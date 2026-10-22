@@ -29,6 +29,30 @@ namespace Jularr.Integrations.Logic.Common
             }
         };
 
+        public static async Task EnsurePublicHttpsAsync(Uri uri, CancellationToken ct)
+        {
+            if (!uri.IsAbsoluteUri || uri.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(uri.UserInfo))
+            {
+                throw new HttpRequestException("The source must have a public HTTPS address.");
+            }
+
+            if (IPAddress.TryParse(uri.IdnHost.Trim('[', ']'), out var literal))
+            {
+                if (!IsPublic(literal))
+                {
+                    throw new HttpRequestException("The source address is not public.");
+                }
+
+                return;
+            }
+
+            var addresses = await Dns.GetHostAddressesAsync(uri.IdnHost, ct);
+            if (addresses.Length == 0 || addresses.Any(address => !IsPublic(address)))
+            {
+                throw new HttpRequestException("The source address is not public.");
+            }
+        }
+
         public static bool IsPublic(IPAddress address)
         {
             if (address.IsIPv4MappedToIPv6)

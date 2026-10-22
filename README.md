@@ -61,6 +61,12 @@ der Link wird von Hand eingetragen. Auf einem Server ohne Grafik erkennt die Pr�
 meist, dort hilft ein Browser auf einem Desktop-Rechner, den Jularr über `Browser:RemoteAddress`
 benutzt.
 
+Der Browser prüft die angeforderte HTTPS-Adresse vor der Navigation auf öffentliche IP-Adressen.
+Das ist **keine vollständige Netzwerkisolierung**: Weiterleitungen und nachgeladene Ressourcen
+können weitere Ziele erreichen. Für den Betrieb mit nicht vertrauenswürdigen Seiten ist
+zusätzlich eine ausgehende Netzwerksperre für interne Docker-/VM-Adressen erforderlich.
+Chrome-Startparameter, virtueller Bildschirm und optionale Installation bleiben unverändert.
+
 ## Backend im gemeinsamen Host
 
 Das Frontend braucht ProjectReferences auf `../Jularr.Backend/Jularr.Backend.csproj`

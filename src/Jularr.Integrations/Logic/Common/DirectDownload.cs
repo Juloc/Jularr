@@ -9,7 +9,8 @@ namespace Jularr.Integrations.Logic.Common
     internal static class DirectDownload
     {
         private const int MaximumRedirects = 5;
-        private static readonly string[] GateMarkers = ["cf-challenge", "challenge-platform", "ddos-guard", "g-recaptcha", "h-captcha", "captcha"];
+        private const long MaximumPageBytes = 4L * 1024 * 1024;
+        private static readonly string[] GateMarkers = ["cf-challenge", "challenge-platform", "ddos-guard", "ddg-captcha", "g-recaptcha", "h-captcha"];
 
         // A page behind a browser check is read by a real browser; without one the check stands and a person takes over.
         public static async Task<string> ReadPageAsync(HttpClient http, Uri uri, ISourceGateResolver gates, ISourceBrowser browser, CancellationToken ct)
@@ -17,7 +18,14 @@ namespace Jularr.Integrations.Logic.Common
             try
             {
                 using var response = await SendAsync(http, uri, null, gates, ct);
-                return await response.Content.ReadAsStringAsync(ct);
+                var page = await ReadPageContentAsync(response, ct);
+                if (response.Content.Headers.ContentType?.MediaType?.Equals("text/html", StringComparison.OrdinalIgnoreCase) == true
+                    && IsGatePage(page))
+                {
+                    throw new DirectDownloadException(DirectDownloadFailure.Gate, "The source returned a browser check instead of its page.");
+                }
+
+                return page;
             }
             catch (DirectDownloadException exception) when (exception.Failure == DirectDownloadFailure.Gate)
             {
@@ -180,6 +188,30 @@ namespace Jularr.Integrations.Logic.Common
             }
         }
 
+        private static async Task<string> ReadPageContentAsync(HttpResponseMessage response, CancellationToken ct)
+        {
+            if (response.Content.Headers.ContentLength > MaximumPageBytes)
+            {
+                throw new DirectDownloadException(DirectDownloadFailure.TooLarge, "The source page is too large.");
+            }
+
+            try
+            {
+                await response.Content.LoadIntoBufferAsync(MaximumPageBytes, ct);
+            }
+            catch (HttpRequestException exception)
+            {
+                throw new DirectDownloadException(DirectDownloadFailure.TooLarge, "The source page is too large.", exception);
+            }
+
+            return await response.Content.ReadAsStringAsync(ct);
+        }
+
+        private static bool IsGatePage(string page) =>
+            GateMarkers.Any(marker => page.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            || page.Contains("<title>Just a moment", StringComparison.OrdinalIgnoreCase)
+            || page.Contains("<title>DDoS-Guard", StringComparison.OrdinalIgnoreCase);
+
         private static async Task<SourceGate?> ReadGateAsync(HttpResponseMessage response, Uri uri, CancellationToken ct)
         {
             // Challenges announce themselves by header or by a recognizable page.
@@ -200,8 +232,8 @@ namespace Jularr.Integrations.Logic.Common
                 return null;
             }
 
-            var page = await response.Content.ReadAsStringAsync(ct);
-            return GateMarkers.Any(marker => page.Contains(marker, StringComparison.OrdinalIgnoreCase)) ? new SourceGate(uri, status, null) : null;
+            var page = await ReadPageContentAsync(response, ct);
+            return IsGatePage(page) ? new SourceGate(uri, status, null) : null;
         }
     }
 
