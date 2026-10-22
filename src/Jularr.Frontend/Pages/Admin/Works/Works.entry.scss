@@ -1,133 +1,62 @@
-// The library list: a filter bar and the mass editor above a table. Each bar is one row that slides sideways on a narrow screen.
+@use "../../../Framework/Components/MediaCard";
 
-.works-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
+// The library list on the list kit: the grid of its columns at three widths (the script builds the same from the person's choice of columns), the drawers' fields, the report and the dialogs.
+
+.works-list {
+    --list-columns: minmax(220px, 2.6fr) minmax(138px, 1fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(80px, .8fr) minmax(130px, 1fr);
+    --list-columns-medium: minmax(220px, 2.6fr) minmax(138px, 1fr) minmax(100px, 1fr) minmax(80px, .8fr) minmax(130px, 1fr);
+    --list-columns-narrow: minmax(200px, 2.4fr) minmax(138px, 1fr) minmax(80px, .8fr) minmax(130px, 1fr);
+
+    .list-actions { gap: 4px; }
 }
 
-.works-filters {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-    white-space: nowrap;
+// The overview view: a larger cover, the title with the start of its synopsis and its facts, the state and the actions.
+.works-overview {
+    --list-columns: minmax(0, 1fr) minmax(138px, 190px) minmax(130px, 190px);
 
-    > * { flex: none; }
-    &::-webkit-scrollbar { display: none; }
+    .list-row { min-height: 112px; }
+}
+
+// The poster view: the shared grid of covers, a little apart from the toolbar.
+.works-posters { padding-top: 6px; }
+
+// The drawers' fields: a title above a select that fills the width.
+.works-field {
+    display: grid;
+    gap: 8px;
+    padding-top: 22px;
+
+    .drawer__field-title { padding-top: 0; }
 }
 
 .works-select {
-    min-height: 40px;
-    max-width: 220px;
-    padding: 0 12px;
-    border: 1px solid var(--accent-line);
+    width: 100%;
+    min-height: var(--control-height);
+    padding: 0 14px;
+    border: 1px solid var(--border);
     border-radius: var(--radius-control);
-    background: var(--surface);
+    background: var(--field);
     color: var(--text);
     cursor: pointer;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--text-control);
     font-weight: 600;
+    text-overflow: ellipsis;
 
-    &--set { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
+    &--set { border-color: var(--accent-outline); background: var(--accent-soft); color: var(--accent-text); }
     &:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 }
-
-.works-apply, .works-clear, .works-add { min-height: 40px; flex: none; white-space: nowrap; }
-
-@media (max-width: 720px) {
-    .works-filters__apply {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-    }
-
-    .works-apply { width: 40px; padding: 0; }
-}
-
-// The mass editor takes the place of the filters while titles are chosen, in a row of the same height. Without script it stands under them.
-.works-editor {
-    margin-bottom: 12px;
-
-    &[data-active="false"] { display: none; }
-}
-
-.works-bars:has(.works-editor[data-active="true"]) .works-toolbar { display: none; }
-
-.works-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 40px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    white-space: nowrap;
-
-    > * { flex: none; }
-    &::-webkit-scrollbar { display: none; }
-    .button { min-height: 40px; }
-}
-
-.works-bar__count {
-    display: inline-flex;
-    align-items: center;
-    min-height: 40px;
-    padding: 0 16px;
-    border: 1px solid var(--accent-line);
-    border-radius: var(--radius-control);
-    background: var(--accent-soft);
-    color: var(--accent-text);
-    font-size: 13px;
-    font-weight: 700;
-}
-
-.works-bar .works-select { max-width: 150px; text-overflow: ellipsis; }
-
-.works-bar .works-delete { color: var(--danger); }
-
-// The table: nothing wraps, the title shortens, and the table slides sideways when it is wider than the screen.
-.works-table {
-    th, td { white-space: nowrap; }
-    td { padding: 8px 12px; vertical-align: middle; }
-    th .work-sort { color: inherit; font-weight: 700; text-decoration: none; }
-    th[data-col="select"], td[data-col="select"] { width: 1%; padding-right: 0; }
-    td[data-col="cover"] { width: 1%; }
-    td[data-col="monitored"] { width: 1%; }
-    th[data-col="actions"], td[data-col="actions"] { width: 1%; text-align: right; }
-    .works-title { max-width: 320px; color: var(--text); font-weight: 650; text-decoration: none; &:hover { color: var(--accent-text); } }
-}
-
-.page-table.works-table tbody tr.works-row--selected { background: var(--accent-soft); }
-
-.works-cover {
-    display: inline-flex;
-    width: 40px;
-    height: 60px;
-    overflow: hidden;
-    border-radius: 6px;
-    background: var(--accent-soft);
-
-    img { display: block; width: 100%; height: 100%; object-fit: cover; }
-}
-
 
 // What the last action did: how many, and why the others stayed.
 .works-report {
     margin-bottom: 12px;
     padding: 10px 14px;
-    border: 1px solid var(--accent-line);
+    border: 1px solid var(--border);
     border-radius: var(--radius-panel);
     background: var(--surface);
 
     p { margin: 0; font-weight: 650; }
-    ul { display: grid; gap: 2px; margin: 6px 0 0; padding: 0; list-style: none; font-size: 13px; }
+    ul { display: grid; gap: 2px; margin: 6px 0 0; padding: 0; list-style: none; font-size: var(--text-small); }
     li { display: flex; gap: 10px; min-width: 0; }
 }
 
@@ -135,11 +64,9 @@
 
 .works-report__reason { color: var(--muted); white-space: nowrap; }
 
-.works-paging { display: flex; justify-content: space-between; margin-top: 12px; }
-
 .work-dialog--wide { width: min(860px, 94vw); max-height: 90vh; overflow-y: auto; }
 
 .works-add-form, .works-delete-form { display: grid; gap: 16px; }
 
 // The search of the providers and the manual title are two ways to the same thing.
-.works-add-form > form + form, .works-add-form > .page-table-wrap + form { padding-top: 16px; border-top: 1px solid var(--accent-line); }
+.works-add-form > form + form, .works-add-form > .page-table-wrap + form { padding-top: 16px; border-top: 1px solid var(--border); }

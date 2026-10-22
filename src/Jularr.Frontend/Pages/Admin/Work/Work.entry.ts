@@ -1,5 +1,5 @@
 import { onPage } from '../../../Modules/Navigation/PageSwap';
-import { compareValues, moveItem, normalizeColumns, type ColumnState } from './Work';
+import { compareValues, listTemplates, moveItem, normalizeColumns, type ColumnState } from './Work';
 
 const storagePrefix = 'jularr.work.columns.';
 
@@ -57,13 +57,29 @@ function initializeVersions(): void {
     });
 }
 
-function tablesOfKind(kind: string): HTMLTableElement[] {
-    return Array.from(document.querySelectorAll<HTMLTableElement>('[data-work-table]')).filter(table => table.dataset.workTable === kind);
+// A table or a list on the list kit (its head and rows are grid rows with the same keyed cells).
+type Columned = HTMLElement;
+
+function tablesOfKind(kind: string): Columned[] {
+    return Array.from(document.querySelectorAll<HTMLElement>('[data-work-table]')).filter(table => table.dataset.workTable === kind);
 }
 
-function readState(kind: string, table: HTMLTableElement): ColumnState {
+const headCells = (table: Columned): HTMLElement[] => Array.from(table.querySelectorAll<HTMLElement>('thead th[data-col], .list-head > [data-col]'));
+
+// A list's grid follows the shown columns: the track of each one, in order, for the wide, medium and narrow width.
+function applyGrid(table: Columned): void {
+    const head = table.querySelector<HTMLElement>('.list-head');
+    if (!head) return;
+    const shown = Array.from(head.children).filter((cell): cell is HTMLElement => cell instanceof HTMLElement && !!cell.dataset.col && !cell.hidden && !!cell.dataset.width);
+    const templates = listTemplates(shown.map(cell => ({ width: cell.dataset.width!, hide: Number(cell.dataset.hide ?? '0') })));
+    table.style.setProperty('--list-columns', templates.wide);
+    table.style.setProperty('--list-columns-medium', templates.medium);
+    table.style.setProperty('--list-columns-narrow', templates.narrow);
+}
+
+function readState(kind: string, table: Columned): ColumnState {
     // The actions and the columns a table marks fixed (a selection box, the title) stay where they are and are not offered.
-    const heads = Array.from(table.querySelectorAll<HTMLElement>('thead th[data-col]')).filter(head => head.dataset.col !== 'actions' && head.dataset.fixed !== 'true');
+    const heads = headCells(table).filter(head => head.dataset.col !== 'actions' && head.dataset.fixed !== 'true');
     const available = heads.map(head => head.dataset.col!);
     const hiddenByDefault = heads.filter(head => head.dataset.hidden === 'true').map(head => head.dataset.col!);
     let stored: unknown = null;
@@ -74,7 +90,7 @@ function readState(kind: string, table: HTMLTableElement): ColumnState {
 // Every row follows the order of the columns, and the hidden ones leave the screen.
 function applyState(kind: string, state: ColumnState): void {
     for (const table of tablesOfKind(kind)) {
-        for (const row of Array.from(table.querySelectorAll<HTMLTableRowElement>('tr'))) {
+        for (const row of Array.from(table.querySelectorAll<HTMLElement>('tr, .list-head, .list-row'))) {
             const cells = new Map<string, HTMLElement>();
             for (const cell of Array.from(row.children) as HTMLElement[]) if (cell.dataset.col) cells.set(cell.dataset.col, cell);
             for (const column of [...state.order, 'actions']) {
@@ -84,6 +100,8 @@ function applyState(kind: string, state: ColumnState): void {
                 cell.hidden = state.hidden.includes(column);
             }
         }
+
+        applyGrid(table);
     }
 
     // The facts of a strip follow the same choice: its order, and the hidden columns leave.
@@ -105,6 +123,7 @@ function saveState(kind: string, state: ColumnState): void {
 
 function sortTables(kind: string, column: string, direction: 'ascending' | 'descending'): void {
     for (const table of tablesOfKind(kind)) {
+        if (!(table instanceof HTMLTableElement)) continue;
         const bodies = Array.from(table.tBodies);
         const value = (body: HTMLTableSectionElement): string => {
             const cell = body.querySelector<HTMLElement>(`tr:first-child [data-col="${CSS.escape(column)}"]`);
@@ -119,11 +138,11 @@ function sortTables(kind: string, column: string, direction: 'ascending' | 'desc
     }
 }
 
-function renderPicker(picker: HTMLElement, kind: string, table: HTMLTableElement, state: ColumnState): void {
+function renderPicker(picker: HTMLElement, kind: string, table: Columned, state: ColumnState): void {
     const list = picker.querySelector<HTMLUListElement>('.work-columns__list');
     if (!list) return;
     const labels = new Map<string, string>();
-    table.querySelectorAll<HTMLElement>('thead th[data-col]').forEach(head => labels.set(head.dataset.col!, head.dataset.label ?? head.dataset.col!));
+    headCells(table).forEach(head => labels.set(head.dataset.col!, head.dataset.label ?? head.dataset.col!));
     list.replaceChildren();
     state.order.forEach((column, index) => {
         const item = document.createElement('li');
@@ -182,7 +201,7 @@ function renderPicker(picker: HTMLElement, kind: string, table: HTMLTableElement
     });
 }
 
-function initializeTable(table: HTMLTableElement): void {
+function initializeTable(table: Columned): void {
     if (table.dataset.workReady) return;
     table.dataset.workReady = 'true';
     const kind = table.dataset.workTable ?? 'units';
@@ -213,9 +232,12 @@ function initializeTable(table: HTMLTableElement): void {
             picker.classList.toggle('work-columns--sheet', sheet);
             picker.style.left = picker.style.top = '';
             if (sheet) return;
+
+            // Below the gear, or above it where the gear sits low (the action dock at the bottom edge).
             const box = gear.getBoundingClientRect();
-            picker.style.left = `${Math.max(8, box.right - 290)}px`;
-            picker.style.top = `${Math.max(8, Math.min(box.bottom + 6, window.innerHeight - picker.offsetHeight - 8))}px`;
+            const above = box.top > window.innerHeight / 2;
+            picker.style.left = `${Math.max(8, Math.min(box.right - 290, window.innerWidth - 298))}px`;
+            picker.style.top = `${Math.max(8, above ? box.top - picker.offsetHeight - 10 : Math.min(box.bottom + 6, window.innerHeight - picker.offsetHeight - 8))}px`;
         });
     }
 }
@@ -333,6 +355,6 @@ onPage(import.meta.url, () => {
     initializeFileEdit();
     initializeStrips();
     initializeNumbering();
-    document.querySelectorAll<HTMLTableElement>('[data-work-table]').forEach(initializeTable);
+    document.querySelectorAll<HTMLElement>('[data-work-table]').forEach(initializeTable);
     if (!pickerReady) { pickerReady = true; initializePicker(); }
 }, { partial: true });

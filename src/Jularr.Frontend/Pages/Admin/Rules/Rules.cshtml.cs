@@ -88,7 +88,7 @@ namespace Jularr.Frontend.Pages.Admin.Rules
                 form.Text(item => item.Name, "request.rule.name");
                 form.Multiline(item => item.Description, "request.rule.description");
                 form.Number(item => item.RequestLimit, "request.rule.limit");
-                form.Number(item => item.PeriodDays, "request.rule.period");
+                form.Number(item => item.PeriodDays, "request.rule.period", affix: FieldAffix.Unit("unit.days"));
                 form.Select(item => item.IsAutomaticApproval, "request.rule.approval", Approvals(texts));
                 form.Choices(item => item.AllowedMediaKeys, "request.rule.media", _media.Select(item => new SelectOption(item.Key, texts[MediaTypeLabel.Key(item.Key, item.IsSubtype)])));
                 form.Choices(item => item.AcquisitionProfileIds, "request.rule.profiles",

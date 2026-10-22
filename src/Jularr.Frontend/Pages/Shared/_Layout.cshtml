@@ -48,6 +48,11 @@
     {
         @Assets.Scripts("Framework/Components/ContinueReadingBar.entry.ts")
     }
+    @if (!isReader && !isPlayer)
+    {
+        @Assets.Scripts("Framework/Components/Form.entry.ts")
+        @Assets.Scripts("Framework/Components/Dropdown.entry.ts")
+    }
     @if (showShell && !isReader)
     {
         @Assets.Scripts("Framework/Components/SavePill.entry.ts")

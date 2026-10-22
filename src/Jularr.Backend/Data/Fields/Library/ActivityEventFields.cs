@@ -9,6 +9,8 @@ namespace Jularr.Backend.Data.Fields.Library
     {
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly EnumField ActivityEventTypeId = new(typeof(ActivityEventType));
+        public static readonly EnumField ActivityEventGroupTypeId = new(typeof(ActivityEventGroupType));
+        public static readonly IntField EventCount = new() { Minimum = 0 };
         public static readonly DateTimeField OccurredAt = new();
         public static readonly StringField WorkTitle = new(NpgsqlDbType.Varchar) { MaximumLength = 500, AllowBlank = false };
         public static readonly EnumField WorkUnitTypeId = new(typeof(WorkUnitType)) { Required = false };
