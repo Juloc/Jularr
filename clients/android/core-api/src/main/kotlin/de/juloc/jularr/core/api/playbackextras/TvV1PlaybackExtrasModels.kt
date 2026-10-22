@@ -57,7 +57,7 @@ data class TvV1Trickplay(
         val frame = minOf(positionMs / (intervalSeconds.toLong() * 1000), (frames - 1).toLong()).toInt()
         val tileOnSheet = frame % framesPerSheet
         return TvV1TrickplayTile(
-            sheetIndex = frame / framesPerSheet,
+            sheetIndex = frame / framesPerSheet + 1,
             frameIndex = frame,
             x = (tileOnSheet % columns) * tileWidth,
             y = (tileOnSheet / columns) * tileHeight,
@@ -68,7 +68,7 @@ data class TvV1Trickplay(
 }
 
 data class TvV1TrickplayTile(
-    val sheetIndex: Int, val frameIndex: Int,
+    val sheetIndex: Int, val frameIndex: Int, // 1-based: backend TrickplayFields.Sheet minimum is 1.
     val x: Int, val y: Int, val width: Int, val height: Int,
 )
 
