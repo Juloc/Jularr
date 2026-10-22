@@ -7,6 +7,7 @@ classes to a small invariant smoke suite. Full CI still owns exhaustive runs.
 from __future__ import annotations
 
 from pathlib import PurePosixPath
+import json
 import subprocess
 import sys
 
@@ -18,6 +19,13 @@ SMOKE = (
     "AuthenticationTests.Session_ExpiredOrRevoked_IsNotRenewed",
     "InstanceModuleDependencyTests.Modules_Read_NameWhatEachNeeds",
 )
+
+# The fast fail-first run of Backend Full (build and smoke job): startup, schema,
+# migrations, sessions and the first-owner setup gate. Whole classes plus SMOKE.
+BOOT_CLASSES = ("DatabaseBaselineTests", "DatabaseMigrationTests", "ServiceFoundationTests",
+                "SessionLockTests", "AccountSchemaTests")
+BOOT_METHODS = ("SetupTests.Razor_FirstOwner_ValidatesRollsBackAndSignsIn",
+                "SetupTests.FirstOwner_ConcurrentCreation_OnlyOneSucceedsAndBootstrapStaysClosed")
 
 # A path may belong to several areas (e.g. downloads + storage). The mappings
 # are deliberately plain to make changes auditable in code review. Keep them
@@ -93,6 +101,12 @@ def choose(paths: list[str]) -> tuple[str, tuple[str, ...]]:
     return "|".join(clauses), tuple(sorted(classes))
 
 
+def boot_filter() -> str:
+    clauses = [f"FullyQualifiedName~{NAMESPACE}{method}" for method in SMOKE + BOOT_METHODS]
+    clauses += [f"FullyQualifiedName~{NAMESPACE}{name}." for name in BOOT_CLASSES]
+    return "|".join(clauses)
+
+
 def self_test() -> None:
     cases = (
         (["src/Jularr.Backend/Logic/Acquisition/Search.cs"], "AcquisitionTests"),
@@ -107,6 +121,7 @@ def self_test() -> None:
     for paths, required in cases:
         _, selected = choose(paths)
         assert required in selected, (paths, selected)
+    assert boot_filter().count("FullyQualifiedName~") == len(SMOKE) + len(BOOT_METHODS) + len(BOOT_CLASSES)
     filter_text, classes = choose(["docs/README.md"])
     assert not classes and filter_text.count("FullyQualifiedName~") == len(SMOKE)
     filter_text, classes = choose(["src/Jularr.Frontend/Styles/app.scss"])
@@ -124,14 +139,24 @@ def main() -> int:
         self_test()
         print("Backend test selection self-checks passed.")
         return 0
-    if len(sys.argv) != 3:
-        print("Usage: ci-select-backend-tests.py BASE_SHA HEAD_SHA", file=sys.stderr)
+    if len(sys.argv) == 2 and sys.argv[1] == "--boot-filter":
+        print(boot_filter())
+        return 0
+    as_json = len(sys.argv) == 4 and sys.argv[3] == "--json"
+    if len(sys.argv) != 3 and not as_json:
+        print("Usage: ci-select-backend-tests.py BASE_SHA HEAD_SHA [--json] | --self-test | --boot-filter", file=sys.stderr)
         return 2
     changed = subprocess.check_output(
         ["git", "diff", "--name-only", "--diff-filter=ACMR", sys.argv[1], sys.argv[2]],
         text=True,
     ).splitlines()
     filter_text, classes = choose(changed)
+    if as_json:
+        # The smoke methods run in the prepare job; the shards split the selected classes.
+        methods = [method for method in SMOKE if method.split(".", 1)[0] not in classes]
+        print(json.dumps({"methods": "|".join(f"FullyQualifiedName~{NAMESPACE}{method}" for method in methods),
+                          "classes": list(classes)}))
+        return 0
     print(f"Selected additional backend test classes: {', '.join(classes) or '(none)'}", file=sys.stderr)
     print(filter_text)
     return 0
