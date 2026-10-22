@@ -6,6 +6,10 @@ package de.juloc.jularr.core.api.catalog
  */
 interface TvCatalogV1Client {
     suspend fun library(page: Int = 1, pageSize: Int = 48, query: String? = null, sortTypeId: Int? = null): TvPageV1<TvWorkCardV1>
+    suspend fun libraryFiltered(
+        page: Int = 1, pageSize: Int = 48,
+        filters: TvCatalogV1Filters, query: String? = null, sortTypeId: Int? = null,
+    ): TvPageV1<TvWorkCardV1>
     suspend fun continueWatching(): List<TvContinueItemV1>
     suspend fun watchlist(page: Int = 1, pageSize: Int = 25, sortTypeId: Int? = null): TvPageV1<TvWorkCardV1>
     suspend fun setWatchlisted(workId: Long, isWatchlisted: Boolean): Boolean
