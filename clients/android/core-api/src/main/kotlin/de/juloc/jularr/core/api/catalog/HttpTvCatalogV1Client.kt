@@ -73,6 +73,45 @@ class HttpTvCatalogV1Client(
         ).objects { discoverItem() }
     }
 
+    override suspend fun discoverCatalogSearch(
+        mediaTypeId: Int, query: String, mediaSubtypeId: Int?,
+    ): List<TvDiscoverCatalogItemV1> {
+        require(mediaTypeId > 0 && query.isNotBlank())
+        require(mediaSubtypeId == null || mediaSubtypeId > 0)
+        return readArray(
+            TvCatalogV1Routes.DiscoverCatalogSearch,
+            "POST",
+            JSONObject().put("mediaTypeId", mediaTypeId).put("query", query).apply {
+                if (mediaSubtypeId != null) put("mediaSubtypeId", mediaSubtypeId)
+            },
+        ).objects { discoverCatalogItem() }
+    }
+
+    override suspend fun discoverCatalogFeed(
+        mediaTypeId: Int, feedTypeId: Int, mediaSubtypeId: Int?,
+    ): List<TvDiscoverCatalogItemV1> {
+        require(mediaTypeId > 0 && feedTypeId > 0)
+        require(mediaSubtypeId == null || mediaSubtypeId > 0)
+        return readArray(
+            TvCatalogV1Routes.DiscoverCatalogFeed,
+            "POST",
+            JSONObject().put("mediaTypeId", mediaTypeId).put("discoverFeedTypeId", feedTypeId).apply {
+                if (mediaSubtypeId != null) put("mediaSubtypeId", mediaSubtypeId)
+            },
+        ).objects { discoverCatalogItem() }
+    }
+
+    override suspend fun discoverSuggestions(query: String, scopeSlug: String?): List<TvDiscoverSuggestionV1> {
+        require(query.isNotBlank())
+        return readArray(
+            TvCatalogV1Routes.DiscoverSuggestions,
+            "POST",
+            JSONObject().put("query", query).apply {
+                if (scopeSlug != null) put("scopeSlug", scopeSlug)
+            },
+        ).objects { discoverSuggestion() }
+    }
+
     override suspend fun work(workId: Long): TvWorkDetailsV1 =
         readObject(TvCatalogV1Routes.work(workId)).workDetails()
 
