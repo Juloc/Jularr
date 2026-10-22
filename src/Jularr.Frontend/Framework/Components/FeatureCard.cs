@@ -23,6 +23,13 @@ namespace Jularr.Frontend.Framework
             Attribute("data-region", "");
         }
 
+        // A card that carries inputs in rows takes the whole width of its grid.
+        public FeatureCard Wide()
+        {
+            Class("feature-card feature-card--wide");
+            return this;
+        }
+
         private static IUiComponent[] Parts(IconTile icon, string name, string? line, IUiComponent? state, IReadOnlyList<IUiComponent> body, IReadOnlyList<IUiComponent> start, IReadOnlyList<IUiComponent>? end)
         {
             var title = new List<IUiComponent> { new Span(new Truncated(name)).Class("feature-card__name") };

@@ -2,7 +2,7 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // The Discover catalog page: the catalogs are rows with their mode and counts; a sync window is added as a draft in the catalog's dialog, typed in the desktop time fields and saved there.
+    // The Discover catalog page: the catalogs are cards with their mode, counts and inputs; a sync window is added as a draft in the card, typed in the desktop time fields and saved by the page's pill.
     [TestClass]
     public sealed class CatalogSettingsTests
     {
@@ -17,20 +17,19 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/Admin/Catalog");
             await Assertions.Expect(page.GetByText("Full local discovery is off", new() { Exact = false })).ToBeVisibleAsync();
 
-            // Every catalog is a row: how it is kept (here only what Discover loaded), the titles and what is still to read.
-            var rows = page.Locator(".list-body .list-row");
-            await Assertions.Expect(rows).ToHaveCountAsync(3);
-            var aniListRow = rows.Filter(new() { HasText = "AniList" });
-            await Assertions.Expect(aniListRow).ToContainTextAsync("Kept");
-            await Assertions.Expect(aniListRow).ToContainTextAsync("20 requests/min");
+            // Every catalog is a card: how it is kept (here only what Discover loaded), the titles and what is still to read.
+            var cards = page.Locator(".card-grid .feature-card");
+            await Assertions.Expect(cards).ToHaveCountAsync(3);
+            var aniList = cards.Filter(new() { HasText = "AniList" });
+            await Assertions.Expect(aniList).ToContainTextAsync("Kept");
             Assert.IsTrue(await page.GetByRole(AriaRole.Button, new() { Name = "Sync now", Exact = true }).IsDisabledAsync(), "Sync now needs full local discovery.");
 
-            // The catalog's settings open in a dialog of their own.
-            var aniList = page.GetByRole(AriaRole.Dialog, new() { Name = "AniList", Exact = true });
-            await aniListRow.GetByRole(AriaRole.Button, new() { Name = "Configure", Exact = true }).ClickAsync();
-            await Assertions.Expect(aniList).ToBeVisibleAsync();
+            // The catalog's settings are inputs of the card: no Configure button, no dialog.
+            Assert.AreEqual(0, await page.GetByRole(AriaRole.Button, new() { Name = "Configure", Exact = true }).CountAsync());
+            await Assertions.Expect(aniList.Locator("[name=RequestsPerMinute]")).ToHaveValueAsync("20");
             await Steps.FollowAsync(page, aniList.GetByRole(AriaRole.Button, new() { Name = "Add window", Exact = true }));
-            await Assertions.Expect(aniList).ToBeVisibleAsync();
+            await Assertions.Expect(aniList.Locator("[name='Windows[0].StartsAt']")).ToHaveValueAsync("02:00");
+            await Assertions.Expect(page.Locator("[data-save-pill]")).ToBeVisibleAsync();
 
             // The desktop shows hour and minute fields that fill the native time field.
             var parts = aniList.Locator(".ui-time__part");
@@ -41,14 +40,11 @@ namespace Jularr.E2E.Tests
             await parts.Nth(3).FillAsync("00");
             await Assertions.Expect(aniList.Locator("[name='Windows[0].StartsAt']")).ToHaveValueAsync("22:30");
             await Evidence.SaveAsync(page, "catalog-settings");
-            await Steps.SubmitAsync(page, aniList.Locator("form"));
+            await Steps.SaveAsync(page);
 
-            await Assertions.Expect(rows.Filter(new() { HasText = "AniList" })).ToContainTextAsync("22:30–01:00");
             await page.ReloadAsync();
-            await page.Locator(".list-body .list-row").Filter(new() { HasText = "AniList" }).GetByRole(AriaRole.Button, new() { Name = "Configure", Exact = true }).ClickAsync();
             await Assertions.Expect(aniList.Locator("[name='Windows[0].StartsAt']")).ToHaveValueAsync("22:30");
             await Assertions.Expect(aniList.Locator("[name='Windows[0].EndsAt']")).ToHaveValueAsync("01:00");
-            await page.Keyboard.PressAsync("Escape");
 
             // The cache of images of other titles is sized here and saved through the page's pill.
             var covers = page.Locator(".ui-section", new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Images of other titles", Exact = true }) }).Locator("form[data-save]");
@@ -72,8 +68,8 @@ namespace Jularr.E2E.Tests
                 """);
             await page.GotoAsync("/Admin/Catalog");
 
-            // Seven catalogs, each a row with an icon tile and its display name; no row is named by a raw key.
-            var catalogRows = page.Locator(".list-body .list-row");
+            // Seven catalogs, each a card with an icon tile and its display name; no card is named by a raw key.
+            var catalogRows = page.Locator(".card-grid .feature-card");
             await Assertions.Expect(catalogRows).ToHaveCountAsync(7);
             foreach (var name in new[] { "TMDB films", "TMDB series", "AniList", "TVDB", "Open Library", "MusicBrainz", "IGDB" })
             {

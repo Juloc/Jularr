@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Catalog
 {
-    // The provider catalogs of local discovery as a list: how each is kept, how far it has come and the Owner's choices for it, which open in a dialog.
+    // The provider catalogs of local discovery as cards: how each is kept, how far it has come and the Owner's choices for it as inputs inside the card.
     public sealed class CatalogModel(ReadExternalWorkSyncsV1 read, UpdateExternalWorkSyncV1 update, ReadCoverCacheV1 readCovers, UpdateCoverCacheV1 updateCovers, ReadInstanceModulesV1 readModules, RunWorkerJobV1 run,
         FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
@@ -49,13 +49,8 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
                 new KpiTile("admin.catalog.entries", Number(_syncs.Sum(sync => sync.Entries)), Glyph("layers"), UiTone.Success),
                 new KpiTile("admin.catalog.pending", Number(_syncs.Sum(sync => sync.Pending)), Glyph("clock"), UiTone.Warning)).Strip());
 
-            var columns = new List<ListColumn>
-            {
-                new("admin.catalog.catalog", ListRole.Main), new("admin.catalog.mode", ListRole.Data, 2), new("admin.catalog.entries", ListRole.Data), new("admin.catalog.pending", ListRole.Data, 1),
-                new("admin.catalog.listedOn", ListRole.Data, 1), new("table.status", ListRole.Status), new("common.actions", ListRole.Actions)
-            };
-            page.Content.Add(new ListPanel("admin.catalog.list", columns, [.. _syncs.Select(Row)]).Modifier("catalog-list"));
-            page.Content.AddRange(_syncs.Select(sync => Dialog(sync, token)));
+            // Each catalog is a card with its counts and its own inputs, saved by the page's pill.
+            page.Content.Add(new CardGrid([.. _syncs.Select(sync => Card(sync, token))]));
 
             // The images of titles that are not Works are kept for a while and up to a size.
             var covers = _coversDraft ?? new UpdateCoverCacheDataV1(_covers!.KeepDays, _covers.MaximumMegabytes, _covers.FormatId, _covers.Version);
@@ -81,27 +76,18 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
         // How a catalog is kept: asked live, the titles Discover loaded, or the whole catalog.
         private string Mode(ExternalWorkSyncV1 sync) => _isOn && sync.IsEnabled ? "whole" : _keeps ? "kept" : "live";
 
-        private ListRow Row(ExternalWorkSyncV1 sync)
+        // One catalog: its mode and state in the head, what it holds, and its settings as inputs; adding or removing a window shows the draft of this card again, and only the pill keeps it.
+        private IUiComponent Card(ExternalWorkSyncV1 sync, string? token)
         {
-            var windows = sync.Windows.Count == 0 ? texts["admin.catalog.allDay"] : string.Join(", ", sync.Windows.Select(window => window.StartsAt.ToString("HH:mm", CultureInfo.InvariantCulture) + "–" + window.EndsAt.ToString("HH:mm", CultureInfo.InvariantCulture)));
-            var subline = new Span(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["admin.catalog.pace"], sync.RequestsPerMinute) + " · " + windows));
-            var identity = new ListIdentity(new IconTile(Glyph("globe", 18), UiTone.Accent), new Text("admin.catalog." + sync.Namespace), subline);
-            var mode = Mode(sync);
             var state = sync.IsEnabled
                 ? new StateChip(new Text("admin.catalog.state.active"), UiTone.Success, Glyph("check", 14))
                 : new StateChip(new Text("admin.catalog.state.off"), UiTone.Neutral, Glyph("pause", 14));
-            var listed = sync.ListedOn is { } date ? new Span(new ValueText(date.ToString("d", CultureInfo.CurrentCulture))).Class("list-value") : new Span(new ValueText("–")).Class("list-value list-value--dim");
-            var actions = new Div(Modal.Opener(new Button(Glyph("settings", 14), new Text("admin.catalog.configure")).Compact().Soft(), "catalog-" + sync.Namespace)).Class("list-actions");
-            return new ListRow([identity, new Tag(new Text("admin.catalog.mode." + mode)), Number(sync.Entries), Number(sync.Pending), listed, state, actions],
-                [ListPanel.Fact("admin.catalog.mode", new Text("admin.catalog.mode." + mode)), ListPanel.Fact("admin.catalog.entries", Number(sync.Entries)), ListPanel.Fact("admin.catalog.pending", Number(sync.Pending))]);
-        }
+            var listed = sync.ListedOn is { } date ? new ValueText(date.ToString("d", CultureInfo.CurrentCulture)) : new ValueText("–");
+            var body = new List<IUiComponent> { Fact("admin.catalog.entries", Number(sync.Entries)), Fact("admin.catalog.pending", Number(sync.Pending)), Fact("admin.catalog.listedOn", listed) };
 
-        // One catalog's settings in a dialog; adding or removing a window shows the draft again with the dialog open, and only Save keeps it.
-        private IUiComponent Dialog(ExternalWorkSyncV1 sync, string? token)
-        {
             var data = _draftNamespace == sync.Namespace ? _draft! : new UpdateExternalWorkSyncDataV1(sync.IsEnabled, sync.RequestsPerMinute, sync.PausesWhileUsed, sync.Version, sync.Windows);
             var address = "/Admin/Catalog?namespace=" + Uri.EscapeDataString(sync.Namespace);
-            var form = new Form<UpdateExternalWorkSyncDataV1>(form =>
+            body.Add(new Form<UpdateExternalWorkSyncDataV1>(form =>
             {
                 form.Hidden(item => item.Version);
                 form.Toggle(item => item.IsEnabled, "admin.catalog.enabled");
@@ -112,21 +98,18 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
                     row.Time(item => item.StartsAt, "admin.catalog.startsAt");
                     row.Time(item => item.EndsAt, "admin.catalog.endsAt");
                 });
-                if (data.Windows.Count < MaxWindows) form.Content(WindowButton("admin.catalog.addWindow", address, true));
-                if (data.Windows.Count > 0) form.Content(WindowButton("admin.catalog.removeWindow", address, false));
-                form.Cancel();
-                form.Submit("common.save");
-            }, address, token, data, _draftNamespace == sync.Namespace ? FormError : null);
-            return new Modal(assets, "catalog-" + sync.Namespace, "admin.catalog." + sync.Namespace, [form], _draftNamespace == sync.Namespace);
+                if (data.Windows.Count < MaxWindows) form.Action(WindowButton("admin.catalog.addWindow", address, true));
+                if (data.Windows.Count > 0) form.Action(WindowButton("admin.catalog.removeWindow", address, false));
+                form.Save();
+            }, address, token, data, _draftNamespace == sync.Namespace ? FormError : null));
+            return new FeatureCard(new IconTile(Glyph("globe", 18), UiTone.Accent), texts["admin.catalog." + sync.Namespace], texts["admin.catalog.mode." + Mode(sync)], state, body, [], null, "catalog-" + sync.Namespace);
         }
 
-        private static Button WindowButton(string labelKey, string address, bool add)
-        {
-            var button = new Button(new Text(labelKey));
-            button.Attribute("type", "submit").Attribute("formaction", address + "&handler=Windows").Attribute("name", "add").Attribute("value", add ? "true" : "false")
+        private static IUiComponent Fact(string labelKey, IUiComponent value) => new Div(new Span(new Text(labelKey)).Class("feature-card__note"), new Span(value)).Class("feature-card__row");
+
+        private static HtmlElement WindowButton(string labelKey, string address, bool add) =>
+            new Button(new Text(labelKey)).Compact().Soft().Attribute("type", "submit").Attribute("formaction", address + "&handler=Windows").Attribute("name", "add").Attribute("value", add ? "true" : "false")
                 .Attribute("formnovalidate", "formnovalidate");
-            return button;
-        }
 
         private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);
 

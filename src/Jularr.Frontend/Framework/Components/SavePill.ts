@@ -167,7 +167,8 @@ export function installSavePill(): void {
         const submitter = (event as SubmitEvent).submitter;
         if (!form.matches("form[data-save]") || !pill()) return;
         if (submitter && !submitter.matches("[data-form-save]")) {
-            draftIndex = forms().indexOf(form);
+            // A button that acts on its own (connect through plex.tv) leaves no draft behind; a row added or a choice applied does.
+            if (!submitter.matches("[data-no-draft]")) draftIndex = forms().indexOf(form);
             return;
         }
         event.preventDefault();
