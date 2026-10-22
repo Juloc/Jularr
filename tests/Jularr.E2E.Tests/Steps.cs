@@ -418,7 +418,7 @@ namespace Jularr.E2E.Tests
             return file;
         }
 
-        public static string WriteEpub(string file, string title, string author)
+        public static string WriteEpub(string file, string title, string author, string? firstChapter = null)
         {
             using var archive = ZipFile.Open(file, ZipArchiveMode.Create);
             var mimetype = archive.CreateEntry("mimetype", CompressionLevel.NoCompression);
@@ -432,7 +432,7 @@ namespace Jularr.E2E.Tests
             Entry(archive, "OEBPS/nav.xhtml", """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Contents</title></head><body><nav epub:type="toc"><ol><li><a href="one.xhtml">Chapter One</a></li><li><a href="two.xhtml">Chapter Two</a></li></ol></nav></body></html>""");
             // Chapters long enough to scroll through.
             var text = string.Concat(Enumerable.Range(1, 60).Select(number => "<p>Paragraph " + number + " of a long chapter, written to be read on.</p>"));
-            Entry(archive, "OEBPS/one.xhtml", """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter One</title></head><body><h1>Chapter One</h1>""" + text + "</body></html>");
+            Entry(archive, "OEBPS/one.xhtml", """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter One</title></head><body><h1>Chapter One</h1>""" + (firstChapter ?? text) + "</body></html>");
             Entry(archive, "OEBPS/two.xhtml", """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter Two</title></head><body><h1>Chapter Two</h1>""" + text + "</body></html>");
             return file;
         }

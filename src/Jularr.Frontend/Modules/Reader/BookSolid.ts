@@ -1,6 +1,6 @@
 import { paperProfile, paperOutline, type Point } from './BookGeometry';
 
-type Dimensions = { blockMm: number; spineMm: number; boardMm: number };
+type Dimensions = { leftMm: number; rightMm: number; centreMm: number; boardMm: number };
 const svgNamespace = 'http://www.w3.org/2000/svg';
 const rounded = (number: number) => number.toFixed(3);
 
@@ -39,9 +39,9 @@ export function paintPaperRim(surface: HTMLElement, outline: Point[], enabled: b
 export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve: number, angle: number, strength: number, pixelScale: number): void {
     const host = study.querySelector<HTMLElement>('[data-book-solid]')!;
     const preview = study;
-    // One cross-section for both pages: the spread is mirror-symmetric, never a taller right page.
-    const block = paperProfile(dimensions.blockMm, dimensions.spineMm, curve, angle);
-    const height = block.height;
+    const left = paperProfile(dimensions.leftMm, dimensions.centreMm, curve, angle);
+    const right = paperProfile(dimensions.rightMm, dimensions.centreMm, curve, angle);
+    const height = right.height;
     const board = dimensions.boardMm * Math.sin(angle * Math.PI / 180);
     const svg = host.querySelector('svg') ?? document.createElementNS(svgNamespace, 'svg');
     svg.setAttribute('viewBox', `0 0 296 ${height}`);
@@ -64,14 +64,14 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
         for (const [offset, colour, opacity] of stops) element('stop', { offset: `${offset}%`, 'stop-color': colour, 'stop-opacity': opacity * strength }, paint);
     };
     gradient('cut', [[0, '#514537', .23], [20, '#514537', .10], [75, '#514537', .17], [100, '#514537', .30]], '0%', '100%');
-    const surfaces = [['left', block], ['right', block]] as const;
+    const surfaces = [['left', left], ['right', right]] as const;
     const overhang = study.dataset.bookBinding === 'soft' ? .7 : 2.4;
-    const projectX = (side: string, profile: typeof block, point: { x: number }, ratio = 1) => {
-        const depth = dimensions.blockMm;
+    const projectX = (side: string, profile: typeof left, point: { x: number }, ratio = 1) => {
+        const depth = side === 'left' ? dimensions.leftMm : dimensions.rightMm;
         const fan = depth > 0 ? Math.min(overhang * .65, .35 + depth * .025) : 0;
         return 148 + (side === 'left' ? -1 : 1) * (point.x + (fan * (1 - ratio) - profile.inset * ratio) * (point.x / 148) ** 3);
     };
-    const facePath = (side: string, profile: typeof block) =>
+    const facePath = (side: string, profile: typeof left) =>
         profile.points.map((point, index) => `${index ? 'L' : 'M'}${rounded(projectX(side, profile, point))},${rounded(point.y)}`).join(' ')
         + [...profile.points].reverse().map(point => `L${rounded(projectX(side, profile, point))},${rounded(height + point.y)}`).join(' ') + 'Z';
     // Nested low-opacity strokes approximate a static soft contact shadow without
@@ -94,7 +94,7 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
     // not expose the dark cover below as a new line when a moving leaf retires.
     // Keep the actual bound paper under that joint; the shared gutter light still
     // supplies the visible crevice, including its paper-coloured interreflection.
-    element('path', { d: `M147.5,${block.points[0].y} H148.5 V${height + block.points[0].y} H147.5 Z`, fill: 'var(--paper)' });
+    element('path', { d: `M147.5,${left.points[0].y} H148.5 V${height + left.points[0].y} H147.5 Z`, fill: 'var(--paper)' });
     for (const [side, profile] of surfaces) {
         const x = (point: { x: number }, ratio = 1) => projectX(side, profile, point, ratio);
         const line = (base: number, ratio: number) => profile.points.map((point, index) => `${index ? 'L' : 'M'}${rounded(x(point, ratio))},${rounded(base + point.y * ratio)}`).join(' ');
@@ -135,13 +135,12 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
         const clip = contour.map(point => `${point.x * 100}% ${point.y * 100}%`);
         sheet.style.clipPath = `polygon(${clip.join(',')})`;
         sheet.style.setProperty('--page-lift', `${profile.lift / height * 100}%`);
-        sheet.style.setProperty('--page-number-rise', `${profile.footerLift * pixelScale}px`);
     }
     for (const [parent, count] of cursors) while (parent.children.length > count) parent.lastElementChild!.remove();
     if (svg.parentElement !== host) host.replaceChildren(svg);
     preview.style.setProperty('--page-height', String(height));
-    preview.style.setProperty('--right-lift', `${block.lift / height * 100}%`);
-    preview.style.setProperty('--spine-lift', `${dimensions.spineMm * Math.sin(angle * Math.PI / 180) / height * 100}%`);
+    preview.style.setProperty('--right-lift', `${right.lift / height * 100}%`);
+    preview.style.setProperty('--spine-lift', `${dimensions.centreMm * Math.sin(angle * Math.PI / 180) / height * 100}%`);
     preview.style.setProperty('--light', String(strength));
     study.dataset.bookSolidNodes = String(svg.querySelectorAll('*').length);
 }

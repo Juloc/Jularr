@@ -6,7 +6,7 @@ import ts from 'typescript';
 
 const source = readFileSync(resolve(import.meta.dirname, '../Modules/Reader/BookGeometry.ts'), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
-const { foldPaper, curlPaper, paperSegments, paperShadow, bookDimensions, paperColour, paperProfile, paperOutline, simplifyOutline, shadowPenumbra } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
+const { foldPaper, curlPaper, paperSegments, paperShadow, bookDimensions, paperColour, paperProfile, paperOutline, printPlacement, simplifyOutline, shadowPenumbra } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
 const area = polygon => Math.abs(polygon.reduce((sum, a, i) => {
     const b = polygon[(i + 1) % polygon.length];
     return sum + a.x * b.y - a.y * b.x;
@@ -108,32 +108,6 @@ test('printed sides produce half as many leaves; reading position redistributes 
     assert.equal(bookDimensions(321, 40, 100, 4).leaves, 161);
     assert.ok(bookDimensions(640, 100, 1, 22).totalMm > start.totalMm);
 });
-// The renderer's sheet box for one side: top and height of the page contour in CSS pixels, from the shared
-// section, exactly as BookSolid/BookRenderer lay them out (sheet top = -lift of the half's height).
-function pageBox(dimensions, curve, angle, half) {
-    const profile = paperProfile(dimensions.blockMm, dimensions.spineMm, curve, angle);
-    const body = half * 204 / 148, scale = half / 148;
-    const sheetTop = -profile.lift / profile.height * body, sheetHeight = body - sheetTop;
-    const outline = paperOutline(profile).map(p => ({ x: p.x * half, y: sheetTop + p.y * sheetHeight }));
-    const ys = outline.map(p => p.y), xs = outline.map(p => p.x);
-    return { top: Math.min(...ys), bottom: Math.max(...ys), width: Math.max(...xs) - Math.min(...xs), footer: profile.footerLift * scale, text: profile.lift * scale };
-}
-test('left and right page of a spread have identical height, position, outline and margins at every viewport and read position', () => {
-    for (const [width, height] of [[909, 561], [1024, 768], [1280, 720], [1920, 1080], [390, 844], [2560, 1440]]) {
-        // The book is as wide as two pages of 148:204 that fit the box, like the stylesheet.
-        const half = Math.min(width / 2, height * 148 / 204) * .9;
-        for (const pages of [8, 320, 1500]) for (const angle of [4, 14, 24]) for (const curve of [0, 24, 100]) {
-            const boxes = [1, pages / 4, pages / 2, pages * .9, pages].map(read => pageBox(bookDimensions(pages, 100, read, 22), curve, angle, half));
-            for (const box of boxes) assert.deepEqual(box, boxes[0], 'Reading position moves leaves between the pages, never the pages themselves.');
-            const left = pageBox(bookDimensions(pages, 100, 1, 22), curve, angle, half), right = pageBox(bookDimensions(pages, 100, pages, 22), curve, angle, half);
-            assert.ok(Math.abs(left.top - right.top) < .001 && Math.abs(left.bottom - right.bottom) < .001);
-            assert.ok(Math.abs(left.footer - right.footer) < .001 && Math.abs(left.text - right.text) < .001, 'Printed text and page number sit identically on both pages.');
-        }
-    }
-    const first = bookDimensions(1500, 100, 1, 22), last = bookDimensions(1500, 100, 1500, 22);
-    assert.equal(first.blockMm, last.blockMm); assert.equal(first.spineMm, last.spineMm);
-    assert.ok(Math.abs(first.blockMm * 2 - (first.totalMm - 2 * first.boardMm)) < 1e-9, 'The shared section is half of the one stable block.');
-});
 test('paper tint is deterministic; brightness changes the material, not the app theme', () => {
     assert.equal(paperColour('#ffffff', 0, 100), '#ffffff');
     assert.equal(paperColour('#ffffff', 100, 100), '#fff1d8');
@@ -168,6 +142,39 @@ test('page-number rise follows the actual curved paper edge at the horizontal ce
             'Footer translation is measured from the paper contour, not the rectangular page box.');
         assert.ok(Number.isFinite(profile.footerLift) && profile.footerLift >= 0);
     }
+});
+test('the read stack grows and the unread stack shrinks with reading position, so the two pages differ', () => {
+    const [start, half, end] = [1, 750, 1500].map(read => bookDimensions(1500, 100, read, 22));
+    assert.ok(start.rightMm > start.leftMm + 30 && end.leftMm > end.rightMm + 30, 'The thicker stack is the unread one at the start and the read one at the end.');
+    assert.ok(Math.abs(half.leftMm - half.rightMm) < .2, 'Halfway the two stacks are alike.');
+    assert.ok(Math.abs(start.leftMm + start.rightMm - (end.leftMm + end.rightMm)) < 1e-9, 'Reading moves leaves between the stacks; the block stays one.');
+    const sheet = (dimensions, side) => paperProfile(side === 'left' ? dimensions.leftMm : dimensions.rightMm, dimensions.centreMm, 24, 14);
+    assert.ok(sheet(start, 'right').lift > sheet(start, 'left').lift + 5 && sheet(end, 'left').lift > sheet(end, 'right').lift + 5, 'The thicker stack lifts its sheet higher.');
+    assert.ok(Math.abs(sheet(half, 'left').lift - sheet(half, 'right').lift) < .1);
+});
+// The text box as the renderer places it on one sheet, measured against that sheet's own paper contour (half-page pixels, from the spine).
+function printOnPaper(dimensions, side, half) {
+    const scale = half / 148, profile = paperProfile(side === 'left' ? dimensions.leftMm : dimensions.rightMm, dimensions.centreMm, 24, 14);
+    const place = printPlacement(profile, side, scale), body = half * profile.height / 148;
+    const sheetTop = -profile.lift * scale, sheetHeight = body - sheetTop;
+    const outline = paperOutline(profile), upper = outline.slice(0, 41), lower = outline.slice(41).reverse();
+    const paperWidth = Math.max(...outline.map(point => point.x)) * half;
+    const edge = (points, x) => { const i = points.findIndex(point => point.x >= x), a = points[i - 1], b = points[i]; return sheetTop + (a.y + (b.y - a.y) * (x - a.x) / (b.x - a.x)) * sheetHeight; };
+    const printTop = sheetTop + place.top;
+    return { above: printTop - edge(upper, paperWidth / 2 / half), below: edge(lower, paperWidth / 2 / half) - (printTop + body),
+        // Distance of the print's middle from the spine, against the paper's middle.
+        centre: half / 2 + (side === 'left' ? -place.shift : place.shift) - paperWidth / 2, paperWidth };
+}
+test('the text box follows each page\'s lifted paper: equal padding above, below and between spine and edge on both pages at 0%, 50% and 100%', () => {
+    for (const pages of [320, 1500]) for (const read of [1, pages / 2, pages]) for (const half of [260, 380, 760]) {
+        const dimensions = bookDimensions(pages, 100, read, 22);
+        const left = printOnPaper(dimensions, 'left', half), right = printOnPaper(dimensions, 'right', half);
+        assert.ok(Math.abs(left.above - right.above) < half * .004, `above ${left.above} vs ${right.above}`);
+        assert.ok(Math.abs(left.below - right.below) < half * .004, `below ${left.below} vs ${right.below}`);
+        assert.ok(Math.abs(left.centre) < 1e-6 && Math.abs(right.centre) < 1e-6, 'The print is centred on its paper whatever the width the stack leaves.');
+    }
+    const start = bookDimensions(1500, 100, 1, 22);
+    assert.ok(printOnPaper(start, 'left', 380).paperWidth - printOnPaper(start, 'right', 380).paperWidth > 10, 'The thick stack narrows its paper; the text moves with it.');
 });
 test('rounded bend partitions the leaf and joins every projected patch without a hinge gap', () => {
     const width = 430, height = 610;
