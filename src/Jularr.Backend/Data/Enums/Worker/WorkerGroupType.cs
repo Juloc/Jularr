@@ -17,6 +17,7 @@ namespace Jularr.Backend.Data.Enums.Worker
         Sampler = 12,
         Download = 13,
         Provider = 14,
-        Derivation = 15
+        Derivation = 15,
+        Health = 16
     }
 }
