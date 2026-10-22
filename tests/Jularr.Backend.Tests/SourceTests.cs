@@ -337,6 +337,25 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AnnasArchive_HtmlCheckWithSuccessStatusIsNotAnEmptySearch()
+        {
+            var sources = new FakeSources { HtmlGate = true };
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
+            await Assert.ThrowsExactlyAsync<Integrations.Data.AnnasArchive.AnnasArchiveException>(() =>
+                client.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice", CancellationToken.None));
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_SearchKeepsTheMirrorThatResponded()
+        {
+            var sources = new FakeSources { MirrorOnlyPk = true };
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
+            var record = (await client.SearchAsync(new Uri("https://annas-archive.gl/"), "Pride and Prejudice", CancellationToken.None)).Single();
+            Assert.AreEqual("annas-archive.pk", record.Site.Host);
+            Assert.AreEqual("annas-archive.pk", AnnasArchiveClient.RecordUri(record.Site, record.Md5).Host);
+        }
+
+        [TestMethod]
         public async Task AnnasArchive_FileThatIsOnlyAPartIsMarked()
         {
             // A file that names a part of a work is only that part.
@@ -411,10 +430,23 @@ namespace Jularr.Backend.Tests
             }
         }
 
+        [TestMethod]
+        public async Task AnnasArchive_BrowserHtmlIsRejectedAndIncompleteFileRemoved()
+        {
+            var sources = new FakeSources();
+            var browser = new FakeBrowser { SaveHtml = true };
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), browser);
+            var destination = Path.Combine(Path.GetTempPath(), "anna-check-" + Guid.NewGuid().ToString("N") + ".epub");
+            await Assert.ThrowsExactlyAsync<Integrations.Data.AnnasArchive.AnnasArchiveException>(() =>
+                client.DownloadFileAsync(new Uri("https://annas.example.test/book.epub"), destination, CancellationToken.None, null, _ => new MemoryStream()));
+            Assert.IsFalse(File.Exists(destination));
+        }
+
         // A browser that writes the file it is asked for.
         private sealed class FakeBrowser : ISourceBrowser
         {
             public int Saved { get; private set; }
+            public bool SaveHtml { get; set; }
 
             public bool IsAvailable => true;
             public SourceBrowserStatus Status => new(null, null, "", false, null, null, null, null, null, 0);
@@ -433,7 +465,7 @@ namespace Jularr.Backend.Tests
             public Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct)
             {
                 Saved++;
-                File.WriteAllBytes(destination, [0x50, 0x4B, 0x03, 0x04, 0x00]);
+                File.WriteAllBytes(destination, SaveHtml ? Encoding.UTF8.GetBytes("<html>checking</html>") : [0x50, 0x4B, 0x03, 0x04, 0x00]);
                 return Task.CompletedTask;
             }
         }
@@ -651,6 +683,8 @@ namespace Jularr.Backend.Tests
             public const string ChallengeToken = "simulated-challenge";
 
             public bool Challenge { get; set; }
+            public bool HtmlGate { get; set; }
+            public bool MirrorOnlyPk { get; set; }
             public bool SlowGate { get; set; }
             public bool SlowWithoutFile { get; set; }
             public bool RealRows { get; set; }
@@ -680,7 +714,7 @@ namespace Jularr.Backend.Tests
                 {
                     "opds.example.test" => Opds(request),
                     "cdn.example.test" => Signed(uri),
-                    "annas.example.test" or "other.example.test" => Annas(request),
+                    "annas.example.test" or "other.example.test" or "annas-archive.gl" or "annas-archive.pk" => Annas(request),
                     "files.example.test" when uri.AbsolutePath == "/expired.epub" => new HttpResponseMessage(HttpStatusCode.Gone),
                     "files.example.test" => Bytes(ReadingTests.BuildEpub("Pride and Prejudice")),
                     _ => Text("""{"queue":{"paused":false,"slots":[]},"history":{"slots":[]},"version":"4.5.0"}""", "application/json")
@@ -726,6 +760,16 @@ namespace Jularr.Backend.Tests
                     gate.Headers.Add("cf-mitigated", "challenge");
                     gate.Headers.Add("X-Challenge-Token", ChallengeToken);
                     return gate;
+                }
+
+                if (HtmlGate && uri.AbsolutePath == "/search")
+                {
+                    return Text("<html><head><title>Just a moment...</title></head><body>challenge-platform</body></html>", "text/html");
+                }
+
+                if (MirrorOnlyPk && uri.AbsolutePath == "/search" && uri.Host != "annas-archive.pk")
+                {
+                    return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
                 }
 
                 // The simulated slow download shows a check or a countdown with the file link.

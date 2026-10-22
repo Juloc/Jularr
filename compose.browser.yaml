@@ -1,0 +1,26 @@
+# Optional browser with Xvfb; no graphical desktop or host-published DevTools port.
+services:
+  jularr:
+    environment:
+      Browser__RemoteAddress: http://browser:9223
+    depends_on:
+      browser:
+        condition: service_healthy
+
+  browser:
+    build:
+      context: .
+      dockerfile: Dockerfile.browser
+    restart: unless-stopped
+    shm_size: "512mb"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      JULARR_BROWSER_NO_SANDBOX: ${JULARR_BROWSER_NO_SANDBOX:-0}
+    volumes:
+      - jularr-browser:/data/browser
+
+volumes:
+  jularr-browser:

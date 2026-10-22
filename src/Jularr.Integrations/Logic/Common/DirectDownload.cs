@@ -17,7 +17,14 @@ namespace Jularr.Integrations.Logic.Common
             try
             {
                 using var response = await SendAsync(http, uri, null, gates, ct);
-                return await response.Content.ReadAsStringAsync(ct);
+                var page = await response.Content.ReadAsStringAsync(ct);
+                if (response.Content.Headers.ContentType?.MediaType?.Equals("text/html", StringComparison.OrdinalIgnoreCase) == true
+                    && IsGatePage(page))
+                {
+                    throw new DirectDownloadException(DirectDownloadFailure.Gate, "The source returned a browser check instead of its page.");
+                }
+
+                return page;
             }
             catch (DirectDownloadException exception) when (exception.Failure == DirectDownloadFailure.Gate)
             {
@@ -179,6 +186,11 @@ namespace Jularr.Integrations.Logic.Common
                 return (response, uri);
             }
         }
+
+        private static bool IsGatePage(string page) =>
+            GateMarkers.Any(marker => page.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            || page.Contains("<title>Just a moment", StringComparison.OrdinalIgnoreCase)
+            || page.Contains("<title>DDoS-Guard", StringComparison.OrdinalIgnoreCase);
 
         private static async Task<SourceGate?> ReadGateAsync(HttpResponseMessage response, Uri uri, CancellationToken ct)
         {

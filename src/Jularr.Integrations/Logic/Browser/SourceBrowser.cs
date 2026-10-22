@@ -635,7 +635,14 @@ namespace Jularr.Integrations.Logic.Browser
                     {
                         if (target.GetProperty("type").GetString() == "page" && target.TryGetProperty("webSocketDebuggerUrl", out var socket))
                         {
-                            return socket.GetString()!;
+                            // Chrome reports a loopback socket even when a proxy serves its DevTools API.
+                            var reported = new Uri(socket.GetString()!);
+                            return new UriBuilder(reported)
+                            {
+                                Scheme = address.Scheme == Uri.UriSchemeHttps ? "wss" : "ws",
+                                Host = address.Host,
+                                Port = address.Port
+                            }.Uri.AbsoluteUri;
                         }
                     }
                 }

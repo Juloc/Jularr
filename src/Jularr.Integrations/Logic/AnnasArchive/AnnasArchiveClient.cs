@@ -60,10 +60,11 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 }
 
                 page = read.Html;
+                answered = new Uri(read.Address.GetLeftPart(UriPartial.Authority) + "/");
             }
 
             var records = new List<AnnasArchiveRecord>();
-            foreach (var record in Records(page))
+            foreach (var record in Records(page, answered!))
             {
                 if (records.All(known => known.Md5 != record.Md5))
                 {
@@ -75,7 +76,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         }
 
         // Each record is a row: the file's facts, the title link and the author.
-        private static IReadOnlyList<AnnasArchiveRecord> Records(string page)
+        private static IReadOnlyList<AnnasArchiveRecord> Records(string page, Uri site)
         {
             if (page.Length > MaximumPageBytes)
             {
@@ -91,7 +92,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                     continue;
                 }
 
-                if (ReadRecord(link, match.Groups[1].Value) is { } record)
+                if (ReadRecord(link, match.Groups[1].Value, site) is { } record)
                 {
                     records.Add(record);
                 }
@@ -231,21 +232,43 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         // A file link a person obtained after the site's own check; no key is sent.
         public async Task DownloadFileAsync(Uri file, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
         {
+            var complete = false;
             try
             {
                 await DirectDownload.SaveFileAsync(http, file, destination, gates, browser, maximumBytes, reserveWrite, ct);
                 // The site may answer with a page instead of the file; then the browser fetches it.
                 if (await IsDocumentAsync(destination, ct))
                 {
+                    complete = true;
                     return;
                 }
 
                 File.Delete(destination);
                 await browser.SaveFileAsync(file, destination, maximumBytes, reserveWrite, ct);
+                if (!await IsDocumentAsync(destination, ct))
+                {
+                    throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The browser did not download a supported book file.");
+                }
+
+                complete = true;
             }
             catch (DirectDownloadException exception) when (exception.Failure != DirectDownloadFailure.TooLarge)
             {
                 throw new AnnasArchiveException(Failure(exception), "The file could not be downloaded.", exception);
+            }
+            finally
+            {
+                if (!complete)
+                {
+                    try
+                    {
+                        File.Delete(destination);
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                    {
+                        // Preserve the download error; cleanup can be retried by the operation lifecycle.
+                    }
+                }
             }
         }
 
@@ -327,7 +350,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         private static string Limit(string value, int length) => value.Length <= length ? value : value[..length];
 
         // Each record is a row: the file's facts, the title link and the author.
-        private static AnnasArchiveRecord? ReadRecord(IElement link, string md5)
+        private static AnnasArchiveRecord? ReadRecord(IElement link, string md5, Uri site)
         {
             var title = (link.QuerySelector("h3")?.TextContent ?? link.TextContent ?? "").Trim();
             if (title.Length == 0)
@@ -347,7 +370,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
             var author = link.QuerySelector(".italic")?.TextContent.Trim() ?? Author(row);
             var language = Language().Match(facts) is { Success: true } code ? code.Groups[1].Value : null;
-            return new AnnasArchiveRecord(md5, Limit(title, 500), author is null ? null : Limit(author, 200), format, language, ReadSize(facts), IsPart(lines));
+            return new AnnasArchiveRecord(md5, Limit(title, 500), author is null ? null : Limit(author, 200), format, language, ReadSize(facts), site, IsPart(lines));
         }
 
         // A file that names a part of a work is only that part.
