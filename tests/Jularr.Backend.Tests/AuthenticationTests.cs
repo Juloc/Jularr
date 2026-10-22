@@ -2,8 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Data.User.Session.V1;
 using Jularr.Integrations.Logic.Plex;
 using Jularr.Backend.Service.Core;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -156,6 +158,44 @@ namespace Jularr.Backend.Tests
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             Assert.IsFalse((await state.Content.ReadFromJsonAsync<AuthenticationResultV1>())!.IsAuthenticated);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountSessions\" WHERE \"RevokedAt\" IS NOT NULL"));
+        }
+
+        [TestMethod]
+        public async Task BrowserDevice_SurvivesSignOut_AndKeepsTheDevicesPlaybackQuality()
+        {
+            await using var host = await Host.CreateAsync();
+            await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", Password));
+            Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
+
+            // One random identifier is made with the first sign-in; a new session starts at automatic quality.
+            var deviceCookie = host.Cookies[BrowserDevice.CookieName];
+            Assert.IsTrue(Guid.TryParseExact(deviceCookie, "D", out var deviceId) && deviceId != Guid.Empty);
+            Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"AccountSessions\" WHERE \"DeviceId\" = '{deviceId}' AND \"PlaybackQuality\" = 1"));
+            var sessionId = await host.ScalarAsync("SELECT \"PublicId\" FROM \"AccountSessions\" WHERE \"RevokedAt\" IS NULL");
+            using var chosen = await host.SendAsync(HttpMethod.Put, "/api/v1/sessions/" + sessionId + "/playback-quality", new SessionPlaybackQualityDataV1(PlaybackQuality.Saver));
+            Assert.AreEqual(HttpStatusCode.OK, chosen.StatusCode, await chosen.Content.ReadAsStringAsync());
+
+            // Signing out clears the session and leaves the device cookie alone.
+            using var logout = await host.SendAsync(HttpMethod.Delete, "/api/v1/auth/session");
+            Assert.AreEqual(HttpStatusCode.OK, logout.StatusCode);
+            Assert.AreEqual(deviceCookie, host.Cookies[BrowserDevice.CookieName]);
+            Assert.IsFalse(logout.Headers.TryGetValues("Set-Cookie", out var cleared) && cleared.Any(cookie => cookie.StartsWith(BrowserDevice.CookieName + "=", StringComparison.Ordinal)));
+
+            // The next sign-in is a new session of the same device and plays at the quality chosen before.
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", Password));
+            Assert.AreEqual(HttpStatusCode.OK, again.StatusCode);
+            Assert.AreEqual(deviceCookie, host.Cookies[BrowserDevice.CookieName]);
+            Assert.AreEqual(2L, await host.ScalarAsync($"SELECT count(*) FROM \"AccountSessions\" WHERE \"DeviceId\" = '{deviceId}'"));
+            Assert.AreEqual((short)4, await host.ScalarAsync("SELECT \"PlaybackQuality\" FROM \"AccountSessions\" WHERE \"RevokedAt\" IS NULL"));
+
+            // Another browser has its own identifier and starts at automatic.
+            host.Cookies.Remove(BrowserDevice.CookieName);
+            await host.SendAsync(HttpMethod.Delete, "/api/v1/auth/session");
+            using var other = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", Password));
+            Assert.AreEqual(HttpStatusCode.OK, other.StatusCode);
+            Assert.AreNotEqual(deviceCookie, host.Cookies[BrowserDevice.CookieName]);
+            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"PlaybackQuality\" FROM \"AccountSessions\" WHERE \"RevokedAt\" IS NULL ORDER BY \"CreatedAt\" DESC LIMIT 1"));
         }
 
         [TestMethod]

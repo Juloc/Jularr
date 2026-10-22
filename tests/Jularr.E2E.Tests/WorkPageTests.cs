@@ -242,7 +242,7 @@ namespace Jularr.E2E.Tests
 
                 // Select all shows the dock's bulk zone with the count; the mass editor sets monitoring for both and reports per title.
                 await page.Locator(".list-head").GetByRole(AriaRole.Checkbox, new() { Name = "Select all titles", Exact = true }).CheckAsync();
-                var dock = page.Locator(".action-dock");
+                var dock = page.Locator(".action-dock:not(.save-pill)");
                 await Assertions.Expect(dock).ToContainTextAsync("2 selected");
                 await Evidence.SaveAsync(page, "works-mass-editor");
                 await dock.GetByRole(AriaRole.Button, new() { Name = "Change", Exact = true }).ClickAsync();
@@ -252,7 +252,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(series.GetByRole(AriaRole.Switch)).ToHaveAttributeAsync("aria-label", "Start monitoring");
 
                 // A column is hidden in the picker and stays hidden after a reload.
-                await page.Locator(".action-dock").GetByRole(AriaRole.Button, new() { Name = "Columns", Exact = true }).ClickAsync();
+                await page.Locator(".action-dock:not(.save-pill)").GetByRole(AriaRole.Button, new() { Name = "Columns", Exact = true }).ClickAsync();
                 await page.Locator("[data-column-picker]").GetByRole(AriaRole.Checkbox, new() { Name = "Profile", Exact = true }).UncheckAsync();
                 await Assertions.Expect(page.Locator(".list-head [data-col=profile]")).ToBeHiddenAsync();
                 await page.ReloadAsync();

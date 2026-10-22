@@ -1060,6 +1060,22 @@
    "AniList",
    "AniList"
   ],
+  "admin.catalog.tvdb": [
+   "TVDB",
+   "TVDB"
+  ],
+  "admin.catalog.openlibrary": [
+   "Open Library",
+   "Open Library"
+  ],
+  "admin.catalog.musicbrainz": [
+   "MusicBrainz",
+   "MusicBrainz"
+  ],
+  "admin.catalog.igdb": [
+   "IGDB",
+   "IGDB"
+  ],
   "admin.catalog.entries": [
    "Titles",
    "Titel"
