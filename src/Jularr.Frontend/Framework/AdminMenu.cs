@@ -71,7 +71,7 @@ namespace Jularr.Frontend.Framework
                     new("admin.manualImport.title", "/Admin/ManualImport", Media, ["Library"]),
                     new("admin.import.title", "/Admin/Import", Media, ["Library", "Requests"])
                 ], UserMenu: true),
-                new("library", "nav.group.library", "library",
+                new("library", "nav.group.library", "folder",
                 [
                     new("library.tab.Overview", "/Admin/Library", Media, ["Library"]),
                     new("library.tab.Unmatched", "/Admin/Library/Unmatched", Media, ["Library"]),

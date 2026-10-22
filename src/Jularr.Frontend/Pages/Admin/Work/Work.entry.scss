@@ -438,7 +438,9 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
         width: 22px;
         align-self: stretch;
         background: light-dark(#f4f1fa, #2a2535);
-        &::before { content: "⋮⋮"; display: grid; place-items: center; height: 100%; color: var(--muted); letter-spacing: -2px; font-size: 14px; }
+        display: grid;
+        place-items: center;
+        color: var(--muted);
     }
 
     .work-fact { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }

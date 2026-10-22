@@ -365,7 +365,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
         // The facts of the second line in the order of the columns; one that has nothing to say is left out.
         private IUiComponent StripFacts(Dictionary<string, Fact> facts, string[] columns) =>
-            new Div([new Span().Class("work-strip__handle").Attribute("aria-hidden", "true"), .. columns.Where(column => facts.TryGetValue(column, out var fact) && !fact.Empty).Select(column =>
+            new Div([new Span(new Icon("grip", assets, 14)).Class("work-strip__handle").Attribute("aria-hidden", "true"), .. columns.Where(column => facts.TryGetValue(column, out var fact) && !fact.Empty).Select(column =>
                 (IUiComponent)new Span(new Span(new Text("work.col." + column)).Class("work-fact__label"), facts[column].Content).Class("work-fact").Attribute("data-col", column))]).Class("work-strip__facts");
 
         private IUiComponent FileTable(WorkManagementV1 work, string? csrf) => FileTable(work.Files.Where(file => !file.IsMissing), FileColumns, csrf);

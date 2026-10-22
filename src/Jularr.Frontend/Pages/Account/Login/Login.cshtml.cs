@@ -86,7 +86,7 @@ namespace Jularr.Frontend.Pages.Account.Login
             if (_allowsRegistration)
             {
                 card.Add(new P(new Text("account.login.newHere"),
-                    new A(new Text("account.login.requestAccess"), new ValueText(" "), new Span(new ValueText("↗")).Attribute("aria-hidden", "true")).Attribute("href", "/Account/Register"))
+                    new A(new Text("account.login.requestAccess"), new ValueText(" "), new Icon("arrow-right", assets, 14)).Attribute("href", "/Account/Register"))
                     .Class("auth-request"));
             }
 
