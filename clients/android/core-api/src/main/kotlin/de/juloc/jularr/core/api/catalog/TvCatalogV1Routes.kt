@@ -53,7 +53,11 @@ object TvCatalogV1Routes {
         page: Int, pageSize: Int, filters: TvCatalogV1Filters, sortTypeId: Int? = null,
     ): String = watchlist(page, pageSize, sortTypeId) + filterQuery(filters, includeProgress = true)
 
-    private fun filterQuery(filters: TvCatalogV1Filters, includeProgress: Boolean): String = buildString {
+    private fun filterQuery(filters: TvCatalogV1Filters, includeProgress: Boolean): String {
+        require(includeProgress || filters.progressStateId == null) {
+            "The library endpoint does not support progressStateId. Use watchlist filtering instead."
+        }
+        return buildString {
         filters.mediaTypeIds.forEach { append("&mediaTypeIds=").append(it) }
         filters.mediaSubtypeIds.forEach { append("&mediaSubtypeIds=").append(it) }
         filters.releaseYearFrom?.let { append("&releaseYearFrom=").append(it) }
