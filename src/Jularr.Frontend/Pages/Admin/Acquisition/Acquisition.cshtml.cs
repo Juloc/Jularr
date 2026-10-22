@@ -434,10 +434,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 }
 
                 // Only download clients place files and report their own paths.
-                if (type == AcquisitionConnectionType.Sabnzbd)
+                if (type is AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.Qbittorrent)
                 {
-                    form.Text(item => item.DownloadCategory, "acquisition.connection.category");
-                    form.Toggle(item => item.RemovesCompleted, "acquisition.connection.removesCompleted");
+                    if (type == AcquisitionConnectionType.Sabnzbd)
+                    {
+                        form.Text(item => item.DownloadCategory, "acquisition.connection.category");
+                        form.Toggle(item => item.RemovesCompleted, "acquisition.connection.removesCompleted");
+                    }
                     // SAB reports its real Complete path; only the Jularr-visible folder is chosen here.
                     if (_selected?.RemotePath is { } detected)
                         form.Content(new P(new Strong(new Text("acquisition.connection.remotePath")), new ValueText(": " + detected)));

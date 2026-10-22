@@ -54,6 +54,19 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Client_TellsTheFolder_ItWritesInto()
+        {
+            var client = new FakeQbittorrent();
+            using var http = new HttpClient(client);
+            var sut = new QbittorrentClient(http);
+            var connection = new QbittorrentConnection("http://torrent:8080", "admin", "secret");
+
+            // The folder is what Jularr maps to the storage it reads from.
+            var path = await sut.GetDefaultSavePathAsync(connection, default);
+            Assert.AreEqual("/downloads/complete", path);
+        }
+
+        [TestMethod]
         public async Task Client_RefusesAWrongAccount_AndReportsIt()
         {
             var client = new FakeQbittorrent { AcceptLogin = false };
@@ -125,6 +138,8 @@ namespace Jularr.Backend.Tests
                 {
                     case "/api/v2/app/version":
                         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("v5.3.0") });
+                    case "/api/v2/app/preferences":
+                        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"save_path\":\"/downloads/complete\"}") });
                     case "/api/v2/torrents/add":
                     {
                         var form = request.Content!.ReadAsStringAsync(cancellationToken).GetAwaiter().GetResult();

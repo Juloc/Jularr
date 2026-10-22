@@ -11,6 +11,7 @@ namespace Jularr.Integrations.Logic.Qbittorrent
     {
         private const string LoginPath = "/api/v2/auth/login";
         private const string VersionPath = "/api/v2/app/version";
+        private const string PreferencesPath = "/api/v2/app/preferences";
         private const string InfoPath = "/api/v2/torrents/info";
         private const string AddPath = "/api/v2/torrents/add";
         private const string DeletePath = "/api/v2/torrents/delete";
@@ -56,6 +57,21 @@ namespace Jularr.Integrations.Logic.Qbittorrent
             }
 
             return new QbittorrentGrabResult(false, null, "acquisition_grab_failed");
+        }
+
+        // The folder the client writes into; Jularr maps it to the storage it reads from.
+        public async Task<string?> GetDefaultSavePathAsync(QbittorrentConnection connection, CancellationToken ct)
+        {
+            var session = await LoginAsync(connection, ct);
+            if (session is null) return null;
+
+            using var response = await SendAsync(connection, session, HttpMethod.Get, PreferencesPath, null, ct);
+            if (!response.IsSuccessStatusCode) return null;
+
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            return document.RootElement.TryGetProperty("save_path", out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
         }
 
         // The state of every torrent, or of the given ones.

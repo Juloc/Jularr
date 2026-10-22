@@ -12,9 +12,11 @@ using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Newznab;
+using Jularr.Integrations.Data.Qbittorrent;
 using Jularr.Integrations.Data.Sabnzbd;
 using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Newznab;
+using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Data.Subtitles;
 using Microsoft.AspNetCore.DataProtection;
@@ -144,11 +146,13 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     {
         private readonly IDataProtector _protector;
         private readonly SabnzbdClient _sabnzbd;
+        private readonly QbittorrentClient _qbittorrent;
 
-        internal CreateAcquisitionConnectionV1(IDataProtectionProvider protection, SabnzbdClient sabnzbd)
+        internal CreateAcquisitionConnectionV1(IDataProtectionProvider protection, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent)
         {
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
             _sabnzbd = sabnzbd;
+            _qbittorrent = qbittorrent;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
@@ -164,7 +168,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 throw new DataValidationException(Data.Username is null ? nameof(SaveAcquisitionConnectionDataV1.Username) : nameof(SaveAcquisitionConnectionDataV1.Password), "required");
             }
 
-            var detected = await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, null, _protector, _sabnzbd, CancellationToken);
+            var detected = await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, null, _protector, _sabnzbd, _qbittorrent, CancellationToken);
             var data = AcquisitionConnectionInput.Create(null, Data, _protector, detected);
             return new CreateAcquisitionConnectionResultV1(await Context.CreateAcquisitionConnectionAsync(data, CancellationToken));
         }
@@ -175,11 +179,13 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     {
         private readonly IDataProtector _protector;
         private readonly SabnzbdClient _sabnzbd;
+        private readonly QbittorrentClient _qbittorrent;
 
-        internal UpdateAcquisitionConnectionV1(IDataProtectionProvider protection, SabnzbdClient sabnzbd)
+        internal UpdateAcquisitionConnectionV1(IDataProtectionProvider protection, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent)
         {
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
             _sabnzbd = sabnzbd;
+            _qbittorrent = qbittorrent;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
@@ -199,7 +205,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     AcquisitionConnectionLogic.ReadAcquisitionConnectionStatement(Parameters.AcquisitionConnectionId), CancellationToken);
             }
 
-            var detected = await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, stored, _protector, _sabnzbd, CancellationToken);
+            var detected = await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, stored, _protector, _sabnzbd, _qbittorrent, CancellationToken);
             await Context.UpdateAcquisitionConnectionAsync(AcquisitionConnectionInput.Create(Parameters.AcquisitionConnectionId, Data, _protector, detected), CancellationToken);
             return new UpdateResult(true);
         }
@@ -311,11 +317,31 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         public const string ProtectorPurpose = "Jularr.Acquisition.ApiKey.V1";
 
         public static async Task<string?> DiscoverCompleteFolderAsync(SaveAcquisitionConnectionDataV1 data, AcquisitionConnectionData? stored,
-            IDataProtector protector, SabnzbdClient sabnzbd, CancellationToken ct)
+            IDataProtector protector, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, CancellationToken ct)
         {
             // Existing explicit API mappings remain valid; the regular UI no longer asks for a remote path.
-            if (data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd || data.RemotePath is not null
-                || data.DownloadStorageMountId is null && data.LocalPath is null) return null;
+            if (data.RemotePath is not null || data.DownloadStorageMountId is null && data.LocalPath is null) return null;
+
+            if (data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent)
+            {
+                // The torrent client tells where it writes; Jularr reads the same folder through the storage.
+                if (data.BaseUrl is null) throw new ServiceUnavailableException("acquisition_unavailable");
+                try
+                {
+                    var path = await qbittorrent.GetDefaultSavePathAsync(new QbittorrentConnection(data.BaseUrl, data.Username,
+                        data.Password ?? (stored is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Qbittorrent }
+                            ? Unprotect(protector, stored.ProtectedPassword) : null)), ct);
+                    if (path is null) throw new ServiceUnavailableException("acquisition_unavailable");
+                    return path;
+                }
+                catch (Exception exception) when (exception is HttpRequestException or QbittorrentException or JsonException
+                    || exception is TaskCanceledException && !ct.IsCancellationRequested)
+                {
+                    throw new ServiceUnavailableException("acquisition_unavailable");
+                }
+            }
+
+            if (data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd) return null;
 
             var key = data.ApiKey ?? (stored is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Sabnzbd }
                 ? Unprotect(protector, stored.ProtectedApiKey) : null);
