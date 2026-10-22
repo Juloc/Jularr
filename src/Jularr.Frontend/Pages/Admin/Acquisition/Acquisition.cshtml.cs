@@ -16,12 +16,12 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Acquisition
 {
-    // Indexers, download clients and subtitle providers, each kind on its own page.
+    // Indexers, download clients and subtitle providers, each kind on its own page: a list of the shared list kit, the editor in a dialog.
     public sealed class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
-        UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, IAntiforgery antiforgery,
-        UiText texts, ReadStorageMountsV1 mounts, ReadStorageDirectoriesV1 directories) : JularrPage
+        UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, FrontendAssets assets,
+        IAntiforgery antiforgery, UiText texts, ReadStorageMountsV1 mounts, ReadStorageDirectoriesV1 directories) : JularrPage
     {
-        // The kinds each tab adds.
+        // The kinds each page adds.
         private static readonly IReadOnlyDictionary<AcquisitionConnectionRole, (AcquisitionConnectionType Type, string LabelKey)[]> Additions =
             new Dictionary<AcquisitionConnectionRole, (AcquisitionConnectionType, string)[]>
             {
@@ -43,8 +43,16 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         [BindProperty(SupportsGet = true)]
         public AcquisitionConnectionType? Type { get; set; }
 
-        // Indexers live at the area's address, download clients and subtitles at their own.
-        private AcquisitionConnectionRole Role { get; set; } = AcquisitionConnectionRole.Search;
+        // Indexers live at the area's address, download clients and subtitles at their own; an opened connection keeps its own kind.
+        private AcquisitionConnectionRole? _role;
+
+        private AcquisitionConnectionRole Role
+        {
+            get => _role ?? (Request.Path.Value?.EndsWith("/Downloads", StringComparison.OrdinalIgnoreCase) is true ? AcquisitionConnectionRole.Download
+                : Request.Path.Value?.EndsWith("/Subtitles", StringComparison.OrdinalIgnoreCase) is true ? AcquisitionConnectionRole.Subtitles
+                : AcquisitionConnectionRole.Search);
+            set => _role = value;
+        }
 
         // Deleting asks once more.
         [BindProperty(SupportsGet = true, Name = "delete")]
@@ -63,75 +71,152 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         protected override void Define(Page page)
         {
             page.Title("acquisition.role." + Role);
+            page.Navigation("nav.admin");
+            page.Asset("Pages/Admin/Acquisition/Acquisition.entry.scss");
+            page.Asset("Framework/Components/Modal.entry.ts");
+            page.Asset("Framework/Components/ActionDock.entry.ts");
+            page.Asset("Framework/Components/Truncated.entry.ts");
+            page.Asset("Framework/Components/Form.entry.ts");
             if (Role == AcquisitionConnectionRole.Download) page.Asset("Framework/Components/FolderPicker.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var isSetup = SetupWizard.IsActive(Request);
             if (isSetup) page.Content.Add(SetupWizard.Frame(Role == AcquisitionConnectionRole.Download ? SetupStepType.Downloads : SetupStepType.Indexers));
-            page.Navigation("nav.admin");
-            var type = _selected?.AcquisitionConnectionTypeId ?? Type ?? (isSetup
-                ? Role == AcquisitionConnectionRole.Download ? AcquisitionConnectionType.Sabnzbd : AcquisitionConnectionType.Newznab
-                : (AcquisitionConnectionType?)null);
+            var type = _selected?.AcquisitionConnectionTypeId ?? Type;
+            var items = _connections?.Items ?? [];
 
-            var layout = new Split(split =>
+            // The figures, then the page's one row of navigation.
+            var reachable = items.Count(item => State(item) == "healthy");
+            var failing = items.Count(item => State(item) is "error" or "backoff");
+            page.Content.Add(new KpiTiles(
+                new KpiTile("acquisition.kpi.total", Number(items.Count), Glyph("layers"), UiTone.Accent),
+                new KpiTile("acquisition.kpi.reachable", Number(reachable), Glyph("check"), UiTone.Success),
+                new KpiTile("acquisition.kpi.failing", Number(failing), Glyph("alert"), UiTone.Danger),
+                new KpiTile("acquisition.kpi.disabled", Number(items.Count(item => !item.IsEnabled)), Glyph("power"), UiTone.Neutral)).Strip());
+            if (!isSetup) page.Content.Add(new ListToolbar(DownloadPages.Tabs(Role switch { AcquisitionConnectionRole.Download => DownloadPages.Clients, AcquisitionConnectionRole.Subtitles => DownloadPages.Subtitles, _ => DownloadPages.Indexers })));
+
+            // The connections; an action on a row swaps the page content, so the figures follow.
+            if (_connections is { } list)
             {
-                if (_connections is { } list)
-                {
-                    split.Primary.Add(list.Items.Count == 0 ? new P(new Text("acquisition.connection.none." + Role)).Attribute("role", "status") : ConnectionTable(list.Items));
-                    if (PageNumber > 1) split.Primary.Add(new A(new Text("common.previous")).Attribute("href", Address(pageNumber: PageNumber - 1)));
-                    if (list.Items.Count == list.PageSize) split.Primary.Add(new A(new Text("common.next")).Attribute("href", Address(pageNumber: PageNumber + 1)));
-                }
-
-                if (Role == AcquisitionConnectionRole.Download)
-                {
-                    split.Primary.Add(new UiSection("downloadStorage.title", [new A(new Text("downloadStorage.configure")).Class("button")
-                        .Attribute("href", isSetup ? "/Setup/DownloadStorage" : "/Admin/DownloadStorage")]));
-                }
-                // Indexers also come from a Prowlarr in one step; subtitle providers from the source catalog with their addresses.
-                var additions = Additions[Role].Select(addition => (IUiComponent)new A(new Text(addition.LabelKey)).Class("button").Attribute("href", Address(type: addition.Type))).ToList();
-                if (Role == AcquisitionConnectionRole.Search)
-                {
-                    additions.Add(new A(new Text("acquisition.connection.importProwlarr")).Class("button")
-                        .Attribute("href", SetupWizard.IsActive(Request) ? SetupWizard.Paths[SetupStepType.Media] : "/Admin/Acquisition/Takeover"));
-                }
-                else if (Role == AcquisitionConnectionRole.Subtitles)
-                {
-                    additions.Add(new A(new Text("acquisition.connection.addSubtitles")).Class("button").Attribute("href", "/Admin/Acquisition/Sources"));
-                }
-
-                split.Primary.Add(new Div([.. additions]).Class("page-actions"));
-
-                if (type is { } selectedType)
-                {
-                    if (_selected is { } selected) split.Secondary.Add(new Strong(Health(selected)).Attribute("role", "status"));
-                    split.Secondary.Add(ConnectionForm(selectedType, csrf));
-                    if (_selected is { } current)
-                    {
-                        split.Secondary.Add(Actions(current, csrf));
-                        if (current.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab) split.Secondary.Add(SearchSection(current, csrf));
-                    }
-                }
-            });
-            page.Content.Add(isSetup ? layout : layout.MasterDetail(type is not null, Address()));
-
-            if (FormError is not null && _searchInput is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
-        }
-
-        private Table<AcquisitionConnectionDetailsV1> ConnectionTable(IReadOnlyList<AcquisitionConnectionDetailsV1> items)
-        {
-            // Each kind shows what decides its use.
-            var table = new Table<AcquisitionConnectionDetailsV1>(items)
-                .Text(item => item.Name, "acquisition.connection.name")
-                .Resource(item => item.AcquisitionConnectionTypeId, "acquisition.connection.type", value => "acquisition.connection.type." + value)
-                .Content("table.status", Health);
-            if (Role == AcquisitionConnectionRole.Search)
-            {
-                table.Content("acquisition.connection.today", Usage)
-                    .Resource(item => item.SearchesAutomatically, "acquisition.connection.searches", automatic => automatic ? "acquisition.connection.automatic" : "acquisition.connection.manualOnly");
+                var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("acquisition.connection.none." + Role)).Attribute("role", "status"));
+                page.Content.Add(new ListPanel("acquisition.role." + Role, Columns(), [.. items.Select(item => Row(item, csrf))], empty).Modifier("connections-list connections-list--" + Role.ToString().ToLowerInvariant()));
             }
 
-            if (Role != AcquisitionConnectionRole.Subtitles) table.Text(item => item.Priority, "acquisition.connection.priority");
-            return table.Resource(item => item.IsEnabled, "acquisition.connection.enabled", enabled => enabled ? "acquisition.connection.on" : "acquisition.connection.off")
-                .Link(item => item.Id, "common.actions", id => Address(id), "common.edit");
+            if (type is { } selectedType) page.Content.Add(Editor(selectedType, csrf));
+            if (FormError is not null && _searchInput is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
+
+            // The page's actions and the paging float at the bottom.
+            var actions = new List<IUiComponent>();
+            foreach (var (addition, label) in Additions[Role])
+            {
+                actions.Add(new A(Glyph("plus", 16), new Span(new Text(label)).Class("action-dock__text")).Class("button").Attribute("href", Address(type: addition)));
+            }
+
+            if (Role == AcquisitionConnectionRole.Search)
+            {
+                actions.Add(new A(Glyph("swap", 16), new Span(new Text("acquisition.connection.importProwlarr")).Class("action-dock__text")).Class("button button--soft")
+                    .Attribute("href", isSetup ? SetupWizard.Paths[SetupStepType.Media] : "/Admin/Acquisition/Takeover"));
+            }
+            else if (Role == AcquisitionConnectionRole.Subtitles)
+            {
+                actions.Add(new A(Glyph("plus", 16), new Span(new Text("acquisition.connection.addSubtitles")).Class("action-dock__text")).Class("button").Attribute("href", "/Admin/Acquisition/Sources"));
+            }
+            else
+            {
+                actions.Add(new A(Glyph("drive", 16), new Span(new Text("downloadStorage.configure")).Class("action-dock__text")).Class("button button--soft")
+                    .Attribute("href", isSetup ? "/Setup/DownloadStorage" : "/Admin/DownloadStorage"));
+            }
+
+            DockPaging? paging = null;
+            if (_connections is { } paged && (PageNumber > 1 || paged.Items.Count == paged.PageSize))
+            {
+                paging = new DockPaging(PageNumber > 1 ? Address(pageNumber: PageNumber - 1) : null, paged.Items.Count == paged.PageSize ? Address(pageNumber: PageNumber + 1) : null,
+                    new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dock.page.single"], PageNumber)));
+            }
+
+            page.Content.Add(new ActionDock(assets, "acquisition.actions", actions, paging: paging));
+        }
+
+        // The columns each kind shows: what decides its use.
+        private List<ListColumn> Columns()
+        {
+            var columns = new List<ListColumn> { new("acquisition.connection.name", ListRole.Main), new("table.status", ListRole.Status), new("acquisition.connection.lastTest", ListRole.Data, 1) };
+            if (Role == AcquisitionConnectionRole.Search) columns.Add(new("acquisition.connection.today", ListRole.Data, 2));
+            if (Role == AcquisitionConnectionRole.Download) columns.Add(new("acquisition.connection.category", ListRole.Data, 2));
+            if (Role != AcquisitionConnectionRole.Subtitles) columns.Add(new("acquisition.connection.priority", ListRole.Data, 1));
+            columns.Add(new("acquisition.connection.active"));
+            columns.Add(new("common.actions", ListRole.Actions));
+            return columns;
+        }
+
+        private ListRow Row(AcquisitionConnectionDetailsV1 item, string? csrf)
+        {
+            var (icon, tone) = item.AcquisitionConnectionTypeId switch
+            {
+                AcquisitionConnectionType.Usenet => ("server", UiTone.Info),
+                _ when Role == AcquisitionConnectionRole.Download => ("download", UiTone.Info),
+                _ when Role == AcquisitionConnectionRole.Subtitles => ("subtitles", UiTone.Accent),
+                _ => ("search", UiTone.Info)
+            };
+            var state = State(item);
+            var note = state switch
+            {
+                "backoff" => new Truncated(texts["acquisition.connection.backoff"] + " " + item.RetryAt!.Value.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)),
+                "error" => new Truncated(texts["errors." + item.ErrorKey]),
+                _ => null
+            };
+            var identity = new ListIdentity(new IconTile(Glyph(icon, 18), tone), new A(new ValueText(item.Name)).Class("list-identity__title").Attribute("href", Address(item.Id)),
+                new Truncated(texts["acquisition.connection.type." + item.AcquisitionConnectionTypeId] + Endpoint(item)), note);
+
+            var cells = new List<IUiComponent> { identity, StateChipOf(item, state), Time(item.CheckedAt) };
+            if (Role == AcquisitionConnectionRole.Search) cells.Add(Usage(item));
+            if (Role == AcquisitionConnectionRole.Download) cells.Add(item.DownloadCategory is { } category ? new Span(new ValueText(category)).Class("list-value") : Dim());
+            if (Role != AcquisitionConnectionRole.Subtitles) cells.Add(new Span(new ValueText(item.Priority.ToString(CultureInfo.InvariantCulture))).Class("list-value"));
+            cells.Add(Post("Toggle", item.Id, csrf, [("isEnabled", item.IsEnabled ? "false" : "true")], new SwitchButton(item.IsEnabled, "acquisition.connection.active")));
+            cells.Add(new Div(
+                Post("Test", item.Id, csrf, [], new Button(Glyph("pulse", 14), new Text("acquisition.connection.test")).Compact().Soft().Submit()),
+                new A(Glyph("pencil", 16)).Class("button button--icon").TextAttribute("aria-label", "common.edit").TextAttribute("title", "common.edit").Attribute("href", Address(item.Id))).Class("list-actions"));
+
+            var caption = new List<IUiComponent> { ListPanel.Fact("acquisition.connection.lastTest", Time(item.CheckedAt), Glyph("clock", 14)) };
+            if (Role != AcquisitionConnectionRole.Subtitles) caption.Add(ListPanel.Fact("acquisition.connection.priority", new ValueText(item.Priority.ToString(CultureInfo.InvariantCulture))));
+            var row = new ListRow(cells, caption);
+            if (state == "backoff") row.Tinted(UiTone.Warning);
+            if (state == "error") row.Tinted(UiTone.Danger);
+            return row;
+        }
+
+        // The state of a connection: switched off, failing and paused, failing, not tested yet or reachable.
+        private static string State(AcquisitionConnectionDetailsV1 item) => !item.IsEnabled ? "off" : item is { IsBackedOff: true, RetryAt: not null } ? "backoff"
+            : item.ErrorKey is not null ? "error" : item.CheckedAt is null ? "unchecked" : "healthy";
+
+        // The icon and the tone say the state as well as the colour does.
+        private IUiComponent StateChipOf(AcquisitionConnectionDetailsV1 item, string state)
+        {
+            var (tone, icon, key) = state switch
+            {
+                "off" => (UiTone.Neutral, "power", "acquisition.connection.off"),
+                "backoff" => (UiTone.Warning, "pause", "acquisition.connection.state.backoff"),
+                "error" => (UiTone.Danger, "alert", "acquisition.connection.state.error"),
+                "unchecked" => (UiTone.Accent, "clock", "acquisition.connection.unchecked"),
+                _ => (UiTone.Success, "check", "acquisition.connection.healthy")
+            };
+            return new StateChip(new Text(key), tone, Glyph(icon, 14));
+        }
+
+        // The address a connection answers at, after its kind.
+        private static string Endpoint(AcquisitionConnectionDetailsV1 item)
+        {
+            if (item.Host is { } host) return " · " + host + (item.Port is { } port ? ":" + port.ToString(CultureInfo.InvariantCulture) : "");
+            return Uri.TryCreate(item.BaseUrl, UriKind.Absolute, out var address) ? " · " + address.Authority : "";
+        }
+
+        // The editor: one dialog for a new or an opened connection, with its test, its search and its deletion beneath the form.
+        private IUiComponent Editor(AcquisitionConnectionType type, string? csrf)
+        {
+            var body = new List<IUiComponent>();
+            if (_selected is { } current) body.Add(Actions(current, csrf));
+            body.Add(ConnectionForm(type, csrf));
+            if (_selected is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Newznab } indexer) body.Add(SearchSection(indexer, csrf));
+            return new Modal(assets, "connection-editor", "acquisition.connection.type." + type, body, open: true, returnTo: Address());
         }
 
         // Test, then delete behind one confirmation.
@@ -145,12 +230,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                         form.Hidden(item => item.Version);
                         form.Submit("acquisition.connection.delete");
                     }, Address(selected.Id, handler: "Delete"), csrf, new DeleteAcquisitionConnectionParametersV1(selected.Id, selected.Version)),
-                    new A(new Text("common.back")).Class("button").Attribute("href", Address(selected.Id))).Class("page-actions");
+                    new A(new Text("common.back")).Class("button").Attribute("href", Address(selected.Id))).Class("connection-editor__actions");
             }
 
-            return new Div(new Form<AcquisitionConnectionParametersV1>(form => form.Submit("acquisition.connection.test"), Address(selected.Id, handler: "Test"), csrf,
-                    new AcquisitionConnectionParametersV1(selected.Id)),
-                new A(new Text("acquisition.connection.delete")).Class("button").Attribute("href", Address(selected.Id) + "&delete=true")).Class("page-actions");
+            return new Div(Post("Test", selected.Id, csrf, [], new Button(Glyph("pulse", 14), new Text("acquisition.connection.test")).Soft().Submit()),
+                new A(Glyph("trash", 14), new Text("acquisition.connection.delete")).Class("button button--warn").Attribute("href", Address(selected.Id) + "&delete=true")).Class("connection-editor__actions");
         }
 
         // A free-text query shows what the indexer returns; it counts towards the daily queries.
@@ -199,7 +283,16 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 AcquisitionConnectionId = (await create.ExecuteAsync<CreateAcquisitionConnectionResultV1>(_input, HttpContext.RequestAborted)).Id;
             }
 
-            return LocalRedirect(Address(AcquisitionConnectionId));
+            return LocalRedirect(Address());
+        }
+
+        // A row's switch changes only whether the connection is used; its key and password stay.
+        public async Task<IActionResult> OnPostToggleAsync(bool isEnabled)
+        {
+            var ct = HttpContext.RequestAborted;
+            var current = await connection.ExecuteAsync<AcquisitionConnectionDetailsV1>(new AcquisitionConnectionParametersV1(SelectedId()), ct);
+            await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(current.Id), InputOf(current, isEnabled), ct);
+            return LocalRedirect(Address());
         }
 
         public async Task<IActionResult> OnGetFoldersAsync([BindRequired] long storageMountId, string? path, string? afterName)
@@ -225,7 +318,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 ? string.Join(" · ", new[] { texts["acquisition.connection.healthy"], result.ServerVersion is { } version ? texts["table.version"] + " " + version : null,
                     result.SearchModes.Length > 0 ? texts["acquisition.connection.searchModes"] + " " + string.Join(", ", result.SearchModes) : null }.OfType<string>())
                 : texts["errors." + (result.ErrorKey ?? "acquisition_unavailable")]);
-            return LocalRedirect(Address(AcquisitionConnectionId));
+            return LocalRedirect(Address());
         }
 
         public async Task<IActionResult> OnPostSearchAsync(string? query)
@@ -246,10 +339,6 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         protected override async Task LoadDataAsync()
         {
-            // The address names the kind; an opened connection keeps its own.
-            Role = Request.Path.Value?.EndsWith("/Downloads", StringComparison.OrdinalIgnoreCase) is true ? AcquisitionConnectionRole.Download
-                : Request.Path.Value?.EndsWith("/Subtitles", StringComparison.OrdinalIgnoreCase) is true ? AcquisitionConnectionRole.Subtitles
-                : AcquisitionConnectionRole.Search;
             if (AcquisitionConnectionId is { } id)
             {
                 _selected = await connection.ExecuteAsync<AcquisitionConnectionDetailsV1>(new AcquisitionConnectionParametersV1(id), HttpContext.RequestAborted);
@@ -270,12 +359,15 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             }
         }
 
+        // The stored values of a connection as an input; a key or password is never read back, so it stays as it is.
+        private static SaveAcquisitionConnectionDataV1 InputOf(AcquisitionConnectionDetailsV1 selected, bool? isEnabled = null) =>
+            new(selected.Name, selected.AcquisitionConnectionTypeId, selected.BaseUrl, null, isEnabled ?? selected.IsEnabled, selected.Priority, selected.Categories,
+                selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username, selected.MaxConnections, null, selected.MediaTypeIds,
+                selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl, selected.DownloadStorageMountId, selected.RemovesCompleted);
+
         private Form<SaveAcquisitionConnectionDataV1> ConnectionForm(AcquisitionConnectionType type, string? csrf)
         {
-            var input = _input ?? (_selected is { } selected
-                ? new SaveAcquisitionConnectionDataV1(selected.Name, selected.AcquisitionConnectionTypeId, selected.BaseUrl, null, selected.IsEnabled, selected.Priority, selected.Categories,
-                    selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username, selected.MaxConnections, null, selected.MediaTypeIds,
-                    selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl, selected.DownloadStorageMountId, selected.RemovesCompleted)
+            var input = _input ?? (_selected is { } selected ? InputOf(selected)
                 : new SaveAcquisitionConnectionDataV1(SuggestedName ?? "", type, type == AcquisitionConnectionType.Usenet ? null : SuggestedUrl ?? "", null, true,
                     type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd ? 25 : 50, [], null, null, null, useSsl: type == AcquisitionConnectionType.Usenet ? true : null));
 
@@ -359,7 +451,6 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     }
                     else form.Hidden(item => item.DownloadStorageMountId);
                     form.Text(item => item.LocalPath, "acquisition.connection.localPath");
-                    form.Content(new P(new Text("acquisition.connection.downloadStorageHint")));
                     var browse = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(Address(AcquisitionConnectionId, type, "Folders"),
                         "storageMountId", input.DownloadStorageMountId?.ToString(CultureInfo.InvariantCulture) ?? "");
                     if (texts.Can("storage.read"))
@@ -369,19 +460,28 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     }
                 }
 
-                form.Save();
+                form.Cancel();
+                form.Submit("common.save");
             }, Address(AcquisitionConnectionId, type), csrf, input, _input is null ? null : FormError);
         }
 
-        // A failing connection waits before automatic use; a successful test ends the pause.
-        private IUiComponent Health(AcquisitionConnectionDetailsV1 item) => item is { IsBackedOff: true, RetryAt: { } retry }
-            ? new Span(new Text("acquisition.connection.backoff"), new ValueText(" " + retry.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)))
-            : new Text(item.CheckedAt is null ? "acquisition.connection.unchecked" : item.ErrorKey is { } error ? "errors." + error : "acquisition.connection.healthy");
+        // A form of one connection's action; posted through htmx, it swaps the page content.
+        private IUiComponent Post(string handler, long id, string? csrf, (string Name, string Value)[] hidden, IUiComponent button) => new PostForm(Address(id, handler: handler), csrf, hidden, button);
+
+        private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);
+
+        private static IUiComponent Number(int value) => new ValueText(value.ToString("N0", CultureInfo.CurrentCulture));
+
+        private static IUiComponent Dim() => new Span(new ValueText("–")).Class("list-value list-value--dim");
+
+        private static IUiComponent Time(DateTime? value) => value is { } time
+            ? new Span(new ValueText(time.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("list-value")
+            : Dim();
 
         // Today's queries and grabs of an indexer against its limits.
-        private static IUiComponent Usage(AcquisitionConnectionDetailsV1 item) => item.AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab ? new Span()
+        private static IUiComponent Usage(AcquisitionConnectionDetailsV1 item) => item.AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab ? Dim()
             : new Span(new ValueText(Count(item.QueryCount, item.QueryLimit) + " "), new Text("acquisition.connection.queries"),
-                new ValueText(" · " + Count(item.GrabCount, item.GrabLimit) + " "), new Text("acquisition.connection.grabs"));
+                new ValueText(" · " + Count(item.GrabCount, item.GrabLimit) + " "), new Text("acquisition.connection.grabs")).Class("list-value");
 
         private static string Count(int count, int? limit) =>
             count.ToString(CultureInfo.InvariantCulture) + (limit is { } value ? " / " + value.ToString(CultureInfo.InvariantCulture) : "");

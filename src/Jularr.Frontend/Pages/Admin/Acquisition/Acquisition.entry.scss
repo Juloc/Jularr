@@ -1,0 +1,36 @@
+// The list kit's grid of the connection pages: the columns each kind shows, at three widths.
+.connections-list--search {
+    --list-columns: minmax(200px, 2.4fr) minmax(112px, 1.05fr) minmax(115px, 1.1fr) minmax(150px, 1.5fr) minmax(70px, .6fr) minmax(72px, .6fr) minmax(165px, 1fr);
+    --list-columns-medium: minmax(190px, 2fr) minmax(112px, 1fr) minmax(70px, .6fr) minmax(72px, .6fr) minmax(165px, 1fr);
+    --list-columns-narrow: minmax(160px, 2fr) minmax(112px, 1fr) minmax(72px, .6fr) minmax(165px, 1fr);
+}
+
+.connections-list--download {
+    --list-columns: minmax(200px, 2.4fr) minmax(112px, 1.05fr) minmax(115px, 1.1fr) minmax(110px, 1fr) minmax(70px, .6fr) minmax(72px, .6fr) minmax(165px, 1fr);
+    --list-columns-medium: minmax(190px, 2fr) minmax(112px, 1fr) minmax(70px, .6fr) minmax(72px, .6fr) minmax(165px, 1fr);
+    --list-columns-narrow: minmax(160px, 2fr) minmax(112px, 1fr) minmax(72px, .6fr) minmax(165px, 1fr);
+}
+
+.connections-list--subtitles {
+    --list-columns: minmax(200px, 2.4fr) minmax(112px, 1.05fr) minmax(115px, 1.1fr) minmax(72px, .6fr) minmax(165px, 1fr);
+    --list-columns-medium: minmax(190px, 2fr) minmax(112px, 1fr) minmax(72px, .6fr) minmax(165px, 1fr);
+    --list-columns-narrow: minmax(160px, 2fr) minmax(112px, 1fr) minmax(72px, .6fr) minmax(165px, 1fr);
+}
+
+// A row's switch is a form of its own; the title of a row is a link to its editor.
+.connections-list {
+    .list-cell form { display: inline-flex; margin: 0; }
+}
+
+// What the editor holds besides its form: the test and delete actions above it and the test search below.
+.connection-editor__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 14px;
+
+    form { display: inline-flex; margin: 0; }
+}
+
+#connection-editor .ui-section { padding: 18px 0; }

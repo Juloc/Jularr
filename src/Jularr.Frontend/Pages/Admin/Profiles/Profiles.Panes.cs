@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
@@ -11,15 +12,31 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
     {
         private void DefineFormats(Page page)
         {
-            if (_formats is { } result)
+            if (_formats is not { } result) return;
+
+            // Which profiles give a format a score decides whether it is used.
+            var empty = new Div(new IconTile(Glyph("filter", 22), UiTone.Neutral), new P(new Text("arr.formats.none")).Attribute("role", "status"));
+            var columns = new List<ListColumn>
             {
-                page.Content.Add(new Table<CustomFormatDetailsV1>(result.Items).Text(item => item.Name, "profile.name")
-                    .Content("common.actions", item => EditLink(item.Id)));
-                Paging(page, result);
-            }
+                new("profile.name", ListRole.Main), new("table.status", ListRole.Status), new("arr.col.conditions", ListRole.Data, 1), new("arr.col.renaming", ListRole.Data, 2),
+                new("arr.col.profiles", ListRole.Data, 2), new("common.actions", ListRole.Actions)
+            };
+            var rows = result.Items.Select(item =>
+            {
+                var using_ = _profiles.Count(profile => profile.FormatScores.Any(score => score.FormatId == item.Id && score.Score != 0));
+                var identity = new ListIdentity(new IconTile(Glyph("filter", 18), UiTone.Info), new A(new ValueText(item.Name)).Class("list-identity__title").Attribute("href", Address(edit: item.Id)),
+                    new Truncated(string.Join(", ", item.Conditions.Select(condition => condition.Name.Length > 0 ? condition.Name : texts["arr.condition." + condition.Kind]))));
+                var state = using_ > 0 ? new StateChip(new Text("arr.format.used"), UiTone.Success, Glyph("check", 14)) : new StateChip(new Text("arr.format.unused"), UiTone.Neutral, Glyph("clock", 14));
+                var renaming = item.IncludeWhenRenaming ? new Span(new Text("arr.col.renaming.yes")).Class("list-value") : new Span(new ValueText("–")).Class("list-value list-value--dim");
+                var caption = new List<IUiComponent> { ListPanel.Fact("arr.col.conditions", Count(item.Conditions.Count)), ListPanel.Fact("arr.col.profiles", Count(using_)) };
+                return new ListRow([identity, state, new Span(Count(item.Conditions.Count)).Class("list-value"), renaming, new Span(Count(using_)).Class("list-value"), new Div(EditLink(Address(edit: item.Id))).Class("list-actions")], caption);
+            }).ToList();
+            page.Content.Add(new ListPanel("arr.formats", columns, rows, empty).Modifier("formats-list"));
+
+            // The editor and the import, each a dialog.
             var input = _format ?? new SaveCustomFormatDataV1(null, MediaTypeId, "", false,
                 new([new FormatConditionV1("", FormatConditionKind.ReleaseTitle, false, false, null, false, null, null, null)]), null);
-            page.Content.Add(new Form<SaveCustomFormatDataV1>(form =>
+            var form = new Form<SaveCustomFormatDataV1>(form =>
             {
                 form.Hidden(item => item.Id);
                 form.Hidden(item => item.MediaTypeId);
@@ -56,17 +73,30 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                     form.Content(new Button(new Text("arr.removeCondition")).Attribute("type", "submit").Attribute("formaction", Address("Condition", Edit))
                         .Attribute("formnovalidate", "formnovalidate"));
                 }
-                form.Save();
-            }, Address("Format", Edit), Token, input, _import is null ? FormError : null));
-            if (input.Id is { } id) DeleteForm(page, id, input.Version!.Value);
-            page.Content.Add(new Form<ImportCustomFormatsDataV1>(form =>
+                form.Cancel();
+                form.Submit("common.save");
+            }, Address("Format", Edit), Token, input, _import is null ? FormError : null);
+            var body = new List<IUiComponent> { form };
+            if (input.Id is { } id) body.Add(DeleteForm(id, input.Version!.Value));
+            if (Edit is not null || IsNew || _format is not null) page.Content.Add(new Modal(assets, "format-editor", "arr.format.title", body, open: true, returnTo: Address()));
+
+            var import = new Form<ImportCustomFormatsDataV1>(form =>
             {
                 form.Hidden(item => item.MediaTypeId);
                 form.Select(item => item.TakeoverSourceTypeId, "takeover.source",
                     new[] { TakeoverSourceType.Sonarr, TakeoverSourceType.Radarr }.Select(source => new SelectOption(Number((byte)source), texts["takeover.source." + source])));
                 form.Multiline(item => item.Json, "arr.importJson");
+                form.Cancel();
                 form.Submit("arr.import");
-            }, Address("Import"), Token, _import ?? new ImportCustomFormatsDataV1(MediaTypeId, TakeoverSourceType.Radarr, ""), _import is null ? null : FormError));
+            }, Address("Import"), Token, _import ?? new ImportCustomFormatsDataV1(MediaTypeId, TakeoverSourceType.Radarr, ""), _import is null ? null : FormError);
+            page.Content.Add(new Modal(assets, "format-import", "arr.import", [import], open: _import is not null));
+
+            var actions = new List<IUiComponent>
+            {
+                AddAction("arr.format.add"),
+                Modal.Opener(new Button(Glyph("download", 16), new Span(new Text("arr.import")).Class("action-dock__text")).Soft(), "format-import")
+            };
+            page.Content.Add(new ActionDock(assets, "arr.actions", actions, paging: Paging(result)));
         }
 
         private void DefineSizes(Page page)
@@ -89,14 +119,27 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         private void DefineRelease(Page page)
         {
-            if (_releases is { } result)
+            if (_releases is not { } result) return;
+            var empty = new Div(new IconTile(Glyph("shield", 22), UiTone.Neutral), new P(new Text("arr.release.none")).Attribute("role", "status"));
+            var columns = new List<ListColumn>
             {
-                page.Content.Add(new Table<ReleaseProfileDetailsV1>(result.Items).Text(item => item.Name, "profile.name")
-                    .Content("common.actions", item => EditLink(item.Id)));
-                Paging(page, result);
-            }
+                new("profile.name", ListRole.Main), new("table.status", ListRole.Status), new("arr.col.required", ListRole.Data, 1), new("arr.col.ignored", ListRole.Data, 1),
+                new("arr.col.indexer", ListRole.Data, 2), new("common.actions", ListRole.Actions)
+            };
+            var rows = result.Items.Select(item =>
+            {
+                var identity = new ListIdentity(new IconTile(Glyph("shield", 18), UiTone.Warning), new A(new ValueText(item.Name)).Class("list-identity__title").Attribute("href", Address(edit: item.Id)),
+                    new Truncated(string.Join(", ", item.Required.Concat(item.Ignored))));
+                var state = item.IsEnabled ? new StateChip(new Text("acquisition.connection.on"), UiTone.Success, Glyph("check", 14)) : new StateChip(new Text("acquisition.connection.off"), UiTone.Neutral, Glyph("power", 14));
+                var indexer = item.AcquisitionConnectionId is { } connectionId ? _indexerChoices.FirstOrDefault(choice => choice.Value == Number(connectionId))?.Label ?? "–" : texts["arr.anyIndexer"];
+                var caption = new List<IUiComponent> { ListPanel.Fact("arr.col.required", Count(item.Required.Length)), ListPanel.Fact("arr.col.ignored", Count(item.Ignored.Length)) };
+                return new ListRow([identity, state, new Span(Count(item.Required.Length)).Class("list-value"), new Span(Count(item.Ignored.Length)).Class("list-value"),
+                    new Span(new ValueText(indexer)).Class("list-value"), new Div(EditLink(Address(edit: item.Id))).Class("list-actions")], caption);
+            }).ToList();
+            page.Content.Add(new ListPanel("arr.releaseProfiles", columns, rows, empty).Modifier("release-list"));
+
             var input = _release ?? new SaveReleaseProfileDataV1(null, MediaTypeId, "", true, [], [], null, [], null);
-            page.Content.Add(new Form<SaveReleaseProfileDataV1>(form =>
+            var form = new Form<SaveReleaseProfileDataV1>(form =>
             {
                 form.Hidden(item => item.Id);
                 form.Hidden(item => item.Version);
@@ -108,52 +151,63 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 PickerPaging(form, "Release", "IndexerPage", _indexerPage?.Page ?? 1, _indexerPage?.Items.Count == _indexerPage?.PageSize);
                 form.Choices(item => item.TagIds, "arr.tags", _tagChoices);
                 PickerPaging(form, "Release", "TagPage", _tagPage?.Page ?? 1, _tagPage?.Items.Count == _tagPage?.PageSize);
-                form.Save();
-            }, Address("Release", Edit), Token, input, FormError));
-            if (input.Id is { } id) DeleteForm(page, id, input.Version!.Value);
+                form.Cancel();
+                form.Submit("common.save");
+            }, Address("Release", Edit), Token, input, FormError);
+            var body = new List<IUiComponent> { form };
+            if (input.Id is { } id) body.Add(DeleteForm(id, input.Version!.Value));
+            if (Edit is not null || IsNew || _release is not null) page.Content.Add(new Modal(assets, "release-editor", "arr.release.title", body, open: true, returnTo: Address()));
+            page.Content.Add(new ActionDock(assets, "arr.actions", [AddAction("arr.release.add")], paging: Paging(result)));
         }
 
         private void DefineTags(Page page)
         {
-            if (_tags is { } result)
-            {
-                page.Content.Add(new Table<AcquisitionTagDetailsV1>(result.Items).Text(item => item.Label, "profile.name")
-                    .Content("common.actions", item => EditLink(item.Id)));
-                Paging(page, result);
-            }
+            if (_tags is not { } result) return;
+            var empty = new Div(new IconTile(Glyph("tag", 22), UiTone.Neutral), new P(new Text("arr.tags.none")).Attribute("role", "status"));
+            var columns = new List<ListColumn> { new("arr.tag", ListRole.Main), new("common.actions", ListRole.Actions) };
+            var rows = result.Items.Select(item => new ListRow([
+                new ListIdentity(new IconTile(Glyph("tag", 18), UiTone.Accent), new A(new ValueText(item.Label)).Class("list-identity__title").Attribute("href", Address(edit: item.Id)), new Span()),
+                new Div(EditLink(Address(edit: item.Id))).Class("list-actions")])).ToList();
+            page.Content.Add(new ListPanel("arr.tags", columns, rows, empty).Modifier("tags-list"));
+
             var input = _tag ?? new SaveAcquisitionTagDataV1(null, "", null);
-            page.Content.Add(new Form<SaveAcquisitionTagDataV1>(form =>
+            var form = new Form<SaveAcquisitionTagDataV1>(form =>
             {
                 form.Hidden(item => item.Id);
                 form.Hidden(item => item.Version);
-                form.Text(item => item.Label, "profile.name");
-                form.Save();
-            }, Address("Tag", Edit), Token, input, FormError));
-            if (input.Id is { } id) DeleteForm(page, id, input.Version!.Value);
+                form.Text(item => item.Label, "arr.tag");
+                form.Cancel();
+                form.Submit("common.save");
+            }, Address("Tag", Edit), Token, input, FormError);
+            var body = new List<IUiComponent> { form };
+            if (input.Id is { } id) body.Add(DeleteForm(id, input.Version!.Value));
+            if (Edit is not null || IsNew || _tag is not null) page.Content.Add(new Modal(assets, "tag-editor", "arr.tag.title", body, open: true, returnTo: Address()));
+            page.Content.Add(new ActionDock(assets, "arr.actions", [AddAction("arr.tag.add")], paging: Paging(result)));
         }
 
-        private void DeleteForm(Page page, long id, long version)
+        // The deletion of the edited item behind one more click.
+        private IUiComponent DeleteForm(long id, long version)
         {
             IUiComponent form = Tab switch
             {
-                "formats" => Confirm(new DeleteCustomFormatParametersV1(id, version), fields =>
+                DownloadPages.Formats => Confirm(new DeleteCustomFormatParametersV1(id, version), fields =>
                 {
                     fields.Hidden(item => item.CustomFormatId);
                     fields.Hidden(item => item.Version);
                 }),
-                "release" => Confirm(new DeleteReleaseProfileParametersV1(id, version), fields =>
+                DownloadPages.Release => Confirm(new DeleteReleaseProfileParametersV1(id, version), fields =>
                 {
                     fields.Hidden(item => item.ReleaseProfileId);
                     fields.Hidden(item => item.Version);
                 }),
-                "tags" => Confirm(new DeleteAcquisitionTagParametersV1(id, version), fields =>
+                DownloadPages.Tags => Confirm(new DeleteAcquisitionTagParametersV1(id, version), fields =>
                 {
                     fields.Hidden(item => item.AcquisitionTagId);
                     fields.Hidden(item => item.Version);
                 }),
                 _ => throw new KeyNotFoundException()
             };
-            page.Content.Add(new Details(new Summary(new Text("common.remove")), form));
+            return new Details(new Summary(new Text("common.remove")), form);
 
             Form<T> Confirm<T>(T input, Action<Form<T>> fields) where T : BaseData => new(form =>
             {
@@ -164,15 +218,15 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         public async Task<IActionResult> OnPostFormatAsync(long? id, string? name, bool includeWhenRenaming, long? version, List<ConditionRow>? conditions)
         {
-            Tab = "formats";
+            Tab = DownloadPages.Formats;
             _format = FormatInput(id, name, includeWhenRenaming, version, conditions);
-            var saved = await saveFormat.ExecuteAsync<SavedCustomFormatV1>(new SaveCustomFormatParametersV1(), _format, HttpContext.RequestAborted);
-            return LocalRedirect(Address(edit: saved.Id));
+            await saveFormat.ExecuteAsync<SavedCustomFormatV1>(new SaveCustomFormatParametersV1(), _format, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
         }
 
         public async Task<IActionResult> OnPostConditionAsync(long? id, string? name, bool includeWhenRenaming, long? version, List<ConditionRow>? conditions, bool add, bool refresh = false)
         {
-            Tab = "formats";
+            Tab = DownloadPages.Formats;
             var rows = conditions ?? [];
             if (add && rows.Count < 64) rows.Add(new("", FormatConditionKind.ReleaseTitle, false, false, null, false, null, null, null));
             else if (!add && !refresh && rows.Count > 1) rows.RemoveAt(rows.Count - 1);
@@ -188,7 +242,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         public async Task<IActionResult> OnPostImportAsync(TakeoverSourceType takeoverSourceTypeId, string? json)
         {
-            Tab = "formats";
+            Tab = DownloadPages.Formats;
             _import = new(MediaTypeId, takeoverSourceTypeId, json ?? "");
             await importFormats.ExecuteAsync<BaseDataList<SavedCustomFormatV1>>(new SaveCustomFormatParametersV1(), _import, HttpContext.RequestAborted);
             return LocalRedirect(Address());
@@ -196,7 +250,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         public async Task<IActionResult> OnPostSizesAsync(List<SizeRow>? rows)
         {
-            Tab = "sizes";
+            Tab = DownloadPages.Sizes;
             _sizes = new(new((rows ?? []).Select(row => new QualityDefinitionV1(row.Quality ?? "", row.MinimumMbPerMinute,
                 row.PreferredMbPerMinute, row.MaximumMbPerMinute, row.Version))));
             await saveSizes.ExecuteAsync<UpdateResult>(new QualityDefinitionsParametersV1(MediaTypeId), _sizes, HttpContext.RequestAborted);
@@ -206,20 +260,20 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         public async Task<IActionResult> OnPostReleaseAsync(long? id, string? name, bool isEnabled, string? required, string? ignored,
             long? acquisitionConnectionId, long[]? tagIds, long? version, bool draft)
         {
-            Tab = "release";
+            Tab = DownloadPages.Release;
             var scope = id is { } existing ? (await release.ExecuteAsync<ReleaseProfileDetailsV1>(new ReleaseProfileParametersV1(existing), HttpContext.RequestAborted)).MediaTypeId : MediaTypeId;
             _release = new(id, scope, name ?? "", isEnabled, Terms(required), Terms(ignored), acquisitionConnectionId, tagIds ?? [], version);
             if (draft) { await LoadDataAsync(); PreparePage(); return Page(); }
-            var saved = await saveRelease.ExecuteAsync<SavedAcquisitionPolicyV1>(new SaveAcquisitionPolicyParametersV1(), _release, HttpContext.RequestAborted);
-            return LocalRedirect(Address(edit: saved.Id));
+            await saveRelease.ExecuteAsync<SavedAcquisitionPolicyV1>(new SaveAcquisitionPolicyParametersV1(), _release, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
         }
 
         public async Task<IActionResult> OnPostTagAsync(long? id, string? label, long? version)
         {
-            Tab = "tags";
+            Tab = DownloadPages.Tags;
             _tag = new(id, label ?? "", version);
-            var saved = await saveTag.ExecuteAsync<SavedAcquisitionPolicyV1>(new SaveAcquisitionPolicyParametersV1(), _tag, HttpContext.RequestAborted);
-            return LocalRedirect(Address(edit: saved.Id));
+            await saveTag.ExecuteAsync<SavedAcquisitionPolicyV1>(new SaveAcquisitionPolicyParametersV1(), _tag, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
         }
 
         public async Task<IActionResult> OnPostDeleteAsync(long version)
@@ -227,11 +281,12 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             var id = Edit ?? throw new KeyNotFoundException();
             switch (Tab)
             {
-                case "formats": await deleteFormat.ExecuteAsync<UpdateResult>(new DeleteCustomFormatParametersV1(id, version), default, HttpContext.RequestAborted); break;
-                case "release": await deleteRelease.ExecuteAsync<UpdateResult>(new DeleteReleaseProfileParametersV1(id, version), default, HttpContext.RequestAborted); break;
-                case "tags": await deleteTag.ExecuteAsync<UpdateResult>(new DeleteAcquisitionTagParametersV1(id, version), default, HttpContext.RequestAborted); break;
+                case DownloadPages.Formats: await deleteFormat.ExecuteAsync<UpdateResult>(new DeleteCustomFormatParametersV1(id, version), default, HttpContext.RequestAborted); break;
+                case DownloadPages.Release: await deleteRelease.ExecuteAsync<UpdateResult>(new DeleteReleaseProfileParametersV1(id, version), default, HttpContext.RequestAborted); break;
+                case DownloadPages.Tags: await deleteTag.ExecuteAsync<UpdateResult>(new DeleteAcquisitionTagParametersV1(id, version), default, HttpContext.RequestAborted); break;
                 default: throw new KeyNotFoundException();
             }
+            Edit = null;
             return LocalRedirect(Address());
         }
 

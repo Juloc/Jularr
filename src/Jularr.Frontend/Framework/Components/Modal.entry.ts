@@ -18,6 +18,12 @@ document.addEventListener("click", event => {
     if (event.target instanceof HTMLDialogElement && event.target.classList.contains("modal")) event.target.close();
 });
 
+// A dialog the address opened leaves the address of its item when it closes, so a reload shows the list.
+document.addEventListener("close", event => {
+    const returnTo = event.target instanceof HTMLDialogElement ? event.target.dataset.return : undefined;
+    if (returnTo?.startsWith("/") && !returnTo.startsWith("//")) history.replaceState(history.state, "", returnTo);
+}, true);
+
 // A dialog the server shows open (its form came back with an error) opens again with the page.
 onPage(import.meta.url, () => {
     document.querySelectorAll<HTMLDialogElement>('dialog.modal[data-open="true"]').forEach(dialog => { if (!dialog.open) dialog.showModal(); });

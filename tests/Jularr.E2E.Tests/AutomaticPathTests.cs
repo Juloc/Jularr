@@ -293,20 +293,19 @@ namespace Jularr.E2E.Tests
         // A profile requires its scored format, made the media type's default.
         private static async Task CreateProfileAsync(IPage page, string type, string name, string mustContain)
         {
-            await page.GotoAsync("/Admin/Acquisition/Profiles?tab=formats&mediaTypeId=1");
-            var format = page.Locator("main form", new() { Has = page.Locator("[name=IncludeWhenRenaming]") });
+            await page.GotoAsync("/Admin/Acquisition/Profiles?tab=formats&mediaTypeId=1&new=true");
+            var format = page.Locator("dialog#format-editor form").First;
             await format.Locator("[name=Name]").FillAsync(name);
             await format.Locator("[name='Conditions[0].Name']").FillAsync(name);
             await format.Locator("[name='Conditions[0].Value']").FillAsync(mustContain);
-            await Steps.SaveAsync(page);
+            await Steps.SubmitAsync(page, format);
             await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
             await page.GotoAsync("/Admin/Acquisition/Profiles/New?type=" + type);
             var form = page.Locator("main form", new() { Has = page.Locator("[name=MinimumFormatScore]") });
             await form.Locator("[name=Name]").FillAsync(name);
             await form.GetByText("Default for its media type", new() { Exact = true }).ClickAsync();
             await Assertions.Expect(form.GetByRole(AriaRole.Switch, new() { Name = "Default for its media type", Exact = true })).ToBeCheckedAsync();
-            await form.Locator("tr", new() { HasText = name }).GetByRole(AriaRole.Button, new() { Name = "Add", Exact = true }).ClickAsync();
-            await form.Locator("[name='FormatScores[0].Score']").FillAsync("100");
+            await form.Locator(".ui-form__row", new() { HasText = name }).Locator("input[name$='.Score']").FillAsync("100");
             await form.Locator("[name=MinimumFormatScore]").FillAsync("100");
             await Steps.SaveAsync(page);
             await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);

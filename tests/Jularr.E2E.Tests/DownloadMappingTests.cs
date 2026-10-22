@@ -5,6 +5,13 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class DownloadMappingTests
     {
+        // A saved connection closes its dialog; its row opens it again.
+        private static async Task<ILocator> ReopenAsync(IPage page)
+        {
+            await Steps.FollowAsync(page, page.Locator(".list-row", new() { HasText = "My download client" }).GetByRole(AriaRole.Link, new() { Name = "Edit", Exact = true }));
+            return page.Locator("dialog#connection-editor form").Filter(new() { Has = page.Locator("[name=BaseUrl]") });
+        }
+
         [TestMethod]
         [DataRow(1440, 900)]
         [DataRow(390, 844)]
@@ -24,7 +31,7 @@ namespace Jularr.E2E.Tests
                 await Steps.AddLibraryAsync(page, folders.Library);
                 await page.GotoAsync("/Admin/Acquisition/Downloads");
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }));
-                var form = page.Locator("form").Filter(new() { Has = page.Locator("[name=BaseUrl]") });
+                var form = page.Locator("dialog#connection-editor form").Filter(new() { Has = page.Locator("[name=BaseUrl]") });
                 await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                 Assert.AreEqual(0d, await page.EvaluateAsync<double>("() => window.jularrLayoutShift"));
                 await form.Locator("[name=Name]").FillAsync("My download client");
@@ -45,7 +52,7 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(originalAddress, page.Url);
                 Assert.AreEqual(0, navigations);
                 await Steps.SubmitAsync(page, form);
-                form = page.Locator("form").Filter(new() { Has = page.Locator("[name=BaseUrl]") });
+                form = await ReopenAsync(page);
                 await Assertions.Expect(form.Locator("[name=DownloadStorageMountId]")).ToHaveValueAsync("1");
                 await Assertions.Expect(form.Locator("[name=LocalPath]")).ToHaveValueAsync("Complete & Bücher");
                 await Assertions.Expect(form.Locator("[name=ApiKey]")).ToHaveValueAsync("");
@@ -54,7 +61,7 @@ namespace Jularr.E2E.Tests
                 await dialog.GetByRole(AriaRole.Link, new() { Name = "Connection root", Exact = true }).ClickAsync();
                 await dialog.GetByRole(AriaRole.Button, new() { Name = "Use this folder", Exact = true }).ClickAsync();
                 await Steps.SubmitAsync(page, form);
-                form = page.Locator("form").Filter(new() { Has = page.Locator("[name=BaseUrl]") });
+                form = await ReopenAsync(page);
                 await Assertions.Expect(form.Locator("[name=DownloadStorageMountId]")).ToHaveValueAsync("1");
                 await Assertions.Expect(form.Locator("[name=LocalPath]")).ToHaveValueAsync("");
                 Assert.IsFalse(await page.Locator("body").EvaluateAsync<bool>("body => body.scrollWidth > innerWidth + 1"));

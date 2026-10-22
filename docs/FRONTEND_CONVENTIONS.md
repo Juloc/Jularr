@@ -223,6 +223,7 @@ adds none of its own colours, radii, shadows or font sizes. Design follows the o
   label; a phone keeps the icons), bulk (shown instead of the actions while rows marked `data-dock-select` are chosen, with their count) and paging (previous, "Page 2 / 9"
   or a range, next, optional page size select; plain GET links with the filters in the address, `pageNumber`). **No infinite scroll on admin pages**: lists are paged,
   25 rows by default. With a visible save pill the dock stacks above it.
+- Related admin list pages are joined by **one** row of section chips whose group is defined once (`DownloadPages` for the acquisition settings), above the list in a `ListToolbar` that may carry the list's one scope menu on its right; such a page has no filter chips of its own. The editor of a list item is a `Modal` that the address opens (`?edit=`, `?new=`, `?AcquisitionConnectionId=`) with the list's address as `returnTo`, so a reload after closing shows the list; it saves on its own with `form.Cancel()` and `form.Submit(...)`, a row switch or test is a `PostForm` and the figures above follow because the page content is swapped. There is no delay, waiting or minimum-age option on any acquisition page.
 
 Everything that changes colour with the theme follows the switch with `transition: color var(--transition)` (or the colour it changes), the wordmark and the mark included; no element has a
 colour of its own that skips it.
