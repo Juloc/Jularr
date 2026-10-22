@@ -80,6 +80,8 @@ fun TvAnimeScreen(
     onPlayEpisode: (EpisodeSummary) -> Unit,
     onBack: () -> Unit,
     onPlayMovie: (() -> Unit)? = null,
+    isWatchlisted: Boolean = false,
+    onToggleWatchlist: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val accent = remember(context) { TvPlayerDesignLoader.load(context).accent }
@@ -211,6 +213,11 @@ fun TvAnimeScreen(
                             ) {
                                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                                 Text(" " + stringResource(R.string.tv_anime_play))
+                            }
+                        }
+                        if (onToggleWatchlist != null) {
+                            Button(onClick = onToggleWatchlist) {
+                                Text(if (isWatchlisted) "Von Watchlist entfernen" else "Zur Watchlist")
                             }
                         }
                         Button(

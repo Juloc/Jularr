@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
@@ -27,6 +28,7 @@ import de.juloc.jularr.core.model.InstanceCapabilities
 import de.juloc.jularr.core.model.WatchlistItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Transitional data host for the *original* TV Compose screens, not a replacement TV design.
@@ -49,6 +51,7 @@ fun TvV1CatalogHost(
     val profileApi: TvV1ProfileClient = remember(serverOrigin, deviceSession) {
         HttpTvV1ProfileClient(serverOrigin, deviceSession.authenticatedTokenStore())
     }
+    val scope = rememberCoroutineScope()
     val focusMemory = remember(serverOrigin) { TvFocusMemory() }
     var page by remember(serverOrigin) { mutableStateOf(TvV1CatalogPage.Home) }
     var searchQuery by remember(serverOrigin) { mutableStateOf("") }
@@ -62,6 +65,9 @@ fun TvV1CatalogHost(
     var continueWatching by remember(serverOrigin) { mutableStateOf<List<TvContinueItemV1>>(emptyList()) }
     var watchlist by remember(serverOrigin) { mutableStateOf<List<WatchlistItem>>(emptyList()) }
     var details by remember(serverOrigin) { mutableStateOf<AnimeDetail?>(null) }
+    var isWatchlisted by remember(serverOrigin) { mutableStateOf(false) }
+    var watchlistBusy by remember(serverOrigin) { mutableStateOf(false) }
+    var watchlistError by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var detailedTitle by remember(serverOrigin) { mutableStateOf("") }
     var omittedFractionalEpisodes by remember(serverOrigin) { mutableIntStateOf(0) }
     var detailWorkId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
@@ -202,6 +208,8 @@ fun TvV1CatalogHost(
                         "Mediendetails sind für dieses Profil nicht freigegeben."
                     }
                     val work = catalog.work(workId)
+                    isWatchlisted = work.isWatchlisted
+                    watchlistError = null
                     detailedTitle = work.canonicalTitle
                     if (TvV1LegacyUiModels.isVideo(work.mediaTypeId)) {
                         playableMovieAssets = if (work.mediaTypeId == TvV1LegacyUiModels.MOVIE) {
@@ -336,6 +344,28 @@ fun TvV1CatalogHost(
                                 playAsset(detailAssetByUnit[episode.id], episode.id)
                             },
                             onBack = ::back,
+                            isWatchlisted = isWatchlisted,
+                            onToggleWatchlist = if (
+                                capabilities.hasPermission("profile.watchlist.update") && !watchlistBusy
+                            ) {{
+                                val targetWork = requireNotNull(detailWorkId)
+                                val targetValue = !isWatchlisted
+                                watchlistBusy = true
+                                scope.launch {
+                                    try {
+                                        check(catalog.setWatchlisted(targetWork, targetValue)) {
+                                            "Jularr hat die Watchlist-Änderung nicht bestätigt."
+                                        }
+                                        isWatchlisted = targetValue
+                                        watchlistError = null
+                                    } catch (failure: AppApiException) {
+                                        if (failure.statusCode == 401) onAuthenticationExpired()
+                                        else watchlistError = "Watchlist: ${failure.code} (HTTP ${failure.statusCode})"
+                                    } catch (failure: Exception) {
+                                        watchlistError = failure.message ?: "Watchlist-Änderung fehlgeschlagen."
+                                    } finally { watchlistBusy = false }
+                                }
+                            }} else null,
                             onPlayMovie = if (playableMovieAssets.isNotEmpty()) {
                                 {
                                     if (playableMovieAssets.size == 1) {
@@ -346,6 +376,12 @@ fun TvV1CatalogHost(
                                 }
                             } else null,
                         )
+                        if (watchlistError != null) {
+                            Text(
+                                requireNotNull(watchlistError),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
                         if (omittedFractionalEpisodes > 0) {
                             Text(
                                 "${omittedFractionalEpisodes} Sonderfolgen mit Bruchnummer sind in dieser TV-Ansicht noch nicht darstellbar.",
