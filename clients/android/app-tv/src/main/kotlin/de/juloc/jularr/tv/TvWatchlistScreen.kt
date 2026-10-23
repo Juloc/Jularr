@@ -76,7 +76,7 @@ internal enum class TvWatchlistCategory(val labelRes: Int) {
     }
 }
 
-internal enum class TvWatchlistSort(val labelRes: Int) {
+enum class TvWatchlistSort(val labelRes: Int) {
     NEWEST(R.string.tv_watchlist_sort_newest),
     OLDEST(R.string.tv_watchlist_sort_oldest),
     TITLE_ASC(R.string.tv_watchlist_sort_title_asc),
