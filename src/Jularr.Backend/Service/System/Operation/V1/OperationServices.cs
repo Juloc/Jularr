@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
@@ -797,8 +798,18 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                     if ((ids.GetValueOrDefault("imdb") is not { } imdb || details.ImdbId is null || details.ImdbId.Equals(imdb, StringComparison.OrdinalIgnoreCase))
                                         && (mediaType == MediaType.Series || ids.GetValueOrDefault("tvdb") is not { } tvdb || details.TvdbId is null || details.TvdbId.ToString() == tvdb))
                                     {
-                                        workId = await _metadata.ImportAsync(Context, provider, mediaType, null, id, CancellationToken,
-                                            mediaType == MediaType.Series && int.TryParse(ids.GetValueOrDefault("tvdb"), out var folderTvdb) && folderTvdb > 0 ? folderTvdb : null);
+                                        var folderTvdb = mediaType == MediaType.Series && int.TryParse(ids.GetValueOrDefault("tvdb"), out var named) && named > 0 ? named : (int?)null;
+                                        if (folderTvdb is { } ownTvdb)
+                                        {
+                                            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                                            {
+                                                await ctx.ReplaceStaleTvdbIdAsync(new WorkTvdbCorrectionData(id.ToString(CultureInfo.InvariantCulture), ids.GetValueOrDefault("imdb"),
+                                                    ownTvdb.ToString(CultureInfo.InvariantCulture)), ct);
+                                                return true;
+                                            }, CancellationToken);
+                                        }
+
+                                        workId = await _metadata.ImportAsync(Context, provider, mediaType, null, id, CancellationToken, folderTvdb);
                                         imported++;
                                     }
                                     else

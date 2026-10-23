@@ -129,6 +129,60 @@ namespace Jularr.Backend.Logic.Media
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
+        // TMDB sometimes links a series to an old or duplicate TheTVDB entry and an import then stored that id. When the folder's own id
+        // (Sonarr, nfo) names the same series by its TMDB id (and its IMDb id, if both are known), the Work takes the folder's id instead;
+        // an id a person set stays, and an id another Work holds is never taken.
+        public static Task<int> ReplaceStaleTvdbIdAsync(this LogicContext ctx, WorkTvdbCorrectionData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "WorkExternalIdentities" AS stale
+                SET
+                    "Value" = @TvdbId,
+                    "UpdatedAt" = now()
+                WHERE
+                    stale."Namespace" = 'tvdb'
+                    AND stale."Value" <> @TvdbId
+                    AND NOT stale."IsManual"
+                    AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkExternalIdentities" AS series
+                            JOIN "Works" AS work ON work."Id" = series."WorkId"
+                        WHERE
+                            series."WorkId" = stale."WorkId"
+                            AND series."Namespace" = 'tmdb_tv'
+                            AND series."Value" = @TmdbTvId
+                            AND work."MediaTypeId" = 2
+                    )
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkExternalIdentities" AS imdb
+                        WHERE
+                            imdb."WorkId" = stale."WorkId"
+                            AND imdb."Namespace" = 'imdb'
+                            AND @ImdbId::text IS NOT NULL
+                            AND imdb."Value" <> @ImdbId
+                    )
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkExternalIdentities" AS other
+                        WHERE
+                            other."Namespace" = 'tvdb'
+                            AND other."Value" = @TvdbId
+                    );
+                """;
+            sql.Parameters.Add(data);
+            return ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task<long> SaveWorkMetadataAsync(this LogicContext ctx, WorkMetadataData data, CancellationToken ct)
         {
             // Video provider IDs must agree on one canonical Work before any metadata is written.

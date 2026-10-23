@@ -955,6 +955,38 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Scan_WorkHoldsTmdbsStaleTvdbId_TakesTheFolderIdAndTheFile()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, services: services =>
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
+            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
+            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
+            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+
+            // An earlier import stored TMDB's TheTVDB link (7001); the folder, as Sonarr names it, says 4001.
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (2, 'Show 1', 2020) RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", item."Namespace", item."Value" FROM work CROSS JOIN (VALUES ('tmdb_tv', '1'), ('imdb', 'tt2000001'), ('tvdb', '7001')) AS item ("Namespace", "Value");
+                """);
+            var mountId = await CreateMountAsync(host);
+            var show = Path.Combine(storage.Path, mountId.ToString(), "Series", "Show 1 - tt2000001");
+            var folder = Path.Combine(show, "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(show, "tvshow.nfo"), "<tvshow><title>Show 1</title><uniqueid type=\"imdb\">tt2000001</uniqueid><uniqueid type=\"tvdb\">4001</uniqueid><uniqueid type=\"tmdb\">1</uniqueid></tvshow>");
+            File.WriteAllText(Path.Combine(folder, "Show 1 - S01E01 - Pilot WEBDL-1080p tt2000001.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+            Assert.AreEqual("4001", await host.ScalarAsync("""SELECT "Value" FROM "WorkExternalIdentities" WHERE "Namespace" = 'tvdb' """));
+        }
+
+        [TestMethod]
         public async Task Scan_FolderIdTheCatalogDoesNotKnowYet_StillTakesTheFileThroughItsOtherIds()
         {
             using var storage = new TemporaryDirectory();
