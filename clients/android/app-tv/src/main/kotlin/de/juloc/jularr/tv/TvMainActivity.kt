@@ -7,7 +7,7 @@ import androidx.tv.material3.MaterialTheme
 
 /**
  * The clean-start entry point starts with device pairing, not the legacy cookie login.
- * The original TV Home/player remains in app-tv and will be wired to the v1 catalog adapter.
+ * The original Compose screens and Media3 player are routed through the active V1 catalog host.
  */
 class TvMainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
