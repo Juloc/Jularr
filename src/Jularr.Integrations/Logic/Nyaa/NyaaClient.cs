@@ -8,10 +8,7 @@ namespace Jularr.Integrations.Logic.Nyaa
     // The torrent index answers a search in its RSS feed; every entry names the file that carries the torrent.
     internal sealed class NyaaClient(HttpClient http)
     {
-        // The feed names its own fields.
-        private static readonly XNamespace Fields = "https://nyaa.media/xmlns/nyaa";
-
-        // Download from the same configured index host as the RSS item; do not redirect to a different provider.
+         // Download from the same configured index host as the RSS item; do not redirect to a different provider.
         private const string DefaultIndex = "https://nyaa.media";
 
         // The literature of the index: English translated, the other languages and the raw text.
@@ -77,15 +74,25 @@ namespace Jularr.Integrations.Logic.Nyaa
                 }
 
                 found.Add(new NyaaEntry(id, title.Trim(), view.Trim(),
-                    item.Element(Fields + "categoryId")?.Value ?? category,
-                    item.Element(Fields + "categoryName")?.Value ?? string.Empty,
-                    Bytes(item.Element(Fields + "size")?.Value),
-                    Number(item.Element(Fields + "seeders")?.Value),
-                    Date(item.Element("pubDate")?.Value)));
+                    Named(item, "categoryId") ?? category,
+                    Named(item, "categoryName") ?? Named(item, "category") ?? string.Empty,
+                    Bytes(Named(item, "size")),
+                    Number(Named(item, "seeders")),
+                    Date(item.Element("pubDate")?.Value),
+                    ReadDownloadLink(item.Element("link")?.Value)));
             }
 
             return found;
         }
+
+        // Mirrors may use different XML namespaces for nyaa:* metadata.
+        private static string? Named(XElement item, string name) =>
+            item.Elements().FirstOrDefault(element => element.Name.LocalName == name)?.Value;
+
+        private static string? ReadDownloadLink(string? link) =>
+            Uri.TryCreate(link?.Trim(), UriKind.Absolute, out var uri)
+                && uri.Scheme is "http" or "https" && uri.AbsolutePath.EndsWith(".torrent", StringComparison.OrdinalIgnoreCase)
+                ? uri.ToString() : null;
 
         // The size is written the way the index writes it: a number and its unit.
         private static long Bytes(string? size)
