@@ -7,6 +7,9 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Storage;
+using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Logic.Storage;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Sabnzbd;
@@ -119,6 +122,40 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             if (string.Equals(root, Path.GetPathRoot(root), StringComparison.Ordinal) || !Directory.Exists(root))
                 throw new DataValidationException(nameof(area), "invalid_transition");
             return SafePath(root, relative, allowRoot: true);
+        }
+
+        // The configured path is relative to the selected Jularr storage mount, not a host pathname.
+        internal static string StorageRoot(string area, string? configuredRemote, string? localPath, string? providerRemote)
+        {
+            if (area is not ("complete" or "incomplete") || string.IsNullOrWhiteSpace(configuredRemote)
+                || string.IsNullOrWhiteSpace(providerRemote) || string.IsNullOrWhiteSpace(localPath)
+                || localPath.StartsWith('/') || localPath.Contains('\\'))
+                throw new DataValidationException(nameof(localPath), "invalid_path");
+
+            var relative = ImportPlacementLogic.MapRemotePath(providerRemote, configuredRemote);
+            if (relative is null && ImportPlacementLogic.MapRemotePath(configuredRemote, providerRemote) is not null)
+                relative = "";
+            if (relative is null) throw new DataValidationException(nameof(configuredRemote), "invalid_path");
+
+            try { return StoragePath.Combine(StoragePath.Check(localPath), StoragePath.Check(relative)); }
+            catch (Jularr.Integrations.Data.Nas.NasMountException)
+            {
+                throw new DataValidationException(nameof(localPath), "invalid_path");
+            }
+        }
+
+        internal static string StorageRelative(string? path, bool allowRoot = false)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                if (allowRoot) return "";
+                throw new DataValidationException(nameof(path), "invalid_path");
+            }
+
+            if (path.StartsWith('/') || path.EndsWith('/') || path.Contains('\\') || path.Contains(':')
+                || path.Any(char.IsControl) || path.Split('/').Any(segment => segment is "." or ".." or ""))
+                throw new DataValidationException(nameof(path), "invalid_path");
+            return path;
         }
 
         internal static string SafePath(string root, string? relative, bool allowRoot = false)
@@ -236,9 +273,10 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         }
     }
 
-    internal abstract class DownloadClientFilesBase(SabnzbdClient client, IDataProtectionProvider protection)
+    internal abstract class DownloadClientFilesBase(SabnzbdClient client, IDataProtectionProvider protection, StorageAccess storage)
     {
         protected readonly SabnzbdClient Client = client;
+        private readonly StorageAccess _storage = storage;
         private readonly IDataProtector _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
 
         protected static void CheckArea(string area)
@@ -247,27 +285,44 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 throw new DataValidationException(nameof(area), "invalid_transition");
         }
 
-        protected async Task<(string Root, SabnzbdConsoleSnapshot Snapshot)> OpenAsync(
+        protected async Task<(string Root, SabnzbdConsoleSnapshot Snapshot, StorageFiles? NetworkFiles, string? NetworkRoot, bool ReadOnly)> OpenAsync(
             LogicContext context, long connectionId, string area, CancellationToken ct)
         {
             CheckArea(area);
             var connection = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadAcquisitionConnectionAsync(connectionId, token), ct);
             if (connection.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd)
                 throw new DataValidationException(nameof(connectionId), "invalid_transition");
+
             var api = new SabnzbdConnection(connection.HttpAddress, AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey));
             var snapshot = await Client.ReadConsoleAsync(api, ct);
-            var root = area == "complete"
-                ? DownloadClientFileSafety.Root(area, connection.RemotePath, connection.LocalPath, snapshot.ReportedCompletePath)
-                : DownloadClientFileSafety.Root(area, connection.IncompleteRemotePath, connection.IncompleteLocalPath, snapshot.ReportedIncompletePath);
-            return (root, snapshot);
+            var configuredRemote = area == "complete" ? connection.RemotePath : connection.IncompleteRemotePath;
+            var configuredLocal = area == "complete" ? connection.LocalPath : connection.IncompleteLocalPath;
+            var reported = area == "complete" ? snapshot.ReportedCompletePath : snapshot.ReportedIncompletePath;
+
+            if (connection.DownloadStorageMountId is not { } mountId)
+                return (DownloadClientFileSafety.Root(area, configuredRemote, configuredLocal, reported), snapshot, null, null, false);
+
+            var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(mountId, token), ct);
+            var relativeRoot = DownloadClientFileSafety.StorageRoot(area, configuredRemote, configuredLocal, reported);
+            var files = _storage.Open(mount);
+            if (files is LocalStorageFiles local)
+                return (local.ResolveDirectory(relativeRoot), snapshot, null, null, mount.IsReadOnly);
+
+            // Remote SMB shares accessed directly by Jularr can be browsed safely.
+            // Destructive operations stay disabled until atomic remote previews are supported.
+            var folder = await files.GetAsync(relativeRoot, ct);
+            if (folder is not { IsDirectory: true })
+                throw new DataValidationException(nameof(configuredLocal), "invalid_path");
+            return (mount.Name + "/" + relativeRoot, snapshot, files, relativeRoot, true);
         }
+
     }
 
     [ServiceEndpoint("POST", "/api/v1/admin/acquisition/connections/{acquisitionConnectionId:long}/files/browse")]
     public sealed class BrowseDownloadClientFilesV1 : AdminService<AcquisitionConnectionParametersV1, DownloadClientFolderRequestV1>
     {
         private readonly DownloadClientFilesReader _reader;
-        internal BrowseDownloadClientFilesV1(SabnzbdClient client, IDataProtectionProvider protection) => _reader = new DownloadClientFilesReader(client, protection);
+        internal BrowseDownloadClientFilesV1(SabnzbdClient client, IDataProtectionProvider protection, StorageAccess storage) => _reader = new DownloadClientFilesReader(client, protection, storage);
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<DownloadClientBrowseResultV1>()];
         protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 p) => ModuleRequirement.All("Acquisition");
@@ -280,7 +335,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     public sealed class PreviewDownloadClientFileDeleteV1 : AdminService<AcquisitionConnectionParametersV1, DownloadClientFolderRequestV1>
     {
         private readonly DownloadClientFilesReader _reader;
-        internal PreviewDownloadClientFileDeleteV1(SabnzbdClient client, IDataProtectionProvider protection) => _reader = new DownloadClientFilesReader(client, protection);
+        internal PreviewDownloadClientFileDeleteV1(SabnzbdClient client, IDataProtectionProvider protection, StorageAccess storage) => _reader = new DownloadClientFilesReader(client, protection, storage);
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<DownloadClientDeletionPreviewV1>()];
         protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 p) => ModuleRequirement.All("Acquisition");
@@ -293,7 +348,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     public sealed class DeleteDownloadClientFilesV1 : AdminService<AcquisitionConnectionParametersV1, DownloadClientFolderRequestV1>
     {
         private readonly DownloadClientFilesReader _reader;
-        internal DeleteDownloadClientFilesV1(SabnzbdClient client, IDataProtectionProvider protection) => _reader = new DownloadClientFilesReader(client, protection);
+        internal DeleteDownloadClientFilesV1(SabnzbdClient client, IDataProtectionProvider protection, StorageAccess storage) => _reader = new DownloadClientFilesReader(client, protection, storage);
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 p) => ModuleRequirement.All("Acquisition");
@@ -305,8 +360,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         }
     }
 
-    internal sealed class DownloadClientFilesReader(SabnzbdClient client, IDataProtectionProvider protection)
-        : DownloadClientFilesBase(client, protection)
+    internal sealed class DownloadClientFilesReader(SabnzbdClient client, IDataProtectionProvider protection, StorageAccess storage)
+        : DownloadClientFilesBase(client, protection, storage)
     {
         private static string RequiredPath(string? path)
         {
@@ -316,26 +371,50 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         internal async Task<DownloadClientBrowseResultV1> BrowseAsync(LogicContext ctx, long id, DownloadClientFolderRequestV1 query, CancellationToken ct)
         {
-            var (root, snapshot) = await OpenAsync(ctx, id, query.Area, ct);
-            return DownloadClientFileSafety.Browse(query.Area, root, query.RelativePath, query.PageNumber, snapshot);
+            var opened = await OpenAsync(ctx, id, query.Area, ct);
+            if (opened.NetworkFiles is null)
+            {
+                var local = DownloadClientFileSafety.Browse(query.Area, opened.Root, query.RelativePath, query.PageNumber, opened.Snapshot);
+                if (!opened.ReadOnly) return local;
+                return new DownloadClientBrowseResultV1(local.Area, local.Root, local.RelativePath, local.HasMore,
+                    new BaseDataList<DownloadClientFileV1>([.. local.Entries.Select(entry =>
+                        new DownloadClientFileV1(entry.Name, entry.RelativePath, entry.IsDirectory, entry.SizeBytes, "unchecked"))]));
+            }
+
+            if (query.PageNumber is < 1 or > 10000)
+                throw new DataValidationException(nameof(query.PageNumber), "invalid_transition");
+            var path = DownloadClientFileSafety.StorageRelative(query.RelativePath, allowRoot: true);
+            var files = await opened.NetworkFiles.ListAsync(StoragePath.Combine(opened.NetworkRoot!, path), ct);
+            var sorted = files.OrderBy(file => file.Name, StringComparer.OrdinalIgnoreCase)
+                .Skip((query.PageNumber - 1) * DownloadClientFileSafety.PageSize)
+                .Take(DownloadClientFileSafety.PageSize + 1).ToArray();
+            var entries = sorted.Take(DownloadClientFileSafety.PageSize).Select(file =>
+                new DownloadClientFileV1(file.Name, StoragePath.Combine(path, file.Name), file.IsDirectory,
+                    file.IsDirectory ? null : file.Length, "unchecked")).ToArray();
+            return new DownloadClientBrowseResultV1(query.Area, opened.Root + " (read-only)", path,
+                sorted.Length > DownloadClientFileSafety.PageSize, new BaseDataList<DownloadClientFileV1>(entries));
         }
 
         internal async Task<DownloadClientDeletionPreviewV1> PreviewAsync(LogicContext ctx, long id, DownloadClientFolderRequestV1 query, CancellationToken ct)
         {
-            var (root, snapshot) = await OpenAsync(ctx, id, query.Area, ct);
-            return DownloadClientFileSafety.Preview(query.Area, root, RequiredPath(query.RelativePath), snapshot);
+            var opened = await OpenAsync(ctx, id, query.Area, ct);
+            if (opened.ReadOnly || opened.NetworkFiles is not null)
+                throw new DataValidationException(nameof(query.Area), "invalid_transition");
+            return DownloadClientFileSafety.Preview(query.Area, opened.Root, RequiredPath(query.RelativePath), opened.Snapshot);
         }
 
         internal async Task DeleteAsync(LogicContext ctx, long id, DownloadClientFolderRequestV1 query, CancellationToken ct)
         {
             if (!query.Confirmed || string.IsNullOrWhiteSpace(query.Fingerprint))
                 throw new DataValidationException(nameof(query.Confirmed), "invalid_transition");
-            var (root, snapshot) = await OpenAsync(ctx, id, query.Area, ct);
-            var checkedPreview = DownloadClientFileSafety.Preview(query.Area, root, RequiredPath(query.RelativePath), snapshot);
+            var opened = await OpenAsync(ctx, id, query.Area, ct);
+            if (opened.ReadOnly || opened.NetworkFiles is not null)
+                throw new DataValidationException(nameof(query.Area), "invalid_transition");
+            var checkedPreview = DownloadClientFileSafety.Preview(query.Area, opened.Root, RequiredPath(query.RelativePath), opened.Snapshot);
             if (!CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(checkedPreview.Fingerprint),
                 Encoding.ASCII.GetBytes(query.Fingerprint)))
                 throw new DataValidationException(nameof(query.Fingerprint), "invalid_transition");
-            DownloadClientFileSafety.Delete(root, RequiredPath(query.RelativePath));
+            DownloadClientFileSafety.Delete(opened.Root, RequiredPath(query.RelativePath));
         }
     }
 }
