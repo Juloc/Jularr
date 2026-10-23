@@ -13,15 +13,14 @@ namespace Jularr.Backend.Logic.Acquisition
 
             var evaluations = candidates.Select(candidate => Evaluate(profile, candidate)).ToArray();
 
-            // The source with the higher priority comes first, as in Readarr: its release is taken and the
-            // quality decides only among the releases of that source. A complete file comes before a file
-            // that is only a part of a work; among the complete ones the languages a request asks for come
-            // first, then the fallback the profile names.
+            // A complete book outranks a partial one. For books the requested language then wins ahead of
+            // source priority; other media retain source priority. Profile rules still decide eligibility.
             var asked = evaluations.Where(evaluation => UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages)).ToArray();
             var fallback = asked.Length > 0 ? [] : evaluations.Where(evaluation => UpgradePolicy.IsFallback(profile, evaluation.Candidate.Languages)).ToArray();
 
             var ranked = evaluations
-                .OrderBy(evaluation => profile.IsBook && profile.LanguageOrder.Length > 0
+                .OrderBy(evaluation => profile.IsBook && evaluation.Candidate.IsPart ? 1 : 0)
+                .ThenBy(evaluation => profile.IsBook && profile.LanguageOrder.Length > 0
                     ? asked.Contains(evaluation) ? 0 : fallback.Contains(evaluation) ? 1 : 2 : 0)
                 .ThenBy(evaluation => evaluation.Candidate.IndexerPriority)
                 .ThenBy(evaluation => evaluation.Candidate.IsPart ? 1 : 0)
