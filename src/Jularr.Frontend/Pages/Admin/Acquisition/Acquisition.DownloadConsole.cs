@@ -1,5 +1,6 @@
 using System.Globalization;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Frontend.Framework;
 
 namespace Jularr.Frontend.Pages.Admin.Acquisition
