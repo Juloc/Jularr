@@ -134,6 +134,36 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Import_BookSearch_OmitsAudioOnlyWorks_ButKeepsPrintedBooksAndMixedFormatWorks()
+        {
+            var providers = new FakeProviders();
+            await using var host = await CreateHostAsync(providers);
+            const string list = """
+                {"version":1,"items":[{"type":"book","title":"audio-filter-case"}]}
+                """;
+            var preview = await PreviewAsync(host, list);
+            var names = preview.Rows.Single().Candidates.Select(item => item.Title).ToArray();
+            CollectionAssert.AreEqual(new[] { "Printed Novel", "The Audiobook Handbook" }, names);
+            Assert.IsFalse(preview.Rows[0].Candidates.Any(item => item.IsSuggested));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
+        public async Task Import_AudiobookEditionIsbn_DoesNotAutoImportParentBook()
+        {
+            var providers = new FakeProviders();
+            await using var host = await CreateHostAsync(providers);
+            const string list = """
+                {"version":1,"items":[{"type":"book","ids":{"isbn":"9780141439518"},"title":"Pride and Prejudice","author":"Jane Austen"}]}
+                """;
+            providers.AudioIsbn = true;
+            var preview = await PreviewAsync(host, list);
+            Assert.AreEqual(MediaImportStatusType.Open, preview.Rows.Single().StatusTypeId);
+            Assert.IsNull(preview.Rows.Single().Choice);
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
         public async Task Import_Isbn_ResolvesUnimportedEditionToCanonicalWork_AndRejectsWrongTitleOrAuthor()
         {
             var providers = new FakeProviders();
@@ -590,6 +620,7 @@ namespace Jularr.Backend.Tests
         {
             public List<string> Requests { get; } = [];
             public bool IsUnavailable { get; set; }
+            public bool AudioIsbn { get; set; }
 
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
@@ -600,7 +631,16 @@ namespace Jularr.Backend.Tests
                 {
                     return Task.FromResult(uri.AbsolutePath switch
                     {
+                        "/search.json" when uri.Query.Contains("audio-filter-case", StringComparison.Ordinal) => Json("""
+                            {"docs":[
+                              {"key":"/works/OL881W","title":"Printed Novel","author_name":["Jane Austen"],"format":["Paperback","Audiobook"]},
+                              {"key":"/works/OL882W","title":"Pride and Prejudice - Audiobook","author_name":["Jane Austen"],"format":["Audiobook"]},
+                              {"key":"/works/OL883W","title":"Audio-Only Edition","author_name":["Jane Austen"],"format":["Audio CD"]},
+                              {"key":"/works/OL884W","title":"The Audiobook Handbook","author_name":["Jane Austen"],"format":["Paperback"]}
+                            ]}
+                            """),
                         "/search.json" => Json("""{"docs":[{"key":"/works/OL66554W","title":"Pride and Prejudice","author_name":["Jane Austen"],"first_publish_year":1813,"cover_i":14348537,"isbn":["9780141439518"]}]}"""),
+                        "/isbn/9780141439518.json" when AudioIsbn => Json("""{"title":"Pride and Prejudice","physical_format":"Audio CD","works":[{"key":"/works/OL66554W"}]}"""),
                         "/isbn/9780141439518.json" => Json("""{"works":[{"key":"/works/OL66554W"}]}"""),
                         "/isbn/9781601424440.json" => Json("""{"works":[{"key":"/works/OL7777W"}]}"""),
                         "/works/OL7777W.json" => Json("""{"title":"For Women Only","first_publish_date":"2004","authors":[{"author":{"key":"/authors/OL7777A"}}]}"""),
