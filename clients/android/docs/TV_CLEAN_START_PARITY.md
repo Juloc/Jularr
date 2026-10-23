@@ -232,3 +232,28 @@ The latest Android CI and live hardware tests remain separate quality gates.
 **Release is not approved until the latest combined Android CI, real TV/device
 pairing + switching + NAS/HLS/device-focus tests, and the companion contract
 and phone integration are complete.**
+
+
+## Catalog-backed video Home parity (2026-10-23)
+
+The Web Home does **not** use TMDB for every ranked media type. Current
+`clean-start` discovers per-scope `isCatalog` and `mediaSubtypeId`.
+Catalog-backed video scopes such as Anime require
+`POST /api/v1/discover/catalog/feed` with the exact media type, ranking and
+subtype. Items carry `namespace` and `externalId`, not a TMDB ID.
+
+- The active TV `TvV1HomeDiscoverFlow` now handles *both* existing
+  provider-only TMDB feeds and existing catalog-backed Anime/video feeds.
+  Cached data is presented before requests to unavailable external providers.
+  Missing pairs are looked up with bounded concurrency and timeouts; an invalid
+  cached pair cannot hide a correct provider response.
+- The original Home uses D-Pad focusable catalog and TMDB rows with different
+  stable keys. For catalog items, a verified local WorkId opens local details;
+  otherwise the existing `discover/catalog/entry` API loads true provider
+  details by `mediaTypeId + mediaSubtypeId + namespace + externalId`.
+  A TMDB ID is **never** substituted for a WorkId or catalog external ID.
+- New tests cover Anime catalog scope and subtype, correct focus identity,
+  fallback for empty caches, true ranking/media identities and provider failure.
+- Remaining release checks: on-device D-Pad focus/Back, a real external Anime
+  catalog, partial and unavailable providers, and a visible TV Home hero
+  comparison. Companion (#1508) remains a separate backend + Phone workstream.
