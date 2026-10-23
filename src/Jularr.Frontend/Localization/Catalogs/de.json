@@ -2697,12 +2697,12 @@
    "Kategorien"
   ],
   "acquisition.connection.remotePath": [
-   "Path reported by the client",
-   "Vom Client gemeldeter Pfad"
+   "SABnzbd completed-download folder (read only)",
+   "SABnzbd-Zielordner (nur Anzeige)"
   ],
   "acquisition.connection.localPath": [
-   "Same path for Jularr",
-   "Derselbe Pfad für Jularr"
+   "Folder inside Jularr storage connection",
+   "Unterordner in der Jularr-Speicherverbindung"
   ],
   "acquisition.connection.addIndexer": [
    "Add indexer",
