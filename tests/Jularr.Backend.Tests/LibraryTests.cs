@@ -923,6 +923,30 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Scan_FolderIdTheCatalogDoesNotKnowYet_StillTakesTheFileThroughItsOtherIds()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, services: services =>
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
+            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
+            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
+            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+
+            // A new series: TMDB knows it by its own id and by IMDb, but does not link the TVDB id (9999) yet.
+            var mountId = await CreateMountAsync(host);
+            var show = Path.Combine(storage.Path, mountId.ToString(), "Series", "Show 1 - tt2000001");
+            var folder = Path.Combine(show, "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(show, "tvshow.nfo"), "<tvshow><title>Show 1</title><uniqueid type=\"imdb\">tt2000001</uniqueid><uniqueid type=\"tvdb\">9999</uniqueid><uniqueid type=\"tmdb\">1</uniqueid></tvshow>");
+            File.WriteAllText(Path.Combine(folder, "Show 1 - S01E01 - Pilot WEBDL-1080p tt2000001.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
         public async Task Scan_WorkWithoutEpisodes_TakesSeasonsAndEpisodesFromTvdb()
         {
             using var storage = new TemporaryDirectory();
