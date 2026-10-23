@@ -4,6 +4,10 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "acquisition.connection.downloadPathWarning": [
+   "Select a folder that Jularr can read. Until a download path is mapped, grabs from this client cannot start.",
+   "Wähle einen Ordner aus, auf den Jularr zugreifen kann. Ohne zugeordneten Downloadpfad können keine Downloads über diesen Client gestartet werden."
+  ],
   "activity.view.queue": [
    "Queue",
    "Warteschlange"
