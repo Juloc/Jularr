@@ -55,7 +55,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
             if (_items is { } items)
             {
-                var visible = ShowFiles ? [.. items.Items.Where(item => item.CanBrowseFiles)] : items.Items;
+                IReadOnlyList<ActivityItemV1> visible = ShowFiles ? [.. items.Items.Where(item => item.CanBrowseFiles)] : items.Items;
                 var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text(ShowFiles ? "activity.files.noJobs" : IsHistory ? "activity.empty.History" : "activity.empty.Queue")));
                 var columns = IsHistory
                     ? new List<ListColumn> { new("activity.item", ListRole.Main), new("table.status", ListRole.Status), new("activity.reason", ListRole.Data, 1), new("activity.size", ListRole.Data, 2), new("operation.created"), new("common.actions", ListRole.Actions) }
