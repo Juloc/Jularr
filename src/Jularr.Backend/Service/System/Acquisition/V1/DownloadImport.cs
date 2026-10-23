@@ -376,7 +376,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         return true;
                     }, ct);
                 }
-                catch (Exception exception) when (exception is HttpRequestException or SabnzbdException or System.Text.Json.JsonException
+                catch (Exception exception) when (exception is HttpRequestException or SabnzbdException or JsonException
                     || exception is TaskCanceledException && !ct.IsCancellationRequested)
                 {
                     await RescheduleAsync(task.Id, "cleanup_client_unavailable");
