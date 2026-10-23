@@ -3,3 +3,14 @@
     display: grid;
     gap: 16px;
 }
+
+ 
+// A SAB connection maps a directory in exactly one way. Without a storage
+// connection, the owner types an absolute container path; with a storage
+// connection, the folder picker edits the very same LocalPath input.
+.ui-form:has(select[name="DownloadStorageMountId"] option:checked:not([value=""]))
+    > .ui-field:has(input[name="LocalPath"]),
+.ui-form:has(select[name="DownloadStorageMountId"] option:checked:not([value=""]))
+    .ui-form__section > .ui-field:has(input[name="LocalPath"]) {
+    display: none;
+}
