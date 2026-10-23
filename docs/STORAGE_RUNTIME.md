@@ -174,40 +174,39 @@ References: [Docker volume options](https://docs.docker.com/reference/compose-fi
 [kernel CIFS usage](https://www.kernel.org/doc/html/latest/admin-guide/cifs/usage.html).
 
 
-## SABnzbd completed category folders (first release)
+## SABnzbd completed-download folder mapping
 
-When saving a SAB connection through the regular Admin form, Jularr reads the resolved Complete directory from SAB's status API and the selected category's directory from SAB's config API (including the default '*' category, which can have its own directory). The Owner chooses the exact corresponding category Complete folder visible to Jularr (local mount or direct SMB), not its parent download folder. A missing category, unsafe parent traversal, disabled per-job folder, or unavailable SAB API prevents an automatic mapping; Jularr must not guess. Existing API clients with explicit RemotePath/LocalPath mapping stay compatible. Jularr does not change SAB's folders or cleanup settings.
+The Admin connection editor now uses SABnzbd's **default** download category;
+users do not have to configure a category in Jularr. When the connection is saved,
+Jularr reads SABnzbd's configured completed-download folder and displays the
+reported directory as read-only information. Jularr does not change SABnzbd's
+physical folders.
 
-SABnzbd controls its own temporary and completed download directories, including
-category subfolders such as `complete/movies` and `complete/tv`. Jularr does
-**not** change SABnzbd's physical paths. On the download connection, set
-`RemotePath` to the completed path prefix reported by SAB history. Choose an
-existing storage connection (`DownloadStorageMountId`) and browse its corresponding
-completed folder (`LocalPath`, relative to that connection; empty means its root).
-This also works with a direct SMB connection without a container mount.
-Alternatively, leave the connection unset and enter an absolute `LocalPath`
-visible inside Jularr's container. All category and release subfolders stay
-underneath the mapping. Source reads and target writes use the same canonical
-storage abstraction. An unreadable source or a copy failure keeps the import
-waiting; SAB completion alone never completes the acquisition request.
-The original SAB completed files are retained after successful library import.
+The Admin form presents the **Jularr storage connection** separately from the
+**folder within that connection**. For example, choosing storage
+`arr_bay4_media` and relative folder `downloads/complete` points to a
+single existing directory available to Jularr, whereas
+`/downloads/complete` is a path in SABnzbd's own container and may refer to
+that same directory through a different mount. The folder picker writes one
+relative `LocalPath`; it is not an additional download destination.
+`DownloadStorageMountId` identifies the connection containing that folder.
+The source may be a local/container mount or direct SMB. When there is no
+storage connection, the advanced input remains an absolute Jularr-visible path.
 
-To send different media types to distinct SABnzbd categories, configure one
-Jularr SABnzbd **download connection per category** using the same server
-address and API key, with the appropriate `Media types` selection:
-- Movies: category `movies`, media type Movie.
-- Series: category `tv`, media type Series.
-- Books: category `books`, media type Book.
+Existing API connections that supply a specific SABnzbd `DownloadCategory`
+and `RemotePath` remain supported for integrations and migrations. For these
+connections, the resolved Complete folder includes the configured category's
+directory, which can be different from SABnzbd's default. A missing category,
+unsafe traversal, disabled per-job folders or unavailable SAB APIs cannot be
+guessed or silently rewritten.
 
-Only explicitly matching connections are preferred; a connection with no
-selected media types serves as fallback. No suitable download client means
-no grab. A generic high-priority SAB connection must not override an explicit
-category for a selected media type. The configured category name must exist
-in SABnzbd; further live category/path validation and storage limits are
-separate pre-release requirements (#1209).
-The fresh schema permits media scopes for SABnzbd and indexers; search scheduling
-and daily query/grab limits remain indexer-only. Workspace validation applies to
-the selected native client, so an unused news server cannot block a scoped SAB job.
+Media types are detected and routed by Jularr's acquisition logic, not by a
+required per-media SABnzbd category. A missing or unreadable source leaves the
+import pending; mere completion in SABnzbd never marks the Jularr request
+imported. Cleanup follows the download connection's **Remove completed** option
+(default on), only after the actual import outcome; existing library files must
+remain safe. The fresh schema permits media scopes for SABnzbd and indexers,
+while daily query/grab limits remain indexer-only.
 
 ## Native and direct download storage
 

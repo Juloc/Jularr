@@ -39,6 +39,11 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 Upload(content, csrf);
             }
 
+            content.Insert(0, new P(new ValueText("")).Class("media-import__feedback").Attribute("role", "status").Attribute("aria-live", "polite")
+                .Attribute("data-import-feedback", "").Attribute("hidden", "hidden")
+                .TextAttribute("data-previewing", "import.progress.previewing").TextAttribute("data-applying", "import.progress.applying")
+                .TextAttribute("data-waiting", "import.progress.waiting").TextAttribute("data-finished", "import.progress.finished")
+                .TextAttribute("data-paused", "import.progress.paused"));
             page.Content.Add(new Div([.. content]).Class("media-import"));
         }
 
@@ -76,7 +81,9 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 .Select(item => (IUiComponent)new Tag(new Strong(new ValueText(item.Count.ToString(CultureInfo.CurrentCulture))), new Text("import.status." + item.Status))).ToList();
             if (listing.Unsearched > 0) summary.Add(new Tag(new Strong(new ValueText(listing.Unsearched.ToString(CultureInfo.CurrentCulture))), new Text("import.unsearched")));
             summary.Add(new A(new Text("import.restart")).Class("button button--compact").Attribute("href", Address));
-            content.Add(new Div(new H2(new Text("import.previewTitle")), new Div([.. summary]).Class("media-import__summary")).Class("media-import__head"));
+            content.Add(new Div(new H2(new Text("import.previewTitle")), new Div([.. summary]).Class("media-import__summary")).Class("media-import__head")
+                .Attribute("data-import-unsearched", listing.Unsearched.ToString(CultureInfo.InvariantCulture))
+                .Attribute("data-import-total", rows.Count.ToString(CultureInfo.InvariantCulture)));
 
             // The defaults of each kind of title the list holds.
             var action = _input?.Action ?? MediaImportActionType.MonitorAndSearch;
@@ -123,7 +130,9 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                     form.Note(new Div(all, new Span(new ValueText("")).Class("media-import__count").Attribute("data-import-count", "").Attribute("hidden", "hidden").TextAttribute("data-template", "import.selected")));
                 }
 
-                form.Submit(new Button(new Text(listing.Unsearched > 0 ? "import.searchMore" : "import.refresh")));
+                var searchMore = new Button(new Text(listing.Unsearched > 0 ? "import.searchMore" : "import.refresh"));
+                searchMore.Attribute("data-import-more", "");
+                form.Submit(searchMore);
                 var apply = new Button(new Text("import.apply")).Primary();
                 apply.Attribute("formaction", Address + "?handler=Apply");
                 apply.Attribute("data-import-apply", "");
@@ -138,14 +147,21 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 .Select(item => (IUiComponent)new Tag(new Strong(new ValueText(item.Count.ToString(CultureInfo.CurrentCulture))), new Text("import.outcome." + item.Outcome))).ToList();
             if (result.RemainingJson is { } remaining)
             {
-                summary.Add(new PostForm(Address + "?handler=Preview", csrf, Continuation(result, remaining), new Button(new Text("import.continue")).Primary().Submit()));
+                var continueButton = new Button(new Text("import.continue")).Primary().Submit();
+                continueButton.Attribute("data-import-continue", "");
+                summary.Add(new PostForm(Address + "?handler=Preview", csrf, Continuation(result, remaining), continueButton));
             }
 
             summary.Add(new A(new Text("import.again")).Class("button button--compact").Attribute("href", Address));
-            content.Add(new Div(new H2(new Text("import.resultTitle")), new Div([.. summary]).Class("media-import__summary")).Class("media-import__head"));
+            var processed = rows.Count(row => row.OutcomeTypeId is not (MediaImportOutcomeType.Deferred or MediaImportOutcomeType.Unavailable or MediaImportOutcomeType.Skipped));
+            content.Add(new Div(new H2(new Text("import.resultTitle")), new Div([.. summary]).Class("media-import__summary")).Class("media-import__head")
+                .Attribute("data-import-processed", processed.ToString(CultureInfo.InvariantCulture))
+                .Attribute("data-import-has-more", result.RemainingJson is null ? "false" : "true"));
             var shown = rows.Where(row => row.OutcomeTypeId != MediaImportOutcomeType.Skipped).ToArray();
             content.Add(new Div(new Table<MediaImportResultRowV1>(shown)
-                .Content("media.title", row => new Div(new Truncated(row.Title ?? "—")).Class("media-import__title"))
+                .Content("media.title", row => new Div(new Truncated(row.Title ?? "—")).Class("media-import__title")
+                    .Attribute("data-import-result-index", row.Index.ToString(CultureInfo.InvariantCulture))
+                    .Attribute("data-import-result-outcome", row.OutcomeTypeId.ToString()))
                 .Content("table.status", row => row.Searches
                     ? new Div(Chip(OutcomeChip(row.OutcomeTypeId), "import.outcome." + row.OutcomeTypeId), Chip(("info", "search"), "import.searches")).Class("media-import__chips")
                     : Chip(OutcomeChip(row.OutcomeTypeId), "import.outcome." + row.OutcomeTypeId))

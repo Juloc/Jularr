@@ -218,18 +218,15 @@ namespace Jularr.E2E.Tests
                 await page.Locator("select[name='Choices[40].Action']").SelectOptionAsync(new SelectOptionValue { Label = "Add only" });
                 await page.Locator("select[name='Choices[41].Action']").SelectOptionAsync(new SelectOptionValue { Label = "Monitor" });
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Import selected"));
-                await Assertions.Expect(page.Locator(".media-import__summary .tag").Filter(new() { HasText = "Waiting for the next run" })).ToContainTextAsync("2");
-                await Evidence.SaveAsync(page, "media-import-result-continue");
 
-                // The rest comes back as the first rows of the next preview with their own choices.
-                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Continue with the rest" }));
-                await Assertions.Expect(rows).ToHaveCountAsync(2);
-                await Assertions.Expect(rows.Nth(0).Locator("select[name='Choices[0].Action'] option:checked")).ToHaveTextAsync("Add only");
-                await Assertions.Expect(rows.Nth(1).Locator("select[name='Choices[1].Action'] option:checked")).ToHaveTextAsync("Monitor");
-                await Evidence.SaveAsync(page, "media-import-continued");
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Import selected"));
+                // The browser continues bounded 40-work batches by itself, keeps
+                // earlier rows and preserves each deferred row's action.
+                await Assertions.Expect(page.Locator("[data-import-feedback]")).ToContainTextAsync("Import finished: 42 of 42", new() { Timeout = 60_000 });
+                await Assertions.Expect(page.Locator("main table tbody tr")).ToHaveCountAsync(42);
                 await Assertions.Expect(page.Locator("main table tbody tr", new() { HasText = "Bulk Movie 30040" }).Locator(".state-chip")).ToHaveTextAsync("Added");
                 await Assertions.Expect(page.Locator("main table tbody tr", new() { HasText = "Bulk Movie 30041" }).Locator(".state-chip")).ToHaveTextAsync("Added, monitored");
+                await Assertions.Expect(page.Locator("main table tbody tr", new() { HasText = "Bulk Movie 30000" })).ToHaveCountAsync(1);
+                await Evidence.SaveAsync(page, "media-import-auto-continued");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
