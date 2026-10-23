@@ -135,6 +135,8 @@ fun TvWatchlistScreen(
     onSelectCollection: (Long?) -> Unit = {},
     collectionLoading: Boolean = false,
     collectionError: String? = null,
+    serverSort: TvWatchlistSort? = null,
+    onServerSortChange: (TvWatchlistSort) -> Unit = {},
 ) {
     if (!supported) {
         TvCenteredPanel(
@@ -155,7 +157,7 @@ fun TvWatchlistScreen(
             } ?: TvWatchlistCategory.ALL,
         )
     }
-    var sort by remember {
+    var localSort by remember {
         mutableStateOf(
             TvWatchlistSort.entries.firstOrNull {
                 it.name == focusMemory.recall("watchlist-sort")
@@ -170,6 +172,7 @@ fun TvWatchlistScreen(
             category = TvWatchlistCategory.ALL
         }
     }
+    val sort = serverSort ?: localSort
     var sortOpen by remember { mutableStateOf(false) }
     var sortPreviouslyOpened by remember { mutableStateOf(false) }
     var infoEntry by remember { mutableStateOf<WatchlistItem?>(null) }
@@ -179,8 +182,9 @@ fun TvWatchlistScreen(
     val infoFocus = remember { FocusRequester() }
     val restoreId = remember { focusMemory.recall("watchlist") }
     val gridState = rememberLazyGridState()
-    val visible = remember(entries, category, sort) {
-        watchlistVisibleItems(entries, category, sort)
+    val visible = remember(entries, category, sort, serverSort) {
+        if (serverSort != null) entries.filter(category::includes) // Server supplies global order across pages.
+        else watchlistVisibleItems(entries, category, sort)
     }
     val progressByAnime = remember(continueWatching) {
         continueWatching
@@ -233,7 +237,7 @@ fun TvWatchlistScreen(
                         color = Color.White,
                         modifier = Modifier.weight(1f),
                     )
-                    Button(
+                    if (selectedCollectionId == null) Button(
                         onClick = { sortOpen = true },
                         modifier = Modifier.focusRequester(sortFocus),
                     ) {
@@ -390,13 +394,14 @@ fun TvWatchlistScreen(
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        TvWatchlistSort.entries.forEach { option ->
+                        (if (serverSort != null) listOf(TvWatchlistSort.NEWEST, TvWatchlistSort.TITLE_ASC)
+                         else TvWatchlistSort.entries).forEach { option ->
                             Button(
                                 modifier = Modifier.fillMaxWidth().then(
                                     if (option == sort) Modifier.focusRequester(optionFocus) else Modifier,
                                 ),
                                 onClick = {
-                                    sort = option
+                                    if (serverSort != null) onServerSortChange(option) else localSort = option
                                     focusMemory.remember("watchlist-sort", option.name)
                                     sortOpen = false
                                 },
