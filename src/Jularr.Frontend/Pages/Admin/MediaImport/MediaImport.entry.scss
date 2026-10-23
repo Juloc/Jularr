@@ -210,3 +210,20 @@
     .media-import__status-cell { align-items: flex-end; }
     .media-import__preview .ui-form > .ui-form__actions { bottom: 8px; }
 }
+
+.media-import__intent {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    margin-block: 8px 16px;
+}
+.media-import__intent-warning {
+    font-size: var(--text-control);
+    color: var(--muted);
+}
+.media-import__intent-warning[data-import-search-warning="hidden"],
+.media-import__intent-warning[hidden] { display: none; }

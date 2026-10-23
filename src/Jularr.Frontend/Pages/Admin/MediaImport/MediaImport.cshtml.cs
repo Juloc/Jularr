@@ -136,7 +136,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                     new Strong(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["import.intent.summary"], intended.Length, monitorCount, searchCount))),
                     new Span(new Text("import.intent.searchWarning")).Class("media-import__intent-warning").Attribute("data-import-search-warning", searchCount == 0 ? "hidden" : "visible"))
                     .Class("media-import__intent").Attribute("data-import-intent", "").TextAttribute("data-template", "import.intent.summary");
-                behavior.Note(intent);
+                form.Note(intent);
 
                 // One row per title; a column of its own for a profile or library only where some title has the choice.
                 var table = new Table<MediaImportRowV1>(rows)
@@ -320,7 +320,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             var posted = _posted.GetValueOrDefault(row.Index)?.Choice;
             var selected = posted ?? row.Choice ?? row.Candidates.FirstOrDefault(candidate => candidate.IsSuggested)?.Choice ?? "";
             var options = new List<IUiComponent> { Item("", texts["import.choose"], selected == "") };
-            options.AddRange(row.Candidates.Select(candidate => Item(candidate.Choice, string.Join(" · ", new[] { WithYear(candidate.Title, candidate.ReleaseYear), candidate.Creator, texts["admin.works.source." + candidate.Source] }
+            options.AddRange(row.Candidates.Select(candidate => Item(candidate.Choice, string.Join(" · ", new[] { candidate.IsSuggested ? texts["import.match.suggested"] : texts["import.match.review"], WithYear(candidate.Title, candidate.ReleaseYear), candidate.Creator, texts["admin.works.source." + candidate.Source] }
                 .Where(text => !string.IsNullOrEmpty(text))), candidate.Choice == selected)));
             var parts = new List<IUiComponent> { Field(new Select([.. options]).Attribute("name", name + "Choice").TextAttribute("aria-label", "import.choose")) };
             if (row.StatusTypeId == MediaImportStatusType.Open)

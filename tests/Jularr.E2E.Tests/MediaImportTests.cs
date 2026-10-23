@@ -156,6 +156,7 @@ namespace Jularr.E2E.Tests
                     releaseSearch.TrySetResult(true);
                 }
                 await Assertions.Expect(page.Locator("[data-import-count]")).ToHaveTextAsync("4 of 4 selected");
+                await Assertions.Expect(page.Locator("[data-import-intent]")).ToContainTextAsync("4 selected · 4 to monitor · 4 to search");
                 await Assertions.Expect(page.Locator("[data-import-apply]")).ToBeEnabledAsync();
                 await page.UnrouteAsync("**/Admin/Import?handler=PreviewStream");
 
