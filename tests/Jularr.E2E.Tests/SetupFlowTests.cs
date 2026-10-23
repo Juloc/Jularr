@@ -116,6 +116,7 @@ namespace Jularr.E2E.Tests
             await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
             {
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
                 ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library
             });
@@ -207,6 +208,7 @@ namespace Jularr.E2E.Tests
             await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
             {
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library
             });
             await using var browser = await BrowserSession.StartAsync(jularr);
