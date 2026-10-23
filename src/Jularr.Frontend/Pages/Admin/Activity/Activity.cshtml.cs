@@ -322,8 +322,8 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 {
                     IUiComponent files = _torrentFileLookupFailed
                         ? new P(new Text("activity.files.unavailable"))
-                        : _openedTorrentFiles is { Items.Count: > 0 } available
-                            ? new Div([.. available.Items.Select(file =>
+                        : _openedTorrentFiles is { Count: > 0 } available
+                            ? new Div([.. available.Select(file =>
                                 new Div(new Truncated(file.Name),
                                     new Span(new ValueText(ByteSize.Format(file.SizeBytes) + " · "
                                         + file.ProgressPercent.ToString(CultureInfo.InvariantCulture) + "%"))
