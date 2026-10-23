@@ -13300,6 +13300,14 @@
    "Use this folder",
    "Diesen Ordner verwenden"
   ],
+  "folderPicker.newFolder": [
+   "New folder name",
+   "Neuer Ordnername"
+  ],
+  "folderPicker.create": [
+   "Create folder",
+   "Ordner erstellen"
+  ],
   "folderPicker.loading": [
    "Loading folders…",
    "Ordner werden geladen …"
