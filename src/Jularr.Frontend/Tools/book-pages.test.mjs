@@ -23,7 +23,7 @@ test('one column measurement counts the same scrolled LTR and RTL content withou
     assert.equal(exports.paperPageCount(content, 2, 40, false), 3);
 });
 
-function harness(fetchChapter, cached = new Map()) {
+function harness(fetchChapter, cached = new Map(), section = 1) {
     const events = new Map(), windowEvents = new Map(), documentEvents = new Map();
     const tasks = new Map();
     let clock = 0, identity = 0, measuring = '', maximumRulers = 0, attached = 0, parsed = 0;
@@ -35,7 +35,7 @@ function harness(fetchChapter, cached = new Map()) {
     const status = { hidden: true, dataset: { readyLabel: 'Book pages: {0}', calculatingLabel: 'calculating', pausedLabel: 'paused', unavailableLabel: 'unavailable' } };
     const content = { cloneNode: () => ruler, querySelectorAll: () => [] };
     const reader = {
-        dataset: { section: '1', sections: '3', sectionsUrl: '/sections/', mode: 'paged', illustrations: 'true' },
+        dataset: { section: String(section), sections: '3', sectionsUrl: '/sections/', mode: 'paged', illustrations: 'true' },
         querySelector: selector => selector.includes('book-pages') ? status : null,
         append() { attached++; },
         addEventListener(name, callback) { events.set(name, callback); }
@@ -67,6 +67,7 @@ function harness(fetchChapter, cached = new Map()) {
     const counter = exports.initializeBookPages(reader, content);
     const layout = { width: 1000, height: 600, columns: 2, gap: 40, pages: 3, rtl: false };
     async function advance(milliseconds = 500) {
+        await new Promise(resolve => setImmediate(resolve));
         clock += milliseconds;
         for (let tick = 0; tick < 30; tick++) {
             const due = [...tasks].filter(([, task]) => task.at <= clock);
@@ -202,8 +203,7 @@ test('completed book pages survive chapter navigation and reload without a secon
     assert.equal(first.reader.dataset.bookPageCount, '11');
     assert.equal(cache.size, 1, 'one completed layout is stored, not partial estimates');
     assert.deepEqual(requests, ['/sections/0', '/sections/2']);
-    const second = harness(fetchChapter, cache);
-    second.reader.dataset.section = '2';
+    const second = harness(fetchChapter, cache, 2);
     second.counter.update({ ...second.layout, pages: 4 });
     await second.advance();
     assert.equal(second.reader.dataset.bookPageState, 'ready');
