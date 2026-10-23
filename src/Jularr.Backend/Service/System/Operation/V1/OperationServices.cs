@@ -757,14 +757,29 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                 var verified = true;
                                 foreach (var (source, value) in ids)
                                 {
-                                    int? resolved = source switch
+                                    int? resolved;
+                                    try
                                     {
-                                        "tmdb_movie" when mediaType == MediaType.Movie => int.TryParse(value, out var movieId) && movieId > 0 ? movieId : null,
-                                        "tmdb_tv" when mediaType == MediaType.Series => int.TryParse(value, out var seriesId) && seriesId > 0 ? seriesId : null,
-                                        "imdb" or "tvdb" => await _metadata.FindExternalAsync(provider, mediaType, source, value, CancellationToken),
-                                        _ => null
-                                    };
-                                    if (resolved is null || tmdbId is not null && tmdbId != resolved)
+                                        resolved = source switch
+                                        {
+                                            "tmdb_movie" when mediaType == MediaType.Movie => int.TryParse(value, out var movieId) && movieId > 0 ? movieId : null,
+                                            "tmdb_tv" when mediaType == MediaType.Series => int.TryParse(value, out var seriesId) && seriesId > 0 ? seriesId : null,
+                                            "imdb" or "tvdb" => await _metadata.FindExternalAsync(provider, mediaType, source, value, CancellationToken),
+                                            _ => null
+                                        };
+                                    }
+                                    catch (KeyNotFoundException)
+                                    {
+                                        resolved = null;
+                                    }
+                                    // An id the catalog cannot resolve (a brand new series it does not link yet) proves nothing against the others;
+                                    // only ids that name different series stop the match.
+                                    if (resolved is null)
+                                    {
+                                        continue;
+                                    }
+
+                                    if (tmdbId is not null && tmdbId != resolved)
                                     {
                                         verified = false;
                                         break;
