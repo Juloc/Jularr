@@ -26,6 +26,8 @@ services:
       JULARR_DB: Host=postgres;Database=jularr;Username=jularr;Password=${JULARR_DB_PASSWORD}
       # A browser that already runs, for the sources that put a browser check in front of their pages.
       Browser__RemoteAddress: ${JULARR_BROWSER_ADDRESS:-}
+      # The host/NAS folder is explicitly mounted at /media and offered to the storage picker.
+      Storage__LocalPaths__0: /media
       # Optional existing private Ollama runtime; no model weights or runtime in the Jularr image.
       LocalTranslation__Endpoint: ${JULARR_OLLAMA_ENDPOINT:-}
       LocalTranslation__OperatorVerifiedFreeBytes: ${JULARR_OLLAMA_VERIFIED_FREE_BYTES:-0}
@@ -35,7 +37,8 @@ services:
       - "127.0.0.1:9223:9223"
     volumes:
       - jularr-data:/data
-      - ${JULARR_MEDIA:-./media}:/media
+      # Do not silently create a ./media host directory when a NAS mount was intended.
+      - ${JULARR_MEDIA:?Set JULARR_MEDIA in .env to an existing host folder or NAS mount}:/media
 
 volumes:
   jularr-data:
