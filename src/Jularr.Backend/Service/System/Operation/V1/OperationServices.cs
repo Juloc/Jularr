@@ -13,6 +13,7 @@ using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Operation;
 using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Media.V1;
@@ -820,6 +821,23 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                 else if (!failures.ContainsKey(key))
                                 {
                                     failures[key] = "none of the ids resolves to a TMDB " + (mediaType == MediaType.Series ? "series" : "film");
+
+                                    // The catalog knows none of the ids (a title it has not linked to IMDb yet): the folder's title and year may still name
+                                    // exactly one entry, as Sonarr and Radarr match by name; two or none leave the file for a person.
+                                    if (parsed.Year is { } year)
+                                    {
+                                        var hits = (await _metadata.SearchAsync(provider, mediaType, parsed.Title, year, CancellationToken))
+                                            .Where(result => result.Year == year && (TitleMatcher.Matches(parsed.Title, result.Title)
+                                                || result.OriginalTitle is { } original && TitleMatcher.Matches(parsed.Title, original)))
+                                            .ToArray();
+                                        if (hits.Length == 1)
+                                        {
+                                            workId = await _metadata.ImportAsync(Context, provider, mediaType, null, hits[0].Id, CancellationToken,
+                                                mediaType == MediaType.Series && int.TryParse(ids.GetValueOrDefault("tvdb"), out var named) && named > 0 ? named : null);
+                                            imported++;
+                                            failures.Remove(key);
+                                        }
+                                    }
                                 }
                             }
                             catch (ServiceUnavailableException)

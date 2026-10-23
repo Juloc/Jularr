@@ -987,6 +987,28 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Scan_NoIdTheCatalogKnows_TitleAndYearNameOneEntry_TakeTheFile()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, services: services =>
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
+            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
+            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
+            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+
+            // The IMDb id in the name is one TMDB does not link; the title and the year name exactly one series.
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Show 1 (2020) - tt9999999", "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Show 1 - S01E01 - Pilot WEBDL-1080p tt9999999.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
         public async Task Scan_FolderIdTheCatalogDoesNotKnowYet_StillTakesTheFileThroughItsOtherIds()
         {
             using var storage = new TemporaryDirectory();
@@ -1101,7 +1123,11 @@ namespace Jularr.Backend.Tests
             {
                 var path = request.RequestUri!.AbsolutePath;
                 string? json = null;
-                if (path == "/3/find/4001")
+                if (path == "/3/search/tv")
+                {
+                    json = """{"results":[{"id":1,"name":"Show 1","first_air_date":"2020-01-01"}]}""";
+                }
+                else if (path == "/3/find/4001")
                 {
                     json = """{"movie_results":[],"tv_results":[{"id":1}]}""";
                 }
