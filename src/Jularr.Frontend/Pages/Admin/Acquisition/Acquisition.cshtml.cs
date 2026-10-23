@@ -436,9 +436,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 }
 
                 // Indexer categories (empty uses the media type defaults), automatic searches and daily limits.
-                if (type == AcquisitionConnectionType.Newznab)
+                if (type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa)
                 {
-                    form.Text(item => item.Categories, "acquisition.connection.categories");
+                    if (type == AcquisitionConnectionType.Newznab)
+                        form.Text(item => item.Categories, "acquisition.connection.categories");
                     form.Select(item => item.SearchesAutomatically, "acquisition.connection.searches",
                         [new SelectOption("True", texts["acquisition.connection.automatic"]), new SelectOption("False", texts["acquisition.connection.manualOnly"])]);
                     form.Number(item => item.QueryLimit, "acquisition.connection.queryLimit");
@@ -471,6 +472,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     }
                     else form.Hidden(item => item.DownloadStorageMountId);
                     form.Text(item => item.LocalPath, "acquisition.connection.localPath");
+                    if (string.IsNullOrWhiteSpace(input.LocalPath) && input.DownloadStorageMountId is null
+                        || existing is { RemotePath: null })
+                        form.Content(new P(new Text("acquisition.connection.downloadPathWarning")).Attribute("role", "status"));
                     var browse = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(Address(existing?.Id, type, "Folders"),
                         "storageMountId", input.DownloadStorageMountId?.ToString(CultureInfo.InvariantCulture) ?? "");
                     if (texts.Can("storage.read"))
