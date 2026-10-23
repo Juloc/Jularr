@@ -26,6 +26,20 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void FilesystemFreeSpace_UsesContainingMountRatherThanRootDriveEnumeration()
+        {
+            using var directory = new TemporaryDirectory();
+            var path = directory.Path;
+            // The same code path also handles a CIFS/NFS mount propagated into a Docker
+            // container, where DriveInfo.GetDrives may not enumerate the child mount.
+            var mount = new DirectoryInfo(path);
+            while (mount is not null && !StorageFileSystem.IsMountPoint(mount.FullName)) mount = mount.Parent;
+            Assert.IsNotNull(mount);
+            var drive = new DriveInfo(mount.FullName);
+            Assert.AreEqual(drive.AvailableFreeSpace, StorageFileSystem.AvailableFreeSpace(path));
+        }
+
+        [TestMethod]
         public void ParallelJobs_EnforcesConfiguredLimitAndRejectsDuplicateExecution()
         {
             var reservations = new DownloadStorageReservations();
