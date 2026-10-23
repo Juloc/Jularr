@@ -16,7 +16,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
 {
     // Temporary: the browser of the instance, what it does and what an administrator can make it do.
     public sealed class BrowserModel(ReadBrowserStatusV1 status, RunBrowserActionV1 run, ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection,
-        TestAcquisitionConnectionV1 test, UpdateAcquisitionConnectionV1 update, ReadWantedV1 wanted, SearchWantedV1 search, IAntiforgery antiforgery, UiText texts) : JularrPage
+        TestAcquisitionConnectionV1 test, UpdateAcquisitionConnectionV1 update, ReadWantedV1 wanted, SearchWantedV1 search, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private BrowserStatusV1? _status;
         private PageResult<AcquisitionConnectionDetailsV1>? _connections;
