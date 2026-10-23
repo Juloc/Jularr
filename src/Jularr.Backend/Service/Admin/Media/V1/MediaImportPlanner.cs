@@ -315,12 +315,51 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
 
             var allowed = ImportNamespaces(type, item.Subtype);
-            var shown = results!.Where(result => allowed.Contains(result.Namespace, StringComparer.Ordinal)).Take(CandidatesPerRow).ToArray();
+            var shown = results!.Where(result => allowed.Contains(result.Namespace, StringComparer.Ordinal))
+                .Where(result => !IsRelatedBookProduct(item, result))
+                .OrderByDescending(result => CandidateScore(item, result))
+                .Take(CandidatesPerRow).ToArray();
 
             // One candidate that carries the whole title and what the file says of year or author is proposed, never taken.
             var strong = query is not null ? [] : shown.Where(result => IsStrong(item, result)).ToArray();
             return [.. shown.Select(result => new MediaImportCandidateV1(result.Namespace + ":" + result.ExternalId, result.Title, result.ReleaseYear, TextLimit.Cut(result.Author, 500), result.Namespace,
                 result.WorkId, strong.Length == 1 && ReferenceEquals(strong[0], result)))];
+        }
+
+        // An exact title and matching creator outrank popular but unrelated editions.
+        // Never turn a title-only score into an automatic import.
+        private static int CandidateScore(MediaImportItem item, MetadataSearchResultV1 result)
+        {
+            var score = 0;
+            if (item.Title is { } title)
+            {
+                var requested = TitleMatcher.SignificantWords(title);
+                var actual = TitleMatcher.SignificantWords(result.Title);
+                if (requested.Count > 0)
+                {
+                    score += requested.SetEquals(actual) ? 100 : 60 * requested.Intersect(actual).Count() / requested.Count;
+                }
+            }
+
+            if (item.Creator is { } creator && result.Author?.Contains(creator, StringComparison.OrdinalIgnoreCase) == true) score += 40;
+            if (item.Year is { } year && result.ReleaseYear == year) score += 10;
+            if (result.WorkId is not null) score += 5;
+            return score;
+        }
+
+        // Distinct companion products must not masquerade as the requested full book.
+        // A requested summary/workbook remains legitimate when that is its actual title.
+        private static bool IsRelatedBookProduct(MediaImportItem item, MetadataSearchResultV1 result)
+        {
+            if (item.Type != MediaType.Book || item.Subtype is MediaSubtype.Manga or MediaSubtype.LightNovel) return false;
+            var wanted = item.Title?.Trim() ?? "";
+            var title = result.Title.Trim();
+            var prefixes = new[] { "summary of ", "summary: ", "analysis of ", "review of ", "study guide for ", "study guide to ", "workbook for ", "workbook of " };
+            if (prefixes.Any(prefix => title.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && !wanted.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))) return true;
+            var suffixes = new[] { " study guide", " workbook", " discussion journal", " summary", " (audiobook)", " - audiobook", " (hörbuch)", " - hörbuch" };
+            return suffixes.Any(suffix => title.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                && !wanted.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
         }
 
         // An ISBN match must not quietly turn a full book into a summary, workbook or a different author's title.

@@ -30,6 +30,9 @@ function initializePreview(): void {
     const count = document.querySelector<HTMLElement>("[data-import-count]");
     const apply = document.querySelector<HTMLButtonElement>("[data-import-apply]");
     const rows = Array.from(document.querySelectorAll<HTMLInputElement>("[data-import-row]"));
+    const form = all?.closest("form") ?? null;
+    const intent = form?.querySelector<HTMLElement>("[data-import-intent]");
+    const globalAction = form?.querySelector<HTMLSelectElement>('select[name="Action"]');
     if (!all || all.dataset.ready !== undefined) return;
     all.dataset.ready = "";
     const update = () => {
@@ -40,6 +43,27 @@ function initializePreview(): void {
             count.hidden = false;
         }
 
+        if (intent) {
+            let monitored = 0;
+            let searched = 0;
+            for (const row of rows) {
+                if (!row.checked) continue;
+                const match = /^Choices\[(\d+)\]\.Include$/.exec(row.name);
+                if (!match) continue;
+                const own = form?.querySelector<HTMLSelectElement>('select[name="Choices[' + match[1] + '].Action"]');
+                const action = own?.value || globalAction?.value || "1";
+                if (action === "2" || action === "3") monitored++;
+                if (action === "3") searched++;
+            }
+            const warning = intent.querySelector<HTMLElement>("[data-import-search-warning]");
+            if (warning) warning.remove();
+            intent.textContent = (intent.dataset.template ?? "{0} · {1} · {2}")
+                .replace("{0}", String(selection.count))
+                .replace("{1}", String(monitored))
+                .replace("{2}", String(searched));
+            // Keep a separate warning after the dynamic count; data stays on the template node.
+            if (warning) { warning.hidden = searched === 0; intent.append(warning); }
+        }
         if (apply) apply.disabled = selection.count === 0;
     };
 
@@ -48,6 +72,8 @@ function initializePreview(): void {
         update();
     });
     for (const row of rows) row.addEventListener("change", update);
+    globalAction?.addEventListener("change", update);
+    form?.querySelectorAll<HTMLSelectElement>('select[name$=".Action"]').forEach(select => select.addEventListener("change", update));
     update();
 }
 

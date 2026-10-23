@@ -74,7 +74,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                     behavior.Select(item => item.Action, "import.action", ActionOptions());
                     behavior.Content(sample);
                 });
-            }, Address + "?handler=Preview", csrf, _input ?? new MediaImportDataV1(null, null, MediaImportActionType.MonitorAndSearch), FormError)).Class("media-import__upload"));
+            }, Address + "?handler=Preview", csrf, _input ?? new MediaImportDataV1(null, null, MediaImportActionType.AddOnly), FormError)).Class("media-import__upload"));
         }
 
         private void Preview(List<IUiComponent> content, MediaImportPreviewV1 listing, string csrf)
@@ -103,7 +103,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 .TextAttribute("data-stage-invalid", "import.status.Invalid"));
 
             // The defaults of each kind of title the list holds.
-            var action = _input?.Action ?? MediaImportActionType.MonitorAndSearch;
+            var action = _input?.Action ?? MediaImportActionType.AddOnly;
             var kinds = rows.Where(row => row.MediaTypeId is not null).GroupBy(row => row.TypeKey, StringComparer.Ordinal).Select(group => group.First()).ToDictionary(row => row.TypeKey, StringComparer.Ordinal);
             var defaults = new BaseDataList<MediaImportDefaultV1>(kinds.Keys.Select(key => _input?.Defaults.FirstOrDefault(item => item.Key == key) ?? new MediaImportDefaultV1(key, null, null)));
             var selectable = rows.Where(CanInclude).ToArray();
@@ -127,6 +127,16 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                         }, item => kinds.TryGetValue(item.Key, out var kind) && HasChoice(listing, kind));
                     }
                 });
+
+                // Selection and side effects are visible before any row is committed.
+                var intended = rows.Where(row => row.IsIncluded).ToArray();
+                var monitorCount = intended.Count(row => row.CanMonitor && row.Action != MediaImportActionType.AddOnly);
+                var searchCount = intended.Count(row => row.CanMonitor && row.Action == MediaImportActionType.MonitorAndSearch);
+                var intent = new Div(
+                    new Strong(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["import.intent.summary"], intended.Length, monitorCount, searchCount))),
+                    new Span(new Text("import.intent.searchWarning")).Class("media-import__intent-warning").Attribute("data-import-search-warning", searchCount == 0 ? "hidden" : "visible"))
+                    .Class("media-import__intent").Attribute("data-import-intent", "").TextAttribute("data-template", "import.intent.summary");
+                behavior.Note(intent);
 
                 // One row per title; a column of its own for a profile or library only where some title has the choice.
                 var table = new Table<MediaImportRowV1>(rows)
@@ -185,7 +195,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         private IEnumerable<(string Name, string Value)> Continuation(MediaImportResultV1 result, string remaining)
         {
             yield return ("json", remaining);
-            yield return ("action", ((byte)(_input?.Action ?? MediaImportActionType.MonitorAndSearch)).ToString(CultureInfo.InvariantCulture));
+            yield return ("action", ((byte)(_input?.Action ?? MediaImportActionType.AddOnly)).ToString(CultureInfo.InvariantCulture));
             var position = 0;
             foreach (var item in (IEnumerable<MediaImportDefaultV1>?)_input?.Defaults ?? [])
             {
@@ -481,7 +491,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
 
         private void Read(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
         {
-            _input = new MediaImportDataV1(file is { Length: > 0 } ? new UploadedFile(file.FileName, file.Length, file.OpenReadStream) : null, json, action ?? MediaImportActionType.MonitorAndSearch,
+            _input = new MediaImportDataV1(file is { Length: > 0 } ? new UploadedFile(file.FileName, file.Length, file.OpenReadStream) : null, json, action ?? MediaImportActionType.AddOnly,
                 new((defaults ?? []).Where(row => row.Key is not null).Select(row => new MediaImportDefaultV1(row.Key!, row.AcquisitionProfileId, row.LibraryRootId))),
                 new((choices ?? []).Where(row => row.Index is not null).Select(row => new MediaImportChoiceV1(row.Index!.Value, row.Include, row.Choice, row.Query, row.Action, row.AcquisitionProfileId, row.LibraryRootId))));
             _posted = _input.Choices.ToDictionary(choice => choice.Index);

@@ -55,6 +55,9 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(input.Locator(".file-input__zone")).ToBeVisibleAsync();
                 await Assertions.Expect(input.GetByRole(AriaRole.Button, new() { Name = "Choose file" })).ToBeVisibleAsync();
                 await Assertions.Expect(input.Locator(".file-input__limit")).ToHaveTextAsync("JSON · up to 1.0 MB");
+                await Assertions.Expect(page.Locator('.media-import__upload select[name="Action"]')).ToHaveValueAsync("1");
+                // This test deliberately opts in to monitor/search instead of relying on a dangerous default.
+                await page.Locator('.media-import__upload select[name="Action"]').SelectOptionAsync("3");
                 await Assertions.Expect(input.Locator("input[type=file]")).ToHaveCSSAsync("opacity", "0");
                 await Assertions.Expect(page.Locator("[data-import-status]")).ToHaveTextAsync("Waiting for a list");
                 await Evidence.SaveAsync(page, "media-import-upload");
@@ -229,6 +232,7 @@ namespace Jularr.E2E.Tests
                 var list = "{\"version\":1,\"items\":[" + string.Join(',', Enumerable.Range(30000, 42).Select(id => "{\"type\":\"movie\",\"ids\":{\"tmdb\":\"" + id + "\"}}")) + "]}";
                 await page.GotoAsync("/Admin/Import");
                 await page.Locator("input[type=file]").SetInputFilesAsync(Payload("bulk.json", list));
+                await page.Locator('.media-import__upload select[name="Action"]').SelectOptionAsync("3");
                 await Assertions.Expect(page.Locator("[data-import-status]")).ToHaveTextAsync("Valid list · 42 entries");
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Preview import"));
                 var rows = page.Locator("main table tbody tr");

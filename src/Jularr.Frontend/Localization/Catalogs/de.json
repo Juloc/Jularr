@@ -9188,6 +9188,22 @@
    "Preview import",
    "Vorschau anzeigen"
   ],
+  "import.intent.summary": [
+   "{0} selected · {1} to monitor · {2} to search",
+   "{0} ausgewählt · {1} überwachen · {2} automatisch suchen"
+  ],
+  "import.intent.searchWarning": [
+   "Automatic searching may start downloads. Select Add only to import without searching.",
+   "Automatische Suche kann Downloads starten. Mit Nur hinzufügen werden keine Suchen gestartet."
+  ],
+  "import.match.suggested": [
+   "Likely match",
+   "Wahrscheinlicher Treffer"
+  ],
+  "import.match.review": [
+   "Check edition",
+   "Ausgabe prüfen"
+  ],
   "import.phase.matching": [
    "Matching library works",
    "Werke abgleichen"
