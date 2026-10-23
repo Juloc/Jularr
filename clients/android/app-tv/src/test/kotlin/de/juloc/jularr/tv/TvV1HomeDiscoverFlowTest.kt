@@ -4,6 +4,7 @@ import de.juloc.jularr.core.api.AppApiException
 import de.juloc.jularr.core.api.DeviceTokenStore
 import de.juloc.jularr.core.api.catalog.HttpTvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
+import de.juloc.jularr.core.api.catalog.TvDiscoverCatalogItemV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverItemV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverScopeV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverShelfV1
@@ -66,6 +67,43 @@ class TvV1HomeDiscoverFlowTest {
         assertEquals(1, result.first().mediaTypeId)
         // No generic movie result can claim to be part of the Anime scope.
         assertFalse(result.any { it.scopeSlug == "anime" })
+    }
+
+    @Test fun animeCatalogShelvesUseNamespacedIdsAndSubtypeWithoutTmdbFallback() = runBlocking {
+        val catalogScope = TvDiscoverScopeV1("anime", 2, 1, true, listOf(1, 2))
+        val catalogItem = TvDiscoverCatalogItemV1(
+            namespace = "anilist", externalId = "456789", title = "Anime title",
+            releaseYear = 2026, author = null, workId = null,
+            posterUrl = null, rating = null, mediaStateTypeId = null,
+        )
+        val requested = mutableListOf<Triple<Int, Int, Int?>>()
+        val client = object : TvCatalogV1Client by fallback {
+            override suspend fun discoverScopes() = listOf(catalogScope)
+            override suspend fun discoverShelves(scopeSlug: String?) =
+                listOf(TvDiscoverShelfV1("anime", 1, emptyList(), listOf(catalogItem)))
+            override suspend fun discoverCatalogFeed(
+                mediaTypeId: Int, feedTypeId: Int, mediaSubtypeId: Int?,
+            ): List<TvDiscoverCatalogItemV1> {
+                requested.add(Triple(mediaTypeId, feedTypeId, mediaSubtypeId))
+                return listOf(catalogItem.copy(externalId = "other"))
+            }
+            override suspend fun discoverFeed(
+                mediaTypeId: Int, feedTypeId: Int, page: Int,
+            ): List<TvDiscoverItemV1> {
+                error("An Anime catalog scope must never be mapped to TMDB")
+            }
+        }
+        val changes = mutableListOf<List<TvV1HomeVideoFeed>>()
+        val result = TvV1HomeDiscoverFlow(client).load { changes.add(it) }
+        assertEquals(1, changes.first().size)
+        assertEquals(listOf(Triple(2, 2, 1)), requested)
+        assertEquals(listOf(1, 2), result.map { it.feedTypeId })
+        assertTrue(result.all { it.isCatalog && it.items.isEmpty() })
+        assertEquals("anilist", result.first().catalogItems.single().namespace)
+        assertEquals("456789", result.first().catalogItems.single().externalId)
+        assertEquals("Anime · Trending", tvV1HomeFeedTitle(result.first()))
+        assertEquals("catalog:anime:1:anilist:456789",
+            tvV1HomeCatalogFocusKey(result.first(), result.first().catalogItems.single()))
     }
 
     @Test fun oneUnavailableProviderDoesNotHideOtherCachedOrRankedShelves() = runBlocking {
