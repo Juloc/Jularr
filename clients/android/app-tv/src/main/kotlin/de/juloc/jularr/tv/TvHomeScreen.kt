@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -103,13 +104,16 @@ fun TvHomeScreen(
     val heroCandidates = remember(visibleDiscoverFeeds) {
         tvV1HomeHeroCandidates(visibleDiscoverFeeds)
     }
+    val heroVisible by remember(listState) {
+        derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key == "hero" } }
+    }
     var heroIndex by remember(heroCandidates) { mutableIntStateOf(0) }
     var heroFocused by remember { mutableStateOf(false) }
     val selectedHero = heroCandidates.getOrNull(heroIndex)
     // The original TV hero remains a single focus surface; switching is paused
     // while the remote is focused on the hero, avoiding unexpected activations.
-    LaunchedEffect(heroCandidates, heroFocused) {
-        while (heroCandidates.size > 1 && !heroFocused) {
+    LaunchedEffect(heroCandidates, heroFocused, heroVisible) {
+        while (heroCandidates.size > 1 && !heroFocused && heroVisible) {
             delay(9_000L)
             heroIndex = (heroIndex + 1) % heroCandidates.size
         }
