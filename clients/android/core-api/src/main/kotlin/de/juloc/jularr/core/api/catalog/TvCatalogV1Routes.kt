@@ -10,6 +10,7 @@ object TvCatalogV1Routes {
     const val Continue = "$base/continue"
     const val Watchlist = "$base/watchlist"
     const val WatchlistCount = "$base/watchlist/count"
+    const val Collections = "$base/collections"
     const val HomeLayout = "$base/home/layout"
     const val DiscoverScopes = "$base/discover/scopes"
     const val DiscoverShelves = "$base/discover/shelves"
@@ -41,6 +42,13 @@ object TvCatalogV1Routes {
     fun availability(workId: Long, page: Int, pageSize: Int): String =
         "${work(workId)}/availability${pageQuery(page, pageSize)}"
     fun watchlistItem(workId: Long): String = "$Watchlist/${positiveId(workId)}"
+
+    /** Reading collections requires Library + Collections and profile.collections. */
+    fun collectionWorks(collectionId: Long, page: Int, pageSize: Int): String =
+        "$Collections/${positiveId(collectionId)}/works" + pageQuery(page, pageSize) +
+            // The backend requires subtype 1 explicitly for Anime; a mediaType
+            // filter alone matches only works without a subtype.
+            "&mediaTypeIds=1&mediaTypeIds=2&mediaSubtypeIds=1"
 
     fun library(page: Int, pageSize: Int, query: String? = null, sortTypeId: Int? = null): String =
         Library + pageQuery(page, pageSize) + optionalQuery("query", query) +

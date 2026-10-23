@@ -17,6 +17,10 @@ interface TvCatalogV1Client {
         filters: TvCatalogV1Filters, sortTypeId: Int? = null,
     ): TvPageV1<TvWorkCardV1>
     suspend fun watchlistCount(): Int
+    suspend fun collections(): List<TvCollectionV1>
+    suspend fun collectionWorks(
+        collectionId: Long, page: Int = 1, pageSize: Int = 100,
+    ): TvPageV1<TvWorkCardV1>
     suspend fun setWatchlisted(workId: Long, isWatchlisted: Boolean): Boolean
     suspend fun homeLayout(): List<TvHomeShelfV1>
     suspend fun discoverScopes(): List<TvDiscoverScopeV1>

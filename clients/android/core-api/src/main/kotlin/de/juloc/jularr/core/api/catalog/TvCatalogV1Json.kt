@@ -41,6 +41,15 @@ internal inline fun <T> JSONArray.objects(parse: JSONObject.() -> T): List<T> =
 internal inline fun <T> JSONObject.page(parse: JSONObject.() -> T): TvPageV1<T> =
     TvPageV1(getJSONArray("items").objects(parse), getInt("page"), getInt("pageSize"))
 
+internal fun JSONObject.collection(): TvCollectionV1 = TvCollectionV1(
+    id = getLong("id"),
+    name = getString("name"),
+    isSmart = getBoolean("isSmart"),
+    workCount = nullableInt("workCount"),
+    posterUrls = stringArray("posterUrls"),
+    version = getLong("version"),
+)
+
 internal fun JSONObject.workCard(): TvWorkCardV1 = TvWorkCardV1(
     id = getLong("id"),
     mediaTypeId = getInt("mediaTypeId"),

@@ -9,6 +9,16 @@ import java.math.BigDecimal
  */
 data class TvPageV1<T>(val items: List<T>, val page: Int, val pageSize: Int)
 
+/** Real user collection identity, not a WorkId or media asset. */
+data class TvCollectionV1(
+    val id: Long,
+    val name: String,
+    val isSmart: Boolean,
+    val workCount: Int?,
+    val posterUrls: List<String>,
+    val version: Long,
+)
+
 data class TvWorkCardV1(
     val id: Long,
     val mediaTypeId: Int,
