@@ -87,6 +87,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             // Direct book sources answer one title and author query; they are asked at the same time as the indexers.
             var direct = SearchDirectSourcesAsync(catalogs, target, budget, offers, ct);
+            var nyaaSearch = SearchNyaaSourcesAsync(torrents, target, budget, offers, ct);
 
             // The torrent index answers for the light novels; it is asked at the same time as the indexers.
             async Task SearchNyaaSourcesAsync(IReadOnlyList<AcquisitionConnectionData> sources, WantedTargetData wanted, SearchBudget limits,
@@ -158,7 +159,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
                 // The direct sources answered at the same time; their releases belong to the choice.
                 await direct;
-                await SearchNyaaSourcesAsync(torrents, target, budget, offers, ct);
+                await nyaaSearch;
                 selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
                 if (selection.Ranked.Count(evaluation => evaluation.IsSelectable) >= budget.TargetUsable)
                 {
@@ -168,7 +169,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             // The direct sources are waited for; they answered at the same time as the indexers.
             await direct;
-            await SearchNyaaSourcesAsync(torrents, target, budget, offers, ct);
+            await nyaaSearch;
             selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
 
             // Manual grabs pick from what was shown; the cache is bounded by offer count.
@@ -249,11 +250,16 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 return;
             }
 
-            // The same SABnzbd endpoint can have separate connections/categories per media type.
-            // Prefer a matching explicit scope, then the existing priority order; an unscoped
-            // connection remains the fallback for existing installations.
-            var client = clients.Where(connection => connection.MediaTypeIds.Contains((int)target.MediaTypeId))
-                .FirstOrDefault() ?? clients.FirstOrDefault(connection => connection.MediaTypeIds.Length == 0);
+            // Route by transport first. A .torrent or magnet must never be handed to SABnzbd,
+            // nor may an NZB be handed to qBittorrent simply because it has the highest priority.
+            var isTorrent = offer.Guid?.StartsWith("nyaa:", StringComparison.OrdinalIgnoreCase) == true
+                || offer.DownloadUri?.Scheme.Equals("magnet", StringComparison.OrdinalIgnoreCase) == true
+                || offer.DownloadUri?.AbsolutePath.EndsWith(".torrent", StringComparison.OrdinalIgnoreCase) == true;
+            var compatible = clients.Where(connection => isTorrent
+                ? connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent
+                : connection.AcquisitionConnectionTypeId is AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.Usenet);
+            var client = compatible.FirstOrDefault(connection => connection.MediaTypeIds.Contains((int)target.MediaTypeId))
+                ?? compatible.FirstOrDefault(connection => connection.MediaTypeIds.Length == 0);
             if (client is null)
             {
                 throw new ServiceUnavailableException("acquisition_no_download_client");
@@ -265,9 +271,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
 
             // SABnzbd owns the download folder. Do not send a release that Jularr cannot import.
-            if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd)
+            if (client.AcquisitionConnectionTypeId is AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.Qbittorrent)
             {
-                await RequireSabImportSourceAsync(context, client, ct);
+                await RequireClientImportSourceAsync(context, client, ct);
             }
 
             // Refuse native downloads before reserving an operation or using an indexer grab.
@@ -393,7 +399,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             _signals.Downloads.Notify();
         }
 
-        private async Task RequireSabImportSourceAsync(LogicContext context, AcquisitionConnectionData client, CancellationToken ct)
+        private async Task RequireClientImportSourceAsync(LogicContext context, AcquisitionConnectionData client, CancellationToken ct)
         {
             if (string.IsNullOrWhiteSpace(client.RemotePath) || client.DownloadStorageMountId is null && string.IsNullOrWhiteSpace(client.LocalPath))
             {
