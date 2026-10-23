@@ -66,6 +66,9 @@ document.addEventListener("htmx:config:request", event => {
     const ctx = (event as CustomEvent<{ ctx?: { target?: Element; request?: { method?: string } } }>).detail?.ctx;
     if (ctx?.target?.id === "app-content" && ctx.request?.method === "GET") event.preventDefault();
 });
+document.addEventListener("htmx:before:history:restore", event => {
+    if (runningImportRequests !== 0) event.preventDefault();
+});
 
 // Both initial preview and "Search more/Refresh" use the same provider stream,
 // including existing per-title selection, provider query and per-media defaults.
