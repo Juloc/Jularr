@@ -139,11 +139,11 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "media-import-preview-mobile");
                 await page.SetViewportSizeAsync(1280, 720);
 
-                // The person imports the chosen rows; every row reports its own outcome.
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Import selected"));
-                await Assertions.Expect(page.Locator(".media-import__summary .tag").Filter(new() { HasText = "Added, monitored" })).ToContainTextAsync("4");
-                await Assertions.Expect(page.Locator("main table tbody tr")).ToHaveCountAsync(4);
-                await Assertions.Expect(page.Locator("main table tbody tr .state-chip", new() { HasText = "Searching" })).ToHaveCountAsync(4);
+                // The person imports the chosen rows without leaving the page; actual per-row outcomes stream live.
+                await page.Locator("[data-import-apply]").ClickAsync();
+                await Assertions.Expect(page.Locator(".media-import__activity--done")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".media-import__activity-list li", new() { HasText = "Added, monitored" })).ToHaveCountAsync(4);
+                await Assertions.Expect(page.Locator(".media-import__activity progress")).ToHaveJSPropertyAsync("value", 6);
                 await Evidence.SaveAsync(page, "media-import-result");
                 await page.SetViewportSizeAsync(390, 844);
                 await Evidence.SaveAsync(page, "media-import-result-mobile");
@@ -170,8 +170,8 @@ namespace Jularr.E2E.Tests
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Preview import"));
                 await Assertions.Expect(page.Locator(".media-import__summary .tag").Filter(new() { HasText = "In library" })).ToContainTextAsync("4");
                 await Assertions.Expect(page.Locator("main table tbody tr input[type=checkbox]")).ToHaveCountAsync(0);
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Import selected"));
-                await Assertions.Expect(page.Locator(".media-import__summary .tag").Filter(new() { HasText = "Skipped" })).ToContainTextAsync("6");
+                // All rows already exist; no need to submit again to discover there are no changes.
+                await Assertions.Expect(page.Locator("[data-import-count]")).ToHaveCountAsync(0);
                 await page.GotoAsync("/Admin/Works");
                 await Assertions.Expect(page.Locator("main .list-row")).ToHaveCountAsync(4);
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
@@ -215,8 +215,9 @@ namespace Jularr.E2E.Tests
                 // The last two rows differ from the list: the next one is only added, the last one is monitored without a search.
                 await page.Locator("select[name='Choices[40].Action']").SelectOptionAsync(new SelectOptionValue { Label = "Add only" });
                 await page.Locator("select[name='Choices[41].Action']").SelectOptionAsync(new SelectOptionValue { Label = "Monitor" });
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Import selected"));
-                await Assertions.Expect(page.Locator(".media-import__summary .tag").Filter(new() { HasText = "Waiting for the next run" })).ToContainTextAsync("2");
+                await page.Locator("[data-import-apply]").ClickAsync();
+                await Assertions.Expect(page.Locator(".media-import__activity--done")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".media-import__activity-list li", new() { HasText = "Waiting for the next run" })).ToHaveCountAsync(2);
                 await Evidence.SaveAsync(page, "media-import-result-continue");
 
                 // The rest comes back as the first rows of the next preview with their own choices.
@@ -225,9 +226,10 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(rows.Nth(0).Locator("select[name='Choices[0].Action'] option:checked")).ToHaveTextAsync("Add only");
                 await Assertions.Expect(rows.Nth(1).Locator("select[name='Choices[1].Action'] option:checked")).ToHaveTextAsync("Monitor");
                 await Evidence.SaveAsync(page, "media-import-continued");
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Import selected"));
-                await Assertions.Expect(page.Locator("main table tbody tr", new() { HasText = "Bulk Movie 30040" }).Locator(".state-chip")).ToHaveTextAsync("Added");
-                await Assertions.Expect(page.Locator("main table tbody tr", new() { HasText = "Bulk Movie 30041" }).Locator(".state-chip")).ToHaveTextAsync("Added, monitored");
+                await page.Locator("[data-import-apply]").ClickAsync();
+                await Assertions.Expect(page.Locator(".media-import__activity--done")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".media-import__activity-list li", new() { HasText = "Bulk Movie 30040" })).ToContainTextAsync("Added");
+                await Assertions.Expect(page.Locator(".media-import__activity-list li", new() { HasText = "Bulk Movie 30041" })).ToContainTextAsync("Added, monitored");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
