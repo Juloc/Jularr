@@ -134,6 +134,49 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Import_Isbn_ResolvesUnimportedEditionToCanonicalWork_AndRejectsWrongTitleOrAuthor()
+        {
+            var providers = new FakeProviders();
+            await using var host = await CreateHostAsync(providers);
+
+            const string isbnList = """
+                {"version":1,"items":[
+                  {"type":"book","ids":{"isbn":"9780141439518"},"title":"Pride and Prejudice","author":"Jane Austen"},
+                  {"type":"book","ids":{"isbn":"9781601424440"},"title":"For Women Only, Revised and Updated Edition","author":"Shaunti Feldhahn"}
+                ]}
+                """;
+            var preview = await PreviewAsync(host, isbnList);
+            CollectionAssert.AreEqual(new[] { MediaImportStatusType.New, MediaImportStatusType.New }, preview.Rows.Select(row => row.StatusTypeId).ToArray());
+            CollectionAssert.AreEqual(new[] { "openlibrary:OL66554W", "openlibrary:OL7777W" }, preview.Rows.Select(row => row.Choice).ToArray());
+            Assert.IsTrue(preview.Rows.All(row => row.IsIncluded));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+
+            var result = await RunAsync(host, isbnList, MediaImportActionType.AddOnly);
+            Assert.AreEqual(2, result.Rows.Count(row => row.OutcomeTypeId == MediaImportOutcomeType.Added));
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+
+            // The edition's ISBN now identifies the existing Work; a repeated import never creates a second copy.
+            var repeat = await PreviewAsync(host, isbnList);
+            Assert.IsTrue(repeat.Rows.All(row => row.StatusTypeId == MediaImportStatusType.InLibrary));
+            Assert.AreEqual(2, (await RunAsync(host, isbnList, MediaImportActionType.AddOnly)).Rows.Count(row => row.OutcomeTypeId == MediaImportOutcomeType.Skipped));
+
+            const string mismatched = """
+                {"version":1,"items":[
+                  {"type":"book","ids":{"isbn":"9780141439518"},"title":"Summary of Pride and Prejudice","author":"Jane Austen"},
+                  {"type":"book","ids":{"isbn":"9781601424440"},"title":"For Young Women Only","author":"Shaunti Feldhahn"}
+                ]}
+                """;
+            // Local edition IDs are authoritative for an existing Work; title checks apply before a new Work is imported.
+            var empty = await CreateHostAsync(new FakeProviders());
+            await using (empty)
+            {
+                var unmatched = await PreviewAsync(empty, mismatched);
+                Assert.IsTrue(unmatched.Rows.All(row => row.StatusTypeId == MediaImportStatusType.Open));
+                Assert.AreEqual(0L, await empty.ScalarAsync("""SELECT count(*) FROM "Works" """));
+            }
+        }
+
+        [TestMethod]
         public async Task Import_ListWithIds_PreviewsWithoutChangesThenAddsMonitorsAndRepeatsWithoutDuplicates()
         {
             var providers = new FakeProviders();
@@ -482,6 +525,11 @@ namespace Jularr.Backend.Tests
                     return Task.FromResult(uri.AbsolutePath switch
                     {
                         "/search.json" => Json("""{"docs":[{"key":"/works/OL66554W","title":"Pride and Prejudice","author_name":["Jane Austen"],"first_publish_year":1813,"cover_i":14348537,"isbn":["9780141439518"]}]}"""),
+                        "/isbn/9780141439518.json" => Json("""{"works":[{"key":"/works/OL66554W"}]}"""),
+                        "/isbn/9781601424440.json" => Json("""{"works":[{"key":"/works/OL7777W"}]}"""),
+                        "/works/OL7777W.json" => Json("""{"title":"For Women Only","first_publish_date":"2004","authors":[{"author":{"key":"/authors/OL7777A"}}]}"""),
+                        "/works/OL7777W/editions.json" => Json("""{"entries":[{"key":"/books/OL7777M","title":"For Women Only, Revised and Updated Edition","languages":[{"key":"/languages/eng"}],"isbn_13":["9781601424440"],"publish_date":"2013"}]}"""),
+                        "/authors/OL7777A.json" => Json("""{"name":"Shaunti Christine Feldhahn"}"""),
                         "/works/OL66554W.json" => Json("""{"title":"Pride and Prejudice","first_publish_date":"1813","description":{"value":"A novel of manners."},"covers":[14348537],"authors":[{"author":{"key":"/authors/OL21594A"}}]}"""),
                         "/authors/OL21594A.json" => Json("""{"name":"Jane Austen"}"""),
                         "/works/OL66554W/editions.json" => Json("""{"entries":[{"key":"/books/OL1M","title":"Pride and Prejudice","languages":[{"key":"/languages/eng"}],"physical_format":"Paperback","isbn_13":["9780141439518"],"publishers":["Penguin"],"publish_date":"2003"}]}"""),
