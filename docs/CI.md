@@ -29,6 +29,10 @@ smoke (build once + critical tests + frontend tests, ~5 min)
   client, so smoke runs `install-tools` too) and `npm test`, then publishes the compiled
   workspace as the `jularr-build` artifact (about 220 MB, 1 day). Shards only unpack it
   (`.github/actions/restore-build`) and run `dotnet test --no-build`; none compiles.
+- Browser jobs install Chromium through `.github/actions/install-chromium`: the browser is downloaded
+  (cached), `ldd` checks that the runner image already has its system libraries (it ships Chrome), and
+  only a missing library takes the slow apt route (hardened, three timed attempts). Plain apt at job
+  time stalled the browser shards for ten minutes on slow mirrors.
 - The shards are one matrix with `fail-fast: true`: the first failing shard cancels all others,
   and a newer push to the same branch or PR cancels the whole older run (`concurrency`).
 - `gate` needs `smoke` and all shards and is the one conclusion of the run (the release guard
