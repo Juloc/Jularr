@@ -2847,6 +2847,7 @@ namespace Jularr.Frontend.Localization
             new("import.outcome.Excluded", "Excluded"),
             new("import.outcome.Deferred", "Waiting for the next run"),
             new("import.outcome.Failed", "Failed"),
+            new("import.interrupted", "Connection interrupted. Some titles may already be imported. Update the preview before importing again."),
             new("admin.works.source.isbn", "ISBN"),
             new("admin.works.source.imdb", "IMDb"),
             new("admin.works.source.tvdb", "TVDB"),
