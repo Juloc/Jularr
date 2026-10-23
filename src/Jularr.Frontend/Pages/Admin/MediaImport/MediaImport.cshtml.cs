@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Encodings.Web;
+using System.Text.Json;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
@@ -127,6 +128,8 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 var apply = new Button(new Text("import.apply")).Primary();
                 apply.Attribute("formaction", Address + "?handler=Apply");
                 apply.Attribute("data-import-apply", "");
+                apply.TextAttribute("data-import-complete", "import.resultTitle");
+                apply.TextAttribute("data-import-continue", "import.continue");
                 form.Submit(apply);
             }, Address + "?handler=Preview", csrf, new MediaImportDataV1(null, listing.Json, action, defaults), FormError)).Class("media-import__preview"));
         }
@@ -375,6 +378,50 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             _result = await run.ExecuteAsync<MediaImportResultV1>(_input!, HttpContext.RequestAborted);
             PreparePage();
             return Page();
+        }
+
+        // The interactive page streams actual outcomes after each processed title; ordinary HTML posting stays supported.
+        public async Task<IActionResult> OnPostApplyStreamAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
+        {
+            if (!texts.CanImportMedia()) return Forbid();
+            Read(file, json, action, defaults, choices);
+            Response.ContentType = "application/x-ndjson; charset=utf-8";
+            Response.Headers.CacheControl = "no-store";
+            Response.Headers["X-Accel-Buffering"] = "no";
+
+            async Task EmitAsync(object update)
+            {
+                await Response.WriteAsync(JsonSerializer.Serialize(update) + "\n", HttpContext.RequestAborted);
+                await Response.Body.FlushAsync(HttpContext.RequestAborted);
+            }
+
+            await EmitAsync(new { kind = "started" });
+            run.OnRowProcessedAsync = row => EmitAsync(new
+            {
+                kind = "row",
+                index = row.Index,
+                title = row.Title,
+                outcome = texts["import.outcome." + row.OutcomeTypeId],
+                status = row.OutcomeTypeId.ToString(),
+                workId = row.WorkId
+            });
+
+            try
+            {
+                var result = await run.ExecuteAsync<MediaImportResultV1>(_input!, HttpContext.RequestAborted);
+                await EmitAsync(new { kind = "done", remaining = result.RemainingJson });
+            }
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                // A streaming response has already started, so return a generic error event instead of HTML.
+                await EmitAsync(new { kind = "error" });
+            }
+
+            return new EmptyResult();
         }
 
         private void Read(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
