@@ -460,6 +460,10 @@ fun TvHomeScreen(
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 }
+                // A type may be absent from the first server page, yet appear in later pages.
+                if (onLoadMoreVideos != null) item(key = "load-more-empty-filter") {
+                    Button(onClick = onLoadMoreVideos) { Text("Weitere Medien laden") }
+                }
             }
 
             item {
