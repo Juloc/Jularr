@@ -32,10 +32,15 @@ namespace Jularr.Backend.Tests
             var path = directory.Path;
             // The same code path also handles a CIFS/NFS mount propagated into a Docker
             // container, where DriveInfo.GetDrives may not enumerate the child mount.
-            var mount = new DirectoryInfo(path);
-            while (mount is not null && !StorageFileSystem.IsMountPoint(mount.FullName)) mount = mount.Parent;
-            Assert.IsNotNull(mount);
-            var drive = new DriveInfo(mount.FullName);
+            var mountPath = Path.GetPathRoot(path)!;
+            if (OperatingSystem.IsLinux())
+            {
+                var mount = new DirectoryInfo(path);
+                while (mount is not null && !StorageFileSystem.IsMountPoint(mount.FullName)) mount = mount.Parent;
+                Assert.IsNotNull(mount);
+                mountPath = mount.FullName;
+            }
+            var drive = new DriveInfo(mountPath);
             Assert.AreEqual(drive.AvailableFreeSpace, StorageFileSystem.AvailableFreeSpace(path));
         }
 
