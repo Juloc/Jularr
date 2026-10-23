@@ -95,7 +95,7 @@ namespace Jularr.Backend.Tests
                 var html = await catalog.Content.ReadAsStringAsync();
                 Assert.AreEqual(HttpStatusCode.OK, catalog.StatusCode, html);
                 StringAssert.Contains(html, "native-storage-notice");
-                StringAssert.Contains(html, "Anna's Archive");
+                StringAssert.Contains(html, "Anna&#x27;s Archive");
                 StringAssert.Contains(html, "/Admin/DownloadStorage");
             }
 
