@@ -472,7 +472,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private static readonly TimeSpan InterruptedRetry = TimeSpan.FromMinutes(30);
         private const int DirectPerCycle = 5;
         private readonly SabnzbdClient _sabnzbd;
-    private readonly QbittorrentClient _qbittorrent;
+        private readonly QbittorrentClient _qbittorrent;
         private readonly IDataProtector _protector;
         private readonly TimeProvider _time;
         private readonly DownloadImport _import;
@@ -546,7 +546,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                                 ProgressPercent = (int?)Math.Clamp((int)Math.Round(torrent.Progress * 100), 0, 99),
                                 SizeBytes = (long?)torrent.SizeBytes,
                                 RemainingBytes = (long?)Math.Max(0, torrent.SizeBytes - torrent.DownloadedBytes),
-                                EtaSeconds = (int?)null,
+                                EtaSeconds = torrent.DownloadSpeed > 0
+                                    ? (int?)Math.Min(int.MaxValue, Math.Ceiling((double)Math.Max(0, torrent.SizeBytes - torrent.DownloadedBytes) / torrent.DownloadSpeed))
+                                    : null,
                                 DownloadStateTypeId = (byte)DownloadLogic.ReadDownloadState(torrent.IsPaused ? "Paused" : torrent.IsFailed ? "Failed" : "Downloading")
                             };
                         })
@@ -560,11 +562,26 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         }, CancellationToken);
                     }
 
-                    foreach (var download in group.Where(download => download.ExternalId is not null
-                        && torrents.TryGetValue(download.ExternalId!, out var torrent) && torrent.IsCompleted))
+                    foreach (var download in group)
                     {
-                        // The file the client wrote is read from the folder Jularr mapped.
-                        await ImportAsync(download, connection, torrents[download.ExternalId!].ContentPath);
+                        if (download.ExternalId is not { } hash || !torrents.TryGetValue(hash, out var torrent))
+                        {
+                            if (_time.GetUtcNow().UtcDateTime - download.StartedAt > LostAfter)
+                                await _import.FailAsync(Context, download.OperationId, DownloadLogic.InterruptedReasonKey,
+                                    _time.GetUtcNow().UtcDateTime + InterruptedRetry, CancellationToken);
+                            continue;
+                        }
+
+                        if (torrent.IsFailed)
+                        {
+                            await _import.FailAsync(Context, download.OperationId, DownloadLogic.InterruptedReasonKey,
+                                _time.GetUtcNow().UtcDateTime + InterruptedRetry, CancellationToken);
+                        }
+                        else if (torrent.IsCompleted)
+                        {
+                            // Import only the exact hash registered by the grab, never an adjacent torrent.
+                            await ImportAsync(download, connection, torrent.ContentPath);
+                        }
                     }
 
                     continue;
