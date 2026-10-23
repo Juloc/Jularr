@@ -133,12 +133,28 @@ namespace Jularr.E2E.Tests
                 await FlipAsync(rows.Nth(3).Locator("input[name='Choices[3].Include']"));
                 await Assertions.Expect(all).ToBeCheckedAsync();
 
-                // A refresh of the existing preview uses the same live provider stream
-                // and does not discard the person's row selection and actions.
-                var refreshedRequest = page.WaitForRequestAsync(request => request.Url.Contains("handler=PreviewStream", StringComparison.Ordinal));
-                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Update preview" }));
-                Assert.AreEqual("POST", (await refreshedRequest).Method);
+                // A delayed provider response must not permit an import against stale matches.
+                var releaseSearch = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var streamedSearch = page.WaitForRequestAsync(request => request.Url.Contains("handler=PreviewStream", StringComparison.Ordinal));
+                await page.RouteAsync("**/Admin/Import?handler=PreviewStream", async route =>
+                {
+                    await releaseSearch.Task;
+                    await route.ContinueAsync();
+                });
+                try
+                {
+                    await page.GetByRole(AriaRole.Button, new() { Name = "Update preview" }).ClickAsync(new() { NoWaitAfter = true });
+                    Assert.AreEqual("POST", (await streamedSearch).Method);
+                    await Assertions.Expect(page.Locator("[data-import-apply]")).ToBeDisabledAsync();
+                    await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Update preview" })).ToBeDisabledAsync();
+                }
+                finally
+                {
+                    releaseSearch.TrySetResult(true);
+                }
                 await Assertions.Expect(page.Locator("[data-import-count]")).ToHaveTextAsync("4 of 4 selected");
+                await Assertions.Expect(page.Locator("[data-import-apply]")).ToBeEnabledAsync();
+                await page.UnrouteAsync("**/Admin/Import?handler=PreviewStream");
 
                 // A narrow screen keeps the page in its width.
                 await page.SetViewportSizeAsync(390, 844);
