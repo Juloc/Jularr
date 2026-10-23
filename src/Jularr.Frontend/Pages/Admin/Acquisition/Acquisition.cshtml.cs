@@ -100,9 +100,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request)));
             // Show missing prerequisites before a source is enabled or a download attempted.
             if (!_directStorageReady && items.Any(item => NativeDownloadStorageNotice.RequiresDirectStorage(item.AcquisitionConnectionTypeId)))
-                page.Content.Add(NativeDownloadStorageNotice.Message(DownloadStorageArea.Direct));
+                page.Content.Add(StorageNotice(DownloadStorageArea.Direct));
             if (!_usenetStorageReady && items.Any(item => item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet))
-                page.Content.Add(NativeDownloadStorageNotice.Message(DownloadStorageArea.Usenet));
+                page.Content.Add(StorageNotice(DownloadStorageArea.Usenet));
             var reachable = items.Count(item => State(item) == "healthy");
             var failing = items.Count(item => State(item) is "error" or "backoff");
             var figures = new KpiTiles(
@@ -165,9 +165,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             var cards = new List<IUiComponent>([.. items.Select(item => Card(item, csrf))]);
             if (!_directStorageReady && items.Any(item => NativeDownloadStorageNotice.RequiresDirectStorage(item.AcquisitionConnectionTypeId)))
-                page.Content.Add(NativeDownloadStorageNotice.Message(DownloadStorageArea.Direct));
+                page.Content.Add(StorageNotice(DownloadStorageArea.Direct));
             if (!_usenetStorageReady && items.Any(item => item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet))
-                page.Content.Add(NativeDownloadStorageNotice.Message(DownloadStorageArea.Usenet));
+                page.Content.Add(StorageNotice(DownloadStorageArea.Usenet));
 
             // The card that adds one: each kind opens its dialog.
             var adds = Additions[Role].Select(addition => (IUiComponent)new A(Glyph("plus", 14), new Text(addition.LabelKey)).Class("button button--compact button--soft").Attribute("href", Address(type: addition.Type))).ToList();
@@ -220,6 +220,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var end = new List<IUiComponent> { Post("Toggle", item.Id, csrf, [("isEnabled", item.IsEnabled ? "false" : "true")], new SwitchButton(item.IsEnabled, "acquisition.connection.active")) };
             return new FeatureCard(new IconTile(Glyph(icon, 18), tone), item.Name, texts["acquisition.connection.type." + item.AcquisitionConnectionTypeId], StateChipOf(item, state), body, start, end).Wide();
         }
+
+        private IUiComponent StorageNotice(DownloadStorageArea area) =>
+            NativeDownloadStorageNotice.Message(area, SetupWizard.IsActive(Request) ? SetupWizard.Paths[SetupStepType.DownloadStorage] : "/Admin/DownloadStorage");
 
         // The state of a connection: switched off, failing and paused, failing, not tested yet or reachable.
         private static string State(AcquisitionConnectionDetailsV1 item) => !item.IsEnabled ? "off" : item is { IsBackedOff: true, RetryAt: not null } ? "backoff"
@@ -413,9 +416,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 form.Hidden(item => item.AcquisitionConnectionTypeId);
                 // The form opens before activation. A missing mount or reserve must be visible now.
                 if (NativeDownloadStorageNotice.RequiresDirectStorage(type) && !_directStorageReady)
-                    form.Content(NativeDownloadStorageNotice.Message(DownloadStorageArea.Direct));
+                    form.Content(StorageNotice(DownloadStorageArea.Direct));
                 else if (type == AcquisitionConnectionType.Usenet && !_usenetStorageReady)
-                    form.Content(NativeDownloadStorageNotice.Message(DownloadStorageArea.Usenet));
+                    form.Content(StorageNotice(DownloadStorageArea.Usenet));
                 form.Text(item => item.Name, "acquisition.connection.name");
                 // A news server is entered as in SABnzbd: server, port and SSL; every other connection by its web address.
                 if (type == AcquisitionConnectionType.Usenet)
