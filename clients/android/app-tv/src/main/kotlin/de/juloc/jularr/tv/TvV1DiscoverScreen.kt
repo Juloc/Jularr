@@ -1,5 +1,6 @@
 package de.juloc.jularr.tv
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -63,6 +64,18 @@ internal fun TvV1DiscoverScreen(
     }
     var catalogLoading by remember(catalog, initialCatalog) { mutableStateOf(false) }
     var catalogError by remember(catalog, initialCatalog) { mutableStateOf<String?>(null) }
+    fun closeDetails() {
+        // A detail opened directly from Home returns to Home. A detail chosen
+        // inside Discover returns to that screen's previous result list.
+        if (initialCatalog != null || initialItem != null) onBack()
+        else {
+            selectedCatalog = null
+            selectedExternal = null
+        }
+    }
+    BackHandler(enabled = selectedCatalog != null || selectedExternal != null) {
+        closeDetails()
+    }
     var loading by remember(catalog) { mutableStateOf(false) }
     var error by remember(catalog) { mutableStateOf<String?>(null) }
     var retry by remember(catalog) { mutableStateOf(0) }
@@ -157,7 +170,7 @@ internal fun TvV1DiscoverScreen(
                     } ?: Text("Noch kein lokales Jularr-Werk.")
                 }
             }
-            Button(onClick = { selectedCatalog = null }) { Text("Zurück zu Discover") }
+            Button(onClick = ::closeDetails) { Text("Zurück") }
         }
         return
     }
@@ -192,7 +205,7 @@ internal fun TvV1DiscoverScreen(
             } else {
                 Text("Dieser Titel ist noch kein lokales Jularr-Work. Es wird keine ID erfunden.")
             }
-            Button(onClick = { selectedExternal = null }) { Text("Zurück zu Discover") }
+            Button(onClick = ::closeDetails) { Text("Zurück") }
         }
         return
     }
