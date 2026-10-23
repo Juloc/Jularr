@@ -29,6 +29,10 @@ The example file (all eight types) is offered on the page and in
 - An entry needs an id or a title. Texts are plain text, trimmed, one space between words, at most 500 characters, no control characters; markup is never interpreted.
 - At most 1 MiB (bytes), depth 8, no comments or trailing commas, strict UTF-8 for files. Nothing is fetched from a URL.
 
+## Book versus audiobook matches
+
+The book catalog uses Open Library Works, which can include both print/ebook and audiobook editions. Normal books with mixed print/audio editions remain searchable. Results explicitly labelled as audio editions (for example `- Audiobook`, `(Hörbuch)`) and Open Library records with **only** audio formats are not offered as regular book candidates. An ISBN resolving to an explicitly audio-only edition is not automatically bound to a book Work; the item remains subject to normal manual matching. Missing/incomplete provider formats cannot be reliably classified and may still require manual review. Audiobooks are not deleted from the Work's legitimate other editions.
+
 ## Flow
 
 1. Choose a `.json` file in the file input (drop zone, name, size, remove) or paste the list, and choose how titles are added (add only, monitor, monitor and search). The page offers the example as a download and as a sample to copy.
