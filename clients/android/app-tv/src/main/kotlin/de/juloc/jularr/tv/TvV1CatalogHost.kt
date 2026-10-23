@@ -91,6 +91,7 @@ fun TvV1CatalogHost(
     var homeNextPage by remember(serverOrigin) { mutableStateOf<Int?>(null) }
     var searchNextPage by remember(serverOrigin) { mutableStateOf<Int?>(null) }
     var watchlistNextPage by remember(serverOrigin) { mutableStateOf<Int?>(null) }
+    var watchlistSort by remember(serverOrigin) { mutableStateOf(TvWatchlistSort.NEWEST) }
     var fetchingNextPage by remember(serverOrigin) { mutableStateOf(false) }
     var pagingError by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var searchResults by remember(serverOrigin) { mutableStateOf(ClientLibrary(emptyList())) }
@@ -186,7 +187,7 @@ fun TvV1CatalogHost(
                 if (which == TvV1CatalogPage.Watchlist) {
                     val result = if (requestedCollection != null) {
                         flow.collectionPage(requestedCollection, next)
-                    } else flow.watchlistPage(next)
+                    } else flow.watchlistPage(next, if (watchlistSort == TvWatchlistSort.TITLE_ASC) 2 else 1)
                     if (page == which && selectedCollectionId == requestedCollection) {
                         val cards = TvV1LegacyUiModels.watchlist(result.items)
                         watchlist = (watchlist + cards).distinctBy { it.id }
@@ -248,7 +249,7 @@ fun TvV1CatalogHost(
     BackHandler(enabled = page != TvV1CatalogPage.Home && page != TvV1CatalogPage.Player) { back() }
 
     LaunchedEffect(serverOrigin, page, searchQuery, detailWorkId, selectedPersonId,
-        selectedCollectionId, reload) {
+        selectedCollectionId, watchlistSort, reload) {
         error = null
         loading = true
         try {
@@ -274,7 +275,7 @@ fun TvV1CatalogHost(
                     watchlist = emptyList()
                     val first = if (selectedCollectionId != null) {
                         flow.collectionPage(requireNotNull(selectedCollectionId), 1)
-                    } else flow.watchlistPage(1)
+                    } else flow.watchlistPage(1, if (watchlistSort == TvWatchlistSort.TITLE_ASC) 2 else 1)
                     watchlist = TvV1LegacyUiModels.watchlist(first.items)
                     watchlistNextPage = if (first.hasMore) 2 else null
                     pagingError = null
@@ -462,6 +463,15 @@ fun TvV1CatalogHost(
                                 selectedCollectionId = selectedCollectionId,
                                 collectionError = collectionsError,
                                 collectionLoading = loading,
+                                serverSort = watchlistSort,
+                                onServerSortChange = { requested ->
+                                    if (requested != watchlistSort) {
+                                        watchlistSort = requested
+                                        watchlist = emptyList()
+                                        watchlistNextPage = null
+                                        pagingError = null
+                                    }
+                                },
                                 onSelectCollection = { id ->
                                     if (id != selectedCollectionId) {
                                         selectedCollectionId = id
