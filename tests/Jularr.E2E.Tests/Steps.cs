@@ -93,6 +93,12 @@ namespace Jularr.E2E.Tests
             var tmdb = page.Locator("#provider-tmdb form[action*='handler=Secret']");
             await tmdb.Locator("[name=Secret]").FillAsync(FakeServices.TmdbToken);
             await SubmitAsync(page, tmdb);
+
+            // A series takes its seasons and episodes from TheTVDB.
+            await page.GotoAsync("/Admin/Providers");
+            var tvdb = page.Locator("#provider-tvdb form[action*='handler=Secret']");
+            await tvdb.Locator("[name=Secret]").FillAsync(FakeServices.TvdbKey);
+            await SubmitAsync(page, tvdb);
         }
 
         // Switches a module on the Modules page; its card is named with the module's description. A module that is blocked by a dependency stays as it is.

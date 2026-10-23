@@ -1827,6 +1827,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, unavailable.StatusCode);
             var tmdb = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(FakeUsenet.TmdbToken));
+            await SaveTvdbKeyAsync(host);
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             using var providers = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/providers");
             Assert.IsFalse((await providers.Content.ReadAsStringAsync()).Contains(FakeUsenet.TmdbToken, StringComparison.Ordinal));
@@ -1847,13 +1848,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\""));
             Assert.AreEqual(6L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 2"));
 
-            // An episode's guest stars and director stay with that episode; the repeat keeps one person each.
-            Assert.AreEqual("Guest Example as Visitor, Episode Director as Director", await host.ScalarAsync("""
-                SELECT string_agg(person."Name" || ' as ' || credit."Credit", ', ' ORDER BY credit."PersonRoleId")
-                FROM "WorkPeople" AS credit JOIN "People" AS person ON person."Id" = credit."PersonId" JOIN "WorkUnits" AS unit ON unit."Id" = credit."WorkUnitId"
-                WHERE unit."Number" = 1 AND unit."WorkUnitTypeId" = 2 AND unit."ParentWorkUnitId" IS NOT NULL
-                """));
-            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"People\""));
+            // TheTVDB names the structure only: no episode credits.
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"People\""));
             Assert.AreEqual("Beispiel Serie", await host.ScalarAsync("SELECT \"Title\" FROM \"WorkTitles\" WHERE \"Title\" <> 'Example Show'"));
 
             // Viewers see the seasons, specials last, and each episode with its still, summary, length and state.
@@ -1861,10 +1857,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, seasonsRead.StatusCode, await seasonsRead.Content.ReadAsStringAsync());
             var seasonList = (await seasonsRead.Content.ReadFromJsonAsync<BaseDataList<WorkSeasonV1>>())!;
             CollectionAssert.AreEqual(new[] { 1, 2, 0 }, seasonList.Select(season => season.SeasonNumber).ToArray());
-            Assert.AreEqual((3, 0, "https://image.tmdb.org/t/p/w500/s1.jpg"), (seasonList[0].EpisodeCount, seasonList[0].AvailableCount, seasonList[0].ImageUrl));
+            Assert.AreEqual((3, 0, (string?)null), (seasonList[0].EpisodeCount, seasonList[0].AvailableCount, seasonList[0].ImageUrl));
             using var episodesRead = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + work.Id + "/seasons/1/episodes");
             var first = (await episodesRead.Content.ReadFromJsonAsync<BaseDataList<WorkEpisodeV1>>())![0];
-            Assert.AreEqual(("One", "The first.", "https://image.tmdb.org/t/p/w400/one.jpg", (int?)42, MediaStateType.NotRequested),
+            Assert.AreEqual(("One", (string?)null, (string?)null, (int?)42, MediaStateType.NotRequested),
                 (first.Title, first.Overview, first.ImageUrl, first.RuntimeMinutes, first.MediaStateTypeId));
             using var laterRead = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + work.Id + "/seasons/2/episodes");
             Assert.IsTrue((await laterRead.Content.ReadFromJsonAsync<BaseDataList<WorkEpisodeV1>>())![1].IsUpcoming);
@@ -1940,6 +1936,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"LibraryRoots\" SET \"MediaTypeId\" = 2");
             var tmdb = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(FakeUsenet.TmdbToken));
+            await SaveTvdbKeyAsync(host);
             using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, "1399"));
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             await host.Fixture.RunSqlAsync($"""
@@ -2298,6 +2295,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"LibraryRoots\" SET \"MediaTypeId\" = 2");
             var tmdb = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(FakeUsenet.TmdbToken));
+            await SaveTvdbKeyAsync(host);
             using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, "1399"));
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
 
@@ -2334,6 +2332,7 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet { Results = FakeUsenet.SeriesResults });
             var tmdb = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(FakeUsenet.TmdbToken));
+            await SaveTvdbKeyAsync(host);
             using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, "1399"));
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             var present = (long)(await host.ScalarAsync($"SELECT min(\"Id\") FROM \"WorkUnits\" WHERE \"WorkId\" = {work.Id} AND \"WorkUnitTypeId\" = 2 AND \"IsMonitored\""))!;
@@ -2742,6 +2741,14 @@ namespace Jularr.Backend.Tests
         private static ReleaseOffer Offer(string title, string guid) =>
             new(title, 1, "Indexer", 25, guid, new Uri("https://indexer.example.test/" + guid), null, 2_000_000_000, DateTimeOffset.UtcNow, ["title"]);
 
+        // A series takes its seasons and episodes from TheTVDB only.
+        private static async Task SaveTvdbKeyAsync(Host host)
+        {
+            var tvdb = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tvdb'"))!;
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tvdb + "/secret", new SaveProviderSecretDataV1(FakeUsenet.TvdbKey));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+        }
+
         private static async Task<Host> CreateHostAsync(string storage, string downloads, FakeUsenet usenet, bool razor = false)
         {
             var host = await LibraryTests.CreateHostAsync(storage, razor, services: services =>
@@ -2749,6 +2756,7 @@ namespace Jularr.Backend.Tests
                 services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
                 services.AddHttpClient<SabnzbdClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
                 services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
+                services.AddHttpClient<Jularr.Integrations.Logic.Tvdb.TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
                 services.AddHttpClient<Jularr.Integrations.Logic.Plex.PlexServerClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
             });
 
@@ -2954,6 +2962,11 @@ namespace Jularr.Backend.Tests
                     return Tmdb(request);
                 }
 
+                if (request.RequestUri!.Host == "api4.thetvdb.com")
+                {
+                    return Tvdb(request);
+                }
+
                 // The open indexer takes no key, the broken one always fails.
                 if (request.RequestUri!.Host is "indexer.example.test" or "open.example.test" or "broken.example.test" or "books.example.test" or "manual.example.test")
                 {
@@ -3020,6 +3033,22 @@ namespace Jularr.Backend.Tests
             }
 
             public const string TmdbToken = "eyJ-test-read-token";
+            public const string TvdbKey = "tvdb-test-project-key";
+
+            // The same series on TheTVDB, which names its structure: a special and two seasons, the last episode still unaired.
+            private static HttpResponseMessage Tvdb(HttpRequestMessage request)
+            {
+                var path = request.RequestUri!.AbsolutePath;
+                var future = DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                return path switch
+                {
+                    "/v4/login" => Json("""{"data":{"token":"tvdb-test-token"}}"""),
+                    "/v4/series/81189/extended" => Json("""{"data":{"id":81189,"name":"Example Show","remoteIds":[{"sourceName":"IMDb","id":"tt0903747"}]}}"""),
+                    "/v4/search/remoteid/tt0903747" => Json("""{"data":[{"series":{"id":81189}}]}"""),
+                    "/v4/series/81189/episodes/default" => Json($$$"""{"data":{"episodes":[{"id":1,"seasonNumber":0,"number":1,"name":"Pilot extra","aired":"2020-01-01"},{"id":2,"seasonNumber":1,"number":1,"name":"One","aired":"2020-04-01","runtime":42},{"id":3,"seasonNumber":1,"number":2,"name":"Two","aired":"2020-04-08"},{"id":4,"seasonNumber":1,"number":3,"name":"Three","aired":"2020-04-15"},{"id":5,"seasonNumber":2,"number":1,"name":"Four","aired":"2021-04-01"},{"id":6,"seasonNumber":2,"number":2,"name":"Five","aired":"{{{future}}}"}]},"links":{"next":null}}"""),
+                    _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+                };
+            }
 
             public const string SeriesResults = """
                 <rss><channel>

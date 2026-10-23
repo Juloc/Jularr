@@ -14,6 +14,7 @@ namespace Jularr.E2E.Tests
     internal sealed class FakeServices : IAsyncDisposable
     {
         public const string TmdbToken = "eyJ-e2e-read-token";
+        public const string TvdbKey = "e2e-tvdb-project-key";
         public const string IndexerKey = "e2e-indexer-key";
         public const string ClientKey = "e2e-client-key";
         public const string MovieTitle = "Big Buck Bunny";
@@ -50,6 +51,9 @@ namespace Jularr.E2E.Tests
         public Uri Address { get; }
 
         public Uri Tmdb3 => new(Address, "tmdb/3/");
+
+        // TheTVDB names the seasons and episodes of every series.
+        public Uri Tvdb4 => new(Address, "tvdb/v4/");
 
         // The provider's image host: TMDB's posters and backdrops are served from here and counted.
         public Uri Images => new(Address, "images/");
@@ -142,6 +146,7 @@ namespace Jularr.E2E.Tests
                 }
             });
             app.MapGet("/tmdb/3/{**path}", Tmdb);
+            app.MapMethods("/tvdb/v4/{**path}", ["GET", "POST"], Tvdb);
             app.MapGet("/images/{**path}", () =>
             {
                 Interlocked.Increment(ref services._imageRequests);
@@ -194,6 +199,16 @@ namespace Jularr.E2E.Tests
                 _ => Results.NotFound()
             };
         }
+
+        private static IResult Tvdb(string path) => path switch
+        {
+            "login" => Json("""{"data":{"token":"e2e-tvdb-token"}}"""),
+            "series/990001/extended" => Json("""{"data":{"id":990001,"name":"Jularr Test Series","remoteIds":[]}}"""),
+            "series/990001/episodes/default" => Json("""{"data":{"episodes":[{"id":1,"seasonNumber":1,"number":1,"name":"Pilot","aired":"2020-04-01"},{"id":2,"seasonNumber":1,"number":2,"name":"Second","aired":"2020-04-08"}]},"links":{"next":null}}"""),
+            "series/990002/extended" => Json("""{"data":{"id":990002,"name":"Example Anime","remoteIds":[]}}"""),
+            "series/990002/episodes/default" => Json("""{"data":{"episodes":[{"id":3,"seasonNumber":1,"number":1,"name":"Beginning","aired":"2021-01-05"},{"id":4,"seasonNumber":1,"number":2,"name":"Ending","aired":"2021-01-12"}]},"links":{"next":null}}"""),
+            _ => Results.NotFound()
+        };
 
         // One album on two discs: two tracks, then one.
         private static IResult MusicBrainzAnswer(string path) => path switch
