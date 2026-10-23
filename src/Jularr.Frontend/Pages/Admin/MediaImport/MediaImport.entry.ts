@@ -94,6 +94,7 @@ function registerPreviewStream(
         if (form.dataset.importBusy === "true") return;
         form.dataset.importBusy = "true";
         const submitButtons = Array.from(form.querySelectorAll<HTMLButtonElement>('button[type="submit"]'));
+        const previousButtonStates = submitButtons.map(control => control.disabled);
         for (const control of submitButtons) control.disabled = true;
         const source = new FormData(form);
         ++runningImportRequests;
@@ -204,7 +205,7 @@ function registerPreviewStream(
             --runningImportRequests;
             form.removeAttribute("aria-busy");
             form.dataset.importBusy = "false";
-            for (const control of submitButtons) control.disabled = false;
+            submitButtons.forEach((control, index) => { control.disabled = previousButtonStates[index]; });
             form.requestSubmit(button);
         }
     });
