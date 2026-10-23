@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import de.juloc.jularr.core.api.catalog.TvDiscoverCatalogItemV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverItemV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverScopeV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverShelfV1
@@ -38,6 +39,8 @@ data class TvV1HomeVideoFeed(
     val mediaSubtypeId: Int?,
     val feedTypeId: Int,
     val items: List<TvDiscoverItemV1>,
+    val catalogItems: List<TvDiscoverCatalogItemV1> = emptyList(),
+    val isCatalog: Boolean = false,
 ) {
     val key: String get() = "$scopeSlug:$feedTypeId"
 }
@@ -46,18 +49,25 @@ internal fun tvV1HomeVideoFeeds(
     scopes: List<TvDiscoverScopeV1>,
     shelves: List<TvDiscoverShelfV1>,
 ): List<TvV1HomeVideoFeed> =
-    scopes.filter { (it.mediaTypeId == 1 || it.mediaTypeId == 2) && !it.isCatalog }
+    scopes.filter { it.mediaTypeId == 1 || it.mediaTypeId == 2 }
         .flatMap { scope ->
             scope.feeds.filter { it in 1..4 }.distinct().sorted().mapNotNull { feed ->
-                val matches = shelves.firstOrNull {
+                val kept = shelves.firstOrNull {
                     it.scopeSlug == scope.slug && it.discoverFeedTypeId == feed
-                }?.items.orEmpty().filter {
-                    it.mediaTypeId == scope.mediaTypeId &&
-                        (it.workId != null || it.tmdbId != null)
                 }
-                if (matches.isEmpty()) null else TvV1HomeVideoFeed(
-                    scope.slug, scope.mediaTypeId, scope.mediaSubtypeId, feed,
-                    matches.distinctBy { Triple(it.mediaTypeId, it.workId, it.tmdbId) },
+                val items = if (scope.isCatalog) emptyList() else kept?.items.orEmpty()
+                    .filter { it.mediaTypeId == scope.mediaTypeId &&
+                        (it.workId != null || it.tmdbId != null) }
+                    .distinctBy { Triple(it.mediaTypeId, it.workId, it.tmdbId) }
+                val catalog = if (scope.isCatalog) kept?.catalogItems.orEmpty()
+                    .filter { it.workId != null ||
+                        (it.namespace.isNotBlank() && it.externalId.isNotBlank()) }
+                    .distinctBy { Triple(it.namespace, it.externalId, it.workId) }
+                    else emptyList()
+                if (items.isEmpty() && catalog.isEmpty()) null else TvV1HomeVideoFeed(
+                    scope.slug, scope.mediaTypeId, scope.mediaSubtypeId, feed, items,
+                    catalogItems = catalog,
+                    isCatalog = scope.isCatalog,
                 )
             }
         }
