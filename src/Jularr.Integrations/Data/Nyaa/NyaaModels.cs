@@ -10,7 +10,7 @@ namespace Jularr.Integrations.Data.Nyaa
     // One entry of the torrent index: a title, the number of its file and what the file holds.
     internal sealed class NyaaEntry
     {
-        public NyaaEntry(string id, string title, string viewUri, string category, string categoryName, long sizeBytes, int seeders, DateTimeOffset published)
+        public NyaaEntry(string id, string title, string viewUri, string category, string categoryName, long sizeBytes, int seeders, DateTimeOffset published, string? downloadUri = null)
         {
             Id = id;
             Title = title;
@@ -20,6 +20,7 @@ namespace Jularr.Integrations.Data.Nyaa
             SizeBytes = sizeBytes;
             Seeders = seeders;
             Published = published;
+            DownloadUri = downloadUri;
         }
 
         // The number of the entry; the file with the torrent is named after it.
@@ -35,5 +36,6 @@ namespace Jularr.Integrations.Data.Nyaa
         public long SizeBytes { get; }
         public int Seeders { get; }
         public DateTimeOffset Published { get; }
+        public string? DownloadUri { get; }
     }
 }
