@@ -12,15 +12,19 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 {
     public sealed class ReadActivityParametersV1 : BaseParameters
     {
-        public ReadActivityParametersV1(ActivityFilterType activityFilterTypeId = ActivityFilterType.All, int page = 1, int pageSize = 25)
+        public ReadActivityParametersV1(ActivityFilterType activityFilterTypeId = ActivityFilterType.All, int page = 1, int pageSize = 25, bool torrentOnly = false)
         {
             ActivityFilterTypeId = activityFilterTypeId;
+            TorrentOnly = torrentOnly;
             Page = page;
             PageSize = pageSize;
         }
 
         [DataField(typeof(OperationFields), nameof(OperationFields.ActivityFilterTypeId))]
         public ActivityFilterType ActivityFilterTypeId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.TorrentOnly))]
+        public bool TorrentOnly { get; }
 
         public int Page { get; }
         public int PageSize { get; }
