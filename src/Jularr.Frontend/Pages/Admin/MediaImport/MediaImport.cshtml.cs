@@ -48,7 +48,14 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         {
             // Script reads the list and says whether it can be read; without script nothing is claimed.
             var status = new Span(new Text("import.list.empty")).Class("media-import__status").Attribute("hidden", "hidden").Attribute("data-import-status", "").Attribute("data-state", "empty")
-                .TextAttribute("data-empty", "import.list.empty").TextAttribute("data-valid", "import.list.valid").TextAttribute("data-invalid", "import.list.invalid");
+                .TextAttribute("data-empty", "import.list.empty").TextAttribute("data-valid", "import.list.valid").TextAttribute("data-invalid", "import.list.invalid")
+                .TextAttribute("data-phase-matching", "import.phase.matching").TextAttribute("data-phase-isbn", "import.phase.isbn")
+                .TextAttribute("data-phase-searching", "import.phase.searching").TextAttribute("data-phase-candidates", "import.phase.candidates")
+                .TextAttribute("data-phase-no-match", "import.phase.no_match").TextAttribute("data-phase-waiting", "import.phase.waiting")
+                .TextAttribute("data-phase-complete", "import.phase.complete")
+                .TextAttribute("data-stage-new", "import.status.New").TextAttribute("data-stage-in-library", "import.status.InLibrary")
+                .TextAttribute("data-stage-duplicate", "import.status.Duplicate").TextAttribute("data-stage-open", "import.status.Open")
+                .TextAttribute("data-stage-invalid", "import.status.Invalid");
             var sample = new Div(new CodeSample("import.sample", MediaImportExample.Json, assets),
                 new A(new Icon("download", assets, 14), new Text("import.example")).Class("button").Attribute("href", Address + "?handler=Example").Attribute("download", MediaImportExample.FileName))
                 .Class("media-import__sample ui-field--wide");
