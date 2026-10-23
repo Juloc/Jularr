@@ -40,12 +40,13 @@ internal fun TvV1DiscoverScreen(
     onLocalWork: (Long) -> Unit,
     onBack: () -> Unit,
     onUnauthorized: () -> Unit,
+    initialItem: TvDiscoverItemV1? = null,
 ) {
     var scopes by remember(catalog) { mutableStateOf<List<TvDiscoverScopeV1>>(emptyList()) }
     var selectedType by remember(catalog) { mutableStateOf<Int?>(null) }
     var query by remember(catalog) { mutableStateOf("") }
     var results by remember(catalog) { mutableStateOf<List<TvDiscoverItemV1>>(emptyList()) }
-    var selectedExternal by remember(catalog) { mutableStateOf<TvDiscoverItemV1?>(null) }
+    var selectedExternal by remember(catalog, initialItem) { mutableStateOf(initialItem) }
     var loading by remember(catalog) { mutableStateOf(false) }
     var error by remember(catalog) { mutableStateOf<String?>(null) }
     var retry by remember(catalog) { mutableStateOf(0) }

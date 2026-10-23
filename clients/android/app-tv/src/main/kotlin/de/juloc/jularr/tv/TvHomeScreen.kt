@@ -46,6 +46,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import de.juloc.jularr.core.api.catalog.TvContinueItemV1
+import de.juloc.jularr.core.api.catalog.TvDiscoverItemV1
 import de.juloc.jularr.core.model.AnimeSummary
 import de.juloc.jularr.core.model.ClientLibrary
 import de.juloc.jularr.core.model.ContinueWatchingItem
@@ -64,8 +65,10 @@ fun TvHomeScreen(
     v1ContinueWatching: List<TvContinueItemV1> = emptyList(),
     onContinueWork: (TvContinueItemV1) -> Unit = {},
     showV1Continue: Boolean = true,
-    shelfOrder: List<Int> = listOf(1, 4),
+    shelfOrder: List<Int> = listOf(1, 4, 5),
     onLoadMoreVideos: (() -> Unit)? = null,
+    discoverFeeds: List<TvV1HomeVideoFeed> = emptyList(),
+    onDiscoverItem: (TvDiscoverItemV1) -> Unit = {},
 ) {
     var filter by remember {
         mutableStateOf(
@@ -81,6 +84,16 @@ fun TvHomeScreen(
         library.anime.filter { filter.includes(it.format) }
     }
     val recentlyAdded = selected.take(20)
+    val visibleDiscoverFeeds = remember(discoverFeeds, filter) {
+        discoverFeeds.filter { feed ->
+            when (filter) {
+                TvContentFilter.ALL -> true
+                TvContentFilter.ANIME -> feed.mediaSubtypeId == 1
+                TvContentFilter.SERIES -> feed.mediaTypeId == 2
+                TvContentFilter.MOVIES -> feed.mediaTypeId == 1
+            }
+        }
+    }
     val featured = selected.firstOrNull { !it.bannerImageUrl.isNullOrBlank() }
         ?: selected.firstOrNull()
     val formats = remember(library) { library.anime.associateBy { it.id } }
@@ -100,6 +113,7 @@ fun TvHomeScreen(
                 1 -> if (showV1Continue && v1ContinueWatching.isNotEmpty())
                     addAll(listOf("v1-continue-title", "v1-continue-row"))
                 4 -> if (recentlyAdded.isNotEmpty()) addAll(listOf("recent-title", "recent-row"))
+                5 -> visibleDiscoverFeeds.forEach { feed -> add("discover:${feed.key}") }
             }
         }
         if (inProgress.isNotEmpty()) addAll(listOf("continue-title", "continue-row"))
@@ -113,6 +127,9 @@ fun TvHomeScreen(
             restoringItem == "hero:${featured?.id}" -> "hero"
             restoringItem?.startsWith("v1continue:") == true -> "v1-continue-row"
             restoringItem?.startsWith("continue:") == true -> "continue-row"
+            restoringItem?.startsWith("discover:") == true -> visibleDiscoverFeeds
+                .firstOrNull { restoringItem.startsWith("discover:${it.key}:") }
+                ?.let { "discover:${it.key}" }
             restoringItem?.startsWith("anime:") == true -> {
                 val id = restoringItem.removePrefix("anime:")
                 if (movies.any { it.id == id }) "movies-row"
@@ -288,6 +305,24 @@ fun TvHomeScreen(
                                 focusColor = focusColor,
                                 onAnime = onAnime,
                             )
+                        }
+                    }
+                    5 -> visibleDiscoverFeeds.forEach { feed ->
+                        item(key = "discover:${feed.key}") {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text(
+                                    tvV1HomeFeedTitle(feed),
+                                    style = MaterialTheme.typography.titleLarge,
+                                )
+                                TvV1HomeDiscoverRow(
+                                    feed = feed,
+                                    serverOrigin = serverOrigin,
+                                    requestHeaders = requestHeaders,
+                                    focusMemory = focusMemory,
+                                    restoringItem = restoringItem,
+                                    onOpen = onDiscoverItem,
+                                )
+                            }
                         }
                     }
                 }
