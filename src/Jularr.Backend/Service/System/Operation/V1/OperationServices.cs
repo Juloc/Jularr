@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
@@ -12,6 +13,7 @@ using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Operation;
 using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Media.V1;
@@ -629,6 +631,14 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         parsed = MediaPathParser.ApplyPlexMatch(parsed, file.RelativePath[(rootFolder.Length + 1)..], parts[^1], rootHints, seasonHints);
                     }
 
+                    // A file of several episodes (S01E12-E13): the first is its unit, the others it covers.
+                    IReadOnlyList<decimal> furtherEpisodes = [];
+                    if (mediaType == MediaType.Series && parsed.WorkUnitTypeId != WorkUnitType.Episode && MediaPathParser.ParseEpisodeRange(file.RelativePath) is { } range)
+                    {
+                        parsed = new MediaPathInfo(parsed.Title, parsed.Year, WorkUnitType.Episode, range.Episodes[0], range.Season);
+                        furtherEpisodes = [.. range.Episodes.Skip(1)];
+                    }
+
                     if (parsed.Title.Length > 500 || mediaType == MediaType.Series && parsed.WorkUnitTypeId != WorkUnitType.Episode)
                     {
                         Note("the name does not give season and episode", file.RelativePath);
@@ -797,8 +807,18 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                     if ((ids.GetValueOrDefault("imdb") is not { } imdb || details.ImdbId is null || details.ImdbId.Equals(imdb, StringComparison.OrdinalIgnoreCase))
                                         && (mediaType == MediaType.Series || ids.GetValueOrDefault("tvdb") is not { } tvdb || details.TvdbId is null || details.TvdbId.ToString() == tvdb))
                                     {
-                                        workId = await _metadata.ImportAsync(Context, provider, mediaType, null, id, CancellationToken,
-                                            mediaType == MediaType.Series && int.TryParse(ids.GetValueOrDefault("tvdb"), out var folderTvdb) && folderTvdb > 0 ? folderTvdb : null);
+                                        var folderTvdb = mediaType == MediaType.Series && int.TryParse(ids.GetValueOrDefault("tvdb"), out var named) && named > 0 ? named : (int?)null;
+                                        if (folderTvdb is { } ownTvdb)
+                                        {
+                                            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                                            {
+                                                await ctx.ReplaceStaleTvdbIdAsync(new WorkTvdbCorrectionData(id.ToString(CultureInfo.InvariantCulture), ids.GetValueOrDefault("imdb"),
+                                                    ownTvdb.ToString(CultureInfo.InvariantCulture)), ct);
+                                                return true;
+                                            }, CancellationToken);
+                                        }
+
+                                        workId = await _metadata.ImportAsync(Context, provider, mediaType, null, id, CancellationToken, folderTvdb);
                                         imported++;
                                     }
                                     else
@@ -809,6 +829,23 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                 else if (!failures.ContainsKey(key))
                                 {
                                     failures[key] = "none of the ids resolves to a TMDB " + (mediaType == MediaType.Series ? "series" : "film");
+
+                                    // The catalog knows none of the ids (a title it has not linked to IMDb yet): the folder's title and year may still name
+                                    // exactly one entry, as Sonarr and Radarr match by name; two or none leave the file for a person.
+                                    if (parsed.Year is { } year)
+                                    {
+                                        var hits = (await _metadata.SearchAsync(provider, mediaType, parsed.Title, year, CancellationToken))
+                                            .Where(result => result.Year == year && (TitleMatcher.Matches(parsed.Title, result.Title)
+                                                || result.OriginalTitle is { } original && TitleMatcher.Matches(parsed.Title, original)))
+                                            .ToArray();
+                                        if (hits.Length == 1)
+                                        {
+                                            workId = await _metadata.ImportAsync(Context, provider, mediaType, null, hits[0].Id, CancellationToken,
+                                                mediaType == MediaType.Series && int.TryParse(ids.GetValueOrDefault("tvdb"), out var named) && named > 0 ? named : null);
+                                            imported++;
+                                            failures.Remove(key);
+                                        }
+                                    }
                                 }
                             }
                             catch (ServiceUnavailableException)
@@ -865,7 +902,14 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     var assignment = new StoredFileAssignmentData(file.Id, workId, null, parsed.WorkUnitTypeId, parsed.UnitNumber, parsed.ParentUnitNumber, null, false);
                     try
                     {
-                        await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileAsync(assignment, ct), CancellationToken);
+                        if (furtherEpisodes.Count > 0)
+                        {
+                            await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileRangeAsync(assignment, furtherEpisodes, ct), CancellationToken);
+                        }
+                        else
+                        {
+                            await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileAsync(assignment, ct), CancellationToken);
+                        }
                     }
                     catch (DataValidationException)
                     {

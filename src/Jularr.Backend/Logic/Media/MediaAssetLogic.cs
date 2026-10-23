@@ -126,6 +126,32 @@ namespace Jularr.Backend.Logic.Media
             return asset;
         }
 
+        // A file that holds several episodes (S01E12-E13) belongs to the first as its primary unit and covers the others; every covered unit exists
+        // before the file counts as playable.
+        public static async Task<MediaAssetIdData> AssignStoredFileRangeAsync(this LogicContext ctx, StoredFileAssignmentData data, IReadOnlyList<decimal> furtherEpisodes, CancellationToken ct)
+        {
+            var asset = await ctx.AssignStoredFileAsync(data, ct);
+            var workId = data.WorkId ?? throw new DataValidationException(nameof(StoredFileAssignmentData.WorkId), "required");
+            var season = await ctx.EnsureWorkUnitAsync(new WorkUnitData(workId, null, WorkUnitType.Season, data.ParentUnitNumber!.Value), ct);
+            foreach (var episode in furtherEpisodes)
+            {
+                var unit = await ctx.EnsureWorkUnitAsync(new WorkUnitData(workId, season, WorkUnitType.Episode, episode), ct);
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    INSERT INTO
+                        "MediaAssetAdditionalUnits" ("MediaAssetId", "WorkId", "WorkUnitId")
+                    VALUES
+                        (@MediaAssetId, @WorkId, @WorkUnitId)
+                    ON CONFLICT DO NOTHING;
+                    """;
+                sql.Parameters.Add(new MediaAssetCoverageData(asset.Id, workId, unit));
+                await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            }
+
+            return asset;
+        }
+
         public static async Task UnassignStoredFileAsync(this LogicContext ctx, StoredFileParameters data, CancellationToken ct)
         {
             var file = await ctx.LockStoredFileAsync(data.StoredFileId, ct);
