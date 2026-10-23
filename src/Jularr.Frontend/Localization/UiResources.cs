@@ -2160,6 +2160,7 @@ namespace Jularr.Frontend.Localization
             new("downloadStorage.incomplete", "Incomplete · working folder"),
             new("downloadStorage.complete", "Complete · ready for import"),
             new("downloadStorage.reserve", "Free space reserve"),
+            new("downloadStorage.reserveHint", "Required for confirmation. Enter 0 if you do not want to keep a free-space reserve."),
             new("downloadStorage.jobLimit", "Optional download size limit"),
             new("downloadStorage.workspaceLimit", "Optional workspace limit"),
             new("downloadStorage.parallel", "Maximum parallel jobs"),
