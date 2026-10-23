@@ -54,18 +54,128 @@ function initializePreview(): void {
 // Preview is still an ordinary POST, but it shows immediate feedback while provider checks run.
 function initializePendingPreview(): void {
     const form = document.querySelector<HTMLFormElement>(".media-import__upload form");
-    if (!form || form.dataset.importPending !== undefined) return;
+    const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const text = form?.querySelector<HTMLTextAreaElement>("textarea");
+    const file = form?.querySelector<HTMLInputElement>('input[type="file"]');
+    const labels = form?.querySelector<HTMLElement>("[data-import-status]")?.dataset;
+    if (!form || !button || form.dataset.importPending !== undefined) return;
     form.dataset.importPending = "";
-    form.addEventListener("submit", event => {
-        const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
-        if (!submitter) return;
-        const notice = document.createElement("p");
-        notice.className = "media-import__pending";
-        notice.setAttribute("role", "status");
-        notice.textContent = (submitter.textContent ?? "").trim() + "…";
-        form.prepend(notice);
-        submitter.disabled = true;
+    let useNormalPost = false;
+
+    form.addEventListener("submit", async event => {
+        if (useNormalPost) return;
+        event.preventDefault();
+
+        const source = new FormData(form);
+        button.disabled = true;
         form.setAttribute("aria-busy", "true");
+        const panel = document.createElement("section");
+        panel.className = "media-import__activity";
+        const heading = document.createElement("strong");
+        heading.setAttribute("role", "status");
+        heading.setAttribute("aria-live", "polite");
+        const progress = document.createElement("progress");
+        const list = document.createElement("ol");
+        list.className = "media-import__activity-list";
+        panel.append(heading, progress, list);
+        form.before(panel);
+        heading.textContent = labels?.phaseMatching ?? "Matching library works";
+
+        const nodes = new Map<number, HTMLElement>();
+        const complete = new Set<number>();
+        const finishedStages = new Set(["New", "InLibrary", "Duplicate", "Open", "Invalid"]);
+        const texts: Record<string, string> = {
+            isbn: labels?.phaseIsbn ?? "Resolving ISBN",
+            searching: labels?.phaseSearching ?? "Searching provider",
+            candidates: labels?.phaseCandidates ?? "Candidates found",
+            no_match: labels?.phaseNoMatch ?? "No candidates",
+            waiting: labels?.phaseWaiting ?? "Waiting for next preview",
+            New: labels?.stageNew ?? "New",
+            InLibrary: labels?.stageInLibrary ?? "In library",
+            Duplicate: labels?.stageDuplicate ?? "Duplicate",
+            Open: labels?.stageOpen ?? "Open",
+            Invalid: labels?.stageInvalid ?? "Invalid"
+        };
+
+        try {
+            const raw = file?.files?.[0] ? await file.files[0].text() : text?.value ?? "";
+            const parsed: unknown = JSON.parse(raw.replace(/^\uFEFF/, ""));
+            const items = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) && "items" in parsed
+                ? (parsed as { items?: unknown }).items : undefined;
+            if (Array.isArray(items)) {
+                progress.max = Math.max(items.length, 1);
+                items.forEach((item, index) => {
+                    if (item === null || typeof item !== "object") return;
+                    const data = item as { title?: unknown; ids?: unknown };
+                    const row = document.createElement("li");
+                    const name = document.createElement("span");
+                    name.textContent = typeof data.title === "string" ? data.title : "#" + String(index + 1);
+                    const status = document.createElement("span");
+                    status.className = "media-import__activity-outcome";
+                    status.textContent = labels?.phaseWaiting ?? "Waiting";
+                    row.append(name, status);
+                    list.append(row);
+                    nodes.set(index, status);
+                });
+            } else {
+                progress.max = 1;
+            }
+        } catch {
+            progress.max = 1;
+        }
+
+        let finished = false;
+        try {
+            const endpoint = new URL(form.action, window.location.href);
+            endpoint.searchParams.set("handler", "PreviewStream");
+            const response = await fetch(endpoint, { method: "POST", body: source, credentials: "same-origin", headers: { Accept: "application/x-ndjson" } });
+            if (!response.ok || !response.body) throw new Error("Preview request failed");
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            const handle = (event: { kind: string; index?: number; stage?: string; count?: number; total?: number }): void => {
+                if (event.kind === "row" && event.index !== undefined && event.stage !== undefined) {
+                    const state = nodes.get(event.index);
+                    if (state) {
+                        const label = texts[event.stage] ?? event.stage;
+                        state.textContent = event.stage === "candidates" && event.count !== undefined
+                            ? label + " (" + event.count + ")" : label;
+                    }
+                    if (finishedStages.has(event.stage)) complete.add(event.index);
+                    progress.value = complete.size;
+                    heading.textContent = (texts[event.stage] ?? event.stage) + " · " + complete.size + " / " + progress.max;
+                    if (state) state.scrollIntoView({ block: "nearest" });
+                } else if (event.kind === "done") {
+                    finished = true;
+                    heading.textContent = labels?.phaseComplete ?? "Preview ready";
+                } else if (event.kind === "error") {
+                    throw new Error("Preview interrupted");
+                }
+            };
+            for (;;) {
+                const chunk = await reader.read();
+                if (chunk.done) break;
+                buffer += decoder.decode(chunk.value, { stream: true });
+                let cut: number;
+                while ((cut = buffer.indexOf("\n")) !== -1) {
+                    const line = buffer.slice(0, cut).trim();
+                    buffer = buffer.slice(cut + 1);
+                    if (line) handle(JSON.parse(line) as { kind: string; index?: number; stage?: string; count?: number; total?: number });
+                }
+            }
+            buffer += decoder.decode();
+            if (buffer.trim()) handle(JSON.parse(buffer) as { kind: string });
+            if (!finished) throw new Error("Preview incomplete");
+        } catch {
+            // The preview never writes to the library. Standard HTML posting exposes validation errors.
+            heading.textContent = labels?.phaseWaiting ?? "Preview interrupted";
+        } finally {
+            // Warm provider results are cached, so the regular HTML preview can render without redoing lookups.
+            useNormalPost = true;
+            button.disabled = false;
+            form.removeAttribute("aria-busy");
+            form.requestSubmit(button);
+        }
     });
 }
 
