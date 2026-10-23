@@ -426,6 +426,9 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             };
         }
 
+        private static long? ReadLong(JsonElement element, string name) =>
+            long.TryParse(ReadString(element, name), NumberStyles.None, CultureInfo.InvariantCulture, out var value) && value >= 0 ? value : null;
+
         private static long? Megabytes(double? value) => value is >= 0 and < 1e9 ? (long)Math.Round(value.Value * 1024 * 1024) : null;
 
         // "h:mm:ss" or "d:hh:mm:ss"; zero means unknown.
