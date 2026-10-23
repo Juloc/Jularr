@@ -12,7 +12,7 @@ on:
       - 'database/**'
       - '.github/workflows/image.yml'
   push:
-    branches: [clean-start]
+    branches: [main]
     paths:
       - 'Dockerfile'
       - 'compose.yaml'

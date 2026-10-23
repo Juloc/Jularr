@@ -4,4 +4,4 @@
 
 CI performs the same verification for every pull request and push, so bypassing a local hook cannot bypass the protected `main` branch.
 
-Feature-branch pushes exclude ancestors already in `origin/clean-start` when that baseline is included in the pushed branch. Newly contributed commits are always checked; pushes to `clean-start`, `dev` and `main` check the full incoming range.
+Feature-branch pushes exclude ancestors already in `origin/main` when that baseline is included in the pushed branch. Newly contributed commits are always checked; pushes to `main`, `dev` and `main` check the full incoming range.

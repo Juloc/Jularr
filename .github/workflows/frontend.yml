@@ -8,12 +8,12 @@ on:
       - 'docs/FRONTEND_CONVENTIONS.md'
       - '.github/workflows/frontend.yml'
   push:
-    branches: [clean-start]
+    branches: [main]
     paths:
       - 'src/Jularr.Frontend/**'
       - 'src/Jularr.Backend/**'
       - '.github/workflows/frontend.yml'
-  # Started by hand on clean-start when the release commit changed no frontend path (see docs/RELEASE.md).
+  # Started by hand on main when the release commit changed no frontend path (see docs/RELEASE.md).
   workflow_dispatch:
 
 permissions:

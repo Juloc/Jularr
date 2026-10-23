@@ -9,7 +9,7 @@ name: Backend Full
 # a shard only unpacks it. No job is meant to run longer than about 10 minutes.
 on:
   push:
-    branches: [clean-start]
+    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, labeled, edited]
     paths:

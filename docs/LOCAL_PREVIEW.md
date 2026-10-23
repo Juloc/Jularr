@@ -1,15 +1,15 @@
-# Local clean-start preview
+# Local main preview
 
-The dedicated checkout is `D:\jularr-clean-start-server\checkout`; do not use it
-for development. It runs only `origin/clean-start`, independently of developer branches.
+The dedicated checkout is `D:\jularr-main-server\checkout`; do not use it
+for development. It runs only `origin/main`, independently of developer branches.
 
 - URL: https://localhost:7241/Account/Login. HTTP localhost:5241 redirects to HTTPS.
   Loopback by default. Optional LAN access binds only the configured IPv4 address,
   not all interfaces. HTTP remains loopback-only.
 - Windows task: `JularrCleanStartPreview`, current user, limited privileges, hidden;
   starts at that user's login, not before login or while the computer is off/asleep.
-- Runner: [run-clean-start-preview.ps1](../scripts/run-clean-start-preview.ps1),
-  deployed as `D:\jularr-clean-start-server\run-preview.ps1` and run by PowerShell 7.
+- Runner: [run-main-preview.ps1](../scripts/run-main-preview.ps1),
+  deployed as `D:\jularr-main-server\run-preview.ps1` and run by PowerShell 7.
   Explicit Git/.NET/npm/Docker paths avoid reliance on the scheduled-task PATH.
   A valid user HTTPS dev certificate is required.
 - Git trusts only this dedicated checkout per command (`safe.directory`), because
@@ -23,14 +23,14 @@ for development. It runs only `origin/clean-start`, independently of developer b
   authentication; the default persistent login lasts 30 days and renews during use.
   Adopting the stable context requires signing in once again.
 - Dirty/divergent checkouts are never reset. Fetch/build errors retain the current
-  process and retry; deployments can therefore lag behind clean-start until resolved.
+  process and retry; deployments can therefore lag behind main until resolved.
 - Status: `status.json` (running commit, URL, host PID); logs: `logs\controller.log`,
   `build-<commit>.log`, `host-<commit>.out.log` and `.err.log`. Releases are retained;
   disk cleanup is manual, never an automatic broad delete.
 
 ## Preview database and test library
 
-`D:\jularr-clean-start-server\preview.settings.json` is local and never committed. It holds
+`D:\jularr-main-server\preview.settings.json` is local and never committed. It holds
 `Environment` variables for the host (`JULARR_DB`, `Storage__LocalPaths__0`, FFmpeg paths,
 transcode cache), the `Database` container/name/user and the `Seed` owner, local path and
 library roots. The database runs in the dedicated loopback container `jularr-preview-pg`;
@@ -52,7 +52,7 @@ with [preview-test-library.ps1](../scripts/preview-test-library.ps1): it mounts 
 library `Test books`, queues the scan through the Owner's session and assigns each folder's title to a Work, since no
 provider identifies the books in a preview. They then show in Library and open in the Reader; the folder is never changed.
 
-To stop safely, create the exact marker `D:\jularr-clean-start-server\stop.request`;
+To stop safely, create the exact marker `D:\jularr-main-server\stop.request`;
 the runner stops its own host and exits. To resume, remove only that marker and start
 the named Windows task. A stale status file is not proof of a live process: check
 the task and URL. Do not kill unrelated dotnet processes or remove other D: folders.
@@ -64,7 +64,7 @@ components, labeled samples and disabled Player chrome; it does not start playba
 Appearance controls adjust Original/Clean, brightness and accent
 immediately in this browser. Shared component changes apply to real pages as well.
 Review one component group at a time, then desktop/mobile and light/dark. Server
-updates continue to follow green, integrated `clean-start` commits; there is no separate
+updates continue to follow green, integrated `main` commits; there is no separate
 HTML prototype to keep synchronized. Actual persistent mini-player navigation remains pending.
 
 ## Optional home-network access

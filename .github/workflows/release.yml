@@ -1,6 +1,6 @@
 name: Release
 
-# A release is a git tag `v<MAJOR>.<MINOR>.<PATCH>[-prerelease]` on a commit of clean-start (or main). Nothing here runs on branches.
+# A release is a git tag `v<MAJOR>.<MINOR>.<PATCH>[-prerelease]` on a commit of main. Nothing here runs on branches.
 # The tag builds the image from the tagged commit, pushes it to GHCR and creates the GitHub release; see docs/RELEASE.md.
 # workflow_dispatch rehearses everything except the push and the release: with dry_run the image is built and not published.
 
@@ -73,14 +73,14 @@ jobs:
           fi
 
           reachable=false
-          for branch in clean-start main; do
+          for branch in main; do
             if git rev-parse --verify --quiet "refs/remotes/origin/${branch}" > /dev/null \
                 && git merge-base --is-ancestor "${sha}" "refs/remotes/origin/${branch}"; then
               reachable=true
             fi
           done
           if [[ "${reachable}" != "true" ]]; then
-            echo "::error::Commit ${sha} is on neither origin/clean-start nor origin/main. Tag a commit that was merged."
+            echo "::error::Commit ${sha} is not on origin/main. Tag a commit that was merged."
             exit 1
           fi
 
