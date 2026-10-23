@@ -86,6 +86,22 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             summary.Add(new A(new Text("import.restart")).Class("button button--compact").Attribute("href", Address));
             content.Add(new Div(new H2(new Text("import.previewTitle")), new Div([.. summary]).Class("media-import__summary")).Class("media-import__head"));
 
+            // The refresh/search-more form uses the same per-work live labels as the first preview.
+            content.Add(new Span(new Text("import.phase.matching")).Class("media-import__status")
+                .Attribute("hidden", "hidden").Attribute("data-import-status", "")
+                .TextAttribute("data-phase-matching", "import.phase.matching")
+                .TextAttribute("data-phase-isbn", "import.phase.isbn")
+                .TextAttribute("data-phase-searching", "import.phase.searching")
+                .TextAttribute("data-phase-candidates", "import.phase.candidates")
+                .TextAttribute("data-phase-no-match", "import.phase.no_match")
+                .TextAttribute("data-phase-waiting", "import.phase.waiting")
+                .TextAttribute("data-phase-complete", "import.phase.complete")
+                .TextAttribute("data-stage-new", "import.status.New")
+                .TextAttribute("data-stage-in-library", "import.status.InLibrary")
+                .TextAttribute("data-stage-duplicate", "import.status.Duplicate")
+                .TextAttribute("data-stage-open", "import.status.Open")
+                .TextAttribute("data-stage-invalid", "import.status.Invalid"));
+
             // The defaults of each kind of title the list holds.
             var action = _input?.Action ?? MediaImportActionType.MonitorAndSearch;
             var kinds = rows.Where(row => row.MediaTypeId is not null).GroupBy(row => row.TypeKey, StringComparer.Ordinal).Select(group => group.First()).ToDictionary(row => row.TypeKey, StringComparer.Ordinal);
