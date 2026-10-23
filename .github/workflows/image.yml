@@ -42,6 +42,7 @@ jobs:
         env:
           JULARR_VERSION: ci
           JULARR_DB_PASSWORD: ci-only-database-password
+          JULARR_MEDIA: ./media
         run: |
           mkdir -p media
           docker compose up --detach --wait --wait-timeout 120 postgres
@@ -54,4 +55,4 @@ jobs:
           docker compose logs jularr | tail -50
           test "$status" = "200"
           curl --silent http://127.0.0.1:8097/Setup | grep -q 'name="PasswordConfirmation"'
-          docker compose exec -T jularr sh -c 'test -d /data/keys && ls /data'
+          docker compose exec -T jularr sh -c 'test -d /data/keys && test -d /media && ls /data'
