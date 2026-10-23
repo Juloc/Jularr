@@ -105,8 +105,15 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         {
             if (area is not ("complete" or "incomplete") || string.IsNullOrWhiteSpace(configuredLocal)
                 || !Path.IsPathFullyQualified(configuredLocal) || string.IsNullOrWhiteSpace(configuredRemote)
-                || string.IsNullOrWhiteSpace(providerRemote) || ImportPlacementLogic.MapRemotePath(providerRemote, configuredRemote) is not { } relative)
+                || string.IsNullOrWhiteSpace(providerRemote))
                 throw new DataValidationException(nameof(area), "invalid_transition");
+
+            // A SAB category's completed directory can be narrower than the server-wide completedir.
+            // In that case expose only the configured category root, never its unmounted parent.
+            var relative = ImportPlacementLogic.MapRemotePath(providerRemote, configuredRemote);
+            if (relative is null && ImportPlacementLogic.MapRemotePath(configuredRemote, providerRemote) is not null)
+                relative = "";
+            if (relative is null) throw new DataValidationException(nameof(area), "invalid_transition");
 
             var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(configuredLocal));
             if (string.Equals(root, Path.GetPathRoot(root), StringComparison.Ordinal) || !Directory.Exists(root))
