@@ -92,6 +92,9 @@ internal fun TvV1PersonScreen(
     onWork: (Long) -> Unit,
     onRetry: () -> Unit,
     onBack: () -> Unit,
+    onLoadMore: (() -> Unit)? = null,
+    loadingMore: Boolean = false,
+    pagingError: String? = null,
 ) {
     TvCenteredPanel(person?.name ?: "Person", "Film- und Serienwerke dieser Person") {
         if (loading) Text("Person und Werke werden geladen …")
@@ -117,6 +120,11 @@ internal fun TvV1PersonScreen(
                     }
                 }
             }
+        }
+        if (pagingError != null) Text(pagingError, color = MaterialTheme.colorScheme.error)
+        if (loadingMore) Text("Weitere Filmografie wird geladen …")
+        if (onLoadMore != null) Button(onClick = onLoadMore, enabled = !loadingMore) {
+            Text("Weitere Werke laden")
         }
         if (error != null) Button(onClick = onRetry) { Text("Erneut versuchen") }
         Button(onClick = onBack) { Text("Zurück zu Mitwirkenden") }
