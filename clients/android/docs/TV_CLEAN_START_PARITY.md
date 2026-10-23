@@ -257,3 +257,22 @@ subtype. Items carry `namespace` and `externalId`, not a TMDB ID.
 - Remaining release checks: on-device D-Pad focus/Back, a real external Anime
   catalog, partial and unavailable providers, and a visible TV Home hero
   comparison. Companion (#1508) remains a separate backend + Phone workstream.
+
+
+## Ranked TV Hero parity (2026-10-23)
+
+- The original TV Hero now uses up to 8 **real ranked Discover** film,
+  series and Anime catalog items before falling back to a local-library title.
+  Trending and New precede Top and Upcoming. Categories are interleaved and
+  identical server WorkIds or provider IDs are deduplicated.
+- The Hero advances every 9 seconds only while in the visible viewport,
+  and pauses while remote-control focus is on it. It remains the original
+  focusable 16:9 TV banner rather than introducing a desktop redesign.
+- Clicking resolves local WorkId to the existing Work-details route; TMDB IDs
+  or catalog namespace/external IDs open their corresponding Discover details.
+  No fake MediaAssetId, WorkId or mandatory Playback permission is assumed.
+- When catalog providers have no valid banner or poster, the existing
+  library Hero is retained. The list and navigation never claim a media item
+  without genuine metadata.
+- New JVM tests validate priority, the 8-item limit, repeated works and
+  catalog identity; real remote/TV visual playback tests remain outstanding.
