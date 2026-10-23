@@ -120,6 +120,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.too_short", "The value is too short."),
             new("errors.validation.password_mismatch", "The passwords do not match."),
             new("errors.validation.password_incorrect", "The current password is not correct."),
+            new("errors.validation.reset_invalid", "This link is not valid any more. Ask an administrator for a new one."),
             new("errors.validation.password_weak", "Use at least 12 characters with at least three of: lowercase letters, uppercase letters, digits and special characters."),
             new("errors.validation.username_taken", "This username is already taken."),
             new("errors.validation.invalid_username", "Use letters, numbers, dots, underscores or hyphens."),
