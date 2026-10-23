@@ -1,5 +1,13 @@
 # Android TV V1 – vollständiges Architektur-, Seiten- und Legacy-Audit
 
+## Umsetzung aus diesem Audit (Integrations-PR #1540)
+
+**Codeänderungen umgesetzt:** `TvV1ClientFlow.videoPage` und `watchlistPage` holen Anime mit `mediaSubtypeIds=1`; Watchlist ist video-only und sortiert mit tatsächlicher Backend-Reihenfolge (nur `RecentlyAdded=1`, `Title=2`, die der V1-Backend-Enum sicher unterstützt). Die alten UI-Optionen „Älteste“ und „Titel Z–A“ werden im aktiven V1-Sort-Dialog nicht länger fälschlich angeboten. Paging-Anfragen berücksichtigen Sortierwechsel; die Suche und Favoriten können auch aus leeren clientseitigen Filterseiten heraus weitere Serverdaten laden. `TvV1PersonScreen`/CatalogHost laden Person-Works nun auf Anforderung statt 20 Seiten im Voraus.
+
+**Legacy-Pfad entfernt:** `TvAppHost`, `TvAppController`, `TvClientFlow` und 12 reine Legacy-UI/Playback-Helper-Dateien sowie die zugehörigen Legacy-Tests sind aus dem TV-Modul entfernt (24 Dateien im ersten Cleanup-Commit plus `TvNavigationTest`); `TvNavigation.kt` enthält nur noch die im aktiven Sidebar-Code benötigten Ziele, `TvScreens.kt` nur noch das aktive `TvSetupScreen`. Unverzichtbare geteilte Compose-Screens und die V1-Kontoslots in `TvSessionStore` bleiben bewusst erhalten. `clients/android/README.md` ist aktualisiert.
+
+**Noch offen:** Phone-Companion #1508 ist kein bestehender V1-Contract; ohne vollständigen Backend-/Phone-/TV-Workflow keine funktionierende Fernsteuerung. TV-Request-Aktionen, echte automatische LAN-Discovery (kein entsprechender aktueller Backend-Responder gefunden), Release-Signing/automatischer Update-Hinweis, erweiterte Movie-Asset-Pagination und echtes Media3-/NAS-/Keystore-/D-Pad-E2E sind nicht erledigt. Der folgende Bericht bleibt als Ausgangsbefund erhalten, auch wo eine genannte Lücke inzwischen korrigiert wurde. Keine Hardware-Vollparität behaupten.
+
 **Stand:** 2026-10-23 · **Integrations-PR:** #1540 (`feat/android-tv-v1-main-integration`) · **Quelle:** #1468 bei `7a0d17e3b8aae0a0615fd586b5688f8d44461e41` · **Backend-Vergleich:** `main` vom 23.10.2026.
 
 **Prüfart:** Statischer Review der Android-TV-Quellen, aktiven Entrypoints, Compose-Screens, V1-Flows, der Backend-Library-/Collection-/Pairing-Verträge und bisheriger Migration-/E2E-Dokumente. Android-Gradle-Tests/CI sind **kein** tatsächlicher TV-/NAS-/Media3-Gerätetest. Die vorhandene 18-Fälle-Geräteanleitung bleibt verbindlich: `TV_V1_PARITY_E2E_TESTPLAN.md`.
