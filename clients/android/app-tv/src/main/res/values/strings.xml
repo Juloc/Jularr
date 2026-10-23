@@ -34,7 +34,7 @@
 
     <!-- Sidebar -->
     <string name="tv_sidebar_home">Home</string>
-    <string name="tv_sidebar_watchlist">Watchlist</string>
+    <string name="tv_sidebar_watchlist">Favoriten</string>
     <string name="tv_sidebar_activity">Activity</string>
     <string name="tv_sidebar_profile">Profile</string>
 
@@ -90,7 +90,7 @@
     <string name="tv_search_no_results">No titles match “%1$s”.</string>
 
     <!-- Watchlist -->
-    <string name="tv_watchlist_title">Watchlist</string>
+    <string name="tv_watchlist_title">Favoriten</string>
     <string name="tv_watchlist_unavailable">This Jularr server doesn\'t support the watchlist yet. Use the Jularr web app to manage your watchlist for now.</string>
     <string name="tv_watchlist_empty">Your watchlist is empty. Follow a title in the Jularr web app to see it here.</string>
     <string name="tv_watchlist_media_anime">Anime</string>
