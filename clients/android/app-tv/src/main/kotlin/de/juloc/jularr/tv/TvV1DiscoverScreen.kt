@@ -79,7 +79,13 @@ internal fun TvV1DiscoverScreen(
             error = failure.message ?: "Discover-Kategorien konnten nicht geladen werden."
         }
     }
-    LaunchedEffect(catalog, query, selectedType, retry) {
+    LaunchedEffect(catalog, query, selectedType, retry, selectedCatalog, selectedExternal) {
+        // Opening a ranked external detail must cancel the background search and
+        // prevent stale search errors from replacing the selected catalog item.
+        if (selectedCatalog != null || selectedExternal != null) {
+            loading = false
+            return@LaunchedEffect
+        }
         loading = true
         try {
             if (query.isNotBlank()) delay(350)
@@ -136,11 +142,6 @@ internal fun TvV1DiscoverScreen(
                 catalogLoading -> Text("Katalogdetails werden geladen …")
                 catalogError != null -> {
                     Text(requireNotNull(catalogError), color = MaterialTheme.colorScheme.error)
-                    Button(onClick = {
-                        // Refresh via a distinct selection object to rerun the request.
-                        selectedCatalog = null
-                        catalogDetail = null
-                    }) { Text("Zurück zu Discover") }
                 }
                 detail == null -> Text("Für diesen Katalogeintrag liegen keine Details vor.")
                 else -> {
