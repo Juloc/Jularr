@@ -185,7 +185,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<long> ImportAsync(LogicContext context, TmdbConnection connection, MediaType mediaType, MediaSubtype? subtype, int tmdbId, CancellationToken ct)
+        // preferredTvdbId is the series' own TheTVDB id where a person or Sonarr named it (folder, nfo); TMDB's link to TheTVDB is sometimes stale
+        // and must not decide which TheTVDB series gives the structure or which id the Work stores.
+        public async Task<long> ImportAsync(LogicContext context, TmdbConnection connection, MediaType mediaType, MediaSubtype? subtype, int tmdbId, CancellationToken ct, int? preferredTvdbId = null)
         {
             // Read everything before the short write batch.
             TmdbWork work;
@@ -199,7 +201,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 // A series takes its seasons and episodes from TheTVDB only, like Sonarr; where TVDB cannot name them yet the Work is created without and the next scan asks again.
                 if (mediaType == MediaType.Series)
                 {
-                    tvdb = await _tvdb.TryReadStructureAsync(context, work.TvdbId, work.ImdbId, ct);
+                    tvdb = await _tvdb.TryReadStructureAsync(context, preferredTvdbId ?? work.TvdbId, work.ImdbId, ct);
                 }
 
                 if (tvdb is not null)
@@ -227,7 +229,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 identities.Add(new { Namespace = "imdb", Value = imdb });
             }
 
-            if ((work.TvdbId ?? tvdb?.TvdbId) is { } tvdbId)
+            if ((preferredTvdbId ?? work.TvdbId ?? tvdb?.TvdbId) is { } tvdbId)
             {
                 identities.Add(new { Namespace = "tvdb", Value = tvdbId.ToString(CultureInfo.InvariantCulture) });
             }
