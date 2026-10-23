@@ -37,6 +37,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("Literature - English-translated", entry.CategoryName);
             Assert.AreEqual(19L * 1024 * 1024, entry.SizeBytes);
             Assert.AreEqual(23, entry.Seeders);
+            Assert.AreEqual("https://nyaa.si/download/2177106.torrent", entry.DownloadUri);
 
             // The file with the torrent is named after the number of the entry.
             Assert.AreEqual("https://nyaa.media/download/2177106.torrent", NyaaClient.TorrentUri(entry.Id).ToString());
@@ -96,11 +97,12 @@ namespace Jularr.Backend.Tests
             public List<string> Requests { get; } = [];
             public string Answer { get; set; } = """
                 <?xml version="1.0" encoding="utf-8"?>
-                <rss version="2.0" xmlns:nyaa="https://nyaa.media/xmlns/nyaa">
+                <rss version="2.0" xmlns:nyaa="https://nyaa.si/xmlns/nyaa">
                     <channel>
                         <item>
                             <title>History of the Kingdom of Orcsen v01-02 [Seven Seas]</title>
                             <guid isPermaLink="true">https://nyaa.media/view/2177106</guid>
+                            <link>https://nyaa.si/download/2177106.torrent</link>
                             <pubDate>Thu, 22 Oct 2026 19:11:01 +0700</pubDate>
                             <description>19.0 MiB</description>
                             <nyaa:size>19.0 MiB</nyaa:size>
