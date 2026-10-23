@@ -346,7 +346,7 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
         public override void Validate()
         {
             base.Validate();
-            if (DirectoryName is "." or ".." || DirectoryName.IndexOfAny(['/', '\\\\']) >= 0)
+            if (DirectoryName is "." or ".." || DirectoryName.IndexOfAny(['/', '\\']) >= 0)
             {
                 throw new DataValidationException(nameof(DirectoryName), "invalid_path");
             }
