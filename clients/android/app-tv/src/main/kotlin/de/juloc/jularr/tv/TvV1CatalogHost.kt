@@ -183,6 +183,7 @@ fun TvV1CatalogHost(
         } ?: return
         val requestedQuery = searchQuery
         val requestedCollection = selectedCollectionId
+        val requestedSort = watchlistSort
         fetchingNextPage = true
         pagingError = null
         scope.launch {
@@ -190,8 +191,8 @@ fun TvV1CatalogHost(
                 if (which == TvV1CatalogPage.Watchlist) {
                     val result = if (requestedCollection != null) {
                         flow.collectionPage(requestedCollection, next)
-                    } else flow.watchlistPage(next, if (watchlistSort == TvWatchlistSort.TITLE_ASC) 2 else 1)
-                    if (page == which && selectedCollectionId == requestedCollection) {
+                    } else flow.watchlistPage(next, if (requestedSort == TvWatchlistSort.TITLE_ASC) 2 else 1)
+                    if (page == which && selectedCollectionId == requestedCollection && watchlistSort == requestedSort) {
                         val cards = TvV1LegacyUiModels.watchlist(result.items)
                         watchlist = (watchlist + cards).distinctBy { it.id }
                         watchlistNextPage = if (result.hasMore) next + 1 else null
