@@ -1,6 +1,7 @@
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
+using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Data.Sabnzbd;
 
 namespace Jularr.Backend.Tests
@@ -76,6 +77,40 @@ namespace Jularr.Backend.Tests
                 DownloadClientFileSafety.StorageRoot("complete", "/data/complete", "Downloads", "/other"));
             Assert.ThrowsExactly<DataValidationException>(() => DownloadClientFileSafety.StorageRelative("../out"));
             Assert.ThrowsExactly<DataValidationException>(() => DownloadClientFileSafety.StorageRelative("other\\out"));
+        }
+
+        private sealed class SabnzbdHistoryDeleteCapture : HttpMessageHandler
+        {
+            public Dictionary<string, string> Fields { get; } = new(StringComparer.Ordinal);
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                var body = await request.Content!.ReadAsStringAsync(cancellationToken);
+                foreach (var pair in body.Split('&'))
+                {
+                    var parts = pair.Split('=', 2);
+                    Fields[Uri.UnescapeDataString(parts[0])] = Uri.UnescapeDataString(parts.Length > 1 ? parts[1] : "");
+                }
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"status":true}""")
+                };
+            }
+        }
+
+        [TestMethod]
+        public async Task TerminalSabnzbdHistoryCleanup_RemovesDataAndHistoryWithoutArchiving()
+        {
+            using var capture = new SabnzbdHistoryDeleteCapture();
+            using var http = new HttpClient(capture);
+            var client = new SabnzbdClient(http);
+            await client.RemoveHistoryJobAsync(new SabnzbdConnection("https://sab.example.test", "secret-key"),
+                "SABnzbd_nzo_123", CancellationToken.None);
+
+            Assert.AreEqual("history", capture.Fields["mode"]);
+            Assert.AreEqual("delete", capture.Fields["name"]);
+            Assert.AreEqual("SABnzbd_nzo_123", capture.Fields["value"]);
+            Assert.AreEqual("1", capture.Fields["del_files"]);
+            Assert.AreEqual("0", capture.Fields["archive"]);
         }
 
         [TestMethod]
