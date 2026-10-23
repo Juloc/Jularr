@@ -256,6 +256,34 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             return new DownloadClientDeletionPreviewV1(area, relative, count, bytes, fingerprint);
         }
 
+        // Automatic post-import cleanup deletes only the specific provider-reported output,
+        // never its mapped root or a sibling; symlinks and overly large trees are refused.
+        internal static void DeleteVerifiedCompleted(string root, string relative)
+        {
+            var target = SafePath(root, relative);
+            if (!File.Exists(target) && !Directory.Exists(target)) return;
+
+            var pending = new Stack<string>();
+            pending.Push(target);
+            var checkedEntries = 0;
+            while (pending.TryPop(out var item))
+            {
+                var full = SafePath(root, Path.GetRelativePath(root, item));
+                var attrs = File.GetAttributes(full);
+                if ((attrs & FileAttributes.ReparsePoint) != 0)
+                    throw new DataValidationException(nameof(relative), "invalid_path");
+                if (++checkedEntries > MaxFilesToDelete)
+                    throw new DataValidationException(nameof(relative), "invalid_transition");
+                if ((attrs & FileAttributes.Directory) != 0)
+                {
+                    foreach (var child in Directory.EnumerateFileSystemEntries(full))
+                        pending.Push(child);
+                }
+            }
+
+            Delete(root, relative);
+        }
+
         internal static void Delete(string root, string relative)
         {
             var target = SafePath(root, relative);

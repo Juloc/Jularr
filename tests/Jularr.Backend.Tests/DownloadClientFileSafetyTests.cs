@@ -114,6 +114,26 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void AutomaticImportedSourceCleanup_DeletesOnlyMappedJobOutput()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "jularr-sab-import-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            try
+            {
+                Directory.CreateDirectory(Path.Combine(root, "Downloaded.Job"));
+                File.WriteAllText(Path.Combine(root, "Downloaded.Job", "movie.mkv"), "test");
+                Directory.CreateDirectory(Path.Combine(root, "Keep.Job"));
+                File.WriteAllText(Path.Combine(root, "Keep.Job", "other.mkv"), "keep");
+                DownloadClientFileSafety.DeleteVerifiedCompleted(root, "Downloaded.Job");
+                Assert.IsFalse(Directory.Exists(Path.Combine(root, "Downloaded.Job")));
+                Assert.IsTrue(File.Exists(Path.Combine(root, "Keep.Job", "other.mkv")));
+                Assert.ThrowsExactly<DataValidationException>(() => DownloadClientFileSafety.DeleteVerifiedCompleted(root, ""));
+                Assert.ThrowsExactly<DataValidationException>(() => DownloadClientFileSafety.DeleteVerifiedCompleted(root, "../Keep.Job"));
+            }
+            finally { Directory.Delete(root, recursive: true); }
+        }
+
+        [TestMethod]
         public void TraversalAndRootDeletion_AreRejected()
         {
             var root = Path.Combine(Path.GetTempPath(), "jularr-sab-console-" + Guid.NewGuid().ToString("N"));

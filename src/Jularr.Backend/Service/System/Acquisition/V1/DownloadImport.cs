@@ -361,9 +361,17 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     // A missing history entry was removed externally, so there is no job left to clean.
                     if (finished is not null)
                     {
-                        if (!finished.IsCompleted && !finished.IsFailed)
+                        if (task.Reason == "imported" && !finished.IsCompleted
+                            || task.Reason == "failed" && !finished.IsFailed
+                            || task.Reason is not ("imported" or "failed"))
                         {
-                            await RescheduleAsync(task.Id, "cleanup_not_terminal");
+                            await RescheduleAsync(task.Id, "cleanup_status_mismatch");
+                            continue;
+                        }
+
+                        if (task.Reason == "imported" && !await DeleteImportedSourceAsync(context, connection, finished.StoragePath, ct))
+                        {
+                            await RescheduleAsync(task.Id, "cleanup_source_unmapped");
                             continue;
                         }
 
@@ -377,6 +385,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     }, ct);
                 }
                 catch (Exception exception) when (exception is HttpRequestException or SabnzbdException or JsonException
+                    or IOException or UnauthorizedAccessException or NasMountException
                     || exception is TaskCanceledException && !ct.IsCancellationRequested)
                 {
                     await RescheduleAsync(task.Id, "cleanup_client_unavailable");
@@ -390,6 +399,37 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 await ctx.RetryDownloadCleanupAsync(new DownloadCleanupAttemptData(id, reason), token);
                 return true;
             }, ct);
+        }
+
+        // A finished SABnzbd job can keep its completed source files after a successful hard-link import.
+        // Only the provider-reported path under the explicitly mapped download root is eligible.
+        private async Task<bool> DeleteImportedSourceAsync(LogicContext context, AcquisitionConnectionData connection,
+            string? reportedPath, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(reportedPath) || string.IsNullOrWhiteSpace(connection.RemotePath)
+                || ImportPlacementLogic.MapRemotePath(reportedPath, connection.RemotePath) is not { Length: > 0 } relative
+                || !connection.RemovesCompleted)
+                return false;
+
+            string root;
+            if (connection.DownloadStorageMountId is { } mountId)
+            {
+                if (string.IsNullOrWhiteSpace(connection.LocalPath)) return false;
+                var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(mountId, token), ct);
+                if (mount.IsReadOnly || storage.Open(mount) is not LocalStorageFiles local) return false;
+                root = local.ResolveDirectory(StoragePath.Check(connection.LocalPath));
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(connection.LocalPath) || !Path.IsPathFullyQualified(connection.LocalPath))
+                    return false;
+                root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(connection.LocalPath));
+                if (root == Path.GetPathRoot(root) || !Directory.Exists(root))
+                    return false;
+            }
+
+            DownloadClientFileSafety.DeleteVerifiedCompleted(root, relative);
+            return true;
         }
 
         // The first numbered alternative whose files are all free.
