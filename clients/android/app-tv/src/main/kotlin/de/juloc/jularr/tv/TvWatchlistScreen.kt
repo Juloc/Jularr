@@ -162,6 +162,14 @@ fun TvWatchlistScreen(
             } ?: TvWatchlistSort.NEWEST,
         )
     }
+    // The TV's collection endpoint is explicitly video-scoped. A previously
+    // selected Books filter must not make a non-empty video collection appear
+    // empty, nor should Books be offered as a valid filter for that collection.
+    LaunchedEffect(selectedCollectionId) {
+        if (selectedCollectionId != null && category == TvWatchlistCategory.BOOKS) {
+            category = TvWatchlistCategory.ALL
+        }
+    }
     var sortOpen by remember { mutableStateOf(false) }
     var sortPreviouslyOpened by remember { mutableStateOf(false) }
     var infoEntry by remember { mutableStateOf<WatchlistItem?>(null) }
@@ -254,7 +262,9 @@ fun TvWatchlistScreen(
                         items(collections, key = { "collection:${it.id}" }) { collection ->
                             Button(onClick = { onSelectCollection(collection.id) }) {
                                 Text(
-                                    (if (collection.id == selectedCollectionId) "✓ " else "") + collection.name,
+                                    (if (collection.id == selectedCollectionId) "✓ " else "") +
+                                        collection.name +
+                                        (collection.workCount?.let { " · $it" } ?: ""),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
@@ -267,7 +277,12 @@ fun TvWatchlistScreen(
                 }
 
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(TvWatchlistCategory.entries.toList(), key = { it.name }) { option ->
+                    items(
+                        TvWatchlistCategory.entries.filter {
+                            selectedCollectionId == null || it != TvWatchlistCategory.BOOKS
+                        },
+                        key = { it.name },
+                    ) { option ->
                         var focused by remember(option) { mutableStateOf(false) }
                         val shape = RoundedCornerShape(24.dp)
                         Box(
