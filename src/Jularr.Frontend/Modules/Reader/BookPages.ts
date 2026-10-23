@@ -1,4 +1,5 @@
 import { paperPageCount } from './PaperMeasure';
+import { readBookPageCounts, writeBookPageCounts } from './BookPageCache';
 
 interface Layout { width: number; height: number; columns: number; gap: number; pages: number; rtl: boolean }
 const MaximumBytes = 2 * 1024 * 1024;
@@ -17,7 +18,8 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
     const pointers = new Set<number>();
     let counts: (number | undefined)[] = [];
     let remaining = 0, pendingIndex = 0, totalCount = 0, pagesBefore = 0, readyText = '';
-    let layout: Layout | undefined, key = '', generation = 0, localPage = 1;
+    let layout: Layout | undefined, key = '', savedKey = '', generation = 0, localPage = 1;
+    let cachePending = false, cacheTimer = 0;
     let running = false, failed = false, disposed = false, suspended = false, busyUntil = performance.now() + 450;
     let timer = 0, idle = 0, request: AbortController | undefined;
     const clearTotal = () => {
@@ -41,11 +43,12 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
     };
     const cancel = (): void => {
         generation++;
+        clearTimeout(cacheTimer); cacheTimer = 0; cachePending = false;
         clearScheduled(); request?.abort(); clearRuler();
     };
     const resetCounts = (): void => {
         counts = Array(sections).fill(undefined);
-        remaining = sections; pendingIndex = totalCount = pagesBefore = 0; readyText = '';
+        remaining = sections; pendingIndex = totalCount = pagesBefore = 0; readyText = savedKey = '';
     };
     const count = (index: number, value: number | undefined): void => {
         const old = counts[index];
@@ -64,12 +67,17 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
         state('ready');
         if (!readyText) readyText = status.dataset.readyLabel!.replace('{0}', new Intl.NumberFormat(document.documentElement.lang || undefined).format(totalCount));
         if (status.textContent !== readyText) status.textContent = readyText;
+        if (key && savedKey !== key) {
+            savedKey = key;
+            void writeBookPageCounts(key, counts as number[]);
+        }
         return true;
     };
     const available = () => !disposed && !suspended && !failed && !!layout && !document.hidden && !pointers.size && performance.now() >= busyUntil;
     const schedule = (): void => {
         clearScheduled();
         if (disposed || suspended || failed || !layout || publish()) return;
+        if (cachePending) { state('paused'); return; }
         if (document.hidden || pointers.size || performance.now() < busyUntil) {
             state('paused');
             if (!document.hidden && !pointers.size) timer = window.setTimeout(schedule, Math.max(1, busyUntil - performance.now()));
@@ -122,7 +130,7 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
                 text += decoder.decode();
             } finally { await stream.cancel(); stream.releaseLock(); }
             await idleBeforeLayout(controller.signal);
-            if (version !== generation || !available()) return;
+            if (version !== generation || disposed || suspended || failed || !layout) return;
             const data: unknown = JSON.parse(text);
             if (!data || typeof data !== 'object' || !('html' in data) || typeof data.html !== 'string' || !('sectionIndex' in data) || data.sectionIndex !== index) throw new Error('Invalid chapter response.');
             // The existing reading service owns sanitization, exactly as for ReaderSection.
@@ -144,7 +152,7 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
                 })]);
             } finally { controller.signal.removeEventListener('abort', abortImages); }
             await idleBeforeLayout(controller.signal);
-            if (version !== generation || !available()) return;
+            if (version !== generation || disposed || suspended || failed || !layout) return;
             count(index, paperPageCount(ruler, dimensions.columns, dimensions.gap, dimensions.rtl));
         } catch {
             if (version === generation && !disposed) { failed = true; clearTotal(); state('unavailable'); }
@@ -156,7 +164,8 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
     }
     const interact = (): void => {
         busyUntil = performance.now() + 450;
-        cancel(); schedule();
+        // A page turn pauses the next chapter, but does not discard an in-flight request.
+        schedule();
     };
     reader.addEventListener('pointerdown', event => { pointers.add(event.pointerId); interact(); }, { passive: true });
     window.addEventListener('pointerup', event => { if (pointers.delete(event.pointerId)) interact(); }, { passive: true });
@@ -171,7 +180,7 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
         suspended = true; cancel();
         if (!event.persisted) { disposed = true; measurement.remove(); }
     });
-    window.addEventListener('pageshow', event => { if (event.persisted) suspended = false; });
+    window.addEventListener('pageshow', event => { if (event.persisted) { suspended = false; cachePending = false; schedule(); } });
     const update = (next: Layout): void => {
         const chosen = reader.querySelector<HTMLElement>('[data-language-choice][aria-pressed=true]')?.dataset.languageChoice ?? reader.dataset.readingLanguage;
         const original = reader.dataset.language?.toLowerCase().split(/[-_]/)[0];
@@ -179,14 +188,35 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
             && (!chosen || chosen === 'original' || chosen.toLowerCase().split(/[-_]/)[0] === original);
         if (!supported || !reader.dataset.sectionsUrl || !Number.isInteger(sections) || sections < 1 || sections > 100_000 || !Number.isInteger(section) || section < 0 || section >= sections
             || next.width <= 0 || next.height <= 0) {
-            cancel(); layout = undefined; key = ''; counts = []; clearTotal();
+            cancel(); layout = undefined; key = ''; cachePending = false; counts = []; clearTotal();
             state(reader.dataset.mode === 'paged' ? 'unavailable' : 'off'); return;
         }
         const style = getComputedStyle(content);
-        const nextKey = JSON.stringify([next.width, next.height, next.columns, next.gap, next.rtl, style.font, style.letterSpacing,
+        const nextKey = JSON.stringify(['book-page-layout-v2', reader.dataset.sectionsUrl, sections, next.width, next.height, next.columns, next.gap, next.rtl, style.font, style.letterSpacing,
             style.getPropertyValue('--reader-text-width'), style.getPropertyValue('--reader-paragraph'), reader.dataset.indent, reader.dataset.hyphenation, reader.dataset.illustrations, document.documentElement.lang]);
         if (key !== nextKey) {
             cancel(); key = nextKey; failed = false; resetCounts(); clearTotal();
+            cachePending = true;
+            const version = generation;
+            // An unavailable/blocked IndexedDB must not postpone normal reading indefinitely.
+            cacheTimer = window.setTimeout(() => {
+                if (version !== generation || !cachePending) return;
+                cachePending = false; cacheTimer = 0; schedule();
+            }, 300);
+            void readBookPageCounts(key, sections).then(saved => {
+                if (version !== generation || disposed || suspended || !cachePending) return;
+                clearTimeout(cacheTimer); cacheTimer = 0; cachePending = false;
+                // A late image, font or content change can alter this section without changing a CSS key.
+                if (saved && layout && saved[section] === layout.pages) {
+                    saved.forEach((value, index) => { if (index !== section) count(index, value); });
+                    savedKey = key;
+                }
+                schedule();
+            }).catch(() => {
+                if (version !== generation || disposed || suspended || !cachePending) return;
+                clearTimeout(cacheTimer); cacheTimer = 0; cachePending = false;
+                schedule();
+            });
         }
         layout = next;
         const images = reader.dataset.illustrations === 'false' ? [] : Array.from(content.querySelectorAll('img'));
@@ -196,12 +226,16 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
             else state('paused');
             return;
         }
+        if (counts[section] !== undefined && counts[section] !== next.pages) {
+            // The visible section is authoritative even when the layout fingerprint is unchanged.
+            cancel(); resetCounts(); clearTotal(); cachePending = false;
+        }
         count(section, next.pages);
         schedule();
     };
     return {
         update,
-        invalidate(): void { cancel(); key = ''; layout = undefined; counts = []; clearTotal(); state('paused'); },
+        invalidate(): void { cancel(); key = ''; layout = undefined; cachePending = false; counts = []; clearTotal(); state('paused'); },
         position(page: number): void {
             localPage = page;
             if (reader.dataset.bookPageState === 'ready' && reader.dataset.bookPage !== String(pagesBefore + page)) reader.dataset.bookPage = String(pagesBefore + page);

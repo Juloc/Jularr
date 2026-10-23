@@ -155,7 +155,18 @@ Failures/oversized/unauthorized chapters leave totals unavailable without blocki
 reading or endless retry. Translated views without all translated chapter HTML
 do not substitute original text counts. Scroll mode does not run this count.
 Only complete counts publish the total, preceding pages and current global page;
-image adapters already know their source count.
+image adapters already know their source count. Completed numeric counts are cached
+in the browser's bounded IndexedDB layout store, keyed by immutable reading document
+and exact geometry/typography settings. Opening another chapter restores the whole-book
+count without fetching every section again; the currently rendered chapter must still
+match the saved count. Resizes, font changes and layout changes invalidate the key.
+A failed/private-mode cache falls back to the existing bounded background ruler.
+Ordinary page turns defer new ruler work without aborting a request already in flight.
+
+Paged spreads reserve a responsive central CSS column gap in the canonical text
+layout (mirrored inside margins, including RTL); one-page mode uses wider symmetric
+text margins. The decorative book samples the same column gap, so neither text nor
+page numbers intrude into the pronounced paper crown at the binding.
 
 ## Single book renderer
 

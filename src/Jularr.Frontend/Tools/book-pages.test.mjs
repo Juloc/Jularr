@@ -23,7 +23,7 @@ test('one column measurement counts the same scrolled LTR and RTL content withou
     assert.equal(exports.paperPageCount(content, 2, 40, false), 3);
 });
 
-function harness(fetchChapter) {
+function harness(fetchChapter, cached = new Map()) {
     const events = new Map(), windowEvents = new Map(), documentEvents = new Map();
     const tasks = new Map();
     let clock = 0, identity = 0, measuring = '', maximumRulers = 0, attached = 0, parsed = 0;
@@ -59,7 +59,10 @@ function harness(fetchChapter) {
     runInNewContext(compile('BookPages'), { exports, window, document, AbortController, TextDecoder,
         performance: { now: () => clock }, clearTimeout: id => tasks.delete(id), fetch: fetchChapter,
         getComputedStyle: () => ({ font: '20px serif', letterSpacing: 'normal', getPropertyValue: () => '68ch' }),
-        require: () => ({ paperPageCount: () => Number(measuring) })
+        require: name => name === './PaperMeasure' ? { paperPageCount: () => Number(measuring) } : {
+            readBookPageCounts: async key => cached.get(key)?.slice(),
+            writeBookPageCounts: async (key, counts) => { cached.set(key, counts.slice()); }
+        }
     });
     const counter = exports.initializeBookPages(reader, content);
     const layout = { width: 1000, height: 600, columns: 2, gap: 40, pages: 3, rtl: false };
@@ -89,9 +92,10 @@ test('background counts pause, discard stale work, finish sequentially and do no
     await h.advance();
     assert.equal(requests.length, 1);
     h.events.get('pointerdown')({ pointerId: 7 });
-    assert.equal(requests[0].signal.aborted, true);
+    assert.equal(requests[0].signal.aborted, false, 'ordinary page turns must not cancel the in-flight request');
     assert.equal(h.reader.dataset.bookPageState, 'paused');
     h.counter.update({ ...h.layout, width: 400, pages: 5 });
+    assert.equal(requests[0].signal.aborted, true, 'a real layout change still invalidates the old measurement');
     release(new Response(JSON.stringify({ sectionIndex: 0, html: '999' })));
     await h.advance(1000);
     assert.equal(requests.length, 1, 'holding a pointer must prevent more work');
@@ -182,4 +186,53 @@ test('choosing the original language with a regional tag does not disable measur
     await h.advance();
     await h.advance();
     assert.equal(h.reader.dataset.bookPageCount, '11');
+});
+
+test('completed book pages survive chapter navigation and reload without a second background fetch', async () => {
+    const cache = new Map();
+    const requests = [];
+    const fetchChapter = async url => {
+        requests.push(url);
+        return new Response(JSON.stringify({ sectionIndex: Number(url.at(-1)), html: '4' }));
+    };
+    const first = harness(fetchChapter, cache);
+    first.counter.update(first.layout);
+    await first.advance();
+    await first.advance();
+    assert.equal(first.reader.dataset.bookPageCount, '11');
+    assert.equal(cache.size, 1, 'one completed layout is stored, not partial estimates');
+    assert.deepEqual(requests, ['/sections/0', '/sections/2']);
+    const second = harness(fetchChapter, cache);
+    second.reader.dataset.section = '2';
+    second.counter.update({ ...second.layout, pages: 4 });
+    await second.advance();
+    assert.equal(second.reader.dataset.bookPageState, 'ready');
+    assert.equal(second.reader.dataset.bookPageCount, '11');
+    assert.equal(second.reader.dataset.bookPageBefore, '7');
+    second.counter.position(4);
+    assert.equal(second.reader.dataset.bookPage, '11');
+    assert.deepEqual(requests, ['/sections/0', '/sections/2'], 'no chapter is fetched again for an unchanged book layout');
+    second.counter.update({ ...second.layout, width: 400, pages: 4 });
+    await second.advance();
+    await second.advance();
+    assert.equal(requests.length, 4, 'a changed page width invalidates the stored layout');
+});
+
+test('repeated turns allow the in-flight chapter to finish without repeated cancellation', async () => {
+    const requests = [];
+    let finish;
+    const h = harness((url, options) => {
+        requests.push({ url, signal: options.signal });
+        if (requests.length === 1) return new Promise(resolve => { finish = resolve; });
+        return Promise.resolve(new Response(JSON.stringify({ sectionIndex: Number(url.at(-1)), html: '4' })));
+    });
+    h.counter.update(h.layout);
+    await h.advance();
+    for (let index = 0; index < 100; index++) h.events.get('keydown')();
+    assert.equal(requests[0].signal.aborted, false);
+    finish(new Response(JSON.stringify({ sectionIndex: 0, html: '4' })));
+    await h.advance();
+    await h.advance();
+    assert.equal(h.reader.dataset.bookPageCount, '11');
+    assert.deepEqual(requests.map(request => request.url), ['/sections/0', '/sections/2']);
 });
