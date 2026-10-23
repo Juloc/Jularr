@@ -452,7 +452,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
 
         private async Task WriteProgressAsync(object update)
         {
-            await Response.WriteAsync(JsonSerializer.Serialize(update) + "\\n", HttpContext.RequestAborted);
+            await Response.WriteAsync(JsonSerializer.Serialize(update) + "\n", HttpContext.RequestAborted);
             await Response.Body.FlushAsync(HttpContext.RequestAborted);
         }
 
