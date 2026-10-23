@@ -636,6 +636,7 @@ namespace Jularr.Backend.Tests
                               {"key":"/works/OL881W","title":"Printed Novel","author_name":["Jane Austen"],"format":["Paperback","Audiobook"]},
                               {"key":"/works/OL882W","title":"Pride and Prejudice - Audiobook","author_name":["Jane Austen"],"format":["Audiobook"]},
                               {"key":"/works/OL883W","title":"Audio-Only Edition","author_name":["Jane Austen"],"format":["Audio CD"]},
+                              {"key":"/works/OL885W","title":"Pride and Prejudice (Hörbuch)","author_name":["Jane Austen"]},
                               {"key":"/works/OL884W","title":"The Audiobook Handbook","author_name":["Jane Austen"],"format":["Paperback"]}
                             ]}
                             """),
