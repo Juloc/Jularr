@@ -52,22 +52,43 @@ function initializePreview(): void {
 }
 
 // Preview is still an ordinary POST, but it shows immediate feedback while provider checks run.
-function initializePendingPreview(): void {
-    const form = document.querySelector<HTMLFormElement>(".media-import__upload form");
-    const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-    const text = form?.querySelector<HTMLTextAreaElement>("textarea");
-    const file = form?.querySelector<HTMLInputElement>('input[type="file"]');
-    const labels = form?.querySelector<HTMLElement>("[data-import-status]")?.dataset;
+// A request-based import is not a durable server job. While it is committing,
+// protect it from an accidental browser refresh or in-app page navigation.
+// Do not claim that a reload is safe before the server owns the job independently.
+let runningImportRequests = 0;
+window.addEventListener("beforeunload", event => {
+    if (runningImportRequests === 0) return;
+    event.preventDefault();
+    event.returnValue = "";
+});
+document.addEventListener("htmx:config:request", event => {
+    if (runningImportRequests === 0) return;
+    const ctx = (event as CustomEvent<{ ctx?: { target?: Element; request?: { method?: string } } }>).detail?.ctx;
+    if (ctx?.target?.id === "app-content" && ctx.request?.method === "GET") event.preventDefault();
+});
+
+// Both initial preview and "Search more/Refresh" use the same provider stream,
+// including existing per-title selection, provider query and per-media defaults.
+function registerPreviewStream(
+    form: HTMLFormElement | null,
+    button: HTMLButtonElement | null,
+    labels: DOMStringMap | undefined,
+    text: HTMLTextAreaElement | null,
+    file: HTMLInputElement | null
+): void {
     if (!form || !button || form.dataset.importPending !== undefined) return;
     form.dataset.importPending = "";
     let useNormalPost = false;
 
     form.addEventListener("submit", async event => {
-        if (useNormalPost) return;
+        const submitter = (event as SubmitEvent).submitter as HTMLElement | null;
+        if (useNormalPost || submitter !== button) return;
         event.preventDefault();
+        event.stopImmediatePropagation();
 
         const source = new FormData(form);
         button.disabled = true;
+        ++runningImportRequests;
         form.setAttribute("aria-busy", "true");
         const panel = document.createElement("section");
         panel.className = "media-import__activity";
@@ -98,7 +119,7 @@ function initializePendingPreview(): void {
         };
 
         try {
-            const raw = file?.files?.[0] ? await file.files[0].text() : text?.value ?? "";
+            const raw = file?.files?.[0] ? await file.files[0].text() : text?.value ?? String(source.get("Json") ?? "");
             const parsed: unknown = JSON.parse(raw.replace(/^\uFEFF/, ""));
             const items = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) && "items" in parsed
                 ? (parsed as { items?: unknown }).items : undefined;
@@ -172,12 +193,36 @@ function initializePendingPreview(): void {
         } finally {
             // Warm provider results are cached, so the regular HTML preview can render without redoing lookups.
             useNormalPost = true;
+            --runningImportRequests;
             button.disabled = false;
             form.removeAttribute("aria-busy");
             form.requestSubmit(button);
         }
     });
 }
+function initializePendingPreview(): void {
+    const form = document.querySelector<HTMLFormElement>(".media-import__upload form");
+    registerPreviewStream(
+        form,
+        form?.querySelector<HTMLButtonElement>('button[type="submit"]') ?? null,
+        form?.querySelector<HTMLElement>("[data-import-status]")?.dataset,
+        form?.querySelector<HTMLTextAreaElement>("textarea") ?? null,
+        form?.querySelector<HTMLInputElement>('input[type="file"]') ?? null
+    );
+}
+
+// Refresh / Search more must show the same live stages rather than silently
+// submitting a full-page form. The apply action is handled separately.
+function initializeRefreshPreview(): void {
+    const form = document.querySelector<HTMLFormElement>(".media-import__preview form");
+    registerPreviewStream(
+        form,
+        form?.querySelector<HTMLButtonElement>('button[type="submit"]:not([data-import-apply])') ?? null,
+        document.querySelector<HTMLElement>(".media-import [data-import-status]")?.dataset,
+        null, null
+    );
+}
+
 
 type ImportEvent =
     | { kind: "started" }
@@ -210,6 +255,7 @@ function initializeLiveImport(): void {
         for (const button of controls) button.disabled = true;
 
         const source = new FormData(form);
+        ++runningImportRequests;
         const total = form.querySelectorAll('input[name$=".Index"]').length;
         const panel = document.createElement("section");
         panel.className = "media-import__activity";
@@ -327,6 +373,7 @@ function initializeLiveImport(): void {
             for (const button of controls) button.disabled = false;
             apply.disabled = false;
         } finally {
+            --runningImportRequests;
             form.removeAttribute("aria-busy");
         }
     });
@@ -336,5 +383,6 @@ onPage(import.meta.url, () => {
     initializeSource();
     initializePreview();
     initializePendingPreview();
+    initializeRefreshPreview();
     initializeLiveImport();
 });
