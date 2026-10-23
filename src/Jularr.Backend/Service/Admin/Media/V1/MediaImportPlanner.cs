@@ -8,6 +8,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.OpenLibrary;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
@@ -20,7 +21,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     internal sealed record MediaImportPlan(IReadOnlyList<MediaImportPlanRow> Rows, int Unsearched);
 
     // Matches a list to the library and the providers without changing anything: reliable identities first, searches only propose candidates.
-    internal sealed class MediaImportPlanner(MetadataCatalog catalog, WorkMetadata metadata, IMemoryCache cache)
+    internal sealed class MediaImportPlanner(MetadataCatalog catalog, WorkMetadata metadata, BookMetadata books, IMemoryCache cache)
     {
         private const int CandidatesPerRow = 8;
         private const int LookupsPerPlan = 100;
@@ -59,9 +60,56 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
 
             var known = await ReadKnownAsync(context, identities.SelectMany(list => list), ct);
+            var lookups = new Budget(LookupsPerPlan);
+            var conflicts = new HashSet<int>();
+
+            // An edition ISBN can identify a Work even when this Jularr instance has not imported it yet.
+            // Provider metadata is checked against the requested title/author before using that Work id.
+            for (var index = 0; index < items.Count; index++)
+            {
+                var item = items[index];
+                if (item.Problem is not null || item.Type != MediaType.Book || Hits(identities[index], known).Count > 0
+                    || identities[index].FirstOrDefault(identity => identity.Namespace == "isbn") is not { } isbn)
+                {
+                    continue;
+                }
+
+                var key = "import.isbn." + isbn.Value;
+                if (!cache.TryGetValue(key, out OpenLibraryWork? book))
+                {
+                    if (!lookups.TrySpend()) break;
+                    try
+                    {
+                        book = await books.ReadWorkForIsbnAsync(isbn.Value, ct);
+                    }
+                    catch (KeyNotFoundException)
+                    {
+                        book = null;
+                    }
+                    catch (ServiceUnavailableException)
+                    {
+                        lookups.Stop();
+                        break;
+                    }
+
+                    cache.Set(key, book, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = Lifetime, Size = 1 });
+                }
+
+                if (book is null || !IsSameBook(item, book)) continue;
+                var other = identities[index].FirstOrDefault(identity => identity.Namespace == "openlibrary");
+                if (other is not null && other.Value != book.WorkId)
+                {
+                    conflicts.Add(index);
+                    continue;
+                }
+
+                if (other is null) identities[index].Add(new MediaImportId("openlibrary", book.WorkId));
+            }
+
+            // The ISBN-resolved Work may already exist with another ISBN in the local database.
+            known = await ReadKnownAsync(context, identities.SelectMany(list => list), ct);
 
             // Video titles named only by IMDb or TVDB find their TMDB entry.
-            var lookups = new Budget(LookupsPerPlan);
             var budget = new Budget(searches);
             var found = new Dictionary<int, MediaImportId>();
             for (var index = 0; index < items.Count; index++)
@@ -104,7 +152,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
                 var hits = Hits(identities[index], known);
                 MediaImportPlanRow row;
-                if (hits.Count > 1)
+                if (conflicts.Contains(index) || hits.Count > 1)
                 {
                     row = Row(item, MediaImportStatusType.Invalid, "ids_conflict", null, canMonitor, list, choice);
                 }
@@ -262,6 +310,30 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var strong = query is not null ? [] : shown.Where(result => IsStrong(item, result)).ToArray();
             return [.. shown.Select(result => new MediaImportCandidateV1(result.Namespace + ":" + result.ExternalId, result.Title, result.ReleaseYear, TextLimit.Cut(result.Author, 500), result.Namespace,
                 result.WorkId, strong.Length == 1 && ReferenceEquals(strong[0], result)))];
+        }
+
+        // An ISBN match must not quietly turn a full book into a summary, workbook or a different author's title.
+        private static bool IsSameBook(MediaImportItem item, OpenLibraryWork work)
+        {
+            if (item.Title is { } title)
+            {
+                var requested = TitleMatcher.SignificantWords(title);
+                var found = TitleMatcher.SignificantWords(work.Title);
+                if (found.Count == 0 || !(found.SetEquals(requested)
+                    || found.IsSubsetOf(requested) && requested.Except(found).All(word => word is "revised" or "updated" or "edition" or "expanded" or "unabridged")))
+                {
+                    return false;
+                }
+            }
+
+            if (item.Creator is not { } creator) return true;
+            var wanted = creator.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return wanted.Length > 0 && work.Authors.Any(author =>
+            {
+                var actual = author.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                return actual.Length > 0 && wanted[0].Equals(actual[0], StringComparison.OrdinalIgnoreCase)
+                    && wanted[^1].Equals(actual[^1], StringComparison.OrdinalIgnoreCase);
+            });
         }
 
         private static bool IsStrong(MediaImportItem item, MetadataSearchResultV1 result)
