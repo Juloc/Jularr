@@ -30,11 +30,12 @@ namespace Jularr.E2E.Tests
 
             await CheckCalendarTodayAsync(germanPage, "Europe/Berlin");
 
+            // Reuse the authenticated session without converting Playwright cookie result types.
+            var sessionState = await berlin.StorageStateAsync();
             await using var newYork = await browser.NewContextAsync(new BrowserNewContextOptions
             {
-                BaseURL = jularr.Address.ToString(), TimezoneId = "America/New_York"
+                BaseURL = jularr.Address.ToString(), TimezoneId = "America/New_York", StorageState = sessionState
             });
-            await newYork.AddCookiesAsync(await berlin.CookiesAsync());
             var americanPage = await newYork.NewPageAsync();
             await americanPage.GotoAsync("/Account/Sessions");
 
