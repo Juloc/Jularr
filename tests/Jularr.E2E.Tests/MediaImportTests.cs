@@ -171,6 +171,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".media-import__activity--done")).ToHaveCountAsync(1);
                 await Assertions.Expect(page.Locator(".media-import__activity-list li", new() { HasText = "Added, monitored" })).ToHaveCountAsync(4);
                 await Assertions.Expect(page.Locator(".media-import__activity progress")).ToHaveJSPropertyAsync("value", 6);
+                await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Download import report" })).ToHaveCountAsync(1);
                 await Evidence.SaveAsync(page, "media-import-result");
                 await page.SetViewportSizeAsync(390, 844);
                 await Evidence.SaveAsync(page, "media-import-result-mobile");

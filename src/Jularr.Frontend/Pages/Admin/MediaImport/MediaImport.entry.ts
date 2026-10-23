@@ -342,7 +342,7 @@ function initializeLiveImport(): void {
             return next;
         };
 
-        const addManualContinuation = (next: FormData): void => {
+        const addManualContinuation = (next: FormData, caption?: string): void => {
             const continuation = document.createElement("form");
             continuation.method = "post";
             const target = new URL(form.action, window.location.href);
@@ -359,7 +359,7 @@ function initializeLiveImport(): void {
             const button = document.createElement("button");
             button.type = "submit";
             button.className = "button button--primary";
-            button.textContent = apply.dataset.importContinue ?? "Continue";
+            button.textContent = caption ?? apply.dataset.importContinue ?? "Continue";
             continuation.append(button);
             panel.append(continuation);
         };
@@ -382,6 +382,8 @@ function initializeLiveImport(): void {
         }
 
         let hasRemaining = false;
+        const failedIndexes = new Set<number>();
+        const outcomes = new Map<number, { title: string; status: string; result: string; workId: number | null }>();
         let current = source;
         let indices = Array.from({ length: total }, (_, index) => index);
         const settled = new Set<number>();
@@ -418,6 +420,11 @@ function initializeLiveImport(): void {
                                 node.name = link;
                             }
                         }
+                        outcomes.set(originalIndex, {
+                            title: update.title || node?.name.textContent || "#" + String(originalIndex + 1),
+                            status: update.status, result: update.outcome, workId: update.workId
+                        });
+                        if (update.status === "Failed" || update.status === "NotFound") failedIndexes.add(originalIndex);
                         if (update.status === "Deferred" || update.status === "Unavailable") {
                             waiting.push(update.index);
                             if (update.status === "Unavailable") unavailable = true;
@@ -472,6 +479,33 @@ function initializeLiveImport(): void {
             if (!finished) throw new Error("Import did not finish");
             panel.classList.add(hasRemaining ? "media-import__activity--partial" : "media-import__activity--done");
             pending(hasRemaining ? (apply.dataset.importPartial ?? "Some titles are waiting") : (apply.dataset.importComplete ?? "Completed"));
+            // A failed row is never retried automatically. Offer a preview containing
+            // only those rows, with their original choices mapped to the new indices.
+            if (failedIndexes.size > 0) {
+                const original = JSON.parse(String(source.get("Json") ?? "")) as { version: number; items: unknown[] };
+                if (Array.isArray(original.items)) {
+                    const failed = [...failedIndexes].sort((a, b) => a - b);
+                    const retry = JSON.stringify({ version: 1, items: failed.map(index => original.items[index]) });
+                    addManualContinuation(makeContinuation(source, failed, retry), apply.dataset.importRetryFailed ?? "Review failed titles");
+                }
+            }
+
+            const exportButton = document.createElement("button");
+            exportButton.type = "button";
+            exportButton.className = "button";
+            exportButton.textContent = apply.dataset.importDownloadReport ?? "Download report";
+            exportButton.addEventListener("click", () => {
+                const report = [...outcomes.entries()].sort(([a], [b]) => a - b)
+                    .map(([index, result]) => ({ index, ...result }));
+                const blob = new Blob([JSON.stringify({ version: 1, results: report }, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "jularr-import-report.json";
+                link.click();
+                URL.revokeObjectURL(url);
+            });
+            panel.append(exportButton);
 
         } catch {
             // Some rows may already have committed; never promise a rollback or blindly retry.

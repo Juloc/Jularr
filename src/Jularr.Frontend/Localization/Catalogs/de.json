@@ -9188,6 +9188,14 @@
    "Preview import",
    "Vorschau anzeigen"
   ],
+  "import.retryFailed": [
+   "Review failed titles only",
+   "Nur fehlgeschlagene Titel erneut prüfen"
+  ],
+  "import.downloadReport": [
+   "Download import report",
+   "Importbericht herunterladen"
+  ],
   "import.phase.partial": [
    "Import paused: some titles are still waiting",
    "Import pausiert: Einige Titel warten noch"

@@ -2765,6 +2765,8 @@ namespace Jularr.Frontend.Localization
             new("import.preview", "Preview import"),
             new("import.intent.summary", "{0} selected · {1} to monitor · {2} to search"),
             new("import.phase.partial", "Import paused: some titles are still waiting"),
+            new("import.retryFailed", "Review failed titles only"),
+            new("import.downloadReport", "Download import report"),
             new("import.intent.searchWarning", "Automatic searching may start downloads. Select Add only to import without searching."),
             new("import.match.suggested", "Likely match"),
             new("import.match.review", "Check edition"),
