@@ -140,7 +140,7 @@ namespace Jularr.Backend.Tests
             var broken = new DatabaseBaseline(cs, migrations:
                 [.. DatabaseBaseline.Migrations, Probe(DatabaseBaseline.CurrentVersion + 1, "CREATE TABLE \"UpgradeProbe\" (\"Id\" bigint);"), Probe(DatabaseBaseline.CurrentVersion + 2, "SELECT 1 / 0;")]);
             var failed = await Assert.ThrowsExactlyAsync<DatabaseUpgradeException>(() => broken.StartAsync(CancellationToken.None));
-            Assert.AreEqual("0003_probe", failed.Migration);
+            Assert.AreEqual($"000{DatabaseBaseline.CurrentVersion + 2}_probe", failed.Migration);
             Assert.AreEqual(0, (await TablesAsync(cs)).Length);
             await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
