@@ -89,8 +89,13 @@ function registerPreviewStream(
         event.preventDefault();
         event.stopImmediatePropagation();
 
+        // Freeze form actions while candidates are being re-evaluated; never allow
+        // a stale selection to be applied against a new provider snapshot.
+        if (form.dataset.importBusy === "true") return;
+        form.dataset.importBusy = "true";
+        const submitButtons = Array.from(form.querySelectorAll<HTMLButtonElement>('button[type="submit"]'));
+        for (const control of submitButtons) control.disabled = true;
         const source = new FormData(form);
-        button.disabled = true;
         ++runningImportRequests;
         form.setAttribute("aria-busy", "true");
         const panel = document.createElement("section");
@@ -197,8 +202,9 @@ function registerPreviewStream(
             // Warm provider results are cached, so the regular HTML preview can render without redoing lookups.
             useNormalPost = true;
             --runningImportRequests;
-            button.disabled = false;
             form.removeAttribute("aria-busy");
+            form.dataset.importBusy = "false";
+            for (const control of submitButtons) control.disabled = false;
             form.requestSubmit(button);
         }
     });
@@ -243,6 +249,11 @@ function initializeLiveImport(): void {
 
     form.addEventListener("submit", async event => {
         const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
+        if (form.dataset.importBusy === "true") {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+        }
         if (submitter !== apply) {
             if (submitter) {
                 submitter.disabled = true;
@@ -252,6 +263,7 @@ function initializeLiveImport(): void {
         }
 
         event.preventDefault();
+        form.dataset.importBusy = "true";
         apply.disabled = true;
         form.setAttribute("aria-busy", "true");
         const controls = Array.from(form.querySelectorAll<HTMLButtonElement>('button[type="submit"]'));
@@ -379,6 +391,7 @@ function initializeLiveImport(): void {
             apply.disabled = true;
         } finally {
             --runningImportRequests;
+            form.dataset.importBusy = "false";
             form.removeAttribute("aria-busy");
         }
     });
