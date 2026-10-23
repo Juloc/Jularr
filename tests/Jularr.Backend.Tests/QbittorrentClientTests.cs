@@ -92,9 +92,9 @@ namespace Jularr.Backend.Tests
             var connection = new QbittorrentConnection("http://torrent:8080", "admin", "secret");
 
             await sut.SetPausedAsync(connection, "abc123", true, default);
-            Assert.AreEqual("/api/v2/torrents/pause", client.LastAction);
+            Assert.AreEqual("/api/v2/torrents/stop", client.LastAction);
             await sut.SetPausedAsync(connection, "abc123", false, default);
-            Assert.AreEqual("/api/v2/torrents/resume", client.LastAction);
+            Assert.AreEqual("/api/v2/torrents/start", client.LastAction);
             await sut.RemoveAsync(connection, "abc123", true, default);
             Assert.AreEqual("/api/v2/torrents/delete", client.LastAction);
             Assert.AreEqual("abc123", client.LastHashes);
@@ -111,6 +111,7 @@ namespace Jularr.Backend.Tests
             public string? LastAction { get; private set; }
             public string? LastHashes { get; private set; }
             public string? LastHashFilter { get; private set; }
+            private string? Tag { get; set; }
 
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
@@ -140,6 +141,12 @@ namespace Jularr.Backend.Tests
                         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("v5.3.0") });
                     case "/api/v2/app/preferences":
                         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"save_path\":\"/downloads/complete\"}") });
+                    case "/api/v2/torrents/createTags":
+                    {
+                        var form = request.Content!.ReadAsStringAsync(cancellationToken).GetAwaiter().GetResult();
+                        Tag = Value(form, "tags");
+                        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+                    }
                     case "/api/v2/torrents/add":
                     {
                         var form = request.Content!.ReadAsStringAsync(cancellationToken).GetAwaiter().GetResult();
@@ -150,10 +157,10 @@ namespace Jularr.Backend.Tests
                     case "/api/v2/torrents/info":
                     {
                         if (query.Length > 1) LastHashFilter = query[1..];
-                        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(TorrentJson, Encoding.UTF8, "application/json") });
+                        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(TorrentJson.Replace("\\\"added_on\\\":", "\\\"tags\\\":\\\"" + Tag + "\\\",\\\"added_on\\\":", StringComparison.Ordinal), Encoding.UTF8, "application/json") });
                     }
-                    case "/api/v2/torrents/pause":
-                    case "/api/v2/torrents/resume":
+                    case "/api/v2/torrents/stop":
+                    case "/api/v2/torrents/start":
                     case "/api/v2/torrents/delete":
                     {
                         LastAction = path;
