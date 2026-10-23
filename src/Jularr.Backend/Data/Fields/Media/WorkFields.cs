@@ -1,0 +1,38 @@
+using Jularr.Backend.Data.Enums.Media;
+using NpgsqlTypes;
+
+namespace Jularr.Backend.Data.Fields.Media
+{
+    public static class WorkFields
+    {
+        public static readonly IntField TrackCount = new() { Minimum = 0 };
+        public static readonly LongField Id = new() { Minimum = 1 };
+        public static readonly StringField MatchKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64 };
+        public static readonly StringField MatchRows = new() { AllowBlank = false };
+        public static readonly EnumField MediaTypeId = new(typeof(MediaType));
+        public static readonly EnumField MediaSubtypeId = new(typeof(MediaSubtype)) { Required = false };
+        public static readonly EnumArrayField MediaTypeIds = new(typeof(MediaType)) { MaximumLength = 8 };
+        public static readonly EnumArrayField MediaSubtypeIds = new(typeof(MediaSubtype)) { MaximumLength = 8 };
+        public static readonly EnumField ProgressStateId = new(typeof(ProgressStateType));
+        public static readonly IntField ProgressPercent = new() { Minimum = 0, Maximum = 100 };
+        public static readonly LongArrayField Ids = new() { Minimum = 1, MaximumLength = 100, IsSet = true };
+        public static readonly BoolField IsMediaSubtypeManual = new();
+        public static readonly BoolField IsFranchiseManual = new();
+        public static readonly StringField CanonicalTitle = new(NpgsqlDbType.Varchar) { AllowBlank = false, Trim = true, MaximumLength = 500 };
+        public static readonly IntField ReleaseYear = new() { Minimum = 1800, Maximum = 2200, Required = false };
+        // On a scale of ten, as the catalogs keep it.
+        public static readonly DecimalField Rating = new() { Minimum = 0, Maximum = 10, Scale = 2, Required = false };
+        public static readonly StringField OriginalLanguage = new(NpgsqlDbType.Varchar) { MaximumLength = 2, Required = false };
+        public static readonly DateField ReleasedOn = new() { Required = false };
+        public static readonly IntField RuntimeMinutes = new() { Minimum = 1, Maximum = 1440, Required = false };
+        public static readonly LongField Version = new() { Minimum = 1 };
+        public static readonly DateTimeField CreatedAt = new();
+        public static readonly DateTimeField UpdatedAt = new();
+        public static readonly BoolField IsWatchlisted = new();
+        public static readonly BoolField IsRequestable = new();
+        public static readonly EnumField AvailabilityStateId = new(typeof(MediaAvailabilityState));
+        public static readonly IntField AvailableUnits = new() { Minimum = 0 };
+        public static readonly IntField MonitoredUnits = new() { Minimum = 0 };
+        public static readonly StringArrayField Titles = new() { ItemMaximumLength = 500 };
+    }
+}

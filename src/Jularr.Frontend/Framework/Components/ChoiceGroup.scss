@@ -1,0 +1,70 @@
+.choice-group {
+    padding: 17px 0 20px;
+    min-width: 0;
+
+    &__heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    &__title { display: grid; min-width: 0; }
+    &__label { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 770; }
+    &__count { color: var(--muted); font-size: 11px; font-weight: 400; }
+    &__items { display: flex; flex-wrap: wrap; gap: 7px; }
+
+    // Pills: the native input stays the control; the pill shows its state.
+    &__item {
+        position: relative;
+        display: inline-flex;
+        cursor: pointer;
+
+        input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+        span {
+            display: inline-flex;
+            align-items: center;
+            padding: 9px 13px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-control);
+            background: var(--surface);
+            color: var(--muted);
+            font-size: var(--text-control);
+            font-weight: 760;
+            line-height: 1.2;
+        }
+
+        &:hover span { border-color: var(--accent-outline); color: var(--accent-text); }
+        input:checked + span { border-color: var(--accent-edge); background: var(--accent-soft); color: var(--accent-text); }
+        input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+    }
+
+    // Native checkboxes in two columns.
+    &--checks &__items, &--section &__items { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 8px; }
+
+    &__check {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-height: 34px;
+        padding: 3px 0;
+        cursor: pointer;
+        font-size: var(--text-body);
+
+        input { margin: 0; }
+    }
+
+    // A frame per area, as on a phone's media chooser.
+    &--section {
+        margin: 12px 0;
+        padding: 14px 14px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel);
+        background: var(--surface);
+
+        .choice-group__heading { margin-bottom: 9px; }
+        .choice-group__label { .ui-icon { color: var(--accent); } }
+        .choice-group__check { min-height: 38px; input { width: 18px; height: 18px; } }
+    }
+
+    // Sits under another group of the same section.
+    &--minor { padding-top: 0; .choice-group__label { font-size: 11px; font-weight: 700; } }
+}
+
+// A choice or a group a script hides (the rankings a chosen type lacks) stays hidden whatever their display.
+.choice-group[hidden], .choice-group__item[hidden], .choice-group__check[hidden] { display: none; }

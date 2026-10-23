@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageReference Include="MSTest.TestAdapter" Version="4.4.1" />
+    <PackageReference Include="MSTest.TestFramework" Version="4.4.1" />
+    <ProjectReference Include="../../src/Jularr.Backend/Jularr.Backend.csproj" />
+    <ProjectReference Include="../../src/Jularr.Frontend/Jularr.Frontend.csproj" />
+    <ProjectReference Include="../../src/Jularr.Workers/Jularr.Workers.csproj" />
+  </ItemGroup>
+</Project>

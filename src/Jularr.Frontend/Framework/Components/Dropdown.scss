@@ -1,0 +1,137 @@
+// The select of every field: a button with the choice and a popup list of the options, in the shared field shapes. The native select stays
+// as the submitted value (and as the field without script), hidden behind it.
+select.ui-dropdown__native {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    opacity: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+    clip-path: inset(50%) !important;
+}
+
+// Contexts that style their select by a class give the same class to the button; this is only the base.
+:where(.ui-dropdown__button) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: var(--control-height);
+    padding: 0 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-field);
+    background: var(--field);
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--text-control);
+    text-align: start;
+    transition: border-color var(--transition), background-color var(--transition), color var(--transition);
+}
+
+.ui-dropdown__button {
+    &:hover:not(:disabled) { border-color: var(--accent-outline); }
+    &:disabled { opacity: .4; cursor: default; }
+    &[inert] { opacity: .5; }
+    &[hidden] { display: none; }
+    &[aria-expanded="true"] { border-color: var(--accent-outline); }
+
+    &::after {
+        content: "";
+        flex: none;
+        width: 6px;
+        height: 6px;
+        margin-inline-start: auto;
+        border-right: 1.75px solid var(--muted);
+        border-bottom: 1.75px solid var(--muted);
+        transform: translateY(-2px) rotate(45deg);
+        transition: transform var(--transition);
+    }
+    &[aria-expanded="true"]::after { transform: translateY(2px) rotate(225deg); }
+}
+
+.ui-dropdown__value {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &--empty { color: var(--muted); }
+}
+
+// In a field the button sits in the field's own surface, which draws the line and the focus edge.
+.ui-field__control > .ui-dropdown__button,
+.ui-field__control > .ui-form__size > .ui-dropdown__button {
+    width: 100%;
+    min-height: calc(var(--field-height) - 2px);
+    padding: 0 6px;
+    border: 0;
+    border-radius: var(--radius-field);
+    background: transparent;
+    font-size: var(--text-body);
+
+    &:hover:not(:disabled) { border-color: transparent; }
+    &:focus-visible { outline: none; }
+}
+
+.ui-dropdown__popup {
+    position: fixed;
+    inset: auto;
+    top: var(--dropdown-top, 0);
+    left: var(--dropdown-left, 0);
+    width: var(--dropdown-width, 200px);
+    max-height: var(--dropdown-max-height, 320px);
+    margin: 0;
+    padding: 6px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-inner);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-overlay);
+    outline: none;
+    transition: opacity .15s, translate .15s, display .15s allow-discrete, overlay .15s allow-discrete;
+
+    &:popover-open {
+        @starting-style { opacity: 0; translate: 0 -6px; }
+    }
+
+    &--above:popover-open {
+        @starting-style { translate: 0 6px; }
+    }
+}
+
+.ui-dropdown__option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: var(--radius-small);
+    cursor: pointer;
+    font-size: var(--text-control);
+    font-weight: var(--weight-control);
+    overflow-wrap: anywhere;
+
+    &--active { background: var(--accent-soft); color: var(--accent-text); }
+
+    &[aria-selected="true"] { color: var(--accent-text); font-weight: 810; }
+    &[aria-selected="true"]::after {
+        content: "";
+        flex: none;
+        width: 5px;
+        height: 10px;
+        margin-inline-end: 2px;
+        border-right: 2px solid var(--accent);
+        border-bottom: 2px solid var(--accent);
+        transform: translateY(-1px) rotate(45deg);
+    }
+
+    &[aria-disabled="true"] { opacity: .4; cursor: default; }
+}

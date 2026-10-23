@@ -1,0 +1,58 @@
+.appearance {
+    display: grid;
+    padding: 14px 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+
+    & > summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+    &[open] > summary { margin-bottom: 16px; }
+
+    &__options { display: grid; gap: 18px; }
+    &__group { display: grid; gap: 8px; }
+    &__label { font-size: 13px; font-weight: 600; }
+    &__choices { display: flex; flex-wrap: wrap; gap: 8px; }
+    // Wrap controls, not captions.
+    &__choices > .button { flex: 1 0 auto; min-width: min(84px, 100%); max-width: 100%; overflow-wrap: anywhere; }
+    &__color { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; }
+    &__color input { width: 54px; height: 44px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--field); cursor: pointer; }
+    &__color [data-accent-value] { color: var(--muted); font-family: ui-monospace, monospace; }
+    &__hint { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+}
+
+// The sign-in pages' two round buttons (AppearanceDock.cs): the design and the brightness, bottom right.
+.appearance-dock {
+    position: fixed;
+    z-index: 5;
+    right: 23px;
+    bottom: 22px;
+    display: flex;
+    gap: 10px;
+
+    &__button {
+        display: grid;
+        place-items: center;
+        width: 45px;
+        height: 45px;
+        padding: 0;
+        border: 1px solid var(--border);
+        border-radius: 50%;
+        background: var(--surface);
+        color: var(--accent);
+        box-shadow: var(--shadow);
+        cursor: pointer;
+        transition: background .16s;
+
+        &:hover { background: var(--accent-soft); }
+        .ui-icon { width: 21px; height: 21px; }
+    }
+
+    // The brightness button shows the choice in effect.
+    &__light, &__dark { display: none; }
+    html[data-mode="light"] & { &__system { display: none; } &__light { display: grid; } }
+    html[data-mode="dark"] & { &__system { display: none; } &__dark { display: grid; } }
+}
+
+@media (max-width: 500px) {
+    .appearance-dock { right: 15px; bottom: 15px; &__button { width: 42px; height: 42px; } }
+}

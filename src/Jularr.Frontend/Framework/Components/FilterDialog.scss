@@ -1,0 +1,95 @@
+// A side sheet on wide screens, the whole screen on phones.
+.filter-dialog {
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: min(440px, 100vw);
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-drawer);
+
+    &::backdrop { background: var(--scrim); backdrop-filter: blur(4px); }
+
+    form {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    &__head,
+    &__foot {
+        display: flex;
+        flex: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 20px 24px;
+    }
+
+    &__head { border-bottom: 1px solid var(--border); }
+    &__head h2 { margin: 0; font-size: 22px; letter-spacing: -.6px; }
+    &__foot { border-top: 1px solid var(--border); }
+    &__foot .button { flex: 1; }
+
+    &__body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px 24px 24px;
+    }
+
+    &__group {
+        min-width: 0;
+        margin: 0;
+        padding: 14px 0;
+        border: 0;
+        border-bottom: 1px solid var(--border);
+
+        &:last-child { border-bottom: 0; }
+        legend { padding: 0; font-size: 13px; font-weight: 800; color: var(--text); }
+    }
+
+    &__choices {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        margin-top: 8px;
+    }
+
+    &__choice {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 40px;
+        padding: 6px 8px;
+        border-radius: var(--radius-small);
+        font-size: var(--text-body);
+        cursor: pointer;
+
+        &:hover { background: var(--surface-hover); }
+    }
+
+    &__input { margin: 0; }
+
+    // On a phone a bottom sheet, as in the mockups.
+    @media (max-width: 640px) {
+        inset: auto 0 0 0;
+        width: 100%;
+        max-width: 100%;
+        height: min(82dvh, 740px);
+        max-height: min(82dvh, 740px);
+        border-radius: var(--radius-dialog) var(--radius-dialog) 0 0;
+        &__head { padding: 19px 19px 16px; }
+        &__body { padding: 8px 19px 18px; }
+        &__foot { padding: 13px 19px max(18px, env(safe-area-inset-bottom)); }
+    }
+}
+
+@media (max-width: 640px) {
+    .filter-dialog[open] { animation: filter-sheet-in .23s ease; }
+    @keyframes filter-sheet-in { from { transform: translateY(40px); opacity: 0; } }
+}

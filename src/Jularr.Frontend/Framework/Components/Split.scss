@@ -1,0 +1,38 @@
+.split {
+    display: grid;
+    grid-template-columns: minmax(240px, 1fr) minmax(0, 1.6fr);
+    gap: 12px;
+
+    &--single { grid-template-columns: minmax(0, 1fr); }
+
+    &__primary,
+    &__secondary {
+        min-width: 0;
+    }
+
+    &__back { display: none; }
+}
+
+// With a detail open the list keeps each row's name and action and gives the detail the room.
+@media (min-width: 781px) {
+    .split--detail-open {
+        grid-template-columns: minmax(220px, 1fr) minmax(0, 2.4fr);
+
+        .split__primary table :is(th, td):not(:first-child, :last-child) { display: none; }
+    }
+}
+
+@media (max-width: 780px) {
+    .split { grid-template-columns: minmax(0, 1fr); }
+
+    .split--master-detail {
+        display: block;
+    }
+    .split--master-detail:not(.split--detail-open) .split__secondary { display: none; }
+    .split--detail-open .split__primary { display: none; }
+    .split--detail-open .split__back {
+        display: inline-flex;
+        min-height: 44px;
+        align-items: center;
+    }
+}

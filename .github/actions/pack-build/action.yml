@@ -1,0 +1,26 @@
+name: Publish the shared build
+description: >-
+  Packs the compiled workspace (tar keeps file modes, for example the Playwright driver) and
+  uploads it for the test shards. node_modules, the repository metadata and the native runtimes
+  of other platforms (about 600 MB of the outputs) stay out; the runners are linux-x64.
+
+runs:
+  using: composite
+  steps:
+    - name: Pack the workspace
+      shell: bash
+      run: |
+        set -euo pipefail
+        exclude=(--exclude=./.git --exclude=node_modules --exclude=./TestResults)
+        for runtime in 'win*' 'osx*' 'ios*' 'android*' 'maccatalyst*' 'browser*' 'linux-arm*' 'linux-x86' \
+                       'linux-musl*' 'linux-bionic*' 'linux-loongarch64' 'linux-riscv64'; do
+          exclude+=("--exclude=*/runtimes/${runtime}")
+        done
+        tar "${exclude[@]}" -I 'gzip -1' -cf "${RUNNER_TEMP}/jularr-build.tgz" -C "${GITHUB_WORKSPACE}" .
+        ls -lh "${RUNNER_TEMP}/jularr-build.tgz"
+    - uses: actions/upload-artifact@v7
+      with:
+        name: jularr-build
+        path: ${{ runner.temp }}/jularr-build.tgz
+        compression-level: 0
+        retention-days: 1

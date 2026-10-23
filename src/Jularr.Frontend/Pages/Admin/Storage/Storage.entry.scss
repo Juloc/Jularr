@@ -1,0 +1,35 @@
+
+// The figures and the cards are one region: an action of a card swaps both.
+.storage__cards {
+    display: grid;
+    gap: 16px;
+}
+
+.storage {
+    &__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-block: 12px;
+    }
+
+    &__volume {
+        overflow-x: auto;
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 0.85rem;
+        user-select: all;
+    }
+
+    &__trail {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+
+        a + a::before {
+            content: "/";
+            margin-inline-end: 4px;
+        }
+    }
+}

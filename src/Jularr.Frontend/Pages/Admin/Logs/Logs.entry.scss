@@ -1,0 +1,44 @@
+@use "../../../Framework/Components/SelectLinkMenu";
+
+// One card: the filters on top, the messages below.
+.logs {
+    min-width: 0;
+
+    // The level as chips at the start, the source menu and the search at the end; the row wraps on a narrow screen.
+    .logs-filters {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 9px;
+        margin-bottom: 15px;
+
+        &__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; min-width: 0; }
+        .search-box { flex: 1 1 240px; min-width: 200px; }
+    }
+}
+
+// A message: when, how serious, what it says and where it comes from.
+.logs-list {
+    &__row {
+        display: grid;
+        grid-template-columns: 140px 86px minmax(0, 1fr);
+        gap: 9px;
+        align-items: start;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border);
+
+        &:last-child { border-bottom: 0; }
+        .state-chip { justify-self: start; }
+    }
+
+    &__when { padding-top: 7px; color: var(--muted); font-size: var(--text-small); }
+    &__message { min-width: 0; padding-top: 4px; font-size: var(--text-control); line-height: 1.5; overflow-wrap: anywhere; }
+    &__origin { margin-top: 2px; color: var(--muted); font-size: var(--text-small); }
+
+    @media (max-width: 640px) {
+        &__row { grid-template-columns: auto minmax(0, 1fr); gap: 4px 9px; }
+        &__message { grid-column: 1 / -1; padding-top: 0; }
+        &__when { padding-top: 0; align-self: center; }
+    }
+}

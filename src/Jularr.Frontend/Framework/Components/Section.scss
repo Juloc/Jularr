@@ -1,0 +1,45 @@
+// A titled card: the mockups' softbox with a bold section heading in the text colour.
+.ui-section {
+    padding: 20px 22px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow);
+
+    h2 { margin: 0 0 12px; }
+
+    // The heading with an action at its end.
+    &__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 15px;
+
+        h2 { margin: 0; }
+        > span { color: var(--muted); font-size: var(--text-small); }
+    }
+}
+
+// A heading with its icon tile: one line, the text cut with an ellipsis.
+.ui-section__title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+// Buttons and small forms that belong together, in one wrapping row.
+.page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+}
+
+td .page-actions { gap: 6px 8px; }
+
+@media (max-width: 650px) {
+    .ui-section { padding: 15px 16px; }
+}

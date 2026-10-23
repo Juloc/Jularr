@@ -1,0 +1,280 @@
+// The admin list kit: rows on a grid inside one panel. The grid belongs to the page (--list-columns, -medium, -narrow); the panel answers to its own
+// width: the less important columns leave first (hide 1, then hide 2), and on a phone every row is a card with its name and state on one line.
+.list {
+    container: list / inline-size;
+    min-width: 0;
+}
+
+.list-panel {
+    --list-columns: minmax(0, 2.4fr) repeat(5, minmax(0, 1.2fr));
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.list-head,
+.list-row {
+    display: grid;
+    grid-template-columns: var(--list-columns);
+    gap: 12px;
+    align-items: center;
+    padding: 12px 22px;
+}
+
+.list-head {
+    padding-block: 14px 13px;
+    border-bottom: 1px solid var(--border);
+    background: var(--field);
+    color: var(--muted);
+    font-size: var(--text-small);
+    font-weight: 780;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+
+    // A head stays on one line; a longer name ends in an ellipsis (its title says it whole).
+    .list-cell { overflow: hidden; color: inherit; font-size: inherit; font-weight: inherit; text-overflow: ellipsis; white-space: nowrap; }
+    .list-cell--data, .list-cell--actions { text-align: right; }
+}
+
+.list-row {
+    min-height: 80px;
+    border-bottom: 1px solid var(--border);
+    transition: background-color var(--transition);
+
+    &:last-child { border-bottom: 0; }
+    &:hover { background: var(--field); }
+    &[hidden] { display: none; }
+
+    &--warning { background: color-mix(in srgb, var(--warning-soft) 18%, var(--surface)); }
+    &--danger { background: color-mix(in srgb, var(--danger-soft) 18%, var(--surface)); }
+    &--child .list-cell--main { padding-left: 23px; }
+
+    &__caption { display: none; }
+}
+
+.list-cell {
+    min-width: 0;
+    font-size: var(--text-small);
+
+    // Values and actions stand at the right edge of their column, in every row alike; what a row does not have is left out, never a different shape.
+    &--data { color: var(--text); font-weight: 650; text-align: right; }
+    &--actions .list-actions { justify-content: flex-end; }
+}
+
+// A state that follows the phase the live stream sets (data-phase): the pill inside takes the phase's tone, so its label can change without a reload.
+.list-phase {
+    &[data-phase="downloading"], &[data-phase="running"], &[data-phase="searching"] { --phase: var(--info); --phase-soft: var(--info-soft); }
+    &[data-phase="waiting"], &[data-phase="paused"], &[data-phase="open"] { --phase: var(--warning); --phase-soft: var(--warning-soft); }
+    &[data-phase="postprocessing"], &[data-phase="queued"], &[data-phase="approved"], &[data-phase="importing"] { --phase: var(--accent-text); --phase-soft: var(--accent-soft); }
+    &[data-phase="completed"] { --phase: var(--success); --phase-soft: var(--success-soft); }
+    &[data-phase="failed"], &[data-phase="rejected"] { --phase: var(--danger); --phase-soft: var(--danger-soft); }
+    &[data-phase="cancelled"] { --phase: var(--muted); --phase-soft: var(--field); }
+
+    &[data-phase] .state-chip { border-color: var(--phase-soft); background: var(--phase-soft); color: var(--phase); }
+}
+
+// What the last action did, above the list's figures.
+.list-notice {
+    margin: 0 0 12px;
+    padding: 11px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-inner);
+    background: var(--surface);
+    color: var(--text);
+    font-size: var(--text-control);
+    font-weight: 650;
+}
+
+.list-value { white-space: nowrap; }
+.list-value--fill { display: block; min-width: 0; }
+
+// A name, a line under it and a note stay on one line each; a cut-off text shows whole on hover (Truncated).
+.list-identity__name, .list-identity__sub, .list-identity__note { display: block; min-width: 0; max-width: 100%; }
+.list-identity__title .truncated { display: inline-block; max-width: 100%; vertical-align: bottom; }
+.list-head-title { display: flex; align-items: center; gap: 12px; }
+.list-value--dim { color: var(--muted); font-weight: 520; }
+
+// A cut-off value at the right edge shows its whole text towards the left.
+.list-cell--data .truncated__tip { right: 0; left: auto; text-align: left; }
+
+.list-identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+
+    &__text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    &__name { font-size: var(--text-control); font-weight: 800; line-height: 1.25; }
+
+    &__title {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-decoration: none;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--text);
+        cursor: pointer;
+        font: inherit;
+        text-align: start;
+        text-decoration: none;
+
+        &:hover { color: var(--accent-text); }
+    }
+
+    &__note { min-width: 0; color: var(--danger); font-size: var(--text-small); }
+
+    &__sub { color: var(--muted); font-size: var(--text-small); font-weight: 400; overflow-wrap: anywhere; }
+}
+
+.list-row--child .list-identity { gap: 10px; }
+
+// A cover where an icon tile would be: the poster's proportions, the tile's corner.
+.list-poster {
+    display: inline-grid;
+    flex: none;
+    width: 38px;
+    height: 56px;
+    overflow: hidden;
+    border-radius: var(--radius-small);
+    background: var(--accent-soft);
+
+    img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+    &--large { width: 56px; height: 84px; }
+}
+
+// The box of a row that can be chosen; the dock's bulk zone counts them. A chosen row takes the accent wash.
+.list-select { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.list-row--selected {
+    background: var(--accent-soft);
+    &:hover { background: var(--accent-soft); }
+
+    // A pill of the accent tone would vanish into the wash.
+    .state-chip--accent { background: var(--surface); }
+}
+
+// A head cell that sorts: a link in the head's own colour and weight, the sorted one marked by its arrow.
+.list-head a { color: inherit; text-decoration: none; &:hover { color: var(--accent-text); } }
+.list-head .list-sort--ascending::after { content: " \2191"; }
+.list-head .list-sort--descending::after { content: " \2193"; }
+
+// The head's select-all box sits where the rows' boxes sit, before the title.
+.list-head .list-identity { gap: 12px; }
+
+// Row controls side by side; a PostForm is only a wrapper.
+.list-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    form { display: inline-flex; margin: 0; }
+    .button { white-space: nowrap; }
+    // Row actions are quiet: the soft one (run) and the details stay the only accents.
+    .button:not(.button--soft):not(.button--icon):not(:hover) { color: var(--muted); }
+    .button--icon { width: var(--control-height-compact); min-height: var(--control-height-compact); border-color: transparent; background: transparent; color: var(--muted); }
+    .button--icon:hover:not(:disabled) { border-color: var(--border); background: transparent; color: var(--accent-text); }
+}
+
+// A form of one field in a row (a select and its button) stays on one line; the column head names the field, so its label is for assistive technology only.
+.list-actions .ui-form--inline {
+    flex-wrap: nowrap;
+    gap: 8px;
+
+    & > .ui-field { flex: 1 1 auto; min-width: 0; }
+    .ui-field__top {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+}
+
+.list-empty {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    padding: 55px 24px;
+    color: var(--muted);
+    font-size: var(--text-control);
+    text-align: center;
+
+    &[hidden] { display: none; }
+}
+
+// Medium: the least important columns leave.
+@container list (max-width: 1000px) {
+    .list-cell--hide-1 { display: none; }
+
+    .list-head,
+    .list-row { grid-template-columns: var(--list-columns-medium, var(--list-columns)); padding-inline: 15px; }
+}
+
+@container list (max-width: 850px) {
+    .list-cell--hide-2 { display: none; }
+
+    .list-head,
+    .list-row { grid-template-columns: var(--list-columns-narrow, var(--list-columns-medium, var(--list-columns))); }
+}
+
+// Phone: one card per row; the head goes, the caption carries the facts of the dropped columns.
+@container list (max-width: 690px) {
+    .list-panel {
+        overflow: visible;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .list-head { display: none; }
+    .list-body { display: grid; gap: 9px; }
+
+    .list-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "name status" "details details" "actions actions";
+        gap: 10px;
+        min-height: 0;
+        padding: 13px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-inner);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+
+        &:last-child { border-bottom: 1px solid var(--border); }
+        &--warning { background: color-mix(in srgb, var(--warning-soft) 18%, var(--surface)); }
+        &--danger { background: color-mix(in srgb, var(--danger-soft) 18%, var(--surface)); }
+        &--child .list-cell--main { padding-left: 0; }
+        &__caption {
+            display: flex;
+            grid-area: details;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px 10px;
+            color: var(--muted);
+            font-size: var(--text-small);
+
+            .ui-icon { vertical-align: -2px; margin-right: 5px; }
+            .list-row__fact { color: var(--text); font-weight: 650; }
+        }
+    }
+
+    .list-cell--main { grid-area: name; }
+    .list-cell--status { grid-area: status; }
+    .list-cell--data { display: none; }
+    .list-cell--actions { grid-area: actions; }
+
+    .list-cell--actions .list-actions {
+        justify-content: flex-end;
+        padding-top: 10px;
+        border-top: 1px solid var(--border);
+    }
+
+    .list-empty { border: 1px solid var(--border); border-radius: var(--radius-inner); background: var(--surface); }
+}

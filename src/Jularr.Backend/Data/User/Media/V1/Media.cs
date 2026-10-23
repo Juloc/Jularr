@@ -1,0 +1,623 @@
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Fields.Acquisition;
+using Jularr.Backend.Data.Fields.Library;
+using Jularr.Backend.Data.Fields.Media;
+using Jularr.Backend.Data.Fields.Playback;
+using Jularr.Backend.Data.Fields.Provider;
+
+namespace Jularr.Backend.Data.User.Media.V1
+{
+    public sealed class ReadWatchlistParametersV1 : BaseParameters
+    {
+        public ReadWatchlistParametersV1(int page = 1, int pageSize = 25, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null, int? releaseYearFrom = null,
+            int? releaseYearTo = null, ProgressStateType? progressStateId = null, LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded)
+        {
+            ProgressStateId = progressStateId;
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
+            ReleaseYearFrom = releaseYearFrom;
+            ReleaseYearTo = releaseYearTo;
+            LibrarySortTypeId = librarySortTypeId;
+            Page = page;
+            PageSize = pageSize;
+        }
+
+        public int Page { get; }
+        public int PageSize { get; }
+
+        // A type lists its Works without subtype, a subtype lists that subtype across types; none lists everything.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
+        public int? ReleaseYearFrom { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
+        public int? ReleaseYearTo { get; }
+
+        // Only titles the profile has not started, is in the middle of or has finished.
+        [DataField(typeof(WorkFields), nameof(WorkFields.ProgressStateId), false)]
+        public ProgressStateType? ProgressStateId { get; }
+
+        // Recently added means added to the watchlist.
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.LibrarySortTypeId))]
+        public LibrarySortType LibrarySortTypeId { get; }
+    }
+
+    public sealed class ReadWatchlistCountParametersV1 : BaseParameters
+    {
+    }
+
+    public sealed class WatchlistCountV1 : BaseResponse
+    {
+        public WatchlistCountV1(int total)
+        {
+            Total = total;
+        }
+
+        // Every favorite the profile can open, whatever a list narrows it to.
+        [DataField(typeof(WorkFields), nameof(WorkFields.AvailableUnits))]
+        public int Total { get; }
+    }
+
+    public sealed class PersonParametersV1 : BaseParameters
+    {
+        public PersonParametersV1(long personId)
+        {
+            PersonId = personId;
+        }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.Id))]
+        public long PersonId { get; }
+    }
+
+    public sealed class ReadPersonWorksParametersV1 : BaseParameters
+    {
+        public ReadPersonWorksParametersV1(long personId, int page = 1, int pageSize = 25)
+        {
+            PersonId = personId;
+            Page = page;
+            PageSize = pageSize;
+        }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.Id))]
+        public long PersonId { get; }
+
+        public int Page { get; }
+        public int PageSize { get; }
+    }
+
+    public sealed class WorkParametersV1 : BaseParameters
+    {
+        public WorkParametersV1(long workId)
+        {
+            WorkId = workId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+    }
+
+    // A platform a game can be requested for.
+    public sealed class GamePlatformV1 : BaseResponse
+    {
+        public GamePlatformV1(long id, string name, string? abbreviation)
+        {
+            Id = id;
+            Name = name;
+            Abbreviation = abbreviation;
+        }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Name))]
+        public string Name { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Abbreviation))]
+        public string? Abbreviation { get; }
+    }
+
+    public sealed class WorkDetailsV1 : BaseResponse
+    {
+        public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
+            string? plexUrl, string[] platforms, long? franchiseId, string? franchiseName, bool isRequestable, AcquisitionRequestStatusType? requestStatusTypeId,
+            int? runtimeMinutes, string? genres, string? trailerKey, string? studio, MediaAvailabilityState availabilityStateId, int availableUnits, int monitoredUnits, ProgressStateType progressStateId,
+            int progressPercent, decimal? rating, string? ratingSource, string? originalTitle, DateOnly? releasedOn, string? originalLanguage, decimal? franchisePosition = null)
+        {
+            AvailabilityStateId = availabilityStateId;
+            AvailableUnits = availableUnits;
+            MonitoredUnits = monitoredUnits;
+            ProgressStateId = progressStateId;
+            ProgressPercent = progressPercent;
+            Rating = rating;
+            RatingSource = ratingSource;
+            OriginalTitle = originalTitle;
+            ReleasedOn = releasedOn;
+            OriginalLanguage = originalLanguage;
+            FranchisePosition = franchisePosition;
+            RuntimeMinutes = runtimeMinutes;
+            Genres = genres;
+            TrailerKey = trailerKey;
+            Studio = studio;
+            RequestStatusTypeId = requestStatusTypeId;
+            IsRequestable = isRequestable;
+            FranchiseId = franchiseId;
+            FranchiseName = franchiseName;
+            Platforms = platforms;
+            PlexUrl = plexUrl;
+            Id = id;
+            MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
+            CanonicalTitle = canonicalTitle;
+            IsWatchlisted = isWatchlisted;
+            ReleaseYear = releaseYear;
+            Overview = overview;
+            PosterUrl = posterUrl;
+            BackdropUrl = backdropUrl;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        // The subtype as the instance shows it; none while that subtype is switched off.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string CanonicalTitle { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.IsWatchlisted))]
+        public bool IsWatchlisted { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Overview))]
+        public string? Overview { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? PosterUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? BackdropUrl { get; }
+
+        // Opens the title on the connected Plex server.
+        [DataField(typeof(PlexFields), nameof(PlexFields.Url))]
+        public string? PlexUrl { get; }
+
+        // Platforms a game is available on.
+        [DataField(typeof(WorkFields), nameof(WorkFields.Titles))]
+        public string[] Platforms { get; }
+
+        // The provider's film series, while franchises are switched on.
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Id), false)]
+        public long? FranchiseId { get; }
+
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Name), false)]
+        public string? FranchiseName { get; }
+
+        // Its place in the series, where known.
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Position), false)]
+        public decimal? FranchisePosition { get; }
+
+        // A Work with media and without episodes or volumes to come, or with an open request of the profile, needs no request.
+        [DataField(typeof(WorkFields), nameof(WorkFields.IsRequestable))]
+        public bool IsRequestable { get; }
+
+        // The profile's latest request for the Work.
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.AcquisitionRequestStatusTypeId), false)]
+        public AcquisitionRequestStatusType? RequestStatusTypeId { get; }
+
+        // A movie's length.
+        [DataField(typeof(WorkFields), nameof(WorkFields.RuntimeMinutes))]
+        public int? RuntimeMinutes { get; }
+
+        // Genre names, comma separated.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Fact))]
+        public string? Genres { get; }
+
+        // A YouTube video id.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.TrailerKey))]
+        public string? TrailerKey { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Fact))]
+        public string? Studio { get; }
+
+        // What the title offers the profile and how far the profile is, as on its card.
+        [DataField(typeof(WorkFields), nameof(WorkFields.AvailabilityStateId))]
+        public MediaAvailabilityState AvailabilityStateId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.AvailableUnits))]
+        public int AvailableUnits { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MonitoredUnits))]
+        public int MonitoredUnits { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ProgressStateId))]
+        public ProgressStateType ProgressStateId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ProgressPercent))]
+        public int ProgressPercent { get; }
+
+        // The catalog's rating on a scale of ten and the catalog it comes from (the namespace of its entry); none while no entry has one.
+        [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
+        public decimal? Rating { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace), false)]
+        public string? RatingSource { get; }
+
+        // The title in its own language, where the catalog names one.
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.OriginalTitle))]
+        public string? OriginalTitle { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleasedOn))]
+        public DateOnly? ReleasedOn { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.OriginalLanguage))]
+        public string? OriginalLanguage { get; }
+    }
+
+    // A person the provider names for a Work: who wrote or made it, the cast with their character, the crew with their job.
+    public sealed class WorkCreditV1 : BaseResponse
+    {
+        public WorkCreditV1(long personId, string name, PersonRole personRoleId, string? credit, string? imageUrl)
+        {
+            PersonId = personId;
+            Name = name;
+            PersonRoleId = personRoleId;
+            Credit = credit;
+            ImageUrl = imageUrl;
+        }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.Id))]
+        public long PersonId { get; }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.Name))]
+        public string Name { get; }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.PersonRoleId))]
+        public PersonRole PersonRoleId { get; }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.Credit))]
+        public string? Credit { get; }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.ImageUrl))]
+        public string? ImageUrl { get; }
+    }
+
+    public sealed class PersonV1 : BaseResponse
+    {
+        public PersonV1(long id, string name, string? imageUrl)
+        {
+            Id = id;
+            Name = name;
+            ImageUrl = imageUrl;
+        }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.Name))]
+        public string Name { get; }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.ImageUrl))]
+        public string? ImageUrl { get; }
+    }
+
+    public sealed class UpdateWatchlistDataV1 : BaseData
+    {
+        public UpdateWatchlistDataV1(bool isWatchlisted)
+        {
+            IsWatchlisted = isWatchlisted;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.IsWatchlisted))]
+        public bool IsWatchlisted { get; }
+    }
+
+    public sealed class ReadWorkAvailabilityParametersV1 : BaseParameters
+    {
+        public ReadWorkAvailabilityParametersV1(long workId, int page = 1, int pageSize = 25)
+        {
+            WorkId = workId;
+            Page = page;
+            PageSize = pageSize;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        public int Page { get; }
+        public int PageSize { get; }
+    }
+
+    public sealed class WorkAvailabilityV1 : BaseResponse
+    {
+        public WorkAvailabilityV1(long id, long workVersionId, MediaAssetType mediaAssetTypeId, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber,
+            long fileCount, long sizeBytes, long? durationMs, bool isAvailable, int? height, string[] audioLanguages, string[] subtitleLanguages, long? resumePositionMs, bool isCompleted, bool isEmulated,
+            string? groupName, string? unitTitle, long? workUnitId, bool hasProgress, long workEditionId, string? platformName, string? unitImageUrl, int? discNumber)
+        {
+            UnitImageUrl = unitImageUrl;
+            DiscNumber = discNumber;
+            WorkEditionId = workEditionId;
+            PlatformName = platformName;
+            WorkUnitId = workUnitId;
+            HasProgress = hasProgress;
+            UnitTitle = unitTitle;
+            GroupName = groupName;
+            IsEmulated = isEmulated;
+            Id = id;
+            WorkVersionId = workVersionId;
+            MediaAssetTypeId = mediaAssetTypeId;
+            WorkUnitTypeId = workUnitTypeId;
+            UnitNumber = unitNumber;
+            ParentUnitNumber = parentUnitNumber;
+            FileCount = fileCount;
+            SizeBytes = sizeBytes;
+            DurationMs = durationMs;
+            IsAvailable = isAvailable;
+            Height = height;
+            AudioLanguages = audioLanguages;
+            SubtitleLanguages = subtitleLanguages;
+            ResumePositionMs = resumePositionMs;
+            IsCompleted = isCompleted;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkVersionId))]
+        public long WorkVersionId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.MediaAssetTypeId))]
+        public MediaAssetType MediaAssetTypeId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitTypeId), false)]
+        public WorkUnitType? WorkUnitTypeId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
+        public decimal? UnitNumber { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
+        public decimal? ParentUnitNumber { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.FileCount))]
+        public long FileCount { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.SizeBytes))]
+        public long SizeBytes { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.DurationMs))]
+        public long? DurationMs { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.IsAvailable))]
+        public bool IsAvailable { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Height))]
+        public int? Height { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Languages))]
+        public string[] AudioLanguages { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Languages))]
+        public string[] SubtitleLanguages { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.PositionMs), false)]
+        public long? ResumePositionMs { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsCompleted))]
+        public bool IsCompleted { get; }
+
+        // A game of a platform the browser plays.
+        [DataField(typeof(GameFields), nameof(GameFields.IsEmulated))]
+        public bool IsEmulated { get; }
+
+        // The named section the unit falls into, if any.
+        [DataField(typeof(WorkUnitGroupFields), nameof(WorkUnitGroupFields.Name), false)]
+        public string? GroupName { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitTitle))]
+        public string? UnitTitle { get; }
+
+        // The unit this version is of, to mark it; none for a whole title.
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Id), false)]
+        public long? WorkUnitId { get; }
+
+        // The profile has a position or a completion here; a book's progress can only be changed where it exists.
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsCompleted))]
+        public bool HasProgress { get; }
+
+        // The edition the version belongs to, and for a game the platform of its release.
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkEditionId))]
+        public long WorkEditionId { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Name), false)]
+        public string? PlatformName { get; }
+
+        // A volume's cover and the disc of a track, where they are known.
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ImageUrl))]
+        public string? UnitImageUrl { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.DiscNumber))]
+        public int? DiscNumber { get; }
+    }
+
+    // An edition of a title: a cut or release name, or a book's language and format, with how much of it is here.
+    public sealed class WorkEditionV1 : BaseResponse
+    {
+        public WorkEditionV1(long id, string? name, string? title, string? languageCode, EditionFormat? editionFormatId, string? publisher, int? releaseYear, long fileCount, bool isAvailable)
+        {
+            Id = id;
+            Name = name;
+            Title = title;
+            LanguageCode = languageCode;
+            EditionFormatId = editionFormatId;
+            Publisher = publisher;
+            ReleaseYear = releaseYear;
+            FileCount = fileCount;
+            IsAvailable = isAvailable;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkEditionId))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GroupName), false)]
+        public string? Name { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GroupName), false)]
+        public string? Title { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.LanguageCode), false)]
+        public string? LanguageCode { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.EditionFormatId), false)]
+        public EditionFormat? EditionFormatId { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.Publisher), false)]
+        public string? Publisher { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.FileCount))]
+        public long FileCount { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.IsAvailable))]
+        public bool IsAvailable { get; }
+    }
+
+    public sealed class ReadWorkEpisodesParametersV1 : BaseParameters
+    {
+        public ReadWorkEpisodesParametersV1(long workId, int seasonNumber)
+        {
+            WorkId = workId;
+            SeasonNumber = seasonNumber;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.SeasonNumber))]
+        public int SeasonNumber { get; }
+    }
+
+    // A season with its poster, year and how much of it is here.
+    public sealed class WorkSeasonV1 : BaseResponse
+    {
+        public WorkSeasonV1(int seasonNumber, string? title, string? imageUrl, int? releaseYear, int episodeCount, int availableCount, long id, int watchedCount)
+        {
+            Id = id;
+            WatchedCount = watchedCount;
+            SeasonNumber = seasonNumber;
+            Title = title;
+            ImageUrl = imageUrl;
+            ReleaseYear = releaseYear;
+            EpisodeCount = episodeCount;
+            AvailableCount = availableCount;
+        }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.SeasonNumber))]
+        public int SeasonNumber { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Title))]
+        public string? Title { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ImageUrl))]
+        public string? ImageUrl { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.EpisodeCount))]
+        public int EpisodeCount { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.AvailableCount))]
+        public int AvailableCount { get; }
+
+        // The season's unit, to mark it, and how many of its episodes this profile has watched.
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.EpisodeCount))]
+        public int WatchedCount { get; }
+    }
+
+    // An episode as a card: still, summary and length, what plays and where this profile stopped, and its state.
+    public sealed class WorkEpisodeV1 : BaseResponse
+    {
+        public WorkEpisodeV1(long id, int seasonNumber, decimal number, string? title, string? overview, string? imageUrl, int? runtimeMinutes, DateOnly? releasedOn,
+            long? mediaAssetId, long? resumePositionMs, long? durationMs, bool isCompleted, MediaStateType mediaStateTypeId, bool isUpcoming, string? groupName)
+        {
+            GroupName = groupName;
+            Id = id;
+            SeasonNumber = seasonNumber;
+            Number = number;
+            Title = title;
+            Overview = overview;
+            ImageUrl = imageUrl;
+            RuntimeMinutes = runtimeMinutes;
+            ReleasedOn = releasedOn;
+            MediaAssetId = mediaAssetId;
+            ResumePositionMs = resumePositionMs;
+            DurationMs = durationMs;
+            IsCompleted = isCompleted;
+            MediaStateTypeId = mediaStateTypeId;
+            IsUpcoming = isUpcoming;
+        }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.SeasonNumber))]
+        public int SeasonNumber { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber))]
+        public decimal Number { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Title))]
+        public string? Title { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Overview))]
+        public string? Overview { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ImageUrl))]
+        public string? ImageUrl { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.RuntimeMinutes))]
+        public int? RuntimeMinutes { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ReleasedOn))]
+        public DateOnly? ReleasedOn { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id), false)]
+        public long? MediaAssetId { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.PositionMs), false)]
+        public long? ResumePositionMs { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.DurationMs), false)]
+        public long? DurationMs { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsCompleted))]
+        public bool IsCompleted { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId))]
+        public MediaStateType MediaStateTypeId { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.IsUpcoming))]
+        public bool IsUpcoming { get; }
+
+        // The staff's section the episode falls in.
+        [DataField(typeof(WorkUnitGroupFields), nameof(WorkUnitGroupFields.Name), false)]
+        public string? GroupName { get; }
+    }
+}

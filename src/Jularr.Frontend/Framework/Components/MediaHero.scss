@@ -1,0 +1,298 @@
+@use "MediaImage";
+
+.media-hero {
+    position: relative;
+    overflow: hidden;
+    min-height: 260px;
+    margin-bottom: 24px;
+    border-radius: 16px;
+    background: var(--surface);
+
+    .media-image {
+        position: absolute;
+        inset: 0;
+        height: 100%;
+    }
+
+    &__body {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-width: 640px;
+        min-height: 260px;
+        justify-content: flex-end;
+        padding: 24px;
+        background: linear-gradient(90deg, rgb(0 0 0 / 75%), rgb(0 0 0 / 0%));
+        color: #fff;
+    }
+
+    &__title {
+        margin: 0;
+        font-size: 28px;
+    }
+
+    &__meta {
+        margin: 0;
+        opacity: 0.85;
+    }
+
+    &__overview {
+        margin: 0;
+        line-height: 1.45;
+    }
+
+    &__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    &--placeholder &__body { background: var(--surface-hover); color: var(--text); }
+}
+
+// A title's own hero (the board's proposal): backdrop under two dark gradients, the poster with its tag, then chips, one line of facts with the rating,
+// one summary line that opens on a click and the actions; the profile's progress sits bottom right, a small control top right. The texts are white on the
+// dark artwork in every theme, the way the mockup has them.
+.media-hero--poster {
+    isolation: isolate;
+    overflow: visible;
+    margin-bottom: 18px;
+    border-radius: var(--radius-dialog);
+    background: transparent;
+    color: #fff;
+
+    .media-hero__backdrop {
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        overflow: hidden;
+        border-radius: inherit;
+        background: linear-gradient(120deg, #2a1d4d, #1a1230);
+
+        .media-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+        &::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(90deg, rgb(18 12 34 / 92%) 0%, rgb(18 12 34 / 74%) 45%, rgb(18 12 34 / 35%) 100%),
+                linear-gradient(0deg, rgb(18 12 34 / 70%), transparent 55%);
+        }
+    }
+
+    .media-hero__layout {
+        position: relative;
+        display: grid;
+        grid-template-columns: 168px minmax(0, 1fr);
+        align-items: start;
+        gap: 24px;
+        padding: 26px 28px;
+    }
+
+    // The profile's progress bar needs its own room at the foot.
+    &.media-hero--progress .media-hero__layout { padding-bottom: 70px; }
+
+    .media-hero__title { margin: 0; font-size: 34px; font-weight: 850; letter-spacing: -1.3px; line-height: 1.1; overflow-wrap: anywhere; }
+
+    .media-hero__poster {
+        position: relative;
+        aspect-ratio: 2 / 3;
+        overflow: hidden;
+        border: 1px solid rgb(255 255 255 / 18%);
+        border-radius: 14px;
+        background: linear-gradient(150deg, var(--accent), #241a3d);
+        box-shadow: 0 16px 38px rgb(0 0 0 / 40%);
+
+        .media-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    }
+
+    // No cover: the icon of the type on the plain tint.
+    .media-hero__placeholder {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: rgb(255 255 255 / 35%);
+
+        .ui-icon { width: 42%; height: 42%; stroke-width: 1.2; }
+    }
+
+    .media-hero__body {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        min-width: 0;
+        max-width: none;
+        min-height: 0;
+        padding: 0;
+        background: none;
+    }
+
+    .media-hero__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    // Chips are translucent white over the artwork; the green one keeps its mint.
+    .media-hero__chips .state-chip { padding: 5px 10px; background: rgb(255 255 255 / 14%); color: #fff; }
+    .media-hero__chips .state-chip--success { background: rgb(120 230 190 / 20%); color: #b9f5df; }
+
+    .media-hero__meta {
+        display: flex;
+        align-items: center;
+        gap: 8px 14px;
+        min-width: 0;
+        margin: 0;
+        color: #e3dcf5;
+        font-size: 12px;
+        opacity: 1;
+    }
+
+    .media-hero__facts { flex: 0 1 auto; min-width: 0; }
+
+    .media-hero__rating {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        gap: 5px;
+        color: #fff;
+        font-weight: 800;
+
+        .ui-icon { width: 13px; height: 13px; fill: #ffcd6b; stroke: #ffcd6b; }
+        small { color: #cfc6e8; font-size: 10.5px; font-weight: 600; }
+    }
+
+    .media-hero__overview {
+        max-width: 760px;
+        margin: 0;
+        color: #e9e4f7;
+        font-size: 13px;
+        line-height: 1.5;
+        cursor: pointer;
+    }
+
+    // The summary opens on a click and closes on the next.
+    .media-hero__overview--open .truncated__text { overflow: visible; white-space: normal; }
+    .media-hero__overview--open .truncated__tip { display: none; }
+
+    .media-hero__actions {
+        position: relative;
+        z-index: 2;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+    }
+
+    // Controls of the actions are translucent white too.
+    .media-hero__actions .button:not(.button--primary, .button--soft, .live-phase-button) {
+        border-color: rgb(255 255 255 / 22%);
+        background: rgb(255 255 255 / 14%);
+        color: #fff;
+
+        &:hover:not(:disabled) { border-color: rgb(255 255 255 / 22%); background: rgb(255 255 255 / 24%); color: #fff; }
+    }
+    // The request button of a title that is on its way: near-white with the accent text, its percent a line along its foot.
+    .media-hero__actions .live-phase-button { border-color: transparent; background: rgb(255 255 255 / 95%); color: #5b24c9; }
+    .media-hero__actions .live-phase-button:hover:not(:disabled) { border-color: transparent; background: #fff; color: #5b24c9; }
+    // One family of controls: the icon buttons are as high as the others.
+    .media-hero__actions .button--icon { width: var(--control-height); min-height: var(--control-height); }
+    // A set favorite stays in that family: the accent fill of the primary button and a filled heart.
+    .media-hero__actions .button--icon[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: var(--accent-contrast);
+
+        .ui-icon { fill: currentColor; }
+
+        &:hover:not(:disabled) { border-color: var(--accent-hover); background: var(--accent-hover); color: var(--accent-contrast); }
+    }
+
+    .media-hero__corner { position: absolute; top: 18px; right: 20px; z-index: 2; display: flex; align-items: center; gap: 8px; }
+
+    // The profile's progress: a word and a figure over a thin bar, bottom right.
+    .media-hero__progress {
+        position: absolute;
+        right: 22px;
+        bottom: 18px;
+        width: min(300px, 42%);
+        color: #fff;
+    }
+
+    .media-hero__progress-caption {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 6px;
+        font-size: 11px;
+        font-weight: 700;
+
+        span:last-child { color: #d8cff0; font-weight: 600; }
+    }
+
+    .media-hero__progress-bar {
+        display: block;
+        appearance: none;
+        width: 100%;
+        height: 7px;
+        overflow: hidden;
+        border: 0;
+        border-radius: 99px;
+        background: rgb(255 255 255 / 20%);
+        color: #fff;
+
+        &::-webkit-progress-bar { background: rgb(255 255 255 / 20%); }
+        &::-webkit-progress-value { border-radius: 99px; background: linear-gradient(90deg, #b59aff, #fff); }
+        &::-moz-progress-bar { border-radius: 99px; background: linear-gradient(90deg, #b59aff, #fff); }
+    }
+
+    @media (max-width: 1180px) {
+        .media-hero__layout { grid-template-columns: 130px minmax(0, 1fr); padding-bottom: 90px; }
+        .media-hero__progress { right: 22px; left: 22px; width: auto; }
+    }
+
+    @media (max-width: 700px) {
+        .media-hero__layout { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 22px 18px 100px; }
+        .media-hero__poster { width: 120px; }
+    }
+}
+
+// Original's fallback composition.
+html[data-skin="original"] .media-hero--placeholder {
+    isolation: isolate;
+
+    &::before, &::after {
+        content: "";
+        position: absolute;
+        pointer-events: none;
+        z-index: -1;
+    }
+    &::before {
+        inset: 0;
+        background: url("../../Modules/Appearance/Original/hero-fuji.webp") 70% 40% / cover no-repeat;
+        filter: var(--art-night-filter) hue-rotate(var(--art-hue-rotate)) saturate(var(--art-saturate));
+    }
+    &::after {
+        inset: 0 2% -8% auto;
+        width: 42%;
+        background: url("../../Modules/Appearance/Original/heroine.webp") right bottom / contain no-repeat;
+        filter: hue-rotate(var(--art-hue-rotate)) saturate(var(--art-saturate));
+    }
+    .media-hero__body {
+        max-width: none;
+        background: linear-gradient(90deg, var(--surface) 0%, color-mix(in srgb, var(--surface) 95%, transparent) 48%, transparent 85%);
+
+        & > * { max-width: 55%; }
+    }
+
+    @media (max-width: 600px) {
+        &::after { inset: 0 0 35% auto; width: 45%; }
+        .media-hero__body {
+            min-height: 320px;
+            padding-top: 120px;
+            background: linear-gradient(0deg, var(--surface) 0%, color-mix(in srgb, var(--surface) 95%, transparent) 60%, transparent);
+
+            & > * { max-width: 100%; }
+        }
+    }
+}

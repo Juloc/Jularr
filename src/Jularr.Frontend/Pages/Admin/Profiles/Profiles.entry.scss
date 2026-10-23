@@ -1,0 +1,25 @@
+@use "../../../Framework/Components/SelectLinkMenu";
+
+// The list kit's grid of the quality rule panes, at three widths.
+.profiles-list {
+    --list-columns: minmax(220px, 2.6fr) minmax(112px, 1fr) minmax(120px, 1.1fr) minmax(95px, .8fr) minmax(80px, .7fr) minmax(60px, .5fr);
+    --list-columns-medium: minmax(200px, 2.2fr) minmax(112px, 1fr) minmax(120px, 1.1fr) minmax(60px, .5fr);
+    --list-columns-narrow: minmax(180px, 2fr) minmax(112px, 1fr) minmax(60px, .5fr);
+}
+
+.formats-list {
+    --list-columns: minmax(220px, 2.6fr) minmax(112px, 1fr) minmax(95px, .8fr) minmax(95px, .8fr) minmax(80px, .7fr) minmax(60px, .5fr);
+    --list-columns-medium: minmax(200px, 2.2fr) minmax(112px, 1fr) minmax(95px, .8fr) minmax(60px, .5fr);
+    --list-columns-narrow: minmax(180px, 2fr) minmax(112px, 1fr) minmax(60px, .5fr);
+}
+
+// A tag is a card of one row: its icon, the label field and the remove button.
+.tag-card {
+    flex-direction: row;
+    align-items: center;
+
+    > .ui-form { flex: 1; min-width: 0; }
+}
+
+// The editor of conditions needs room.
+#format-editor { width: min(760px, calc(100vw - 32px)); }

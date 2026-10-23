@@ -1,0 +1,106 @@
+@inject UiText T
+@inject FrontendAssets Assets
+@{
+    var isPreview = ViewData["ShellPreview"] is true;
+    var currentPage = ViewContext.ViewData.Model as JularrPage;
+    var showShell = (User.Identity?.IsAuthenticated == true || isPreview)
+        && (currentPage?.Definition.Shell ?? true);
+    var isPlayer = currentPage?.Definition.IsPlayer ?? false;
+    var isReader = currentPage?.Definition.IsReader ?? false;
+    // The first-run setup stands alone: the steps and the page, without the application's menus.
+    var isSetup = Context.Request.Path.StartsWithSegments("/Setup");
+    var title = currentPage?.Definition.DocumentTitle ?? (currentPage?.Definition.TitleKey is { } titleKey ? T[titleKey]
+        : ViewData["Title"] as string ?? T["app.name"]);
+    ViewData["Title"] = title;
+    var pageAssets = currentPage?.Definition.AssetEntries.ToArray() ?? [];
+    // The Reader keeps document-lifetime rendering resources; leaving it is a full navigation.
+    var inPlace = (showShell || isPlayer) && !isReader;
+    // The hint of an action a page without script answered; a script's request got it in the HX-Trigger header instead.
+    var hint = TempData[JularrPage.HintKey] as string;
+}
+<!DOCTYPE html>
+<html lang="@T.Locale" dir="@(T.IsRightToLeft ? "rtl" : "ltr")" data-skin="clean" data-mode="system">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#17161e" />
+    <title>@title · @T.InstanceName</title>
+    <link rel="icon" type="image/svg+xml" sizes="any" href="@Assets.ImageUrl("Assets/Shared/favicon.svg")" />
+    <link rel="icon" type="image/png" sizes="32x32" href="@Assets.ImageUrl("Assets/Shared/icon-32.png")" />
+    <link rel="apple-touch-icon" href="@Assets.ImageUrl("Assets/Shared/apple-touch-icon.png")" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="@T.InstanceName" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    @Assets.Styles("Assets/Shared/shell.entry.scss")
+    @if (!showShell)
+    {
+        @Assets.Styles(pageAssets)
+    }
+    @Assets.Scripts("Modules/Appearance/theme.entry.ts")
+    @Assets.Scripts("Modules/Pwa/pwa.entry.ts")
+    @Assets.Scripts("Framework/Components/MediaImage.entry.ts")
+    @if (inPlace)
+    {
+        @Assets.Scripts("Modules/Navigation/navigation.entry.ts")
+    }
+    @if (showShell && !isPreview && !isReader)
+    {
+        @Assets.Scripts("Framework/Components/ContinueReadingBar.entry.ts")
+    }
+    @if (!isReader && !isPlayer)
+    {
+        @Assets.Scripts("Framework/Components/Form.entry.ts")
+        @Assets.Scripts("Framework/Components/Dropdown.entry.ts")
+    }
+    @if (showShell && !isReader)
+    {
+        @Assets.Scripts("Framework/Components/SavePill.entry.ts")
+        @Assets.Scripts("Framework/Components/ActionToast.entry.ts")
+        @Assets.Scripts("Framework/Components/Modal.entry.ts")
+        @Assets.Styles("Framework/Components/Truncated.entry.ts")
+        @Assets.Scripts("Framework/Components/Truncated.entry.ts")
+        @Assets.Scripts("Pages/Shared/Breadcrumb.entry.ts")
+        @Assets.Scripts("Pages/Shared/Shell.entry.ts")
+        @Assets.Scripts("Framework/Components/LinkMenu.entry.ts")
+    }
+    @if (!showShell)
+    {
+        @Assets.Scripts(pageAssets)
+    }
+    @await RenderSectionAsync("Head", required: false)
+</head>
+@* App pages swap #app-content in place (with their own assets); the player page keeps its player beside it. *@
+<body class="@(isReader ? "app-page reader-page" : isPlayer ? "player-page" : showShell ? "app-page" : isSetup ? "auth-page setup-page" : "auth-page")" hx-boost:inherited="@(inPlace ? "true" : null)"
+    hx-target:inherited="@(inPlace ? "#app-content" : null)" hx-select:inherited="@(inPlace ? "#app-content" : null)" hx-swap:inherited="@(inPlace ? "outerHTML" : null)">
+    <a class="skip-link" href="#main-content">@T["shell.skip"]</a>
+    @(new UiHtml(new NoCoverTemplate(Assets), T))
+    @if (showShell)
+    {
+        <div id="app-content" class="app-content" data-shell="app" data-autoplay-previews="@(T.AutoplayPreviews && !string.Equals(Context.Request.Headers["Save-Data"], "on", StringComparison.OrdinalIgnoreCase) ? "true" : "false")" hx-history-elt>
+            @Assets.Styles(pageAssets)
+            <div class="app-layout">
+                <partial name="_AppShell" />
+                <main class="app-main" id="main-content" tabindex="-1">@RenderBody()@if (!isReader) { @(new UiHtml(new SavePill(), T)) }</main>
+            </div>
+            @Assets.Scripts(pageAssets)
+        </div>
+        @if (!isReader)
+        {
+            @(new UiHtml(new ActionToast(string.IsNullOrEmpty(hint) ? null : hint), T))
+        }
+    }
+    else if (isPlayer)
+    {
+        <div id="app-content" class="app-content" data-shell="player" hx-history-elt></div>
+        <main class="player-main" id="main-content" tabindex="-1">@RenderBody()</main>
+    }
+    else
+    {
+        <main class="@(isSetup ? "setup-main" : "auth-main")" id="main-content" tabindex="-1">@RenderBody()</main>
+    }
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

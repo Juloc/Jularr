@@ -1,0 +1,18 @@
+@page "/ShellPreview"
+@model Jularr.Frontend.Pages.Development.ShellPreview.ShellPreviewModel
+@inject UiText T
+@using Jularr.Frontend.Modules.Appearance
+@{
+    ViewData["ShellPreview"] = true;
+    ViewData["Title"] = Model.Definition.TitleKey is { } titleKey ? T[titleKey] : T["shell.preview"];
+}
+<nav class="preview-screen-links" aria-label="@T["shell.preview"]">
+    @foreach (var view in Jularr.Frontend.Pages.Development.ShellPreview.ShellPreviewModel.Views)
+    {
+        <a href="/ShellPreview?view=@view.Slug" aria-current="@(Model.SelectedView == view.Slug ? "page" : null)">@T[view.LabelKey]</a>
+    }
+</nav>
+<partial name="_PageBody" model="Model.Definition" />
+<div class="preview-controls">
+    <partial name="_UiComponent" model="new Appearance()" />
+</div>

@@ -1,0 +1,190 @@
+import assert from "node:assert/strict";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { test } from "node:test";
+
+const root = resolve(import.meta.dirname, "..");
+const build = join(root, "wwwroot", "build");
+const manifest = JSON.parse(readFileSync(join(root, "Assets", "Generated", "manifest.json"), "utf8"));
+const icons = JSON.parse(readFileSync(join(root, "Assets", "Generated", "icons.json"), "utf8"));
+const files = Object.values(manifest).flatMap(entry => [entry.file, ...(entry.css ?? []), ...(entry.assets ?? [])].filter(Boolean));
+
+test("all published assets exist with content fingerprints", () => {
+    for (const file of [...new Set([...files, icons.file])]) {
+        assert.match(file, /^assets\/[A-Za-z0-9_./-]+-[A-Za-z0-9_-]{8,}\.(?:css|js|svg|png|jpe?g|webp|avif|txt|wasm|data)$/i, file);
+        assert.ok(existsSync(join(build, file)), "missing compiled " + file);
+    }
+});
+
+test("Speech notices and matched worker runtime are published with fingerprints", () => {
+    const assets = readdirSync(join(build, "assets"));
+    for (const pattern of [/^NOTICE\.generated-[\w-]{8,}\.txt$/, /^sherpa-onnx-wasm-main-tts-[\w-]{8,}\.wasm$/,
+        /^sherpa-onnx-wasm-main-tts-[\w-]{8,}\.data$/, /^neural\.worker-[\w-]{8,}\.js$/]) {
+        assert.equal(assets.filter(file => pattern.test(file)).length, 1, String(pattern));
+    }
+    const notices = readFileSync(join(build, "assets", assets.find(file => /^NOTICE\.generated-/.test(file))), "utf8");
+    assert.ok(notices.includes("GNU GENERAL PUBLIC LICENSE"));
+    assert.match(notices, /Matching public browser-client source snapshot:|DEVELOPMENT BUILD:/);
+});
+
+test("shared asset and page/module entries have separate manifests", () => {
+    for (const key of [
+        "Assets/Shared/shell.entry.scss",
+        "Modules/Appearance/theme.entry.ts",
+        "Modules/Appearance/appearance.entry.scss",
+        "Pages/User/Discover/Index.entry.scss",
+        "Pages/User/Discover/Index.entry.ts",
+        "Pages/Account/Login/Login.entry.scss",
+        "Pages/Development/Design/Design.entry.scss",
+        "Framework/Components/MediaPreview.entry.ts",
+        "Modules/Player/player.entry.ts"
+    ]) assert.ok(manifest[key], "missing entry " + key);
+    assert.notEqual(manifest["Pages/User/Discover/Index.entry.scss"].file, manifest["Assets/Shared/shell.entry.scss"].file);
+});
+
+test("a page's CSS and TypeScript entries both survive discovery and publish", () => {
+    const styles = manifest["Pages/User/Discover/Index.entry.scss"];
+    const script = manifest["Pages/User/Discover/Index.entry.ts"];
+    assert.match(styles.file, /\.css$/);
+    assert.match(script.file, /\.js$/);
+    assert.notEqual(styles.file, script.file);
+    const css = readFileSync(join(build, styles.file), "utf8");
+    assert.ok(css.includes(".media-grid") && css.includes(".discover-paging"));
+});
+
+test("design media and Original artwork have fingerprinted image entries", () => {
+    for (const image of ["Modules/Appearance/Original/hero-torii.webp", "Modules/Appearance/Original/heroine.webp",
+        "Modules/Appearance/Original/washi.webp", "Modules/Appearance/Original/blossom-branch.webp", "Modules/Appearance/Original/hero-fuji.webp",
+        "Pages/Development/Design/Images/your-name-poster.jpg", "Pages/Development/Design/Images/suzume-poster.jpg",
+        "Pages/Development/Design/Images/your-name-backdrop.jpg"]) {
+        assert.ok(manifest[image]?.file, image);
+    }
+});
+
+test("obsolete design references are not published as current assets", () => {
+    for (const key of Object.keys(manifest)) assert.ok(!key.includes('/Design/References/'), key);
+});
+
+test("CSS image URLs use the host build root and resolve to published assets", () => {
+    let images = 0;
+    for (const file of new Set(files.filter(file => file.endsWith(".css")))) {
+        const css = readFileSync(join(build, file), "utf8");
+        for (const match of css.matchAll(/url\(["']?([^\s)"']+)["']?\)/g)) {
+            const url = match[1];
+            if (url.startsWith("data:")) continue;
+            assert.ok(url.startsWith("/build/assets/"), file + ": " + url);
+            assert.ok(existsSync(join(build, url.slice("/build/".length))), url);
+            images++;
+        }
+    }
+    assert.ok(images >= 5, "Original decorations must be emitted and referenced");
+});
+
+test("SVG sprite contains every compiled icon and no unhashed sprite", () => {
+    for (const key of ["home", "library", "bookmark", "calendar", "settings", "user", "search", "bell", "brand-clean", "brand-original",
+        "books", "reading", "folder", "subtitles", "providers", "theme-system", "player-previous", "player-next", "close"]) {
+        assert.equal(icons.symbols[key], "icon-" + key);
+    }
+    assert.ok(!readdirSync(join(build, "assets")).includes("icons.svg"));
+    assert.ok(!existsSync(join(build, ".vite")), "build metadata must be private");
+    const sprite = readFileSync(join(build, icons.file), "utf8");
+    for (const id of Object.values(icons.symbols)) {
+        assert.ok(sprite.includes('id="' + id + '"'), "missing sprite symbol " + id);
+    }
+});
+
+test("media preview bounds its hero width and uses full-width mobile context", () => {
+    const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
+    assert.match(css, /\.media-preview__hero\{[^}]*width:100%/);
+    assert.match(css, /\.media-preview__body\{display:contents\}/);
+    assert.ok(css.includes('max-width:none'));
+});
+
+test("shared base styles cover forms, tables and capsule navigation on every page", () => {
+    const css = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
+    for (const selector of [".ui-form", ".ui-field__top", ".page-table", ".navigation-tabs__link--active", ".toggle", ".tag"]) {
+        assert.ok(css.includes(selector), selector);
+    }
+    assert.doesNotMatch(css, /--glass|box-shadow:inset/);
+    assert.match(css, /\.page-screen\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
+    assert.match(css, /\.app-main \[id\]\{scroll-margin-top:var\(--shell-header-offset,\s*80px\)/);
+    assert.match(css, /\.split\{grid-template-columns:minmax\(0,1fr\)/);
+    assert.ok(!manifest["Pages/User/Settings/Settings.entry.scss"], "base-only pages need no duplicate bundle");
+});
+
+test("shared navigation stays single-row and the phone's sidebar is an off-canvas drawer", () => {
+    const css = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
+    assert.match(css, /\.navigation-tabs\{[^}]*overflow-x:auto/);
+    assert.match(css, /\.navigation-tabs\{[^}]*scrollbar-width:none/);
+    assert.match(css, /\.navigation-tabs::-webkit-scrollbar\{display:none/);
+    assert.doesNotMatch(css, /\.navigation-tabs\{[^}]*flex-wrap:wrap/);
+    assert.match(css, /\.navigation-tabs__link--active[^{}]*\{background:var\(--accent-soft\);color:var\(--accent-text\)/);
+    assert.match(css, /@media\s*\(max-width:\s*640px\)\{[^@]*\.app-sidebar\{[^}]*transform:translate\(-105%\);visibility:hidden/);
+    assert.match(css, /@media\s*\(min-width:\s*641px\)\s*and \(max-width:\s*1120px\)\{\.app-layout\{--side:\s*67px/);
+    assert.doesNotMatch(css, /\.mobile-navigation|\.mobile-link/);
+    assert.match(css, /body\{min-width:0/);
+});
+
+test("appearance choices wrap at their natural width and search keeps its own minimum height", () => {
+    const appearance = readFileSync(join(build, manifest["Modules/Appearance/appearance.entry.scss"].file), "utf8");
+    assert.match(appearance, /\.appearance__choices>\.button\{[^}]*flex:1 0 auto;[^}]*max-width:100%;overflow-wrap:anywhere/);
+    assert.match(appearance, /\.appearance__color input\{[^}]*height:44px/);
+
+    const shell = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
+    assert.match(shell, /\.search-box__input\{[^}]*min-width:0;min-height:39px/);
+    assert.match(shell, /--control-height:\s*37px/);
+    assert.match(shell, /\.search-box__input:focus-visible\{outline:none;border-color:var\(--accent-outline\)/);
+});
+
+test("media shelf snap alignment includes its focus padding without visible scrollbars", () => {
+    const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
+    assert.match(css, /\.media-shelf__items\{[^}]*padding:4px 2px 8px;[^}]*scroll-padding-inline:2px;scrollbar-width:none/);
+    assert.match(css, /\.media-shelf__items::-webkit-scrollbar\{display:none\}/);
+});
+
+test("card status capsules reveal on keyboard focus and retain their hint", () => {
+    const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
+    assert.match(css, /\.media-card__surface:focus-within \.media-availability-badge__body/);
+    assert.match(css, /\.media-availability-badge:focus-visible \.media-availability-badge__hint\{display:block\}/);
+});
+
+test("availability dots share one palette with their compact expanded symbols", () => {
+    const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
+    assert.match(css, /\.media-availability-badge\{[^}]*min-width:44px;height:44px/);
+    assert.match(css, /\.media-availability-badge__body\{[^}]*max-width:12px;height:12px/);
+    assert.match(css, /\.media-availability--compact\{[^}]*width:16px;height:16px[^}]*background:none/);
+    assert.match(css, /--status-dot:\s*linear-gradient\(135deg, var\(--status-alternate\) 50%, var\(--status-color\) 50%\)/);
+    assert.ok(css.includes(".media-availability--partialotheraudio .media-availability__track{color:var(--status-alternate)}"));
+});
+
+test("shared cards are small, softly rounded covers with single-line text below and one action over them", () => {
+    const css = readFileSync(join(build, manifest["Pages/User/Library/Library.entry.scss"].file), "utf8");
+    assert.ok(css.includes(".media-image{display:block;width:100%;max-width:100%;height:auto;object-fit:cover}"));
+    assert.match(css, /\.media-card\{--card-width: 144px;--card-radius: 12px;/);
+    assert.match(css, /\.media-card__surface\{[^}]*overflow:hidden;border-radius:var\(--card-radius\)/);
+    assert.match(css, /\.media-card__progress\{[^}]*height:3px/);
+    assert.match(css, /\.media-card__progress-shell\{[^}]*inset:auto 8px 6px[^}]*border-radius:999px/);
+    assert.match(css, /\.media-card__actions\{[^}]*position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center/);
+    assert.match(css, /\.media-card__title\{[^}]*overflow:hidden[^}]*text-overflow:ellipsis;white-space:nowrap/);
+    assert.match(css, /\.media-card__info\{[^}]*overflow:hidden[^}]*white-space:nowrap/);
+    assert.match(css, /\.media-grid\{[^}]*minmax\(min\(100%,133px\),150px\)/);
+    assert.doesNotMatch(css, /\.media-card__surface\[data-expanded\]/);
+    assert.doesNotMatch(css, /media-card__genres|media-card__series|media-card__languages|media-card--minimal/);
+});
+
+test("card entry delegates one touch status handler and starts a trailer only from the delayed hover", () => {
+    const entry = manifest["Framework/Components/MediaCard.entry.ts"];
+    const script = readFileSync(join(build, entry.file), "utf8");
+    assert.ok(!script.includes("pointerover"), "Reimporting the entry must not recreate global listeners.");
+    const chunks = entry.imports?.map(key => readFileSync(join(build, manifest[key].file), "utf8")) ?? [];
+    assert.ok(chunks.some(chunk => chunk.includes("data-open") && chunk.includes("keydown")));
+    // The delayed hover preview is the one trailer embed: muted, from the privacy host, only after the delay.
+    assert.ok(chunks.every(chunk => !chunk.includes("youtube.com/embed")));
+    assert.ok(chunks.some(chunk => chunk.includes("youtube-nocookie.com/embed") && chunk.includes("autoplay=1&mute=1")));
+});
+
+test("manifest URLs are relative and cannot escape the asset root", () => {
+    for (const file of [...files, icons.file]) {
+        assert.ok(!file.startsWith("/") && !file.includes("..") && !file.includes("?"), file);
+    }
+});

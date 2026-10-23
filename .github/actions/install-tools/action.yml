@@ -1,0 +1,81 @@
+name: Install the test tools
+description: >-
+  The PostgreSQL 18 client (pg_dump matches the test database major; backups are part of the tests),
+  and when asked cjxl (libjxl-tools, small, from apt) and FFmpeg. FFmpeg is NOT installed with apt: its
+  dependency set is large and downloading it from the hosted mirrors stalled for minutes; a static
+  build from the FFmpeg-Builds releases is one download, cached between runs.
+
+inputs:
+  ffmpeg:
+    description: Install FFmpeg and ffprobe (static build, linked into /usr/bin)
+    default: 'false'
+  cjxl:
+    description: Install cjxl (libjxl-tools)
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Cache the static FFmpeg
+      if: inputs.ffmpeg == 'true'
+      id: ffmpeg-cache
+      uses: actions/cache@v6
+      with:
+        path: ~/ffmpeg-static
+        key: ffmpeg-static-n8.1-linux64-gpl-v1
+
+    - name: Install FFmpeg (static build)
+      if: inputs.ffmpeg == 'true'
+      shell: bash
+      env:
+        CACHE_HIT: ${{ steps.ffmpeg-cache.outputs.cache-hit }}
+      run: |
+        set -euo pipefail
+        dir="${HOME}/ffmpeg-static"
+        if [[ "${CACHE_HIT}" != "true" || ! -x "${dir}/ffmpeg" ]]; then
+          mkdir -p "${dir}"
+          url="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-linux64-gpl-8.1.tar.xz"
+          for attempt in 1 2 3; do
+            if curl -fsSL --retry 3 --retry-delay 3 --connect-timeout 20 --max-time 240 "${url}" -o "${RUNNER_TEMP}/ffmpeg.tar.xz"; then break; fi
+            echo "::warning::FFmpeg download attempt ${attempt} failed; retrying"
+            [[ "${attempt}" -lt 3 ]] || { echo "::error::The static FFmpeg could not be downloaded."; exit 1; }
+            sleep 5
+          done
+          tar -xJf "${RUNNER_TEMP}/ffmpeg.tar.xz" -C "${dir}" --strip-components=2 --wildcards '*/bin/ffmpeg' '*/bin/ffprobe'
+          rm -f "${RUNNER_TEMP}/ffmpeg.tar.xz"
+        fi
+        sudo ln -sf "${dir}/ffmpeg" /usr/bin/ffmpeg
+        sudo ln -sf "${dir}/ffprobe" /usr/bin/ffprobe
+        /usr/bin/ffmpeg -version | head -1
+        /usr/bin/ffprobe -version | head -1
+
+    - name: Install the PostgreSQL client and cjxl
+      shell: bash
+      env:
+        WITH_CJXL: ${{ inputs.cjxl }}
+      run: |
+        set -euo pipefail
+        # apt on hosted runners can stall (IPv6, a slow mirror): IPv4 is forced, every command has a time
+        # limit and the install is retried instead of hanging for minutes.
+        apt_opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::ForceIPv4=true -o Dpkg::Use-Pty=0)
+        sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+        curl -fsSL --retry 3 --retry-delay 2 --max-time 30 https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+        echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "${VERSION_CODENAME}")-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+        packages=(postgresql-client-18)
+        if [[ "${WITH_CJXL}" == "true" ]]; then packages+=(libjxl-tools); fi
+        installed=false
+        for attempt in 1 2 3; do
+          if sudo timeout 90 apt-get update -qq "${apt_opts[@]}" && sudo env DEBIAN_FRONTEND=noninteractive timeout 150 apt-get install -qq --yes --no-install-recommends "${apt_opts[@]}" "${packages[@]}"; then
+            installed=true
+            break
+          fi
+          echo "::warning::apt attempt ${attempt} failed or timed out; retrying"
+          sudo dpkg --configure -a || true
+          sleep 5
+        done
+        if [[ "${installed}" != "true" ]]; then
+          echo "::error::Installing the test tools failed three times."
+          exit 1
+        fi
+        echo "/usr/lib/postgresql/18/bin" >> "${GITHUB_PATH}"
+        /usr/lib/postgresql/18/bin/pg_dump --version

@@ -1,6 +1,12 @@
 .git
-.github
+.scratch
+.vs
 **/bin
 **/obj
-tests
-TestResults
+**/node_modules
+**/TestResults
+**/.env
+src/Jularr.Frontend/Properties
+src/Jularr.Frontend/wwwroot/build
+src/Jularr.Frontend/wwwroot/emulator
+src/Jularr.Frontend/Assets/Generated

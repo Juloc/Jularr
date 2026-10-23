@@ -1,0 +1,483 @@
+@use "./Brand";
+
+// The mockups' shell: a 252px sidebar (230px, then 67px with icons only on a tablet, a drawer on a phone) and a 78px header on the panel
+// colour, separated by 1px quiet lines, one lavender tint for the current place. The header is one row at every width.
+.app-layout {
+    --side: 252px;
+    --shell-header-offset: 80px;
+    display: grid;
+    min-height: 100dvh;
+    grid-template-columns: var(--side) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+}
+.app-main { grid-column: 2; grid-row: 2; width: 100%; max-width: 1830px; min-width: 0; margin: 0 auto; padding: 31px clamp(24px, 2.5vw, 44px) 85px; }
+
+.app-header {
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    backdrop-filter: blur(14px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    grid-column: 2;
+    grid-row: 1;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    height: 78px;
+    padding: 0 clamp(23px, 2.5vw, 44px);
+    border-bottom: 1px solid var(--line);
+}
+.app-header-brand, .app-header .app-menu-toggle, .app-sidebar-overlay { display: none; }
+
+// Area > Group > Page > Title; every part but the last links. A long trail scrolls instead of wrapping.
+.app-header-location {
+    flex: 1 1 0;
+    min-width: 0;
+    container: crumbs / inline-size;
+}
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    overflow-x: auto;
+    list-style: none;
+    white-space: nowrap;
+    font-size: var(--text-body);
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
+
+    &__item {
+        display: flex;
+        flex: none;
+        align-items: center;
+        color: var(--text);
+        font-weight: 810;
+
+        & + &::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            margin: 0 12px 0 8px;
+            border-top: 1.5px solid var(--muted);
+            border-right: 1.5px solid var(--muted);
+            transform: rotate(45deg);
+        }
+
+        & > a {
+            color: var(--muted);
+            text-decoration: none;
+            font-weight: 400;
+
+            &:hover { color: var(--accent-text); text-decoration: underline; }
+        }
+    }
+}
+// A part with sub-pages is a link on a wide header and a menu of those pages on a narrow one.
+.breadcrumb__item--menu .link-menu { display: none; }
+.breadcrumb__item .link-menu__summary { min-height: 40px; color: var(--muted); font-weight: 400; }
+.breadcrumb__item .link-menu__list { left: 12px; }
+
+// Narrow header: only the last two parts.
+@container crumbs (max-width: 460px) {
+    .breadcrumb__item:nth-last-child(n + 3) { display: none; }
+    .breadcrumb__item:nth-last-child(2)::before { display: none; }
+    .breadcrumb__item--menu > .breadcrumb__link { display: none; }
+    .breadcrumb__item--menu .link-menu { display: block; }
+}
+
+// The header search: an outlined pill with its icon; on a phone only the icon until it takes focus.
+.app-search {
+    display: flex;
+    flex: 0 1 min(26vw, 370px);
+    align-items: center;
+    min-width: 185px;
+    margin-left: auto;
+    height: 39px;
+    padding: 0 13px;
+    gap: 9px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    background: var(--field);
+    color: var(--muted);
+
+    &:focus-within { border-color: var(--accent-outline); }
+
+    &__icon { display: grid; flex: none; place-items: center; cursor: text; }
+
+    .search-box { flex: 1; max-width: none; }
+
+    .search-box__input {
+        min-height: 37px;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+
+        &:focus-visible { outline: none; }
+    }
+}
+
+// The slash key focuses the search (Pages/Shared/Shell.entry.ts); the hint is for a keyboard only.
+.app-search__hint {
+    flex: none;
+    padding: 3px 5px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--surface);
+    font: inherit;
+    font-size: var(--text-small);
+    line-height: 1.2;
+}
+@media (pointer: coarse) { .app-search__hint { display: none; } }
+
+// The header's round buttons: 36px on the quiet line, the lavender tint and the soft purple edge on hover.
+.app-header .button--icon { flex: none; color: var(--muted); &:hover:not(:disabled) { background: var(--accent-soft); } }
+.theme-toggle > span { display: inline-grid; place-items: center; }
+.theme-toggle > .theme-toggle__sun { display: none; }
+html[data-mode="dark"] .theme-toggle { & > .theme-toggle__moon { display: none; } & > .theme-toggle__sun { display: inline-grid; } }
+@media (prefers-color-scheme: dark) {
+    html[data-mode="system"] .theme-toggle { & > .theme-toggle__moon { display: none; } & > .theme-toggle__sun { display: inline-grid; } }
+}
+
+// The avatar: the profile's initials on a soft accent gradient, linking to the profile settings.
+.app-avatar {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 35px;
+    height: 35px;
+    border: 3px solid var(--surface);
+    border-radius: 50%;
+    outline: 1px solid var(--line);
+    background: linear-gradient(145deg, color-mix(in oklab, var(--accent) 30%, #fff), color-mix(in oklab, var(--accent) 62%, #fff));
+    color: color-mix(in oklab, var(--accent) 70%, #000);
+    font-size: var(--text-small);
+    font-weight: 830;
+    text-decoration: none;
+    text-transform: uppercase;
+}
+
+.app-notifications {
+    position: relative;
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: var(--icon-button);
+    height: var(--icon-button);
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--muted);
+    text-decoration: none;
+
+    &:hover, &.is-active { border-color: var(--accent-outline); background: var(--accent-soft); color: var(--accent-text); }
+}
+.app-notifications__count {
+    position: absolute;
+    top: 2px;
+    right: 0;
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+}
+
+.app-sidebar {
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 11;
+    display: flex;
+    grid-column: 1;
+    grid-row: 1 / 3;
+    height: 100dvh;
+    flex-direction: column;
+    padding: 0;
+    border-right: 1px solid var(--line);
+    // Open areas may outgrow a short window.
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+}
+.sidebar-brand {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    height: 78px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--line);
+    text-decoration: none;
+    font-size: 21px;
+    font-weight: 850;
+    letter-spacing: -.8px;
+    white-space: nowrap;
+}
+.sidebar-navigation { display: grid; gap: 5px; padding: 21px 13px; }
+.sidebar-secondary { margin-top: auto; }
+
+// Original blossom framing.
+html[data-skin="original"] .app-header {
+    isolation: isolate;
+
+    &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background: url("../../Modules/Appearance/Original/blossom-branch.webp") right 35% / 250px auto no-repeat;
+        opacity: .18;
+        filter: hue-rotate(var(--art-hue-rotate)) saturate(var(--art-saturate));
+        mask-image: linear-gradient(to right, transparent 65%, #000);
+    }
+}
+html[data-skin="original"] .app-sidebar {
+    isolation: isolate;
+
+    &::before {
+        content: "";
+        position: absolute;
+        inset: auto 0 0;
+        height: 300px;
+        z-index: -1;
+        pointer-events: none;
+        background: url("../../Modules/Appearance/Original/blossom-branch.webp") left bottom / auto 100% no-repeat;
+        opacity: var(--blossom-opacity);
+        filter: hue-rotate(var(--art-hue-rotate)) saturate(var(--art-saturate));
+        mask-image: linear-gradient(to top, #000 55%, transparent);
+    }
+}
+html[data-skin="original"] .sidebar-secondary {
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+}
+.nav-link {
+    display: flex;
+    align-items: center;
+    min-height: 43px;
+    gap: 10px;
+    padding: 0 12px;
+    border-radius: var(--radius-control);
+    color: var(--text);
+    text-decoration: none;
+    font-size: var(--text-body);
+    font-weight: 740;
+    transition: background-color var(--transition), color var(--transition);
+}
+.nav-link:hover { background-color: var(--surface-hover); }
+.nav-link.is-active { background-color: var(--accent-soft); color: var(--accent-text); }
+
+// The administration menu (the owner's proposal, variant B): a find field, then every group open under a thin line and a small name, an icon tile on each entry
+// (the current one in the accent), and a figure on the three entries whose work waits.
+.menu { display: block; padding: 12px 11px 22px; }
+.menu-find {
+    margin: 0 2px 14px;
+
+    .search-box { max-width: none; }
+    .search-box--inline .search-box__input { min-height: 37px; padding: 0 13px 0 38px; background: var(--field); font-size: var(--text-control); }
+    .search-box__icon { left: 13px; .ui-icon { width: 16px; height: 16px; } }
+}
+.menu-group {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+
+    &:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; }
+    &[hidden] { display: none; }
+
+    &__label {
+        display: flex;
+        align-items: center;
+        margin: 0;
+        padding: 0 12px 6px;
+        color: var(--muted);
+        font-size: var(--text-small);
+        font-weight: 800;
+        letter-spacing: 1.15px;
+        text-transform: uppercase;
+        transition: color var(--transition);
+    }
+    &--current &__label { color: var(--accent-text); }
+    &__entries { display: grid; gap: 2px; }
+}
+.menu-entry {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 34px;
+    padding: 0 10px 0 8px;
+    border-radius: var(--radius-control);
+    color: var(--text);
+    text-decoration: none;
+    font-size: 11.5px;
+    font-weight: 600;
+    transition: background-color var(--transition), color var(--transition);
+
+    &[hidden] { display: none; }
+    &:hover { background: var(--field); }
+
+    &__icon {
+        display: grid;
+        flex: none;
+        box-sizing: content-box;
+        padding: 5px;
+        border-radius: 9px;
+        color: var(--muted);
+        transition: background-color var(--transition), color var(--transition);
+    }
+    &:hover &__icon { color: var(--accent-text); }
+    &:not(.is-active):hover &__icon { background: var(--accent-soft); }
+
+    &__label {
+        flex: 1 1 auto;
+        min-width: 0;
+
+        .truncated__tip { max-width: 190px; }
+    }
+
+    &.is-active { background: var(--accent-soft); color: var(--accent-text); font-weight: 810; }
+    &.is-active &__icon { background: var(--accent); color: var(--accent-contrast); }
+}
+.menu-badge {
+    flex: none;
+    min-width: 20px;
+    margin-left: auto;
+    padding: 1px 7px;
+    border-radius: var(--radius-control);
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: var(--text-small);
+    font-weight: 800;
+    text-align: center;
+
+    &[hidden] { display: none; }
+}
+.menu-entry.is-active .menu-badge { background: var(--surface); }
+
+// The area of the administration: a small caps eyebrow above the areas.
+.nav-eyebrow {
+    flex: none;
+    margin: 0;
+    padding: 21px 23px 0;
+    color: var(--muted);
+    font-size: var(--text-small);
+    font-weight: 800;
+    letter-spacing: 1.15px;
+    text-transform: uppercase;
+}
+.nav-eyebrow + .sidebar-navigation { padding-top: 15px; }
+
+// Tablet: 230px, then a 67px bar of icons; the selected area is tinted, labels, chevrons and pages give way.
+@media (max-width: 1420px) {
+    .app-layout { --side: 230px; }
+    .app-main { padding: 28px 27px 70px; }
+}
+@media (min-width: 641px) and (max-width: 1120px) {
+    .app-layout { --side: 67px; }
+    .app-sidebar { overflow-x: clip; }
+    .sidebar-brand { justify-content: center; padding: 0 15px; }
+    .sidebar-brand .shell-brand__name, .sidebar-brand .shell-brand__attribution, .nav-eyebrow, .nav-link > span { display: none; }
+    .sidebar-navigation { padding: 20px 8px; }
+    .nav-eyebrow + .sidebar-navigation { padding-top: 20px; }
+    .nav-link { justify-content: center; padding: 0; }
+    .nav-link > .ui-icon { width: 21px; height: 21px; }
+
+    // The menu keeps its groups, thin lines and icon tiles; the find field, names and figures give way.
+    .menu { padding: 20px 8px 22px; }
+    .menu-find, .menu-group__label, .menu-entry__label, .menu-badge { display: none; }
+    .menu-group { margin-top: 8px; padding-top: 8px; }
+    .menu-entry { justify-content: center; padding: 0; min-height: 40px; }
+}
+
+// Phone: the sidebar is a drawer over a dimmed page, opened from the header's menu button; the header is one row of 65px.
+.app-sidebar-overlay { position: fixed; inset: 0; z-index: 19; background: #16122577; }
+@media (max-width: 640px) {
+    .app-layout { --side: 0px; --shell-header-offset: calc(65px + env(safe-area-inset-top)); display: block; }
+    .app-main { padding: 22px 13px 40px; }
+
+    .app-sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 20;
+        width: min(290px, 86vw);
+        height: 100dvh;
+        box-shadow: var(--shadow-menu);
+        transform: translateX(-105%);
+        visibility: hidden;
+        transition: transform .22s, visibility .22s;
+    }
+    .app-layout--menu-open .app-sidebar { transform: translateX(0); visibility: visible; }
+    .app-layout--menu-open .app-sidebar-overlay { display: block; }
+    .sidebar-brand { padding: 0 21px; }
+    .sidebar-navigation { padding: 18px 13px; }
+    .nav-eyebrow + .sidebar-navigation { padding-top: 15px; }
+
+    // Mark in the sidebar; the header has the menu button, the last two parts of the trail, search and inbox: always one row.
+    .app-header {
+        gap: 10px;
+        height: calc(65px + env(safe-area-inset-top));
+        padding: env(safe-area-inset-top) 14px 0;
+    }
+    .app-header .app-menu-toggle { display: inline-grid; }
+    .app-header .button--icon, .app-notifications { width: 34px; height: 34px; min-height: 34px; }
+    .app-avatar { width: 31px; height: 31px; }
+    .breadcrumb { font-size: var(--text-control); }
+    .breadcrumb__item:nth-last-child(n + 3) { display: none; }
+    .breadcrumb__item:nth-last-child(2)::before { display: none; }
+    .breadcrumb__item--menu > .breadcrumb__link { display: none; }
+    .breadcrumb__item--menu .link-menu { display: block; }
+
+    .app-search {
+        flex: none;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        min-width: 0;
+        margin-left: 0;
+        padding: 0;
+        border-color: var(--line);
+        border-radius: 50%;
+        background: var(--surface);
+        color: var(--muted);
+
+        &__icon { width: 100%; height: 100%; }
+        &__hint { display: none; }
+
+        // Hidden but focusable, so the icon's label can open it.
+        .search-box {
+            flex: none;
+            width: 1px;
+            height: 1px;
+            margin: -1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+        }
+
+        &:focus-within {
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            justify-content: flex-start;
+            width: auto;
+            height: auto;
+            padding: env(safe-area-inset-top) 14px 0;
+            border: 0;
+            border-radius: 0;
+            background: var(--surface);
+
+            .app-search__icon { width: auto; height: auto; }
+            .search-box { flex: 1; width: auto; height: auto; margin: 0; overflow: visible; clip-path: none; }
+        }
+    }
+}

@@ -1,0 +1,62 @@
+using System.Collections.Concurrent;
+using Jularr.Backend.Data.Common;
+using Microsoft.Extensions.Logging;
+
+namespace Jularr.Backend.Service.Core
+{
+    // The last warnings and errors of this process for the Owner; exceptions keep their type and message, never a stack trace.
+    internal sealed class RecentLogs(TimeProvider time) : ILoggerProvider
+    {
+        private const int Capacity = 1000;
+        private readonly ConcurrentQueue<RecentLogEntry> _entries = new();
+
+        // Follows the Diagnostics module.
+        public bool IsEnabled { get; private set; } = true;
+
+        public ILogger CreateLogger(string categoryName) => new Logger(this, categoryName);
+
+        public void Enable(bool enabled)
+        {
+            IsEnabled = enabled;
+            if (!enabled) _entries.Clear();
+        }
+
+        // Newest first.
+        public IReadOnlyList<RecentLogEntry> Read(int count) => [.. _entries.Reverse().Take(count)];
+
+        public void Dispose()
+        {
+        }
+
+        private void Add(RecentLogEntry entry)
+        {
+            _entries.Enqueue(entry);
+            while (_entries.Count > Capacity && _entries.TryDequeue(out _))
+            {
+            }
+        }
+
+        private sealed class Logger(RecentLogs owner, string category) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => owner.IsEnabled && logLevel is >= LogLevel.Warning and < LogLevel.None;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                if (!IsEnabled(logLevel))
+                {
+                    return;
+                }
+
+                var message = formatter(state, exception);
+                if (exception is not null) message += " (" + exception.GetType().Name + ": " + exception.Message + ")";
+                owner.Add(new RecentLogEntry(owner.Now(), logLevel, category, TextLimit.Cut(message, 2000)!));
+            }
+        }
+
+        private DateTime Now() => time.GetUtcNow().UtcDateTime;
+    }
+
+    internal sealed record RecentLogEntry(DateTime At, LogLevel Level, string Category, string Message);
+}

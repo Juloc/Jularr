@@ -1,9 +1,0 @@
-@using Jularr.Web.Features.Localization
-@model (UiNavigationItem Item, UiTextBundle Ui)
-<li>
-    <a class="profile-row" href="@Model.Item.Href">
-        <partial name="_AppIcon" model="Model.Item.Icon" />
-        <span class="profile-row-label">@Model.Ui[Model.Item.LabelKey]</span>
-        <span class="profile-row-chevron" aria-hidden="true">›</span>
-    </a>
-</li>

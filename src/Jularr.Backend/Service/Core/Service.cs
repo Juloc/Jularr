@@ -1,0 +1,338 @@
+using System.Data;
+using System.Diagnostics;
+using Jularr.Backend.Data;
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Sql;
+using Jularr.Backend.Infrastructure.Sql;
+
+namespace Jularr.Backend.Service.Core
+{
+    public abstract class Service : IServiceDefinition
+    {
+        private ServiceRuntime? _runtime;
+
+        private protected ServiceRuntime Runtime => _runtime ?? throw new InvalidOperationException("The service runtime has not been bound.");
+
+        internal void BindRuntime(ServiceRuntime runtime)
+        {
+            ArgumentNullException.ThrowIfNull(runtime);
+            if (Interlocked.CompareExchange(ref _runtime, runtime, null) is not null)
+            {
+                throw new InvalidOperationException("A service runtime can only be bound once.");
+            }
+        }
+
+        public abstract void ValidateDefinition();
+        public abstract ServiceOperationType OperationType { get; }
+        public abstract Type DefaultResultType { get; }
+        public abstract ServiceArea ServiceArea { get; }
+    }
+
+    public abstract class Service<TParameters, TData> : Service
+    {
+        private readonly Lazy<ServiceDefinition> _definition;
+        private readonly AsyncLocal<Invocation?> _invocation = new();
+
+        private Invocation Current => _invocation.Value ?? throw new InvalidOperationException("Service state is only available during an authorized invocation.");
+        protected TParameters Parameters => Current.Parameters;
+        protected TData Data => Current.Data;
+        private protected LogicContext Context => Current.Context;
+        protected ServiceCaller Auth => Current.Caller;
+        protected Type ResultType => Current.ResultType;
+        protected CancellationToken CancellationToken => Current.CancellationToken;
+        protected PageRequest Page => Current.Page ?? throw new InvalidOperationException("This invocation has no PageRequest.");
+
+        protected Service()
+        {
+            _definition = new Lazy<ServiceDefinition>(BuildDefinition);
+        }
+
+        protected abstract ServiceArea Area { get; }
+        protected abstract ServiceOperationType GetOperationType();
+        protected abstract IReadOnlyList<ServiceResultType> GetResultTypes();
+        protected abstract ModuleRequirement GetInstanceModules(TParameters parameters);
+        protected abstract ServicePermission GetPermission(TParameters parameters, Type resultType);
+        protected virtual void ValidateParameters(TParameters parameters)
+        {
+        }
+
+        protected virtual IsolationLevel? GetTransaction(TParameters parameters) => null;
+        protected virtual PageRequest? GetPageRequest(TParameters parameters) => null;
+        protected virtual Task ValidatePermissions(TParameters parameters) => Task.CompletedTask;
+        protected virtual Task<IServiceOutput> OnRead() => throw new InvalidOperationException("The Read hook is not implemented.");
+        protected virtual Task<IServiceOutput> OnCreate() => throw new InvalidOperationException("The Create hook is not implemented.");
+        protected virtual Task<IServiceOutput> OnUpdate() => throw new InvalidOperationException("The Update hook is not implemented.");
+        protected virtual Task<IServiceOutput> OnDelete() => throw new InvalidOperationException("The Delete hook is not implemented.");
+        protected virtual Task<IServiceOutput> OnExecute() => throw new InvalidOperationException("The Execute hook is not implemented.");
+
+        // Runs once the service's writes are committed: in-memory state that follows them changes only then.
+        protected virtual void OnCommitted()
+        {
+        }
+
+        public override void ValidateDefinition() => _ = _definition.Value;
+        public override ServiceOperationType OperationType => _definition.Value.OperationType;
+        public override Type DefaultResultType => _definition.Value.DefaultResultType;
+        public override ServiceArea ServiceArea => Area;
+
+        public Task<IServiceOutput> ExecuteAsync(TParameters parameters, TData data, CancellationToken cancellationToken = default)
+        {
+            ValidateDefinition();
+            var definition = _definition.Value;
+            return RunAsync(parameters, data, definition.DefaultResultType, definition, cancellationToken);
+        }
+
+        public Task<IServiceOutput> ExecuteAsync(TData data = default!, CancellationToken cancellationToken = default) =>
+            ExecuteAsync(BaseParameters.CreateEmpty<TParameters>(), data, cancellationToken);
+
+        public Task<TOutput> ExecuteAsync<TOutput>(TData data = default!, CancellationToken cancellationToken = default) where TOutput : IServiceOutput =>
+            ExecuteAsync<TOutput>(BaseParameters.CreateEmpty<TParameters>(), data, cancellationToken);
+
+        public async Task<TOutput> ExecuteAsync<TOutput>(TParameters parameters, TData data, CancellationToken cancellationToken = default) where TOutput : IServiceOutput
+        {
+            ValidateDefinition();
+            var definition = _definition.Value;
+            return (TOutput)await RunAsync(parameters, data, typeof(TOutput), definition, cancellationToken);
+        }
+
+        // Large uploads check the caller and permission before their body is read.
+        public Task AuthorizeAsync(TParameters parameters, CancellationToken cancellationToken) =>
+            RequireCallerAsync(parameters ?? BaseParameters.CreateEmpty<TParameters>(), _definition.Value.DefaultResultType, cancellationToken);
+
+        private async Task<(ServiceCaller Caller, ServicePermission Permission)> RequireCallerAsync(TParameters parameters, Type resultType, CancellationToken cancellationToken)
+        {
+            var caller = await Runtime.Gate.RequireCallerAsync(Area, cancellationToken);
+            if (caller is null || caller.Area != Area || string.IsNullOrWhiteSpace(caller.PrincipalKey))
+            {
+                throw new UnauthorizedAccessException("The service caller has not been verified for this area.");
+            }
+
+            var permission = GetPermission(parameters, resultType) ?? throw new InvalidOperationException("A service permission must be declared.");
+            await Runtime.Gate.RequireAccessAsync(caller, permission, cancellationToken);
+            return (caller, permission);
+        }
+
+        // Timed per call; only server faults count as errors.
+        private async Task<IServiceOutput> RunAsync(TParameters parameters, TData data, Type resultType, ServiceDefinition definition, CancellationToken cancellationToken)
+        {
+            var started = Stopwatch.GetTimestamp();
+            var failed = false;
+            try
+            {
+                return await RunCoreAsync(parameters, data, resultType, definition, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException && ServiceError.FromException(exception).StatusCode >= 500)
+            {
+                failed = true;
+                throw;
+            }
+            finally
+            {
+                Runtime.Timings.Record(Area + "/" + GetType().Name, Stopwatch.GetElapsedTime(started), failed);
+            }
+        }
+
+        private async Task<IServiceOutput> RunCoreAsync(TParameters parameters, TData data, Type resultType, ServiceDefinition definition, CancellationToken cancellationToken)
+        {
+            parameters ??= BaseParameters.CreateEmpty<TParameters>();
+            ArgumentNullException.ThrowIfNull(data);
+
+            // Normalize once for API and Razor callers, then validate.
+            if (parameters is BaseData parameterData)
+            {
+                parameters = (TParameters)(object)parameterData.Normalized();
+                ((BaseData)(object)parameters).Validate();
+            }
+
+            if (data is BaseData inputData)
+            {
+                data = (TData)(object)inputData.Normalized();
+                ((BaseData)(object)data).Validate();
+            }
+
+            var modules = GetInstanceModules(parameters) ?? throw new InvalidOperationException("The module requirement cannot be null.");
+
+            var page = GetPageRequest(parameters);
+            ValidateParameters(parameters);
+
+            if (!definition.ResultTypes.Contains(resultType))
+            {
+                throw new InvalidOperationException("The requested result type is not declared by this service.");
+            }
+
+            // Verify caller and permission.
+            var (caller, permission) = await RequireCallerAsync(parameters, resultType, cancellationToken);
+
+            // Own the transaction boundary.
+            await using var sql = Runtime.CreateSqlContext();
+            var isolation = GetTransaction(parameters);
+            var needsTransaction = definition.OperationType != ServiceOperationType.Execute || isolation.HasValue;
+
+            if (needsTransaction)
+            {
+                var mode = definition.OperationType == ServiceOperationType.Read ? SqlAccessMode.ReadOnly : SqlAccessMode.ReadWrite;
+                if (mode == SqlAccessMode.ReadOnly)
+                {
+                    sql.PrepareReadTransaction(isolation ?? IsolationLevel.ReadCommitted);
+                }
+                else
+                {
+                    await sql.BeginAsync(mode, isolation ?? IsolationLevel.ReadCommitted, cancellationToken);
+                }
+            }
+
+            var canMutate = definition.OperationType != ServiceOperationType.Read;
+            var context = new LogicContext(sql);
+
+            if (canMutate && needsTransaction)
+            {
+                await Runtime.Gate.RequireTransactionalAccessAsync(caller, permission, context, cancellationToken);
+            }
+            else if (definition.OperationType == ServiceOperationType.Execute)
+            {
+                // Recheck access per batch.
+                context.SetTransactionalAccessCheck(async (logic, token) =>
+                {
+                    await Runtime.Gate.RequireTransactionalAccessAsync(caller, permission, logic, token);
+                    if (modules.Mode != ModuleRequirementMode.None)
+                    {
+                        await Runtime.Gate.RequireModulesAsync(modules, logic, true, token);
+                    }
+                });
+            }
+
+            // Keep authorization lock ordering.
+            if (needsTransaction || modules.Mode == ModuleRequirementMode.None)
+            {
+                await Runtime.Gate.RequireModulesAsync(modules, context, canMutate, cancellationToken);
+            }
+            else
+            {
+                // Authorize before external work.
+                await context.ExecuteBatchAsync((_, _) => Task.FromResult(true), cancellationToken);
+            }
+
+            // Bind this invocation only.
+            var previous = _invocation.Value;
+            _invocation.Value = new Invocation(parameters, data, resultType, caller, context, cancellationToken, page);
+            try
+            {
+                await ValidatePermissions(parameters);
+                cancellationToken.ThrowIfCancellationRequested();
+                var result = await (definition.OperationType switch
+                {
+                    ServiceOperationType.Read => OnRead(),
+                    ServiceOperationType.Create => OnCreate(),
+                    ServiceOperationType.Update => OnUpdate(),
+                    ServiceOperationType.Delete => OnDelete(),
+                    ServiceOperationType.Execute => OnExecute(),
+                    _ => throw new InvalidOperationException("The service operation is unavailable.")
+                });
+
+                // Validate before committing.
+                if (result is null || result.GetType() != resultType)
+                {
+                    throw new InvalidOperationException("The service returned an undeclared or incorrect result type.");
+                }
+
+                if (result is BaseData output)
+                {
+                    try
+                    {
+                        output.Validate();
+                    }
+                    catch (DataValidationException exception)
+                    {
+                        throw new InvalidOperationException("The service returned invalid data.", exception);
+                    }
+                }
+
+                if (needsTransaction)
+                {
+                    await sql.CommitAsync(cancellationToken);
+                }
+
+                OnCommitted();
+                return result;
+            }
+            finally
+            {
+                _invocation.Value = previous;
+            }
+        }
+
+        private ServiceDefinition BuildDefinition()
+        {
+            var operationType = GetOperationType();
+            if (!Enum.IsDefined(operationType))
+            {
+                throw new InvalidOperationException("A service must declare a valid operation type.");
+            }
+
+            var declaredTypes = GetResultTypes()?.ToArray() ?? throw new InvalidOperationException("A service must declare result types.");
+            if (declaredTypes.Length == 0 || declaredTypes.Count(result => result.IsDefault) != 1
+                || declaredTypes.Any(result => !typeof(IServiceOutput).IsAssignableFrom(result.Type) || result.Type.IsAbstract || result.Type.IsInterface)
+                || declaredTypes.Select(result => result.Type).Distinct().Count() != declaredTypes.Length)
+            {
+                throw new InvalidOperationException("Result types must be concrete and unique, with exactly one default.");
+            }
+
+            return new ServiceDefinition(operationType, declaredTypes.Select(result => result.Type).ToHashSet(), declaredTypes.Single(result => result.IsDefault).Type);
+        }
+
+        private sealed record ServiceDefinition(ServiceOperationType OperationType, HashSet<Type> ResultTypes, Type DefaultResultType);
+        private sealed record Invocation(TParameters Parameters, TData Data, Type ResultType, ServiceCaller Caller, LogicContext Context, CancellationToken CancellationToken, PageRequest? Page);
+    }
+
+    public abstract class UserService<TParameters, TData> : Service<TParameters, TData>
+    {
+        protected sealed override ServiceArea Area => ServiceArea.User;
+    }
+
+    public abstract class AdminService<TParameters, TData> : Service<TParameters, TData>
+    {
+        protected sealed override ServiceArea Area => ServiceArea.Admin;
+    }
+
+    public abstract class SystemService<TParameters, TData> : Service<TParameters, TData>
+    {
+        protected sealed override ServiceArea Area => ServiceArea.System;
+    }
+
+    public abstract class PublicService<TParameters, TData> : Service<TParameters, TData>
+    {
+        protected sealed override ServiceArea Area => ServiceArea.Public;
+        protected sealed override ServicePermission GetPermission(TParameters parameters, Type resultType) => ServicePermission.Public;
+    }
+
+    public abstract class PublicService<TParameters> : PublicService<TParameters, NoData>
+    {
+        protected sealed override ServiceOperationType GetOperationType() => ServiceOperationType.Read;
+
+        public Task<IServiceOutput> ExecuteAsync(TParameters parameters = default!, CancellationToken cancellationToken = default) => base.ExecuteAsync(parameters, default, cancellationToken);
+
+        public Task<TOutput> ExecuteAsync<TOutput>(TParameters parameters = default!, CancellationToken cancellationToken = default) where TOutput : IServiceOutput
+            => base.ExecuteAsync<TOutput>(parameters, default, cancellationToken);
+    }
+
+    public abstract class UserService<TParameters> : UserService<TParameters, NoData>
+    {
+        protected sealed override ServiceOperationType GetOperationType() => ServiceOperationType.Read;
+
+        public Task<IServiceOutput> ExecuteAsync(TParameters parameters, CancellationToken cancellationToken = default) => base.ExecuteAsync(parameters, default, cancellationToken);
+
+        public Task<TOutput> ExecuteAsync<TOutput>(TParameters parameters, CancellationToken cancellationToken = default) where TOutput : IServiceOutput
+            => base.ExecuteAsync<TOutput>(parameters, default, cancellationToken);
+    }
+
+    public abstract class AdminService<TParameters> : AdminService<TParameters, NoData>
+    {
+        protected sealed override ServiceOperationType GetOperationType() => ServiceOperationType.Read;
+
+        public Task<IServiceOutput> ExecuteAsync(TParameters parameters, CancellationToken cancellationToken = default) => base.ExecuteAsync(parameters, default, cancellationToken);
+
+        public Task<TOutput> ExecuteAsync<TOutput>(TParameters parameters, CancellationToken cancellationToken = default) where TOutput : IServiceOutput
+            => base.ExecuteAsync<TOutput>(parameters, default, cancellationToken);
+    }
+}

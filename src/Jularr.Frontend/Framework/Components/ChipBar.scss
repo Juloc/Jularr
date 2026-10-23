@@ -1,0 +1,105 @@
+// A capsule of filter chips grouped by area; the container decides how much of each group shows.
+.chip-bar {
+    container: chip-bar / inline-size;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+
+    &__chips {
+        display: flex;
+        flex: 1;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    &__tools {
+        display: flex;
+        flex: none;
+        gap: 6px;
+        margin-left: auto;
+    }
+
+    &__pill,
+    &__master,
+    &__chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--muted);
+        font-size: var(--text-control);
+        font-weight: 760;
+        text-decoration: none;
+        white-space: nowrap;
+
+        &:hover { color: var(--accent-text); }
+    }
+
+    &__pill,
+    &__master {
+        min-height: 36px;
+        padding: 0 14px;
+        border-radius: var(--radius-control);
+    }
+
+    &__pill {
+        border: 1px solid var(--accent-line);
+
+        &--selected { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); &:hover { color: var(--accent-contrast); } }
+    }
+
+    &__group {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 3px;
+        border: 1px solid var(--accent-line);
+        border-radius: var(--radius-control);
+        background: var(--accent-soft);
+    }
+
+    &__master {
+        color: var(--accent-text);
+
+        &--selected { background: var(--surface); }
+        &--solo { background: var(--accent); color: var(--accent-contrast); &:hover { color: var(--accent-contrast); } }
+    }
+
+    &__inner {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding-left: 5px;
+        border-left: 1px solid var(--accent-line);
+    }
+
+    &__chip {
+        min-height: 30px;
+        padding: 0 9px;
+        border-radius: var(--radius-control);
+        font-size: var(--text-small);
+
+        &--selected { background: var(--surface); color: var(--text); }
+    }
+
+    // Single types are chosen in the filter dialog when the capsule gets narrow.
+    @container chip-bar (max-width: 900px) {
+        &__inner { display: none; }
+    }
+
+    @container chip-bar (max-width: 520px) {
+        &__chips { flex-wrap: nowrap; justify-content: space-between; }
+        &__pill { min-width: 46px; justify-content: center; padding: 0; }
+        &__pill span,
+        &__master span { display: none; }
+        &__group { padding: 2px; border: 0; background: transparent; }
+        &__master { width: 36px; padding: 0; justify-content: center; }
+    }
+}

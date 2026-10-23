@@ -1,0 +1,13 @@
+// The module step: the starting sets, then the form with the name, the basic functions, the media groups and the other modules, one under the other.
+.setup-modules {
+    display: grid;
+    gap: 16px;
+
+    &__form > .ui-form {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+    }
+
+    // The name keeps its field width; the groups and the button take the whole row.
+    &__form > .ui-form > .ui-field { max-width: 360px; }
+}

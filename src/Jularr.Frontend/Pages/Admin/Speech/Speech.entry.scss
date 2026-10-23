@@ -1,0 +1,26 @@
+.speech-models-toolbar {
+    .list-toolbar__tools { flex: 1; flex-wrap: wrap; justify-content: flex-end; }
+    .search-box { flex: 1 1 14rem; }
+    .choice-select { flex: 1 1 9rem; min-width: 0; }
+    .choice-select__control { width: 100%; max-width: none; }
+}
+
+.speech-models {
+    --list-columns: minmax(12rem, 1fr) 5rem 5rem 11rem minmax(18rem, auto);
+    --list-columns-medium: minmax(12rem, 1fr) 11rem minmax(16rem, auto);
+    --list-columns-narrow: minmax(12rem, 1fr) 11rem minmax(16rem, auto);
+}
+
+// A row's switch is saved by the page's pill, so the row holding only its save button is gone; the conditions to accept stay on one line beside the switch.
+[data-save-ready] .speech-models .list-actions > .ui-form[data-save] > .ui-form__actions:not(:has(> :not([data-form-save]))) { display: none; }
+.speech-models .list-actions .ui-form { flex-wrap: nowrap; align-items: center; gap: 12px; }
+
+.speech-models__metadata {
+    overflow-wrap: anywhere;
+}
+
+.speech-models__sample {
+    display: grid;
+    gap: .35rem;
+    justify-items: start;
+}

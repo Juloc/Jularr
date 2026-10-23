@@ -1,0 +1,24 @@
+// The requests on the list kit: the grid of its columns at three widths and the live status of a row.
+.requests-list {
+    --list-columns: minmax(230px, 2.4fr) minmax(170px, 1.3fr) minmax(100px, .9fr) minmax(150px, .9fr) minmax(130px, 1fr) minmax(210px, 1.3fr);
+    --list-columns-medium: minmax(230px, 2.4fr) minmax(170px, 1.3fr) minmax(150px, .9fr) minmax(130px, 1fr) minmax(210px, 1.3fr);
+    --list-columns-narrow: minmax(200px, 2.2fr) minmax(170px, 1.3fr) minmax(130px, 1fr) minmax(210px, 1.3fr);
+}
+
+// The pill, and under it the bar with its numbers on one line, so a row with progress is as high as one without.
+.live-progress.requests-status {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    align-items: center;
+    justify-items: start;
+    gap: 6px 8px;
+    min-width: 0;
+
+    .state-chip { grid-column: 1 / -1; }
+    .live-progress__bar { grid-column: 1; width: 100%; min-width: 0; height: 6px; }
+    .live-progress__facts { grid-column: 1 / -1; max-width: 100%; overflow: hidden; color: var(--muted); font-size: var(--text-small); text-overflow: ellipsis; white-space: nowrap; }
+    .live-progress__bar:not([hidden]) + .live-progress__facts { grid-column: 2; }
+    [hidden] { display: none; }
+
+    &.requests-status--drawer { grid-template-columns: minmax(0, 1fr); justify-items: stretch; .live-progress__bar, .live-progress__facts { grid-column: 1; } .state-chip { justify-self: start; } }
+}

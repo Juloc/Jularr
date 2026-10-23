@@ -1,0 +1,57 @@
+name: Image
+
+# Container smoke for packaging/schema PRs; source-only PRs use the fast gates.
+# All source changes are still checked in the assembled image after merge.
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - 'compose.yaml'
+      - '.dockerignore'
+      - 'database/**'
+      - '.github/workflows/image.yml'
+  push:
+    branches: [clean-start]
+    paths:
+      - 'Dockerfile'
+      - 'compose.yaml'
+      - '.dockerignore'
+      - 'database/**'
+      - 'src/**'
+      - '.github/workflows/image.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  minimal-compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      # Local builds are faster here than exporting gigabytes of remote layer cache.
+      # Docker Compose still validates the exact image this job just built.
+      - name: Build the image
+        run: docker build --tag ghcr.io/juloc/jularr:ci .
+      - name: Start the shipped compose.yaml with nothing but its variables
+        env:
+          JULARR_VERSION: ci
+          JULARR_DB_PASSWORD: ci-only-database-password
+        run: |
+          mkdir -p media
+          docker compose up --detach --wait --wait-timeout 120 postgres
+          docker compose up --detach jularr
+          for attempt in $(seq 1 60); do
+            status=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8097/Setup || true)
+            if [ "$status" = "200" ]; then break; fi
+            sleep 2
+          done
+          docker compose logs jularr | tail -50
+          test "$status" = "200"
+          curl --silent http://127.0.0.1:8097/Setup | grep -q 'name="PasswordConfirmation"'
+          docker compose exec -T jularr sh -c 'test -d /data/keys && ls /data'

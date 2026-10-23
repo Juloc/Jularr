@@ -1,7 +1,5 @@
 name: Authorship
 
-# Runs for every pull request and push to main, including Android-only changes that CI ignores,
-# so it can be the only required status check on main.
 on:
   push:
     branches: [main, dev]
@@ -29,11 +27,15 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           if [[ "${EVENT_NAME}" == "pull_request" ]]; then
-            range="${BASE_SHA}..${HEAD_SHA}"
+            # The event's base SHA can predate target-branch fast-forwards.
+            # Checkout fetched all branches; verify every commit outside that actual target.
+            current_base="$(git rev-parse --verify "refs/remotes/origin/${BASE_REF}")"
+            range="${current_base}..${HEAD_SHA}"
           elif [[ -n "${BASE_SHA}" && ! "${BASE_SHA}" =~ ^0+$ ]]; then
             range="${BASE_SHA}..${HEAD_SHA}"
           else

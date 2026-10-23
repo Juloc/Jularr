@@ -1,0 +1,6632 @@
+﻿{
+ "locale": "ja",
+ "name": "日本語",
+ "reviewed": false,
+ "enabled": false,
+ "texts": {
+  "progress.saveFailed": [
+   "Progress could not be saved. Jularr will retry temporary failures.",
+   "進捗を保存できませんでした。一時的な失敗の場合、Jularr は再試行します。"
+  ],
+  "discover.loadRecommendations": [
+   "Load recommendations",
+   "おすすめを読み込む"
+  ],
+  "design.art.washi": [
+   "Washi paper",
+   "和紙"
+  ],
+  "design.art.blossom": [
+   "Blossom branch",
+   "桜の枝"
+  ],
+  "design.art.fuji": [
+   "Fuji landscape",
+   "富士の風景"
+  ],
+  "design.art.torii": [
+   "Torii landscape",
+   "鳥居の風景"
+  ],
+  "design.art.mascot": [
+   "Jularr mascot",
+   "Jularr のマスコット"
+  ],
+  "appearance.accent": [
+   "Accent color",
+   "アクセントカラー"
+  ],
+  "appearance.jularrRed": [
+   "Jularr red",
+   "Jularr レッド"
+  ],
+  "appearance.jularrPurple": [
+   "Jularr purple",
+   "Jularr パープル"
+  ],
+  "appearance.accentDefault": [
+   "Use style default",
+   "スタイルの既定値を使う"
+  ],
+  "appearance.devicePreference": [
+   "Appearance choices are stored in this browser.",
+   "外観の選択はこのブラウザーに保存されます。"
+  ],
+  "design.title": [
+   "Design lab",
+   "デザインラボ"
+  ],
+  "design.cards.title": [
+   "Approved cover card states",
+   "承認済みのカバーカードの状態"
+  ],
+  "design.cards.notice": [
+   "Design samples only; bookmarks toggle locally and actions open a preview, without library playback, requests or account changes. Green: complete in the profile audio language. Yellow: complete in other audio languages. Orange: partial in the profile language. Yellow–orange: partial in other audio languages. Subtitles do not change this status. Hover longer for the official muted trailer.",
+   "デザインのサンプルのみです。ブックマークはローカルで切り替わり、操作はプレビューを開くだけで、ライブラリの再生、リクエスト、アカウントの変更は行われません。緑：プロフィールの音声言語で完全。黄：他の音声言語で完全。オレンジ：プロフィールの言語で一部のみ。黄橙：他の音声言語で一部のみ。字幕はこの状態に影響しません。長くホバーすると公式のミュート予告編が表示されます。"
+  ],
+  "design.introduction": [
+   "A development-only component workshop. These are labeled examples, not library records or working account actions. Changes to shared components affect the real pages.",
+   "開発専用のコンポーネント工房です。ラベル付きのサンプルであり、ライブラリのレコードや実際のアカウント操作ではありません。共有コンポーネントを変更すると実際のページにも反映されます。"
+  ],
+  "design.controls": [
+   "Buttons and icons",
+   "ボタンとアイコン"
+  ],
+  "design.icons": [
+   "Original Jularr icon catalog",
+   "Jularr オリジナルのアイコン一覧"
+  ],
+  "design.tagGenre": [
+   "Fantasy",
+   "ファンタジー"
+  ],
+  "design.tagSubtitles": [
+   "Subtitles",
+   "字幕"
+  ],
+  "design.toggleOff": [
+   "Off example",
+   "オフの例"
+  ],
+  "design.toggleOn": [
+   "On example",
+   "オンの例"
+  ],
+  "design.toggleNotice": [
+   "These switches demonstrate local control states only. They do not save settings.",
+   "これらのスイッチはローカルでの操作状態を示すだけで、設定は保存されません。"
+  ],
+  "design.imageCredit": [
+   "Development artwork examples from TMDB. Poster and film artwork rights belong to their respective owners.",
+   "TMDB の開発用アートワークの例です。ポスターおよび映画のアートワークの権利はそれぞれの権利者に帰属します。"
+  ],
+  "design.trailerCredit": [
+   "Official Your Name trailer from TOHO. Playback connects to YouTube after Play or a sustained hover on cards with a trailer.",
+   "TOHO による『君の名は。』の公式予告編です。再生すると、または予告編付きのカードに長くホバーすると YouTube に接続します。"
+  ],
+  "media.preview.title": [
+   "Title preview",
+   "タイトルのプレビュー"
+  ],
+  "media.preview.close": [
+   "Close preview",
+   "プレビューを閉じる"
+  ],
+  "media.preview.playTrailer": [
+   "Play trailer",
+   "予告編を再生"
+  ],
+  "media.preview.noTrailer": [
+   "No trailer available",
+   "予告編はありません"
+  ],
+  "media.preview.externalTrailer": [
+   "Trailer unavailable here? Open it on YouTube.",
+   "ここで予告編を見られませんか？ YouTube で開く。"
+  ],
+  "media.preview.seriesStatus": [
+   "Series status",
+   "シリーズの状況"
+  ],
+  "media.preview.availability": [
+   "Library availability",
+   "ライブラリの入手状況"
+  ],
+  "media.preview.requestStatus": [
+   "Request status",
+   "リクエストの状況"
+  ],
+  "media.preview.downloadStatus": [
+   "Download status",
+   "ダウンロードの状況"
+  ],
+  "media.preview.noDownload": [
+   "No active download",
+   "進行中のダウンロードはありません"
+  ],
+  "design.branding": [
+   "Branding and Original artwork",
+   "ブランディングとオリジナルアートワーク"
+  ],
+  "design.forms": [
+   "Forms and validation",
+   "フォームと検証"
+  ],
+  "design.layouts": [
+   "Layouts and navigation",
+   "レイアウトとナビゲーション"
+  ],
+  "design.media": [
+   "Media components",
+   "メディアコンポーネント"
+  ],
+  "design.player": [
+   "Player controls",
+   "プレーヤーのコントロール"
+  ],
+  "design.playerNotice": [
+   "Layout preview only. No playback session or stream is started here.",
+   "レイアウトのプレビューのみです。ここでは再生セッションもストリームも開始されません。"
+  ],
+  "design.primary": [
+   "Primary",
+   "プライマリ"
+  ],
+  "design.secondary": [
+   "Secondary",
+   "セカンダリ"
+  ],
+  "design.disabled": [
+   "Disabled",
+   "無効"
+  ],
+  "design.selected": [
+   "Selected",
+   "選択中"
+  ],
+  "design.exampleTitle": [
+   "Example work",
+   "サンプル作品"
+  ],
+  "design.exampleOtherTitle": [
+   "Another example work",
+   "別のサンプル作品"
+  ],
+  "design.exampleContext": [
+   "Component example",
+   "コンポーネントの例"
+  ],
+  "design.exampleOverview": [
+   "Artwork, title, context and actions use the same media components as Library and Discover.",
+   "アートワーク、タイトル、コンテキスト、操作には、ライブラリや発見と同じメディアコンポーネントを使用しています。"
+  ],
+  "design.exampleStatus": [
+   "Preview only",
+   "プレビューのみ"
+  ],
+  "design.primaryArea": [
+   "Primary area",
+   "プライマリエリア"
+  ],
+  "design.secondaryArea": [
+   "Secondary area",
+   "セカンダリエリア"
+  ],
+  "design.validationExample": [
+   "Validation example",
+   "検証の例"
+  ],
+  "design.search": [
+   "Search component examples",
+   "検索コンポーネントの例"
+  ],
+  "setup.start.title": [
+   "Start and system",
+   "開始とシステム"
+  ],
+  "setup.owner.userName": [
+   "User name",
+   "ユーザー名"
+  ],
+  "setup.owner.passwordConfirmation": [
+   "Confirm password",
+   "パスワードの確認"
+  ],
+  "setup.owner.create": [
+   "Create Owner",
+   "オーナーを作成"
+  ],
+  "setup.owner.closed": [
+   "Initial Owner creation is no longer available.",
+   "最初のオーナーの作成はできなくなりました。"
+  ],
+  "account.field.email": [
+   "Email",
+   "メールアドレス"
+  ],
+  "account.field.password": [
+   "Password",
+   "パスワード"
+  ],
+  "account.field.userName": [
+   "Username or email",
+   "ユーザー名またはメールアドレス"
+  ],
+  "account.login.hidePassword": [
+   "Hide password",
+   "パスワードを隠す"
+  ],
+  "account.login.options": [
+   "Other sign-in options",
+   "その他のサインイン方法"
+  ],
+  "account.login.remember": [
+   "Stay signed in",
+   "サインインしたままにする"
+  ],
+  "account.login.showPassword": [
+   "Show password",
+   "パスワードを表示"
+  ],
+  "account.login.submit": [
+   "Sign in",
+   "サインイン"
+  ],
+  "account.login.title": [
+   "Sign in",
+   "サインイン"
+  ],
+  "account.logout.title": [
+   "Sign out",
+   "サインアウト"
+  ],
+  "account.logout.submit": [
+   "Sign out",
+   "サインアウト"
+  ],
+  "account.plex.start": [
+   "Sign in with Plex",
+   "Plex でサインイン"
+  ],
+  "account.plex.authorize": [
+   "Open Plex sign-in",
+   "Plex のサインインを開く"
+  ],
+  "account.plex.pending": [
+   "Confirm sign-in in Plex, then continue here. Wait at least five seconds before checking again.",
+   "Plex でサインインを確認してから、ここに戻って続行してください。再確認は5秒以上待ってください。"
+  ],
+  "account.plex.complete": [
+   "Check Plex confirmation",
+   "Plex の確認を確認"
+  ],
+  "account.plex.approval": [
+   "Your registration request is awaiting administrator approval.",
+   "登録リクエストは管理者の承認待ちです。"
+  ],
+  "account.profile.required": [
+   "Choose a profile before changing profile settings.",
+   "プロフィール設定を変更する前にプロフィールを選択してください。"
+  ],
+  "account.profile.title": [
+   "Choose a profile",
+   "プロフィールを選択"
+  ],
+  "account.profile.choose": [
+   "Use profile: ",
+   "使用するプロフィール： "
+  ],
+  "account.profile.locked": [
+   "PIN protected",
+   "PIN で保護"
+  ],
+  "account.profile.pin": [
+   "PIN",
+   "PIN"
+  ],
+  "account.profile.pin.submit": [
+   "Unlock",
+   "ロック解除"
+  ],
+  "profile.pin.save": [
+   "Save PIN",
+   "PIN を保存"
+  ],
+  "account.profile.add": [
+   "Add profile",
+   "プロフィールを追加"
+  ],
+  "request.quality": [
+   "Quality",
+   "画質"
+  ],
+  "reader.comic.page": [
+   "Page",
+   "ページ"
+  ],
+  "reader.comic.direction": [
+   "Reading direction",
+   "読む方向"
+  ],
+  "reader.comic.spread": [
+   "Two pages",
+   "見開き"
+  ],
+  "request.quality.default": [
+   "Default quality",
+   "既定の画質"
+  ],
+  "request.rule.add": [
+   "Add rule",
+   "ルールを追加"
+  ],
+  "request.rule.name": [
+   "Rule name",
+   "ルール名"
+  ],
+  "request.rule.description": [
+   "Description",
+   "説明"
+  ],
+  "request.rule.limit": [
+   "Requests per period",
+   "期間あたりのリクエスト数"
+  ],
+  "request.rule.limitColumn": [
+   "Request limit",
+   "リクエスト上限"
+  ],
+  "request.rule.period": [
+   "Rolling period",
+   "集計期間（日数）"
+  ],
+  "request.rule.approval": [
+   "Approval",
+   "承認"
+  ],
+  "request.rule.manual": [
+   "Manual approval",
+   "手動承認"
+  ],
+  "request.rule.automatic": [
+   "Automatic approval",
+   "自動承認"
+  ],
+  "request.rule.media": [
+   "Allowed request media",
+   "許可するリクエストのメディア"
+  ],
+  "request.rule.profiles": [
+   "Qualities requesters may choose",
+   "リクエスト者が選べる画質"
+  ],
+  "request.rule.isDefault": [
+   "Default",
+   "既定"
+  ],
+  "request.rule.delete": [
+   "Delete rule",
+   "ルールを削除"
+  ],
+  "request.rule.summary": [
+   "{0} requests / {1} days",
+   "{0} 件のリクエスト / {1} 日"
+  ],
+  "request.rule.unlimited": [
+   "Unlimited",
+   "無制限"
+  ],
+  "request.rule.profile": [
+   "Request rule",
+   "リクエストルール"
+  ],
+  "request.rule.inherited": [
+   "inherited",
+   "継承"
+  ],
+  "request.rule.overridden": [
+   "adjusted",
+   "調整済み"
+  ],
+  "request.rule.override": [
+   "Override the rule's values",
+   "ルールの値を上書き"
+  ],
+  "request.rule.inheritDefault": [
+   "Default ({0})",
+   "既定（{0}）"
+  ],
+  "account.profile.create": [
+   "Create profile",
+   "プロフィールを作成"
+  ],
+  "profile.delete.warning": [
+   "Deleting removes this profile's progress and lists and cancels its open requests. This cannot be undone.",
+   "削除すると、このプロフィールの進捗とリストが削除され、未処理のリクエストは取り消されます。この操作は元に戻せません。"
+  ],
+  "profile.delete.confirm": [
+   "Delete permanently",
+   "完全に削除"
+  ],
+  "profile.pin.remove": [
+   "Remove PIN",
+   "PIN を削除"
+  ],
+  "admin.accounts.profilePinReset": [
+   "Reset PIN",
+   "PIN をリセット"
+  ],
+  "account.profile.empty": [
+   "No profiles are assigned to this account.",
+   "このアカウントに割り当てられたプロフィールはありません。"
+  ],
+  "session.current": [
+   "Current session",
+   "現在のセッション"
+  ],
+  "session.other": [
+   "Other session",
+   "他のセッション"
+  ],
+  "session.created": [
+   "Signed in: ",
+   "サインイン： "
+  ],
+  "session.expires": [
+   "Expires: ",
+   "有効期限： "
+  ],
+  "session.revoke": [
+   "End session",
+   "セッションを終了"
+  ],
+  "common.next": [
+   "Next",
+   "次へ"
+  ],
+  "common.previous": [
+   "Previous",
+   "前へ"
+  ],
+  "common.actions": [
+   "Actions",
+   "操作"
+  ],
+  "common.edit": [
+   "Edit",
+   "編集"
+  ],
+  "common.save": [
+   "Save changes",
+   "変更を保存"
+  ],
+  "common.yes": [
+   "Yes",
+   "はい"
+  ],
+  "common.no": [
+   "No",
+   "いいえ"
+  ],
+  "admin.localization.title": [
+   "UI translations",
+   "UI翻訳"
+  ],
+  "admin.languages.title": [
+   "Languages",
+   "言語"
+  ],
+  "admin.languages.code": [
+   "Language code",
+   "言語コード"
+  ],
+  "admin.languages.name": [
+   "Language name",
+   "言語名"
+  ],
+  "admin.languages.enabled": [
+   "Enabled",
+   "有効"
+  ],
+  "admin.languages.disabled": [
+   "Disabled",
+   "無効"
+  ],
+  "admin.languages.direction": [
+   "Text direction",
+   "文字方向"
+  ],
+  "admin.languages.leftToRight": [
+   "Left to right",
+   "左から右"
+  ],
+  "admin.languages.rightToLeft": [
+   "Right to left",
+   "右から左"
+  ],
+  "admin.languages.add": [
+   "Add language",
+   "言語を追加"
+  ],
+  "admin.localization.key": [
+   "Resource key",
+   "リソースキー"
+  ],
+  "admin.localization.english": [
+   "English source",
+   "英語の原文"
+  ],
+  "admin.localization.description": [
+   "Translation context",
+   "翻訳のコンテキスト"
+  ],
+  "admin.localization.translation": [
+   "Translation",
+   "翻訳"
+  ],
+  "admin.localization.version": [
+   "Source version",
+   "原文のバージョン"
+  ],
+  "admin.localization.status": [
+   "Translation status",
+   "翻訳の状態"
+  ],
+  "admin.localization.status.missing": [
+   "Missing",
+   "未翻訳"
+  ],
+  "admin.localization.status.generated": [
+   "Generated",
+   "自動生成"
+  ],
+  "admin.localization.status.reviewed": [
+   "Reviewed",
+   "レビュー済み"
+  ],
+  "admin.localization.status.manual": [
+   "Manual",
+   "手動"
+  ],
+  "admin.localization.status.outdated": [
+   "Outdated",
+   "古い"
+  ],
+  "admin.accounts.title": [
+   "Accounts",
+   "アカウント"
+  ],
+  "admin.accounts.name": [
+   "Account name",
+   "アカウント名"
+  ],
+  "admin.accounts.role": [
+   "Role",
+   "ロール"
+  ],
+  "admin.accounts.role.owner": [
+   "Owner",
+   "オーナー"
+  ],
+  "admin.accounts.role.user": [
+   "User",
+   "ユーザー"
+  ],
+  "admin.accounts.role.mediamanager": [
+   "Media manager",
+   "メディアマネージャー"
+  ],
+  "admin.accounts.status": [
+   "Account status",
+   "アカウントの状態"
+  ],
+  "admin.accounts.mayConfirmSources": [
+   "May confirm source checks for own requests",
+   "自分のリクエストのソース確認を承認できる"
+  ],
+  "admin.accounts.enabled": [
+   "Enabled",
+   "有効"
+  ],
+  "admin.accounts.disabled": [
+   "Disabled / awaiting approval",
+   "無効 / 承認待ち"
+  ],
+  "admin.accounts.sessionWarning": [
+   "Role or status changes end this account's existing sessions. Enabling an account does not verify its email address.",
+   "ロールまたは状態を変更すると、このアカウントの既存のセッションが終了します。アカウントを有効にしても、メールアドレスは確認されません。"
+  ],
+  "admin.accounts.profileId": [
+   "Existing profile ID",
+   "既存のプロフィール ID"
+  ],
+  "admin.accounts.profiles": [
+   "Assigned profiles",
+   "割り当て済みのプロフィール"
+  ],
+  "admin.accounts.profileAdd": [
+   "Assign profile access",
+   "プロフィールへのアクセスを割り当てる"
+  ],
+  "admin.accounts.profileRemove": [
+   "Remove profile access and end affected sessions",
+   "プロフィールへのアクセスを削除し、影響するセッションを終了"
+  ],
+  "admin.accounts.profileOwned": [
+   "Owned profile: its ownership link cannot be removed here.",
+   "所有しているプロフィール：所有関係はここでは削除できません。"
+  ],
+  "admin.providers.title": [
+   "Providers",
+   "プロバイダー"
+  ],
+  "admin.plex.notConnected": [
+   "Plex server: not connected",
+   "Plex サーバー：未接続"
+  ],
+  "admin.plex.connected": [
+   "Plex server connected · {0} titles linked · last sync {1}",
+   "Plex サーバーに接続済み · {0} 件のタイトルをリンク済み · 最終同期 {1}"
+  ],
+  "admin.plex.notSynced": [
+   "not synced yet",
+   "未同期"
+  ],
+  "admin.plex.baseUrl": [
+   "Plex server address",
+   "Plex サーバーのアドレス"
+  ],
+  "admin.plex.token": [
+   "Plex token",
+   "Plex トークン"
+  ],
+  "admin.plex.connect": [
+   "Connect and test",
+   "接続してテスト"
+  ],
+  "admin.plex.sync": [
+   "Sync availability now",
+   "入手状況を今すぐ同期"
+  ],
+  "admin.plex.signIn": [
+   "Sign in with Plex",
+   "Plexでサインイン"
+  ],
+  "admin.plex.registration": [
+   "Plex users may register",
+   "Plexユーザーの登録を許可"
+  ],
+  "admin.plex.registrationApproval": [
+   "New accounts wait for approval",
+   "新しいアカウントは承認待ちにする"
+  ],
+  "admin.plex.registrationSections": [
+   "Libraries whose users may register",
+   "登録を許可するライブラリ"
+  ],
+  "hint.PlexFields.SignIn.info": [
+   "Accounts linked to Plex sign in through Plex.",
+   "Plexと連携したアカウントはPlexでサインインします。"
+  ],
+  "hint.PlexFields.Registration.info": [
+   "Someone with access to the connected server can ask for an account by signing in with Plex.",
+   "接続済みサーバーにアクセスできるユーザーは、Plexでサインインしてアカウントを申請できます。"
+  ],
+  "hint.PlexFields.RegistrationApproval.info": [
+   "An administrator enables each new account first.",
+   "新しいアカウントは管理者が先に有効にします。"
+  ],
+  "hint.PlexFields.SectionKeys.info": [
+   "None chosen: users of any library may register.",
+   "未選択の場合、どのライブラリのユーザーも登録できます。"
+  ],
+  "admin.plex.disconnect": [
+   "Disconnect Plex server",
+   "Plex サーバーを切断"
+  ],
+  "admin.plex.tested": [
+   "Plex {0} answered; libraries: {1}",
+   "Plex {0} が応答しました。ライブラリ：{1}"
+  ],
+  "admin.plex.synced": [
+   "{0} titles linked, {1} new titles added",
+   "{0} 件のタイトルをリンク、{1} 件の新しいタイトルを追加しました"
+  ],
+  "admin.mediaServer.notConnected": [
+   "Not connected",
+   "未接続"
+  ],
+  "admin.mediaServer.connected": [
+   "Connected · last progress sync {0}",
+   "接続済み · 最終進捗同期 {0}"
+  ],
+  "admin.mediaServer.baseUrl": [
+   "Server address",
+   "サーバーのアドレス"
+  ],
+  "admin.mediaServer.apiKey": [
+   "API key",
+   "API キー"
+  ],
+  "admin.mediaServer.tested": [
+   "{0} {1} answered; {2} users",
+   "{0} {1} が応答しました。ユーザー {2} 人"
+  ],
+  "admin.mediaServer.sync": [
+   "Sync progress now",
+   "進捗を今すぐ同期"
+  ],
+  "admin.mediaServer.synced": [
+   "{0} positions taken over, {1} sent to the server",
+   "{0} 件の再生位置を取り込み、{1} 件をサーバーに送信しました"
+  ],
+  "admin.mediaServer.disconnect": [
+   "Disconnect server",
+   "サーバーを切断"
+  ],
+  "admin.mediaServer.linked": [
+   "{0} shares progress with {1}",
+   "{0} は {1} と進捗を共有しています"
+  ],
+  "admin.mediaServer.proposed": [
+   "{0}: proposed profile {1}, not confirmed",
+   "{0}：プロフィール {1} を提案中（未確認）"
+  ],
+  "admin.mediaServer.unlinked": [
+   "{0} shares no progress",
+   "{0} は進捗を共有していません"
+  ],
+  "admin.mediaServer.profile": [
+   "Profile",
+   "プロフィール"
+  ],
+  "admin.mediaServer.noProfile": [
+   "None",
+   "なし"
+  ],
+  "admin.mediaServer.confirm": [
+   "Confirm",
+   "確認"
+  ],
+  "media.openInPlex": [
+   "Open in Plex",
+   "Plex で開く"
+  ],
+  "reader.title": [
+   "Reader",
+   "リーダー"
+  ],
+  "reader.notFound": [
+   "This book cannot be opened.",
+   "この本を開けません。"
+  ],
+  "reader.contents": [
+   "Contents",
+   "目次"
+  ],
+  "reader.notes": [
+   "Notes",
+   "メモ"
+  ],
+  "reader.bookmark": [
+   "Bookmark",
+   "しおり"
+  ],
+  "reader.bookmarks": [
+   "Bookmarks",
+   "しおり"
+  ],
+  "reader.bookmarkDelete": [
+   "Delete bookmark",
+   "しおりを削除"
+  ],
+  "reader.openPdf": [
+   "Open in a new tab",
+   "新しいタブで開く"
+  ],
+  "reader.originalPdf": [
+   "Original PDF",
+   "元の PDF"
+  ],
+  "reader.download": [
+   "Download",
+   "ダウンロード"
+  ],
+  "reader.download.epub": [
+   "EPUB",
+   "EPUB"
+  ],
+  "reader.download.translated": [
+   "EPUB in {0}, machine-translated",
+   "EPUB（{0}、機械翻訳）"
+  ],
+  "reader.translate.original": [
+   "Original",
+   "原文"
+  ],
+  "reader.language": [
+   "Language of this book",
+   "この本の言語"
+  ],
+  "reader.translating": [
+   "Translating",
+   "翻訳中"
+  ],
+  "reader.translationFailed": [
+   "Translation is unavailable right now; the text stays in its language.",
+   "現在翻訳を利用できません。テキストは元の言語のままです。"
+  ],
+  "reader.search": [
+   "Search in this book",
+   "この本の中を検索"
+  ],
+  "reader.searchEmpty": [
+   "The words do not appear in this book.",
+   "この本にその語句は見つかりません。"
+  ],
+  "reader.searchMore": [
+   "Only the first 50 sections with the words are listed.",
+   "その語句を含む最初の50セクションのみ表示しています。"
+  ],
+  "reader.notesEmpty": [
+   "Select text to highlight it or add a note.",
+   "テキストを選択してハイライトまたはメモを追加します。"
+  ],
+  "reader.notesPages": [
+   "Note pages",
+   "メモのページ"
+  ],
+  "reader.note": [
+   "Note",
+   "メモ"
+  ],
+  "reader.deleteNote": [
+   "Delete",
+   "削除"
+  ],
+  "reader.highlight.Yellow": [
+   "Yellow",
+   "黄"
+  ],
+  "reader.highlight.Green": [
+   "Green",
+   "緑"
+  ],
+  "reader.highlight.Blue": [
+   "Blue",
+   "青"
+  ],
+  "reader.highlight.Pink": [
+   "Pink",
+   "ピンク"
+  ],
+  "reader.saveNote": [
+   "Save note",
+   "メモを保存"
+  ],
+  "reader.settings": [
+   "Settings",
+   "設定"
+  ],
+  "reader.previous": [
+   "Previous",
+   "前へ"
+  ],
+  "reader.next": [
+   "Next",
+   "次へ"
+  ],
+  "reader.end": [
+   "The end",
+   "おわり"
+  ],
+  "reader.fontSize": [
+   "Text size",
+   "文字サイズ"
+  ],
+  "reader.smaller": [
+   "Smaller",
+   "小さく"
+  ],
+  "reader.larger": [
+   "Larger",
+   "大きく"
+  ],
+  "reader.theme": [
+   "Theme",
+   "テーマ"
+  ],
+  "reader.theme.light": [
+   "Light",
+   "ライト"
+  ],
+  "reader.theme.sepia": [
+   "Sepia",
+   "セピア"
+  ],
+  "reader.theme.dark": [
+   "Dark",
+   "ダーク"
+  ],
+  "reader.mode": [
+   "Layout",
+   "レイアウト"
+  ],
+  "reader.mode.scroll": [
+   "Scroll",
+   "スクロール"
+  ],
+  "reader.mode.paged": [
+   "Pages",
+   "ページ"
+  ],
+  "reader.notCached": [
+   "This book is still being saved for reading without the storage.",
+   "この本はストレージなしで読めるよう、まだ保存中です。"
+  ],
+  "details.read": [
+   "Read",
+   "読む"
+  ],
+  "admin.instance.title": [
+   "Instance settings",
+   "インスタンス設定"
+  ],
+  "admin.instance.name": [
+   "Instance name",
+   "インスタンス名"
+  ],
+  "admin.instance.readingCacheMegabytes": [
+   "Reading cache for offline storage",
+   "オフライン保存用の閲覧キャッシュ（MB）"
+  ],
+  "admin.instance.readingCacheWorks": [
+   "Reading cache: most recently read books",
+   "閲覧キャッシュ：最近読んだ本"
+  ],
+  "admin.instance.libraryScanIntervalHours": [
+   "Library scan interval",
+   "ライブラリのスキャン間隔（時間）"
+  ],
+  "admin.instance.historyRetentionDays": [
+   "Keep finished activity for",
+   "完了したアクティビティを保持する日数"
+  ],
+  "admin.instance.historyMegabytes": [
+   "Activity history size",
+   "アクティビティ履歴のサイズ（MB）"
+  ],
+  "admin.instance.collectionLimit": [
+   "Collections per profile",
+   "プロフィールあたりのコレクション数"
+  ],
+  "admin.instance.unitGroupLimit": [
+   "Sections per title",
+   "タイトルあたりのセクション数"
+  ],
+  "admin.instance.subtitleLanguages": [
+   "Wanted subtitle languages",
+   "欲しい字幕言語"
+  ],
+  "admin.instance.usersConfirmSources": [
+   "Users may confirm source checks",
+   "ユーザーがソース確認を承認できる"
+  ],
+  "admin.providers.scope": [
+   "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration.",
+   "登録済みの連携を有効または無効にします。接続とログインの機能には、引き続きホスト側の既存の設定が必要です。"
+  ],
+  "admin.providers.state": [
+   "Provider status",
+   "プロバイダーの状態"
+  ],
+  "admin.providers.enabled": [
+   "Enabled",
+   "有効"
+  ],
+  "admin.providers.disabled": [
+   "Disabled",
+   "無効"
+  ],
+  "profile.field.displayName": [
+   "Profile name",
+   "プロフィール名"
+  ],
+  "profile.field.uiLocale": [
+   "Language",
+   "言語"
+  ],
+  "profile.settings.title": [
+   "Profile settings",
+   "プロフィール設定"
+  ],
+  "profile.settings.saved": [
+   "Your changes were saved.",
+   "変更を保存しました。"
+  ],
+  "admin.library.description": [
+   "Imported media and file availability",
+   "インポート済みのメディアとファイルの入手状況"
+  ],
+  "admin.activity.title": [
+   "Activity",
+   "アクティビティ"
+  ],
+  "admin.requests.title": [
+   "Requests",
+   "リクエスト"
+  ],
+  "admin.rules.description": [
+   "Approval and request rules",
+   "承認とリクエストのルール"
+  ],
+  "admin.rules.title": [
+   "Rules",
+   "ルール"
+  ],
+  "admin.users.description": [
+   "Account assignments and request permissions",
+   "アカウントの割り当てとリクエスト権限"
+  ],
+  "admin.users.title": [
+   "Users",
+   "ユーザー"
+  ],
+  "admin.wanted.description": [
+   "Acquisition needs after request approval",
+   "リクエスト承認後の取得ニーズ"
+  ],
+  "admin.wanted.title": [
+   "Wanted",
+   "欲しいもの"
+  ],
+  "admin.acquisition.title": [
+   "Indexers & download clients",
+   "インデクサーとダウンロードクライアント"
+  ],
+  "admin.profiles.title": [
+   "Quality profiles",
+   "画質プロファイル"
+  ],
+  "admin.sources.title": [
+   "Sources",
+   "ソース"
+  ],
+  "sources.setUpAll": [
+   "Set up all available sources",
+   "利用可能なすべてのソースを設定"
+  ],
+  "sources.setUpResult": [
+   "Added: {0}. Waiting for a login or key: {1}.",
+   "追加：{0}。ログインまたはキーの待機中：{1}。"
+  ],
+  "sources.name": [
+   "Source",
+   "ソース"
+  ],
+  "sources.capabilities": [
+   "Can",
+   "できること"
+  ],
+  "sources.configured": [
+   "Set up",
+   "設定済み"
+  ],
+  "sources.add": [
+   "Add",
+   "追加"
+  ],
+  "sources.group.Books": [
+   "Books",
+   "本"
+  ],
+  "sources.group.Novels": [
+   "Light novels, web novels and fanfiction",
+   "ライトノベル、Web小説、二次創作"
+  ],
+  "sources.group.Manga": [
+   "Manga",
+   "マンガ"
+  ],
+  "sources.group.Audiobooks": [
+   "Audiobooks",
+   "オーディオブック"
+  ],
+  "sources.group.Acquisition": [
+   "Usenet",
+   "Usenet"
+  ],
+  "sources.group.Music": [
+   "Music",
+   "音楽"
+  ],
+  "sources.group.Games": [
+   "Games",
+   "ゲーム"
+  ],
+  "sources.group.Subtitles": [
+   "Subtitles",
+   "字幕"
+  ],
+  "request.platform": [
+   "Platform",
+   "プラットフォーム"
+  ],
+  "admin.takeover.title": [
+   "Take over",
+   "インポート"
+  ],
+  "takeover.source": [
+   "Application",
+   "アプリケーション"
+  ],
+  "takeover.source.Prowlarr": [
+   "Prowlarr (indexers)",
+   "Prowlarr（インデクサー）"
+  ],
+  "takeover.source.Sonarr": [
+   "Sonarr (indexers, client, missing series)",
+   "Sonarr（インデクサー、クライアント、未取得のシリーズ）"
+  ],
+  "takeover.source.Radarr": [
+   "Radarr (indexers, client, missing movies)",
+   "Radarr（インデクサー、クライアント、未取得の映画）"
+  ],
+  "takeover.source.Lidarr": [
+   "Lidarr (indexers, client, missing albums)",
+   "Lidarr（インデクサー、クライアント、未取得のアルバム）"
+  ],
+  "takeover.source.Readarr": [
+   "Readarr (indexers, client, missing books)",
+   "Readarr（インデクサー、クライアント、未取得の本）"
+  ],
+  "takeover.mode": [
+   "Mode",
+   "モード"
+  ],
+  "takeover.preview": [
+   "Preview",
+   "プレビュー"
+  ],
+  "takeover.apply": [
+   "Take over now",
+   "今すぐインポート"
+  ],
+  "takeover.run": [
+   "Read",
+   "読み取り"
+  ],
+  "takeover.empty": [
+   "Nothing to take over.",
+   "インポートするものはありません。"
+  ],
+  "takeover.kind": [
+   "Kind",
+   "種類"
+  ],
+  "takeover.kind.Indexer": [
+   "Indexer",
+   "インデクサー"
+  ],
+  "takeover.kind.Client": [
+   "Download client",
+   "ダウンロードクライアント"
+  ],
+  "takeover.kind.Movie": [
+   "Movie",
+   "映画"
+  ],
+  "takeover.kind.Series": [
+   "Series",
+   "TVシリーズ"
+  ],
+  "takeover.kind.Album": [
+   "Album",
+   "アルバム"
+  ],
+  "takeover.kind.Book": [
+   "Book",
+   "本"
+  ],
+  "takeover.kind.Profile": [
+   "Quality profile",
+   "画質プロファイル"
+  ],
+  "takeover.kind.Format": [
+   "Custom format",
+   "カスタムフォーマット"
+  ],
+  "takeover.kind.RootFolder": [
+   "Root folder",
+   "ルートフォルダー"
+  ],
+  "takeover.rootFolders": [
+   "Root folders",
+   "ルートフォルダー"
+  ],
+  "takeover.assign": [
+   "Take into this library",
+   "このライブラリに取り込む"
+  ],
+  "takeover.outcome.takeover_no_library": [
+   "No library of this type",
+   "この種類のライブラリがありません"
+  ],
+  "takeover.outcome.takeover_not_monitored": [
+   "Release type not monitored there",
+   "そちらではリリースの種類が監視されていません"
+  ],
+  "takeover.outcome.takeover_exists": [
+   "Already set up",
+   "設定済み"
+  ],
+  "takeover.outcome.takeover_needs_key": [
+   "Key needed",
+   "キーが必要"
+  ],
+  "takeover.outcome.takeover_will_add": [
+   "Will be added",
+   "追加予定"
+  ],
+  "takeover.outcome.takeover_added": [
+   "Added",
+   "追加済み"
+  ],
+  "takeover.outcome.takeover_no_id": [
+   "No provider id",
+   "プロバイダー ID がありません"
+  ],
+  "takeover.outcome.takeover_no_match": [
+   "No clear match",
+   "明確な一致なし"
+  ],
+  "takeover.outcome.takeover_will_want": [
+   "Will be wanted (paused)",
+   "監視対象になります（一時停止）"
+  ],
+  "takeover.outcome.takeover_wanted": [
+   "Wanted (paused)",
+   "監視を一時停止"
+  ],
+  "takeover.outcome.takeover_next_run": [
+   "Next run",
+   "次回の実行"
+  ],
+  "takeover.outcome.takeover_no_qualities": [
+   "No quality Jularr knows",
+   "Jularr が認識できる画質がありません"
+  ],
+  "takeover.outcome.takeover_format_skipped": [
+   "Not taken over: conditions Jularr does not support",
+   "インポートしません：Jularr が対応していない条件"
+  ],
+  "profile.monitoring": [
+   "Monitoring",
+   "監視"
+  ],
+  "profile.monitoring.types": [
+   "Release types and statuses",
+   "リリースの種類とステータス"
+  ],
+  "profile.monitoring.languages": [
+   "Languages",
+   "言語"
+  ],
+  "profile.monitoring.pages": [
+   "At least pages",
+   "最低ページ数"
+  ],
+  "sources.capability.Metadata": [
+   "metadata",
+   "メタデータ"
+  ],
+  "sources.capability.Search": [
+   "search",
+   "検索"
+  ],
+  "sources.capability.Download": [
+   "download",
+   "ダウンロード"
+  ],
+  "sources.capability.Monitoring": [
+   "chapter monitoring",
+   "章の監視"
+  ],
+  "sources.capability.Link": [
+   "link",
+   "リンク"
+  ],
+  "sources.capability.Subtitles": [
+   "Subtitles",
+   "字幕"
+  ],
+  "sources.availability.Ready": [
+   "Ready",
+   "準備完了"
+  ],
+  "sources.availability.Account": [
+   "Needs a login or key",
+   "ログインまたはキーが必要"
+  ],
+  "sources.availability.Planned": [
+   "Planned",
+   "予定"
+  ],
+  "sources.availability.ReferenceOnly": [
+   "Reference only",
+   "参照のみ"
+  ],
+  "profile.name": [
+   "Name",
+   "名前"
+  ],
+  "profile.qualities": [
+   "Allowed qualities",
+   "許可する画質"
+  ],
+  "profile.usage": [
+   "Used by",
+   "使用先"
+  ],
+  "profile.default": [
+   "Default",
+   "既定"
+  ],
+  "profile.add.Movie": [
+   "Add movie profile",
+   "映画用プロファイルを追加"
+  ],
+  "profile.add.Series": [
+   "Add series profile",
+   "TVシリーズ用プロファイルを追加"
+  ],
+  "profile.add.Book": [
+   "Add book profile",
+   "本用プロファイルを追加"
+  ],
+  "profile.add.LightNovel": [
+   "Add light novel profile",
+   "ライトノベル用プロファイルを追加"
+  ],
+  "profile.delete": [
+   "Delete profile",
+   "プロファイルを削除"
+  ],
+  "profile.isDefault": [
+   "Default for its media type",
+   "このメディアタイプの既定"
+  ],
+  "profile.upgradeAllowed": [
+   "Upgrade to better releases",
+   "より良いリリースにアップグレード"
+  ],
+  "profile.cutoff": [
+   "Stop upgrading at",
+   "アップグレードを止める画質"
+  ],
+  "profile.noCutoff": [
+   "No upgrades",
+   "アップグレードなし"
+  ],
+  "profile.section.general": [
+   "General",
+   "一般"
+  ],
+  "profile.section.qualities": [
+   "Qualities",
+   "画質"
+  ],
+  "profile.allowed": [
+   "Allowed",
+   "許可"
+  ],
+  "profile.minimumSize": [
+   "Minimum size",
+   "最小サイズ"
+  ],
+  "profile.maximumSize": [
+   "Maximum size",
+   "最大サイズ"
+  ],
+  "wanted.profile": [
+   "Quality profile",
+   "画質プロファイル"
+  ],
+  "wanted.library": [
+   "Library",
+   "ライブラリ"
+  ],
+  "setup.title": [
+   "Setup",
+   "セットアップ"
+  ],
+  "setup.steps": [
+   "Setup steps",
+   "セットアップの手順"
+  ],
+  "setup.step.Storage": [
+   "Storage",
+   "ストレージ"
+  ],
+  "setup.step.Indexers": [
+   "Indexers",
+   "インデクサー"
+  ],
+  "setup.step.Downloads": [
+   "Download clients",
+   "ダウンロードクライアント"
+  ],
+  "setup.step.Providers": [
+   "Providers",
+   "プロバイダー"
+  ],
+  "setup.step.Profiles": [
+   "Profiles",
+   "プロファイル"
+  ],
+  "setup.next": [
+   "Continue",
+   "続ける"
+  ],
+  "setup.finish": [
+   "Finish setup",
+   "セットアップを完了"
+  ],
+  "setup.check.library": [
+   "no library yet",
+   "まだライブラリがありません"
+  ],
+  "setup.check.tmdb": [
+   "Movies and series need a TMDB key.",
+   "映画とシリーズには TMDB キーが必要です。"
+  ],
+  "setup.check.indexer": [
+   "Arr+ has no indexer yet.",
+   "Arr+ にはまだインデクサーがありません。"
+  ],
+  "setup.check.downloader": [
+   "Arr+ has no download client yet.",
+   "Arr+ にはまだダウンロードクライアントがありません。"
+  ],
+  "setup.check.ffmpeg": [
+   "FFmpeg is not configured; files play only as they are.",
+   "FFmpeg が設定されていないため、ファイルはそのままの形式でのみ再生されます。"
+  ],
+  "admin.works.source": [
+   "Source",
+   "ソース"
+  ],
+  "admin.works.source.tmdb_movie": [
+   "TMDB",
+   "TMDB"
+  ],
+  "admin.works.source.tmdb_tv": [
+   "TMDB",
+   "TMDB"
+  ],
+  "admin.works.source.openlibrary": [
+   "Open Library",
+   "Open Library"
+  ],
+  "admin.works.source.anilist": [
+   "AniList",
+   "AniList"
+  ],
+  "admin.works.source.musicbrainz": [
+   "MusicBrainz",
+   "MusicBrainz"
+  ],
+  "admin.works.source.igdb": [
+   "IGDB",
+   "IGDB"
+  ],
+  "admin.matches.title": [
+   "AniList matches",
+   "AniList の一致"
+  ],
+  "admin.matches.empty": [
+   "No match waits for a decision.",
+   "判断待ちの一致はありません。"
+  ],
+  "admin.matches.hint": [
+   "For a series, choose the entry of its first season.",
+   "シリーズの場合は、第1シーズンのエントリーを選んでください。"
+  ],
+  "admin.matches.accept": [
+   "Use this entry",
+   "このエントリーを使う"
+  ],
+  "admin.matches.aniListId": [
+   "AniList entry number",
+   "AniList エントリー番号"
+  ],
+  "admin.matches.dismiss": [
+   "No AniList entry",
+   "AniList のエントリーなし"
+  ],
+  "admin.instance.media": [
+   "Media types",
+   "メディアタイプ"
+  ],
+  "admin.instance.media.noLibrary": [
+   "No library yet; nothing is downloaded for it.",
+   "まだライブラリがないため、ダウンロードは行われません。"
+  ],
+  "profile.media.hidden": [
+   "Hidden media types",
+   "非表示のメディアタイプ"
+  ],
+  "admin.accounts.profileMediaBlocked": [
+   "Blocked media types",
+   "ブロックするメディアタイプ"
+  ],
+  "wanted.library.default": [
+   "Default library",
+   "既定のライブラリ"
+  ],
+  "wanted.profile.default": [
+   "Default for this media type",
+   "このメディアタイプの既定"
+  ],
+  "wanted.release.block": [
+   "Block",
+   "ブロック"
+  ],
+  "wanted.release.unblock": [
+   "Allow again",
+   "再び許可"
+  ],
+  "acquisition.connection.name": [
+   "Name",
+   "名前"
+  ],
+  "acquisition.connection.type": [
+   "Type",
+   "種類"
+  ],
+  "acquisition.connection.type.Newznab": [
+   "Newznab indexer",
+   "Newznab インデクサー"
+  ],
+  "acquisition.connection.type.Sabnzbd": [
+   "SABnzbd",
+   "SABnzbd"
+  ],
+  "acquisition.connection.baseUrl": [
+   "Address",
+   "アドレス"
+  ],
+  "acquisition.connection.host": [
+   "Server",
+   "サーバー"
+  ],
+  "acquisition.connection.port": [
+   "Port",
+   "ポート"
+  ],
+  "acquisition.connection.ssl": [
+   "SSL",
+   "SSL"
+  ],
+  "form.info": [
+   "More about this field",
+   "この項目の詳細"
+  ],
+  "request.readsTranslated": [
+   "Not published in it; read translated",
+   "その言語では未刊行。翻訳で読めます"
+  ],
+  "hint.AccountFields.Email.placeholder": [
+   "name@example.com",
+   "name@example.com"
+  ],
+  "hint.AccountFields.Email.info": [
+   "Used to sign in and for password resets.",
+   "サインインとパスワードのリセットに使用します。"
+  ],
+  "hint.AccountFields.DisplayName.info": [
+   "Shown to other users, for example on requests.",
+   "リクエストなど、他のユーザーに表示されます。"
+  ],
+  "hint.AccountFields.AccountRoleTypeId.info": [
+   "Owner: everything. Media manager: titles, requests and wanted lists. User: watch, read and request.",
+   "オーナー：すべて。メディアマネージャー：タイトル、リクエスト、欲しいものリスト。ユーザー：視聴、閲覧、リクエスト。"
+  ],
+  "hint.AccountFields.IsEnabled.info": [
+   "A disabled account cannot sign in; its profiles and history stay.",
+   "無効なアカウントはサインインできません。プロフィールと履歴は残ります。"
+  ],
+  "hint.AccountFields.MayConfirmSources.info": [
+   "Lets this account confirm a found source itself instead of waiting for an administrator.",
+   "管理者を待たずに、見つかったソースをこのアカウント自身で承認できるようにします。"
+  ],
+  "hint.AccountSessionFields.DeviceName.placeholder": [
+   "Living room TV",
+   "リビングのテレビ"
+  ],
+  "hint.AccountSessionFields.DeviceName.info": [
+   "Empty shows the device's platform as its name.",
+   "空欄の場合、デバイスのプラットフォームが名前として表示されます。"
+  ],
+  "hint.ProfileFields.DisplayName.info": [
+   "The name shown when choosing a profile.",
+   "プロフィールを選ぶときに表示される名前です。"
+  ],
+  "hint.ProfileFields.UiLocaleId.info": [
+   "Language of the interface and of titles and summaries where a translation exists.",
+   "インターフェースの言語、および翻訳がある場合はタイトルとあらすじの言語です。"
+  ],
+  "hint.ProfilePinFields.Pin.info": [
+   "Three to six digits asked when switching to this profile.",
+   "このプロフィールに切り替えるときに求められる3～6桁の数字です。"
+  ],
+  "hint.AuthenticationFields.NewPassword.info": [
+   "At least 12 characters; a passphrase of several words is easiest to remember.",
+   "12文字以上。複数の単語から成るパスフレーズが覚えやすくおすすめです。"
+  ],
+  "hint.DevicePairingFields.Code.placeholder": [
+   "123456",
+   "123456"
+  ],
+  "hint.DevicePairingFields.Code.info": [
+   "The six-digit code the TV, phone or app shows.",
+   "テレビ、スマートフォン、アプリに表示される6桁のコードです。"
+  ],
+  "hint.AcquisitionConnectionFields.Host.placeholder": [
+   "news.newshosting.com",
+   "news.newshosting.com"
+  ],
+  "hint.AcquisitionConnectionFields.Host.info": [
+   "The server name from your Usenet provider, without nntp:// or https://.",
+   "Usenet プロバイダーのサーバー名です。nntp:// や https:// は付けません。"
+  ],
+  "hint.AcquisitionConnectionFields.Port.placeholder": [
+   "563 with SSL, 119 without",
+   "SSL あり 563、なし 119"
+  ],
+  "hint.AcquisitionConnectionFields.Port.info": [
+   "Empty uses 563 with SSL and 119 without. Some providers also offer 443 or 80.",
+   "空欄の場合、SSL ありは 563、なしは 119 を使います。プロバイダーによっては 443 や 80 も利用できます。"
+  ],
+  "hint.AcquisitionConnectionFields.UseSsl.info": [
+   "Encrypts the connection to the news server. Leave it on unless your provider has no SSL.",
+   "ニュースサーバーへの接続を暗号化します。プロバイダーが SSL に対応していない場合を除き、オンのままにしてください。"
+  ],
+  "hint.AcquisitionConnectionFields.Username.info": [
+   "The login from your provider; leave empty for open servers.",
+   "プロバイダーのログイン名です。オープンサーバーの場合は空欄にします。"
+  ],
+  "hint.AcquisitionConnectionFields.MaxConnections.placeholder": [
+   "8",
+   "8"
+  ],
+  "hint.AcquisitionConnectionFields.MaxConnections.info": [
+   "Parallel connections Jularr opens. Use at most what your plan allows; more is faster.",
+   "Jularr が開く並列接続の数です。契約で許可されている数までにしてください。多いほど高速です。"
+  ],
+  "hint.AcquisitionConnectionFields.Priority.placeholder": [
+   "1 to 100",
+   "1～100"
+  ],
+  "hint.AcquisitionConnectionFields.Priority.info": [
+   "1 comes first.",
+   "1が最優先です。"
+  ],
+  "hint.AcquisitionConnectionFields.IsEnabled.info": [
+   "A switched-off connection keeps its settings but is not used.",
+   "オフにした接続は設定を保持したまま使用されません。"
+  ],
+  "hint.AcquisitionConnectionFields.Categories.placeholder": [
+   "2000, 5000",
+   "2000, 5000"
+  ],
+  "hint.AcquisitionConnectionFields.Categories.info": [
+   "Newznab category numbers, separated by commas. Empty uses the usual ranges of each media type.",
+   "Newznab のカテゴリ番号をカンマで区切って指定します。空欄の場合は、各メディアタイプの通常の範囲を使います。"
+  ],
+  "hint.AcquisitionConnectionFields.MediaTypeIds.info": [
+   "None chosen: the indexer is asked for every media type.",
+   "未選択の場合：すべてのメディアタイプについてインデクサーに問い合わせます。"
+  ],
+  "hint.AcquisitionConnectionFields.SearchesAutomatically.info": [
+   "Manual only: the indexer is asked only when you search by hand.",
+   "手動のみ：手動で検索したときだけインデクサーに問い合わせます。"
+  ],
+  "hint.AcquisitionConnectionFields.QueryLimit.placeholder": [
+   "No limit",
+   "制限なし"
+  ],
+  "hint.AcquisitionConnectionFields.QueryLimit.info": [
+   "Searches per day, as your indexer plan allows; once reached it rests until midnight.",
+   "インデクサーの契約で許可されている1日あたりの検索回数です。上限に達すると深夜0時まで休止します。"
+  ],
+  "hint.AcquisitionConnectionFields.GrabLimit.placeholder": [
+   "No limit",
+   "制限なし"
+  ],
+  "hint.AcquisitionConnectionFields.GrabLimit.info": [
+   "Downloads per day, as your indexer plan allows.",
+   "インデクサーの契約で許可されている1日あたりのダウンロード数です。"
+  ],
+  "hint.AcquisitionConnectionFields.DownloadCategory.placeholder": [
+   "movies",
+   "movies"
+  ],
+  "hint.AcquisitionConnectionFields.DownloadCategory.info": [
+   "The SABnzbd category Jularr gives its downloads; empty uses SABnzbd's default.",
+   "Jularr がダウンロードに付ける SABnzbd のカテゴリです。空欄の場合は SABnzbd の既定を使います。"
+  ],
+  "hint.AcquisitionConnectionFields.RemotePath.placeholder": [
+   "/downloads/complete",
+   "/downloads/complete"
+  ],
+  "hint.AcquisitionConnectionFields.RemotePath.info": [
+   "Where SABnzbd says it stores finished downloads. Only needed when SABnzbd sees them under another path than Jularr.",
+   "SABnzbd が完了したダウンロードを保存すると報告する場所です。SABnzbd から見たパスが Jularr から見たパスと異なる場合にのみ必要です。"
+  ],
+  "hint.AcquisitionConnectionFields.LocalPath.placeholder": [
+   "/mnt/downloads/complete",
+   "/mnt/downloads/complete"
+  ],
+  "hint.AcquisitionConnectionFields.LocalPath.info": [
+   "The same folder as Jularr sees it.",
+   "Jularr から見た同じフォルダーです。"
+  ],
+  "hint.AcquisitionConnectionFields.SearchQuery.placeholder": [
+   "The Matrix 1999",
+   "The Matrix 1999"
+  ],
+  "hint.AcquisitionConnectionFields.SearchQuery.info": [
+   "A test search; it counts towards the indexer's daily limit.",
+   "テスト検索です。インデクサーの1日の上限に数えられます。"
+  ],
+  "hint.acquisition.Newznab.placeholder": [
+   "https://indexer.example.com",
+   "https://indexer.example.com"
+  ],
+  "hint.acquisition.Newznab.info": [
+   "The indexer's address as in Prowlarr or Sonarr, without /api.",
+   "Prowlarr や Sonarr と同じ形式の、/api を付けないインデクサーのアドレスです。"
+  ],
+  "hint.acquisition.Sabnzbd.placeholder": [
+   "http://192.168.1.10:8080",
+   "http://192.168.1.10:8080"
+  ],
+  "hint.acquisition.Sabnzbd.info": [
+   "SABnzbd's web address with its port.",
+   "ポートを含む SABnzbd の Web アドレスです。"
+  ],
+  "hint.acquisition.Opds.placeholder": [
+   "https://example.com/opds",
+   "https://example.com/opds"
+  ],
+  "hint.acquisition.Opds.info": [
+   "The address of the OPDS catalog feed.",
+   "OPDS カタログフィードのアドレスです。"
+  ],
+  "hint.acquisition.Gutenberg.placeholder": [
+   "https://gutendex.com",
+   "https://gutendex.com"
+  ],
+  "hint.acquisition.AnnasArchive.placeholder": [
+   "https://annas-archive.org",
+   "https://annas-archive.org"
+  ],
+  "hint.acquisition.AnnasArchive.info": [
+   "Only HTTPS; the member key travels in the address.",
+   "HTTPS のみ。メンバーキーはアドレスに含まれて送信されます。"
+  ],
+  "hint.acquisition.OpenSubtitles.placeholder": [
+   "https://api.opensubtitles.com",
+   "https://api.opensubtitles.com"
+  ],
+  "hint.acquisition.OpenSubtitles.info": [
+   "Only HTTPS.",
+   "HTTPS のみ。"
+  ],
+  "hint.acquisition.SubDl.placeholder": [
+   "https://api.subdl.com",
+   "https://api.subdl.com"
+  ],
+  "hint.acquisition.SubDl.info": [
+   "Only HTTPS.",
+   "HTTPS のみ。"
+  ],
+  "hint.AcquisitionProfileFields.IsDefault.info": [
+   "New requests of this media type use the default profile.",
+   "このメディアタイプの新しいリクエストは既定のプロファイルを使います。"
+  ],
+  "hint.AcquisitionProfileFields.UpgradeAllowed.info": [
+   "Replaces a present file with a better quality until the cutoff is reached.",
+   "目標画質に達するまで、既存のファイルをより高画質のものに置き換えます。"
+  ],
+  "hint.AcquisitionProfileFields.MinimumSizeMb.placeholder": [
+   "No minimum",
+   "最小なし"
+  ],
+  "hint.AcquisitionProfileFields.MinimumSizeMb.info": [
+   "Smaller releases are skipped, often fakes or samples.",
+   "これより小さいリリースはスキップされます。偽物やサンプルであることが多いためです。"
+  ],
+  "hint.AcquisitionProfileFields.MaximumSizeMb.placeholder": [
+   "No maximum",
+   "最大なし"
+  ],
+  "hint.AcquisitionProfileFields.MaximumSizeMb.info": [
+   "Larger releases are skipped.",
+   "これより大きいリリースはスキップされます。"
+  ],
+  "hint.RequestRuleFields.Description.info": [
+   "Shown to users the rule applies to.",
+   "このルールが適用されるユーザーに表示されます。"
+  ],
+  "hint.RequestRuleFields.MediaKeys.info": [
+   "The media types users of this rule may request.",
+   "このルールのユーザーがリクエストできるメディアタイプです。"
+  ],
+  "hint.RequestRuleFields.PeriodDays.placeholder": [
+   "7",
+   "7"
+  ],
+  "hint.RequestRuleFields.PeriodDays.info": [
+   "The limit counts requests of this many days.",
+   "上限は、この日数分のリクエストを数えます。"
+  ],
+  "hint.RequestRuleFields.RequestLimit.placeholder": [
+   "No limit",
+   "制限なし"
+  ],
+  "hint.RequestRuleFields.RequestLimit.info": [
+   "Requests allowed within the period.",
+   "期間内に許可されるリクエスト数です。"
+  ],
+  "hint.RequestRuleFields.IsAutomaticApproval.info": [
+   "Requests within the limit are approved without an administrator.",
+   "上限内のリクエストは管理者なしで承認されます。"
+  ],
+  "hint.RequestRuleFields.AcquisitionProfileIds.info": [
+   "Quality profiles users of this rule may choose.",
+   "このルールのユーザーが選べる画質プロファイルです。"
+  ],
+  "hint.RequestRuleFields.IsDefault.info": [
+   "Applies to every account without its own rule.",
+   "個別のルールがないすべてのアカウントに適用されます。"
+  ],
+  "hint.RequestRuleFields.IsOverridden.info": [
+   "This account uses its own limits instead of the default rule.",
+   "このアカウントは既定のルールではなく、独自の上限を使います。"
+  ],
+  "hint.AcquisitionReleaseFields.ParentUnitNumber.placeholder": [
+   "1",
+   "1"
+  ],
+  "hint.AcquisitionReleaseFields.ParentUnitNumber.info": [
+   "Season or volume to search; empty searches the whole title.",
+   "検索するシーズンまたは巻です。空欄の場合はタイトル全体を検索します。"
+  ],
+  "hint.AcquisitionReleaseFields.UnitStart.placeholder": [
+   "1",
+   "1"
+  ],
+  "hint.AcquisitionReleaseFields.UnitStart.info": [
+   "Episode or chapter to search; empty searches the whole season.",
+   "検索するエピソードまたは章です。空欄の場合はシーズン全体を検索します。"
+  ],
+  "hint.InstanceSettingsFields.Name.info": [
+   "Shown in the browser tab and on paired devices.",
+   "ブラウザーのタブとペアリング済みのデバイスに表示されます。"
+  ],
+  "hint.InstanceSettingsFields.PublicUrl.placeholder": [
+   "https://media.example.com/",
+   "https://media.example.com/"
+  ],
+  "hint.InstanceSettingsFields.PublicUrl.info": [
+   "The address Jularr is reached at from outside; the pairing QR code for TVs and apps points to it.",
+   "外部から Jularr にアクセスするためのアドレスです。テレビやアプリ用のペアリング QR コードがこのアドレスを指します。"
+  ],
+  "hint.InstanceSettingsFields.TrustedProxies.placeholder": [
+   "192.168.1.2, 172.16.0.0/12",
+   "192.168.1.2, 172.16.0.0/12"
+  ],
+  "hint.InstanceSettingsFields.TrustedProxies.info": [
+   "Reverse proxies whose forwarded client address Jularr believes, as addresses or ranges separated by commas. Empty without a proxy.",
+   "Jularr が転送されたクライアントアドレスを信頼するリバースプロキシを、アドレスまたは範囲をカンマで区切って指定します。プロキシがない場合は空欄にします。"
+  ],
+  "hint.InstanceSettingsFields.LibraryScanIntervalHours.placeholder": [
+   "24",
+   "24"
+  ],
+  "hint.InstanceSettingsFields.LibraryScanIntervalHours.info": [
+   "Hours between automatic library scans; 0 switches them off. Sleeping NAS are not woken.",
+   "自動ライブラリスキャンの間隔（時間）です。0でオフになります。スリープ中の NAS は起こされません。"
+  ],
+  "hint.InstanceSettingsFields.HistoryRetentionDays.placeholder": [
+   "30",
+   "30"
+  ],
+  "hint.InstanceSettingsFields.HistoryRetentionDays.info": [
+   "History and finished operations older than this are removed.",
+   "これより古い履歴と完了した操作は削除されます。"
+  ],
+  "hint.InstanceSettingsFields.HistoryMegabytes.placeholder": [
+   "10",
+   "10"
+  ],
+  "hint.InstanceSettingsFields.HistoryMegabytes.info": [
+   "The oldest history is removed once it is larger than this.",
+   "履歴がこのサイズを超えると、古いものから削除されます。"
+  ],
+  "hint.InstanceSettingsFields.CollectionLimit.placeholder": [
+   "100",
+   "100"
+  ],
+  "hint.InstanceSettingsFields.CollectionLimit.info": [
+   "Most collections a profile may keep.",
+   "プロフィールが保持できるコレクションの最大数です。"
+  ],
+  "hint.InstanceSettingsFields.UnitGroupLimit.placeholder": [
+   "100",
+   "100"
+  ],
+  "hint.InstanceSettingsFields.UnitGroupLimit.info": [
+   "Most episode or chapter groups a profile may keep.",
+   "プロフィールが保持できるエピソードまたは章グループの最大数です。"
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheMegabytes.placeholder": [
+   "2048",
+   "2048"
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheMegabytes.info": [
+   "Space for prepared books and comics; the oldest are removed first.",
+   "準備済みの本とコミック用の容量です。古いものから削除されます。"
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheWorks.placeholder": [
+   "100",
+   "100"
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheWorks.info": [
+   "Most books and comics kept prepared at once.",
+   "同時に準備済みで保持される本とコミックの最大数です。"
+  ],
+  "hint.InstanceSettingsFields.SubtitleLanguages.placeholder": [
+   "de, en",
+   "de, en"
+  ],
+  "hint.InstanceSettingsFields.SubtitleLanguages.info": [
+   "Two-letter languages searched automatically, in this order.",
+   "自動で検索する2文字の言語コードを、この順番で指定します。"
+  ],
+  "hint.InstanceSettingsFields.UsersConfirmSources.info": [
+   "Lets users confirm found sources for their own requests.",
+   "ユーザーが自分のリクエストで見つかったソースを承認できるようにします。"
+  ],
+  "hint.InstanceSettingsFields.KeepsReleases.info": [
+   "Keeps the earlier file when a new release of the same film, episode or volume is imported, instead of replacing it.",
+   "同じ映画、エピソード、巻の新しいリリースをインポートするとき、以前のファイルを置き換えずに残します。"
+  ],
+  "hint.InstanceSettingsFields.RecycleModeId.info": [
+   "Delete removes files for good. A recycle folder keeps them for the days below.",
+   "「削除」はファイルを完全に削除します。ごみ箱フォルダーは、下記の日数だけファイルを保持します。"
+  ],
+  "hint.InstanceSettingsFields.RecycleDays.placeholder": [
+   "7",
+   "7"
+  ],
+  "hint.InstanceSettingsFields.RecycleDays.info": [
+   "Days a removed file stays in the recycle folder; 0 keeps it until you remove it.",
+   "削除したファイルがごみ箱フォルダーに残る日数です。0なら手動で削除するまで保持します。"
+  ],
+  "hint.InstanceSettingsFields.RecyclePath.placeholder": [
+   "Recycle",
+   "Recycle"
+  ],
+  "hint.InstanceSettingsFields.RecyclePath.info": [
+   "A folder on the chosen storage, relative to its share.",
+   "選択したストレージ上の、共有からの相対パスのフォルダーです。"
+  ],
+  "hint.InstanceModuleFields.IsEnabled.info": [
+   "Switched-off modules disappear from menus and pages; their data stays.",
+   "オフにしたモジュールはメニューとページから消えますが、データは残ります。"
+  ],
+  "hint.UiLocaleFields.Locale.placeholder": [
+   "de-DE",
+   "de-DE"
+  ],
+  "hint.UiLocaleFields.Locale.info": [
+   "Language and region code, such as de-DE or pt-BR.",
+   "de-DE や pt-BR のような言語と地域のコードです。"
+  ],
+  "hint.UiLocaleFields.IsRightToLeft.info": [
+   "For Arabic, Hebrew and other right-to-left scripts.",
+   "アラビア語、ヘブライ語など右から左に書く文字体系用です。"
+  ],
+  "hint.UiTranslationFields.Text.info": [
+   "Placeholders in braces, such as {0}, must stay.",
+   "{0} のような波括弧のプレースホルダーはそのまま残す必要があります。"
+  ],
+  "hint.StorageMountFields.Host.placeholder": [
+   "nas.local",
+   "nas.local"
+  ],
+  "hint.StorageMountFields.Host.info": [
+   "The NAS name or IP address, without smb:// or nfs://.",
+   "NAS の名前または IP アドレスです。smb:// や nfs:// は付けません。"
+  ],
+  "hint.StorageMountFields.SharePath.placeholder": [
+   "/media",
+   "/media"
+  ],
+  "hint.StorageMountFields.SharePath.info": [
+   "The share or exported path on the NAS.",
+   "NAS 上の共有またはエクスポートされたパスです。"
+  ],
+  "hint.StorageMountFields.Username.info": [
+   "An account of the NAS with access to the share.",
+   "共有にアクセスできる NAS のアカウントです。"
+  ],
+  "hint.StorageMountFields.Domain.placeholder": [
+   "WORKGROUP",
+   "WORKGROUP"
+  ],
+  "hint.StorageMountFields.Password.info": [
+   "Leave empty to keep the saved one.",
+   "空欄の場合は保存済みのものを保持します。"
+  ],
+  "hint.mediaServer.baseUrl.placeholder": [
+   "http://192.168.1.10:8096",
+   "http://192.168.1.10:8096"
+  ],
+  "hint.StorageMountFields.Domain.info": [
+   "Only for Windows domains; usually empty.",
+   "Windows ドメイン専用です。通常は空欄です。"
+  ],
+  "hint.StorageMountFields.IsReadOnly.info": [
+   "Read-only storage is played and scanned, but downloads are never placed on it.",
+   "読み取り専用のストレージは再生とスキャンの対象になりますが、ダウンロードは配置されません。"
+  ],
+  "hint.StorageMountFields.WakeMacAddress.placeholder": [
+   "00:11:22:AA:BB:CC",
+   "00:11:22:AA:BB:CC"
+  ],
+  "hint.StorageMountFields.WakeMacAddress.info": [
+   "The NAS network card, for Wake-on-LAN.",
+   "Wake-on-LAN 用の NAS のネットワークカードです。"
+  ],
+  "hint.StorageMountFields.WakeBroadcastAddress.placeholder": [
+   "192.168.1.255",
+   "192.168.1.255"
+  ],
+  "hint.StorageMountFields.WakeBroadcastAddress.info": [
+   "The broadcast address of the NAS network; empty uses 255.255.255.255.",
+   "NAS のネットワークのブロードキャストアドレスです。空欄の場合は 255.255.255.255 を使います。"
+  ],
+  "hint.StorageMountFields.WakeOnDemand.info": [
+   "Wakes the NAS when something is played from it.",
+   "NAS から何かを再生するときに NAS を起こします。"
+  ],
+  "hint.SynologyFields.SynologyUrl.placeholder": [
+   "https://nas.local:5001",
+   "https://nas.local:5001"
+  ],
+  "hint.SynologyFields.SynologyUrl.info": [
+   "DSM's address, to show the NAS state and switch it on and off.",
+   "NAS の状態を表示し、オン・オフを切り替えるための DSM のアドレスです。"
+  ],
+  "hint.LibraryRootFields.RelativePath.placeholder": [
+   "Movies",
+   "Movies"
+  ],
+  "hint.LibraryRootFields.RelativePath.info": [
+   "The folder below the storage's share.",
+   "ストレージの共有の下にあるフォルダーです。"
+  ],
+  "hint.LibraryRootFields.MediaTypeId.info": [
+   "What the library holds; it decides naming, matching and downloads.",
+   "ライブラリが保持するものです。命名、照合、ダウンロードはこれによって決まります。"
+  ],
+  "hint.NamingPatternFields.Folder.placeholder": [
+   "{Title} ({Year})",
+   "{Title} ({Year})"
+  ],
+  "hint.NamingPatternFields.Folder.info": [
+   "Folder for each title, below the library; a slash starts the next folder.",
+   "ライブラリ配下のタイトルごとのフォルダーです。スラッシュで次のフォルダーが始まります。"
+  ],
+  "hint.NamingPatternFields.File.placeholder": [
+   "{Title} ({Year}) {Quality}",
+   "{Title} ({Year}) {Quality}"
+  ],
+  "hint.NamingPatternFields.File.info": [
+   "The placeholders below are filled for every file; the extension is added.",
+   "下のプレースホルダーはファイルごとに置き換えられ、拡張子が付加されます。"
+  ],
+  "hint.StoredFileFields.SubtitleLanguage.placeholder": [
+   "de",
+   "de"
+  ],
+  "hint.StoredFileFields.SubtitleLanguage.info": [
+   "Two-letter language of the subtitle.",
+   "字幕の2文字の言語コードです。"
+  ],
+  "hint.WorkFields.CanonicalTitle.info": [
+   "The title shown everywhere; providers' titles stay as alternatives.",
+   "あらゆる場所に表示されるタイトルです。プロバイダーのタイトルは別名として残ります。"
+  ],
+  "hint.WorkFields.ReleaseYear.placeholder": [
+   "1999",
+   "1999"
+  ],
+  "hint.WorkFields.ReleaseYear.info": [
+   "Helps tell titles of the same name apart when searching.",
+   "検索時に同名のタイトルを区別するのに役立ちます。"
+  ],
+  "hint.WorkMetadataFields.Query.placeholder": [
+   "The Matrix",
+   "マトリックス"
+  ],
+  "hint.WorkMetadataFields.Query.info": [
+   "A title, optionally with its year.",
+   "タイトル。必要に応じて公開年も指定できます。"
+  ],
+  "hint.CollectionFields.IsSmart.info": [
+   "A smart collection fills itself from the filters below.",
+   "スマートコレクションは、下のフィルターに従って自動的に内容が埋まります。"
+  ],
+  "hint.CollectionFields.ReleaseYear.placeholder": [
+   "Any year",
+   "指定なし"
+  ],
+  "hint.CollectionFields.OnlyAvailable.info": [
+   "Only titles that can be played or read now.",
+   "今すぐ再生または閲覧できるタイトルのみ。"
+  ],
+  "hint.CollectionFields.OnlyUnfinished.info": [
+   "Hides titles this profile has finished.",
+   "このプロフィールが完了したタイトルを非表示にします。"
+  ],
+  "hint.FranchiseFields.Name.placeholder": [
+   "The Lord of the Rings",
+   "ロード・オブ・ザ・リング"
+  ],
+  "hint.FranchiseFields.Name.info": [
+   "Empty lets the providers decide the series again.",
+   "空欄にすると、シリーズはプロバイダーの情報で再び決まります。"
+  ],
+  "hint.FranchiseFields.Position.placeholder": [
+   "2",
+   "2"
+  ],
+  "hint.FranchiseFields.Position.info": [
+   "The title's place in the series; 1.5 sits between 1 and 2.",
+   "シリーズ内でのタイトルの位置です。1.5 は 1 と 2 の間になります。"
+  ],
+  "hint.IdentityMatchFields.ProviderId.placeholder": [
+   "21",
+   "21"
+  ],
+  "hint.IdentityMatchFields.ProviderId.info": [
+   "The provider's number for the title, from its address.",
+   "アドレスに含まれる、プロバイダーでのタイトルの番号です。"
+  ],
+  "hint.MediaAssetFields.UnitNumber.placeholder": [
+   "1",
+   "1"
+  ],
+  "hint.MediaAssetFields.UnitNumber.info": [
+   "Episode, track or chapter number.",
+   "エピソード、トラック、または章の番号です。"
+  ],
+  "hint.ProviderCredentialFields.Secret.info": [
+   "Stored encrypted and never shown again; leave empty to keep the saved one.",
+   "暗号化して保存され、再表示されません。空欄の場合は保存済みのものを保持します。"
+  ],
+  "hint.ProviderFields.BaseUrl.placeholder": [
+   "http://192.168.1.10:32400",
+   "http://192.168.1.10:32400"
+  ],
+  "hint.ProviderFields.BaseUrl.info": [
+   "The server's address with its port.",
+   "ポートを含むサーバーのアドレスです。"
+  ],
+  "hint.ProviderFields.ExternalId.info": [
+   "The application id from the provider's developer settings.",
+   "プロバイダーの開発者設定にあるアプリケーション ID です。"
+  ],
+  "hint.ProviderFields.IsEnabled.info": [
+   "A switched-off provider is not asked; its key stays saved.",
+   "オフにしたプロバイダーには問い合わせません。キーは保存されたままです。"
+  ],
+  "hint.TakeoverFields.TakeoverSourceTypeId.info": [
+   "The program whose settings and missing titles are taken over once.",
+   "設定と未取得のタイトルを一度だけインポートするプログラムです。"
+  ],
+  "hint.TakeoverFields.Apply.info": [
+   "A preview shows what would happen and changes nothing.",
+   "プレビューは実行内容を表示するだけで、何も変更しません。"
+  ],
+  "hint.BackupFields.Name.placeholder": [
+   "before-update",
+   "before-update"
+  ],
+  "acquisition.connection.apiKey": [
+   "API key",
+   "API キー"
+  ],
+  "acquisition.connection.priority": [
+   "Priority",
+   "優先度"
+  ],
+  "acquisition.connection.enabled": [
+   "State",
+   "状態"
+  ],
+  "acquisition.connection.on": [
+   "Enabled",
+   "有効"
+  ],
+  "acquisition.connection.off": [
+   "Disabled",
+   "無効"
+  ],
+  "acquisition.connection.category": [
+   "Download category",
+   "ダウンロードカテゴリ"
+  ],
+  "acquisition.connection.type.Gutenberg": [
+   "Project Gutenberg (public-domain books)",
+   "Project Gutenberg（パブリックドメインの本）"
+  ],
+  "acquisition.connection.type.Opds": [
+   "OPDS catalog",
+   "OPDS カタログ"
+  ],
+  "acquisition.connection.type.AnnasArchive": [
+   "Anna's Archive",
+   "Anna's Archive"
+  ],
+  "acquisition.connection.type.Usenet": [
+   "News server",
+   "ニュースサーバー"
+  ],
+  "acquisition.connection.type.OpenSubtitles": [
+   "OpenSubtitles.com",
+   "OpenSubtitles.com"
+  ],
+  "acquisition.connection.type.SubDl": [
+   "SubDL",
+   "SubDL"
+  ],
+  "acquisition.connection.username": [
+   "User name",
+   "ユーザー名"
+  ],
+  "acquisition.connection.password": [
+   "Password",
+   "パスワード"
+  ],
+  "acquisition.connection.memberKey": [
+   "Member key",
+   "メンバーキー"
+  ],
+  "acquisition.outcome.source_manual_link": [
+   "Confirm at the source, then paste the file link",
+   "ソースで確認してから、ファイルのリンクを貼り付けてください"
+  ],
+  "acquisition.outcome.source_gate": [
+   "The source asks for a manual login or confirmation",
+   "ソースが手動のログインまたは確認を求めています"
+  ],
+  "acquisition.connection.categories": [
+   "Categories",
+   "カテゴリ"
+  ],
+  "acquisition.connection.remotePath": [
+   "Path reported by the client",
+   "クライアントが報告するパス"
+  ],
+  "acquisition.connection.localPath": [
+   "Same path for Jularr",
+   "Jularr から見た同じパス"
+  ],
+  "acquisition.connection.addIndexer": [
+   "Add indexer",
+   "インデクサーを追加"
+  ],
+  "acquisition.connection.addClient": [
+   "Add download client",
+   "ダウンロードクライアントを追加"
+  ],
+  "acquisition.connection.addUsenet": [
+   "Add news server",
+   "ニュースサーバーを追加"
+  ],
+  "nav.group.media": [
+   "Media",
+   "メディア"
+  ],
+  "nav.group.acquisition": [
+   "Arr+",
+   "Arr+"
+  ],
+  "acquisition.role.Search": [
+   "Indexers",
+   "インデクサー"
+  ],
+  "acquisition.role.Download": [
+   "Download clients",
+   "ダウンロードクライアント"
+  ],
+  "acquisition.role.Subtitles": [
+   "Subtitles",
+   "字幕"
+  ],
+  "acquisition.connection.none.Search": [
+   "No indexers yet.",
+   "インデクサーはまだありません。"
+  ],
+  "acquisition.connection.none.Download": [
+   "No download clients yet.",
+   "ダウンロードクライアントはまだありません。"
+  ],
+  "acquisition.connection.none.Subtitles": [
+   "No subtitle providers yet.",
+   "字幕プロバイダーはまだありません。"
+  ],
+  "acquisition.connection.addSubtitles": [
+   "Add subtitle provider",
+   "字幕プロバイダーを追加"
+  ],
+  "acquisition.connection.importProwlarr": [
+   "Import from Prowlarr",
+   "Prowlarr からインポート"
+  ],
+  "acquisition.connection.deleteConfirm": [
+   "Delete this connection? Searches and downloads stop using it.",
+   "この接続を削除しますか？ 検索とダウンロードでは使用されなくなります。"
+  ],
+  "acquisition.connection.searchTitle": [
+   "Test search",
+   "テスト検索"
+  ],
+  "acquisition.connection.searchQuery": [
+   "Search text",
+   "検索テキスト"
+  ],
+  "acquisition.connection.search": [
+   "Search",
+   "検索"
+  ],
+  "acquisition.connection.searchModes": [
+   "Search modes",
+   "検索モード"
+  ],
+  "acquisition.connection.maxConnections": [
+   "Connections",
+   "接続数"
+  ],
+  "acquisition.connection.test": [
+   "Test connection",
+   "接続をテスト"
+  ],
+  "acquisition.connection.delete": [
+   "Delete",
+   "削除"
+  ],
+  "acquisition.connection.unchecked": [
+   "Not tested",
+   "未テスト"
+  ],
+  "acquisition.connection.today": [
+   "Used today",
+   "本日の使用"
+  ],
+  "acquisition.connection.queries": [
+   "queries",
+   "件の検索"
+  ],
+  "acquisition.connection.grabs": [
+   "grabs",
+   "件の取得"
+  ],
+  "acquisition.connection.backoff": [
+   "Failing, paused until",
+   "失敗中、再開まで停止"
+  ],
+  "acquisition.connection.mediaTypes": [
+   "Media types",
+   "メディアタイプ"
+  ],
+  "acquisition.connection.searches": [
+   "Searches",
+   "検索"
+  ],
+  "acquisition.connection.automatic": [
+   "Automatic and manual",
+   "自動と手動"
+  ],
+  "acquisition.connection.manualOnly": [
+   "Manual only",
+   "手動のみ"
+  ],
+  "acquisition.connection.queryLimit": [
+   "Queries per day",
+   "1日あたりの検索数"
+  ],
+  "acquisition.connection.grabLimit": [
+   "Grabs per day",
+   "1日あたりの取得数"
+  ],
+  "acquisition.connection.healthy": [
+   "Reachable",
+   "接続可能"
+  ],
+  "admin.work.description": [
+   "Canonical Work details, versions and monitoring",
+   "作品の詳細、バージョン、監視"
+  ],
+  "admin.work.files": [
+   "Local files and versions",
+   "ローカルファイルとバージョン"
+  ],
+  "admin.work.hierarchy": [
+   "Work → Structure → Edition → Version → Asset → File",
+   "作品 → 構成 → エディション → バージョン → アセット → ファイル"
+  ],
+  "admin.work.structure": [
+   "Structure and monitoring",
+   "構成と監視"
+  ],
+  "admin.work.title": [
+   "Work",
+   "作品"
+  ],
+  "admin.works.description": [
+   "Canonical media and monitoring",
+   "メディアと監視"
+  ],
+  "admin.works.title": [
+   "Works",
+   "作品"
+  ],
+  "app.name": [
+   "Jularr",
+   "Jularr"
+  ],
+  "app.byJularr": [
+   "by Jularr",
+   "by Jularr"
+  ],
+  "instance.module.Library": [
+   "Library",
+   "ライブラリ"
+  ],
+  "instance.module.Requests": [
+   "Requests",
+   "リクエスト"
+  ],
+  "instance.module.Acquisition": [
+   "Arr+",
+   "Arr+"
+  ],
+  "requests.title": [
+   "My requests",
+   "マイリクエスト"
+  ],
+  "request.language": [
+   "Requested language",
+   "リクエストする言語"
+  ],
+  "request.create": [
+   "Request this work",
+   "この作品をリクエスト"
+  ],
+  "request.approve": [
+   "Approve",
+   "承認"
+  ],
+  "request.reject": [
+   "Reject",
+   "却下"
+  ],
+  "request.empty": [
+   "No requests on this page.",
+   "このページにリクエストはありません。"
+  ],
+  "request.tab.All": [
+   "All",
+   "すべて"
+  ],
+  "request.tab.Open": [
+   "Open",
+   "未処理"
+  ],
+  "request.tab.Approved": [
+   "Approved",
+   "承認済み"
+  ],
+  "request.tab.InProgress": [
+   "In progress",
+   "進行中"
+  ],
+  "request.tab.Done": [
+   "Done",
+   "完了"
+  ],
+  "request.tab.Rejected": [
+   "Rejected",
+   "却下"
+  ],
+  "request.status.Open": [
+   "Open",
+   "未処理"
+  ],
+  "request.status.Approved": [
+   "Approved",
+   "承認済み"
+  ],
+  "request.status.Searching": [
+   "Searching",
+   "検索中"
+  ],
+  "request.status.Downloading": [
+   "Downloading",
+   "ダウンロード中"
+  ],
+  "request.status.Importing": [
+   "Importing",
+   "インポート中"
+  ],
+  "request.status.Completed": [
+   "Completed",
+   "完了"
+  ],
+  "request.status.Rejected": [
+   "Rejected",
+   "却下"
+  ],
+  "request.status.Failed": [
+   "Failed",
+   "失敗"
+  ],
+  "request.status.Cancelled": [
+   "Cancelled",
+   "取り消し済み"
+  ],
+  "request.state.Open": [
+   "Waiting for approval",
+   "承認待ち"
+  ],
+  "request.state.Approved": [
+   "Looking for media",
+   "メディアを探しています"
+  ],
+  "request.state.Searching": [
+   "Looking for media",
+   "メディアを探しています"
+  ],
+  "request.state.Downloading": [
+   "Getting media",
+   "メディアを取得しています"
+  ],
+  "request.state.Importing": [
+   "Preparing",
+   "準備中"
+  ],
+  "request.state.Completed": [
+   "Available",
+   "利用可能"
+  ],
+  "request.state.Rejected": [
+   "Declined",
+   "却下されました"
+  ],
+  "request.state.Failed": [
+   "Could not complete the request",
+   "リクエストを完了できませんでした"
+  ],
+  "request.state.Cancelled": [
+   "Request cancelled",
+   "リクエストは取り消されました"
+  ],
+  "media.notForProfile": [
+   "Media is not available for this profile.",
+   "このプロフィールではメディアを利用できません。"
+  ],
+  "media.remove": [
+   "Remove",
+   "削除"
+  ],
+  "collections.deleteConfirm": [
+   "Delete this collection? The titles themselves stay.",
+   "このコレクションを削除しますか？ タイトル自体は残ります。"
+  ],
+  "collections.addMedia": [
+   "Add media",
+   "メディアを追加"
+  ],
+  "collections.find": [
+   "Find in the library",
+   "ライブラリ内を検索"
+  ],
+  "collections.add": [
+   "Add",
+   "追加"
+  ],
+  "collections.inside": [
+   "In this collection",
+   "このコレクション内"
+  ],
+  "wanted.empty": [
+   "No wanted works on this page.",
+   "このページに欲しい作品はありません。"
+  ],
+  "wanted.paused": [
+   "Paused",
+   "一時停止中"
+  ],
+  "wanted.pause": [
+   "Pause",
+   "一時停止"
+  ],
+  "wanted.resume": [
+   "Resume",
+   "再開"
+  ],
+  "admin.instance.modules": [
+   "Modules",
+   "モジュール"
+  ],
+  "admin.instance.module.retained": [
+   "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",
+   "ライブラリを無効にすると、メディアサービスがブロックされ、そのナビゲーションも非表示になります。既存のメディアとウォッチリストは保持されます。"
+  ],
+  "common.all": [
+   "All",
+   "すべて"
+  ],
+  "common.seeAll": [
+   "See all",
+   "すべて見る"
+  ],
+  "details.heroDescription": [
+   "Title, artwork and availability will come from the canonical Work.",
+   "タイトル、アートワーク、入手状況は作品の情報から取得されます。"
+  ],
+  "details.recommendations": [
+   "More like this",
+   "関連のおすすめ"
+  ],
+  "details.related": [
+   "Related works",
+   "関連作品"
+  ],
+  "details.structure": [
+   "Seasons / structure",
+   "シーズン / 構成"
+  ],
+  "details.title": [
+   "Media details",
+   "メディアの詳細"
+  ],
+  "details.units": [
+   "Episodes / editions",
+   "エピソード / エディション"
+  ],
+  "details.versions": [
+   "Versions & languages",
+   "バージョンと言語"
+  ],
+  "details.seasons": [
+   "Seasons",
+   "シーズン"
+  ],
+  "details.episodes": [
+   "Episodes",
+   "エピソード"
+  ],
+  "details.episodeCount": [
+   "{0} episodes",
+   "{0} 話"
+  ],
+  "details.specials": [
+   "Specials",
+   "スペシャル"
+  ],
+  "details.upcoming": [
+   "Upcoming",
+   "近日公開"
+  ],
+  "details.noEpisodes": [
+   "No episodes known for this season yet.",
+   "このシーズンのエピソードはまだ不明です。"
+  ],
+  "details.minutes": [
+   "{0} min",
+   "{0} 分"
+  ],
+  "details.watchTrailer": [
+   "Watch the trailer on YouTube",
+   "YouTube で予告編を見る"
+  ],
+  "details.cast": [
+   "Cast & crew",
+   "キャストとスタッフ"
+  ],
+  "discover.mediaTypes": [
+   "Media types",
+   "メディアタイプ"
+  ],
+  "discover.continueWatching": [
+   "Continue watching",
+   "続きを見る"
+  ],
+  "discover.continueListening": [
+   "Continue listening",
+   "続きを聴く"
+  ],
+  "media.continueReading": [
+   "Continue reading",
+   "続きを読む"
+  ],
+  "continueReading.dismiss": [
+   "Hide this bar; your reading position stays",
+   "このバーを非表示にします。読書位置は保持されます"
+  ],
+  "discover.title": [
+   "Discover",
+   "発見"
+  ],
+  "discover.all": [
+   "All",
+   "すべて"
+  ],
+  "discover.type.movies": [
+   "Movies",
+   "映画"
+  ],
+  "discover.type.series": [
+   "Series",
+   "TVシリーズ"
+  ],
+  "discover.type.anime": [
+   "Anime",
+   "アニメ"
+  ],
+  "discover.type.lightnovels": [
+   "Light novels",
+   "ライトノベル"
+  ],
+  "discover.type.books": [
+   "Books",
+   "本"
+  ],
+  "discover.type.manga": [
+   "Manga",
+   "マンガ"
+  ],
+  "discover.type.music": [
+   "Music",
+   "音楽"
+  ],
+  "discover.type.games": [
+   "Games",
+   "ゲーム"
+  ],
+  "discover.known": [
+   "In Jularr",
+   "Jularr 内"
+  ],
+  "discover.feed.Trending": [
+   "Trending",
+   "トレンド"
+  ],
+  "discover.feed.Top": [
+   "Top rated",
+   "高評価"
+  ],
+  "discover.feed.New": [
+   "New releases",
+   "新作"
+  ],
+  "discover.feed.Upcoming": [
+   "Upcoming",
+   "近日公開"
+  ],
+  "discover.providerUnavailable": [
+   "Discovery is unavailable right now; your library still works.",
+   "現在、発見機能を利用できません。ライブラリは引き続き使えます。"
+  ],
+  "discover.empty": [
+   "Nothing to show here yet.",
+   "ここにはまだ表示するものがありません。"
+  ],
+  "discover.noResults": [
+   "Nothing matches this search.",
+   "この検索に一致するものはありません。"
+  ],
+  "discover.recentlyAdded": [
+   "Recently added",
+   "最近追加"
+  ],
+  "discover.pages": [
+   "Result pages",
+   "結果のページ"
+  ],
+  "discover.loadFailed": [
+   "Results could not be loaded. Try again or open the next page.",
+   "結果を読み込めませんでした。もう一度試すか、次のページを開いてください。"
+  ],
+  "media.state.NotRequested": [
+   "Not requested",
+   "未リクエスト"
+  ],
+  "media.state.Requested": [
+   "Requested",
+   "リクエスト済み"
+  ],
+  "media.state.Available": [
+   "Available",
+   "利用可能"
+  ],
+  "media.state.InProgress": [
+   "In progress",
+   "進行中"
+  ],
+  "media.continue": [
+   "Continue",
+   "続ける"
+  ],
+  "media.progress": [
+   "Playback progress",
+   "再生の進捗"
+  ],
+  "media.minutesLeft": [
+   "{0} min left",
+   "残り {0} 分"
+  ],
+  "media.readProgress": [
+   "Read progress",
+   "読書の進捗"
+  ],
+  "media.percentRead": [
+   "{0}% read",
+   "{0}% 読了"
+  ],
+  "media.dubs": [
+   "Dubs",
+   "吹替"
+  ],
+  "media.subs": [
+   "Subs",
+   "字幕"
+  ],
+  "media.languageCount": [
+   "{0}: {1} languages",
+   "{0}：{1} 言語"
+  ],
+  "media.languagePreferred": [
+   "{0}: {1}",
+   "{0}：{1}"
+  ],
+  "media.shelfPrevious": [
+   "Previous titles",
+   "前のタイトル"
+  ],
+  "media.shelfNext": [
+   "Next titles",
+   "次のタイトル"
+  ],
+  "media.availability.Available": [
+   "All monitored episodes or units are available.",
+   "監視中のすべてのエピソードまたはユニットが利用可能です。"
+  ],
+  "media.rating": [
+   "Rating",
+   "評価"
+  ],
+  "media.request": [
+   "Request",
+   "リクエスト"
+  ],
+  "media.availability.ProfileAudio": [
+   "Local audio is available in the profile language.",
+   "プロフィールの言語のローカル音声を利用できます。"
+  ],
+  "media.availability.OtherAudio": [
+   "Available locally, but only in other audio languages.",
+   "ローカルで利用できますが、他の音声言語のみです。"
+  ],
+  "media.availability.PartialOtherAudio": [
+   "{0} of {1} monitored episodes or units are available, but only in other audio languages.",
+   "監視中の {1} 件のエピソードまたはユニットのうち {0} 件が利用可能ですが、他の音声言語のみです。"
+  ],
+  "media.availability.Requested": [
+   "Requested",
+   "リクエスト済み"
+  ],
+  "media.availability.Partial": [
+   "{0} of {1} monitored episodes or units are available.",
+   "監視中の {1} 件のエピソードまたはユニットのうち {0} 件が利用可能です。"
+  ],
+  "media.availability.Missing": [
+   "No monitored episodes or units are available.",
+   "監視中のエピソードまたはユニットは利用できません。"
+  ],
+  "media.availability.Downloading": [
+   "Downloading",
+   "ダウンロード中"
+  ],
+  "media.availability.Searching": [
+   "Searching or queued for another search",
+   "検索中、または再検索の待機中"
+  ],
+  "media.series.Continuing": [
+   "Continuing",
+   "継続中"
+  ],
+  "media.series.Releasing": [
+   "Releasing",
+   "配信中"
+  ],
+  "media.series.Ended": [
+   "Ended",
+   "終了"
+  ],
+  "media.series.Canceled": [
+   "Canceled",
+   "打ち切り"
+  ],
+  "media.series.Announced": [
+   "Announced",
+   "発表済み"
+  ],
+  "design.languageGerman": [
+   "German",
+   "ドイツ語"
+  ],
+  "design.genreDrama": [
+   "Drama",
+   "ドラマ"
+  ],
+  "design.genreRomance": [
+   "Romance",
+   "ロマンス"
+  ],
+  "design.genreAdventure": [
+   "Adventure",
+   "アドベンチャー"
+  ],
+  "design.mediaNotice": [
+   "Sample cards and previews only. Statuses and languages are illustrative; request and library playback actions are disabled. The official trailer is available on Play.",
+   "サンプルのカードとプレビューのみです。状態と言語は例示であり、リクエストとライブラリの再生操作は無効です。再生すると公式の予告編を視聴できます。"
+  ],
+  "design.mediaLibrary": [
+   "Library cards",
+   "ライブラリのカード"
+  ],
+  "design.mediaDiscover": [
+   "Discover cards",
+   "発見のカード"
+  ],
+  "media.watch": [
+   "Watch",
+   "見る"
+  ],
+  "media.details": [
+   "Details",
+   "詳細"
+  ],
+  "search.global": [
+   "Search movies and series",
+   "映画とシリーズを検索"
+  ],
+  "library.scope.all": [
+   "All",
+   "すべて"
+  ],
+  "library.scope.movies": [
+   "Movies",
+   "映画"
+  ],
+  "library.scope.series": [
+   "Series",
+   "TVシリーズ"
+  ],
+  "library.scope.anime": [
+   "Anime",
+   "アニメ"
+  ],
+  "library.scope.books": [
+   "Books",
+   "本"
+  ],
+  "library.scope.manga": [
+   "Manga",
+   "マンガ"
+  ],
+  "library.scope.lightnovels": [
+   "Light novels",
+   "ライトノベル"
+  ],
+  "library.scope.music": [
+   "Music",
+   "音楽"
+  ],
+  "library.scope.games": [
+   "Games",
+   "ゲーム"
+  ],
+  "library.search": [
+   "Search your library",
+   "ライブラリを検索"
+  ],
+  "library.sort": [
+   "Sort",
+   "並べ替え"
+  ],
+  "library.sort.RecentlyAdded": [
+   "Recently added",
+   "最近追加"
+  ],
+  "library.sort.Title": [
+   "Title",
+   "タイトル"
+  ],
+  "library.sort.Year": [
+   "Year",
+   "年"
+  ],
+  "library.paging": [
+   "Pages",
+   "ページ"
+  ],
+  "library.userEmpty": [
+   "Your library is empty. Discover finds something to watch.",
+   "ライブラリは空です。発見で観るものを探しましょう。"
+  ],
+  "form.error": [
+   "Something went wrong.",
+   "問題が発生しました。"
+  ],
+  "form.invalid_type": [
+   "Invalid value.",
+   "無効な値です。"
+  ],
+  "form.out_of_range": [
+   "The value is outside the allowed range.",
+   "値が許容範囲外です。"
+  ],
+  "form.required": [
+   "This field is required.",
+   "この項目は必須です。"
+  ],
+  "form.too_long": [
+   "The value is too long.",
+   "値が長すぎます。"
+  ],
+  "media.all": [
+   "All",
+   "すべて"
+  ],
+  "media.anime": [
+   "Anime",
+   "アニメ"
+  ],
+  "media.books": [
+   "Books",
+   "本"
+  ],
+  "media.lightNovels": [
+   "Light novels",
+   "ライトノベル"
+  ],
+  "media.manga": [
+   "Manga",
+   "マンガ"
+  ],
+  "media.movies": [
+   "Movies",
+   "映画"
+  ],
+  "media.series": [
+   "Series",
+   "TVシリーズ"
+  ],
+  "nav.breadcrumb": [
+   "Breadcrumb",
+   "パンくずリスト"
+  ],
+  "nav.admin": [
+   "Admin",
+   "管理"
+  ],
+  "nav.back": [
+   "Back",
+   "戻る"
+  ],
+  "nav.home": [
+   "Home",
+   "ホーム"
+  ],
+  "nav.library": [
+   "Library",
+   "ライブラリ"
+  ],
+  "nav.mobile": [
+   "Mobile navigation",
+   "モバイルナビゲーション"
+  ],
+  "nav.primary": [
+   "Main navigation",
+   "メインナビゲーション"
+  ],
+  "nav.secondary": [
+   "Secondary navigation",
+   "サブナビゲーション"
+  ],
+  "nav.tabs": [
+   "Tabs",
+   "タブ"
+  ],
+  "nav.profile": [
+   "Profile",
+   "プロフィール"
+  ],
+  "nav.settings": [
+   "Settings",
+   "設定"
+  ],
+  "nav.watchlist": [
+   "Watchlist",
+   "ウォッチリスト"
+  ],
+  "player.title": [
+   "Player",
+   "プレーヤー"
+  ],
+  "player.unavailable": [
+   "Playback is not connected yet.",
+   "再生はまだ接続されていません。"
+  ],
+  "preview.admin-library": [
+   "Admin library",
+   "管理：ライブラリ"
+  ],
+  "preview.admin-requests": [
+   "Admin requests",
+   "管理：リクエスト"
+  ],
+  "preview.admin-rules": [
+   "Admin rules",
+   "管理：ルール"
+  ],
+  "preview.admin-users": [
+   "Admin users",
+   "管理：ユーザー"
+  ],
+  "preview.admin-wanted": [
+   "Admin wanted",
+   "管理：欲しいもの"
+  ],
+  "preview.admin-work": [
+   "Admin work",
+   "管理：作品"
+  ],
+  "preview.admin-works": [
+   "Admin works",
+   "管理：作品一覧"
+  ],
+  "appearance.title": [
+   "Appearance",
+   "外観"
+  ],
+  "appearance.style": [
+   "Style",
+   "スタイル"
+  ],
+  "appearance.brightness": [
+   "Brightness",
+   "明るさ"
+  ],
+  "appearance.original": [
+   "Original",
+   "オリジナル"
+  ],
+  "appearance.clean": [
+   "Clean",
+   "クリーン"
+  ],
+  "appearance.system": [
+   "System",
+   "システム"
+  ],
+  "appearance.light": [
+   "Light",
+   "ライト"
+  ],
+  "appearance.dark": [
+   "Dark",
+   "ダーク"
+  ],
+  "preview.details": [
+   "Details",
+   "詳細"
+  ],
+  "preview.discover": [
+   "Discover",
+   "発見"
+  ],
+  "preview.player": [
+   "Player",
+   "プレーヤー"
+  ],
+  "preview.settings": [
+   "Settings",
+   "設定"
+  ],
+  "preview.shell": [
+   "Shell",
+   "シェル"
+  ],
+  "preview.watchlist": [
+   "Watchlist",
+   "ウォッチリスト"
+  ],
+  "requests.approved": [
+   "Approved",
+   "承認済み"
+  ],
+  "requests.done": [
+   "Done",
+   "完了"
+  ],
+  "requests.inProgress": [
+   "In progress",
+   "進行中"
+  ],
+  "requests.open": [
+   "Open",
+   "未処理"
+  ],
+  "requests.rejected": [
+   "Rejected",
+   "却下"
+  ],
+  "settings.accessibility": [
+   "Accessibility",
+   "アクセシビリティ"
+  ],
+  "settings.account": [
+   "Account",
+   "アカウント"
+  ],
+  "settings.appearance": [
+   "Appearance",
+   "外観"
+  ],
+  "settings.audioSubtitles": [
+   "Audio & subtitles",
+   "音声と字幕"
+  ],
+  "settings.connections": [
+   "Connections",
+   "連携"
+  ],
+  "settings.general": [
+   "General",
+   "一般"
+  ],
+  "settings.language": [
+   "Language & region",
+   "言語と地域"
+  ],
+  "settings.library": [
+   "Library & display",
+   "ライブラリと表示"
+  ],
+  "settings.media": [
+   "Media",
+   "メディア"
+  ],
+  "settings.modules": [
+   "Modules & features",
+   "モジュールと機能"
+  ],
+  "settings.personal": [
+   "Personal features",
+   "個人用機能"
+  ],
+  "settings.playback": [
+   "Playback",
+   "再生"
+  ],
+  "settings.privacy": [
+   "Profile & privacy",
+   "プロフィールとプライバシー"
+  ],
+  "settings.profileNotice": [
+   "This will be the Settings tab of your profile.",
+   "これがプロフィールの設定タブになります。"
+  ],
+  "settings.ratings": [
+   "Ratings",
+   "評価"
+  ],
+  "settings.reader": [
+   "Reader",
+   "リーダー"
+  ],
+  "settings.security": [
+   "Account & security",
+   "アカウントとセキュリティ"
+  ],
+  "settings.sessions": [
+   "Devices & sessions",
+   "デバイスとセッション"
+  ],
+  "settings.title": [
+   "Settings",
+   "設定"
+  ],
+  "shell.preview": [
+   "Shell preview",
+   "シェルのプレビュー"
+  ],
+  "shell.previewInfo": [
+   "Presentation preview only. No account or profile data is loaded.",
+   "表示のプレビューのみです。アカウントやプロフィールのデータは読み込まれません。"
+  ],
+  "shell.search": [
+   "Search",
+   "検索"
+  ],
+  "shell.skip": [
+   "Skip to content",
+   "コンテンツへ移動"
+  ],
+  "skeleton.unconnected": [
+   "This view will show live data when its backend service is available.",
+   "バックエンドサービスが利用可能になると、この画面にライブデータが表示されます。"
+  ],
+  "table.actions": [
+   "Actions",
+   "操作"
+  ],
+  "table.titles": [
+   "Titles",
+   "タイトル"
+  ],
+  "table.availability": [
+   "Availability",
+   "入手状況"
+  ],
+  "table.language": [
+   "Language / version",
+   "言語 / バージョン"
+  ],
+  "table.lastSearch": [
+   "Last search",
+   "最終検索"
+  ],
+  "table.limit": [
+   "Limit",
+   "上限"
+  ],
+  "table.monitored": [
+   "Monitoring",
+   "監視"
+  ],
+  "table.profile": [
+   "Profile",
+   "プロフィール"
+  ],
+  "table.requestedAt": [
+   "Requested at",
+   "リクエスト日時"
+  ],
+  "table.requester": [
+   "Requester",
+   "リクエスト者"
+  ],
+  "table.role": [
+   "Role",
+   "ロール"
+  ],
+  "table.rule": [
+   "Rule",
+   "ルール"
+  ],
+  "table.size": [
+   "Storage used",
+   "使用容量"
+  ],
+  "table.status": [
+   "Status",
+   "状態"
+  ],
+  "table.type": [
+   "Type",
+   "種類"
+  ],
+  "table.user": [
+   "User",
+   "ユーザー"
+  ],
+  "table.version": [
+   "Version",
+   "バージョン"
+  ],
+  "table.work": [
+   "Work / unit",
+   "作品 / ユニット"
+  ],
+  "toolbar.filter": [
+   "Filter",
+   "フィルター"
+  ],
+  "toolbar.label": [
+   "List controls",
+   "リストの操作"
+  ],
+  "toolbar.search": [
+   "Search",
+   "検索"
+  ],
+  "toolbar.sort": [
+   "Sort",
+   "並べ替え"
+  ],
+  "toolbar.view": [
+   "View",
+   "表示"
+  ],
+  "wanted.requested": [
+   "Requested",
+   "リクエスト済み"
+  ],
+  "wanted.available": [
+   "Available",
+   "利用可能"
+  ],
+  "wanted.downloading": [
+   "Downloading",
+   "ダウンロード中"
+  ],
+  "wanted.lastSearch": [
+   "Last search",
+   "最終検索"
+  ],
+  "wanted.open": [
+   "Open",
+   "未処理"
+  ],
+  "wanted.openWork": [
+   "Edit title",
+   "タイトルを編集"
+  ],
+  "wanted.section.status": [
+   "Status",
+   "状態"
+  ],
+  "wanted.section.choice": [
+   "Profile and library",
+   "プロファイルとライブラリ"
+  ],
+  "wanted.section.episodes": [
+   "Seasons and episodes",
+   "シーズンとエピソード"
+  ],
+  "wanted.section.volumes": [
+   "Volumes",
+   "巻"
+  ],
+  "wanted.searchAutomatic": [
+   "Search automatically",
+   "自動で検索"
+  ],
+  "wanted.searchManual": [
+   "Search manually",
+   "手動で検索"
+  ],
+  "admin.work.wanted": [
+   "Search and downloads",
+   "検索とダウンロード"
+  ],
+  "wanted.monitoring": [
+   "Monitoring",
+   "監視"
+  ],
+  "wanted.progress": [
+   "Progress (%)",
+   "進捗（%）"
+  ],
+  "wanted.grabQueued": [
+   "The release was sent to the download client.",
+   "リリースをダウンロードクライアントに送信しました。"
+  ],
+  "wanted.tab.search": [
+   "Search",
+   "検索"
+  ],
+  "wanted.tab.history": [
+   "History",
+   "履歴"
+  ],
+  "wanted.search.start": [
+   "Start search",
+   "検索を開始"
+  ],
+  "wanted.view.All": [
+   "All",
+   "すべて"
+  ],
+  "wanted.view.Missing": [
+   "Missing",
+   "未取得"
+  ],
+  "wanted.view.CutoffUnmet": [
+   "Cutoff unmet",
+   "目標画質未達"
+  ],
+  "wanted.belowCutoff": [
+   "Below cutoff",
+   "目標画質未満"
+  ],
+  "wanted.monitorsNewUnits": [
+   "New episodes and volumes",
+   "新しいエピソードと巻"
+  ],
+  "wanted.unit": [
+   "Season, episode or volume",
+   "シーズン、エピソード、または巻"
+  ],
+  "wanted.unit.releasedOn": [
+   "Released",
+   "公開日"
+  ],
+  "wanted.unit.present": [
+   "Present",
+   "取得済み"
+  ],
+  "wanted.unit.monitored": [
+   "Monitored",
+   "監視中"
+  ],
+  "wanted.unit.unmonitored": [
+   "Not monitored",
+   "監視していません"
+  ],
+  "wanted.unit.partly": [
+   "Partly monitored",
+   "一部を監視中"
+  ],
+  "wanted.unit.start": [
+   "Monitor",
+   "監視"
+  ],
+  "wanted.unit.stop": [
+   "Stop monitoring",
+   "監視を停止"
+  ],
+  "wanted.search.season": [
+   "Season",
+   "シーズン"
+  ],
+  "wanted.search.episode": [
+   "Episode",
+   "エピソード"
+  ],
+  "wanted.search.volume": [
+   "Volume",
+   "巻"
+  ],
+  "wanted.search.empty": [
+   "No releases were found.",
+   "リリースは見つかりませんでした。"
+  ],
+  "wanted.search.decision": [
+   "Decision",
+   "判定"
+  ],
+  "wanted.search.score": [
+   "Score",
+   "スコア"
+  ],
+  "wanted.search.release": [
+   "Release",
+   "リリース"
+  ],
+  "wanted.search.indexer": [
+   "Indexer",
+   "インデクサー"
+  ],
+  "wanted.search.age": [
+   "Age (days)",
+   "経過日数"
+  ],
+  "wanted.search.size": [
+   "Size",
+   "サイズ"
+  ],
+  "wanted.search.quality": [
+   "Quality",
+   "画質"
+  ],
+  "wanted.search.reason": [
+   "Reason",
+   "理由"
+  ],
+  "wanted.search.grab": [
+   "Select and download",
+   "選択してダウンロード"
+  ],
+  "wanted.history.empty": [
+   "No releases have been taken yet.",
+   "まだリリースを取得していません。"
+  ],
+  "wanted.history.date": [
+   "Date",
+   "日付"
+  ],
+  "acquisition.decision.Eligible": [
+   "Eligible",
+   "対象"
+  ],
+  "acquisition.decision.ManualReview": [
+   "Review",
+   "要確認"
+  ],
+  "acquisition.decision.Rejected": [
+   "Rejected",
+   "除外"
+  ],
+  "acquisition.release.Grabbed": [
+   "Downloading",
+   "ダウンロード中"
+  ],
+  "acquisition.release.Imported": [
+   "Imported",
+   "インポート済み"
+  ],
+  "acquisition.release.Failed": [
+   "Failed",
+   "失敗"
+  ],
+  "acquisition.release.Blocked": [
+   "Blocked",
+   "ブロック済み"
+  ],
+  "acquisition.release.Allowed": [
+   "Allowed again",
+   "再許可済み"
+  ],
+  "acquisition.outcome.release_found": [
+   "Release found",
+   "リリースが見つかりました"
+  ],
+  "acquisition.outcome.grabbed": [
+   "Downloading",
+   "ダウンロード中"
+  ],
+  "acquisition.outcome.imported": [
+   "Imported",
+   "インポート済み"
+  ],
+  "acquisition.outcome.manual_review": [
+   "Needs review",
+   "確認が必要"
+  ],
+  "acquisition.outcome.profile_rejected": [
+   "No release fits the profile",
+   "プロファイルに合うリリースがありません"
+  ],
+  "acquisition.outcome.identity_invalid": [
+   "No matching release",
+   "一致するリリースがありません"
+  ],
+  "acquisition.outcome.no_candidates": [
+   "Nothing found",
+   "何も見つかりませんでした"
+  ],
+  "acquisition.outcome.indexers_unavailable": [
+   "Indexers unavailable",
+   "インデクサーを利用できません"
+  ],
+  "acquisition.outcome.profile_missing": [
+   "No acquisition profile",
+   "取得プロファイルがありません"
+  ],
+  "acquisition.outcome.download_failed": [
+   "Download failed",
+   "ダウンロードに失敗しました"
+  ],
+  "acquisition.outcome.download_interrupted": [
+   "Download interrupted",
+   "ダウンロードが中断されました"
+  ],
+  "acquisition.outcome.acquisition_unavailable": [
+   "Download client unavailable",
+   "ダウンロードクライアントを利用できません"
+  ],
+  "acquisition.outcome.acquisition_no_download_client": [
+   "No download client",
+   "ダウンロードクライアントがありません"
+  ],
+  "acquisition.outcome.acquisition_grab_failed": [
+   "Download client refused",
+   "ダウンロードクライアントが拒否しました"
+  ],
+  "acquisition.outcome.acquisition_limit_reached": [
+   "Indexer grab limit reached",
+   "インデクサーの取得上限に達しました"
+  ],
+  "acquisition.outcome.acquisition_download_path_unconfigured": [
+   "Download workspace is not configured or is unavailable",
+   "ダウンロードの一時保存先が未設定か利用できません"
+  ],
+  "acquisition.workspace.title": [
+   "Download storage",
+   "ダウンロード保存先"
+  ],
+  "acquisition.workspace.hint": [
+   "Configured paths (not a mount or writeability check). Native downloads pause if their workspaces are unavailable.",
+   "設定済みのパスです（マウントや書き込み可否は未確認）。保存先が利用できない場合、内蔵ダウンロードは一時停止します。"
+  ],
+  "acquisition.workspace.usenet": [
+   "Usenet temporary files",
+   "Usenet 一時ファイル"
+  ],
+  "acquisition.workspace.direct": [
+   "Direct book downloads",
+   "書籍の直接ダウンロード"
+  ],
+  "acquisition.workspace.limit": [
+   "Per-Usenet-job limit",
+   "Usenet ジョブごとの上限"
+  ],
+  "acquisition.workspace.unset": [
+   "Not configured",
+   "未設定"
+  ],
+  "acquisition.workspace.hostAllow": [
+   "Host filesystem: explicitly allowed",
+   "ホストのファイルシステム: 明示的に許可"
+  ],
+  "acquisition.workspace.hostDeny": [
+   "Host filesystem: blocked unless a mounted workspace is selected",
+   "ホストのファイルシステム: マウント済み保存先が選択されるまで禁止"
+  ],
+  "acquisition.workspace.manageHint": [
+   "To change these paths and the limit, update the server configuration and restart Jularr. In-app editing is not available yet.",
+   "パスや上限を変更するにはサーバー設定を更新し、Jularr を再起動してください。アプリ内での編集にはまだ対応していません。"
+  ],
+  "acquisition.outcome.usenet_disk_budget": [
+   "Download exceeds the configured size limit",
+   "ダウンロードが設定されたサイズ制限を超えています"
+  ],
+  "acquisition.outcome.import_path_unmapped": [
+   "Download folder is not mapped to storage",
+   "ダウンロードフォルダーがストレージにマッピングされていません"
+  ],
+  "acquisition.outcome.import_no_library": [
+   "No library path for this media type",
+   "このメディアタイプのライブラリパスがありません"
+  ],
+  "acquisition.outcome.import_source_unavailable": [
+   "Download folder is unreachable",
+   "ダウンロードフォルダーに到達できません"
+  ],
+  "acquisition.outcome.import_library_unavailable": [
+   "Library storage is unreachable",
+   "ライブラリのストレージに到達できません"
+  ],
+  "acquisition.reason.Eligible": [
+   "Eligible",
+   "対象"
+  ],
+  "acquisition.reason.Blocked": [
+   "Failed or blocked before",
+   "以前に失敗またはブロック済み"
+  ],
+  "acquisition.reason.NoDownload": [
+   "No download link",
+   "ダウンロードリンクなし"
+  ],
+  "acquisition.reason.Unparseable": [
+   "Name not recognized",
+   "名前を認識できません"
+  ],
+  "acquisition.reason.Matches": [
+   "Matches",
+   "一致"
+  ],
+  "acquisition.reason.MatchesTitleAndAuthor": [
+   "Matches title and author",
+   "タイトルと著者が一致"
+  ],
+  "acquisition.reason.AuthorMissing": [
+   "Author not named",
+   "著者の記載なし"
+  ],
+  "acquisition.reason.MatchesById": [
+   "Matches by provider ID",
+   "プロバイダー ID で一致"
+  ],
+  "acquisition.reason.MatchesTitleAndYear": [
+   "Matches title and year",
+   "タイトルと年が一致"
+  ],
+  "acquisition.reason.WrongTitle": [
+   "Different title",
+   "タイトルが異なる"
+  ],
+  "acquisition.reason.WrongYear": [
+   "Different year",
+   "年が異なる"
+  ],
+  "acquisition.reason.AmbiguousTitle": [
+   "Title is ambiguous",
+   "タイトルが曖昧"
+  ],
+  "acquisition.reason.ExtraTitleWords": [
+   "Title has extra words",
+   "タイトルに余分な語がある"
+  ],
+  "acquisition.reason.WrongSeason": [
+   "Wrong season",
+   "シーズンが違う"
+  ],
+  "acquisition.reason.WrongEpisode": [
+   "Wrong episode",
+   "エピソードが違う"
+  ],
+  "acquisition.reason.ContainsTarget": [
+   "Contains the target",
+   "対象を含む"
+  ],
+  "acquisition.reason.QualityNotAllowed": [
+   "Quality not allowed",
+   "許可されていない画質"
+  ],
+  "acquisition.reason.NotAnUpgrade": [
+   "No upgrade of the present quality",
+   "現在の画質より向上しない"
+  ],
+  "acquisition.reason.SizeUnknown": [
+   "Size unknown",
+   "サイズ不明"
+  ],
+  "acquisition.reason.SizeBelowMinimum": [
+   "Smaller than allowed",
+   "許容サイズより小さい"
+  ],
+  "acquisition.reason.SizeAboveMaximum": [
+   "Larger than allowed",
+   "許容サイズより大きい"
+  ],
+  "acquisition.reason.MissingRequiredTerm": [
+   "Required term missing",
+   "必須の語がない"
+  ],
+  "acquisition.reason.ContainsRejectedTerm": [
+   "Contains a rejected term",
+   "除外する語を含む"
+  ],
+  "acquisition.reason.MissingRequiredPattern": [
+   "Required pattern missing",
+   "必須のパターンがない"
+  ],
+  "acquisition.reason.MatchesRejectedPattern": [
+   "Matches a rejected pattern",
+   "除外パターンに一致"
+  ],
+  "acquisition.reason.MissingRequiredRule": [
+   "Required rule not met",
+   "必須ルールを満たさない"
+  ],
+  "acquisition.reason.MatchesRejectRule": [
+   "Matches a reject rule",
+   "除外ルールに一致"
+  ],
+  "acquisition.reason.RuleScore": [
+   "Rule score",
+   "ルールのスコア"
+  ],
+  "acquisition.reason.OnlyCandidate": [
+   "Only eligible release",
+   "対象は唯一のリリース"
+  ],
+  "acquisition.reason.HigherQuality": [
+   "Best quality",
+   "最高画質"
+  ],
+  "acquisition.reason.PreferredLanguage": [
+   "Preferred language",
+   "優先言語"
+  ],
+  "acquisition.reason.HigherPreference": [
+   "Highest score",
+   "最高スコア"
+  ],
+  "acquisition.reason.BetterCoverage": [
+   "Covers more",
+   "より多く含む"
+  ],
+  "acquisition.reason.BetterReliability": [
+   "More reliable source",
+   "より信頼できるソース"
+  ],
+  "acquisition.reason.IndexerPriority": [
+   "Indexer priority",
+   "インデクサーの優先度"
+  ],
+  "acquisition.reason.PostedLater": [
+   "Newer post",
+   "投稿が新しい"
+  ],
+  "acquisition.reason.StableOrder": [
+   "Equal candidates",
+   "同等の候補"
+  ],
+  "acquisition.reason.MatchesTitle": [
+   "Matches the title",
+   "タイトルが一致"
+  ],
+  "acquisition.reason.MatchesArtistAndAlbum": [
+   "Matches artist and album",
+   "アーティストとアルバムが一致"
+  ],
+  "acquisition.reason.MatchesTitleAndPlatform": [
+   "Matches title and platform",
+   "タイトルとプラットフォームが一致"
+  ],
+  "acquisition.reason.ArtistMissing": [
+   "Album has no artist",
+   "アルバムにアーティストがない"
+  ],
+  "acquisition.reason.PlatformMissing": [
+   "Platform not named",
+   "プラットフォームの記載なし"
+  ],
+  "acquisition.reason.WrongArtist": [
+   "Not the wanted artist",
+   "希望のアーティストではない"
+  ],
+  "acquisition.reason.WrongVolume": [
+   "Wrong volume",
+   "巻が違う"
+  ],
+  "acquisition.reason.WrongPlatform": [
+   "Different platform",
+   "プラットフォームが異なる"
+  ],
+  "acquisition.reason.OtherEdition": [
+   "Other part or edition",
+   "別のパートまたはエディション"
+  ],
+  "acquisition.reason.ChaptersOnly": [
+   "Chapters only",
+   "章のみ"
+  ],
+  "acquisition.reason.VolumesUnknown": [
+   "Series volumes unknown",
+   "シリーズの巻数が不明"
+  ],
+  "acquisition.reason.PartOfGame": [
+   "Part of a game",
+   "ゲームの一部"
+  ],
+  "acquisition.reason.BestQuality": [
+   "Best quality present",
+   "最高画質を取得済み"
+  ],
+  "acquisition.reason.BelowCutoff": [
+   "Below the quality goal",
+   "目標画質に未達"
+  ],
+  "acquisition.reason.CutoffMet": [
+   "Quality goal reached",
+   "目標画質に到達"
+  ],
+  "acquisition.reason.UpgradesDisabled": [
+   "Upgrades off",
+   "アップグレード無効"
+  ],
+  "acquisition.reason.InstalledQualityUnknown": [
+   "Installed quality unknown",
+   "導入済みの画質が不明"
+  ],
+  "watchlist.title": [
+   "Watchlist",
+   "ウォッチリスト"
+  ],
+  "storage.title": [
+   "Storage",
+   "ストレージ"
+  ],
+  "setup.storage.title": [
+   "Setup · Storage",
+   "セットアップ · ストレージ"
+  ],
+  "storage.name": [
+   "Name",
+   "名前"
+  ],
+  "storage.host": [
+   "Server hostname or IPv4 address",
+   "サーバーのホスト名または IPv4 アドレス"
+  ],
+  "storage.sharePath": [
+   "Share or export path",
+   "共有またはエクスポートのパス"
+  ],
+  "storage.protocolVersion": [
+   "Protocol version",
+   "プロトコルのバージョン"
+  ],
+  "storage.username": [
+   "Username",
+   "ユーザー名"
+  ],
+  "storage.domain": [
+   "Domain",
+   "ドメイン"
+  ],
+  "storage.password": [
+   "Password",
+   "パスワード"
+  ],
+  "storage.access": [
+   "Access",
+   "アクセス"
+  ],
+  "storage.readOnly": [
+   "Read only",
+   "読み取り専用"
+  ],
+  "storage.readWrite": [
+   "Read and write",
+   "読み書き"
+  ],
+  "storage.protocol.Smb": [
+   "SMB",
+   "SMB"
+  ],
+  "storage.protocol.Nfs": [
+   "NFS",
+   "NFS"
+  ],
+  "storage.add.Smb": [
+   "Add SMB connection",
+   "SMB 接続を追加"
+  ],
+  "storage.add.Nfs": [
+   "Add NFS connection",
+   "NFS 接続を追加"
+  ],
+  "storage.credentialsHint": [
+   "Passwords are protected in storage and never shown. NFS permissions use the server export and filesystem identities.",
+   "パスワードはストレージ内で保護され、表示されることはありません。NFS の権限にはサーバーのエクスポートとファイルシステムの ID が使われます。"
+  ],
+  "admin.backup.title": [
+   "Backups",
+   "バックアップ"
+  ],
+  "admin.backup.notConfigured": [
+   "Backups need pg_dump and pg_restore, which this server does not have.",
+   "バックアップにはpg_dumpとpg_restoreが必要ですが、このサーバーにはありません。"
+  ],
+  "admin.backup.running": [
+   "A backup is being made.",
+   "バックアップを作成中です。"
+  ],
+  "admin.backup.failed": [
+   "The last backup failed.",
+   "前回のバックアップに失敗しました。"
+  ],
+  "admin.backup.restored": [
+   "The backup was restored. Restart Jularr, then sign in with an account of the restored instance.",
+   "バックアップを復元しました。Jularr を再起動し、復元したインスタンスのアカウントでサインインしてください。"
+  ],
+  "admin.backup.create": [
+   "Back up now",
+   "今すぐバックアップ"
+  ],
+  "admin.backup.createdAt": [
+   "Made",
+   "作成日時"
+  ],
+  "admin.backup.empty": [
+   "No backups yet.",
+   "バックアップはまだありません。"
+  ],
+  "admin.backup.compatible": [
+   "This version",
+   "このバージョン"
+  ],
+  "admin.backup.otherVersion": [
+   "Other version",
+   "別のバージョン"
+  ],
+  "admin.backup.restore": [
+   "Restore",
+   "復元"
+  ],
+  "admin.backup.passphrase": [
+   "Backup passphrase",
+   "バックアップのパスフレーズ"
+  ],
+  "admin.backup.delete": [
+   "Delete",
+   "削除"
+  ],
+  "storage.synology.title": [
+   "Synology",
+   "Synology"
+  ],
+  "storage.synology.hint": [
+   "Reads the NAS's health and can shut it down or restart it. Needs a DSM administrator account without two-step verification; an empty address removes the access.",
+   "NAS の健全性を読み取り、シャットダウンや再起動ができます。2段階認証のない DSM 管理者アカウントが必要です。アドレスを空にするとアクセスが削除されます。"
+  ],
+  "storage.synology.url": [
+   "DSM address",
+   "DSM のアドレス"
+  ],
+  "storage.synology.username": [
+   "DSM account",
+   "DSM アカウント"
+  ],
+  "storage.synology.password": [
+   "DSM password",
+   "DSM パスワード"
+  ],
+  "storage.synology.status": [
+   "Read NAS health",
+   "NAS の健全性を読み取る"
+  ],
+  "storage.synology.certificate": [
+   "Check certificate",
+   "証明書を確認"
+  ],
+  "storage.synology.certificate.valid": [
+   "Certificate confirmed by a public authority:",
+   "公的な認証局によって確認された証明書："
+  ],
+  "storage.synology.certificate.trusted": [
+   "Certificate you trusted:",
+   "信頼済みの証明書："
+  ],
+  "storage.synology.certificate.untrusted": [
+   "Unknown certificate; compare its fingerprint with the one DSM shows before you trust it:",
+   "不明な証明書です。信頼する前に、フィンガープリントを DSM に表示されるものと照合してください："
+  ],
+  "storage.synology.certificate.trust": [
+   "Trust this certificate",
+   "この証明書を信頼"
+  ],
+  "storage.synology.certificate.none": [
+   "Plain HTTP uses no certificate.",
+   "通常の HTTP では証明書を使用しません。"
+  ],
+  "storage.synology.power.Shutdown": [
+   "Shut down NAS",
+   "NAS をシャットダウン"
+  ],
+  "storage.synology.power.Restart": [
+   "Restart NAS",
+   "NAS を再起動"
+  ],
+  "storage.synology.confirm.Shutdown": [
+   "Shut down the NAS now? Playback, downloads and scans on it stop until it is started again.",
+   "今すぐ NAS をシャットダウンしますか？ 再び起動するまで、NAS 上の再生、ダウンロード、スキャンは停止します。"
+  ],
+  "storage.synology.confirm.Restart": [
+   "Restart the NAS now? Playback, downloads and scans on it stop for a few minutes.",
+   "今すぐ NAS を再起動しますか？ 数分間、NAS 上の再生、ダウンロード、スキャンが停止します。"
+  ],
+  "storage.synology.sent": [
+   "The NAS accepted the command.",
+   "NAS がコマンドを受け付けました。"
+  ],
+  "storage.synology.keepRunning": [
+   "Keep it running",
+   "稼働を続ける"
+  ],
+  "storage.synology.used": [
+   "{0} of {1} used",
+   "{1} 中 {0} を使用"
+  ],
+  "storage.synology.temperature": [
+   "{0} °C",
+   "{0} °C"
+  ],
+  "statistics.title": [
+   "Statistics",
+   "統計"
+  ],
+  "statistics.periods": [
+   "Period",
+   "期間"
+  ],
+  "statistics.period.7": [
+   "7 days",
+   "7日間"
+  ],
+  "statistics.period.30": [
+   "30 days",
+   "30日間"
+  ],
+  "statistics.period.365": [
+   "One year",
+   "1年間"
+  ],
+  "statistics.period.0": [
+   "All time",
+   "全期間"
+  ],
+  "statistics.watched": [
+   "Time in the player",
+   "プレーヤーでの時間"
+  ],
+  "statistics.sessions": [
+   "Playback sessions",
+   "再生セッション"
+  ],
+  "statistics.games": [
+   "Retro games, all time",
+   "レトロゲーム（全期間）"
+  ],
+  "statistics.completed.Movie": [
+   "Movies finished",
+   "視聴済みの映画"
+  ],
+  "statistics.completed.Series": [
+   "Episodes finished",
+   "視聴済みのエピソード"
+  ],
+  "statistics.completed.Book": [
+   "Books and volumes finished",
+   "読了した本と巻"
+  ],
+  "statistics.completed.Music": [
+   "Albums and tracks finished",
+   "聴き終えたアルバムとトラック"
+  ],
+  "statistics.completed.Game": [
+   "Games finished",
+   "クリアしたゲーム"
+  ],
+  "statistics.top": [
+   "Most played",
+   "再生数トップ"
+  ],
+  "statistics.hours": [
+   "{0} h {1} min",
+   "{0} 時間 {1} 分"
+  ],
+  "instance.module.Statistics": [
+   "Statistics",
+   "統計"
+  ],
+  "system.title": [
+   "System",
+   "システム"
+  ],
+  "system.database": [
+   "Database size",
+   "データベースのサイズ"
+  ],
+  "system.profiles": [
+   "Profiles",
+   "プロフィール"
+  ],
+  "system.queued": [
+   "Queued operations",
+   "待機中の操作"
+  ],
+  "system.failed": [
+   "Failures to look at",
+   "確認が必要な失敗"
+  ],
+  "system.storageOffline": [
+   "Storage connections offline",
+   "オフラインのストレージ接続"
+  ],
+  "system.lastBackup": [
+   "Last backup",
+   "最後のバックアップ"
+  ],
+  "system.never": [
+   "Never",
+   "なし"
+  ],
+  "system.tools": [
+   "Server tools",
+   "サーバーツール"
+  ],
+  "system.tool": [
+   "Tool",
+   "ツール"
+  ],
+  "system.tool.ffprobe": [
+   "ffprobe (stream analysis)",
+   "ffprobe（ストリーム解析）"
+  ],
+  "system.tool.ffmpeg": [
+   "FFmpeg (conversion)",
+   "FFmpeg（変換）"
+  ],
+  "system.tool.par2": [
+   "par2 (download repair)",
+   "par2（ダウンロードの修復）"
+  ],
+  "system.tool.sevenZip": [
+   "7-Zip (unpacking, CBR/CB7)",
+   "7-Zip（解凍、CBR/CB7）"
+  ],
+  "system.tool.pgDump": [
+   "pg_dump (backups)",
+   "pg_dump（バックアップ）"
+  ],
+  "system.configured": [
+   "Configured",
+   "設定済み"
+  ],
+  "system.missing": [
+   "Not configured",
+   "未設定"
+  ],
+  "person.title": [
+   "Person",
+   "人物"
+  ],
+  "franchise.title": [
+   "Series",
+   "シリーズ"
+  ],
+  "admin.history.title": [
+   "History",
+   "履歴"
+  ],
+  "history.when": [
+   "When",
+   "日時"
+  ],
+  "history.event": [
+   "What",
+   "内容"
+  ],
+  "history.release": [
+   "Release",
+   "リリース"
+  ],
+  "history.source": [
+   "Indexer and client",
+   "インデクサーとクライアント"
+  ],
+  "history.file": [
+   "File",
+   "ファイル"
+  ],
+  "history.by": [
+   "By",
+   "実行者"
+  ],
+  "history.byJularr": [
+   "Jularr",
+   "Jularr"
+  ],
+  "history.empty": [
+   "Nothing has happened yet.",
+   "まだ何も起きていません。"
+  ],
+  "history.event.Grabbed": [
+   "Grabbed",
+   "取得"
+  ],
+  "history.event.DownloadFailed": [
+   "Download failed",
+   "ダウンロード失敗"
+  ],
+  "history.event.Imported": [
+   "Imported",
+   "インポート済み"
+  ],
+  "history.event.Upgraded": [
+   "Replaced by a better release",
+   "より良いリリースに置き換え"
+  ],
+  "history.event.FileRenamed": [
+   "Renamed",
+   "名前を変更"
+  ],
+  "history.event.FileDeleted": [
+   "Deleted",
+   "削除"
+  ],
+  "history.event.ManualImport": [
+   "Assigned by hand",
+   "手動で割り当て"
+  ],
+  "history.event.Blocked": [
+   "Blocked",
+   "ブロック"
+  ],
+  "history.event.SubtitleDownloaded": [
+   "Subtitle added",
+   "字幕を追加"
+  ],
+  "request.step.Grabbed": [
+   "Downloading",
+   "ダウンロード中"
+  ],
+  "request.step.DownloadFailed": [
+   "Download failed, searching again",
+   "ダウンロード失敗、再検索中"
+  ],
+  "request.step.Imported": [
+   "Added",
+   "追加済み"
+  ],
+  "request.step.Upgraded": [
+   "Better version added",
+   "より良いバージョンを追加"
+  ],
+  "admin.work.series": [
+   "Series",
+   "シリーズ"
+  ],
+  "admin.work.seriesName": [
+   "Series name",
+   "シリーズ名"
+  ],
+  "admin.work.seriesPosition": [
+   "Place in the series",
+   "シリーズ内の位置"
+  ],
+  "details.franchise": [
+   "Series:",
+   "シリーズ："
+  ],
+  "person.empty": [
+   "None of their titles are in your library.",
+   "この人物のタイトルはライブラリにありません。"
+  ],
+  "home.layout": [
+   "Home page",
+   "ホームページ"
+  ],
+  "home.shelf": [
+   "Shelf",
+   "棚"
+  ],
+  "home.shown": [
+   "Shown",
+   "表示"
+  ],
+  "home.hidden": [
+   "Hidden",
+   "非表示"
+  ],
+  "home.shelf.ContinueWatching": [
+   "Continue watching",
+   "続きを見る"
+  ],
+  "home.shelf.ContinueListening": [
+   "Continue listening",
+   "続きを聴く"
+  ],
+  "home.shelf.ContinueReading": [
+   "Continue reading",
+   "続きを読む"
+  ],
+  "home.shelf.RecentlyAdded": [
+   "Recently added",
+   "最近追加"
+  ],
+  "home.shelf.Recommendations": [
+   "Recommendations",
+   "おすすめ"
+  ],
+  "instance.module.HomeLayout": [
+   "Personal home page order",
+   "ホームページの個人用の並び順"
+  ],
+  "instance.module.Trickplay": [
+   "Thumbnails while seeking",
+   "シークバーのサムネイル"
+  ],
+  "instance.module.Translation": [
+   "Translate books in the reader",
+   "リーダーでの本の翻訳"
+  ],
+  "instance.module.Ocr": [
+   "Recognize the text of scanned books",
+   "スキャンした本の文字を認識"
+  ],
+  "instance.module.Diagnostics": [
+   "Diagnostics in memory",
+   "メモリ上の診断"
+  ],
+  "instance.module.Subtitles": [
+   "Subtitles from providers",
+   "プロバイダーの字幕"
+  ],
+  "instance.module.Uploads": [
+   "Upload manga volumes",
+   "マンガの巻をアップロード"
+  ],
+  "work.upload": [
+   "Upload a volume",
+   "巻をアップロード"
+  ],
+  "work.upload.file": [
+   "Volume file",
+   "巻のファイル"
+  ],
+  "work.upload.volume": [
+   "Volume number (empty: the whole series)",
+   "巻番号（空欄：シリーズ全体）"
+  ],
+  "work.upload.submit": [
+   "Upload",
+   "アップロード"
+  ],
+  "work.upload.done": [
+   "The volume is in the library.",
+   "巻をライブラリに追加しました。"
+  ],
+  "instance.module.Franchises": [
+   "Series",
+   "シリーズ"
+  ],
+  "calendar.view.month": [
+   "Month",
+   "月"
+  ],
+  "calendar.view.agenda": [
+   "Agenda",
+   "予定表"
+  ],
+  "calendar.more": [
+   "+{0} more",
+   "他 {0} 件"
+  ],
+  "calendar.title": [
+   "Calendar",
+   "カレンダー"
+  ],
+  "calendar.earlier": [
+   "Earlier",
+   "以前"
+  ],
+  "calendar.today": [
+   "From today",
+   "今日から"
+  ],
+  "calendar.later": [
+   "Later",
+   "以降"
+  ],
+  "calendar.pages": [
+   "Calendar weeks",
+   "カレンダーの週"
+  ],
+  "calendar.empty": [
+   "Nothing is released in these two weeks for your watchlist, requests or library.",
+   "この2週間には、ウォッチリスト、リクエスト、ライブラリに関する公開予定はありません。"
+  ],
+  "instance.module.Calendar": [
+   "Release calendar",
+   "公開カレンダー"
+  ],
+  "collections.title": [
+   "Collections",
+   "コレクション"
+  ],
+  "collections.name": [
+   "Name",
+   "名前"
+  ],
+  "collections.kind": [
+   "Kind",
+   "種類"
+  ],
+  "collections.smartToggle": [
+   "Smart filter instead of hand-picked titles",
+   "選んだタイトルの代わりにスマートフィルターを使う"
+  ],
+  "collections.manual": [
+   "Hand-picked",
+   "手動で選択"
+  ],
+  "collections.smart": [
+   "Smart filter",
+   "スマートフィルター"
+  ],
+  "collections.empty": [
+   "No collections yet.",
+   "コレクションはまだありません。"
+  ],
+  "collections.new": [
+   "New collection",
+   "新しいコレクション"
+  ],
+  "collections.create": [
+   "Create",
+   "作成"
+  ],
+  "collections.edit": [
+   "Edit collection",
+   "コレクションを編集"
+  ],
+  "collections.delete": [
+   "Delete collection",
+   "コレクションを削除"
+  ],
+  "collections.noWorks": [
+   "Add titles from their details page.",
+   "タイトルの詳細ページから追加してください。"
+  ],
+  "collections.noMatch": [
+   "Nothing matches this filter yet.",
+   "このフィルターに一致するものはまだありません。"
+  ],
+  "collections.type": [
+   "Media type",
+   "メディアタイプ"
+  ],
+  "collections.subtype": [
+   "Subtype",
+   "サブタイプ"
+  ],
+  "collections.anyType": [
+   "Any type",
+   "すべてのタイプ"
+  ],
+  "collections.anySubtype": [
+   "Any subtype",
+   "すべてのサブタイプ"
+  ],
+  "collections.yearFrom": [
+   "Released from",
+   "公開年（から）"
+  ],
+  "collections.yearTo": [
+   "Released until",
+   "公開年（まで）"
+  ],
+  "collections.onlyAvailable": [
+   "Only what is in the library",
+   "ライブラリにあるもののみ"
+  ],
+  "collections.onlyUnfinished": [
+   "Only what is not finished",
+   "未完了のもののみ"
+  ],
+  "collections.addTo": [
+   "Add",
+   "追加"
+  ],
+  "collections.removeFrom": [
+   "Remove",
+   "削除"
+  ],
+  "instance.module.Collections": [
+   "Collections",
+   "コレクション"
+  ],
+  "notifications.title": [
+   "Notifications",
+   "通知"
+  ],
+  "notifications.unread": [
+   "Notifications, {0} unread",
+   "通知、未読 {0} 件"
+  ],
+  "notifications.markRead": [
+   "Mark all as read",
+   "すべて既読にする"
+  ],
+  "notifications.empty": [
+   "Nothing new.",
+   "新しい通知はありません。"
+  ],
+  "notifications.pages": [
+   "Notification pages",
+   "通知のページ"
+  ],
+  "notifications.times": [
+   "({0}×)",
+   "（{0}回）"
+  ],
+  "notifications.settings": [
+   "What to notify about",
+   "通知する内容"
+  ],
+  "notifications.on": [
+   "Notify",
+   "通知する"
+  ],
+  "notifications.off": [
+   "Don't notify",
+   "通知しない"
+  ],
+  "notifications.message.RequestApproved": [
+   "Your request for {0} was approved.",
+   "{0} のリクエストが承認されました。"
+  ],
+  "notifications.message.RequestRejected": [
+   "Your request for {0} was declined.",
+   "{0} のリクエストは却下されました。"
+  ],
+  "notifications.message.MediaAvailable": [
+   "{0} is available.",
+   "{0} を利用できます。"
+  ],
+  "notifications.message.DownloadFailed": [
+   "A download of {0} failed.",
+   "{0} のダウンロードに失敗しました。"
+  ],
+  "notifications.message.StorageOffline": [
+   "The storage connection {0} stays offline.",
+   "ストレージ接続 {0} はオフラインのままです。"
+  ],
+  "notifications.type.RequestApproved": [
+   "Approved requests",
+   "承認されたリクエスト"
+  ],
+  "notifications.type.RequestRejected": [
+   "Declined requests",
+   "却下されたリクエスト"
+  ],
+  "notifications.type.MediaAvailable": [
+   "New media from requests",
+   "リクエストした新しいメディア"
+  ],
+  "notifications.type.DownloadFailed": [
+   "Failed downloads",
+   "失敗したダウンロード"
+  ],
+  "notifications.type.StorageOffline": [
+   "Offline storage",
+   "オフラインのストレージ"
+  ],
+  "instance.module.Notifications": [
+   "Notifications",
+   "通知"
+  ],
+  "storage.health": [
+   "State",
+   "状態"
+  ],
+  "storage.health.Unknown": [
+   "Not checked yet",
+   "未確認"
+  ],
+  "storage.health.Online": [
+   "Online",
+   "オンライン"
+  ],
+  "storage.health.Sleeping": [
+   "Asleep",
+   "スリープ中"
+  ],
+  "storage.health.Offline": [
+   "Offline",
+   "オフライン"
+  ],
+  "storage.health.Error": [
+   "No access",
+   "アクセス不可"
+  ],
+  "storage.space": [
+   "{0} free of {1}",
+   "{1} 中 {0} 空き"
+  ],
+  "storage.checkedAt": [
+   "checked {0}",
+   "{0} に確認"
+  ],
+  "storage.problem.permission_denied": [
+   "Jularr may not read this share",
+   "Jularr はこの共有を読み取れません"
+  ],
+  "storage.problem.probe_timeout": [
+   "The share does not answer",
+   "共有が応答しません"
+  ],
+  "storage.problem.storage_unavailable": [
+   "Not reachable or not mounted",
+   "到達できないか、マウントされていません"
+  ],
+  "storage.saved": [
+   "Connection saved.",
+   "接続を保存しました。"
+  ],
+  "storage.add.Local": [
+   "Add local path",
+   "ローカルパスを追加"
+  ],
+  "storage.protocol": [
+   "Protocol",
+   "プロトコル"
+  ],
+  "storage.protocol.Local": [
+   "Local path",
+   "ローカルパス"
+  ],
+  "storage.location": [
+   "Location",
+   "場所"
+  ],
+  "storage.localPath": [
+   "Permitted container path",
+   "許可されたコンテナーのパス"
+  ],
+  "storage.wake.macAddress": [
+   "Wake-on-LAN MAC address",
+   "Wake-on-LAN の MAC アドレス"
+  ],
+  "storage.wake.broadcastAddress": [
+   "Wake-on-LAN broadcast address",
+   "Wake-on-LAN のブロードキャストアドレス"
+  ],
+  "storage.wake.policy": [
+   "Wake-on-LAN",
+   "Wake-on-LAN"
+  ],
+  "storage.wake.ownerOnly": [
+   "Only the Owner wakes this device",
+   "オーナーだけがこのデバイスを起動できる"
+  ],
+  "storage.wake.onDemand": [
+   "Wake automatically when someone opens media",
+   "誰かがメディアを開くと自動で起動する"
+  ],
+  "storage.wake.send": [
+   "Wake device",
+   "デバイスを起動"
+  ],
+  "storage.wake.sent": [
+   "Wake-on-LAN packet sent.",
+   "Wake-on-LAN パケットを送信しました。"
+  ],
+  "storage.remove": [
+   "Remove connection",
+   "接続を削除"
+  ],
+  "storage.paths": [
+   "Paths on this connection",
+   "この接続のパス"
+  ],
+  "storage.paths.path": [
+   "Path",
+   "パス"
+  ],
+  "storage.paths.files": [
+   "Files",
+   "ファイル"
+  ],
+  "storage.paths.scan": [
+   "Scan",
+   "スキャン"
+  ],
+  "storage.paths.scanQueued": [
+   "Scan queued. Progress appears under Admin library.",
+   "スキャンを待機中です。進捗は管理のライブラリに表示されます。"
+  ],
+  "storage.paths.remove": [
+   "Remove path",
+   "パスを削除"
+  ],
+  "storage.paths.removeHint": [
+   "Removing a path forgets its file inventory. Works and media files remain untouched.",
+   "パスを削除すると、そのファイル一覧は破棄されます。作品とメディアファイルには影響しません。"
+  ],
+  "storage.paths.connectionRoot": [
+   "Connection root",
+   "接続のルート"
+  ],
+  "storage.paths.selected": [
+   "Selected folder",
+   "選択中のフォルダー"
+  ],
+  "storage.paths.noFolders": [
+   "This folder has no subfolders.",
+   "このフォルダーにサブフォルダーはありません。"
+  ],
+  "storage.paths.browse": [
+   "Browse folders",
+   "フォルダーを参照"
+  ],
+  "storage.paths.add": [
+   "Add library path",
+   "ライブラリのパスを追加"
+  ],
+  "library.tab.Overview": [
+   "Libraries",
+   "ライブラリ"
+  ],
+  "library.tab.Unmatched": [
+   "Unidentified",
+   "未識別"
+  ],
+  "library.tab.Files": [
+   "All files",
+   "すべてのファイル"
+  ],
+  "library.tab.Rename": [
+   "Rename",
+   "名前の変更"
+  ],
+  "library.tab.Naming": [
+   "Naming",
+   "命名"
+  ],
+  "library.tab.Versions": [
+   "Files & versions",
+   "ファイルとバージョン"
+  ],
+  "library.naming.Movie": [
+   "Movie files",
+   "映画のファイル"
+  ],
+  "library.naming.Series": [
+   "Episode files",
+   "エピソードのファイル"
+  ],
+  "library.naming.folder": [
+   "Folders",
+   "フォルダー"
+  ],
+  "library.naming.file": [
+   "File name",
+   "ファイル名"
+  ],
+  "library.naming.example": [
+   "Example:",
+   "例："
+  ],
+  "library.naming.placeholders": [
+   "Placeholders",
+   "プレースホルダー"
+  ],
+  "library.naming.rules": [
+   "Empty placeholders leave with their brackets; the file name always names the film or the episode.",
+   "空のプレースホルダーは括弧ごと省かれます。ファイル名には必ず映画またはエピソードの名前が含まれます。"
+  ],
+  "library.naming.token.Title": [
+   "The title",
+   "タイトル"
+  ],
+  "library.naming.token.Year": [
+   "The year of release",
+   "公開年"
+  ],
+  "library.naming.token.Season": [
+   "The season number, with :00 two digits",
+   "シーズン番号。:00 を付けると2桁"
+  ],
+  "library.naming.token.Episode": [
+   "The episode number, with :00 two digits",
+   "エピソード番号。:00 を付けると2桁"
+  ],
+  "library.naming.token.EpisodeTitle": [
+   "The episode title",
+   "エピソードのタイトル"
+  ],
+  "library.naming.token.Quality": [
+   "The quality, such as WEBDL-1080p",
+   "画質（WEBDL-1080p など）"
+  ],
+  "library.naming.token.ReleaseGroup": [
+   "The release group",
+   "リリースグループ"
+  ],
+  "library.naming.token.Edition": [
+   "The edition, such as Director's Cut",
+   "エディション（Director's Cut など）"
+  ],
+  "library.naming.token.Proper": [
+   "Proper or Repack for a corrected release",
+   "修正版リリースの Proper または Repack"
+  ],
+  "library.overview.empty": [
+   "No libraries yet. Add one with its storage.",
+   "ライブラリはまだありません。ストレージを指定して追加してください。"
+  ],
+  "library.overview.place": [
+   "Storage and folder",
+   "ストレージとフォルダー"
+  ],
+  "library.overview.attention": [
+   "Needs attention",
+   "要確認"
+  ],
+  "library.overview.fine": [
+   "Nothing",
+   "なし"
+  ],
+  "library.overview.scanned": [
+   "Last scan",
+   "最終スキャン"
+  ],
+  "library.overview.scanning": [
+   "Scanning now",
+   "スキャン中"
+  ],
+  "library.overview.never": [
+   "Not yet",
+   "まだ"
+  ],
+  "library.overview.manage": [
+   "Manage storage and libraries",
+   "ストレージとライブラリを管理"
+  ],
+  "nav.group.library": [
+   "Library",
+   "ライブラリ"
+  ],
+  "library.replacement.keepsReleases": [
+   "Keep several releases",
+   "複数のリリースを保持"
+  ],
+  "library.replacement.mode": [
+   "Replaced files",
+   "置き換えたファイル"
+  ],
+  "library.replacement.mode.Delete": [
+   "Delete",
+   "削除"
+  ],
+  "library.replacement.mode.LibraryFolder": [
+   "Recycle bin in the library",
+   "ライブラリ内のごみ箱"
+  ],
+  "library.replacement.mode.OwnFolder": [
+   "Own recycle bin",
+   "専用のごみ箱"
+  ],
+  "library.replacement.mount": [
+   "Own recycle bin: connection",
+   "専用のごみ箱：接続"
+  ],
+  "library.replacement.path": [
+   "Own recycle bin: folder",
+   "専用のごみ箱：フォルダー"
+  ],
+  "library.replacement.days": [
+   "Keep in the recycle bin",
+   "ごみ箱に残す日数"
+  ],
+  "library.keepOnly": [
+   "Keep only this version",
+   "このバージョンのみ残す"
+  ],
+  "library.protect": [
+   "Protect from automatic upgrades",
+   "自動アップグレードから保護"
+  ],
+  "library.unprotect": [
+   "Allow automatic upgrades",
+   "自動アップグレードを許可"
+  ],
+  "devices.link.title": [
+   "Connect this device",
+   "このデバイスを接続"
+  ],
+  "devices.link.hint": [
+   "On a phone signed in to Jularr, scan the code or open Settings, Pair a device, and enter these digits.",
+   "Jularr にサインインしているスマートフォンで、コードをスキャンするか、設定の「デバイスをペアリング」を開いてこの数字を入力してください。"
+  ],
+  "devices.link.qr": [
+   "QR code to pair this device",
+   "このデバイスをペアリングする QR コード"
+  ],
+  "devices.name.browser": [
+   "Browser",
+   "ブラウザー"
+  ],
+  "devices.rename": [
+   "Device name",
+   "デバイス名"
+  ],
+  "devices.pair.title": [
+   "Pair a device",
+   "デバイスをペアリング"
+  ],
+  "devices.pair.code": [
+   "Code shown on the device",
+   "デバイスに表示されるコード"
+  ],
+  "devices.pair.submit": [
+   "Pair with this profile",
+   "このプロフィールとペアリング"
+  ],
+  "devices.pair.show": [
+   "Show the device",
+   "デバイスを表示"
+  ],
+  "devices.pair.device": [
+   "{0} ({1}) asks to be paired with this profile with this code:",
+   "{0}（{1}）が、このコードでこのプロフィールとのペアリングを求めています："
+  ],
+  "devices.pair.warning": [
+   "Confirm only if your own device shows exactly this code; whoever holds it signs in as you.",
+   "ご自身のデバイスにまったく同じコードが表示されている場合のみ確認してください。コードを持つ人があなたとしてサインインします。"
+  ],
+  "devices.link.start": [
+   "Show a pairing code",
+   "ペアリングコードを表示"
+  ],
+  "devices.pair.done": [
+   "The device is paired; it signs in by itself.",
+   "デバイスをペアリングしました。自動でサインインします。"
+  ],
+  "instance.module.Devices": [
+   "Pair TVs, phones and apps by code",
+   "テレビ、スマートフォン、アプリをコードでペアリング"
+  ],
+  "instance.module.Registration": [
+   "Let visitors ask for an account an administrator enables",
+   "訪問者が、管理者が有効にするアカウントを申請できるようにする"
+  ],
+  "account.register.title": [
+   "Create an account",
+   "アカウントを作成"
+  ],
+  "account.register.submit": [
+   "Ask for an account",
+   "アカウントを申請"
+  ],
+  "account.register.pending": [
+   "Your account waits until an administrator enables it.",
+   "アカウントは管理者が有効にするまで待機します。"
+  ],
+  "admin.instance.trustedProxies": [
+   "Trusted reverse proxies",
+   "信頼するリバースプロキシ"
+  ],
+  "admin.instance.publicUrl": [
+   "Public address for QR codes",
+   "QR コード用の公開アドレス"
+  ],
+  "library.renameTarget": [
+   "New name",
+   "新しい名前"
+  ],
+  "library.renameApply": [
+   "Rename these files",
+   "これらのファイルの名前を変更"
+  ],
+  "library.renameEmpty": [
+   "All identified files follow the library layout.",
+   "識別済みのファイルはすべてライブラリの構成に従っています。"
+  ],
+  "library.renamed": [
+   "Files renamed: {0}. Skipped: {1}.",
+   "名前を変更したファイル：{0}。スキップ：{1}。"
+  ],
+  "library.file": [
+   "File",
+   "ファイル"
+  ],
+  "library.root": [
+   "Library path",
+   "ライブラリのパス"
+  ],
+  "library.present": [
+   "Available",
+   "利用可能"
+  ],
+  "library.missing": [
+   "Missing",
+   "未取得"
+  ],
+  "library.assign": [
+   "Identify",
+   "識別"
+  ],
+  "library.unmatched": [
+   "Not identified",
+   "未識別"
+  ],
+  "library.empty": [
+   "No files have been scanned yet.",
+   "まだスキャンされたファイルはありません。"
+  ],
+  "library.emptyUnmatched": [
+   "All scanned files are identified.",
+   "スキャンしたファイルはすべて識別済みです。"
+  ],
+  "library.newWork": [
+   "New work title",
+   "新しい作品のタイトル"
+  ],
+  "library.unitType": [
+   "Unit",
+   "ユニット"
+  ],
+  "library.unit.None": [
+   "Whole work",
+   "作品全体"
+  ],
+  "library.unit.Season": [
+   "Season",
+   "シーズン"
+  ],
+  "library.unit.Episode": [
+   "Episode",
+   "エピソード"
+  ],
+  "library.unit.Volume": [
+   "Volume",
+   "巻"
+  ],
+  "library.unit.Chapter": [
+   "Chapter",
+   "章"
+  ],
+  "library.unit.Track": [
+   "Track",
+   "トラック"
+  ],
+  "library.unitNumber": [
+   "Number",
+   "番号"
+  ],
+  "library.parentNumber.Series": [
+   "Season",
+   "シーズン"
+  ],
+  "library.parentNumber.Book": [
+   "Volume",
+   "巻"
+  ],
+  "library.parentNumber.Manga": [
+   "Volume",
+   "巻"
+  ],
+  "library.parentNumber.LightNovel": [
+   "Volume",
+   "巻"
+  ],
+  "library.createAndAssign": [
+   "Create work and identify",
+   "作品を作成して識別"
+  ],
+  "library.assignExisting": [
+   "Identify as existing work",
+   "既存の作品として識別"
+  ],
+  "library.unassign": [
+   "Remove identification",
+   "識別を解除"
+  ],
+  "operation.type.LibraryScan": [
+   "Library scan",
+   "ライブラリのスキャン"
+  ],
+  "operation.type.Download": [
+   "Download",
+   "ダウンロード"
+  ],
+  "operation.type.Backup": [
+   "Backup",
+   "バックアップ"
+  ],
+  "operation.status.Queued": [
+   "Queued",
+   "待機中"
+  ],
+  "operation.status.Running": [
+   "Running",
+   "実行中"
+  ],
+  "operation.status.Completed": [
+   "Completed",
+   "完了"
+  ],
+  "operation.status.Failed": [
+   "Failed",
+   "失敗"
+  ],
+  "operation.created": [
+   "Queued at",
+   "キュー追加日時"
+  ],
+  "activity.tab.History": [
+   "History",
+   "履歴"
+  ],
+  "activity.item": [
+   "Item",
+   "項目"
+  ],
+  "activity.progress": [
+   "Progress",
+   "進捗"
+  ],
+  "activity.reason": [
+   "Reason",
+   "理由"
+  ],
+  "activity.client": [
+   "Client",
+   "クライアント"
+  ],
+  "activity.eta": [
+   "Time left",
+   "残り時間"
+  ],
+  "activity.size": [
+   "Size",
+   "サイズ"
+  ],
+  "activity.state.Queued": [
+   "Queued",
+   "待機中"
+  ],
+  "activity.state.Downloading": [
+   "Downloading",
+   "ダウンロード中"
+  ],
+  "activity.state.Paused": [
+   "Paused",
+   "一時停止中"
+  ],
+  "activity.state.PostProcessing": [
+   "Unpacking",
+   "解凍中"
+  ],
+  "activity.retry": [
+   "Retry",
+   "再試行"
+  ],
+  "activity.dismiss": [
+   "Dismiss",
+   "閉じる"
+  ],
+  "activity.openSource": [
+   "Open the source and confirm",
+   "ソースを開いて確認"
+  ],
+  "activity.fileLink": [
+   "The address of the file itself (the .epub link), not the page",
+   "ソースのファイルリンク"
+  ],
+  "activity.continueDownload": [
+   "Continue download",
+   "ダウンロードを続行"
+  ],
+  "activity.empty.History": [
+   "Nothing has finished yet.",
+   "完了したものはまだありません。"
+  ],
+  "details.availability": [
+   "Available media",
+   "利用可能なメディア"
+  ],
+  "details.unit": [
+   "Unit",
+   "ユニット"
+  ],
+  "details.quality": [
+   "Quality",
+   "画質"
+  ],
+  "details.audio": [
+   "Audio",
+   "音声"
+  ],
+  "details.subtitles": [
+   "Subtitles",
+   "字幕"
+  ],
+  "subtitles.present": [
+   "Present:",
+   "取得済み："
+  ],
+  "subtitles.language": [
+   "Language",
+   "言語"
+  ],
+  "subtitles.search": [
+   "Search subtitles",
+   "字幕を検索"
+  ],
+  "subtitles.none": [
+   "No subtitles found in this language.",
+   "この言語の字幕は見つかりませんでした。"
+  ],
+  "subtitles.provider": [
+   "Provider",
+   "プロバイダー"
+  ],
+  "subtitles.release": [
+   "Release",
+   "リリース"
+  ],
+  "subtitles.hearingImpaired": [
+   "For the hearing impaired",
+   "聴覚障害者向け"
+  ],
+  "subtitles.downloads": [
+   "Downloads",
+   "ダウンロード数"
+  ],
+  "subtitles.download": [
+   "Use this subtitle",
+   "この字幕を使う"
+  ],
+  "subtitles.saved": [
+   "The subtitle was saved beside the video.",
+   "字幕を動画の横に保存しました。"
+  ],
+  "subtitles.exists": [
+   "A subtitle of this language is already beside the video.",
+   "この言語の字幕はすでに動画の横にあります。"
+  ],
+  "details.duration": [
+   "Duration",
+   "再生時間"
+  ],
+  "details.wholeWork": [
+   "Whole work",
+   "作品全体"
+  ],
+  "details.pages": [
+   "Version pages",
+   "バージョンのページ"
+  ],
+  "media.asset.Video": [
+   "Video",
+   "ビデオ"
+  ],
+  "media.asset.Audio": [
+   "Audio",
+   "オーディオ"
+  ],
+  "media.asset.Ebook": [
+   "E-book",
+   "電子書籍"
+  ],
+  "media.asset.Comic": [
+   "Comic",
+   "コミック"
+  ],
+  "media.asset.Game": [
+   "Game",
+   "ゲーム"
+  ],
+  "instance.module.Playback": [
+   "Playback",
+   "再生"
+  ],
+  "instance.module.Reading": [
+   "Book processing and reader",
+   "本の処理とリーダー"
+  ],
+  "instance.module.Profiles": [
+   "Several profiles per account",
+   "アカウントごとに複数のプロフィール"
+  ],
+  "instance.module.Emulation": [
+   "Retro games in the browser",
+   "ブラウザーでのレトロゲーム"
+  ],
+  "instance.module.UnitGroups": [
+   "Named sections for episodes and volumes",
+   "エピソードと巻の名前付きセクション"
+  ],
+  "instance.module.ProgressSync": [
+   "Share watch progress with Jellyfin and Emby",
+   "Jellyfin や Emby と視聴の進捗を共有"
+  ],
+  "unitGroups.title": [
+   "Sections",
+   "セクション"
+  ],
+  "unitGroups.name": [
+   "Name",
+   "名前"
+  ],
+  "unitGroups.delete": [
+   "Delete",
+   "削除"
+  ],
+  "unitGroups.from": [
+   "From",
+   "開始"
+  ],
+  "unitGroups.to": [
+   "To",
+   "終了"
+  ],
+  "unitGroups.fromParent": [
+   "From season",
+   "開始シーズン"
+  ],
+  "unitGroups.toParent": [
+   "To season",
+   "終了シーズン"
+  ],
+  "unitGroups.add": [
+   "Add section",
+   "セクションを追加"
+  ],
+  "game.title": [
+   "Play",
+   "プレイ"
+  ],
+  "game.notFound": [
+   "This game is not available.",
+   "このゲームは利用できません。"
+  ],
+  "game.unsupported": [
+   "This game's platform does not play in the browser.",
+   "このゲームのプラットフォームはブラウザーでは動作しません。"
+  ],
+  "game.saveFailed": [
+   "The save could not be stored on the server; it stays in this browser for now.",
+   "セーブデータをサーバーに保存できませんでした。今のところこのブラウザーに保持されます。"
+  ],
+  "game.stateSaved": [
+   "State saved to your profile",
+   "プロフィールに状態を保存しました"
+  ],
+  "game.stateMissing": [
+   "No saved state yet",
+   "保存された状態はまだありません"
+  ],
+  "game.playedMinutes": [
+   "Played {0} min",
+   "{0} 分プレイ"
+  ],
+  "game.playedHours": [
+   "Played {0} h {1} min",
+   "{0} 時間 {1} 分プレイ"
+  ],
+  "player.play": [
+   "Play",
+   "再生"
+  ],
+  "player.pause": [
+   "Pause",
+   "一時停止"
+  ],
+  "player.back10": [
+   "Back 10 seconds",
+   "10秒戻る"
+  ],
+  "player.previous": [
+   "Previous",
+   "前へ"
+  ],
+  "player.next": [
+   "Next",
+   "次へ"
+  ],
+  "player.forward30": [
+   "Forward 30 seconds",
+   "30秒進む"
+  ],
+  "player.timeline": [
+   "Playback position",
+   "再生位置"
+  ],
+  "player.mute": [
+   "Mute",
+   "ミュート"
+  ],
+  "player.volume": [
+   "Volume",
+   "音量"
+  ],
+  "player.speed": [
+   "Playback speed",
+   "再生速度"
+  ],
+  "player.audio": [
+   "Audio",
+   "音声"
+  ],
+  "player.minimize": [
+   "Minimize",
+   "最小化"
+  ],
+  "player.expand": [
+   "Open full player",
+   "フルプレーヤーを開く"
+  ],
+  "player.stop": [
+   "Stop playback",
+   "再生を停止"
+  ],
+  "player.subtitles": [
+   "Subtitles",
+   "字幕"
+  ],
+  "player.subtitles.off": [
+   "Off",
+   "オフ"
+  ],
+  "player.subtitles.forced": [
+   "forced",
+   "強制"
+  ],
+  "player.track.unknown": [
+   "Track",
+   "トラック"
+  ],
+  "player.channels.mono": [
+   "Mono",
+   "モノラル"
+  ],
+  "player.channels.stereo": [
+   "Stereo",
+   "ステレオ"
+  ],
+  "player.channels.count": [
+   "{0} channels",
+   "{0} チャンネル"
+  ],
+  "player.track.unsupported": [
+   "Not available in the browser yet",
+   "ブラウザーではまだ利用できません"
+  ],
+  "player.pip": [
+   "Picture in picture",
+   "ピクチャーインピクチャー"
+  ],
+  "player.fullscreen": [
+   "Fullscreen",
+   "全画面"
+  ],
+  "player.more": [
+   "More",
+   "その他"
+  ],
+  "player.delivery": [
+   "Delivery",
+   "配信方式"
+  ],
+  "player.mode.DirectPlay": [
+   "Direct Play",
+   "ダイレクト再生"
+  ],
+  "player.mode.Remux": [
+   "Direct Stream",
+   "ダイレクトストリーム"
+  ],
+  "player.mode.Transcode": [
+   "Transcode",
+   "トランスコード"
+  ],
+  "player.status.storage_waking": [
+   "The storage device is waking up. Playback starts automatically when it is ready.",
+   "ストレージデバイスを起動しています。準備ができると自動的に再生が始まります。"
+  ],
+  "player.status.storage_unavailable": [
+   "The storage holding this file is unavailable.",
+   "このファイルを保持しているストレージを利用できません。"
+  ],
+  "player.status.playback_conversion_unavailable": [
+   "This browser cannot play the file directly, and conversion is not available yet.",
+   "このブラウザーではファイルを直接再生できず、変換もまだ利用できません。"
+  ],
+  "player.status.not_found": [
+   "This media is no longer available.",
+   "このメディアは利用できなくなりました。"
+  ],
+  "player.status.failed": [
+   "Playback could not be started.",
+   "再生を開始できませんでした。"
+  ],
+  "details.play": [
+   "Play",
+   "再生"
+  ],
+  "details.playAgain": [
+   "Play again",
+   "もう一度再生"
+  ],
+  "details.resume": [
+   "Continue at",
+   "続きから"
+  ],
+  "common.back": [
+   "Back",
+   "戻る"
+  ],
+  "media.author": [
+   "Author",
+   "著者"
+  ],
+  "media.title": [
+   "Title",
+   "タイトル"
+  ],
+  "common.open": [
+   "Open",
+   "開く"
+  ],
+  "media.type": [
+   "Media type",
+   "メディアタイプ"
+  ],
+  "media.year": [
+   "Year",
+   "年"
+  ],
+  "admin.works.searchMetadata": [
+   "Search metadata",
+   "メタデータを検索"
+  ],
+  "admin.works.noMetadata": [
+   "No match found.",
+   "一致するものは見つかりませんでした。"
+  ],
+  "admin.works.originalTitle": [
+   "Original title",
+   "原題"
+  ],
+  "admin.works.import": [
+   "Add",
+   "追加"
+  ],
+  "admin.work.refreshMetadata": [
+   "Update from the provider",
+   "プロバイダーから更新"
+  ],
+  "admin.work.match": [
+   "Wrong match",
+   "一致が違う"
+  ],
+  "admin.work.useMatch": [
+   "Use this match",
+   "この一致を使う"
+  ],
+  "admin.work.currentMatch": [
+   "Current match",
+   "現在の一致"
+  ],
+  "admin.providers.secret": [
+   "API key or read access token",
+   "API キーまたは読み取りアクセストークン"
+  ],
+  "admin.providers.clientId": [
+   "Twitch application client ID",
+   "Twitch アプリケーションのクライアント ID"
+  ],
+  "admin.providers.clientSecret": [
+   "Twitch application client secret",
+   "Twitch アプリケーションのクライアントシークレット"
+  ],
+  "admin.providers.secretSet": [
+   "A key is stored.",
+   "キーが保存されています。"
+  ],
+  "admin.providers.secretMissing": [
+   "No key is stored.",
+   "キーは保存されていません。"
+  ],
+  "media.create": [
+   "Create work",
+   "作品を作成"
+  ],
+  "media.empty": [
+   "No works have been added yet.",
+   "作品はまだ追加されていません。"
+  ],
+  "media.type.Movie": [
+   "Movie",
+   "映画"
+  ],
+  "media.type.Series": [
+   "Series",
+   "TVシリーズ"
+  ],
+  "media.type.Book": [
+   "Book",
+   "本"
+  ],
+  "media.subtype": [
+   "Subtype",
+   "サブタイプ"
+  ],
+  "media.subtype.none": [
+   "None",
+   "なし"
+  ],
+  "media.subtype.Anime": [
+   "Anime",
+   "アニメ"
+  ],
+  "media.subtype.Manga": [
+   "Manga",
+   "マンガ"
+  ],
+  "media.subtype.LightNovel": [
+   "Light novel",
+   "ライトノベル"
+  ],
+  "media.type.Music": [
+   "Music",
+   "音楽"
+  ],
+  "media.type.Game": [
+   "Game",
+   "ゲーム"
+  ],
+  "media.watchlist.add": [
+   "Add to watchlist",
+   "ウォッチリストに追加"
+  ],
+  "media.watchlist.manage": [
+   "Manage watchlist in Details",
+   "詳細でウォッチリストを管理"
+  ],
+  "media.watchlist.remove": [
+   "Remove from watchlist",
+   "ウォッチリストから削除"
+  ],
+  "media.watchlist.empty": [
+   "Your watchlist is empty.",
+   "ウォッチリストは空です。"
+  ],
+  "errors.invalid_data": [
+   "Please check the supplied values.",
+   "入力された値を確認してください。"
+  ],
+  "errors.authentication_required": [
+   "Please sign in to continue.",
+   "続行するにはサインインしてください。"
+  ],
+  "errors.permission_denied": [
+   "You do not have permission to perform this action.",
+   "この操作を行う権限がありません。"
+  ],
+  "errors.not_found": [
+   "The requested resource was not found.",
+   "要求されたリソースが見つかりませんでした。"
+  ],
+  "errors.invalid_antiforgery_token": [
+   "Please reload the page and try again.",
+   "ページを再読み込みして、もう一度お試しください。"
+  ],
+  "errors.invalid_request": [
+   "The request could not be processed.",
+   "リクエストを処理できませんでした。"
+  ],
+  "errors.provider_unavailable": [
+   "The external provider is currently unavailable.",
+   "外部プロバイダーは現在利用できません。"
+  ],
+  "errors.storage_unavailable": [
+   "The storage is not reachable. Check that the NAS is on and the share is mounted.",
+   "ストレージに接続できません。NAS の電源が入っていて、共有がマウントされているか確認してください。"
+  ],
+  "errors.storage_waking": [
+   "The storage device is waking up. Please try again shortly.",
+   "ストレージデバイスを起動しています。しばらくしてからもう一度お試しください。"
+  ],
+  "errors.playback_conversion_unavailable": [
+   "This file cannot be played directly, and conversion is not available yet.",
+   "このファイルは直接再生できず、変換もまだ利用できません。"
+  ],
+  "errors.playback_conversion_failed": [
+   "The media conversion failed. Please try again.",
+   "メディアの変換に失敗しました。もう一度お試しください。"
+  ],
+  "errors.playback_subtitle_unavailable": [
+   "This subtitle cannot be shown.",
+   "この字幕は表示できません。"
+  ],
+  "errors.playback_capacity_exhausted": [
+   "The server is converting as many streams as it allows. Please try again shortly.",
+   "サーバーが許可された数のストリームを変換中です。しばらくしてからもう一度お試しください。"
+  ],
+  "errors.storage_wake_failed": [
+   "The Wake-on-LAN packet could not be sent.",
+   "Wake-on-LAN パケットを送信できませんでした。"
+  ],
+  "errors.scan_incomplete": [
+   "Some folders could not be read. Nothing was marked as missing.",
+   "一部のフォルダーを読み取れませんでした。未取得としてマークされたものはありません。"
+  ],
+  "errors.synology_unavailable": [
+   "The Synology NAS could not be reached at its DSM address.",
+   "DSM のアドレスで Synology NAS に到達できませんでした。"
+  ],
+  "errors.synology_certificate_untrusted": [
+   "The NAS presents a certificate nobody vouches for.",
+   "NAS が、誰も保証していない証明書を提示しています。"
+  ],
+  "errors.synology_login_failed": [
+   "DSM rejected the account or password.",
+   "DSM がアカウントまたはパスワードを拒否しました。"
+  ],
+  "errors.synology_two_factor": [
+   "This DSM account uses two-step verification; use an administrator account without it.",
+   "この DSM アカウントは2段階認証を使用しています。2段階認証のない管理者アカウントを使用してください。"
+  ],
+  "errors.synology_not_admin": [
+   "This DSM account may not read health or change power; use an administrator account.",
+   "この DSM アカウントでは健全性の読み取りや電源の変更はできません。管理者アカウントを使用してください。"
+  ],
+  "errors.synology_blocked": [
+   "DSM blocks Jularr's address after failed logins; unblock it in DSM.",
+   "ログインの失敗により、DSM が Jularr のアドレスをブロックしています。DSM でブロックを解除してください。"
+  ],
+  "errors.backup_unavailable": [
+   "Backups need pg_dump and pg_restore, which this server does not have.",
+   "バックアップにはpg_dumpとpg_restoreが必要ですが、このサーバーにはありません。"
+  ],
+  "errors.backup_failed": [
+   "The backup tool did not finish. The server log has its message.",
+   "バックアップツールが完了しませんでした。メッセージはサーバーログにあります。"
+  ],
+  "errors.backup_tool_missing": [
+   "pg_dump or pg_restore was not found at the configured path.",
+   "設定されたパスに pg_dump または pg_restore が見つかりませんでした。"
+  ],
+  "errors.backup_auth_failed": [
+   "PostgreSQL refused the database login of the backup tool.",
+   "PostgreSQL がバックアップツールのデータベースログインを拒否しました。"
+  ],
+  "errors.backup_version_mismatch": [
+   "pg_dump or pg_restore is older than the PostgreSQL server.",
+   "pg_dump または pg_restore が PostgreSQL サーバーより古いバージョンです。"
+  ],
+  "errors.backup_disk_full": [
+   "The backup folder is full.",
+   "バックアップフォルダーがいっぱいです。"
+  ],
+  "errors.backup_timeout": [
+   "The backup tool ran too long and was stopped.",
+   "バックアップツールの実行時間が長すぎたため停止されました。"
+  ],
+  "errors.backup_running": [
+   "A restore is already running.",
+   "復元はすでに実行中です。"
+  ],
+  "errors.metadata_unavailable": [
+   "The metadata source is not configured or cannot be reached.",
+   "メタデータソースが設定されていないか、到達できません。"
+  ],
+  "errors.metadata_authentication_failed": [
+   "TMDB rejected the stored key.",
+   "TMDB が保存されたキーを拒否しました。"
+  ],
+  "errors.metadata_rate_limited": [
+   "TMDB limits requests right now. Please try again shortly.",
+   "現在 TMDB がリクエストを制限しています。しばらくしてからもう一度お試しください。"
+  ],
+  "errors.reading_unavailable": [
+   "This book is not saved for reading while its storage is offline.",
+   "ストレージがオフラインの間、この本は閲覧用に保存されていません。"
+  ],
+  "errors.reading_invalid_file": [
+   "This book file cannot be opened.",
+   "この本のファイルを開けません。"
+  ],
+  "errors.translation_unavailable": [
+   "Translation files cannot be fetched right now; the book stays in its language.",
+   "現在、翻訳ファイルを取得できません。本は元の言語のままです。"
+  ],
+  "errors.reading_pdf_without_text": [
+   "This PDF holds scanned pages without text; it opens as a PDF.",
+   "この PDF にはテキストのないスキャンページが含まれているため、PDF として開きます。"
+  ],
+  "errors.reading_translation_incomplete": [
+   "This book is not translated into that language in every section yet.",
+   "この本はまだすべてのセクションがその言語に翻訳されていません。"
+  ],
+  "errors.reading_pdf_recognizing": [
+   "The scanned pages are being turned into text; until then the book opens as a PDF.",
+   "スキャンしたページをテキストに変換しています。完了するまで本はPDFとして開きます。"
+  ],
+  "errors.ocr_unavailable": [
+   "The text recognition models cannot be fetched right now.",
+   "文字認識モデルを今は取得できません。"
+  ],
+  "errors.reading_unsupported": [
+   "This comic needs 7-Zip, which is not configured on the server.",
+   "このコミックには 7-Zip が必要ですが、サーバーで設定されていません。"
+  ],
+  "errors.plex_unavailable": [
+   "The Plex server could not be reached.",
+   "Plex サーバーに到達できませんでした。"
+  ],
+  "errors.plex_authentication_failed": [
+   "The Plex server rejected the token.",
+   "Plex サーバーがトークンを拒否しました。"
+  ],
+  "errors.plex_invalid_response": [
+   "The Plex server returned an invalid response.",
+   "Plex サーバーが無効な応答を返しました。"
+  ],
+  "errors.media_server_unavailable": [
+   "The media server could not be reached.",
+   "メディアサーバーに到達できませんでした。"
+  ],
+  "errors.media_server_authentication_failed": [
+   "The media server refused the API key.",
+   "メディアサーバーが API キーを拒否しました。"
+  ],
+  "errors.media_server_invalid_response": [
+   "The media server returned an invalid response.",
+   "メディアサーバーが無効な応答を返しました。"
+  ],
+  "errors.media_server_outdated": [
+   "Jellyfin 10.9 or newer is needed.",
+   "Jellyfin 10.9 以降が必要です。"
+  ],
+  "errors.device_pairing_busy": [
+   "No pairing code is free right now; try again in a minute.",
+   "現在使用できるペアリングコードがありません。1分後にもう一度お試しください。"
+  ],
+  "errors.device_pairing_attempts": [
+   "Too many wrong codes; try again in ten minutes.",
+   "間違ったコードの入力が多すぎます。10分後にもう一度お試しください。"
+  ],
+  "errors.validation.invalid_code": [
+   "This code is unknown or has expired.",
+   "このコードは不明か、有効期限が切れています。"
+  ],
+  "errors.validation.translation_mismatch": [
+   "The translation does not fit this section.",
+   "翻訳がこのセクションに合っていません。"
+  ],
+  "errors.validation.indexer_removed": [
+   "The indexer of this release was removed; search again.",
+   "このリリースのインデクサーは削除されました。もう一度検索してください。"
+  ],
+  "errors.validation.invalid_network": [
+   "Enter IP addresses or networks such as 192.168.1.10 or 10.0.0.0/8.",
+   "192.168.1.10 や 10.0.0.0/8 のような IP アドレスまたはネットワークを入力してください。"
+  ],
+  "errors.validation.pairing_expired": [
+   "This code has expired; show a new code on the device.",
+   "このコードは有効期限が切れています。デバイスで新しいコードを表示してください。"
+  ],
+  "errors.acquisition_unavailable": [
+   "The indexer or download client could not be reached.",
+   "インデクサーまたはダウンロードクライアントに到達できませんでした。"
+  ],
+  "errors.acquisition_authentication_failed": [
+   "The indexer or download client rejected the API key.",
+   "インデクサーまたはダウンロードクライアントが API キーを拒否しました。"
+  ],
+  "errors.acquisition_rate_limited": [
+   "The indexer limits requests right now. Please try again later.",
+   "現在インデクサーがリクエストを制限しています。しばらくしてからもう一度お試しください。"
+  ],
+  "errors.acquisition_limit_reached": [
+   "The indexer's daily grab limit is reached.",
+   "インデクサーの1日の取得上限に達しました。"
+  ],
+  "errors.acquisition_query_limit_reached": [
+   "The indexer's daily query limit is reached.",
+   "インデクサーの1日の検索上限に達しました。"
+  ],
+  "errors.acquisition_invalid_response": [
+   "The indexer or download client returned an invalid response.",
+   "インデクサーまたはダウンロードクライアントが無効な応答を返しました。"
+  ],
+  "errors.acquisition_download_path_unconfigured": [
+   "Download workspace is not configured or is unavailable",
+   "ダウンロードの一時保存先が未設定か利用できません"
+  ],
+  "errors.acquisition_no_download_client": [
+   "No enabled download client is configured.",
+   "有効なダウンロードクライアントが設定されていません。"
+  ],
+  "errors.acquisition_grab_failed": [
+   "The download client did not accept the release.",
+   "ダウンロードクライアントがリリースを受け付けませんでした。"
+  ],
+  "errors.concurrent_change": [
+   "Another change was made at the same time. Please reload and try again.",
+   "同時に別の変更が行われました。再読み込みして、もう一度お試しください。"
+  ],
+  "errors.internal_error": [
+   "An unknown error occurred.",
+   "不明なエラーが発生しました。"
+  ],
+  "errors.import_no_library": [
+   "No writable library of this kind exists.",
+   "この種類の書き込み可能なライブラリがありません。"
+  ],
+  "errors.rate_limit_exceeded": [
+   "Too many requests. Please try again later.",
+   "リクエストが多すぎます。しばらくしてからもう一度お試しください。"
+  ],
+  "errors.validation.required": [
+   "A value is required.",
+   "値が必要です。"
+  ],
+  "errors.validation.invalid_type": [
+   "The value has an invalid type.",
+   "値の型が無効です。"
+  ],
+  "errors.validation.out_of_range": [
+   "The value is outside the allowed range.",
+   "値が許容範囲外です。"
+  ],
+  "errors.validation.invalid_uuid": [
+   "The identifier is invalid.",
+   "識別子が無効です。"
+  ],
+  "errors.validation.invalid_text": [
+   "The text contains invalid characters.",
+   "テキストに無効な文字が含まれています。"
+  ],
+  "errors.validation.too_short": [
+   "The value is too short.",
+   "値が短すぎます。"
+  ],
+  "errors.validation.password_mismatch": [
+   "The passwords do not match.",
+   "パスワードが一致しません。"
+  ],
+  "errors.validation.too_long": [
+   "The value is too long.",
+   "値が長すぎます。"
+  ],
+  "errors.validation.invalid_email": [
+   "Please enter a valid email address.",
+   "有効なメールアドレスを入力してください。"
+  ],
+  "errors.validation.invalid_locale": [
+   "Please enter a language code supported by this server.",
+   "このサーバーが対応している言語コードを入力してください。"
+  ],
+  "errors.validation.invalid_url": [
+   "Please enter an HTTP or HTTPS address.",
+   "HTTP または HTTPS のアドレスを入力してください。"
+  ],
+  "errors.validation.invalid_host": [
+   "Please enter a hostname or IPv4 address without a scheme or path.",
+   "スキームやパスを含まないホスト名または IPv4 アドレスを入力してください。"
+  ],
+  "errors.validation.invalid_path": [
+   "Please enter a path without traversal segments.",
+   "親ディレクトリへの移動を含まないパスを入力してください。"
+  ],
+  "errors.validation.invalid_mac_address": [
+   "Please enter a MAC address such as 00:11:22:AA:BB:CC.",
+   "00:11:22:AA:BB:CC のような MAC アドレスを入力してください。"
+  ],
+  "errors.validation.overlapping_path": [
+   "This path overlaps another library path on the same connection.",
+   "このパスは、同じ接続上の別のライブラリパスと重複しています。"
+  ],
+  "errors.validation.in_use": [
+   "This item is still in use.",
+   "この項目はまだ使用中です。"
+  ],
+  "errors.validation.invalid_pin": [
+   "The PIN is incorrect.",
+   "PIN が正しくありません。"
+  ],
+  "errors.validation.request_limit": [
+   "You have reached your request limit for now.",
+   "現在、リクエストの上限に達しています。"
+  ],
+  "errors.validation.request_media_blocked": [
+   "Your request rule does not allow this kind of media.",
+   "リクエストルールでは、この種類のメディアは許可されていません。"
+  ],
+  "errors.validation.profile_limit": [
+   "An account can own up to ten profiles.",
+   "1つのアカウントで所有できるプロフィールは最大10個です。"
+  ],
+  "errors.validation.invalid_pin_format": [
+   "The PIN must have three to six digits.",
+   "PIN は3～6桁の数字にしてください。"
+  ],
+  "errors.validation.pin_locked": [
+   "Too many incorrect PINs. Please try again in a minute.",
+   "誤った PIN の入力が多すぎます。1分後にもう一度お試しください。"
+  ],
+  "errors.validation.duplicate_value": [
+   "This value is already in use.",
+   "この値はすでに使用されています。"
+  ],
+  "errors.validation.collection_limit": [
+   "This profile has as many collections as the Admin allows.",
+   "このプロフィールのコレクション数は、管理者が許可する上限に達しています。"
+  ],
+  "errors.validation.annotation_limit": [
+   "A profile keeps at most 1000 highlights per book.",
+   "プロフィールが1冊の本に保持できるハイライトは最大1000件です。"
+  ],
+  "errors.validation.bookmark_limit": [
+   "A profile keeps at most 200 bookmarks per book.",
+   "プロフィールごとに、1冊につきしおりは最大200件まで保存できます。"
+  ],
+  "errors.validation.overlapping_group": [
+   "These units already belong to another section.",
+   "これらのユニットはすでに別のセクションに属しています。"
+  ],
+  "errors.validation.group_limit": [
+   "This title has as many sections as the Admin allows.",
+   "このタイトルのセクション数は、管理者が許可する上限に達しています。"
+  ],
+  "errors.validation.utc_required": [
+   "The timestamp must use UTC.",
+   "タイムスタンプには UTC を使用する必要があります。"
+  ],
+  "errors.validation.unknown_catalog_value": [
+   "The selection is invalid.",
+   "選択内容が無効です。"
+  ],
+  "errors.validation.unknown_reference": [
+   "The referenced resource is unavailable.",
+   "参照されたリソースを利用できません。"
+  ],
+  "errors.validation.outdated_version": [
+   "The data has changed. Please reload and try again.",
+   "データが変更されました。再読み込みして、もう一度お試しください。"
+  ],
+  "errors.validation.invalid_transition": [
+   "This change is not available.",
+   "この変更は利用できません。"
+  ],
+  "errors.validation.invalid_file_type": [
+   "This kind of file is not accepted here.",
+   "この種類のファイルはここでは受け付けられません。"
+  ],
+  "errors.validation.invalid_value": [
+   "This value cannot be used here.",
+   "この値はここでは使用できません。"
+  ],
+  "errors.validation.unknown_language": [
+   "Use two-letter language codes such as de or en.",
+   "de や en のような2文字の言語コードを使用してください。"
+  ],
+  "errors.validation.backup_passphrase": [
+   "The passphrase does not open this backup's key ring.",
+   "このパスフレーズではこのバックアップの鍵を開けません。"
+  ],
+  "errors.validation.naming_unknown_token": [
+   "The pattern uses an unknown placeholder.",
+   "パターンに不明なプレースホルダーが使われています。"
+  ],
+  "errors.validation.naming_incomplete": [
+   "The pattern needs the title, and for episodes the season and episode.",
+   "パターンにはタイトルが必要で、エピソードの場合はシーズンとエピソードも必要です。"
+  ],
+  "errors.validation.naming_needs_release_token": [
+   "Several releases need {Quality}, {Release Group} or {Edition} in every file name.",
+   "複数のリリースを保持するには、すべてのファイル名に {Quality}、{Release Group}、または {Edition} が必要です。"
+  ],
+  "errors.validation.naming_invalid_path": [
+   "Each folder of the pattern needs a name.",
+   "パターンの各フォルダーには名前が必要です。"
+  ],
+  "errors.validation.setup_completed": [
+   "Only an instance that has not finished setup can be replaced by a backup.",
+   "セットアップが完了していないインスタンスだけが、バックアップで置き換えられます。"
+  ],
+  "errors.validation.backup_incompatible": [
+   "This backup belongs to another Jularr version.",
+   "このバックアップは別の Jularr バージョンのものです。"
+  ],
+  "errors.validation.library_rename_changed": [
+   "The library changed since the preview. Please check the new preview.",
+   "プレビュー後にライブラリが変更されました。新しいプレビューを確認してください。"
+  ],
+  "errors.validation.invalid_placeholders": [
+   "The translation must preserve its placeholders.",
+   "翻訳ではプレースホルダーを保持する必要があります。"
+  ],
+  "errors.validation.unknown_id": [
+   "The referenced item is unavailable.",
+   "参照された項目を利用できません。"
+  ],
+  "errors.validation.duplicate_id": [
+   "The item was supplied more than once.",
+   "この項目が複数回指定されました。"
+  ],
+  "errors.validation.unknown_or_duplicate_id": [
+   "The item is unavailable or was supplied more than once.",
+   "この項目を利用できないか、複数回指定されました。"
+  ],
+  "storage.check": [
+   "Check now",
+   "今すぐ確認"
+  ],
+  "storage.volume.title": [
+   "Docker volume",
+   "Docker ボリューム"
+  ],
+  "storage.volume.info": [
+   "Add these lines to compose.yaml and restart the container. An SMB password goes into .env under the variable named in them, each comma written twice. Docker mounts the share when the container starts, so the NAS must be on then.",
+   "これらの行を compose.yaml に追加し、コンテナーを再起動してください。SMB のパスワードは、行内に記載された変数名で .env に記入し、カンマはすべて 2 回続けて書きます。Docker はコンテナーの起動時に共有をマウントするため、その時点で NAS が起動している必要があります。"
+  ],
+  "storage.reach": [
+   "Connected by",
+   "接続方法"
+  ],
+  "storage.reach.direct": [
+   "Jularr",
+   "Jularr"
+  ],
+  "storage.reach.volume": [
+   "Docker volume",
+   "Docker ボリューム"
+  ],
+  "hint.StorageMountFields.IsVolume.info": [
+   "Jularr opens the share only when needed, so a NAS may sleep. A Docker volume is mounted when the container starts and needs lines in compose.yaml.",
+   "Jularr は必要なときだけ共有を開くため、NAS はスリープできます。Docker ボリュームはコンテナーの起動時にマウントされ、compose.yaml への記述が必要です。"
+  ],
+  "setup.step.Owner": [
+   "Owner & language",
+   "オーナーと言語"
+  ],
+  "admin.plex.pin.start": [
+   "Connect through plex.tv",
+   "plex.tv 経由で接続"
+  ],
+  "setup.presets": [
+   "Module presets",
+   "モジュールのプリセット"
+  ],
+  "setup.locale.machine": [
+   "{0} (machine translated)",
+   "{0}（機械翻訳）"
+  ],
+  "setup.preset.complete": [
+   "Complete",
+   "すべて"
+  ],
+  "setup.preset.mediaServer": [
+   "Media server",
+   "メディアサーバー"
+  ],
+  "setup.preset.requests": [
+   "Requests",
+   "リクエスト"
+  ],
+  "setup.modules.personal": [
+   "Profiles & personal features",
+   "プロフィールと個人機能"
+  ],
+  "setup.modules.operations": [
+   "Administration",
+   "管理"
+  ],
+  "arr.settings": [
+   "Arr+ settings",
+   "Arr+設定"
+  ],
+  "arr.formats": [
+   "Custom formats",
+   "カスタムフォーマット"
+  ],
+  "arr.sizes": [
+   "Quality sizes",
+   "品質ごとのサイズ"
+  ],
+  "arr.releaseProfiles": [
+   "Release profiles",
+   "リリースプロファイル"
+  ],
+  "arr.tags": [
+   "Tags",
+   "タグ"
+  ],
+  "arr.qualityGroups": [
+   "Quality groups",
+   "品質グループ"
+  ],
+  "arr.refreshGroups": [
+   "Apply group changes",
+   "グループの変更を適用"
+  ],
+  "arr.minimumScore": [
+   "Minimum format score",
+   "フォーマットの最低スコア"
+  ],
+  "arr.cutoffScore": [
+   "Upgrade until this format score",
+   "このフォーマットスコアまで更新"
+  ],
+  "arr.upgradeScore": [
+   "Minimum score increase",
+   "スコアの最低増加量"
+  ],
+  "arr.moveUp": [
+   "Move up",
+   "上へ"
+  ],
+  "arr.moveDown": [
+   "Move down",
+   "下へ"
+  ],
+  "arr.anyIndexer": [
+   "Every indexer",
+   "すべてのインデクサー"
+  ],
+  "arr.includeRenaming": [
+   "Include when renaming",
+   "名前の変更時に含める"
+  ],
+  "arr.condition": [
+   "Condition",
+   "条件"
+  ],
+  "arr.required": [
+   "Required",
+   "必須"
+  ],
+  "arr.negate": [
+   "Negate",
+   "否定"
+  ],
+  "arr.value": [
+   "Value or pattern",
+   "値またはパターン"
+  ],
+  "arr.exceptLanguage": [
+   "Any other language",
+   "指定以外の言語"
+  ],
+  "arr.resolution": [
+   "Resolution",
+   "解像度"
+  ],
+  "arr.minimum": [
+   "Minimum",
+   "最小値"
+  ],
+  "arr.maximum": [
+   "Maximum",
+   "最大値"
+  ],
+  "arr.addCondition": [
+   "Add condition",
+   "条件を追加"
+  ],
+  "arr.removeCondition": [
+   "Remove last condition",
+   "最後の条件を削除"
+  ],
+  "arr.importJson": [
+   "Sonarr, Radarr or TRaSH JSON",
+   "Sonarr、Radarr、TRaSHのJSON"
+  ],
+  "arr.import": [
+   "Import formats",
+   "フォーマットをインポート"
+  ],
+  "arr.minimumMb": [
+   "Minimum",
+   "最小"
+  ],
+  "arr.preferredMb": [
+   "Preferred",
+   "推奨"
+  ],
+  "arr.maximumMb": [
+   "Maximum",
+   "最大"
+  ],
+  "arr.requiredTerms": [
+   "One required term",
+   "いずれかの必須語句"
+  ],
+  "arr.ignoredTerms": [
+   "Ignored terms",
+   "除外する語句"
+  ],
+  "arr.condition.ReleaseTitle": [
+   "Release title",
+   "リリース名"
+  ],
+  "arr.condition.Edition": [
+   "Edition",
+   "エディション"
+  ],
+  "arr.condition.Language": [
+   "Language",
+   "言語"
+  ],
+  "arr.condition.ReleaseGroup": [
+   "Release group",
+   "リリースグループ"
+  ],
+  "arr.condition.Source": [
+   "Source",
+   "ソース"
+  ],
+  "arr.condition.Resolution": [
+   "Resolution",
+   "解像度"
+  ],
+  "arr.condition.QualityModifier": [
+   "Quality modifier",
+   "品質修飾子"
+  ],
+  "arr.condition.IndexerFlag": [
+   "Indexer flag",
+   "インデクサーフラグ"
+  ],
+  "arr.condition.Size": [
+   "Size (GB)",
+   "サイズ（GB）"
+  ],
+  "arr.condition.ReleaseType": [
+   "Release type",
+   "リリース種別"
+  ],
+  "arr.condition.Year": [
+   "Year",
+   "年"
+  ],
+  "takeover.outcome.takeover_profile_unsupported": [
+   "Profile needs review before importing titles",
+   "タイトルの取り込み前にプロファイルを確認"
+  ],
+  "arr.terms.info": [
+   "One term per line. Patterns use /expression/i.",
+   "語句は1行に1つ入力します。パターンは /式/i で入力します。"
+  ],
+  "arr.condition.info": [
+   "Use a pattern for titles, editions and groups; a two-letter language code or original, any, unknown for languages. Source and modifier values follow Sonarr or Radarr. Resolution uses its number; size and year use minimum and maximum.",
+   "タイトル、版、グループにはパターンを指定します。言語には2文字コードまたは original、any、unknown を使います。ソースと修飾子はSonarrまたはRadarrに従います。解像度は数値、サイズと年は上下限を指定します。"
+  ],
+  "common.remove": [
+   "Remove",
+   "削除"
+  ],
+  "acquisition.reason.SizeBelowQualityMinimum": [
+   "Below the minimum size for this quality",
+   "この品質の最小サイズ未満"
+  ],
+  "acquisition.reason.SizeAboveQualityMaximum": [
+   "Above the maximum size for this quality",
+   "この品質の最大サイズ超過"
+  ],
+  "acquisition.reason.FormatScore": [
+   "Custom format score",
+   "カスタムフォーマットのスコア"
+  ],
+  "acquisition.reason.FormatScoreBelowMinimum": [
+   "Format score below minimum",
+   "フォーマットスコアが最低値未満"
+  ],
+  "takeover.newLibraries": [
+   "Create libraries from root folders",
+   "ルートフォルダーからライブラリを作成"
+  ],
+  "takeover.keepLibrary": [
+   "Use existing library assignment",
+   "既存のライブラリ割り当てを使用"
+  ],
+  "takeover.inlineKeys": [
+   "Complete missing API keys",
+   "不足しているAPIキーを入力"
+  ],
+  "profile.section.size": [
+   "Size",
+   "サイズ"
+  ],
+  "profile.deleteConfirm": [
+   "Delete this unused profile?",
+   "この未使用のプロファイルを削除しますか？"
+  ],
+  "acquisition.reason.FormatEvaluationFailed": [
+   "Custom format could not be evaluated",
+   "カスタムフォーマットを評価できませんでした"
+  ],
+  "arr.applyCondition": [
+   "Apply condition type",
+   "条件の種類を適用"
+  ]
+ }
+}

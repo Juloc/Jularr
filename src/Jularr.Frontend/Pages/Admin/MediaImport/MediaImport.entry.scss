@@ -1,0 +1,166 @@
+// The import mockup: the source and the behaviour as two cards side by side (stacked on a narrow page), then the preview table with its dock.
+.media-import {
+    // The two cards of the first step share the form's grid.
+    &__upload .ui-form {
+        grid-template-columns: minmax(0, 1.3fr) minmax(min(100%, 360px), .7fr);
+        align-items: stretch;
+        gap: 22px;
+    }
+
+    &__upload .ui-form__section { grid-column: auto; align-content: start; }
+
+    // The cards' headings sit inside them, as in the mockup.
+    .ui-form__section > legend { float: left; grid-column: 1 / -1; width: 100%; margin: 0; padding: 0; }
+    .ui-form__note > div { display: flex; align-items: center; gap: 14px; }
+
+    // "Or paste JSON" between the two ways to give the list.
+    &__divider {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--muted);
+        font-size: var(--text-small);
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+
+        &::before,
+        &::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+    }
+
+    // Whether the list reads as one; script writes it.
+    &__status {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: var(--text-control);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+
+        &[data-state="valid"] { color: var(--success); }
+        &[data-state="invalid"] { color: var(--danger); }
+    }
+
+    // The example: its button beside the download, the opened box below both.
+    &__sample {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+        gap: 8px;
+
+        .code-sample { grid-column: 1 / -1; grid-row: 1; }
+        & > .button { grid-column: 2; grid-row: 1; z-index: 1; }
+    }
+
+    // The heading of the step beside what the list holds.
+    &__head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px 16px;
+        margin-block-end: 14px;
+
+        h2 { margin: 0; }
+    }
+
+    &__summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+    }
+
+    // The behaviour card and the table follow each other with the form's own gap.
+    &__preview .ui-form { gap: 18px; }
+    &__preview .ui-form__section { max-width: 560px; }
+
+    // The columns share the width of the page: the include switch is narrow, titles and matches give way.
+    &__rows .page-table :is(th, td) { padding-inline: 14px; }
+    &__rows .page-table td { min-width: 0; }
+    &__rows .page-table :is(th, td):first-child { width: 1%; padding-inline: 22px 6px; }
+    &__rows .page-table td:nth-child(2) { max-width: 260px; }
+    &__rows .page-table td:nth-child(3) { max-width: 200px; }
+    &__rows .page-table td:nth-child(4) { max-width: 260px; }
+
+    // What a row names: an icon tile for its kind of title, the title, then the kind, year and author.
+    &__title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+    }
+
+    &__tile {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        border-radius: var(--radius-tile);
+        background: var(--accent-soft);
+        color: var(--accent-text);
+    }
+
+    &__titles {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+        flex: 1;
+
+        strong { font-size: var(--text-body); font-weight: 800; }
+        span { color: var(--muted); font-size: var(--text-control); }
+    }
+
+    &__status-cell,
+    &__stack {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    &__status-cell > span { display: block; max-width: 100%; }
+    &__stack { align-items: stretch; min-width: 190px; }
+    &__status-cell > a { font-size: var(--text-control); }
+    &__detail { max-width: 100%; color: var(--muted); font-size: var(--text-control); }
+    &__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    &__search { display: flex; gap: 6px; & > .ui-field__control { flex: 1; min-width: 0; } }
+    &__field { min-width: 150px; }
+    &__include .toggle { min-height: 0; }
+    &__include .toggle__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+    // The dock keeps what is chosen and the two actions in view while a long list scrolls.
+    &__preview .ui-form > .ui-form__actions {
+        position: sticky;
+        bottom: 14px;
+        z-index: 3;
+        padding: 10px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-control);
+        background: var(--surface);
+        box-shadow: var(--shadow-overlay);
+    }
+
+    &__count { color: var(--muted); font-size: var(--text-control); font-weight: 680; white-space: nowrap; }
+}
+
+@media (max-width: 1100px) {
+    .media-import__upload .ui-form { grid-template-columns: minmax(0, 1fr); }
+}
+
+// A phone shows the cells of a row as lines; the controls take the width.
+@media (max-width: 640px) {
+    .media-import__rows .page-table td:nth-child(n) { max-width: none; }
+    .media-import__rows .page-table td > * { min-width: 0; max-width: 100%; }
+    .media-import__title,
+    .media-import__status-cell,
+    .media-import__field,
+    .media-import__stack { min-width: 0; flex: 1 1 0; }
+    .media-import__title { justify-content: flex-end; }
+    .media-import__stack,
+    .media-import__status-cell { align-items: flex-end; }
+    .media-import__preview .ui-form > .ui-form__actions { bottom: 8px; }
+}

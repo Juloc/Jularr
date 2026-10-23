@@ -1,0 +1,43 @@
+// The naming page: the example under each pattern and the drawer of placeholders.
+.naming-example {
+    color: var(--accent-text);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: var(--text-control);
+    overflow-wrap: anywhere;
+
+    &--problem { color: var(--danger); font-family: inherit; }
+}
+
+// The panels are the page: forms of one panel sit apart on the panel's rhythm.
+.ui-section > .ui-form + p,
+.ui-section > .ui-form + h3,
+.ui-section > p + .ui-form,
+.ui-section > p + h3 { margin-top: 14px; }
+
+.ui-section > h3 { margin: 18px 0 10px; }
+.ui-section > p { margin: 8px 0 0; color: var(--muted); font-size: var(--text-control); }
+.ui-section > .ui-form { margin-top: 14px; }
+.ui-section > .ui-form:first-of-type { margin-top: 0; }
+
+.naming-tokens {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 16px;
+    margin-top: 14px;
+}
+
+// A placeholder is a pill the drawer's click writes into a field.
+.naming-token {
+    justify-self: start;
+    padding: 6px 12px;
+    border: 1px solid var(--accent-edge);
+    border-radius: var(--radius-control);
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font: 700 var(--text-control) ui-monospace, SFMono-Regular, Consolas, monospace;
+    cursor: pointer;
+    transition: border-color var(--transition);
+
+    &:hover { border-color: var(--accent-outline); }
+}

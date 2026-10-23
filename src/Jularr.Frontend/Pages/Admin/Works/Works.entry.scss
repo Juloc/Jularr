@@ -1,0 +1,72 @@
+@use "../../../Framework/Components/MediaCard";
+
+// The library list on the list kit: the grid of its columns at three widths (the script builds the same from the person's choice of columns), the drawers' fields, the report and the dialogs.
+
+.works-list {
+    --list-columns: minmax(220px, 2.6fr) minmax(138px, 1fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(80px, .8fr) minmax(130px, 1fr);
+    --list-columns-medium: minmax(220px, 2.6fr) minmax(138px, 1fr) minmax(100px, 1fr) minmax(80px, .8fr) minmax(130px, 1fr);
+    --list-columns-narrow: minmax(200px, 2.4fr) minmax(138px, 1fr) minmax(80px, .8fr) minmax(130px, 1fr);
+
+    .list-actions { gap: 4px; }
+}
+
+// The overview view: a larger cover, the title with the start of its synopsis and its facts, the state and the actions.
+.works-overview {
+    --list-columns: minmax(0, 1fr) minmax(138px, 190px) minmax(130px, 190px);
+
+    .list-row { min-height: 112px; }
+}
+
+// The poster view: the shared grid of covers, a little apart from the toolbar.
+.works-posters { padding-top: 6px; }
+
+// The drawers' fields: a title above a select that fills the width.
+.works-field {
+    display: grid;
+    gap: 8px;
+    padding-top: 22px;
+
+    .drawer__field-title { padding-top: 0; }
+}
+
+.works-select {
+    width: 100%;
+    min-height: var(--control-height);
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--field);
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--text-control);
+    font-weight: 600;
+    text-overflow: ellipsis;
+
+    &--set { border-color: var(--accent-outline); background: var(--accent-soft); color: var(--accent-text); }
+    &:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+}
+
+// What the last action did: how many, and why the others stayed.
+.works-report {
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+
+    p { margin: 0; font-weight: 650; }
+    ul { display: grid; gap: 2px; margin: 6px 0 0; padding: 0; list-style: none; font-size: var(--text-small); }
+    li { display: flex; gap: 10px; min-width: 0; }
+}
+
+.works-report__title { min-width: 0; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+
+.works-report__reason { color: var(--muted); white-space: nowrap; }
+
+.work-dialog--wide { width: min(860px, 94vw); max-height: 90vh; overflow-y: auto; }
+
+.works-add-form, .works-delete-form { display: grid; gap: 16px; }
+
+// The search of the providers and the manual title are two ways to the same thing.
+.works-add-form > form + form, .works-add-form > .page-table-wrap + form { padding-top: 16px; border-top: 1px solid var(--border); }

@@ -1,0 +1,28 @@
+.fact-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin: 0 0 24px;
+
+    &__fact {
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+
+        dt {
+            color: var(--muted);
+            font-size: var(--text-small);
+            font-weight: 680;
+        }
+
+        dd {
+            margin: 4px 0 0;
+            font-size: 20px;
+            font-weight: 840;
+            letter-spacing: -.8px;
+            line-height: 1.15;
+        }
+    }
+}

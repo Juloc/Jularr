@@ -1,0 +1,6632 @@
+﻿{
+ "locale": "pt-BR",
+ "name": "Português (Brasil)",
+ "reviewed": false,
+ "enabled": false,
+ "texts": {
+  "progress.saveFailed": [
+   "Progress could not be saved. Jularr will retry temporary failures.",
+   "Não foi possível salvar o progresso. O Jularr tentará novamente em caso de falhas temporárias."
+  ],
+  "discover.loadRecommendations": [
+   "Load recommendations",
+   "Carregar recomendações"
+  ],
+  "design.art.washi": [
+   "Washi paper",
+   "Papel washi"
+  ],
+  "design.art.blossom": [
+   "Blossom branch",
+   "Ramo de cerejeira em flor"
+  ],
+  "design.art.fuji": [
+   "Fuji landscape",
+   "Paisagem do Monte Fuji"
+  ],
+  "design.art.torii": [
+   "Torii landscape",
+   "Paisagem com torii"
+  ],
+  "design.art.mascot": [
+   "Jularr mascot",
+   "Mascote do Jularr"
+  ],
+  "appearance.accent": [
+   "Accent color",
+   "Cor de destaque"
+  ],
+  "appearance.jularrRed": [
+   "Jularr red",
+   "Vermelho Jularr"
+  ],
+  "appearance.jularrPurple": [
+   "Jularr purple",
+   "Roxo Jularr"
+  ],
+  "appearance.accentDefault": [
+   "Use style default",
+   "Usar o padrão do estilo"
+  ],
+  "appearance.devicePreference": [
+   "Appearance choices are stored in this browser.",
+   "As escolhas de aparência são salvas neste navegador."
+  ],
+  "design.title": [
+   "Design lab",
+   "Laboratório de design"
+  ],
+  "design.cards.title": [
+   "Approved cover card states",
+   "Estados aprovados do card de capa"
+  ],
+  "design.cards.notice": [
+   "Design samples only; bookmarks toggle locally and actions open a preview, without library playback, requests or account changes. Green: complete in the profile audio language. Yellow: complete in other audio languages. Orange: partial in the profile language. Yellow–orange: partial in other audio languages. Subtitles do not change this status. Hover longer for the official muted trailer.",
+   "Apenas exemplos de design; os favoritos alternam localmente e as ações abrem uma prévia, sem reprodução da biblioteca, pedidos ou alterações na conta. Verde: completo no idioma de áudio do perfil. Amarelo: completo em outros idiomas de áudio. Laranja: parcial no idioma do perfil. Amarelo-alaranjado: parcial em outros idiomas de áudio. As legendas não alteram este status. Mantenha o cursor por mais tempo para ver o trailer oficial sem som."
+  ],
+  "design.introduction": [
+   "A development-only component workshop. These are labeled examples, not library records or working account actions. Changes to shared components affect the real pages.",
+   "Uma oficina de componentes apenas para desenvolvimento. São exemplos identificados, não registros da biblioteca nem ações reais da conta. Alterações nos componentes compartilhados afetam as páginas reais."
+  ],
+  "design.controls": [
+   "Buttons and icons",
+   "Botões e ícones"
+  ],
+  "design.icons": [
+   "Original Jularr icon catalog",
+   "Catálogo de ícones originais do Jularr"
+  ],
+  "design.tagGenre": [
+   "Fantasy",
+   "Fantasia"
+  ],
+  "design.tagSubtitles": [
+   "Subtitles",
+   "Legendas"
+  ],
+  "design.toggleOff": [
+   "Off example",
+   "Exemplo desligado"
+  ],
+  "design.toggleOn": [
+   "On example",
+   "Exemplo ligado"
+  ],
+  "design.toggleNotice": [
+   "These switches demonstrate local control states only. They do not save settings.",
+   "Estes interruptores demonstram apenas estados de controle locais. Eles não salvam configurações."
+  ],
+  "design.imageCredit": [
+   "Development artwork examples from TMDB. Poster and film artwork rights belong to their respective owners.",
+   "Exemplos de arte para desenvolvimento do TMDB. Os direitos dos pôsteres e das artes de filmes pertencem aos respectivos proprietários."
+  ],
+  "design.trailerCredit": [
+   "Official Your Name trailer from TOHO. Playback connects to YouTube after Play or a sustained hover on cards with a trailer.",
+   "Trailer oficial de Your Name da TOHO. A reprodução se conecta ao YouTube após Reproduzir ou ao manter o cursor por um tempo em cards com trailer."
+  ],
+  "media.preview.title": [
+   "Title preview",
+   "Prévia do título"
+  ],
+  "media.preview.close": [
+   "Close preview",
+   "Fechar prévia"
+  ],
+  "media.preview.playTrailer": [
+   "Play trailer",
+   "Reproduzir trailer"
+  ],
+  "media.preview.noTrailer": [
+   "No trailer available",
+   "Nenhum trailer disponível"
+  ],
+  "media.preview.externalTrailer": [
+   "Trailer unavailable here? Open it on YouTube.",
+   "Trailer indisponível aqui? Abra no YouTube."
+  ],
+  "media.preview.seriesStatus": [
+   "Series status",
+   "Status da série"
+  ],
+  "media.preview.availability": [
+   "Library availability",
+   "Disponibilidade na biblioteca"
+  ],
+  "media.preview.requestStatus": [
+   "Request status",
+   "Status do pedido"
+  ],
+  "media.preview.downloadStatus": [
+   "Download status",
+   "Status do download"
+  ],
+  "media.preview.noDownload": [
+   "No active download",
+   "Nenhum download ativo"
+  ],
+  "design.branding": [
+   "Branding and Original artwork",
+   "Marca e arte original"
+  ],
+  "design.forms": [
+   "Forms and validation",
+   "Formulários e validação"
+  ],
+  "design.layouts": [
+   "Layouts and navigation",
+   "Layouts e navegação"
+  ],
+  "design.media": [
+   "Media components",
+   "Componentes de mídia"
+  ],
+  "design.player": [
+   "Player controls",
+   "Controles do player"
+  ],
+  "design.playerNotice": [
+   "Layout preview only. No playback session or stream is started here.",
+   "Apenas prévia do layout. Nenhuma sessão de reprodução ou stream é iniciada aqui."
+  ],
+  "design.primary": [
+   "Primary",
+   "Primário"
+  ],
+  "design.secondary": [
+   "Secondary",
+   "Secundário"
+  ],
+  "design.disabled": [
+   "Disabled",
+   "Desativado"
+  ],
+  "design.selected": [
+   "Selected",
+   "Selecionado"
+  ],
+  "design.exampleTitle": [
+   "Example work",
+   "Obra de exemplo"
+  ],
+  "design.exampleOtherTitle": [
+   "Another example work",
+   "Outra obra de exemplo"
+  ],
+  "design.exampleContext": [
+   "Component example",
+   "Exemplo de componente"
+  ],
+  "design.exampleOverview": [
+   "Artwork, title, context and actions use the same media components as Library and Discover.",
+   "Arte, título, contexto e ações usam os mesmos componentes de mídia da Biblioteca e do Descobrir."
+  ],
+  "design.exampleStatus": [
+   "Preview only",
+   "Apenas prévia"
+  ],
+  "design.primaryArea": [
+   "Primary area",
+   "Área primária"
+  ],
+  "design.secondaryArea": [
+   "Secondary area",
+   "Área secundária"
+  ],
+  "design.validationExample": [
+   "Validation example",
+   "Exemplo de validação"
+  ],
+  "design.search": [
+   "Search component examples",
+   "Exemplos de componentes de busca"
+  ],
+  "setup.start.title": [
+   "Start and system",
+   "Início e sistema"
+  ],
+  "setup.owner.userName": [
+   "User name",
+   "Nome de usuário"
+  ],
+  "setup.owner.passwordConfirmation": [
+   "Confirm password",
+   "Confirmar senha"
+  ],
+  "setup.owner.create": [
+   "Create Owner",
+   "Criar Proprietário"
+  ],
+  "setup.owner.closed": [
+   "Initial Owner creation is no longer available.",
+   "A criação do Proprietário inicial não está mais disponível."
+  ],
+  "account.field.email": [
+   "Email",
+   "E-mail"
+  ],
+  "account.field.password": [
+   "Password",
+   "Senha"
+  ],
+  "account.field.userName": [
+   "Username or email",
+   "Nome de usuário ou e-mail"
+  ],
+  "account.login.hidePassword": [
+   "Hide password",
+   "Ocultar senha"
+  ],
+  "account.login.options": [
+   "Other sign-in options",
+   "Outras opções de login"
+  ],
+  "account.login.remember": [
+   "Stay signed in",
+   "Manter conectado"
+  ],
+  "account.login.showPassword": [
+   "Show password",
+   "Mostrar senha"
+  ],
+  "account.login.submit": [
+   "Sign in",
+   "Entrar"
+  ],
+  "account.login.title": [
+   "Sign in",
+   "Entrar"
+  ],
+  "account.logout.title": [
+   "Sign out",
+   "Sair"
+  ],
+  "account.logout.submit": [
+   "Sign out",
+   "Sair"
+  ],
+  "account.plex.start": [
+   "Sign in with Plex",
+   "Entrar com o Plex"
+  ],
+  "account.plex.authorize": [
+   "Open Plex sign-in",
+   "Abrir o login do Plex"
+  ],
+  "account.plex.pending": [
+   "Confirm sign-in in Plex, then continue here. Wait at least five seconds before checking again.",
+   "Confirme o login no Plex e continue aqui. Aguarde pelo menos cinco segundos antes de verificar novamente."
+  ],
+  "account.plex.complete": [
+   "Check Plex confirmation",
+   "Verificar confirmação do Plex"
+  ],
+  "account.plex.approval": [
+   "Your registration request is awaiting administrator approval.",
+   "Seu pedido de cadastro aguarda a aprovação do administrador."
+  ],
+  "account.profile.required": [
+   "Choose a profile before changing profile settings.",
+   "Escolha um perfil antes de alterar as configurações do perfil."
+  ],
+  "account.profile.title": [
+   "Choose a profile",
+   "Escolha um perfil"
+  ],
+  "account.profile.choose": [
+   "Use profile: ",
+   "Usar o perfil: "
+  ],
+  "account.profile.locked": [
+   "PIN protected",
+   "Protegido por PIN"
+  ],
+  "account.profile.pin": [
+   "PIN",
+   "PIN"
+  ],
+  "account.profile.pin.submit": [
+   "Unlock",
+   "Desbloquear"
+  ],
+  "profile.pin.save": [
+   "Save PIN",
+   "Salvar PIN"
+  ],
+  "account.profile.add": [
+   "Add profile",
+   "Adicionar perfil"
+  ],
+  "request.quality": [
+   "Quality",
+   "Qualidade"
+  ],
+  "reader.comic.page": [
+   "Page",
+   "Página"
+  ],
+  "reader.comic.direction": [
+   "Reading direction",
+   "Direção de leitura"
+  ],
+  "reader.comic.spread": [
+   "Two pages",
+   "Duas páginas"
+  ],
+  "request.quality.default": [
+   "Default quality",
+   "Qualidade padrão"
+  ],
+  "request.rule.add": [
+   "Add rule",
+   "Adicionar regra"
+  ],
+  "request.rule.name": [
+   "Rule name",
+   "Nome da regra"
+  ],
+  "request.rule.description": [
+   "Description",
+   "Descrição"
+  ],
+  "request.rule.limit": [
+   "Requests per period",
+   "Pedidos por período"
+  ],
+  "request.rule.limitColumn": [
+   "Request limit",
+   "Limite de pedidos"
+  ],
+  "request.rule.period": [
+   "Rolling period",
+   "Período móvel"
+  ],
+  "request.rule.approval": [
+   "Approval",
+   "Aprovação"
+  ],
+  "request.rule.manual": [
+   "Manual approval",
+   "Aprovação manual"
+  ],
+  "request.rule.automatic": [
+   "Automatic approval",
+   "Aprovação automática"
+  ],
+  "request.rule.media": [
+   "Allowed request media",
+   "Mídias permitidas nos pedidos"
+  ],
+  "request.rule.profiles": [
+   "Qualities requesters may choose",
+   "Qualidades que quem pede pode escolher"
+  ],
+  "request.rule.isDefault": [
+   "Default",
+   "Padrão"
+  ],
+  "request.rule.delete": [
+   "Delete rule",
+   "Excluir regra"
+  ],
+  "request.rule.summary": [
+   "{0} requests / {1} days",
+   "{0} pedidos / {1} dias"
+  ],
+  "request.rule.unlimited": [
+   "Unlimited",
+   "Ilimitado"
+  ],
+  "request.rule.profile": [
+   "Request rule",
+   "Regra de pedidos"
+  ],
+  "request.rule.inherited": [
+   "inherited",
+   "herdado"
+  ],
+  "request.rule.overridden": [
+   "adjusted",
+   "ajustado"
+  ],
+  "request.rule.override": [
+   "Override the rule's values",
+   "Substituir os valores da regra"
+  ],
+  "request.rule.inheritDefault": [
+   "Default ({0})",
+   "Padrão ({0})"
+  ],
+  "account.profile.create": [
+   "Create profile",
+   "Criar perfil"
+  ],
+  "profile.delete.warning": [
+   "Deleting removes this profile's progress and lists and cancels its open requests. This cannot be undone.",
+   "Excluir remove o progresso e as listas deste perfil e cancela seus pedidos em aberto. Isso não pode ser desfeito."
+  ],
+  "profile.delete.confirm": [
+   "Delete permanently",
+   "Excluir permanentemente"
+  ],
+  "profile.pin.remove": [
+   "Remove PIN",
+   "Remover PIN"
+  ],
+  "admin.accounts.profilePinReset": [
+   "Reset PIN",
+   "Redefinir PIN"
+  ],
+  "account.profile.empty": [
+   "No profiles are assigned to this account.",
+   "Nenhum perfil está atribuído a esta conta."
+  ],
+  "session.current": [
+   "Current session",
+   "Sessão atual"
+  ],
+  "session.other": [
+   "Other session",
+   "Outra sessão"
+  ],
+  "session.created": [
+   "Signed in: ",
+   "Conectado em: "
+  ],
+  "session.expires": [
+   "Expires: ",
+   "Expira em: "
+  ],
+  "session.revoke": [
+   "End session",
+   "Encerrar sessão"
+  ],
+  "common.next": [
+   "Next",
+   "Próximo"
+  ],
+  "common.previous": [
+   "Previous",
+   "Anterior"
+  ],
+  "common.actions": [
+   "Actions",
+   "Ações"
+  ],
+  "common.edit": [
+   "Edit",
+   "Editar"
+  ],
+  "common.save": [
+   "Save changes",
+   "Salvar alterações"
+  ],
+  "common.yes": [
+   "Yes",
+   "Sim"
+  ],
+  "common.no": [
+   "No",
+   "Não"
+  ],
+  "admin.localization.title": [
+   "UI translations",
+   "Traduções da interface"
+  ],
+  "admin.languages.title": [
+   "Languages",
+   "Idiomas"
+  ],
+  "admin.languages.code": [
+   "Language code",
+   "Código do idioma"
+  ],
+  "admin.languages.name": [
+   "Language name",
+   "Nome do idioma"
+  ],
+  "admin.languages.enabled": [
+   "Enabled",
+   "Ativado"
+  ],
+  "admin.languages.disabled": [
+   "Disabled",
+   "Desativado"
+  ],
+  "admin.languages.direction": [
+   "Text direction",
+   "Direção do texto"
+  ],
+  "admin.languages.leftToRight": [
+   "Left to right",
+   "Da esquerda para a direita"
+  ],
+  "admin.languages.rightToLeft": [
+   "Right to left",
+   "Da direita para a esquerda"
+  ],
+  "admin.languages.add": [
+   "Add language",
+   "Adicionar idioma"
+  ],
+  "admin.localization.key": [
+   "Resource key",
+   "Chave do recurso"
+  ],
+  "admin.localization.english": [
+   "English source",
+   "Origem em inglês"
+  ],
+  "admin.localization.description": [
+   "Translation context",
+   "Contexto da tradução"
+  ],
+  "admin.localization.translation": [
+   "Translation",
+   "Tradução"
+  ],
+  "admin.localization.version": [
+   "Source version",
+   "Versão da origem"
+  ],
+  "admin.localization.status": [
+   "Translation status",
+   "Status da tradução"
+  ],
+  "admin.localization.status.missing": [
+   "Missing",
+   "Faltando"
+  ],
+  "admin.localization.status.generated": [
+   "Generated",
+   "Gerada"
+  ],
+  "admin.localization.status.reviewed": [
+   "Reviewed",
+   "Revisada"
+  ],
+  "admin.localization.status.manual": [
+   "Manual",
+   "Manual"
+  ],
+  "admin.localization.status.outdated": [
+   "Outdated",
+   "Desatualizada"
+  ],
+  "admin.accounts.title": [
+   "Accounts",
+   "Contas"
+  ],
+  "admin.accounts.name": [
+   "Account name",
+   "Nome da conta"
+  ],
+  "admin.accounts.role": [
+   "Role",
+   "Função"
+  ],
+  "admin.accounts.role.owner": [
+   "Owner",
+   "Proprietário"
+  ],
+  "admin.accounts.role.user": [
+   "User",
+   "Usuário"
+  ],
+  "admin.accounts.role.mediamanager": [
+   "Media manager",
+   "Gerente de mídia"
+  ],
+  "admin.accounts.status": [
+   "Account status",
+   "Status da conta"
+  ],
+  "admin.accounts.mayConfirmSources": [
+   "May confirm source checks for own requests",
+   "Pode confirmar verificações de fontes nos próprios pedidos"
+  ],
+  "admin.accounts.enabled": [
+   "Enabled",
+   "Ativada"
+  ],
+  "admin.accounts.disabled": [
+   "Disabled / awaiting approval",
+   "Desativada / aguardando aprovação"
+  ],
+  "admin.accounts.sessionWarning": [
+   "Role or status changes end this account's existing sessions. Enabling an account does not verify its email address.",
+   "Alterações de função ou status encerram as sessões existentes desta conta. Ativar uma conta não verifica o endereço de e-mail dela."
+  ],
+  "admin.accounts.profileId": [
+   "Existing profile ID",
+   "ID de perfil existente"
+  ],
+  "admin.accounts.profiles": [
+   "Assigned profiles",
+   "Perfis atribuídos"
+  ],
+  "admin.accounts.profileAdd": [
+   "Assign profile access",
+   "Atribuir acesso ao perfil"
+  ],
+  "admin.accounts.profileRemove": [
+   "Remove profile access and end affected sessions",
+   "Remover acesso ao perfil e encerrar as sessões afetadas"
+  ],
+  "admin.accounts.profileOwned": [
+   "Owned profile: its ownership link cannot be removed here.",
+   "Perfil próprio: o vínculo de propriedade não pode ser removido aqui."
+  ],
+  "admin.providers.title": [
+   "Providers",
+   "Provedores"
+  ],
+  "admin.plex.notConnected": [
+   "Plex server: not connected",
+   "Servidor Plex: não conectado"
+  ],
+  "admin.plex.connected": [
+   "Plex server connected · {0} titles linked · last sync {1}",
+   "Servidor Plex conectado · {0} títulos vinculados · última sincronização {1}"
+  ],
+  "admin.plex.notSynced": [
+   "not synced yet",
+   "ainda não sincronizado"
+  ],
+  "admin.plex.baseUrl": [
+   "Plex server address",
+   "Endereço do servidor Plex"
+  ],
+  "admin.plex.token": [
+   "Plex token",
+   "Token do Plex"
+  ],
+  "admin.plex.connect": [
+   "Connect and test",
+   "Conectar e testar"
+  ],
+  "admin.plex.sync": [
+   "Sync availability now",
+   "Sincronizar disponibilidade agora"
+  ],
+  "admin.plex.signIn": [
+   "Sign in with Plex",
+   "Entrar com o Plex"
+  ],
+  "admin.plex.registration": [
+   "Plex users may register",
+   "Usuários do Plex podem se cadastrar"
+  ],
+  "admin.plex.registrationApproval": [
+   "New accounts wait for approval",
+   "Contas novas aguardam aprovação"
+  ],
+  "admin.plex.registrationSections": [
+   "Libraries whose users may register",
+   "Bibliotecas cujos usuários podem se cadastrar"
+  ],
+  "hint.PlexFields.SignIn.info": [
+   "Accounts linked to Plex sign in through Plex.",
+   "Contas vinculadas ao Plex entram pelo Plex."
+  ],
+  "hint.PlexFields.Registration.info": [
+   "Someone with access to the connected server can ask for an account by signing in with Plex.",
+   "Quem tem acesso ao servidor conectado pode pedir uma conta entrando com o Plex."
+  ],
+  "hint.PlexFields.RegistrationApproval.info": [
+   "An administrator enables each new account first.",
+   "Um administrador ativa primeiro cada conta nova."
+  ],
+  "hint.PlexFields.SectionKeys.info": [
+   "None chosen: users of any library may register.",
+   "Nenhuma escolhida: usuários de qualquer biblioteca podem se cadastrar."
+  ],
+  "admin.plex.disconnect": [
+   "Disconnect Plex server",
+   "Desconectar servidor Plex"
+  ],
+  "admin.plex.tested": [
+   "Plex {0} answered; libraries: {1}",
+   "O Plex {0} respondeu; bibliotecas: {1}"
+  ],
+  "admin.plex.synced": [
+   "{0} titles linked, {1} new titles added",
+   "{0} títulos vinculados, {1} novos títulos adicionados"
+  ],
+  "admin.mediaServer.notConnected": [
+   "Not connected",
+   "Não conectado"
+  ],
+  "admin.mediaServer.connected": [
+   "Connected · last progress sync {0}",
+   "Conectado · última sincronização de progresso {0}"
+  ],
+  "admin.mediaServer.baseUrl": [
+   "Server address",
+   "Endereço do servidor"
+  ],
+  "admin.mediaServer.apiKey": [
+   "API key",
+   "Chave de API"
+  ],
+  "admin.mediaServer.tested": [
+   "{0} {1} answered; {2} users",
+   "{0} {1} respondeu; {2} usuários"
+  ],
+  "admin.mediaServer.sync": [
+   "Sync progress now",
+   "Sincronizar progresso agora"
+  ],
+  "admin.mediaServer.synced": [
+   "{0} positions taken over, {1} sent to the server",
+   "{0} posições importadas, {1} enviadas ao servidor"
+  ],
+  "admin.mediaServer.disconnect": [
+   "Disconnect server",
+   "Desconectar servidor"
+  ],
+  "admin.mediaServer.linked": [
+   "{0} shares progress with {1}",
+   "{0} compartilha o progresso com {1}"
+  ],
+  "admin.mediaServer.proposed": [
+   "{0}: proposed profile {1}, not confirmed",
+   "{0}: perfil sugerido {1}, não confirmado"
+  ],
+  "admin.mediaServer.unlinked": [
+   "{0} shares no progress",
+   "{0} não compartilha progresso"
+  ],
+  "admin.mediaServer.profile": [
+   "Profile",
+   "Perfil"
+  ],
+  "admin.mediaServer.noProfile": [
+   "None",
+   "Nenhum"
+  ],
+  "admin.mediaServer.confirm": [
+   "Confirm",
+   "Confirmar"
+  ],
+  "media.openInPlex": [
+   "Open in Plex",
+   "Abrir no Plex"
+  ],
+  "reader.title": [
+   "Reader",
+   "Leitor"
+  ],
+  "reader.notFound": [
+   "This book cannot be opened.",
+   "Não é possível abrir este livro."
+  ],
+  "reader.contents": [
+   "Contents",
+   "Conteúdo"
+  ],
+  "reader.notes": [
+   "Notes",
+   "Notas"
+  ],
+  "reader.bookmark": [
+   "Bookmark",
+   "Marcador"
+  ],
+  "reader.bookmarks": [
+   "Bookmarks",
+   "Marcadores"
+  ],
+  "reader.bookmarkDelete": [
+   "Delete bookmark",
+   "Excluir marcador"
+  ],
+  "reader.openPdf": [
+   "Open in a new tab",
+   "Abrir em uma nova aba"
+  ],
+  "reader.originalPdf": [
+   "Original PDF",
+   "PDF original"
+  ],
+  "reader.download": [
+   "Download",
+   "Baixar"
+  ],
+  "reader.download.epub": [
+   "EPUB",
+   "EPUB"
+  ],
+  "reader.download.translated": [
+   "EPUB in {0}, machine-translated",
+   "EPUB, {0}, tradução automática"
+  ],
+  "reader.translate.original": [
+   "Original",
+   "Original"
+  ],
+  "reader.language": [
+   "Language of this book",
+   "Idioma deste livro"
+  ],
+  "reader.translating": [
+   "Translating",
+   "Traduzindo"
+  ],
+  "reader.translationFailed": [
+   "Translation is unavailable right now; the text stays in its language.",
+   "A tradução não está disponível no momento; o texto permanece no idioma original."
+  ],
+  "reader.search": [
+   "Search in this book",
+   "Buscar neste livro"
+  ],
+  "reader.searchEmpty": [
+   "The words do not appear in this book.",
+   "As palavras não aparecem neste livro."
+  ],
+  "reader.searchMore": [
+   "Only the first 50 sections with the words are listed.",
+   "Apenas as primeiras 50 seções com as palavras são listadas."
+  ],
+  "reader.notesEmpty": [
+   "Select text to highlight it or add a note.",
+   "Selecione um texto para destacá-lo ou adicionar uma nota."
+  ],
+  "reader.notesPages": [
+   "Note pages",
+   "Páginas de notas"
+  ],
+  "reader.note": [
+   "Note",
+   "Nota"
+  ],
+  "reader.deleteNote": [
+   "Delete",
+   "Excluir"
+  ],
+  "reader.highlight.Yellow": [
+   "Yellow",
+   "Amarelo"
+  ],
+  "reader.highlight.Green": [
+   "Green",
+   "Verde"
+  ],
+  "reader.highlight.Blue": [
+   "Blue",
+   "Azul"
+  ],
+  "reader.highlight.Pink": [
+   "Pink",
+   "Rosa"
+  ],
+  "reader.saveNote": [
+   "Save note",
+   "Salvar nota"
+  ],
+  "reader.settings": [
+   "Settings",
+   "Configurações"
+  ],
+  "reader.previous": [
+   "Previous",
+   "Anterior"
+  ],
+  "reader.next": [
+   "Next",
+   "Próxima"
+  ],
+  "reader.end": [
+   "The end",
+   "Fim"
+  ],
+  "reader.fontSize": [
+   "Text size",
+   "Tamanho do texto"
+  ],
+  "reader.smaller": [
+   "Smaller",
+   "Menor"
+  ],
+  "reader.larger": [
+   "Larger",
+   "Maior"
+  ],
+  "reader.theme": [
+   "Theme",
+   "Tema"
+  ],
+  "reader.theme.light": [
+   "Light",
+   "Claro"
+  ],
+  "reader.theme.sepia": [
+   "Sepia",
+   "Sépia"
+  ],
+  "reader.theme.dark": [
+   "Dark",
+   "Escuro"
+  ],
+  "reader.mode": [
+   "Layout",
+   "Layout"
+  ],
+  "reader.mode.scroll": [
+   "Scroll",
+   "Rolagem"
+  ],
+  "reader.mode.paged": [
+   "Pages",
+   "Páginas"
+  ],
+  "reader.notCached": [
+   "This book is still being saved for reading without the storage.",
+   "Este livro ainda está sendo salvo para leitura sem o armazenamento."
+  ],
+  "details.read": [
+   "Read",
+   "Ler"
+  ],
+  "admin.instance.title": [
+   "Instance settings",
+   "Configurações da instância"
+  ],
+  "admin.instance.name": [
+   "Instance name",
+   "Nome da instância"
+  ],
+  "admin.instance.readingCacheMegabytes": [
+   "Reading cache for offline storage",
+   "Cache de leitura para armazenamento offline"
+  ],
+  "admin.instance.readingCacheWorks": [
+   "Reading cache: most recently read books",
+   "Cache de leitura: livros lidos mais recentemente"
+  ],
+  "admin.instance.libraryScanIntervalHours": [
+   "Library scan interval",
+   "Intervalo de varredura da biblioteca"
+  ],
+  "admin.instance.historyRetentionDays": [
+   "Keep finished activity for",
+   "Manter atividades concluídas por dias"
+  ],
+  "admin.instance.historyMegabytes": [
+   "Activity history size",
+   "Tamanho do histórico de atividades em MB"
+  ],
+  "admin.instance.collectionLimit": [
+   "Collections per profile",
+   "Listas por perfil"
+  ],
+  "admin.instance.unitGroupLimit": [
+   "Sections per title",
+   "Seções por título"
+  ],
+  "admin.instance.subtitleLanguages": [
+   "Wanted subtitle languages",
+   "Idiomas de legenda desejados"
+  ],
+  "admin.instance.usersConfirmSources": [
+   "Users may confirm source checks",
+   "Usuários podem confirmar verificações de fontes"
+  ],
+  "admin.providers.scope": [
+   "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration.",
+   "Ative ou desative as integrações registradas. Os recursos de conexão e login ainda exigem a configuração existente do host."
+  ],
+  "admin.providers.state": [
+   "Provider status",
+   "Status do provedor"
+  ],
+  "admin.providers.enabled": [
+   "Enabled",
+   "Ativado"
+  ],
+  "admin.providers.disabled": [
+   "Disabled",
+   "Desativado"
+  ],
+  "profile.field.displayName": [
+   "Profile name",
+   "Nome do perfil"
+  ],
+  "profile.field.uiLocale": [
+   "Language",
+   "Idioma"
+  ],
+  "profile.settings.title": [
+   "Profile settings",
+   "Configurações do perfil"
+  ],
+  "profile.settings.saved": [
+   "Your changes were saved.",
+   "Suas alterações foram salvas."
+  ],
+  "admin.library.description": [
+   "Imported media and file availability",
+   "Mídia importada e disponibilidade dos arquivos"
+  ],
+  "admin.activity.title": [
+   "Activity",
+   "Atividade"
+  ],
+  "admin.requests.title": [
+   "Requests",
+   "Pedidos"
+  ],
+  "admin.rules.description": [
+   "Approval and request rules",
+   "Regras de aprovação e de pedidos"
+  ],
+  "admin.rules.title": [
+   "Rules",
+   "Regras"
+  ],
+  "admin.users.description": [
+   "Account assignments and request permissions",
+   "Atribuições de contas e permissões de pedidos"
+  ],
+  "admin.users.title": [
+   "Users",
+   "Usuários"
+  ],
+  "admin.wanted.description": [
+   "Acquisition needs after request approval",
+   "Necessidades de aquisição após a aprovação do pedido"
+  ],
+  "admin.wanted.title": [
+   "Wanted",
+   "Procurados"
+  ],
+  "admin.acquisition.title": [
+   "Indexers & download clients",
+   "Indexers e clientes de download"
+  ],
+  "admin.profiles.title": [
+   "Quality profiles",
+   "Perfis de qualidade"
+  ],
+  "admin.sources.title": [
+   "Sources",
+   "Fontes"
+  ],
+  "sources.setUpAll": [
+   "Set up all available sources",
+   "Configurar todas as fontes disponíveis"
+  ],
+  "sources.setUpResult": [
+   "Added: {0}. Waiting for a login or key: {1}.",
+   "Adicionadas: {0}. Aguardando login ou chave: {1}."
+  ],
+  "sources.name": [
+   "Source",
+   "Fonte"
+  ],
+  "sources.capabilities": [
+   "Can",
+   "Pode"
+  ],
+  "sources.configured": [
+   "Set up",
+   "Configurada"
+  ],
+  "sources.add": [
+   "Add",
+   "Adicionar"
+  ],
+  "sources.group.Books": [
+   "Books",
+   "Livros"
+  ],
+  "sources.group.Novels": [
+   "Light novels, web novels and fanfiction",
+   "Light novels, web novels e fanfics"
+  ],
+  "sources.group.Manga": [
+   "Manga",
+   "Mangá"
+  ],
+  "sources.group.Audiobooks": [
+   "Audiobooks",
+   "Audiolivros"
+  ],
+  "sources.group.Acquisition": [
+   "Usenet",
+   "Usenet"
+  ],
+  "sources.group.Music": [
+   "Music",
+   "Música"
+  ],
+  "sources.group.Games": [
+   "Games",
+   "Jogos"
+  ],
+  "sources.group.Subtitles": [
+   "Subtitles",
+   "Legendas"
+  ],
+  "request.platform": [
+   "Platform",
+   "Plataforma"
+  ],
+  "admin.takeover.title": [
+   "Take over",
+   "Importar"
+  ],
+  "takeover.source": [
+   "Application",
+   "Aplicativo"
+  ],
+  "takeover.source.Prowlarr": [
+   "Prowlarr (indexers)",
+   "Prowlarr (indexers)"
+  ],
+  "takeover.source.Sonarr": [
+   "Sonarr (indexers, client, missing series)",
+   "Sonarr (indexers, cliente, séries faltando)"
+  ],
+  "takeover.source.Radarr": [
+   "Radarr (indexers, client, missing movies)",
+   "Radarr (indexers, cliente, filmes faltando)"
+  ],
+  "takeover.source.Lidarr": [
+   "Lidarr (indexers, client, missing albums)",
+   "Lidarr (indexers, cliente, álbuns faltando)"
+  ],
+  "takeover.source.Readarr": [
+   "Readarr (indexers, client, missing books)",
+   "Readarr (indexers, cliente, livros faltando)"
+  ],
+  "takeover.mode": [
+   "Mode",
+   "Modo"
+  ],
+  "takeover.preview": [
+   "Preview",
+   "Prévia"
+  ],
+  "takeover.apply": [
+   "Take over now",
+   "Importar agora"
+  ],
+  "takeover.run": [
+   "Read",
+   "Ler"
+  ],
+  "takeover.empty": [
+   "Nothing to take over.",
+   "Nada para importar."
+  ],
+  "takeover.kind": [
+   "Kind",
+   "Tipo"
+  ],
+  "takeover.kind.Indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "takeover.kind.Client": [
+   "Download client",
+   "Cliente de download"
+  ],
+  "takeover.kind.Movie": [
+   "Movie",
+   "Filme"
+  ],
+  "takeover.kind.Series": [
+   "Series",
+   "Série"
+  ],
+  "takeover.kind.Album": [
+   "Album",
+   "Álbum"
+  ],
+  "takeover.kind.Book": [
+   "Book",
+   "Livro"
+  ],
+  "takeover.kind.Profile": [
+   "Quality profile",
+   "Perfil de qualidade"
+  ],
+  "takeover.kind.Format": [
+   "Custom format",
+   "Formato personalizado"
+  ],
+  "takeover.kind.RootFolder": [
+   "Root folder",
+   "Pasta raiz"
+  ],
+  "takeover.rootFolders": [
+   "Root folders",
+   "Pastas raiz"
+  ],
+  "takeover.assign": [
+   "Take into this library",
+   "Importar para esta biblioteca"
+  ],
+  "takeover.outcome.takeover_no_library": [
+   "No library of this type",
+   "Nenhuma biblioteca deste tipo"
+  ],
+  "takeover.outcome.takeover_not_monitored": [
+   "Release type not monitored there",
+   "Tipo de release não monitorado lá"
+  ],
+  "takeover.outcome.takeover_exists": [
+   "Already set up",
+   "Já configurado"
+  ],
+  "takeover.outcome.takeover_needs_key": [
+   "Key needed",
+   "Chave necessária"
+  ],
+  "takeover.outcome.takeover_will_add": [
+   "Will be added",
+   "Será adicionado"
+  ],
+  "takeover.outcome.takeover_added": [
+   "Added",
+   "Adicionado"
+  ],
+  "takeover.outcome.takeover_no_id": [
+   "No provider id",
+   "Sem ID de provedor"
+  ],
+  "takeover.outcome.takeover_no_match": [
+   "No clear match",
+   "Sem correspondência clara"
+  ],
+  "takeover.outcome.takeover_will_want": [
+   "Will be wanted (paused)",
+   "Será monitorado (pausado)"
+  ],
+  "takeover.outcome.takeover_wanted": [
+   "Wanted (paused)",
+   "Monitoramento pausado"
+  ],
+  "takeover.outcome.takeover_next_run": [
+   "Next run",
+   "Próxima execução"
+  ],
+  "takeover.outcome.takeover_no_qualities": [
+   "No quality Jularr knows",
+   "Nenhuma qualidade que o Jularr conheça"
+  ],
+  "takeover.outcome.takeover_format_skipped": [
+   "Not taken over: conditions Jularr does not support",
+   "Não importado: condições que o Jularr não suporta"
+  ],
+  "profile.monitoring": [
+   "Monitoring",
+   "Monitoramento"
+  ],
+  "profile.monitoring.types": [
+   "Release types and statuses",
+   "Tipos e status de release"
+  ],
+  "profile.monitoring.languages": [
+   "Languages",
+   "Idiomas"
+  ],
+  "profile.monitoring.pages": [
+   "At least pages",
+   "No mínimo páginas"
+  ],
+  "sources.capability.Metadata": [
+   "metadata",
+   "metadados"
+  ],
+  "sources.capability.Search": [
+   "search",
+   "busca"
+  ],
+  "sources.capability.Download": [
+   "download",
+   "download"
+  ],
+  "sources.capability.Monitoring": [
+   "chapter monitoring",
+   "monitoramento de capítulos"
+  ],
+  "sources.capability.Link": [
+   "link",
+   "link"
+  ],
+  "sources.capability.Subtitles": [
+   "Subtitles",
+   "Legendas"
+  ],
+  "sources.availability.Ready": [
+   "Ready",
+   "Pronta"
+  ],
+  "sources.availability.Account": [
+   "Needs a login or key",
+   "Precisa de login ou chave"
+  ],
+  "sources.availability.Planned": [
+   "Planned",
+   "Planejada"
+  ],
+  "sources.availability.ReferenceOnly": [
+   "Reference only",
+   "Apenas referência"
+  ],
+  "profile.name": [
+   "Name",
+   "Nome"
+  ],
+  "profile.qualities": [
+   "Allowed qualities",
+   "Qualidades permitidas"
+  ],
+  "profile.usage": [
+   "Used by",
+   "Usado por"
+  ],
+  "profile.default": [
+   "Default",
+   "Padrão"
+  ],
+  "profile.add.Movie": [
+   "Add movie profile",
+   "Adicionar perfil de filme"
+  ],
+  "profile.add.Series": [
+   "Add series profile",
+   "Adicionar perfil de série"
+  ],
+  "profile.add.Book": [
+   "Add book profile",
+   "Adicionar perfil de livro"
+  ],
+  "profile.add.LightNovel": [
+   "Add light novel profile",
+   "Adicionar perfil de light novel"
+  ],
+  "profile.delete": [
+   "Delete profile",
+   "Excluir perfil"
+  ],
+  "profile.isDefault": [
+   "Default for its media type",
+   "Padrão para o seu tipo de mídia"
+  ],
+  "profile.upgradeAllowed": [
+   "Upgrade to better releases",
+   "Substituir por releases melhores"
+  ],
+  "profile.cutoff": [
+   "Stop upgrading at",
+   "Qualidade-alvo (parar de melhorar nela)"
+  ],
+  "profile.noCutoff": [
+   "No upgrades",
+   "Sem melhorias"
+  ],
+  "profile.section.general": [
+   "General",
+   "Geral"
+  ],
+  "profile.section.qualities": [
+   "Qualities",
+   "Qualidades"
+  ],
+  "profile.allowed": [
+   "Allowed",
+   "Permitida"
+  ],
+  "profile.minimumSize": [
+   "Minimum size",
+   "Tamanho mínimo"
+  ],
+  "profile.maximumSize": [
+   "Maximum size",
+   "Tamanho máximo"
+  ],
+  "wanted.profile": [
+   "Quality profile",
+   "Perfil de qualidade"
+  ],
+  "wanted.library": [
+   "Library",
+   "Biblioteca"
+  ],
+  "setup.title": [
+   "Setup",
+   "Configuração inicial"
+  ],
+  "setup.steps": [
+   "Setup steps",
+   "Etapas da configuração"
+  ],
+  "setup.step.Storage": [
+   "Storage",
+   "Armazenamento"
+  ],
+  "setup.step.Indexers": [
+   "Indexers",
+   "Indexers"
+  ],
+  "setup.step.Downloads": [
+   "Download clients",
+   "Clientes de download"
+  ],
+  "setup.step.Providers": [
+   "Providers",
+   "Provedores"
+  ],
+  "setup.step.Profiles": [
+   "Profiles",
+   "Perfis"
+  ],
+  "setup.next": [
+   "Continue",
+   "Continuar"
+  ],
+  "setup.finish": [
+   "Finish setup",
+   "Concluir configuração"
+  ],
+  "setup.check.library": [
+   "no library yet",
+   "ainda sem biblioteca"
+  ],
+  "setup.check.tmdb": [
+   "Movies and series need a TMDB key.",
+   "Filmes e séries precisam de uma chave do TMDB."
+  ],
+  "setup.check.indexer": [
+   "Arr+ has no indexer yet.",
+   "O Arr+ ainda não tem nenhum indexer."
+  ],
+  "setup.check.downloader": [
+   "Arr+ has no download client yet.",
+   "O Arr+ ainda não tem nenhum cliente de download."
+  ],
+  "setup.check.ffmpeg": [
+   "FFmpeg is not configured; files play only as they are.",
+   "O FFmpeg não está configurado; os arquivos são reproduzidos apenas como estão."
+  ],
+  "admin.works.source": [
+   "Source",
+   "Fonte"
+  ],
+  "admin.works.source.tmdb_movie": [
+   "TMDB",
+   "TMDB"
+  ],
+  "admin.works.source.tmdb_tv": [
+   "TMDB",
+   "TMDB"
+  ],
+  "admin.works.source.openlibrary": [
+   "Open Library",
+   "Open Library"
+  ],
+  "admin.works.source.anilist": [
+   "AniList",
+   "AniList"
+  ],
+  "admin.works.source.musicbrainz": [
+   "MusicBrainz",
+   "MusicBrainz"
+  ],
+  "admin.works.source.igdb": [
+   "IGDB",
+   "IGDB"
+  ],
+  "admin.matches.title": [
+   "AniList matches",
+   "Correspondências do AniList"
+  ],
+  "admin.matches.empty": [
+   "No match waits for a decision.",
+   "Nenhuma correspondência aguarda uma decisão."
+  ],
+  "admin.matches.hint": [
+   "For a series, choose the entry of its first season.",
+   "Para uma série, escolha a entrada da primeira temporada."
+  ],
+  "admin.matches.accept": [
+   "Use this entry",
+   "Usar esta entrada"
+  ],
+  "admin.matches.aniListId": [
+   "AniList entry number",
+   "Número da entrada do AniList"
+  ],
+  "admin.matches.dismiss": [
+   "No AniList entry",
+   "Nenhuma entrada do AniList"
+  ],
+  "admin.instance.media": [
+   "Media types",
+   "Tipos de mídia"
+  ],
+  "admin.instance.media.noLibrary": [
+   "No library yet; nothing is downloaded for it.",
+   "Ainda sem biblioteca; nada é baixado para ele."
+  ],
+  "profile.media.hidden": [
+   "Hidden media types",
+   "Tipos de mídia ocultos"
+  ],
+  "admin.accounts.profileMediaBlocked": [
+   "Blocked media types",
+   "Tipos de mídia bloqueados"
+  ],
+  "wanted.library.default": [
+   "Default library",
+   "Biblioteca padrão"
+  ],
+  "wanted.profile.default": [
+   "Default for this media type",
+   "Padrão para este tipo de mídia"
+  ],
+  "wanted.release.block": [
+   "Block",
+   "Bloquear"
+  ],
+  "wanted.release.unblock": [
+   "Allow again",
+   "Permitir novamente"
+  ],
+  "acquisition.connection.name": [
+   "Name",
+   "Nome"
+  ],
+  "acquisition.connection.type": [
+   "Type",
+   "Tipo"
+  ],
+  "acquisition.connection.type.Newznab": [
+   "Newznab indexer",
+   "Indexer Newznab"
+  ],
+  "acquisition.connection.type.Sabnzbd": [
+   "SABnzbd",
+   "SABnzbd"
+  ],
+  "acquisition.connection.baseUrl": [
+   "Address",
+   "Endereço"
+  ],
+  "acquisition.connection.host": [
+   "Server",
+   "Servidor"
+  ],
+  "acquisition.connection.port": [
+   "Port",
+   "Porta"
+  ],
+  "acquisition.connection.ssl": [
+   "SSL",
+   "SSL"
+  ],
+  "form.info": [
+   "More about this field",
+   "Mais sobre este campo"
+  ],
+  "request.readsTranslated": [
+   "Not published in it; read translated",
+   "Não publicado nele; leitura traduzida"
+  ],
+  "hint.AccountFields.Email.placeholder": [
+   "name@example.com",
+   "name@example.com"
+  ],
+  "hint.AccountFields.Email.info": [
+   "Used to sign in and for password resets.",
+   "Usado para entrar e para redefinir a senha."
+  ],
+  "hint.AccountFields.DisplayName.info": [
+   "Shown to other users, for example on requests.",
+   "Exibido para outros usuários, por exemplo nos pedidos."
+  ],
+  "hint.AccountFields.AccountRoleTypeId.info": [
+   "Owner: everything. Media manager: titles, requests and wanted lists. User: watch, read and request.",
+   "Proprietário: tudo. Gerente de mídia: títulos, pedidos e listas de procurados. Usuário: assistir, ler e pedir."
+  ],
+  "hint.AccountFields.IsEnabled.info": [
+   "A disabled account cannot sign in; its profiles and history stay.",
+   "Uma conta desativada não pode entrar; seus perfis e histórico permanecem."
+  ],
+  "hint.AccountFields.MayConfirmSources.info": [
+   "Lets this account confirm a found source itself instead of waiting for an administrator.",
+   "Permite que esta conta confirme por conta própria uma fonte encontrada, em vez de esperar por um administrador."
+  ],
+  "hint.AccountSessionFields.DeviceName.placeholder": [
+   "Living room TV",
+   "TV da sala"
+  ],
+  "hint.AccountSessionFields.DeviceName.info": [
+   "Empty shows the device's platform as its name.",
+   "Se vazio, a plataforma do dispositivo é exibida como nome."
+  ],
+  "hint.ProfileFields.DisplayName.info": [
+   "The name shown when choosing a profile.",
+   "O nome exibido ao escolher um perfil."
+  ],
+  "hint.ProfileFields.UiLocaleId.info": [
+   "Language of the interface and of titles and summaries where a translation exists.",
+   "Idioma da interface e dos títulos e resumos onde houver tradução."
+  ],
+  "hint.ProfilePinFields.Pin.info": [
+   "Three to six digits asked when switching to this profile.",
+   "Três a seis dígitos, pedidos ao trocar para este perfil."
+  ],
+  "hint.AuthenticationFields.NewPassword.info": [
+   "At least 12 characters; a passphrase of several words is easiest to remember.",
+   "Pelo menos 12 caracteres; uma frase com várias palavras é a mais fácil de lembrar."
+  ],
+  "hint.DevicePairingFields.Code.placeholder": [
+   "123456",
+   "123456"
+  ],
+  "hint.DevicePairingFields.Code.info": [
+   "The six-digit code the TV, phone or app shows.",
+   "O código de seis dígitos que a TV, o celular ou o app exibe."
+  ],
+  "hint.AcquisitionConnectionFields.Host.placeholder": [
+   "news.newshosting.com",
+   "news.newshosting.com"
+  ],
+  "hint.AcquisitionConnectionFields.Host.info": [
+   "The server name from your Usenet provider, without nntp:// or https://.",
+   "O nome do servidor do seu provedor de Usenet, sem nntp:// ou https://."
+  ],
+  "hint.AcquisitionConnectionFields.Port.placeholder": [
+   "563 with SSL, 119 without",
+   "563 com SSL, 119 sem"
+  ],
+  "hint.AcquisitionConnectionFields.Port.info": [
+   "Empty uses 563 with SSL and 119 without. Some providers also offer 443 or 80.",
+   "Se vazio, usa 563 com SSL e 119 sem. Alguns provedores também oferecem 443 ou 80."
+  ],
+  "hint.AcquisitionConnectionFields.UseSsl.info": [
+   "Encrypts the connection to the news server. Leave it on unless your provider has no SSL.",
+   "Criptografa a conexão com o servidor de notícias. Deixe ativado, a menos que seu provedor não tenha SSL."
+  ],
+  "hint.AcquisitionConnectionFields.Username.info": [
+   "The login from your provider; leave empty for open servers.",
+   "O login do seu provedor; deixe vazio para servidores abertos."
+  ],
+  "hint.AcquisitionConnectionFields.MaxConnections.placeholder": [
+   "8",
+   "8"
+  ],
+  "hint.AcquisitionConnectionFields.MaxConnections.info": [
+   "Parallel connections Jularr opens. Use at most what your plan allows; more is faster.",
+   "Conexões paralelas que o Jularr abre. Use no máximo o que seu plano permite; mais é mais rápido."
+  ],
+  "hint.AcquisitionConnectionFields.Priority.placeholder": [
+   "1 to 100",
+   "1 a 100"
+  ],
+  "hint.AcquisitionConnectionFields.Priority.info": [
+   "1 comes first.",
+   "1 vem primeiro."
+  ],
+  "hint.AcquisitionConnectionFields.IsEnabled.info": [
+   "A switched-off connection keeps its settings but is not used.",
+   "Uma conexão desligada mantém suas configurações, mas não é usada."
+  ],
+  "hint.AcquisitionConnectionFields.Categories.placeholder": [
+   "2000, 5000",
+   "2000, 5000"
+  ],
+  "hint.AcquisitionConnectionFields.Categories.info": [
+   "Newznab category numbers, separated by commas. Empty uses the usual ranges of each media type.",
+   "Números de categoria do Newznab, separados por vírgulas. Se vazio, usa as faixas habituais de cada tipo de mídia."
+  ],
+  "hint.AcquisitionConnectionFields.MediaTypeIds.info": [
+   "None chosen: the indexer is asked for every media type.",
+   "Nenhum escolhido: o indexer é consultado para todos os tipos de mídia."
+  ],
+  "hint.AcquisitionConnectionFields.SearchesAutomatically.info": [
+   "Manual only: the indexer is asked only when you search by hand.",
+   "Somente manual: o indexer só é consultado quando você busca manualmente."
+  ],
+  "hint.AcquisitionConnectionFields.QueryLimit.placeholder": [
+   "No limit",
+   "Sem limite"
+  ],
+  "hint.AcquisitionConnectionFields.QueryLimit.info": [
+   "Searches per day, as your indexer plan allows; once reached it rests until midnight.",
+   "Buscas por dia, conforme o plano do seu indexer; ao atingir o limite, ele descansa até a meia-noite."
+  ],
+  "hint.AcquisitionConnectionFields.GrabLimit.placeholder": [
+   "No limit",
+   "Sem limite"
+  ],
+  "hint.AcquisitionConnectionFields.GrabLimit.info": [
+   "Downloads per day, as your indexer plan allows.",
+   "Downloads por dia, conforme o plano do seu indexer."
+  ],
+  "hint.AcquisitionConnectionFields.DownloadCategory.placeholder": [
+   "movies",
+   "movies"
+  ],
+  "hint.AcquisitionConnectionFields.DownloadCategory.info": [
+   "The SABnzbd category Jularr gives its downloads; empty uses SABnzbd's default.",
+   "A categoria do SABnzbd que o Jularr dá aos seus downloads; se vazio, usa a padrão do SABnzbd."
+  ],
+  "hint.AcquisitionConnectionFields.RemotePath.placeholder": [
+   "/downloads/complete",
+   "/downloads/complete"
+  ],
+  "hint.AcquisitionConnectionFields.RemotePath.info": [
+   "Where SABnzbd says it stores finished downloads. Only needed when SABnzbd sees them under another path than Jularr.",
+   "Onde o SABnzbd diz guardar os downloads concluídos. Só é necessário quando o SABnzbd os vê em um caminho diferente do que o Jularr vê."
+  ],
+  "hint.AcquisitionConnectionFields.LocalPath.placeholder": [
+   "/mnt/downloads/complete",
+   "/mnt/downloads/complete"
+  ],
+  "hint.AcquisitionConnectionFields.LocalPath.info": [
+   "The same folder as Jularr sees it.",
+   "A mesma pasta como o Jularr a vê."
+  ],
+  "hint.AcquisitionConnectionFields.SearchQuery.placeholder": [
+   "The Matrix 1999",
+   "The Matrix 1999"
+  ],
+  "hint.AcquisitionConnectionFields.SearchQuery.info": [
+   "A test search; it counts towards the indexer's daily limit.",
+   "Uma busca de teste; ela conta para o limite diário do indexer."
+  ],
+  "hint.acquisition.Newznab.placeholder": [
+   "https://indexer.example.com",
+   "https://indexer.example.com"
+  ],
+  "hint.acquisition.Newznab.info": [
+   "The indexer's address as in Prowlarr or Sonarr, without /api.",
+   "O endereço do indexer como no Prowlarr ou no Sonarr, sem /api."
+  ],
+  "hint.acquisition.Sabnzbd.placeholder": [
+   "http://192.168.1.10:8080",
+   "http://192.168.1.10:8080"
+  ],
+  "hint.acquisition.Sabnzbd.info": [
+   "SABnzbd's web address with its port.",
+   "O endereço web do SABnzbd com sua porta."
+  ],
+  "hint.acquisition.Opds.placeholder": [
+   "https://example.com/opds",
+   "https://example.com/opds"
+  ],
+  "hint.acquisition.Opds.info": [
+   "The address of the OPDS catalog feed.",
+   "O endereço do feed do catálogo OPDS."
+  ],
+  "hint.acquisition.Gutenberg.placeholder": [
+   "https://gutendex.com",
+   "https://gutendex.com"
+  ],
+  "hint.acquisition.AnnasArchive.placeholder": [
+   "https://annas-archive.org",
+   "https://annas-archive.org"
+  ],
+  "hint.acquisition.AnnasArchive.info": [
+   "Only HTTPS; the member key travels in the address.",
+   "Somente HTTPS; a chave de membro viaja no endereço."
+  ],
+  "hint.acquisition.OpenSubtitles.placeholder": [
+   "https://api.opensubtitles.com",
+   "https://api.opensubtitles.com"
+  ],
+  "hint.acquisition.OpenSubtitles.info": [
+   "Only HTTPS.",
+   "Somente HTTPS."
+  ],
+  "hint.acquisition.SubDl.placeholder": [
+   "https://api.subdl.com",
+   "https://api.subdl.com"
+  ],
+  "hint.acquisition.SubDl.info": [
+   "Only HTTPS.",
+   "Somente HTTPS."
+  ],
+  "hint.AcquisitionProfileFields.IsDefault.info": [
+   "New requests of this media type use the default profile.",
+   "Novos pedidos deste tipo de mídia usam o perfil padrão."
+  ],
+  "hint.AcquisitionProfileFields.UpgradeAllowed.info": [
+   "Replaces a present file with a better quality until the cutoff is reached.",
+   "Substitui um arquivo existente por uma qualidade melhor até atingir a qualidade-alvo."
+  ],
+  "hint.AcquisitionProfileFields.MinimumSizeMb.placeholder": [
+   "No minimum",
+   "Sem mínimo"
+  ],
+  "hint.AcquisitionProfileFields.MinimumSizeMb.info": [
+   "Smaller releases are skipped, often fakes or samples.",
+   "Releases menores são ignorados, geralmente falsos ou amostras."
+  ],
+  "hint.AcquisitionProfileFields.MaximumSizeMb.placeholder": [
+   "No maximum",
+   "Sem máximo"
+  ],
+  "hint.AcquisitionProfileFields.MaximumSizeMb.info": [
+   "Larger releases are skipped.",
+   "Releases maiores são ignorados."
+  ],
+  "hint.RequestRuleFields.Description.info": [
+   "Shown to users the rule applies to.",
+   "Exibida para os usuários aos quais a regra se aplica."
+  ],
+  "hint.RequestRuleFields.MediaKeys.info": [
+   "The media types users of this rule may request.",
+   "Os tipos de mídia que os usuários desta regra podem pedir."
+  ],
+  "hint.RequestRuleFields.PeriodDays.placeholder": [
+   "7",
+   "7"
+  ],
+  "hint.RequestRuleFields.PeriodDays.info": [
+   "The limit counts requests of this many days.",
+   "O limite conta os pedidos desta quantidade de dias."
+  ],
+  "hint.RequestRuleFields.RequestLimit.placeholder": [
+   "No limit",
+   "Sem limite"
+  ],
+  "hint.RequestRuleFields.RequestLimit.info": [
+   "Requests allowed within the period.",
+   "Pedidos permitidos dentro do período."
+  ],
+  "hint.RequestRuleFields.IsAutomaticApproval.info": [
+   "Requests within the limit are approved without an administrator.",
+   "Pedidos dentro do limite são aprovados sem um administrador."
+  ],
+  "hint.RequestRuleFields.AcquisitionProfileIds.info": [
+   "Quality profiles users of this rule may choose.",
+   "Perfis de qualidade que os usuários desta regra podem escolher."
+  ],
+  "hint.RequestRuleFields.IsDefault.info": [
+   "Applies to every account without its own rule.",
+   "Aplica-se a toda conta sem regra própria."
+  ],
+  "hint.RequestRuleFields.IsOverridden.info": [
+   "This account uses its own limits instead of the default rule.",
+   "Esta conta usa limites próprios em vez da regra padrão."
+  ],
+  "hint.AcquisitionReleaseFields.ParentUnitNumber.placeholder": [
+   "1",
+   "1"
+  ],
+  "hint.AcquisitionReleaseFields.ParentUnitNumber.info": [
+   "Season or volume to search; empty searches the whole title.",
+   "Temporada ou volume a buscar; se vazio, busca o título inteiro."
+  ],
+  "hint.AcquisitionReleaseFields.UnitStart.placeholder": [
+   "1",
+   "1"
+  ],
+  "hint.AcquisitionReleaseFields.UnitStart.info": [
+   "Episode or chapter to search; empty searches the whole season.",
+   "Episódio ou capítulo a buscar; se vazio, busca a temporada inteira."
+  ],
+  "hint.InstanceSettingsFields.Name.info": [
+   "Shown in the browser tab and on paired devices.",
+   "Exibido na aba do navegador e nos dispositivos pareados."
+  ],
+  "hint.InstanceSettingsFields.PublicUrl.placeholder": [
+   "https://media.example.com/",
+   "https://media.example.com/"
+  ],
+  "hint.InstanceSettingsFields.PublicUrl.info": [
+   "The address Jularr is reached at from outside; the pairing QR code for TVs and apps points to it.",
+   "O endereço pelo qual o Jularr é acessado de fora; o QR code de pareamento para TVs e apps aponta para ele."
+  ],
+  "hint.InstanceSettingsFields.TrustedProxies.placeholder": [
+   "192.168.1.2, 172.16.0.0/12",
+   "192.168.1.2, 172.16.0.0/12"
+  ],
+  "hint.InstanceSettingsFields.TrustedProxies.info": [
+   "Reverse proxies whose forwarded client address Jularr believes, as addresses or ranges separated by commas. Empty without a proxy.",
+   "Proxies reversos cujo endereço de cliente encaminhado o Jularr considera confiável, como endereços ou faixas separados por vírgulas. Vazio sem proxy."
+  ],
+  "hint.InstanceSettingsFields.LibraryScanIntervalHours.placeholder": [
+   "24",
+   "24"
+  ],
+  "hint.InstanceSettingsFields.LibraryScanIntervalHours.info": [
+   "Hours between automatic library scans; 0 switches them off. Sleeping NAS are not woken.",
+   "Horas entre as varreduras automáticas da biblioteca; 0 as desliga. NAS em repouso não são despertados."
+  ],
+  "hint.InstanceSettingsFields.HistoryRetentionDays.placeholder": [
+   "30",
+   "30"
+  ],
+  "hint.InstanceSettingsFields.HistoryRetentionDays.info": [
+   "History and finished operations older than this are removed.",
+   "O histórico e as operações concluídas mais antigos que isso são removidos."
+  ],
+  "hint.InstanceSettingsFields.HistoryMegabytes.placeholder": [
+   "10",
+   "10"
+  ],
+  "hint.InstanceSettingsFields.HistoryMegabytes.info": [
+   "The oldest history is removed once it is larger than this.",
+   "O histórico mais antigo é removido quando ultrapassa este tamanho."
+  ],
+  "hint.InstanceSettingsFields.CollectionLimit.placeholder": [
+   "100",
+   "100"
+  ],
+  "hint.InstanceSettingsFields.CollectionLimit.info": [
+   "Most collections a profile may keep.",
+   "Máximo de listas que um perfil pode manter."
+  ],
+  "hint.InstanceSettingsFields.UnitGroupLimit.placeholder": [
+   "100",
+   "100"
+  ],
+  "hint.InstanceSettingsFields.UnitGroupLimit.info": [
+   "Most episode or chapter groups a profile may keep.",
+   "Máximo de grupos de episódios ou capítulos que um perfil pode manter."
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheMegabytes.placeholder": [
+   "2048",
+   "2048"
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheMegabytes.info": [
+   "Space for prepared books and comics; the oldest are removed first.",
+   "Espaço para livros e quadrinhos preparados; os mais antigos são removidos primeiro."
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheWorks.placeholder": [
+   "100",
+   "100"
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheWorks.info": [
+   "Most books and comics kept prepared at once.",
+   "Máximo de livros e quadrinhos mantidos preparados ao mesmo tempo."
+  ],
+  "hint.InstanceSettingsFields.SubtitleLanguages.placeholder": [
+   "de, en",
+   "de, en"
+  ],
+  "hint.InstanceSettingsFields.SubtitleLanguages.info": [
+   "Two-letter languages searched automatically, in this order.",
+   "Idiomas de duas letras buscados automaticamente, nesta ordem."
+  ],
+  "hint.InstanceSettingsFields.UsersConfirmSources.info": [
+   "Lets users confirm found sources for their own requests.",
+   "Permite que os usuários confirmem fontes encontradas para os próprios pedidos."
+  ],
+  "hint.InstanceSettingsFields.KeepsReleases.info": [
+   "Keeps the earlier file when a new release of the same film, episode or volume is imported, instead of replacing it.",
+   "Mantém o arquivo anterior quando um novo release do mesmo filme, episódio ou volume é importado, em vez de substituí-lo."
+  ],
+  "hint.InstanceSettingsFields.RecycleModeId.info": [
+   "Delete removes files for good. A recycle folder keeps them for the days below.",
+   "Excluir remove os arquivos de vez. Uma pasta da lixeira os mantém pelos dias abaixo."
+  ],
+  "hint.InstanceSettingsFields.RecycleDays.placeholder": [
+   "7",
+   "7"
+  ],
+  "hint.InstanceSettingsFields.RecycleDays.info": [
+   "Days a removed file stays in the recycle folder; 0 keeps it until you remove it.",
+   "Dias que um arquivo removido permanece na pasta da lixeira; 0 o mantém até você removê-lo."
+  ],
+  "hint.InstanceSettingsFields.RecyclePath.placeholder": [
+   "Recycle",
+   "Recycle"
+  ],
+  "hint.InstanceSettingsFields.RecyclePath.info": [
+   "A folder on the chosen storage, relative to its share.",
+   "Uma pasta no armazenamento escolhido, relativa ao seu compartilhamento."
+  ],
+  "hint.InstanceModuleFields.IsEnabled.info": [
+   "Switched-off modules disappear from menus and pages; their data stays.",
+   "Módulos desligados desaparecem dos menus e das páginas; seus dados permanecem."
+  ],
+  "hint.UiLocaleFields.Locale.placeholder": [
+   "de-DE",
+   "de-DE"
+  ],
+  "hint.UiLocaleFields.Locale.info": [
+   "Language and region code, such as de-DE or pt-BR.",
+   "Código de idioma e região, como de-DE ou pt-BR."
+  ],
+  "hint.UiLocaleFields.IsRightToLeft.info": [
+   "For Arabic, Hebrew and other right-to-left scripts.",
+   "Para árabe, hebraico e outras escritas da direita para a esquerda."
+  ],
+  "hint.UiTranslationFields.Text.info": [
+   "Placeholders in braces, such as {0}, must stay.",
+   "Os marcadores entre chaves, como {0}, devem permanecer."
+  ],
+  "hint.StorageMountFields.Host.placeholder": [
+   "nas.local",
+   "nas.local"
+  ],
+  "hint.StorageMountFields.Host.info": [
+   "The NAS name or IP address, without smb:// or nfs://.",
+   "O nome ou endereço IP do NAS, sem smb:// ou nfs://."
+  ],
+  "hint.StorageMountFields.SharePath.placeholder": [
+   "/media",
+   "/media"
+  ],
+  "hint.StorageMountFields.SharePath.info": [
+   "The share or exported path on the NAS.",
+   "O compartilhamento ou caminho exportado no NAS."
+  ],
+  "hint.StorageMountFields.Username.info": [
+   "An account of the NAS with access to the share.",
+   "Uma conta do NAS com acesso ao compartilhamento."
+  ],
+  "hint.StorageMountFields.Domain.placeholder": [
+   "WORKGROUP",
+   "WORKGROUP"
+  ],
+  "hint.StorageMountFields.Password.info": [
+   "Leave empty to keep the saved one.",
+   "Deixe vazio para manter a salva."
+  ],
+  "hint.mediaServer.baseUrl.placeholder": [
+   "http://192.168.1.10:8096",
+   "http://192.168.1.10:8096"
+  ],
+  "hint.StorageMountFields.Domain.info": [
+   "Only for Windows domains; usually empty.",
+   "Somente para domínios Windows; geralmente vazio."
+  ],
+  "hint.StorageMountFields.IsReadOnly.info": [
+   "Read-only storage is played and scanned, but downloads are never placed on it.",
+   "Um armazenamento somente leitura é reproduzido e varrido, mas nunca recebe downloads."
+  ],
+  "hint.StorageMountFields.WakeMacAddress.placeholder": [
+   "00:11:22:AA:BB:CC",
+   "00:11:22:AA:BB:CC"
+  ],
+  "hint.StorageMountFields.WakeMacAddress.info": [
+   "The NAS network card, for Wake-on-LAN.",
+   "A placa de rede do NAS, para Wake-on-LAN."
+  ],
+  "hint.StorageMountFields.WakeBroadcastAddress.placeholder": [
+   "192.168.1.255",
+   "192.168.1.255"
+  ],
+  "hint.StorageMountFields.WakeBroadcastAddress.info": [
+   "The broadcast address of the NAS network; empty uses 255.255.255.255.",
+   "O endereço de broadcast da rede do NAS; se vazio, usa 255.255.255.255."
+  ],
+  "hint.StorageMountFields.WakeOnDemand.info": [
+   "Wakes the NAS when something is played from it.",
+   "Desperta o NAS quando algo é reproduzido a partir dele."
+  ],
+  "hint.SynologyFields.SynologyUrl.placeholder": [
+   "https://nas.local:5001",
+   "https://nas.local:5001"
+  ],
+  "hint.SynologyFields.SynologyUrl.info": [
+   "DSM's address, to show the NAS state and switch it on and off.",
+   "O endereço do DSM, para mostrar o estado do NAS e ligá-lo e desligá-lo."
+  ],
+  "hint.LibraryRootFields.RelativePath.placeholder": [
+   "Movies",
+   "Movies"
+  ],
+  "hint.LibraryRootFields.RelativePath.info": [
+   "The folder below the storage's share.",
+   "A pasta dentro do compartilhamento do armazenamento."
+  ],
+  "hint.LibraryRootFields.MediaTypeId.info": [
+   "What the library holds; it decides naming, matching and downloads.",
+   "O que a biblioteca contém; isso define a nomeação, a correspondência e os downloads."
+  ],
+  "hint.NamingPatternFields.Folder.placeholder": [
+   "{Title} ({Year})",
+   "{Title} ({Year})"
+  ],
+  "hint.NamingPatternFields.Folder.info": [
+   "Folder for each title, below the library; a slash starts the next folder.",
+   "Pasta de cada título, dentro da biblioteca; uma barra inicia a próxima pasta."
+  ],
+  "hint.NamingPatternFields.File.placeholder": [
+   "{Title} ({Year}) {Quality}",
+   "{Title} ({Year}) {Quality}"
+  ],
+  "hint.NamingPatternFields.File.info": [
+   "The placeholders below are filled for every file; the extension is added.",
+   "Os marcadores abaixo são preenchidos para cada arquivo; a extensão é adicionada."
+  ],
+  "hint.StoredFileFields.SubtitleLanguage.placeholder": [
+   "de",
+   "de"
+  ],
+  "hint.StoredFileFields.SubtitleLanguage.info": [
+   "Two-letter language of the subtitle.",
+   "Idioma de duas letras da legenda."
+  ],
+  "hint.WorkFields.CanonicalTitle.info": [
+   "The title shown everywhere; providers' titles stay as alternatives.",
+   "O título exibido em todos os lugares; os títulos dos provedores permanecem como alternativas."
+  ],
+  "hint.WorkFields.ReleaseYear.placeholder": [
+   "1999",
+   "1999"
+  ],
+  "hint.WorkFields.ReleaseYear.info": [
+   "Helps tell titles of the same name apart when searching.",
+   "Ajuda a distinguir títulos com o mesmo nome na busca."
+  ],
+  "hint.WorkMetadataFields.Query.placeholder": [
+   "The Matrix",
+   "The Matrix"
+  ],
+  "hint.WorkMetadataFields.Query.info": [
+   "A title, optionally with its year.",
+   "Um título, opcionalmente com o ano."
+  ],
+  "hint.CollectionFields.IsSmart.info": [
+   "A smart collection fills itself from the filters below.",
+   "Uma lista inteligente se preenche sozinha a partir dos filtros abaixo."
+  ],
+  "hint.CollectionFields.ReleaseYear.placeholder": [
+   "Any year",
+   "Qualquer ano"
+  ],
+  "hint.CollectionFields.OnlyAvailable.info": [
+   "Only titles that can be played or read now.",
+   "Somente títulos que podem ser reproduzidos ou lidos agora."
+  ],
+  "hint.CollectionFields.OnlyUnfinished.info": [
+   "Hides titles this profile has finished.",
+   "Oculta os títulos que este perfil já concluiu."
+  ],
+  "hint.FranchiseFields.Name.placeholder": [
+   "The Lord of the Rings",
+   "O Senhor dos Anéis"
+  ],
+  "hint.FranchiseFields.Name.info": [
+   "Empty lets the providers decide the series again.",
+   "Se vazio, os provedores voltam a decidir a coleção."
+  ],
+  "hint.FranchiseFields.Position.placeholder": [
+   "2",
+   "2"
+  ],
+  "hint.FranchiseFields.Position.info": [
+   "The title's place in the series; 1.5 sits between 1 and 2.",
+   "A posição do título na coleção; 1.5 fica entre 1 e 2."
+  ],
+  "hint.IdentityMatchFields.ProviderId.placeholder": [
+   "21",
+   "21"
+  ],
+  "hint.IdentityMatchFields.ProviderId.info": [
+   "The provider's number for the title, from its address.",
+   "O número do título no provedor, tirado do endereço dele."
+  ],
+  "hint.MediaAssetFields.UnitNumber.placeholder": [
+   "1",
+   "1"
+  ],
+  "hint.MediaAssetFields.UnitNumber.info": [
+   "Episode, track or chapter number.",
+   "Número do episódio, da faixa ou do capítulo."
+  ],
+  "hint.ProviderCredentialFields.Secret.info": [
+   "Stored encrypted and never shown again; leave empty to keep the saved one.",
+   "Guardado criptografado e nunca mais exibido; deixe vazio para manter o salvo."
+  ],
+  "hint.ProviderFields.BaseUrl.placeholder": [
+   "http://192.168.1.10:32400",
+   "http://192.168.1.10:32400"
+  ],
+  "hint.ProviderFields.BaseUrl.info": [
+   "The server's address with its port.",
+   "O endereço do servidor com sua porta."
+  ],
+  "hint.ProviderFields.ExternalId.info": [
+   "The application id from the provider's developer settings.",
+   "O ID do aplicativo nas configurações de desenvolvedor do provedor."
+  ],
+  "hint.ProviderFields.IsEnabled.info": [
+   "A switched-off provider is not asked; its key stays saved.",
+   "Um provedor desligado não é consultado; sua chave permanece salva."
+  ],
+  "hint.TakeoverFields.TakeoverSourceTypeId.info": [
+   "The program whose settings and missing titles are taken over once.",
+   "O programa cujas configurações e títulos faltando são importados uma vez."
+  ],
+  "hint.TakeoverFields.Apply.info": [
+   "A preview shows what would happen and changes nothing.",
+   "Uma prévia mostra o que aconteceria e não altera nada."
+  ],
+  "hint.BackupFields.Name.placeholder": [
+   "before-update",
+   "before-update"
+  ],
+  "acquisition.connection.apiKey": [
+   "API key",
+   "Chave de API"
+  ],
+  "acquisition.connection.priority": [
+   "Priority",
+   "Prioridade"
+  ],
+  "acquisition.connection.enabled": [
+   "State",
+   "Estado"
+  ],
+  "acquisition.connection.on": [
+   "Enabled",
+   "Ativada"
+  ],
+  "acquisition.connection.off": [
+   "Disabled",
+   "Desativada"
+  ],
+  "acquisition.connection.category": [
+   "Download category",
+   "Categoria de download"
+  ],
+  "acquisition.connection.type.Gutenberg": [
+   "Project Gutenberg (public-domain books)",
+   "Project Gutenberg (livros em domínio público)"
+  ],
+  "acquisition.connection.type.Opds": [
+   "OPDS catalog",
+   "Catálogo OPDS"
+  ],
+  "acquisition.connection.type.AnnasArchive": [
+   "Anna's Archive",
+   "Anna's Archive"
+  ],
+  "acquisition.connection.type.Usenet": [
+   "News server",
+   "Servidor de notícias"
+  ],
+  "acquisition.connection.type.OpenSubtitles": [
+   "OpenSubtitles.com",
+   "OpenSubtitles.com"
+  ],
+  "acquisition.connection.type.SubDl": [
+   "SubDL",
+   "SubDL"
+  ],
+  "acquisition.connection.username": [
+   "User name",
+   "Nome de usuário"
+  ],
+  "acquisition.connection.password": [
+   "Password",
+   "Senha"
+  ],
+  "acquisition.connection.memberKey": [
+   "Member key",
+   "Chave de membro"
+  ],
+  "acquisition.outcome.source_manual_link": [
+   "Confirm at the source, then paste the file link",
+   "Confirme na fonte e cole o link do arquivo"
+  ],
+  "acquisition.outcome.source_gate": [
+   "The source asks for a manual login or confirmation",
+   "A fonte exige login ou confirmação manual"
+  ],
+  "acquisition.connection.categories": [
+   "Categories",
+   "Categorias"
+  ],
+  "acquisition.connection.remotePath": [
+   "Path reported by the client",
+   "Caminho informado pelo cliente"
+  ],
+  "acquisition.connection.localPath": [
+   "Same path for Jularr",
+   "Mesmo caminho para o Jularr"
+  ],
+  "acquisition.connection.addIndexer": [
+   "Add indexer",
+   "Adicionar indexer"
+  ],
+  "acquisition.connection.addClient": [
+   "Add download client",
+   "Adicionar cliente de download"
+  ],
+  "acquisition.connection.addUsenet": [
+   "Add news server",
+   "Adicionar servidor de notícias"
+  ],
+  "nav.group.media": [
+   "Media",
+   "Mídia"
+  ],
+  "nav.group.acquisition": [
+   "Arr+",
+   "Arr+"
+  ],
+  "acquisition.role.Search": [
+   "Indexers",
+   "Indexers"
+  ],
+  "acquisition.role.Download": [
+   "Download clients",
+   "Clientes de download"
+  ],
+  "acquisition.role.Subtitles": [
+   "Subtitles",
+   "Legendas"
+  ],
+  "acquisition.connection.none.Search": [
+   "No indexers yet.",
+   "Ainda sem indexers."
+  ],
+  "acquisition.connection.none.Download": [
+   "No download clients yet.",
+   "Ainda sem clientes de download."
+  ],
+  "acquisition.connection.none.Subtitles": [
+   "No subtitle providers yet.",
+   "Ainda sem provedores de legendas."
+  ],
+  "acquisition.connection.addSubtitles": [
+   "Add subtitle provider",
+   "Adicionar provedor de legendas"
+  ],
+  "acquisition.connection.importProwlarr": [
+   "Import from Prowlarr",
+   "Importar do Prowlarr"
+  ],
+  "acquisition.connection.deleteConfirm": [
+   "Delete this connection? Searches and downloads stop using it.",
+   "Excluir esta conexão? As buscas e os downloads deixam de usá-la."
+  ],
+  "acquisition.connection.searchTitle": [
+   "Test search",
+   "Busca de teste"
+  ],
+  "acquisition.connection.searchQuery": [
+   "Search text",
+   "Texto da busca"
+  ],
+  "acquisition.connection.search": [
+   "Search",
+   "Buscar"
+  ],
+  "acquisition.connection.searchModes": [
+   "Search modes",
+   "Modos de busca"
+  ],
+  "acquisition.connection.maxConnections": [
+   "Connections",
+   "Conexões"
+  ],
+  "acquisition.connection.test": [
+   "Test connection",
+   "Testar conexão"
+  ],
+  "acquisition.connection.delete": [
+   "Delete",
+   "Excluir"
+  ],
+  "acquisition.connection.unchecked": [
+   "Not tested",
+   "Não testada"
+  ],
+  "acquisition.connection.today": [
+   "Used today",
+   "Usada hoje"
+  ],
+  "acquisition.connection.queries": [
+   "queries",
+   "consultas"
+  ],
+  "acquisition.connection.grabs": [
+   "grabs",
+   "downloads"
+  ],
+  "acquisition.connection.backoff": [
+   "Failing, paused until",
+   "Com falha, pausada até"
+  ],
+  "acquisition.connection.mediaTypes": [
+   "Media types",
+   "Tipos de mídia"
+  ],
+  "acquisition.connection.searches": [
+   "Searches",
+   "Buscas"
+  ],
+  "acquisition.connection.automatic": [
+   "Automatic and manual",
+   "Automáticas e manuais"
+  ],
+  "acquisition.connection.manualOnly": [
+   "Manual only",
+   "Somente manuais"
+  ],
+  "acquisition.connection.queryLimit": [
+   "Queries per day",
+   "Consultas por dia"
+  ],
+  "acquisition.connection.grabLimit": [
+   "Grabs per day",
+   "Downloads por dia"
+  ],
+  "acquisition.connection.healthy": [
+   "Reachable",
+   "Acessível"
+  ],
+  "admin.work.description": [
+   "Canonical Work details, versions and monitoring",
+   "Detalhes canônicos da Obra, versões e monitoramento"
+  ],
+  "admin.work.files": [
+   "Local files and versions",
+   "Arquivos locais e versões"
+  ],
+  "admin.work.hierarchy": [
+   "Work → Structure → Edition → Version → Asset → File",
+   "Obra → Estrutura → Edição → Versão → Recurso → Arquivo"
+  ],
+  "admin.work.structure": [
+   "Structure and monitoring",
+   "Estrutura e monitoramento"
+  ],
+  "admin.work.title": [
+   "Work",
+   "Obra"
+  ],
+  "admin.works.description": [
+   "Canonical media and monitoring",
+   "Mídia canônica e monitoramento"
+  ],
+  "admin.works.title": [
+   "Works",
+   "Obras"
+  ],
+  "app.name": [
+   "Jularr",
+   "Jularr"
+  ],
+  "app.byJularr": [
+   "by Jularr",
+   "por Jularr"
+  ],
+  "instance.module.Library": [
+   "Library",
+   "Biblioteca"
+  ],
+  "instance.module.Requests": [
+   "Requests",
+   "Pedidos"
+  ],
+  "instance.module.Acquisition": [
+   "Arr+",
+   "Arr+"
+  ],
+  "requests.title": [
+   "My requests",
+   "Meus pedidos"
+  ],
+  "request.language": [
+   "Requested language",
+   "Idioma pedido"
+  ],
+  "request.create": [
+   "Request this work",
+   "Pedir esta obra"
+  ],
+  "request.approve": [
+   "Approve",
+   "Aprovar"
+  ],
+  "request.reject": [
+   "Reject",
+   "Rejeitar"
+  ],
+  "request.empty": [
+   "No requests on this page.",
+   "Nenhum pedido nesta página."
+  ],
+  "request.tab.All": [
+   "All",
+   "Todos"
+  ],
+  "request.tab.Open": [
+   "Open",
+   "Em aberto"
+  ],
+  "request.tab.Approved": [
+   "Approved",
+   "Aprovados"
+  ],
+  "request.tab.InProgress": [
+   "In progress",
+   "Em andamento"
+  ],
+  "request.tab.Done": [
+   "Done",
+   "Concluídos"
+  ],
+  "request.tab.Rejected": [
+   "Rejected",
+   "Rejeitados"
+  ],
+  "request.status.Open": [
+   "Open",
+   "Em aberto"
+  ],
+  "request.status.Approved": [
+   "Approved",
+   "Aprovado"
+  ],
+  "request.status.Searching": [
+   "Searching",
+   "Buscando"
+  ],
+  "request.status.Downloading": [
+   "Downloading",
+   "Baixando"
+  ],
+  "request.status.Importing": [
+   "Importing",
+   "Importando"
+  ],
+  "request.status.Completed": [
+   "Completed",
+   "Concluído"
+  ],
+  "request.status.Rejected": [
+   "Rejected",
+   "Rejeitado"
+  ],
+  "request.status.Failed": [
+   "Failed",
+   "Falhou"
+  ],
+  "request.status.Cancelled": [
+   "Cancelled",
+   "Cancelado"
+  ],
+  "request.state.Open": [
+   "Waiting for approval",
+   "Aguardando aprovação"
+  ],
+  "request.state.Approved": [
+   "Looking for media",
+   "Procurando mídia"
+  ],
+  "request.state.Searching": [
+   "Looking for media",
+   "Procurando mídia"
+  ],
+  "request.state.Downloading": [
+   "Getting media",
+   "Obtendo mídia"
+  ],
+  "request.state.Importing": [
+   "Preparing",
+   "Preparando"
+  ],
+  "request.state.Completed": [
+   "Available",
+   "Disponível"
+  ],
+  "request.state.Rejected": [
+   "Declined",
+   "Recusado"
+  ],
+  "request.state.Failed": [
+   "Could not complete the request",
+   "Não foi possível concluir o pedido"
+  ],
+  "request.state.Cancelled": [
+   "Request cancelled",
+   "Pedido cancelado"
+  ],
+  "media.notForProfile": [
+   "Media is not available for this profile.",
+   "A mídia não está disponível para este perfil."
+  ],
+  "media.remove": [
+   "Remove",
+   "Remover"
+  ],
+  "collections.deleteConfirm": [
+   "Delete this collection? The titles themselves stay.",
+   "Excluir esta lista? Os próprios títulos permanecem."
+  ],
+  "collections.addMedia": [
+   "Add media",
+   "Adicionar mídia"
+  ],
+  "collections.find": [
+   "Find in the library",
+   "Encontrar na biblioteca"
+  ],
+  "collections.add": [
+   "Add",
+   "Adicionar"
+  ],
+  "collections.inside": [
+   "In this collection",
+   "Nesta lista"
+  ],
+  "wanted.empty": [
+   "No wanted works on this page.",
+   "Nenhuma obra procurada nesta página."
+  ],
+  "wanted.paused": [
+   "Paused",
+   "Pausado"
+  ],
+  "wanted.pause": [
+   "Pause",
+   "Pausar"
+  ],
+  "wanted.resume": [
+   "Resume",
+   "Retomar"
+  ],
+  "admin.instance.modules": [
+   "Modules",
+   "Módulos"
+  ],
+  "admin.instance.module.retained": [
+   "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",
+   "Desativar a Biblioteca bloqueia os serviços de mídia e oculta a navegação deles. A mídia e as listas de interesse existentes são mantidas."
+  ],
+  "common.all": [
+   "All",
+   "Todos"
+  ],
+  "common.seeAll": [
+   "See all",
+   "Ver todos"
+  ],
+  "details.heroDescription": [
+   "Title, artwork and availability will come from the canonical Work.",
+   "Título, arte e disponibilidade virão da Obra canônica."
+  ],
+  "details.recommendations": [
+   "More like this",
+   "Mais como este"
+  ],
+  "details.related": [
+   "Related works",
+   "Obras relacionadas"
+  ],
+  "details.structure": [
+   "Seasons / structure",
+   "Temporadas / estrutura"
+  ],
+  "details.title": [
+   "Media details",
+   "Detalhes da mídia"
+  ],
+  "details.units": [
+   "Episodes / editions",
+   "Episódios / edições"
+  ],
+  "details.versions": [
+   "Versions & languages",
+   "Versões e idiomas"
+  ],
+  "details.seasons": [
+   "Seasons",
+   "Temporadas"
+  ],
+  "details.episodes": [
+   "Episodes",
+   "Episódios"
+  ],
+  "details.episodeCount": [
+   "{0} episodes",
+   "{0} episódios"
+  ],
+  "details.specials": [
+   "Specials",
+   "Especiais"
+  ],
+  "details.upcoming": [
+   "Upcoming",
+   "Em breve"
+  ],
+  "details.noEpisodes": [
+   "No episodes known for this season yet.",
+   "Ainda não há episódios conhecidos para esta temporada."
+  ],
+  "details.minutes": [
+   "{0} min",
+   "{0} min"
+  ],
+  "details.watchTrailer": [
+   "Watch the trailer on YouTube",
+   "Assistir ao trailer no YouTube"
+  ],
+  "details.cast": [
+   "Cast & crew",
+   "Elenco e equipe"
+  ],
+  "discover.mediaTypes": [
+   "Media types",
+   "Tipos de mídia"
+  ],
+  "discover.continueWatching": [
+   "Continue watching",
+   "Continuar assistindo"
+  ],
+  "discover.continueListening": [
+   "Continue listening",
+   "Continuar ouvindo"
+  ],
+  "media.continueReading": [
+   "Continue reading",
+   "Continuar lendo"
+  ],
+  "continueReading.dismiss": [
+   "Hide this bar; your reading position stays",
+   "Ocultar esta barra; sua posição de leitura permanece"
+  ],
+  "discover.title": [
+   "Discover",
+   "Descobrir"
+  ],
+  "discover.all": [
+   "All",
+   "Todos"
+  ],
+  "discover.type.movies": [
+   "Movies",
+   "Filmes"
+  ],
+  "discover.type.series": [
+   "Series",
+   "Séries"
+  ],
+  "discover.type.anime": [
+   "Anime",
+   "Anime"
+  ],
+  "discover.type.lightnovels": [
+   "Light novels",
+   "Light novels"
+  ],
+  "discover.type.books": [
+   "Books",
+   "Livros"
+  ],
+  "discover.type.manga": [
+   "Manga",
+   "Mangá"
+  ],
+  "discover.type.music": [
+   "Music",
+   "Música"
+  ],
+  "discover.type.games": [
+   "Games",
+   "Jogos"
+  ],
+  "discover.known": [
+   "In Jularr",
+   "No Jularr"
+  ],
+  "discover.feed.Trending": [
+   "Trending",
+   "Em alta"
+  ],
+  "discover.feed.Top": [
+   "Top rated",
+   "Mais bem avaliados"
+  ],
+  "discover.feed.New": [
+   "New releases",
+   "Lançamentos"
+  ],
+  "discover.feed.Upcoming": [
+   "Upcoming",
+   "Em breve"
+  ],
+  "discover.providerUnavailable": [
+   "Discovery is unavailable right now; your library still works.",
+   "O Descobrir não está disponível no momento; sua biblioteca continua funcionando."
+  ],
+  "discover.empty": [
+   "Nothing to show here yet.",
+   "Ainda não há nada para mostrar aqui."
+  ],
+  "discover.noResults": [
+   "Nothing matches this search.",
+   "Nada corresponde a esta busca."
+  ],
+  "discover.recentlyAdded": [
+   "Recently added",
+   "Adicionados recentemente"
+  ],
+  "discover.pages": [
+   "Result pages",
+   "Páginas de resultados"
+  ],
+  "discover.loadFailed": [
+   "Results could not be loaded. Try again or open the next page.",
+   "Não foi possível carregar os resultados. Tente novamente ou abra a próxima página."
+  ],
+  "media.state.NotRequested": [
+   "Not requested",
+   "Não pedido"
+  ],
+  "media.state.Requested": [
+   "Requested",
+   "Pedido"
+  ],
+  "media.state.Available": [
+   "Available",
+   "Disponível"
+  ],
+  "media.state.InProgress": [
+   "In progress",
+   "Em andamento"
+  ],
+  "media.continue": [
+   "Continue",
+   "Continuar"
+  ],
+  "media.progress": [
+   "Playback progress",
+   "Progresso da reprodução"
+  ],
+  "media.minutesLeft": [
+   "{0} min left",
+   "{0} min restantes"
+  ],
+  "media.readProgress": [
+   "Read progress",
+   "Progresso da leitura"
+  ],
+  "media.percentRead": [
+   "{0}% read",
+   "{0}% lido"
+  ],
+  "media.dubs": [
+   "Dubs",
+   "Dublagens"
+  ],
+  "media.subs": [
+   "Subs",
+   "Legendas"
+  ],
+  "media.languageCount": [
+   "{0}: {1} languages",
+   "{0}: {1} idiomas"
+  ],
+  "media.languagePreferred": [
+   "{0}: {1}",
+   "{0}: {1}"
+  ],
+  "media.shelfPrevious": [
+   "Previous titles",
+   "Títulos anteriores"
+  ],
+  "media.shelfNext": [
+   "Next titles",
+   "Próximos títulos"
+  ],
+  "media.availability.Available": [
+   "All monitored episodes or units are available.",
+   "Todos os episódios ou unidades monitorados estão disponíveis."
+  ],
+  "media.rating": [
+   "Rating",
+   "Avaliação"
+  ],
+  "media.request": [
+   "Request",
+   "Pedir"
+  ],
+  "media.availability.ProfileAudio": [
+   "Local audio is available in the profile language.",
+   "O áudio local está disponível no idioma do perfil."
+  ],
+  "media.availability.OtherAudio": [
+   "Available locally, but only in other audio languages.",
+   "Disponível localmente, mas somente em outros idiomas de áudio."
+  ],
+  "media.availability.PartialOtherAudio": [
+   "{0} of {1} monitored episodes or units are available, but only in other audio languages.",
+   "{0} de {1} episódios ou unidades monitorados estão disponíveis, mas somente em outros idiomas de áudio."
+  ],
+  "media.availability.Requested": [
+   "Requested",
+   "Pedido"
+  ],
+  "media.availability.Partial": [
+   "{0} of {1} monitored episodes or units are available.",
+   "{0} de {1} episódios ou unidades monitorados estão disponíveis."
+  ],
+  "media.availability.Missing": [
+   "No monitored episodes or units are available.",
+   "Nenhum episódio ou unidade monitorado está disponível."
+  ],
+  "media.availability.Downloading": [
+   "Downloading",
+   "Baixando"
+  ],
+  "media.availability.Searching": [
+   "Searching or queued for another search",
+   "Buscando ou na fila para outra busca"
+  ],
+  "media.series.Continuing": [
+   "Continuing",
+   "Em andamento"
+  ],
+  "media.series.Releasing": [
+   "Releasing",
+   "Em lançamento"
+  ],
+  "media.series.Ended": [
+   "Ended",
+   "Finalizada"
+  ],
+  "media.series.Canceled": [
+   "Canceled",
+   "Cancelada"
+  ],
+  "media.series.Announced": [
+   "Announced",
+   "Anunciada"
+  ],
+  "design.languageGerman": [
+   "German",
+   "Alemão"
+  ],
+  "design.genreDrama": [
+   "Drama",
+   "Drama"
+  ],
+  "design.genreRomance": [
+   "Romance",
+   "Romance"
+  ],
+  "design.genreAdventure": [
+   "Adventure",
+   "Aventura"
+  ],
+  "design.mediaNotice": [
+   "Sample cards and previews only. Statuses and languages are illustrative; request and library playback actions are disabled. The official trailer is available on Play.",
+   "Apenas cards e prévias de exemplo. Status e idiomas são ilustrativos; as ações de pedido e de reprodução da biblioteca estão desativadas. O trailer oficial está disponível em Reproduzir."
+  ],
+  "design.mediaLibrary": [
+   "Library cards",
+   "Cards da biblioteca"
+  ],
+  "design.mediaDiscover": [
+   "Discover cards",
+   "Cards do Descobrir"
+  ],
+  "media.watch": [
+   "Watch",
+   "Assistir"
+  ],
+  "media.details": [
+   "Details",
+   "Detalhes"
+  ],
+  "search.global": [
+   "Search movies and series",
+   "Buscar filmes e séries"
+  ],
+  "library.scope.all": [
+   "All",
+   "Todos"
+  ],
+  "library.scope.movies": [
+   "Movies",
+   "Filmes"
+  ],
+  "library.scope.series": [
+   "Series",
+   "Séries"
+  ],
+  "library.scope.anime": [
+   "Anime",
+   "Anime"
+  ],
+  "library.scope.books": [
+   "Books",
+   "Livros"
+  ],
+  "library.scope.manga": [
+   "Manga",
+   "Mangá"
+  ],
+  "library.scope.lightnovels": [
+   "Light novels",
+   "Light novels"
+  ],
+  "library.scope.music": [
+   "Music",
+   "Música"
+  ],
+  "library.scope.games": [
+   "Games",
+   "Jogos"
+  ],
+  "library.search": [
+   "Search your library",
+   "Buscar na sua biblioteca"
+  ],
+  "library.sort": [
+   "Sort",
+   "Ordenar"
+  ],
+  "library.sort.RecentlyAdded": [
+   "Recently added",
+   "Adicionados recentemente"
+  ],
+  "library.sort.Title": [
+   "Title",
+   "Título"
+  ],
+  "library.sort.Year": [
+   "Year",
+   "Ano"
+  ],
+  "library.paging": [
+   "Pages",
+   "Páginas"
+  ],
+  "library.userEmpty": [
+   "Your library is empty. Discover finds something to watch.",
+   "Sua biblioteca está vazia. O Descobrir encontra algo para assistir."
+  ],
+  "form.error": [
+   "Something went wrong.",
+   "Algo deu errado."
+  ],
+  "form.invalid_type": [
+   "Invalid value.",
+   "Valor inválido."
+  ],
+  "form.out_of_range": [
+   "The value is outside the allowed range.",
+   "O valor está fora do intervalo permitido."
+  ],
+  "form.required": [
+   "This field is required.",
+   "Este campo é obrigatório."
+  ],
+  "form.too_long": [
+   "The value is too long.",
+   "O valor é muito longo."
+  ],
+  "media.all": [
+   "All",
+   "Todos"
+  ],
+  "media.anime": [
+   "Anime",
+   "Anime"
+  ],
+  "media.books": [
+   "Books",
+   "Livros"
+  ],
+  "media.lightNovels": [
+   "Light novels",
+   "Light novels"
+  ],
+  "media.manga": [
+   "Manga",
+   "Mangá"
+  ],
+  "media.movies": [
+   "Movies",
+   "Filmes"
+  ],
+  "media.series": [
+   "Series",
+   "Séries"
+  ],
+  "nav.breadcrumb": [
+   "Breadcrumb",
+   "Trilha de navegação"
+  ],
+  "nav.admin": [
+   "Admin",
+   "Administração"
+  ],
+  "nav.back": [
+   "Back",
+   "Voltar"
+  ],
+  "nav.home": [
+   "Home",
+   "Início"
+  ],
+  "nav.library": [
+   "Library",
+   "Biblioteca"
+  ],
+  "nav.mobile": [
+   "Mobile navigation",
+   "Navegação móvel"
+  ],
+  "nav.primary": [
+   "Main navigation",
+   "Navegação principal"
+  ],
+  "nav.secondary": [
+   "Secondary navigation",
+   "Navegação secundária"
+  ],
+  "nav.tabs": [
+   "Tabs",
+   "Abas"
+  ],
+  "nav.profile": [
+   "Profile",
+   "Perfil"
+  ],
+  "nav.settings": [
+   "Settings",
+   "Configurações"
+  ],
+  "nav.watchlist": [
+   "Watchlist",
+   "Lista de interesse"
+  ],
+  "player.title": [
+   "Player",
+   "Player"
+  ],
+  "player.unavailable": [
+   "Playback is not connected yet.",
+   "A reprodução ainda não está conectada."
+  ],
+  "preview.admin-library": [
+   "Admin library",
+   "Biblioteca do admin"
+  ],
+  "preview.admin-requests": [
+   "Admin requests",
+   "Pedidos do admin"
+  ],
+  "preview.admin-rules": [
+   "Admin rules",
+   "Regras do admin"
+  ],
+  "preview.admin-users": [
+   "Admin users",
+   "Usuários do admin"
+  ],
+  "preview.admin-wanted": [
+   "Admin wanted",
+   "Procurados do admin"
+  ],
+  "preview.admin-work": [
+   "Admin work",
+   "Obra do admin"
+  ],
+  "preview.admin-works": [
+   "Admin works",
+   "Obras do admin"
+  ],
+  "appearance.title": [
+   "Appearance",
+   "Aparência"
+  ],
+  "appearance.style": [
+   "Style",
+   "Estilo"
+  ],
+  "appearance.brightness": [
+   "Brightness",
+   "Brilho"
+  ],
+  "appearance.original": [
+   "Original",
+   "Original"
+  ],
+  "appearance.clean": [
+   "Clean",
+   "Limpo"
+  ],
+  "appearance.system": [
+   "System",
+   "Sistema"
+  ],
+  "appearance.light": [
+   "Light",
+   "Claro"
+  ],
+  "appearance.dark": [
+   "Dark",
+   "Escuro"
+  ],
+  "preview.details": [
+   "Details",
+   "Detalhes"
+  ],
+  "preview.discover": [
+   "Discover",
+   "Descobrir"
+  ],
+  "preview.player": [
+   "Player",
+   "Player"
+  ],
+  "preview.settings": [
+   "Settings",
+   "Configurações"
+  ],
+  "preview.shell": [
+   "Shell",
+   "Estrutura"
+  ],
+  "preview.watchlist": [
+   "Watchlist",
+   "Lista de interesse"
+  ],
+  "requests.approved": [
+   "Approved",
+   "Aprovados"
+  ],
+  "requests.done": [
+   "Done",
+   "Concluídos"
+  ],
+  "requests.inProgress": [
+   "In progress",
+   "Em andamento"
+  ],
+  "requests.open": [
+   "Open",
+   "Em aberto"
+  ],
+  "requests.rejected": [
+   "Rejected",
+   "Rejeitados"
+  ],
+  "settings.accessibility": [
+   "Accessibility",
+   "Acessibilidade"
+  ],
+  "settings.account": [
+   "Account",
+   "Conta"
+  ],
+  "settings.appearance": [
+   "Appearance",
+   "Aparência"
+  ],
+  "settings.audioSubtitles": [
+   "Audio & subtitles",
+   "Áudio e legendas"
+  ],
+  "settings.connections": [
+   "Connections",
+   "Conexões"
+  ],
+  "settings.general": [
+   "General",
+   "Geral"
+  ],
+  "settings.language": [
+   "Language & region",
+   "Idioma e região"
+  ],
+  "settings.library": [
+   "Library & display",
+   "Biblioteca e exibição"
+  ],
+  "settings.media": [
+   "Media",
+   "Mídia"
+  ],
+  "settings.modules": [
+   "Modules & features",
+   "Módulos e recursos"
+  ],
+  "settings.personal": [
+   "Personal features",
+   "Recursos pessoais"
+  ],
+  "settings.playback": [
+   "Playback",
+   "Reprodução"
+  ],
+  "settings.privacy": [
+   "Profile & privacy",
+   "Perfil e privacidade"
+  ],
+  "settings.profileNotice": [
+   "This will be the Settings tab of your profile.",
+   "Esta será a aba Configurações do seu perfil."
+  ],
+  "settings.ratings": [
+   "Ratings",
+   "Avaliações"
+  ],
+  "settings.reader": [
+   "Reader",
+   "Leitor"
+  ],
+  "settings.security": [
+   "Account & security",
+   "Conta e segurança"
+  ],
+  "settings.sessions": [
+   "Devices & sessions",
+   "Dispositivos e sessões"
+  ],
+  "settings.title": [
+   "Settings",
+   "Configurações"
+  ],
+  "shell.preview": [
+   "Shell preview",
+   "Prévia da estrutura"
+  ],
+  "shell.previewInfo": [
+   "Presentation preview only. No account or profile data is loaded.",
+   "Apenas prévia de apresentação. Nenhum dado de conta ou perfil é carregado."
+  ],
+  "shell.search": [
+   "Search",
+   "Buscar"
+  ],
+  "shell.skip": [
+   "Skip to content",
+   "Ir para o conteúdo"
+  ],
+  "skeleton.unconnected": [
+   "This view will show live data when its backend service is available.",
+   "Esta visualização mostrará dados ao vivo quando o serviço de backend estiver disponível."
+  ],
+  "table.actions": [
+   "Actions",
+   "Ações"
+  ],
+  "table.titles": [
+   "Titles",
+   "Títulos"
+  ],
+  "table.availability": [
+   "Availability",
+   "Disponibilidade"
+  ],
+  "table.language": [
+   "Language / version",
+   "Idioma / versão"
+  ],
+  "table.lastSearch": [
+   "Last search",
+   "Última busca"
+  ],
+  "table.limit": [
+   "Limit",
+   "Limite"
+  ],
+  "table.monitored": [
+   "Monitoring",
+   "Monitoramento"
+  ],
+  "table.profile": [
+   "Profile",
+   "Perfil"
+  ],
+  "table.requestedAt": [
+   "Requested at",
+   "Pedido em"
+  ],
+  "table.requester": [
+   "Requester",
+   "Solicitante"
+  ],
+  "table.role": [
+   "Role",
+   "Função"
+  ],
+  "table.rule": [
+   "Rule",
+   "Regra"
+  ],
+  "table.size": [
+   "Storage used",
+   "Armazenamento usado"
+  ],
+  "table.status": [
+   "Status",
+   "Status"
+  ],
+  "table.type": [
+   "Type",
+   "Tipo"
+  ],
+  "table.user": [
+   "User",
+   "Usuário"
+  ],
+  "table.version": [
+   "Version",
+   "Versão"
+  ],
+  "table.work": [
+   "Work / unit",
+   "Obra / unidade"
+  ],
+  "toolbar.filter": [
+   "Filter",
+   "Filtrar"
+  ],
+  "toolbar.label": [
+   "List controls",
+   "Controles da lista"
+  ],
+  "toolbar.search": [
+   "Search",
+   "Buscar"
+  ],
+  "toolbar.sort": [
+   "Sort",
+   "Ordenar"
+  ],
+  "toolbar.view": [
+   "View",
+   "Visualização"
+  ],
+  "wanted.requested": [
+   "Requested",
+   "Pedido"
+  ],
+  "wanted.available": [
+   "Available",
+   "Disponível"
+  ],
+  "wanted.downloading": [
+   "Downloading",
+   "Baixando"
+  ],
+  "wanted.lastSearch": [
+   "Last search",
+   "Última busca"
+  ],
+  "wanted.open": [
+   "Open",
+   "Abrir"
+  ],
+  "wanted.openWork": [
+   "Edit title",
+   "Editar título"
+  ],
+  "wanted.section.status": [
+   "Status",
+   "Status"
+  ],
+  "wanted.section.choice": [
+   "Profile and library",
+   "Perfil e biblioteca"
+  ],
+  "wanted.section.episodes": [
+   "Seasons and episodes",
+   "Temporadas e episódios"
+  ],
+  "wanted.section.volumes": [
+   "Volumes",
+   "Volumes"
+  ],
+  "wanted.searchAutomatic": [
+   "Search automatically",
+   "Buscar automaticamente"
+  ],
+  "wanted.searchManual": [
+   "Search manually",
+   "Buscar manualmente"
+  ],
+  "admin.work.wanted": [
+   "Search and downloads",
+   "Busca e downloads"
+  ],
+  "wanted.monitoring": [
+   "Monitoring",
+   "Monitoramento"
+  ],
+  "wanted.progress": [
+   "Progress (%)",
+   "Progresso (%)"
+  ],
+  "wanted.grabQueued": [
+   "The release was sent to the download client.",
+   "O release foi enviado ao cliente de download."
+  ],
+  "wanted.tab.search": [
+   "Search",
+   "Busca"
+  ],
+  "wanted.tab.history": [
+   "History",
+   "Histórico"
+  ],
+  "wanted.search.start": [
+   "Start search",
+   "Iniciar busca"
+  ],
+  "wanted.view.All": [
+   "All",
+   "Todos"
+  ],
+  "wanted.view.Missing": [
+   "Missing",
+   "Faltando"
+  ],
+  "wanted.view.CutoffUnmet": [
+   "Cutoff unmet",
+   "Qualidade-alvo não atingida"
+  ],
+  "wanted.belowCutoff": [
+   "Below cutoff",
+   "Abaixo da qualidade-alvo"
+  ],
+  "wanted.monitorsNewUnits": [
+   "New episodes and volumes",
+   "Novos episódios e volumes"
+  ],
+  "wanted.unit": [
+   "Season, episode or volume",
+   "Temporada, episódio ou volume"
+  ],
+  "wanted.unit.releasedOn": [
+   "Released",
+   "Lançado"
+  ],
+  "wanted.unit.present": [
+   "Present",
+   "Presente"
+  ],
+  "wanted.unit.monitored": [
+   "Monitored",
+   "Monitorado"
+  ],
+  "wanted.unit.unmonitored": [
+   "Not monitored",
+   "Não monitorado"
+  ],
+  "wanted.unit.partly": [
+   "Partly monitored",
+   "Parcialmente monitorado"
+  ],
+  "wanted.unit.start": [
+   "Monitor",
+   "Monitorar"
+  ],
+  "wanted.unit.stop": [
+   "Stop monitoring",
+   "Parar de monitorar"
+  ],
+  "wanted.search.season": [
+   "Season",
+   "Temporada"
+  ],
+  "wanted.search.episode": [
+   "Episode",
+   "Episódio"
+  ],
+  "wanted.search.volume": [
+   "Volume",
+   "Volume"
+  ],
+  "wanted.search.empty": [
+   "No releases were found.",
+   "Nenhum release foi encontrado."
+  ],
+  "wanted.search.decision": [
+   "Decision",
+   "Decisão"
+  ],
+  "wanted.search.score": [
+   "Score",
+   "Pontuação"
+  ],
+  "wanted.search.release": [
+   "Release",
+   "Release"
+  ],
+  "wanted.search.indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "wanted.search.age": [
+   "Age (days)",
+   "Idade (dias)"
+  ],
+  "wanted.search.size": [
+   "Size",
+   "Tamanho"
+  ],
+  "wanted.search.quality": [
+   "Quality",
+   "Qualidade"
+  ],
+  "wanted.search.reason": [
+   "Reason",
+   "Motivo"
+  ],
+  "wanted.search.grab": [
+   "Select and download",
+   "Selecionar e baixar"
+  ],
+  "wanted.history.empty": [
+   "No releases have been taken yet.",
+   "Nenhum release foi obtido ainda."
+  ],
+  "wanted.history.date": [
+   "Date",
+   "Data"
+  ],
+  "acquisition.decision.Eligible": [
+   "Eligible",
+   "Elegível"
+  ],
+  "acquisition.decision.ManualReview": [
+   "Review",
+   "Revisar"
+  ],
+  "acquisition.decision.Rejected": [
+   "Rejected",
+   "Rejeitado"
+  ],
+  "acquisition.release.Grabbed": [
+   "Downloading",
+   "Baixando"
+  ],
+  "acquisition.release.Imported": [
+   "Imported",
+   "Importado"
+  ],
+  "acquisition.release.Failed": [
+   "Failed",
+   "Falhou"
+  ],
+  "acquisition.release.Blocked": [
+   "Blocked",
+   "Bloqueado"
+  ],
+  "acquisition.release.Allowed": [
+   "Allowed again",
+   "Permitido novamente"
+  ],
+  "acquisition.outcome.release_found": [
+   "Release found",
+   "Release encontrado"
+  ],
+  "acquisition.outcome.grabbed": [
+   "Downloading",
+   "Baixando"
+  ],
+  "acquisition.outcome.imported": [
+   "Imported",
+   "Importado"
+  ],
+  "acquisition.outcome.manual_review": [
+   "Needs review",
+   "Precisa de revisão"
+  ],
+  "acquisition.outcome.profile_rejected": [
+   "No release fits the profile",
+   "Nenhum release se ajusta ao perfil"
+  ],
+  "acquisition.outcome.identity_invalid": [
+   "No matching release",
+   "Nenhum release correspondente"
+  ],
+  "acquisition.outcome.no_candidates": [
+   "Nothing found",
+   "Nada encontrado"
+  ],
+  "acquisition.outcome.indexers_unavailable": [
+   "Indexers unavailable",
+   "Indexers indisponíveis"
+  ],
+  "acquisition.outcome.profile_missing": [
+   "No acquisition profile",
+   "Sem perfil de aquisição"
+  ],
+  "acquisition.outcome.download_failed": [
+   "Download failed",
+   "O download falhou"
+  ],
+  "acquisition.outcome.download_interrupted": [
+   "Download interrupted",
+   "Download interrompido"
+  ],
+  "acquisition.outcome.acquisition_unavailable": [
+   "Download client unavailable",
+   "Cliente de download indisponível"
+  ],
+  "acquisition.outcome.acquisition_no_download_client": [
+   "No download client",
+   "Sem cliente de download"
+  ],
+  "acquisition.outcome.acquisition_grab_failed": [
+   "Download client refused",
+   "O cliente de download recusou"
+  ],
+  "acquisition.outcome.acquisition_limit_reached": [
+   "Indexer grab limit reached",
+   "Limite de downloads do indexer atingido"
+  ],
+  "acquisition.outcome.acquisition_download_path_unconfigured": [
+   "Download workspace is not configured or is unavailable",
+   "Pasta temporária de downloads não configurada ou indisponível"
+  ],
+  "acquisition.workspace.title": [
+   "Download storage",
+   "Armazenamento de downloads"
+  ],
+  "acquisition.workspace.hint": [
+   "Configured paths (not a mount or writeability check). Native downloads pause if their workspaces are unavailable.",
+   "Caminhos configurados (sem verificar montagem ou gravação). Downloads nativos pausam quando o armazenamento está indisponível."
+  ],
+  "acquisition.workspace.usenet": [
+   "Usenet temporary files",
+   "Arquivos temporários do Usenet"
+  ],
+  "acquisition.workspace.direct": [
+   "Direct book downloads",
+   "Downloads diretos de livros"
+  ],
+  "acquisition.workspace.limit": [
+   "Per-Usenet-job limit",
+   "Limite por tarefa do Usenet"
+  ],
+  "acquisition.workspace.unset": [
+   "Not configured",
+   "Não configurado"
+  ],
+  "acquisition.workspace.hostAllow": [
+   "Host filesystem: explicitly allowed",
+   "Sistema de arquivos do host: permitido explicitamente"
+  ],
+  "acquisition.workspace.hostDeny": [
+   "Host filesystem: blocked unless a mounted workspace is selected",
+   "Sistema de arquivos do host: bloqueado sem armazenamento montado"
+  ],
+  "acquisition.workspace.manageHint": [
+   "To change these paths and the limit, update the server configuration and restart Jularr. In-app editing is not available yet.",
+   "Para alterar caminhos e limite, atualize a configuração do servidor e reinicie o Jularr. A edição no aplicativo ainda não está disponível."
+  ],
+  "acquisition.outcome.usenet_disk_budget": [
+   "Download exceeds the configured size limit",
+   "O download excede o limite de tamanho configurado"
+  ],
+  "acquisition.outcome.import_path_unmapped": [
+   "Download folder is not mapped to storage",
+   "A pasta de download não está mapeada para o armazenamento"
+  ],
+  "acquisition.outcome.import_no_library": [
+   "No library path for this media type",
+   "Nenhum caminho de biblioteca para este tipo de mídia"
+  ],
+  "acquisition.outcome.import_source_unavailable": [
+   "Download folder is unreachable",
+   "A pasta de download está inacessível"
+  ],
+  "acquisition.outcome.import_library_unavailable": [
+   "Library storage is unreachable",
+   "O armazenamento da biblioteca está inacessível"
+  ],
+  "acquisition.reason.Eligible": [
+   "Eligible",
+   "Elegível"
+  ],
+  "acquisition.reason.Blocked": [
+   "Failed or blocked before",
+   "Falhou ou foi bloqueado antes"
+  ],
+  "acquisition.reason.NoDownload": [
+   "No download link",
+   "Sem link de download"
+  ],
+  "acquisition.reason.Unparseable": [
+   "Name not recognized",
+   "Nome não reconhecido"
+  ],
+  "acquisition.reason.Matches": [
+   "Matches",
+   "Corresponde"
+  ],
+  "acquisition.reason.MatchesTitleAndAuthor": [
+   "Matches title and author",
+   "Corresponde ao título e ao autor"
+  ],
+  "acquisition.reason.AuthorMissing": [
+   "Author not named",
+   "Autor não informado"
+  ],
+  "acquisition.reason.MatchesById": [
+   "Matches by provider ID",
+   "Corresponde pelo ID do provedor"
+  ],
+  "acquisition.reason.MatchesTitleAndYear": [
+   "Matches title and year",
+   "Corresponde ao título e ao ano"
+  ],
+  "acquisition.reason.WrongTitle": [
+   "Different title",
+   "Título diferente"
+  ],
+  "acquisition.reason.WrongYear": [
+   "Different year",
+   "Ano diferente"
+  ],
+  "acquisition.reason.AmbiguousTitle": [
+   "Title is ambiguous",
+   "Título ambíguo"
+  ],
+  "acquisition.reason.ExtraTitleWords": [
+   "Title has extra words",
+   "O título tem palavras extras"
+  ],
+  "acquisition.reason.WrongSeason": [
+   "Wrong season",
+   "Temporada errada"
+  ],
+  "acquisition.reason.WrongEpisode": [
+   "Wrong episode",
+   "Episódio errado"
+  ],
+  "acquisition.reason.ContainsTarget": [
+   "Contains the target",
+   "Contém o alvo"
+  ],
+  "acquisition.reason.QualityNotAllowed": [
+   "Quality not allowed",
+   "Qualidade não permitida"
+  ],
+  "acquisition.reason.NotAnUpgrade": [
+   "No upgrade of the present quality",
+   "Não melhora a qualidade presente"
+  ],
+  "acquisition.reason.SizeUnknown": [
+   "Size unknown",
+   "Tamanho desconhecido"
+  ],
+  "acquisition.reason.SizeBelowMinimum": [
+   "Smaller than allowed",
+   "Menor que o permitido"
+  ],
+  "acquisition.reason.SizeAboveMaximum": [
+   "Larger than allowed",
+   "Maior que o permitido"
+  ],
+  "acquisition.reason.MissingRequiredTerm": [
+   "Required term missing",
+   "Falta um termo obrigatório"
+  ],
+  "acquisition.reason.ContainsRejectedTerm": [
+   "Contains a rejected term",
+   "Contém um termo rejeitado"
+  ],
+  "acquisition.reason.MissingRequiredPattern": [
+   "Required pattern missing",
+   "Falta um padrão obrigatório"
+  ],
+  "acquisition.reason.MatchesRejectedPattern": [
+   "Matches a rejected pattern",
+   "Corresponde a um padrão rejeitado"
+  ],
+  "acquisition.reason.MissingRequiredRule": [
+   "Required rule not met",
+   "Regra obrigatória não cumprida"
+  ],
+  "acquisition.reason.MatchesRejectRule": [
+   "Matches a reject rule",
+   "Corresponde a uma regra de rejeição"
+  ],
+  "acquisition.reason.RuleScore": [
+   "Rule score",
+   "Pontuação da regra"
+  ],
+  "acquisition.reason.OnlyCandidate": [
+   "Only eligible release",
+   "Único release elegível"
+  ],
+  "acquisition.reason.HigherQuality": [
+   "Best quality",
+   "Melhor qualidade"
+  ],
+  "acquisition.reason.PreferredLanguage": [
+   "Preferred language",
+   "Idioma preferido"
+  ],
+  "acquisition.reason.HigherPreference": [
+   "Highest score",
+   "Maior pontuação"
+  ],
+  "acquisition.reason.BetterCoverage": [
+   "Covers more",
+   "Cobre mais"
+  ],
+  "acquisition.reason.BetterReliability": [
+   "More reliable source",
+   "Fonte mais confiável"
+  ],
+  "acquisition.reason.IndexerPriority": [
+   "Indexer priority",
+   "Prioridade do indexer"
+  ],
+  "acquisition.reason.PostedLater": [
+   "Newer post",
+   "Publicação mais recente"
+  ],
+  "acquisition.reason.StableOrder": [
+   "Equal candidates",
+   "Candidatos iguais"
+  ],
+  "acquisition.reason.MatchesTitle": [
+   "Matches the title",
+   "Corresponde ao título"
+  ],
+  "acquisition.reason.MatchesArtistAndAlbum": [
+   "Matches artist and album",
+   "Corresponde ao artista e ao álbum"
+  ],
+  "acquisition.reason.MatchesTitleAndPlatform": [
+   "Matches title and platform",
+   "Corresponde ao título e à plataforma"
+  ],
+  "acquisition.reason.ArtistMissing": [
+   "Album has no artist",
+   "O álbum não tem artista"
+  ],
+  "acquisition.reason.PlatformMissing": [
+   "Platform not named",
+   "Plataforma não informada"
+  ],
+  "acquisition.reason.WrongArtist": [
+   "Not the wanted artist",
+   "Não é o artista procurado"
+  ],
+  "acquisition.reason.WrongVolume": [
+   "Wrong volume",
+   "Volume errado"
+  ],
+  "acquisition.reason.WrongPlatform": [
+   "Different platform",
+   "Plataforma diferente"
+  ],
+  "acquisition.reason.OtherEdition": [
+   "Other part or edition",
+   "Outra parte ou edição"
+  ],
+  "acquisition.reason.ChaptersOnly": [
+   "Chapters only",
+   "Somente capítulos"
+  ],
+  "acquisition.reason.VolumesUnknown": [
+   "Series volumes unknown",
+   "Volumes da série desconhecidos"
+  ],
+  "acquisition.reason.PartOfGame": [
+   "Part of a game",
+   "Parte de um jogo"
+  ],
+  "acquisition.reason.BestQuality": [
+   "Best quality present",
+   "Melhor qualidade presente"
+  ],
+  "acquisition.reason.BelowCutoff": [
+   "Below the quality goal",
+   "Abaixo da qualidade-alvo"
+  ],
+  "acquisition.reason.CutoffMet": [
+   "Quality goal reached",
+   "Qualidade-alvo atingida"
+  ],
+  "acquisition.reason.UpgradesDisabled": [
+   "Upgrades off",
+   "Melhorias desativadas"
+  ],
+  "acquisition.reason.InstalledQualityUnknown": [
+   "Installed quality unknown",
+   "Qualidade instalada desconhecida"
+  ],
+  "watchlist.title": [
+   "Watchlist",
+   "Lista de interesse"
+  ],
+  "storage.title": [
+   "Storage",
+   "Armazenamento"
+  ],
+  "setup.storage.title": [
+   "Setup · Storage",
+   "Configuração · Armazenamento"
+  ],
+  "storage.name": [
+   "Name",
+   "Nome"
+  ],
+  "storage.host": [
+   "Server hostname or IPv4 address",
+   "Nome do host ou endereço IPv4 do servidor"
+  ],
+  "storage.sharePath": [
+   "Share or export path",
+   "Caminho do compartilhamento ou da exportação"
+  ],
+  "storage.protocolVersion": [
+   "Protocol version",
+   "Versão do protocolo"
+  ],
+  "storage.username": [
+   "Username",
+   "Nome de usuário"
+  ],
+  "storage.domain": [
+   "Domain",
+   "Domínio"
+  ],
+  "storage.password": [
+   "Password",
+   "Senha"
+  ],
+  "storage.access": [
+   "Access",
+   "Acesso"
+  ],
+  "storage.readOnly": [
+   "Read only",
+   "Somente leitura"
+  ],
+  "storage.readWrite": [
+   "Read and write",
+   "Leitura e escrita"
+  ],
+  "storage.protocol.Smb": [
+   "SMB",
+   "SMB"
+  ],
+  "storage.protocol.Nfs": [
+   "NFS",
+   "NFS"
+  ],
+  "storage.add.Smb": [
+   "Add SMB connection",
+   "Adicionar conexão SMB"
+  ],
+  "storage.add.Nfs": [
+   "Add NFS connection",
+   "Adicionar conexão NFS"
+  ],
+  "storage.credentialsHint": [
+   "Passwords are protected in storage and never shown. NFS permissions use the server export and filesystem identities.",
+   "As senhas são protegidas no armazenamento e nunca exibidas. As permissões NFS usam a exportação do servidor e as identidades do sistema de arquivos."
+  ],
+  "admin.backup.title": [
+   "Backups",
+   "Backups"
+  ],
+  "admin.backup.notConfigured": [
+   "Backups need pg_dump and pg_restore, which this server does not have.",
+   "Os backups precisam de pg_dump e pg_restore, que este servidor não tem."
+  ],
+  "admin.backup.running": [
+   "A backup is being made.",
+   "Um backup está sendo feito."
+  ],
+  "admin.backup.failed": [
+   "The last backup failed.",
+   "O último backup falhou."
+  ],
+  "admin.backup.restored": [
+   "The backup was restored. Restart Jularr, then sign in with an account of the restored instance.",
+   "O backup foi restaurado. Reinicie o Jularr e entre com uma conta da instância restaurada."
+  ],
+  "admin.backup.create": [
+   "Back up now",
+   "Fazer backup agora"
+  ],
+  "admin.backup.createdAt": [
+   "Made",
+   "Feito em"
+  ],
+  "admin.backup.empty": [
+   "No backups yet.",
+   "Ainda sem backups."
+  ],
+  "admin.backup.compatible": [
+   "This version",
+   "Esta versão"
+  ],
+  "admin.backup.otherVersion": [
+   "Other version",
+   "Outra versão"
+  ],
+  "admin.backup.restore": [
+   "Restore",
+   "Restaurar"
+  ],
+  "admin.backup.passphrase": [
+   "Backup passphrase",
+   "Frase secreta do backup"
+  ],
+  "admin.backup.delete": [
+   "Delete",
+   "Excluir"
+  ],
+  "storage.synology.title": [
+   "Synology",
+   "Synology"
+  ],
+  "storage.synology.hint": [
+   "Reads the NAS's health and can shut it down or restart it. Needs a DSM administrator account without two-step verification; an empty address removes the access.",
+   "Lê a saúde do NAS e pode desligá-lo ou reiniciá-lo. Precisa de uma conta de administrador do DSM sem verificação em duas etapas; um endereço vazio remove o acesso."
+  ],
+  "storage.synology.url": [
+   "DSM address",
+   "Endereço do DSM"
+  ],
+  "storage.synology.username": [
+   "DSM account",
+   "Conta do DSM"
+  ],
+  "storage.synology.password": [
+   "DSM password",
+   "Senha do DSM"
+  ],
+  "storage.synology.status": [
+   "Read NAS health",
+   "Ler a saúde do NAS"
+  ],
+  "storage.synology.certificate": [
+   "Check certificate",
+   "Verificar certificado"
+  ],
+  "storage.synology.certificate.valid": [
+   "Certificate confirmed by a public authority:",
+   "Certificado confirmado por uma autoridade pública:"
+  ],
+  "storage.synology.certificate.trusted": [
+   "Certificate you trusted:",
+   "Certificado em que você confiou:"
+  ],
+  "storage.synology.certificate.untrusted": [
+   "Unknown certificate; compare its fingerprint with the one DSM shows before you trust it:",
+   "Certificado desconhecido; compare a impressão digital dele com a exibida pelo DSM antes de confiar nele:"
+  ],
+  "storage.synology.certificate.trust": [
+   "Trust this certificate",
+   "Confiar neste certificado"
+  ],
+  "storage.synology.certificate.none": [
+   "Plain HTTP uses no certificate.",
+   "HTTP simples não usa certificado."
+  ],
+  "storage.synology.power.Shutdown": [
+   "Shut down NAS",
+   "Desligar o NAS"
+  ],
+  "storage.synology.power.Restart": [
+   "Restart NAS",
+   "Reiniciar o NAS"
+  ],
+  "storage.synology.confirm.Shutdown": [
+   "Shut down the NAS now? Playback, downloads and scans on it stop until it is started again.",
+   "Desligar o NAS agora? A reprodução, os downloads e as varreduras nele são interrompidos até que seja ligado novamente."
+  ],
+  "storage.synology.confirm.Restart": [
+   "Restart the NAS now? Playback, downloads and scans on it stop for a few minutes.",
+   "Reiniciar o NAS agora? A reprodução, os downloads e as varreduras nele são interrompidos por alguns minutos."
+  ],
+  "storage.synology.sent": [
+   "The NAS accepted the command.",
+   "O NAS aceitou o comando."
+  ],
+  "storage.synology.keepRunning": [
+   "Keep it running",
+   "Manter ligado"
+  ],
+  "storage.synology.used": [
+   "{0} of {1} used",
+   "{0} de {1} usados"
+  ],
+  "storage.synology.temperature": [
+   "{0} °C",
+   "{0} °C"
+  ],
+  "statistics.title": [
+   "Statistics",
+   "Estatísticas"
+  ],
+  "statistics.periods": [
+   "Period",
+   "Período"
+  ],
+  "statistics.period.7": [
+   "7 days",
+   "7 dias"
+  ],
+  "statistics.period.30": [
+   "30 days",
+   "30 dias"
+  ],
+  "statistics.period.365": [
+   "One year",
+   "Um ano"
+  ],
+  "statistics.period.0": [
+   "All time",
+   "Todo o período"
+  ],
+  "statistics.watched": [
+   "Time in the player",
+   "Tempo no player"
+  ],
+  "statistics.sessions": [
+   "Playback sessions",
+   "Sessões de reprodução"
+  ],
+  "statistics.games": [
+   "Retro games, all time",
+   "Jogos retrô, todo o período"
+  ],
+  "statistics.completed.Movie": [
+   "Movies finished",
+   "Filmes concluídos"
+  ],
+  "statistics.completed.Series": [
+   "Episodes finished",
+   "Episódios concluídos"
+  ],
+  "statistics.completed.Book": [
+   "Books and volumes finished",
+   "Livros e volumes concluídos"
+  ],
+  "statistics.completed.Music": [
+   "Albums and tracks finished",
+   "Álbuns e faixas concluídos"
+  ],
+  "statistics.completed.Game": [
+   "Games finished",
+   "Jogos concluídos"
+  ],
+  "statistics.top": [
+   "Most played",
+   "Mais reproduzidos"
+  ],
+  "statistics.hours": [
+   "{0} h {1} min",
+   "{0} h {1} min"
+  ],
+  "instance.module.Statistics": [
+   "Statistics",
+   "Estatísticas"
+  ],
+  "system.title": [
+   "System",
+   "Sistema"
+  ],
+  "system.database": [
+   "Database size",
+   "Tamanho do banco de dados"
+  ],
+  "system.profiles": [
+   "Profiles",
+   "Perfis"
+  ],
+  "system.queued": [
+   "Queued operations",
+   "Operações na fila"
+  ],
+  "system.failed": [
+   "Failures to look at",
+   "Falhas a verificar"
+  ],
+  "system.storageOffline": [
+   "Storage connections offline",
+   "Conexões de armazenamento offline"
+  ],
+  "system.lastBackup": [
+   "Last backup",
+   "Último backup"
+  ],
+  "system.never": [
+   "Never",
+   "Nunca"
+  ],
+  "system.tools": [
+   "Server tools",
+   "Ferramentas do servidor"
+  ],
+  "system.tool": [
+   "Tool",
+   "Ferramenta"
+  ],
+  "system.tool.ffprobe": [
+   "ffprobe (stream analysis)",
+   "ffprobe (análise de streams)"
+  ],
+  "system.tool.ffmpeg": [
+   "FFmpeg (conversion)",
+   "FFmpeg (conversão)"
+  ],
+  "system.tool.par2": [
+   "par2 (download repair)",
+   "par2 (reparo de downloads)"
+  ],
+  "system.tool.sevenZip": [
+   "7-Zip (unpacking, CBR/CB7)",
+   "7-Zip (descompactação, CBR/CB7)"
+  ],
+  "system.tool.pgDump": [
+   "pg_dump (backups)",
+   "pg_dump (backups)"
+  ],
+  "system.configured": [
+   "Configured",
+   "Configurado"
+  ],
+  "system.missing": [
+   "Not configured",
+   "Não configurado"
+  ],
+  "person.title": [
+   "Person",
+   "Pessoa"
+  ],
+  "franchise.title": [
+   "Series",
+   "Coleção"
+  ],
+  "admin.history.title": [
+   "History",
+   "Histórico"
+  ],
+  "history.when": [
+   "When",
+   "Quando"
+  ],
+  "history.event": [
+   "What",
+   "O quê"
+  ],
+  "history.release": [
+   "Release",
+   "Release"
+  ],
+  "history.source": [
+   "Indexer and client",
+   "Indexer e cliente"
+  ],
+  "history.file": [
+   "File",
+   "Arquivo"
+  ],
+  "history.by": [
+   "By",
+   "Por"
+  ],
+  "history.byJularr": [
+   "Jularr",
+   "Jularr"
+  ],
+  "history.empty": [
+   "Nothing has happened yet.",
+   "Ainda não aconteceu nada."
+  ],
+  "history.event.Grabbed": [
+   "Grabbed",
+   "Obtido"
+  ],
+  "history.event.DownloadFailed": [
+   "Download failed",
+   "O download falhou"
+  ],
+  "history.event.Imported": [
+   "Imported",
+   "Importado"
+  ],
+  "history.event.Upgraded": [
+   "Replaced by a better release",
+   "Substituído por um release melhor"
+  ],
+  "history.event.FileRenamed": [
+   "Renamed",
+   "Renomeado"
+  ],
+  "history.event.FileDeleted": [
+   "Deleted",
+   "Excluído"
+  ],
+  "history.event.ManualImport": [
+   "Assigned by hand",
+   "Atribuído manualmente"
+  ],
+  "history.event.Blocked": [
+   "Blocked",
+   "Bloqueado"
+  ],
+  "history.event.SubtitleDownloaded": [
+   "Subtitle added",
+   "Legenda adicionada"
+  ],
+  "request.step.Grabbed": [
+   "Downloading",
+   "Baixando"
+  ],
+  "request.step.DownloadFailed": [
+   "Download failed, searching again",
+   "O download falhou, buscando novamente"
+  ],
+  "request.step.Imported": [
+   "Added",
+   "Adicionado"
+  ],
+  "request.step.Upgraded": [
+   "Better version added",
+   "Versão melhor adicionada"
+  ],
+  "admin.work.series": [
+   "Series",
+   "Coleção"
+  ],
+  "admin.work.seriesName": [
+   "Series name",
+   "Nome da coleção"
+  ],
+  "admin.work.seriesPosition": [
+   "Place in the series",
+   "Posição na coleção"
+  ],
+  "details.franchise": [
+   "Series:",
+   "Coleção:"
+  ],
+  "person.empty": [
+   "None of their titles are in your library.",
+   "Nenhum título desta pessoa está na sua biblioteca."
+  ],
+  "home.layout": [
+   "Home page",
+   "Página inicial"
+  ],
+  "home.shelf": [
+   "Shelf",
+   "Prateleira"
+  ],
+  "home.shown": [
+   "Shown",
+   "Exibida"
+  ],
+  "home.hidden": [
+   "Hidden",
+   "Oculta"
+  ],
+  "home.shelf.ContinueWatching": [
+   "Continue watching",
+   "Continuar assistindo"
+  ],
+  "home.shelf.ContinueListening": [
+   "Continue listening",
+   "Continuar ouvindo"
+  ],
+  "home.shelf.ContinueReading": [
+   "Continue reading",
+   "Continuar lendo"
+  ],
+  "home.shelf.RecentlyAdded": [
+   "Recently added",
+   "Adicionados recentemente"
+  ],
+  "home.shelf.Recommendations": [
+   "Recommendations",
+   "Recomendações"
+  ],
+  "instance.module.HomeLayout": [
+   "Personal home page order",
+   "Ordem pessoal da página inicial"
+  ],
+  "instance.module.Trickplay": [
+   "Thumbnails while seeking",
+   "Miniaturas ao avançar o vídeo"
+  ],
+  "instance.module.Translation": [
+   "Translate books in the reader",
+   "Traduzir livros no leitor"
+  ],
+  "instance.module.Ocr": [
+   "Recognize the text of scanned books",
+   "Reconhecer o texto de livros digitalizados"
+  ],
+  "instance.module.Diagnostics": [
+   "Diagnostics in memory",
+   "Diagnóstico na memória"
+  ],
+  "instance.module.Subtitles": [
+   "Subtitles from providers",
+   "Legendas de provedores"
+  ],
+  "instance.module.Uploads": [
+   "Upload manga volumes",
+   "Enviar volumes de mangá"
+  ],
+  "work.upload": [
+   "Upload a volume",
+   "Enviar um volume"
+  ],
+  "work.upload.file": [
+   "Volume file",
+   "Arquivo do volume"
+  ],
+  "work.upload.volume": [
+   "Volume number (empty: the whole series)",
+   "Número do volume (vazio: a série inteira)"
+  ],
+  "work.upload.submit": [
+   "Upload",
+   "Enviar"
+  ],
+  "work.upload.done": [
+   "The volume is in the library.",
+   "O volume está na biblioteca."
+  ],
+  "instance.module.Franchises": [
+   "Series",
+   "Coleções"
+  ],
+  "calendar.view.month": [
+   "Month",
+   "Mês"
+  ],
+  "calendar.view.agenda": [
+   "Agenda",
+   "Agenda"
+  ],
+  "calendar.more": [
+   "+{0} more",
+   "+{0} mais"
+  ],
+  "calendar.title": [
+   "Calendar",
+   "Calendário"
+  ],
+  "calendar.earlier": [
+   "Earlier",
+   "Antes"
+  ],
+  "calendar.today": [
+   "From today",
+   "A partir de hoje"
+  ],
+  "calendar.later": [
+   "Later",
+   "Depois"
+  ],
+  "calendar.pages": [
+   "Calendar weeks",
+   "Semanas do calendário"
+  ],
+  "calendar.empty": [
+   "Nothing is released in these two weeks for your watchlist, requests or library.",
+   "Nada é lançado nestas duas semanas para a sua lista de interesse, seus pedidos ou sua biblioteca."
+  ],
+  "instance.module.Calendar": [
+   "Release calendar",
+   "Calendário de lançamentos"
+  ],
+  "collections.title": [
+   "Collections",
+   "Listas"
+  ],
+  "collections.name": [
+   "Name",
+   "Nome"
+  ],
+  "collections.kind": [
+   "Kind",
+   "Tipo"
+  ],
+  "collections.smartToggle": [
+   "Smart filter instead of hand-picked titles",
+   "Filtro inteligente em vez de títulos escolhidos à mão"
+  ],
+  "collections.manual": [
+   "Hand-picked",
+   "Escolhidos à mão"
+  ],
+  "collections.smart": [
+   "Smart filter",
+   "Filtro inteligente"
+  ],
+  "collections.empty": [
+   "No collections yet.",
+   "Ainda sem listas."
+  ],
+  "collections.new": [
+   "New collection",
+   "Nova lista"
+  ],
+  "collections.create": [
+   "Create",
+   "Criar"
+  ],
+  "collections.edit": [
+   "Edit collection",
+   "Editar lista"
+  ],
+  "collections.delete": [
+   "Delete collection",
+   "Excluir lista"
+  ],
+  "collections.noWorks": [
+   "Add titles from their details page.",
+   "Adicione títulos a partir da página de detalhes deles."
+  ],
+  "collections.noMatch": [
+   "Nothing matches this filter yet.",
+   "Nada corresponde a este filtro ainda."
+  ],
+  "collections.type": [
+   "Media type",
+   "Tipo de mídia"
+  ],
+  "collections.subtype": [
+   "Subtype",
+   "Subtipo"
+  ],
+  "collections.anyType": [
+   "Any type",
+   "Qualquer tipo"
+  ],
+  "collections.anySubtype": [
+   "Any subtype",
+   "Qualquer subtipo"
+  ],
+  "collections.yearFrom": [
+   "Released from",
+   "Lançado a partir de"
+  ],
+  "collections.yearTo": [
+   "Released until",
+   "Lançado até"
+  ],
+  "collections.onlyAvailable": [
+   "Only what is in the library",
+   "Somente o que está na biblioteca"
+  ],
+  "collections.onlyUnfinished": [
+   "Only what is not finished",
+   "Somente o que não foi concluído"
+  ],
+  "collections.addTo": [
+   "Add",
+   "Adicionar"
+  ],
+  "collections.removeFrom": [
+   "Remove",
+   "Remover"
+  ],
+  "instance.module.Collections": [
+   "Collections",
+   "Listas"
+  ],
+  "notifications.title": [
+   "Notifications",
+   "Notificações"
+  ],
+  "notifications.unread": [
+   "Notifications, {0} unread",
+   "Notificações, {0} não lidas"
+  ],
+  "notifications.markRead": [
+   "Mark all as read",
+   "Marcar todas como lidas"
+  ],
+  "notifications.empty": [
+   "Nothing new.",
+   "Nada de novo."
+  ],
+  "notifications.pages": [
+   "Notification pages",
+   "Páginas de notificações"
+  ],
+  "notifications.times": [
+   "({0}×)",
+   "({0}×)"
+  ],
+  "notifications.settings": [
+   "What to notify about",
+   "Sobre o que notificar"
+  ],
+  "notifications.on": [
+   "Notify",
+   "Notificar"
+  ],
+  "notifications.off": [
+   "Don't notify",
+   "Não notificar"
+  ],
+  "notifications.message.RequestApproved": [
+   "Your request for {0} was approved.",
+   "Seu pedido de {0} foi aprovado."
+  ],
+  "notifications.message.RequestRejected": [
+   "Your request for {0} was declined.",
+   "Seu pedido de {0} foi recusado."
+  ],
+  "notifications.message.MediaAvailable": [
+   "{0} is available.",
+   "{0} está disponível."
+  ],
+  "notifications.message.DownloadFailed": [
+   "A download of {0} failed.",
+   "Um download de {0} falhou."
+  ],
+  "notifications.message.StorageOffline": [
+   "The storage connection {0} stays offline.",
+   "A conexão de armazenamento {0} continua offline."
+  ],
+  "notifications.type.RequestApproved": [
+   "Approved requests",
+   "Pedidos aprovados"
+  ],
+  "notifications.type.RequestRejected": [
+   "Declined requests",
+   "Pedidos recusados"
+  ],
+  "notifications.type.MediaAvailable": [
+   "New media from requests",
+   "Novas mídias dos pedidos"
+  ],
+  "notifications.type.DownloadFailed": [
+   "Failed downloads",
+   "Downloads com falha"
+  ],
+  "notifications.type.StorageOffline": [
+   "Offline storage",
+   "Armazenamento offline"
+  ],
+  "instance.module.Notifications": [
+   "Notifications",
+   "Notificações"
+  ],
+  "storage.health": [
+   "State",
+   "Estado"
+  ],
+  "storage.health.Unknown": [
+   "Not checked yet",
+   "Ainda não verificado"
+  ],
+  "storage.health.Online": [
+   "Online",
+   "Online"
+  ],
+  "storage.health.Sleeping": [
+   "Asleep",
+   "Em repouso"
+  ],
+  "storage.health.Offline": [
+   "Offline",
+   "Offline"
+  ],
+  "storage.health.Error": [
+   "No access",
+   "Sem acesso"
+  ],
+  "storage.space": [
+   "{0} free of {1}",
+   "{0} livres de {1}"
+  ],
+  "storage.checkedAt": [
+   "checked {0}",
+   "verificado {0}"
+  ],
+  "storage.problem.permission_denied": [
+   "Jularr may not read this share",
+   "O Jularr não pode ler este compartilhamento"
+  ],
+  "storage.problem.probe_timeout": [
+   "The share does not answer",
+   "O compartilhamento não responde"
+  ],
+  "storage.problem.storage_unavailable": [
+   "Not reachable or not mounted",
+   "Inacessível ou não montado"
+  ],
+  "storage.saved": [
+   "Connection saved.",
+   "Conexão salva."
+  ],
+  "storage.add.Local": [
+   "Add local path",
+   "Adicionar caminho local"
+  ],
+  "storage.protocol": [
+   "Protocol",
+   "Protocolo"
+  ],
+  "storage.protocol.Local": [
+   "Local path",
+   "Caminho local"
+  ],
+  "storage.location": [
+   "Location",
+   "Local"
+  ],
+  "storage.localPath": [
+   "Permitted container path",
+   "Caminho permitido do contêiner"
+  ],
+  "storage.wake.macAddress": [
+   "Wake-on-LAN MAC address",
+   "Endereço MAC para Wake-on-LAN"
+  ],
+  "storage.wake.broadcastAddress": [
+   "Wake-on-LAN broadcast address",
+   "Endereço de broadcast para Wake-on-LAN"
+  ],
+  "storage.wake.policy": [
+   "Wake-on-LAN",
+   "Wake-on-LAN"
+  ],
+  "storage.wake.ownerOnly": [
+   "Only the Owner wakes this device",
+   "Somente o Proprietário desperta este dispositivo"
+  ],
+  "storage.wake.onDemand": [
+   "Wake automatically when someone opens media",
+   "Despertar automaticamente quando alguém abrir uma mídia"
+  ],
+  "storage.wake.send": [
+   "Wake device",
+   "Despertar dispositivo"
+  ],
+  "storage.wake.sent": [
+   "Wake-on-LAN packet sent.",
+   "Pacote Wake-on-LAN enviado."
+  ],
+  "storage.remove": [
+   "Remove connection",
+   "Remover conexão"
+  ],
+  "storage.paths": [
+   "Paths on this connection",
+   "Caminhos nesta conexão"
+  ],
+  "storage.paths.path": [
+   "Path",
+   "Caminho"
+  ],
+  "storage.paths.files": [
+   "Files",
+   "Arquivos"
+  ],
+  "storage.paths.scan": [
+   "Scan",
+   "Varrer"
+  ],
+  "storage.paths.scanQueued": [
+   "Scan queued. Progress appears under Admin library.",
+   "Varredura na fila. O progresso aparece em Biblioteca do admin."
+  ],
+  "storage.paths.remove": [
+   "Remove path",
+   "Remover caminho"
+  ],
+  "storage.paths.removeHint": [
+   "Removing a path forgets its file inventory. Works and media files remain untouched.",
+   "Remover um caminho esquece o inventário de arquivos dele. As obras e os arquivos de mídia permanecem intocados."
+  ],
+  "storage.paths.connectionRoot": [
+   "Connection root",
+   "Raiz da conexão"
+  ],
+  "storage.paths.selected": [
+   "Selected folder",
+   "Pasta selecionada"
+  ],
+  "storage.paths.noFolders": [
+   "This folder has no subfolders.",
+   "Esta pasta não tem subpastas."
+  ],
+  "storage.paths.browse": [
+   "Browse folders",
+   "Navegar pelas pastas"
+  ],
+  "storage.paths.add": [
+   "Add library path",
+   "Adicionar caminho da biblioteca"
+  ],
+  "library.tab.Overview": [
+   "Libraries",
+   "Bibliotecas"
+  ],
+  "library.tab.Unmatched": [
+   "Unidentified",
+   "Não identificados"
+  ],
+  "library.tab.Files": [
+   "All files",
+   "Todos os arquivos"
+  ],
+  "library.tab.Rename": [
+   "Rename",
+   "Renomear"
+  ],
+  "library.tab.Naming": [
+   "Naming",
+   "Nomeação"
+  ],
+  "library.tab.Versions": [
+   "Files & versions",
+   "Arquivos e versões"
+  ],
+  "library.naming.Movie": [
+   "Movie files",
+   "Arquivos de filmes"
+  ],
+  "library.naming.Series": [
+   "Episode files",
+   "Arquivos de episódios"
+  ],
+  "library.naming.folder": [
+   "Folders",
+   "Pastas"
+  ],
+  "library.naming.file": [
+   "File name",
+   "Nome do arquivo"
+  ],
+  "library.naming.example": [
+   "Example:",
+   "Exemplo:"
+  ],
+  "library.naming.placeholders": [
+   "Placeholders",
+   "Marcadores"
+  ],
+  "library.naming.rules": [
+   "Empty placeholders leave with their brackets; the file name always names the film or the episode.",
+   "Marcadores vazios saem junto com seus colchetes; o nome do arquivo sempre nomeia o filme ou o episódio."
+  ],
+  "library.naming.token.Title": [
+   "The title",
+   "O título"
+  ],
+  "library.naming.token.Year": [
+   "The year of release",
+   "O ano de lançamento"
+  ],
+  "library.naming.token.Season": [
+   "The season number, with :00 two digits",
+   "O número da temporada, com :00 para dois dígitos"
+  ],
+  "library.naming.token.Episode": [
+   "The episode number, with :00 two digits",
+   "O número do episódio, com :00 para dois dígitos"
+  ],
+  "library.naming.token.EpisodeTitle": [
+   "The episode title",
+   "O título do episódio"
+  ],
+  "library.naming.token.Quality": [
+   "The quality, such as WEBDL-1080p",
+   "A qualidade, como WEBDL-1080p"
+  ],
+  "library.naming.token.ReleaseGroup": [
+   "The release group",
+   "O grupo do release"
+  ],
+  "library.naming.token.Edition": [
+   "The edition, such as Director's Cut",
+   "A edição, como Director's Cut"
+  ],
+  "library.naming.token.Proper": [
+   "Proper or Repack for a corrected release",
+   "Proper ou Repack para um release corrigido"
+  ],
+  "library.overview.empty": [
+   "No libraries yet. Add one with its storage.",
+   "Ainda sem bibliotecas. Adicione uma com seu armazenamento."
+  ],
+  "library.overview.place": [
+   "Storage and folder",
+   "Armazenamento e pasta"
+  ],
+  "library.overview.attention": [
+   "Needs attention",
+   "Precisa de atenção"
+  ],
+  "library.overview.fine": [
+   "Nothing",
+   "Nada"
+  ],
+  "library.overview.scanned": [
+   "Last scan",
+   "Última varredura"
+  ],
+  "library.overview.scanning": [
+   "Scanning now",
+   "Varrendo agora"
+  ],
+  "library.overview.never": [
+   "Not yet",
+   "Ainda não"
+  ],
+  "library.overview.manage": [
+   "Manage storage and libraries",
+   "Gerenciar armazenamento e bibliotecas"
+  ],
+  "nav.group.library": [
+   "Library",
+   "Biblioteca"
+  ],
+  "library.replacement.keepsReleases": [
+   "Keep several releases",
+   "Manter vários releases"
+  ],
+  "library.replacement.mode": [
+   "Replaced files",
+   "Arquivos substituídos"
+  ],
+  "library.replacement.mode.Delete": [
+   "Delete",
+   "Excluir"
+  ],
+  "library.replacement.mode.LibraryFolder": [
+   "Recycle bin in the library",
+   "Lixeira na biblioteca"
+  ],
+  "library.replacement.mode.OwnFolder": [
+   "Own recycle bin",
+   "Lixeira própria"
+  ],
+  "library.replacement.mount": [
+   "Own recycle bin: connection",
+   "Lixeira própria: conexão"
+  ],
+  "library.replacement.path": [
+   "Own recycle bin: folder",
+   "Lixeira própria: pasta"
+  ],
+  "library.replacement.days": [
+   "Keep in the recycle bin",
+   "Dias na lixeira"
+  ],
+  "library.keepOnly": [
+   "Keep only this version",
+   "Manter somente esta versão"
+  ],
+  "library.protect": [
+   "Protect from automatic upgrades",
+   "Proteger de melhorias automáticas"
+  ],
+  "library.unprotect": [
+   "Allow automatic upgrades",
+   "Permitir melhorias automáticas"
+  ],
+  "devices.link.title": [
+   "Connect this device",
+   "Conectar este dispositivo"
+  ],
+  "devices.link.hint": [
+   "On a phone signed in to Jularr, scan the code or open Settings, Pair a device, and enter these digits.",
+   "Em um celular conectado ao Jularr, leia o código ou abra Configurações, Parear um dispositivo, e digite estes números."
+  ],
+  "devices.link.qr": [
+   "QR code to pair this device",
+   "QR code para parear este dispositivo"
+  ],
+  "devices.name.browser": [
+   "Browser",
+   "Navegador"
+  ],
+  "devices.rename": [
+   "Device name",
+   "Nome do dispositivo"
+  ],
+  "devices.pair.title": [
+   "Pair a device",
+   "Parear um dispositivo"
+  ],
+  "devices.pair.code": [
+   "Code shown on the device",
+   "Código exibido no dispositivo"
+  ],
+  "devices.pair.submit": [
+   "Pair with this profile",
+   "Parear com este perfil"
+  ],
+  "devices.pair.show": [
+   "Show the device",
+   "Exibir o dispositivo"
+  ],
+  "devices.pair.device": [
+   "{0} ({1}) asks to be paired with this profile with this code:",
+   "{0} ({1}) pede para ser pareado com este perfil com este código:"
+  ],
+  "devices.pair.warning": [
+   "Confirm only if your own device shows exactly this code; whoever holds it signs in as you.",
+   "Confirme somente se o seu próprio dispositivo exibir exatamente este código; quem o tiver entra como você."
+  ],
+  "devices.link.start": [
+   "Show a pairing code",
+   "Exibir um código de pareamento"
+  ],
+  "devices.pair.done": [
+   "The device is paired; it signs in by itself.",
+   "O dispositivo está pareado; ele entra sozinho."
+  ],
+  "instance.module.Devices": [
+   "Pair TVs, phones and apps by code",
+   "Parear TVs, celulares e apps por código"
+  ],
+  "instance.module.Registration": [
+   "Let visitors ask for an account an administrator enables",
+   "Permitir que visitantes peçam uma conta que um administrador ativa"
+  ],
+  "account.register.title": [
+   "Create an account",
+   "Criar uma conta"
+  ],
+  "account.register.submit": [
+   "Ask for an account",
+   "Pedir uma conta"
+  ],
+  "account.register.pending": [
+   "Your account waits until an administrator enables it.",
+   "Sua conta aguarda até que um administrador a ative."
+  ],
+  "admin.instance.trustedProxies": [
+   "Trusted reverse proxies",
+   "Proxies reversos confiáveis"
+  ],
+  "admin.instance.publicUrl": [
+   "Public address for QR codes",
+   "Endereço público para QR codes"
+  ],
+  "library.renameTarget": [
+   "New name",
+   "Novo nome"
+  ],
+  "library.renameApply": [
+   "Rename these files",
+   "Renomear estes arquivos"
+  ],
+  "library.renameEmpty": [
+   "All identified files follow the library layout.",
+   "Todos os arquivos identificados seguem o layout da biblioteca."
+  ],
+  "library.renamed": [
+   "Files renamed: {0}. Skipped: {1}.",
+   "Arquivos renomeados: {0}. Ignorados: {1}."
+  ],
+  "library.file": [
+   "File",
+   "Arquivo"
+  ],
+  "library.root": [
+   "Library path",
+   "Caminho da biblioteca"
+  ],
+  "library.present": [
+   "Available",
+   "Disponível"
+  ],
+  "library.missing": [
+   "Missing",
+   "Faltando"
+  ],
+  "library.assign": [
+   "Identify",
+   "Identificar"
+  ],
+  "library.unmatched": [
+   "Not identified",
+   "Não identificado"
+  ],
+  "library.empty": [
+   "No files have been scanned yet.",
+   "Nenhum arquivo foi varrido ainda."
+  ],
+  "library.emptyUnmatched": [
+   "All scanned files are identified.",
+   "Todos os arquivos varridos estão identificados."
+  ],
+  "library.newWork": [
+   "New work title",
+   "Título da nova obra"
+  ],
+  "library.unitType": [
+   "Unit",
+   "Unidade"
+  ],
+  "library.unit.None": [
+   "Whole work",
+   "Obra inteira"
+  ],
+  "library.unit.Season": [
+   "Season",
+   "Temporada"
+  ],
+  "library.unit.Episode": [
+   "Episode",
+   "Episódio"
+  ],
+  "library.unit.Volume": [
+   "Volume",
+   "Volume"
+  ],
+  "library.unit.Chapter": [
+   "Chapter",
+   "Capítulo"
+  ],
+  "library.unit.Track": [
+   "Track",
+   "Faixa"
+  ],
+  "library.unitNumber": [
+   "Number",
+   "Número"
+  ],
+  "library.parentNumber.Series": [
+   "Season",
+   "Temporada"
+  ],
+  "library.parentNumber.Book": [
+   "Volume",
+   "Volume"
+  ],
+  "library.parentNumber.Manga": [
+   "Volume",
+   "Volume"
+  ],
+  "library.parentNumber.LightNovel": [
+   "Volume",
+   "Volume"
+  ],
+  "library.createAndAssign": [
+   "Create work and identify",
+   "Criar obra e identificar"
+  ],
+  "library.assignExisting": [
+   "Identify as existing work",
+   "Identificar como obra existente"
+  ],
+  "library.unassign": [
+   "Remove identification",
+   "Remover identificação"
+  ],
+  "operation.type.LibraryScan": [
+   "Library scan",
+   "Varredura da biblioteca"
+  ],
+  "operation.type.Download": [
+   "Download",
+   "Download"
+  ],
+  "operation.type.Backup": [
+   "Backup",
+   "Backup"
+  ],
+  "operation.status.Queued": [
+   "Queued",
+   "Na fila"
+  ],
+  "operation.status.Running": [
+   "Running",
+   "Em execução"
+  ],
+  "operation.status.Completed": [
+   "Completed",
+   "Concluída"
+  ],
+  "operation.status.Failed": [
+   "Failed",
+   "Falhou"
+  ],
+  "operation.created": [
+   "Queued at",
+   "Enfileirada em"
+  ],
+  "activity.tab.History": [
+   "History",
+   "Histórico"
+  ],
+  "activity.item": [
+   "Item",
+   "Item"
+  ],
+  "activity.progress": [
+   "Progress",
+   "Progresso"
+  ],
+  "activity.reason": [
+   "Reason",
+   "Motivo"
+  ],
+  "activity.client": [
+   "Client",
+   "Cliente"
+  ],
+  "activity.eta": [
+   "Time left",
+   "Tempo restante"
+  ],
+  "activity.size": [
+   "Size",
+   "Tamanho"
+  ],
+  "activity.state.Queued": [
+   "Queued",
+   "Na fila"
+  ],
+  "activity.state.Downloading": [
+   "Downloading",
+   "Baixando"
+  ],
+  "activity.state.Paused": [
+   "Paused",
+   "Pausado"
+  ],
+  "activity.state.PostProcessing": [
+   "Unpacking",
+   "Descompactando"
+  ],
+  "activity.retry": [
+   "Retry",
+   "Tentar novamente"
+  ],
+  "activity.dismiss": [
+   "Dismiss",
+   "Dispensar"
+  ],
+  "activity.openSource": [
+   "Open the source and confirm",
+   "Abrir a fonte e confirmar"
+  ],
+  "activity.fileLink": [
+   "The address of the file itself (the .epub link), not the page",
+   "Link do arquivo na fonte"
+  ],
+  "activity.continueDownload": [
+   "Continue download",
+   "Continuar download"
+  ],
+  "activity.empty.History": [
+   "Nothing has finished yet.",
+   "Nada foi concluído ainda."
+  ],
+  "details.availability": [
+   "Available media",
+   "Mídia disponível"
+  ],
+  "details.unit": [
+   "Unit",
+   "Unidade"
+  ],
+  "details.quality": [
+   "Quality",
+   "Qualidade"
+  ],
+  "details.audio": [
+   "Audio",
+   "Áudio"
+  ],
+  "details.subtitles": [
+   "Subtitles",
+   "Legendas"
+  ],
+  "subtitles.present": [
+   "Present:",
+   "Presentes:"
+  ],
+  "subtitles.language": [
+   "Language",
+   "Idioma"
+  ],
+  "subtitles.search": [
+   "Search subtitles",
+   "Buscar legendas"
+  ],
+  "subtitles.none": [
+   "No subtitles found in this language.",
+   "Nenhuma legenda encontrada neste idioma."
+  ],
+  "subtitles.provider": [
+   "Provider",
+   "Provedor"
+  ],
+  "subtitles.release": [
+   "Release",
+   "Release"
+  ],
+  "subtitles.hearingImpaired": [
+   "For the hearing impaired",
+   "Para deficientes auditivos"
+  ],
+  "subtitles.downloads": [
+   "Downloads",
+   "Downloads"
+  ],
+  "subtitles.download": [
+   "Use this subtitle",
+   "Usar esta legenda"
+  ],
+  "subtitles.saved": [
+   "The subtitle was saved beside the video.",
+   "A legenda foi salva ao lado do vídeo."
+  ],
+  "subtitles.exists": [
+   "A subtitle of this language is already beside the video.",
+   "Já existe uma legenda deste idioma ao lado do vídeo."
+  ],
+  "details.duration": [
+   "Duration",
+   "Duração"
+  ],
+  "details.wholeWork": [
+   "Whole work",
+   "Obra inteira"
+  ],
+  "details.pages": [
+   "Version pages",
+   "Páginas de versões"
+  ],
+  "media.asset.Video": [
+   "Video",
+   "Vídeo"
+  ],
+  "media.asset.Audio": [
+   "Audio",
+   "Áudio"
+  ],
+  "media.asset.Ebook": [
+   "E-book",
+   "E-book"
+  ],
+  "media.asset.Comic": [
+   "Comic",
+   "Quadrinho"
+  ],
+  "media.asset.Game": [
+   "Game",
+   "Jogo"
+  ],
+  "instance.module.Playback": [
+   "Playback",
+   "Reprodução"
+  ],
+  "instance.module.Reading": [
+   "Book processing and reader",
+   "Processamento de livros e leitor"
+  ],
+  "instance.module.Profiles": [
+   "Several profiles per account",
+   "Vários perfis por conta"
+  ],
+  "instance.module.Emulation": [
+   "Retro games in the browser",
+   "Jogos retrô no navegador"
+  ],
+  "instance.module.UnitGroups": [
+   "Named sections for episodes and volumes",
+   "Seções nomeadas para episódios e volumes"
+  ],
+  "instance.module.ProgressSync": [
+   "Share watch progress with Jellyfin and Emby",
+   "Compartilhar o progresso de visualização com Jellyfin e Emby"
+  ],
+  "unitGroups.title": [
+   "Sections",
+   "Seções"
+  ],
+  "unitGroups.name": [
+   "Name",
+   "Nome"
+  ],
+  "unitGroups.delete": [
+   "Delete",
+   "Excluir"
+  ],
+  "unitGroups.from": [
+   "From",
+   "De"
+  ],
+  "unitGroups.to": [
+   "To",
+   "Até"
+  ],
+  "unitGroups.fromParent": [
+   "From season",
+   "Da temporada"
+  ],
+  "unitGroups.toParent": [
+   "To season",
+   "Até a temporada"
+  ],
+  "unitGroups.add": [
+   "Add section",
+   "Adicionar seção"
+  ],
+  "game.title": [
+   "Play",
+   "Jogar"
+  ],
+  "game.notFound": [
+   "This game is not available.",
+   "Este jogo não está disponível."
+  ],
+  "game.unsupported": [
+   "This game's platform does not play in the browser.",
+   "A plataforma deste jogo não roda no navegador."
+  ],
+  "game.saveFailed": [
+   "The save could not be stored on the server; it stays in this browser for now.",
+   "Não foi possível guardar o save no servidor; por enquanto ele fica neste navegador."
+  ],
+  "game.stateSaved": [
+   "State saved to your profile",
+   "Estado salvo no seu perfil"
+  ],
+  "game.stateMissing": [
+   "No saved state yet",
+   "Ainda sem estado salvo"
+  ],
+  "game.playedMinutes": [
+   "Played {0} min",
+   "Jogado por {0} min"
+  ],
+  "game.playedHours": [
+   "Played {0} h {1} min",
+   "Jogado por {0} h {1} min"
+  ],
+  "player.play": [
+   "Play",
+   "Reproduzir"
+  ],
+  "player.pause": [
+   "Pause",
+   "Pausar"
+  ],
+  "player.back10": [
+   "Back 10 seconds",
+   "Voltar 10 segundos"
+  ],
+  "player.previous": [
+   "Previous",
+   "Anterior"
+  ],
+  "player.next": [
+   "Next",
+   "Próximo"
+  ],
+  "player.forward30": [
+   "Forward 30 seconds",
+   "Avançar 30 segundos"
+  ],
+  "player.timeline": [
+   "Playback position",
+   "Posição da reprodução"
+  ],
+  "player.mute": [
+   "Mute",
+   "Silenciar"
+  ],
+  "player.volume": [
+   "Volume",
+   "Volume"
+  ],
+  "player.speed": [
+   "Playback speed",
+   "Velocidade de reprodução"
+  ],
+  "player.audio": [
+   "Audio",
+   "Áudio"
+  ],
+  "player.minimize": [
+   "Minimize",
+   "Minimizar"
+  ],
+  "player.expand": [
+   "Open full player",
+   "Abrir o player completo"
+  ],
+  "player.stop": [
+   "Stop playback",
+   "Parar reprodução"
+  ],
+  "player.subtitles": [
+   "Subtitles",
+   "Legendas"
+  ],
+  "player.subtitles.off": [
+   "Off",
+   "Desativadas"
+  ],
+  "player.subtitles.forced": [
+   "forced",
+   "forçada"
+  ],
+  "player.track.unknown": [
+   "Track",
+   "Faixa"
+  ],
+  "player.channels.mono": [
+   "Mono",
+   "Mono"
+  ],
+  "player.channels.stereo": [
+   "Stereo",
+   "Estéreo"
+  ],
+  "player.channels.count": [
+   "{0} channels",
+   "{0} canais"
+  ],
+  "player.track.unsupported": [
+   "Not available in the browser yet",
+   "Ainda não disponível no navegador"
+  ],
+  "player.pip": [
+   "Picture in picture",
+   "Picture in picture"
+  ],
+  "player.fullscreen": [
+   "Fullscreen",
+   "Tela cheia"
+  ],
+  "player.more": [
+   "More",
+   "Mais"
+  ],
+  "player.delivery": [
+   "Delivery",
+   "Entrega"
+  ],
+  "player.mode.DirectPlay": [
+   "Direct Play",
+   "Reprodução direta"
+  ],
+  "player.mode.Remux": [
+   "Direct Stream",
+   "Streaming direto"
+  ],
+  "player.mode.Transcode": [
+   "Transcode",
+   "Transcodificação"
+  ],
+  "player.status.storage_waking": [
+   "The storage device is waking up. Playback starts automatically when it is ready.",
+   "O dispositivo de armazenamento está despertando. A reprodução começa automaticamente quando ele estiver pronto."
+  ],
+  "player.status.storage_unavailable": [
+   "The storage holding this file is unavailable.",
+   "O armazenamento que contém este arquivo está indisponível."
+  ],
+  "player.status.playback_conversion_unavailable": [
+   "This browser cannot play the file directly, and conversion is not available yet.",
+   "Este navegador não consegue reproduzir o arquivo diretamente, e a conversão ainda não está disponível."
+  ],
+  "player.status.not_found": [
+   "This media is no longer available.",
+   "Esta mídia não está mais disponível."
+  ],
+  "player.status.failed": [
+   "Playback could not be started.",
+   "Não foi possível iniciar a reprodução."
+  ],
+  "details.play": [
+   "Play",
+   "Reproduzir"
+  ],
+  "details.playAgain": [
+   "Play again",
+   "Reproduzir novamente"
+  ],
+  "details.resume": [
+   "Continue at",
+   "Continuar em"
+  ],
+  "common.back": [
+   "Back",
+   "Voltar"
+  ],
+  "media.author": [
+   "Author",
+   "Autor"
+  ],
+  "media.title": [
+   "Title",
+   "Título"
+  ],
+  "common.open": [
+   "Open",
+   "Abrir"
+  ],
+  "media.type": [
+   "Media type",
+   "Tipo de mídia"
+  ],
+  "media.year": [
+   "Year",
+   "Ano"
+  ],
+  "admin.works.searchMetadata": [
+   "Search metadata",
+   "Buscar metadados"
+  ],
+  "admin.works.noMetadata": [
+   "No match found.",
+   "Nenhuma correspondência encontrada."
+  ],
+  "admin.works.originalTitle": [
+   "Original title",
+   "Título original"
+  ],
+  "admin.works.import": [
+   "Add",
+   "Adicionar"
+  ],
+  "admin.work.refreshMetadata": [
+   "Update from the provider",
+   "Atualizar a partir do provedor"
+  ],
+  "admin.work.match": [
+   "Wrong match",
+   "Correspondência errada"
+  ],
+  "admin.work.useMatch": [
+   "Use this match",
+   "Usar esta correspondência"
+  ],
+  "admin.work.currentMatch": [
+   "Current match",
+   "Correspondência atual"
+  ],
+  "admin.providers.secret": [
+   "API key or read access token",
+   "Chave de API ou token de acesso de leitura"
+  ],
+  "admin.providers.clientId": [
+   "Twitch application client ID",
+   "ID do cliente do aplicativo Twitch"
+  ],
+  "admin.providers.clientSecret": [
+   "Twitch application client secret",
+   "Segredo do cliente do aplicativo Twitch"
+  ],
+  "admin.providers.secretSet": [
+   "A key is stored.",
+   "Há uma chave armazenada."
+  ],
+  "admin.providers.secretMissing": [
+   "No key is stored.",
+   "Nenhuma chave armazenada."
+  ],
+  "media.create": [
+   "Create work",
+   "Criar obra"
+  ],
+  "media.empty": [
+   "No works have been added yet.",
+   "Nenhuma obra foi adicionada ainda."
+  ],
+  "media.type.Movie": [
+   "Movie",
+   "Filme"
+  ],
+  "media.type.Series": [
+   "Series",
+   "Série"
+  ],
+  "media.type.Book": [
+   "Book",
+   "Livro"
+  ],
+  "media.subtype": [
+   "Subtype",
+   "Subtipo"
+  ],
+  "media.subtype.none": [
+   "None",
+   "Nenhum"
+  ],
+  "media.subtype.Anime": [
+   "Anime",
+   "Anime"
+  ],
+  "media.subtype.Manga": [
+   "Manga",
+   "Mangá"
+  ],
+  "media.subtype.LightNovel": [
+   "Light novel",
+   "Light novel"
+  ],
+  "media.type.Music": [
+   "Music",
+   "Música"
+  ],
+  "media.type.Game": [
+   "Game",
+   "Jogo"
+  ],
+  "media.watchlist.add": [
+   "Add to watchlist",
+   "Adicionar à lista de interesse"
+  ],
+  "media.watchlist.manage": [
+   "Manage watchlist in Details",
+   "Gerenciar a lista de interesse em Detalhes"
+  ],
+  "media.watchlist.remove": [
+   "Remove from watchlist",
+   "Remover da lista de interesse"
+  ],
+  "media.watchlist.empty": [
+   "Your watchlist is empty.",
+   "Sua lista de interesse está vazia."
+  ],
+  "errors.invalid_data": [
+   "Please check the supplied values.",
+   "Confira os valores informados."
+  ],
+  "errors.authentication_required": [
+   "Please sign in to continue.",
+   "Entre para continuar."
+  ],
+  "errors.permission_denied": [
+   "You do not have permission to perform this action.",
+   "Você não tem permissão para realizar esta ação."
+  ],
+  "errors.not_found": [
+   "The requested resource was not found.",
+   "O recurso solicitado não foi encontrado."
+  ],
+  "errors.invalid_antiforgery_token": [
+   "Please reload the page and try again.",
+   "Recarregue a página e tente novamente."
+  ],
+  "errors.invalid_request": [
+   "The request could not be processed.",
+   "Não foi possível processar o pedido."
+  ],
+  "errors.provider_unavailable": [
+   "The external provider is currently unavailable.",
+   "O provedor externo está indisponível no momento."
+  ],
+  "errors.storage_unavailable": [
+   "The storage is not reachable. Check that the NAS is on and the share is mounted.",
+   "O armazenamento não está acessível. Verifique se o NAS está ligado e o compartilhamento montado."
+  ],
+  "errors.storage_waking": [
+   "The storage device is waking up. Please try again shortly.",
+   "O dispositivo de armazenamento está despertando. Tente novamente em instantes."
+  ],
+  "errors.playback_conversion_unavailable": [
+   "This file cannot be played directly, and conversion is not available yet.",
+   "Este arquivo não pode ser reproduzido diretamente, e a conversão ainda não está disponível."
+  ],
+  "errors.playback_conversion_failed": [
+   "The media conversion failed. Please try again.",
+   "A conversão da mídia falhou. Tente novamente."
+  ],
+  "errors.playback_subtitle_unavailable": [
+   "This subtitle cannot be shown.",
+   "Esta legenda não pode ser exibida."
+  ],
+  "errors.playback_capacity_exhausted": [
+   "The server is converting as many streams as it allows. Please try again shortly.",
+   "O servidor está convertendo o máximo de streams que permite. Tente novamente em instantes."
+  ],
+  "errors.storage_wake_failed": [
+   "The Wake-on-LAN packet could not be sent.",
+   "Não foi possível enviar o pacote Wake-on-LAN."
+  ],
+  "errors.scan_incomplete": [
+   "Some folders could not be read. Nothing was marked as missing.",
+   "Algumas pastas não puderam ser lidas. Nada foi marcado como faltando."
+  ],
+  "errors.synology_unavailable": [
+   "The Synology NAS could not be reached at its DSM address.",
+   "Não foi possível alcançar o NAS Synology no endereço do DSM."
+  ],
+  "errors.synology_certificate_untrusted": [
+   "The NAS presents a certificate nobody vouches for.",
+   "O NAS apresenta um certificado pelo qual ninguém responde."
+  ],
+  "errors.synology_login_failed": [
+   "DSM rejected the account or password.",
+   "O DSM rejeitou a conta ou a senha."
+  ],
+  "errors.synology_two_factor": [
+   "This DSM account uses two-step verification; use an administrator account without it.",
+   "Esta conta do DSM usa verificação em duas etapas; use uma conta de administrador sem ela."
+  ],
+  "errors.synology_not_admin": [
+   "This DSM account may not read health or change power; use an administrator account.",
+   "Esta conta do DSM não pode ler a saúde nem alterar a energia; use uma conta de administrador."
+  ],
+  "errors.synology_blocked": [
+   "DSM blocks Jularr's address after failed logins; unblock it in DSM.",
+   "O DSM bloqueia o endereço do Jularr após logins com falha; desbloqueie-o no DSM."
+  ],
+  "errors.backup_unavailable": [
+   "Backups need pg_dump and pg_restore, which this server does not have.",
+   "Os backups precisam de pg_dump e pg_restore, que este servidor não tem."
+  ],
+  "errors.backup_failed": [
+   "The backup tool did not finish. The server log has its message.",
+   "A ferramenta de backup não terminou. O log do servidor tem a mensagem dela."
+  ],
+  "errors.backup_tool_missing": [
+   "pg_dump or pg_restore was not found at the configured path.",
+   "pg_dump ou pg_restore não foi encontrado no caminho configurado."
+  ],
+  "errors.backup_auth_failed": [
+   "PostgreSQL refused the database login of the backup tool.",
+   "O PostgreSQL recusou o login no banco de dados da ferramenta de backup."
+  ],
+  "errors.backup_version_mismatch": [
+   "pg_dump or pg_restore is older than the PostgreSQL server.",
+   "pg_dump ou pg_restore é mais antigo que o servidor PostgreSQL."
+  ],
+  "errors.backup_disk_full": [
+   "The backup folder is full.",
+   "A pasta de backup está cheia."
+  ],
+  "errors.backup_timeout": [
+   "The backup tool ran too long and was stopped.",
+   "A ferramenta de backup demorou demais e foi interrompida."
+  ],
+  "errors.backup_running": [
+   "A restore is already running.",
+   "Uma restauração já está em andamento."
+  ],
+  "errors.metadata_unavailable": [
+   "The metadata source is not configured or cannot be reached.",
+   "A fonte de metadados não está configurada ou não pode ser alcançada."
+  ],
+  "errors.metadata_authentication_failed": [
+   "TMDB rejected the stored key.",
+   "O TMDB rejeitou a chave armazenada."
+  ],
+  "errors.metadata_rate_limited": [
+   "TMDB limits requests right now. Please try again shortly.",
+   "O TMDB está limitando as requisições no momento. Tente novamente em instantes."
+  ],
+  "errors.reading_unavailable": [
+   "This book is not saved for reading while its storage is offline.",
+   "Este livro não está salvo para leitura enquanto o armazenamento dele está offline."
+  ],
+  "errors.reading_invalid_file": [
+   "This book file cannot be opened.",
+   "O arquivo deste livro não pode ser aberto."
+  ],
+  "errors.translation_unavailable": [
+   "Translation files cannot be fetched right now; the book stays in its language.",
+   "Não é possível obter os arquivos de tradução no momento; o livro permanece no idioma original."
+  ],
+  "errors.reading_pdf_without_text": [
+   "This PDF holds scanned pages without text; it opens as a PDF.",
+   "Este PDF contém páginas digitalizadas sem texto; ele abre como PDF."
+  ],
+  "errors.reading_translation_incomplete": [
+   "This book is not translated into that language in every section yet.",
+   "Este livro ainda não está traduzido para esse idioma em todas as seções."
+  ],
+  "errors.reading_pdf_recognizing": [
+   "The scanned pages are being turned into text; until then the book opens as a PDF.",
+   "As páginas digitalizadas estão sendo convertidas em texto; até lá, o livro abre como PDF."
+  ],
+  "errors.ocr_unavailable": [
+   "The text recognition models cannot be fetched right now.",
+   "Os modelos de reconhecimento de texto não podem ser baixados agora."
+  ],
+  "errors.reading_unsupported": [
+   "This comic needs 7-Zip, which is not configured on the server.",
+   "Este quadrinho precisa do 7-Zip, que não está configurado no servidor."
+  ],
+  "errors.plex_unavailable": [
+   "The Plex server could not be reached.",
+   "Não foi possível alcançar o servidor Plex."
+  ],
+  "errors.plex_authentication_failed": [
+   "The Plex server rejected the token.",
+   "O servidor Plex rejeitou o token."
+  ],
+  "errors.plex_invalid_response": [
+   "The Plex server returned an invalid response.",
+   "O servidor Plex retornou uma resposta inválida."
+  ],
+  "errors.media_server_unavailable": [
+   "The media server could not be reached.",
+   "Não foi possível alcançar o servidor de mídia."
+  ],
+  "errors.media_server_authentication_failed": [
+   "The media server refused the API key.",
+   "O servidor de mídia recusou a chave de API."
+  ],
+  "errors.media_server_invalid_response": [
+   "The media server returned an invalid response.",
+   "O servidor de mídia retornou uma resposta inválida."
+  ],
+  "errors.media_server_outdated": [
+   "Jellyfin 10.9 or newer is needed.",
+   "É necessário o Jellyfin 10.9 ou mais recente."
+  ],
+  "errors.device_pairing_busy": [
+   "No pairing code is free right now; try again in a minute.",
+   "Nenhum código de pareamento está livre no momento; tente novamente em um minuto."
+  ],
+  "errors.device_pairing_attempts": [
+   "Too many wrong codes; try again in ten minutes.",
+   "Muitos códigos errados; tente novamente em dez minutos."
+  ],
+  "errors.validation.invalid_code": [
+   "This code is unknown or has expired.",
+   "Este código é desconhecido ou expirou."
+  ],
+  "errors.validation.translation_mismatch": [
+   "The translation does not fit this section.",
+   "A tradução não corresponde a esta seção."
+  ],
+  "errors.validation.indexer_removed": [
+   "The indexer of this release was removed; search again.",
+   "O indexer deste release foi removido; busque novamente."
+  ],
+  "errors.validation.invalid_network": [
+   "Enter IP addresses or networks such as 192.168.1.10 or 10.0.0.0/8.",
+   "Informe endereços IP ou redes como 192.168.1.10 ou 10.0.0.0/8."
+  ],
+  "errors.validation.pairing_expired": [
+   "This code has expired; show a new code on the device.",
+   "Este código expirou; exiba um novo código no dispositivo."
+  ],
+  "errors.acquisition_unavailable": [
+   "The indexer or download client could not be reached.",
+   "Não foi possível alcançar o indexer ou o cliente de download."
+  ],
+  "errors.acquisition_authentication_failed": [
+   "The indexer or download client rejected the API key.",
+   "O indexer ou o cliente de download rejeitou a chave de API."
+  ],
+  "errors.acquisition_rate_limited": [
+   "The indexer limits requests right now. Please try again later.",
+   "O indexer está limitando as requisições no momento. Tente novamente mais tarde."
+  ],
+  "errors.acquisition_limit_reached": [
+   "The indexer's daily grab limit is reached.",
+   "O limite diário de downloads do indexer foi atingido."
+  ],
+  "errors.acquisition_query_limit_reached": [
+   "The indexer's daily query limit is reached.",
+   "O limite diário de consultas do indexer foi atingido."
+  ],
+  "errors.acquisition_invalid_response": [
+   "The indexer or download client returned an invalid response.",
+   "O indexer ou o cliente de download retornou uma resposta inválida."
+  ],
+  "errors.acquisition_download_path_unconfigured": [
+   "Download workspace is not configured or is unavailable",
+   "Pasta temporária de downloads não configurada ou indisponível"
+  ],
+  "errors.acquisition_no_download_client": [
+   "No enabled download client is configured.",
+   "Nenhum cliente de download ativado está configurado."
+  ],
+  "errors.acquisition_grab_failed": [
+   "The download client did not accept the release.",
+   "O cliente de download não aceitou o release."
+  ],
+  "errors.concurrent_change": [
+   "Another change was made at the same time. Please reload and try again.",
+   "Outra alteração foi feita ao mesmo tempo. Recarregue e tente novamente."
+  ],
+  "errors.internal_error": [
+   "An unknown error occurred.",
+   "Ocorreu um erro desconhecido."
+  ],
+  "errors.import_no_library": [
+   "No writable library of this kind exists.",
+   "Não existe uma biblioteca gravável deste tipo."
+  ],
+  "errors.rate_limit_exceeded": [
+   "Too many requests. Please try again later.",
+   "Requisições demais. Tente novamente mais tarde."
+  ],
+  "errors.validation.required": [
+   "A value is required.",
+   "É necessário um valor."
+  ],
+  "errors.validation.invalid_type": [
+   "The value has an invalid type.",
+   "O valor tem um tipo inválido."
+  ],
+  "errors.validation.out_of_range": [
+   "The value is outside the allowed range.",
+   "O valor está fora do intervalo permitido."
+  ],
+  "errors.validation.invalid_uuid": [
+   "The identifier is invalid.",
+   "O identificador é inválido."
+  ],
+  "errors.validation.invalid_text": [
+   "The text contains invalid characters.",
+   "O texto contém caracteres inválidos."
+  ],
+  "errors.validation.too_short": [
+   "The value is too short.",
+   "O valor é muito curto."
+  ],
+  "errors.validation.password_mismatch": [
+   "The passwords do not match.",
+   "As senhas não coincidem."
+  ],
+  "errors.validation.too_long": [
+   "The value is too long.",
+   "O valor é muito longo."
+  ],
+  "errors.validation.invalid_email": [
+   "Please enter a valid email address.",
+   "Informe um endereço de e-mail válido."
+  ],
+  "errors.validation.invalid_locale": [
+   "Please enter a language code supported by this server.",
+   "Informe um código de idioma compatível com este servidor."
+  ],
+  "errors.validation.invalid_url": [
+   "Please enter an HTTP or HTTPS address.",
+   "Informe um endereço HTTP ou HTTPS."
+  ],
+  "errors.validation.invalid_host": [
+   "Please enter a hostname or IPv4 address without a scheme or path.",
+   "Informe um nome de host ou endereço IPv4 sem esquema nem caminho."
+  ],
+  "errors.validation.invalid_path": [
+   "Please enter a path without traversal segments.",
+   "Informe um caminho sem segmentos de travessia."
+  ],
+  "errors.validation.invalid_mac_address": [
+   "Please enter a MAC address such as 00:11:22:AA:BB:CC.",
+   "Informe um endereço MAC como 00:11:22:AA:BB:CC."
+  ],
+  "errors.validation.overlapping_path": [
+   "This path overlaps another library path on the same connection.",
+   "Este caminho se sobrepõe a outro caminho de biblioteca na mesma conexão."
+  ],
+  "errors.validation.in_use": [
+   "This item is still in use.",
+   "Este item ainda está em uso."
+  ],
+  "errors.validation.invalid_pin": [
+   "The PIN is incorrect.",
+   "O PIN está incorreto."
+  ],
+  "errors.validation.request_limit": [
+   "You have reached your request limit for now.",
+   "Você atingiu seu limite de pedidos por enquanto."
+  ],
+  "errors.validation.request_media_blocked": [
+   "Your request rule does not allow this kind of media.",
+   "Sua regra de pedidos não permite este tipo de mídia."
+  ],
+  "errors.validation.profile_limit": [
+   "An account can own up to ten profiles.",
+   "Uma conta pode ter até dez perfis."
+  ],
+  "errors.validation.invalid_pin_format": [
+   "The PIN must have three to six digits.",
+   "O PIN deve ter de três a seis dígitos."
+  ],
+  "errors.validation.pin_locked": [
+   "Too many incorrect PINs. Please try again in a minute.",
+   "PINs incorretos demais. Tente novamente em um minuto."
+  ],
+  "errors.validation.duplicate_value": [
+   "This value is already in use.",
+   "Este valor já está em uso."
+  ],
+  "errors.validation.collection_limit": [
+   "This profile has as many collections as the Admin allows.",
+   "Este perfil já tem o máximo de listas que o admin permite."
+  ],
+  "errors.validation.annotation_limit": [
+   "A profile keeps at most 1000 highlights per book.",
+   "Um perfil mantém no máximo 1000 destaques por livro."
+  ],
+  "errors.validation.bookmark_limit": [
+   "A profile keeps at most 200 bookmarks per book.",
+   "Um perfil guarda no máximo 200 marcadores por livro."
+  ],
+  "errors.validation.overlapping_group": [
+   "These units already belong to another section.",
+   "Estas unidades já pertencem a outra seção."
+  ],
+  "errors.validation.group_limit": [
+   "This title has as many sections as the Admin allows.",
+   "Este título já tem o máximo de seções que o admin permite."
+  ],
+  "errors.validation.utc_required": [
+   "The timestamp must use UTC.",
+   "O carimbo de data e hora deve usar UTC."
+  ],
+  "errors.validation.unknown_catalog_value": [
+   "The selection is invalid.",
+   "A seleção é inválida."
+  ],
+  "errors.validation.unknown_reference": [
+   "The referenced resource is unavailable.",
+   "O recurso referenciado está indisponível."
+  ],
+  "errors.validation.outdated_version": [
+   "The data has changed. Please reload and try again.",
+   "Os dados foram alterados. Recarregue e tente novamente."
+  ],
+  "errors.validation.invalid_transition": [
+   "This change is not available.",
+   "Esta alteração não está disponível."
+  ],
+  "errors.validation.invalid_file_type": [
+   "This kind of file is not accepted here.",
+   "Este tipo de arquivo não é aceito aqui."
+  ],
+  "errors.validation.invalid_value": [
+   "This value cannot be used here.",
+   "Este valor não pode ser usado aqui."
+  ],
+  "errors.validation.unknown_language": [
+   "Use two-letter language codes such as de or en.",
+   "Use códigos de idioma de duas letras, como de ou en."
+  ],
+  "errors.validation.backup_passphrase": [
+   "The passphrase does not open this backup's key ring.",
+   "A frase secreta não abre o chaveiro deste backup."
+  ],
+  "errors.validation.naming_unknown_token": [
+   "The pattern uses an unknown placeholder.",
+   "O padrão usa um marcador desconhecido."
+  ],
+  "errors.validation.naming_incomplete": [
+   "The pattern needs the title, and for episodes the season and episode.",
+   "O padrão precisa do título e, para episódios, da temporada e do episódio."
+  ],
+  "errors.validation.naming_needs_release_token": [
+   "Several releases need {Quality}, {Release Group} or {Edition} in every file name.",
+   "Vários releases precisam de {Quality}, {Release Group} ou {Edition} em cada nome de arquivo."
+  ],
+  "errors.validation.naming_invalid_path": [
+   "Each folder of the pattern needs a name.",
+   "Cada pasta do padrão precisa de um nome."
+  ],
+  "errors.validation.setup_completed": [
+   "Only an instance that has not finished setup can be replaced by a backup.",
+   "Somente uma instância que não concluiu a configuração inicial pode ser substituída por um backup."
+  ],
+  "errors.validation.backup_incompatible": [
+   "This backup belongs to another Jularr version.",
+   "Este backup pertence a outra versão do Jularr."
+  ],
+  "errors.validation.library_rename_changed": [
+   "The library changed since the preview. Please check the new preview.",
+   "A biblioteca mudou desde a prévia. Confira a nova prévia."
+  ],
+  "errors.validation.invalid_placeholders": [
+   "The translation must preserve its placeholders.",
+   "A tradução deve preservar seus marcadores."
+  ],
+  "errors.validation.unknown_id": [
+   "The referenced item is unavailable.",
+   "O item referenciado está indisponível."
+  ],
+  "errors.validation.duplicate_id": [
+   "The item was supplied more than once.",
+   "O item foi informado mais de uma vez."
+  ],
+  "errors.validation.unknown_or_duplicate_id": [
+   "The item is unavailable or was supplied more than once.",
+   "O item está indisponível ou foi informado mais de uma vez."
+  ],
+  "storage.check": [
+   "Check now",
+   "Verificar agora"
+  ],
+  "storage.volume.title": [
+   "Docker volume",
+   "Volume do Docker"
+  ],
+  "storage.volume.info": [
+   "Add these lines to compose.yaml and restart the container. An SMB password goes into .env under the variable named in them, each comma written twice. Docker mounts the share when the container starts, so the NAS must be on then.",
+   "Adicione estas linhas ao compose.yaml e reinicie o contêiner. Uma senha SMB vai no .env sob a variável indicada nelas, com cada vírgula escrita duas vezes. O Docker monta o compartilhamento quando o contêiner inicia, então o NAS precisa estar ligado nesse momento."
+  ],
+  "storage.reach": [
+   "Connected by",
+   "Conectado por"
+  ],
+  "storage.reach.direct": [
+   "Jularr",
+   "Jularr"
+  ],
+  "storage.reach.volume": [
+   "Docker volume",
+   "Volume do Docker"
+  ],
+  "hint.StorageMountFields.IsVolume.info": [
+   "Jularr opens the share only when needed, so a NAS may sleep. A Docker volume is mounted when the container starts and needs lines in compose.yaml.",
+   "O Jularr abre o compartilhamento só quando precisa, então o NAS pode hibernar. Um volume do Docker é montado quando o contêiner inicia e precisa de linhas no compose.yaml."
+  ],
+  "setup.step.Owner": [
+   "Owner & language",
+   "Proprietário e idioma"
+  ],
+  "admin.plex.pin.start": [
+   "Connect through plex.tv",
+   "Conectar pelo plex.tv"
+  ],
+  "setup.presets": [
+   "Module presets",
+   "Predefinições de módulos"
+  ],
+  "setup.locale.machine": [
+   "{0} (machine translated)",
+   "{0} (tradução automática)"
+  ],
+  "setup.preset.complete": [
+   "Complete",
+   "Completo"
+  ],
+  "setup.preset.mediaServer": [
+   "Media server",
+   "Servidor multimédia"
+  ],
+  "setup.preset.requests": [
+   "Requests",
+   "Pedidos"
+  ],
+  "setup.modules.personal": [
+   "Profiles & personal features",
+   "Perfis e funcionalidades pessoais"
+  ],
+  "setup.modules.operations": [
+   "Administration",
+   "Administração"
+  ],
+  "arr.settings": [
+   "Arr+ settings",
+   "Configurações do Arr+"
+  ],
+  "arr.formats": [
+   "Custom formats",
+   "Formatos personalizados"
+  ],
+  "arr.sizes": [
+   "Quality sizes",
+   "Tamanhos por qualidade"
+  ],
+  "arr.releaseProfiles": [
+   "Release profiles",
+   "Perfis de lançamento"
+  ],
+  "arr.tags": [
+   "Tags",
+   "Etiquetas"
+  ],
+  "arr.qualityGroups": [
+   "Quality groups",
+   "Grupos de qualidade"
+  ],
+  "arr.refreshGroups": [
+   "Apply group changes",
+   "Aplicar alterações dos grupos"
+  ],
+  "arr.minimumScore": [
+   "Minimum format score",
+   "Pontuação mínima de formatos"
+  ],
+  "arr.cutoffScore": [
+   "Upgrade until this format score",
+   "Atualizar até esta pontuação"
+  ],
+  "arr.upgradeScore": [
+   "Minimum score increase",
+   "Aumento mínimo de pontuação"
+  ],
+  "arr.moveUp": [
+   "Move up",
+   "Mover para cima"
+  ],
+  "arr.moveDown": [
+   "Move down",
+   "Mover para baixo"
+  ],
+  "arr.anyIndexer": [
+   "Every indexer",
+   "Todos os indexadores"
+  ],
+  "arr.includeRenaming": [
+   "Include when renaming",
+   "Incluir ao renomear"
+  ],
+  "arr.condition": [
+   "Condition",
+   "Condição"
+  ],
+  "arr.required": [
+   "Required",
+   "Obrigatória"
+  ],
+  "arr.negate": [
+   "Negate",
+   "Inverter"
+  ],
+  "arr.value": [
+   "Value or pattern",
+   "Valor ou expressão"
+  ],
+  "arr.exceptLanguage": [
+   "Any other language",
+   "Qualquer outro idioma"
+  ],
+  "arr.resolution": [
+   "Resolution",
+   "Resolução"
+  ],
+  "arr.minimum": [
+   "Minimum",
+   "Mínimo"
+  ],
+  "arr.maximum": [
+   "Maximum",
+   "Máximo"
+  ],
+  "arr.addCondition": [
+   "Add condition",
+   "Adicionar condição"
+  ],
+  "arr.removeCondition": [
+   "Remove last condition",
+   "Remover última condição"
+  ],
+  "arr.importJson": [
+   "Sonarr, Radarr or TRaSH JSON",
+   "JSON do Sonarr, Radarr ou TRaSH"
+  ],
+  "arr.import": [
+   "Import formats",
+   "Importar formatos"
+  ],
+  "arr.minimumMb": [
+   "Minimum",
+   "Mínimo"
+  ],
+  "arr.preferredMb": [
+   "Preferred",
+   "Preferido"
+  ],
+  "arr.maximumMb": [
+   "Maximum",
+   "Máximo"
+  ],
+  "arr.requiredTerms": [
+   "One required term",
+   "Um termo obrigatório"
+  ],
+  "arr.ignoredTerms": [
+   "Ignored terms",
+   "Termos excluídos"
+  ],
+  "arr.condition.ReleaseTitle": [
+   "Release title",
+   "Título do lançamento"
+  ],
+  "arr.condition.Edition": [
+   "Edition",
+   "Edição"
+  ],
+  "arr.condition.Language": [
+   "Language",
+   "Idioma"
+  ],
+  "arr.condition.ReleaseGroup": [
+   "Release group",
+   "Grupo de lançamento"
+  ],
+  "arr.condition.Source": [
+   "Source",
+   "Fonte"
+  ],
+  "arr.condition.Resolution": [
+   "Resolution",
+   "Resolução"
+  ],
+  "arr.condition.QualityModifier": [
+   "Quality modifier",
+   "Modificador de qualidade"
+  ],
+  "arr.condition.IndexerFlag": [
+   "Indexer flag",
+   "Indicador do indexador"
+  ],
+  "arr.condition.Size": [
+   "Size (GB)",
+   "Tamanho (GB)"
+  ],
+  "arr.condition.ReleaseType": [
+   "Release type",
+   "Tipo de lançamento"
+  ],
+  "arr.condition.Year": [
+   "Year",
+   "Ano"
+  ],
+  "takeover.outcome.takeover_profile_unsupported": [
+   "Profile needs review before importing titles",
+   "Revise o perfil antes dos títulos"
+  ],
+  "arr.terms.info": [
+   "One term per line. Patterns use /expression/i.",
+   "Um termo por linha. Expressões: /expressão/i."
+  ],
+  "arr.condition.info": [
+   "Use a pattern for titles, editions and groups; a two-letter language code or original, any, unknown for languages. Source and modifier values follow Sonarr or Radarr. Resolution uses its number; size and year use minimum and maximum.",
+   "Use expressões para títulos, edições e grupos; código de duas letras ou original, any, unknown para idiomas. Fontes e modificadores seguem Sonarr ou Radarr. Resolução numérica; tamanho e ano com limites."
+  ],
+  "common.remove": [
+   "Remove",
+   "Remover"
+  ],
+  "acquisition.reason.SizeBelowQualityMinimum": [
+   "Below the minimum size for this quality",
+   "Abaixo do tamanho mínimo desta qualidade"
+  ],
+  "acquisition.reason.SizeAboveQualityMaximum": [
+   "Above the maximum size for this quality",
+   "Acima do tamanho máximo desta qualidade"
+  ],
+  "acquisition.reason.FormatScore": [
+   "Custom format score",
+   "Pontuação de formato"
+  ],
+  "acquisition.reason.FormatScoreBelowMinimum": [
+   "Format score below minimum",
+   "Pontuação de formato abaixo do mínimo"
+  ],
+  "takeover.newLibraries": [
+   "Create libraries from root folders",
+   "Criar bibliotecas de pastas raiz"
+  ],
+  "takeover.keepLibrary": [
+   "Use existing library assignment",
+   "Usar atribuição de biblioteca existente"
+  ],
+  "takeover.inlineKeys": [
+   "Complete missing API keys",
+   "Completar chaves de API ausentes"
+  ],
+  "profile.section.size": [
+   "Size",
+   "Tamanho"
+  ],
+  "profile.deleteConfirm": [
+   "Delete this unused profile?",
+   "Excluir este perfil sem uso?"
+  ],
+  "acquisition.reason.FormatEvaluationFailed": [
+   "Custom format could not be evaluated",
+   "Não foi possível avaliar o formato personalizado"
+  ],
+  "arr.applyCondition": [
+   "Apply condition type",
+   "Aplicar tipo de condição"
+  ]
+ }
+}

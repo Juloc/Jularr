@@ -1,0 +1,5 @@
+// The figures and the cards are one region: an action of a card swaps both.
+.connections__cards {
+    display: grid;
+    gap: 16px;
+}

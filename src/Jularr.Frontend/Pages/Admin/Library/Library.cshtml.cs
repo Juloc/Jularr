@@ -1,0 +1,365 @@
+using System.Globalization;
+using System.IO;
+using System.Text.Encodings.Web;
+using Jularr.Backend.Data;
+using Jularr.Backend.Data.Admin.Library.V1;
+using Jularr.Backend.Data.Admin.Storage.V1;
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Library;
+using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Service.Admin.Library.V1;
+using Jularr.Backend.Service.Admin.Storage.V1;
+using Jularr.Frontend.Framework;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+
+namespace Jularr.Frontend.Pages.Admin.Library
+{
+    public enum LibraryTab : byte
+    {
+        Unmatched = 1,
+        Files = 2,
+        Rename = 3,
+        Versions = 5,
+        Overview = 6
+    }
+
+    public sealed class LibraryModel(ReadLibraryFilesV1 readFiles, AssignLibraryFileV1 assign, UnassignLibraryFileV1 unassign, ReadLibraryRenamesV1 readRenames,
+        ApplyLibraryRenamesV1 applyRenames, ReadReplacementSettingsV1 readReplacement, UpdateReplacementSettingsV1 updateReplacement, KeepOnlyLibraryFileV1 keepOnly, ProtectLibraryFileV1 protect, ReadStorageMountsV1 readMounts, ReadLibraryOverviewV1 readOverview,
+        QueueLibraryScanV1 queueScan, CreateLibraryRootV1 createLibraryRoot, ReadStorageDirectoriesV1 readDirectories, FrontendAssets assets,
+        IAntiforgery antiforgery, UiText texts) : JularrPage
+    {
+        private IReadOnlyList<LibraryOverviewV1>? _overview;
+        private ReplacementSettingsV1? _replacement;
+        private UpdateReplacementSettingsDataV1? _replacementInput;
+        private PageResult<StorageMountDetailsV1>? _mounts;
+        private CreateLibraryRootDataV1? _libraryInput;
+        private const int RenamePageSize = 100;
+        private PageResult<LibraryFileDetailsV1>? _files;
+        private LibraryRenamePlanV1? _renames;
+        private long? _failedFileId;
+
+        [BindProperty(SupportsGet = true)]
+        public int PageNumber { get; set; } = 1;
+
+        // The files of one library.
+        [BindProperty(SupportsGet = true, Name = "root")]
+        public long? RootId { get; set; }
+
+        // Each view has its address: the overview at /Admin/Library, the others below it.
+        private LibraryTab Tab => Request.Path.Value?.TrimEnd('/').Split('/')[^1] is { } last && Enum.TryParse<LibraryTab>(last, true, out var tab) && tab != LibraryTab.Overview
+            ? tab : LibraryTab.Overview;
+
+        protected override void Define(Page page)
+        {
+            page.Title("library.tab." + Tab);
+            page.Navigation("nav.admin");
+            page.Asset("Pages/Admin/Library/Library.entry.scss");
+            page.Asset("Framework/Components/FolderPicker.entry.ts");
+            var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+
+            // Every library with what it holds; new ones are added with their storage.
+            if (_overview is { } libraries)
+            {
+                if (libraries.Count > 0) page.Content.Add(Totals(libraries));
+                var table = new Table<LibraryOverviewV1>(libraries)
+                    .Text(item => item.Name, "library.root")
+                    .Content("table.type", item => new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)))
+                    .Content("library.overview.place", item => new ValueText(item.StorageMountName + " / " + item.RelativePath))
+                    .Content("table.titles", item => new ValueText(item.WorkCount.ToString("N0", CultureInfo.CurrentCulture)))
+                    .Content("storage.paths.files", item => new A(new ValueText(item.FileCount.ToString("N0", CultureInfo.CurrentCulture)))
+                        .Attribute("href", "/Admin/Library/Files?root=" + item.Id.ToString(CultureInfo.InvariantCulture)))
+                    .Content("table.size", item => new ValueText(ByteSize.Format(item.TotalBytes)))
+                    .Content("library.overview.attention", Attention)
+                    .Content("library.overview.scanned", item => item.IsScanning ? new Text("library.overview.scanning")
+                        : item.LastScanAt is { } scanned ? new ValueText(scanned.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)) : new Text("library.overview.never"));
+
+                // Scanning reads the storage, which needs its administration.
+                if (CanRename)
+                {
+                    table.Content("common.actions", item => new Form<LibraryRootParametersV1>(form => form.Submit("storage.paths.scan", item.Name, valueHidden: true),
+                        Address(handler: "Scan") + "&libraryRootId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new LibraryRootParametersV1(item.Id)));
+                }
+
+                page.Content.Add(libraries.Count == 0 ? new P(new Text("library.overview.empty")) : table);
+                if (CanRename)
+                {
+                    page.Content.Add(new Div(new A(new Text("library.overview.manage")).Class("button").Attribute("href", "/Admin/Storage")).Class("page-actions"));
+                    page.Content.Add(AddLibraryButton(csrf));
+                }
+            }
+
+            // Inventory and manual identity.
+            if (_files is { } files)
+            {
+                var table = new Table<LibraryFileDetailsV1>(files.Items)
+                    .Text(item => item.RelativePath, "library.file")
+                    .Text(item => item.LibraryRootName, "library.root")
+                    .Content("table.size", item => new ValueText(ByteSize.Format(item.SizeBytes)))
+                    .Content("table.status", item => new Text(item.MissingSince is null ? "library.present" : "library.missing"));
+                table = Tab == LibraryTab.Unmatched
+                    ? table.Content("library.assign", item => Assignment(item, csrf))
+                    : table.Content("table.work", item => item.WorkId is { } workId
+                        ? new Div(new A(new ValueText(item.WorkTitle ?? "")).Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)), Release(item, csrf), Subtitles(item))
+                        : new Text("library.unmatched"));
+                page.Content.Add((files.Items.Count > 0 ? (IUiComponent)table : new P(new Text(Tab == LibraryTab.Unmatched ? "library.emptyUnmatched" : "library.empty"))).Paged(files.Items.Count, files.PageSize));
+            }
+
+            if (_renames is { } renames)
+            {
+                if (renames.Items.Count == 0)
+                {
+                    page.Content.Add(new P(new Text("library.renameEmpty")));
+                }
+                else
+                {
+                    page.Content.Add(new Table<LibraryRenameV1>(renames.Items)
+                        .Text(item => item.LibraryRootName, "library.root")
+                        .Text(item => item.RelativePath, "library.file")
+                        .Text(item => item.TargetPath, "library.renameTarget"));
+
+                    // Files move only for the confirmed plan.
+                    page.Content.Add(new Form<ApplyLibraryRenamesDataV1>(form =>
+                    {
+                        form.Hidden(item => item.Fingerprint);
+                        form.Submit("library.renameApply");
+                    }, Address(handler: "Rename"), csrf, new ApplyLibraryRenamesDataV1(renames.Fingerprint)));
+                }
+
+                page.Content.Add(new Span().Paged(renames.Items.Count, RenamePageSize));
+            }
+
+            // What an import does with the earlier file of the same film or episode.
+            if (_replacement is { } replacement)
+            {
+                var modes = Enum.GetValues<RecycleMode>().Select(mode => new SelectOption(((byte)mode).ToString(CultureInfo.InvariantCulture), texts["library.replacement.mode." + mode]));
+                var mounts = (_mounts?.Items ?? []).Where(mount => !mount.IsReadOnly)
+                    .Select(mount => new SelectOption(mount.Id.ToString(CultureInfo.InvariantCulture), mount.Name)).Prepend(new SelectOption("", "-"));
+                page.Content.Add(new Form<UpdateReplacementSettingsDataV1>(form =>
+                {
+                    form.Hidden(item => item.Version);
+                    form.Toggle(item => item.KeepsReleases, "library.replacement.keepsReleases");
+                    form.Select(item => item.RecycleModeId, "library.replacement.mode", modes);
+                    form.Select(item => item.RecycleStorageMountId, "library.replacement.mount", mounts);
+                    form.Text(item => item.RecyclePath, "library.replacement.path");
+                    form.Number(item => item.RecycleDays, "library.replacement.days", affix: FieldAffix.Unit("unit.days"));
+                    form.Toggle(item => item.UnmonitorsDeletedUnits, "library.replacement.unmonitorsDeleted");
+                    form.Save();
+                }, Address(handler: "Replacement"), csrf, _replacementInput ?? new UpdateReplacementSettingsDataV1(replacement.KeepsReleases, replacement.RecycleModeId,
+                    replacement.RecycleStorageMountId, replacement.RecyclePath, replacement.RecycleDays, replacement.Version, replacement.UnmonitorsDeletedUnits), _replacementInput is null ? null : FormError));
+            }
+
+            if (FormError is not null && _failedFileId is null && _replacementInput is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+        }
+
+        // What the libraries hold altogether: how many, the files in them, those not identified and when one was scanned last.
+        private IUiComponent Totals(IReadOnlyList<LibraryOverviewV1> libraries)
+        {
+            var scanned = libraries.Max(item => item.LastScanAt);
+            return new KpiTiles(
+                new KpiTile("library.tab.Overview", new ValueText(libraries.Count.ToString("N0", CultureInfo.CurrentCulture)), new Framework.Icon("library", assets, 20)),
+                new KpiTile("storage.paths.files", new ValueText(libraries.Sum(item => item.FileCount).ToString("N0", CultureInfo.CurrentCulture)), new Framework.Icon("document", assets, 20)),
+                new KpiTile("library.unmatched", new ValueText(libraries.Sum(item => item.UnmatchedCount).ToString("N0", CultureInfo.CurrentCulture)), new Framework.Icon("status", assets, 20)),
+                new KpiTile("library.overview.scanned", scanned is { } at ? new ValueText(at.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)) : new Text("library.overview.never"), new Framework.Icon("sync", assets, 20)));
+        }
+
+        private Form<AssignLibraryFileDataV1> Assignment(LibraryFileDetailsV1 file, string? csrf)
+        {
+            var units = WorkUnitTypes.For(file.MediaTypeId);
+            var input = new AssignLibraryFileDataV1(file.SuggestedWorkId, file.SuggestedWorkId is null ? file.SuggestedTitle : null, file.SuggestedWorkUnitTypeId,
+                file.SuggestedUnitNumber, file.SuggestedParentUnitNumber);
+            return new Form<AssignLibraryFileDataV1>(form =>
+            {
+                if (file.SuggestedWorkId is null)
+                {
+                    form.Text(item => item.Title, "library.newWork");
+                }
+                else
+                {
+                    form.Hidden(item => item.WorkId);
+                }
+
+                if (units.Count > 0)
+                {
+                    form.Select(item => item.WorkUnitTypeId, "library.unitType", [new SelectOption("", texts["library.unit.None"]),
+                        .. units.Select(unit => new SelectOption(((byte)unit).ToString(CultureInfo.InvariantCulture), texts["library.unit." + unit]))]);
+                    form.Number(item => item.UnitNumber, "library.unitNumber");
+                    if (units.Any(unit => WorkUnitTypes.ParentOf(unit) is not null)) form.Number(item => item.ParentUnitNumber, "library.parentNumber." + file.MediaTypeId);
+                }
+
+                form.Submit(file.SuggestedWorkId is null ? "library.createAndAssign" : "library.assignExisting");
+            }, Address(handler: "Assign") + "&storedFileId=" + file.Id.ToString(CultureInfo.InvariantCulture), csrf, input, _failedFileId == file.Id ? FormError : null);
+        }
+
+        // Keeping one version is the administrator's confirmation, also against a better one.
+        // Films and episodes have their subtitles searched by hand while the Subtitles module is on.
+        private IUiComponent Subtitles(LibraryFileDetailsV1 item) => item.MediaTypeId is MediaType.Movie or MediaType.Series && texts.Can(null, "Subtitles")
+            ? new A(new Text("details.subtitles")).Attribute("href", "/Admin/Library/Subtitles/" + item.Id.ToString(CultureInfo.InvariantCulture))
+            : new Span();
+
+        private Div Release(LibraryFileDetailsV1 file, string? csrf)
+        {
+            var id = file.Id.ToString(CultureInfo.InvariantCulture);
+            var unassign = new Form<StoredFileParametersV1>(form => form.Submit("library.unassign"), Address(handler: "Unassign") + "&storedFileId=" + id, csrf,
+                new StoredFileParametersV1(file.Id));
+            var protection = new Form<ProtectLibraryFileDataV1>(form =>
+            {
+                form.Hidden(item => item.IsProtected);
+                form.Submit(file.IsProtected ? "library.unprotect" : "library.protect");
+            }, Address(handler: "Protect") + "&storedFileId=" + id, csrf, new ProtectLibraryFileDataV1(!file.IsProtected));
+            return file.HasOtherVersions
+                ? new Div(unassign, protection, new Form<StoredFileParametersV1>(form => form.Submit("library.keepOnly"), Address(handler: "KeepOnly") + "&storedFileId=" + id, csrf,
+                    new StoredFileParametersV1(file.Id)))
+                : new Div(unassign, protection);
+        }
+
+        public async Task<IActionResult> OnPostProtectAsync([BindRequired] long storedFileId, [BindRequired] bool isProtected)
+        {
+            await protect.ExecuteAsync<UpdateResult>(new StoredFileParametersV1(storedFileId), new ProtectLibraryFileDataV1(isProtected), HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
+
+        public async Task<IActionResult> OnPostKeepOnlyAsync([BindRequired] long storedFileId)
+        {
+            await keepOnly.ExecuteAsync<UpdateResult>(new StoredFileParametersV1(storedFileId), default, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
+
+        public async Task<IActionResult> OnGetAsync()
+        {
+            if (Tab is LibraryTab.Rename or LibraryTab.Versions && !CanRename) return LocalRedirect("/Admin/Library");
+            await LoadDataAsync();
+            PreparePage();
+            return Page();
+        }
+
+        public async Task<IActionResult> OnPostAssignAsync([BindRequired] long storedFileId, long? workId, string? title, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber)
+        {
+            _failedFileId = storedFileId;
+            var data = new AssignLibraryFileDataV1(workId, string.IsNullOrWhiteSpace(title) ? null : title, workUnitTypeId, unitNumber, parentUnitNumber);
+            await assign.ExecuteAsync<AssignLibraryFileResultV1>(new StoredFileParametersV1(storedFileId), data, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
+
+        public async Task<IActionResult> OnPostUnassignAsync([BindRequired] long storedFileId)
+        {
+            await unassign.ExecuteAsync<UpdateResult>(new StoredFileParametersV1(storedFileId), default, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
+
+        // Missing files, and unidentified ones to assign.
+        private static IUiComponent Attention(LibraryOverviewV1 item) => item.MissingCount == 0 && item.UnmatchedCount == 0 ? new Text("library.overview.fine")
+            : new Span([.. new IUiComponent?[]
+            {
+                item.MissingCount > 0 ? new Span(new ValueText(item.MissingCount.ToString("N0", CultureInfo.CurrentCulture) + " "), new Text("library.missing")) : null,
+                item.UnmatchedCount > 0 ? new A(new ValueText(item.UnmatchedCount.ToString("N0", CultureInfo.CurrentCulture) + " "), new Text("library.unmatched"))
+                    .Attribute("href", "/Admin/Library/Unmatched?root=" + item.Id.ToString(CultureInfo.InvariantCulture)) : null
+            }.OfType<IUiComponent>()]).Class("library-attention");
+
+        // Button + dialog that opens directly on the library page: choose an existing storage mount,
+        // enter a relative folder path, name and media type, then create the library root.
+        private IUiComponent AddLibraryButton(string csrf)
+        {
+            var mediaTypes = Enum.GetValues<MediaType>().Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type]));
+            var subtypes = new[] { new SelectOption("", texts["media.subtype.none"]) }
+                .Concat(Enum.GetValues<MediaSubtype>()
+                    .Select(subtype => new SelectOption(((byte)subtype).ToString(CultureInfo.InvariantCulture), texts["media.subtype." + subtype])));
+            var mountOptions = (_mounts?.Items ?? []).Select(mount => new SelectOption(mount.Id.ToString(CultureInfo.InvariantCulture), mount.Name));
+
+            var relativePath = _libraryInput?.RelativePath ?? "";
+            var browseUrl = Address(handler: "Folders") + "&storageMountId=";
+            return new Div(
+                Modal.Opener(new Button(new Icon("plus", assets, 18), new Text("library.add")).Primary(), "library-add"),
+                new Modal(assets, "library-add", "library.add", [
+                    new Form<CreateLibraryRootDataV1>(form =>
+                    {
+                        form.Select(item => item.StorageMountId, "storage.mount", mountOptions);
+                        form.Text(item => item.Name, "library.name");
+                        form.Select(item => item.MediaTypeId, "table.type", mediaTypes);
+                        form.Select(item => item.MediaSubtypeId, "media.subtype", subtypes);
+                        form.Hidden(item => item.RelativePath);
+                        form.Content(new FolderPicker(assets, browseUrl, relativePath, nameof(CreateLibraryRootDataV1.RelativePath), browseUrl,
+                            storageMountFieldName: nameof(CreateLibraryRootDataV1.StorageMountId)));
+                        form.Submit("library.add");
+                    }, Address(handler: "CreateLibraryRoot"), csrf, _libraryInput ?? new CreateLibraryRootDataV1("", MediaType.Movie, 0, ""), _libraryInput is null ? null : FormError)
+                ])
+            ).Class("page-actions");
+        }
+
+        // A library is read again in the background.
+        public async Task<IActionResult> OnPostScanAsync([BindRequired] long libraryRootId)
+        {
+            await queueScan.ExecuteAsync<QueueLibraryScanResultV1>(new LibraryRootParametersV1(libraryRootId), default, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
+
+        public async Task<IActionResult> OnPostCreateLibraryRootAsync(string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, long storageMountId, string relativePath)
+        {
+            _libraryInput = new CreateLibraryRootDataV1(name ?? "", mediaTypeId, storageMountId, relativePath ?? "", mediaSubtypeId);
+            var result = await createLibraryRoot.ExecuteAsync<CreateLibraryRootResultV1>(new CreateLibraryRootParametersV1(), _libraryInput, HttpContext.RequestAborted);
+            Hint("library.added");
+            return LocalRedirect(Address());
+        }
+
+        public async Task<IActionResult> OnGetFoldersAsync([BindRequired] long storageMountId, string? path, string? afterName)
+        {
+            Response.Headers.CacheControl = "no-store";
+            var directories = await readDirectories.ExecuteAsync<BaseDataList<StorageDirectoryV1>>(new StorageMountParametersV1(storageMountId),
+                new ReadStorageDirectoriesDataV1(path ?? "", afterName), HttpContext.RequestAborted);
+            using var writer = new StringWriter(CultureInfo.InvariantCulture);
+            FolderPicker.Directories(Address(handler: "Folders", storageMountId: storageMountId, path: path ?? ""), path ?? "", directories.Select(directory => directory.Name).ToArray(), texts,
+                afterName, directories.Count == StorageDirectoryV1.PageSize)
+                .WriteTo(writer, HtmlEncoder.Default, texts);
+            return Content(writer.ToString(), "text/html; charset=utf-8");
+        }
+
+        public async Task<IActionResult> OnPostReplacementAsync(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId, string? recyclePath, int recycleDays, long version, bool unmonitorsDeletedUnits)
+        {
+            _replacementInput = new UpdateReplacementSettingsDataV1(keepsReleases, recycleModeId, recycleStorageMountId, recyclePath, recycleDays, version, unmonitorsDeletedUnits);
+            await updateReplacement.ExecuteAsync<UpdateResult>(new ReplacementSettingsParametersV1(), _replacementInput, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
+
+        public async Task<IActionResult> OnPostRenameAsync([BindRequired] string fingerprint)
+        {
+            var result = await applyRenames.ExecuteAsync<ApplyLibraryRenamesResultV1>(new LibraryRenamesParametersV1(), new ApplyLibraryRenamesDataV1(fingerprint), HttpContext.RequestAborted);
+            Hint("library.renamed", result.RenamedCount, result.SkippedCount);
+            return LocalRedirect(Address());
+        }
+
+        protected override async Task LoadDataAsync()
+        {
+            var ct = HttpContext.RequestAborted;
+            if (Tab == LibraryTab.Overview)
+            {
+                _overview = await readOverview.ExecuteAsync<BaseDataList<LibraryOverviewV1>>(new ReadLibraryOverviewParametersV1(), ct);
+                if (CanRename) _mounts = await readMounts.ExecuteAsync<PageResult<StorageMountDetailsV1>>(new ReadStorageMountsParametersV1(1, 100), ct);
+                return;
+            }
+
+            if (Tab == LibraryTab.Versions)
+            {
+                _replacement = await readReplacement.ExecuteAsync<ReplacementSettingsV1>(new ReplacementSettingsParametersV1(), ct);
+                _mounts = await readMounts.ExecuteAsync<PageResult<StorageMountDetailsV1>>(new ReadStorageMountsParametersV1(1, 100), ct);
+                return;
+            }
+
+            if (Tab == LibraryTab.Rename)
+            {
+                _renames = await readRenames.ExecuteAsync<LibraryRenamePlanV1>(new ReadLibraryRenamesParametersV1(PageNumber, RenamePageSize), cancellationToken: ct);
+                return;
+            }
+
+            _files = await readFiles.ExecuteAsync<PageResult<LibraryFileDetailsV1>>(new ReadLibraryFilesParametersV1(RootId, Tab == LibraryTab.Unmatched, PageNumber), ct);
+        }
+
+        private bool CanRename => texts.CanManageStorage();
+
+        private string Address(int? pageNumber = null, string? handler = null, long? storageMountId = null, string? path = null) =>
+            (Tab == LibraryTab.Overview ? "/Admin/Library" : "/Admin/Library/" + Tab) + "?PageNumber=" + (pageNumber ?? PageNumber).ToString(CultureInfo.InvariantCulture)
+            + (RootId is { } root ? "&root=" + root.ToString(CultureInfo.InvariantCulture) : "") + (handler is null ? "" : "&handler=" + handler)
+            + (storageMountId is { } id ? "&storageMountId=" + id.ToString(CultureInfo.InvariantCulture) : "")
+            + (path is { } p ? "&path=" + Uri.EscapeDataString(p) : "");
+    }
+}

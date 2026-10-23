@@ -1,0 +1,416 @@
+@use "MediaImage";
+@use "MediaAvailability";
+
+// The one cover of every catalog: a small, softly rounded cover with its linked title and one line of facts below.
+.media-card {
+    --card-width: 144px;
+    --card-radius: 12px;
+
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: var(--card-width);
+    flex: 0 0 auto;
+    min-width: 0;
+    container-type: inline-size;
+    scroll-snap-align: start;
+
+    // A card to continue is a little wider so that where the profile stands stays readable.
+    &--resume { --card-width: 176px; }
+
+    &__surface {
+        position: relative;
+        aspect-ratio: 2 / 3;
+        isolation: isolate;
+        overflow: hidden;
+        border-radius: var(--card-radius);
+        background: var(--surface);
+        // The availability tag never runs under the bookmark.
+        --availability-max: calc(100cqw - 48px);
+    }
+    &__art { display: block; width: 100%; height: 100%; }
+    &__art .media-image { width: 100%; height: 100%; object-fit: cover; }
+
+    // The title and the facts; each stays one line.
+    &__details { position: relative; min-width: 0; padding: 8px 2px 0; }
+    &__title {
+        margin: 0;
+        overflow: hidden;
+        font-size: 13px;
+        font-weight: 650;
+        line-height: 18px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    &__link {
+        display: block;
+        overflow: hidden;
+        color: var(--text);
+        text-decoration: none;
+        text-overflow: ellipsis;
+        &:hover { color: var(--accent-text); }
+        &:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+    }
+    &__info {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        margin: 2px 0 0;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 16px;
+        white-space: nowrap;
+
+        > * { flex: none; min-width: 0; }
+        > * + *::before { content: "·"; margin: 0 5px; }
+        &--resume > * + *::before { content: "|"; margin: 0 5px; }
+    }
+    &__type, &__lead { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+    &__detail { flex: 0 0 auto; }
+    &__rating { display: inline-flex; align-items: center; gap: 3px; .ui-icon { color: var(--accent-text); fill: currentColor; } }
+
+    // Shown over the cover when a clipped text is hovered or focused.
+    &__tip {
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + 4px);
+        left: 0;
+        z-index: 6;
+        padding: 6px 8px;
+        border: 1px solid var(--accent-line);
+        border-radius: 10px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        color: var(--text);
+        font-size: 12px;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+        pointer-events: none;
+    }
+
+    // The one contextual action: icon and short label.
+    &__actions {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px;
+        background: linear-gradient(transparent, rgb(0 0 0 / 28%));
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity .16s ease, visibility .16s ease;
+        > * { max-width: 100%; pointer-events: auto; }
+        form { margin: 0; }
+    }
+    &__primary {
+        min-width: 0;
+        &-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    }
+
+    // The heart sits top right on a white disc.
+    &__bookmark {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        z-index: 4;
+        form { margin: 0; }
+        .button {
+            width: 32px;
+            min-width: 32px;
+            min-height: 32px;
+            height: 32px;
+            padding: 0;
+            border: 0;
+            border-radius: 50%;
+            .ui-icon { width: 17px; height: 17px; }
+            &:not([aria-pressed="true"]) { background: rgb(255 255 255 / 90%); color: #26222e; &:hover { background: #fff; } }
+        }
+    }
+
+    // The box of a chosen card sits top left on a white disc, as the bookmark does on the right.
+    &__select {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        z-index: 4;
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        border-radius: 50%;
+        background: rgb(255 255 255 / 90%);
+        .list-select { margin: 0; }
+    }
+
+    // A short label over the cover, bottom left.
+    &__label { position: absolute; bottom: 14px; left: 6px; z-index: 3; max-width: calc(100% - 12px); pointer-events: none; }
+
+    // Progress is a thin capsule over the foot of the cover.
+    &__progress-shell {
+        position: absolute;
+        inset: auto 8px 6px;
+        z-index: 3;
+        padding: 2px;
+        border-radius: 999px;
+        background: rgb(255 255 255 / 28%);
+        pointer-events: none;
+    }
+    &__progress {
+        display: block;
+        appearance: none;
+        width: 100%;
+        height: 3px;
+        overflow: hidden;
+        border: 0;
+        border-radius: 999px;
+        background: rgb(255 255 255 / 45%);
+        color: var(--accent);
+        &::-webkit-progress-bar { background: transparent; }
+        &::-webkit-progress-value { border-radius: inherit; background: var(--accent); }
+        &::-moz-progress-bar { border-radius: inherit; background: var(--accent); }
+    }
+
+    &__surface:focus-within, &__surface[data-open] {
+        .media-card__actions { opacity: 1; visibility: visible; }
+    }
+    @media (hover: hover) and (pointer: fine) {
+        &__surface:hover .media-card__actions { opacity: 1; visibility: visible; }
+    }
+    @media (hover: none), (pointer: coarse) {
+        &__actions { opacity: 1; visibility: visible; }
+    }
+    // The card under an open preview is hidden, not removed: the cards of the row never change width or position.
+    &[data-preview-open] > &__surface, &[data-preview-open] > &__details { opacity: 0; }
+
+    // The delayed hover preview: a panel as high as the card, over the row, opened by the script after the mouse rested on the cover. The script sets its box
+    // (left, top, width, height) from the card and the row so that it stays inside them. Trailer mode shows the trailer above the title; description mode a larger
+    // title and a longer description.
+    &__preview {
+        position: fixed;
+        inset: auto;
+        top: var(--preview-top, 0);
+        left: var(--preview-left, 0);
+        width: var(--preview-width, calc(var(--card-width) * 1.84));
+        height: var(--preview-height, auto);
+        max-width: calc(100vw - 8px);
+        margin: 0;
+        padding: 6px;
+        overflow: hidden;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-tile);
+        background: var(--surface);
+        color: var(--text);
+        box-shadow: var(--shadow-overlay);
+        container: media-preview / size;
+
+        &:popover-open { display: flex; flex-direction: column; animation: media-card-preview-in .17s ease; }
+        &[data-preview-mode="description"] { padding: 0; }
+        &[data-preview-mode="description"] .media-card__preview-media { display: none; }
+    }
+
+    // The frame of the trailer: 16:9 with a dark ground; the backdrop shows, a little larger than the frame, until the trailer plays.
+    &__preview-media { position: relative; flex: none; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 7px; background: #1c1b2b; }
+    &__preview-poster {
+        position: absolute;
+        inset: -8%;
+        .media-image { display: block; width: 100%; height: 100%; object-fit: cover; }
+        &::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 62%, rgb(9 4 23 / 53%) 100%); }
+    }
+
+    // A very wide frame, centred and larger than the area: only the picture of the trailer shows, none of the provider's own bars, title or branding.
+    &__trailer {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        overflow: hidden;
+        pointer-events: none;
+        iframe { position: absolute; top: 50%; left: 50%; width: 240%; height: auto; aspect-ratio: 16 / 9; border: 0; opacity: 0; transform: translate(-50%, -50%); transition: opacity .2s ease; pointer-events: none; }
+    }
+    &__preview[data-trailer-ready] &__trailer iframe { opacity: 1; }
+
+    // Jularr's own controls, as in the player: pause top left and sound top right on small dark discs that take the accent on hover.
+    &__trailer-controls {
+        position: absolute;
+        inset: 7px 7px auto;
+        z-index: 3;
+        display: flex;
+        justify-content: space-between;
+        pointer-events: none;
+    }
+    &__trailer-button {
+        display: inline-grid;
+        flex: none;
+        place-items: center;
+        width: 25px;
+        height: 25px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: rgb(16 12 34 / 74%);
+        color: #fff;
+        cursor: pointer;
+        pointer-events: auto;
+        &:hover { background: var(--accent); }
+        &:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+        .ui-icon { width: 15px; height: 15px; }
+        &[data-trailer-action="toggle"] .ui-icon:last-child, &[data-trailer-action="mute"] .ui-icon:last-child { display: none; }
+    }
+    &__preview[data-playing="false"] [data-trailer-action="toggle"] .ui-icon { &:first-child { display: none; } &:last-child { display: block; } }
+    &__preview[data-muted="true"] [data-trailer-action="mute"] .ui-icon { &:first-child { display: none; } &:last-child { display: block; } }
+
+    // The progress line and time at the foot of the frame. Without a time from the provider the line only runs on.
+    &__trailer-foot {
+        position: absolute;
+        inset: auto 0 0;
+        z-index: 3;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        height: 26px;
+        padding: 0 8px 5px;
+        background: linear-gradient(transparent, rgb(0 0 0 / 67%));
+        pointer-events: none;
+    }
+    &__trailer-line {
+        position: relative;
+        width: 100%;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 4px;
+        background: rgb(255 255 255 / 53%);
+        span { position: absolute; inset: 0 auto 0 0; width: var(--trailer-progress, 0%); border-radius: 4px; background: var(--accent); }
+    }
+    &__preview[data-progress="fake"] &__trailer-line span { width: 25%; animation: media-card-preview-progress 145s linear forwards; }
+    &__trailer-time {
+        position: absolute;
+        right: 8px;
+        bottom: 12px;
+        color: #fff;
+        font-size: 9px;
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 1px 3px #000;
+        &:empty { display: none; }
+    }
+
+    // Title, facts and description.
+    &__preview-body { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 7px 7px 0; overflow: hidden; }
+    &__preview-title {
+        margin: 0;
+        overflow: hidden;
+        font-size: 13px;
+        font-weight: 750;
+        letter-spacing: -.2px;
+        line-height: 1.2;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        a { color: inherit; text-decoration: none; }
+    }
+    &__preview-meta {
+        margin: 2px 0 0;
+        color: var(--muted);
+        font-size: 10.5px;
+        line-height: 1.25;
+        > * + *::before { content: "·"; margin: 0 5px; color: color-mix(in srgb, var(--muted) 55%, transparent); }
+    }
+    &__description {
+        display: -webkit-box;
+        margin: 4px 0 0;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        color: color-mix(in srgb, var(--text) 72%, var(--muted));
+        font-size: 11px;
+        line-height: 1.35;
+    }
+
+    &__preview[data-preview-mode="description"] {
+        .media-card__preview-body { padding: 15px 15px 0; }
+        .media-card__preview-title { display: -webkit-box; font-size: 15px; line-height: 1.26; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+        .media-card__preview-meta { margin-top: 5px; font-size: 11px; }
+        .media-card__description {
+            display: block;
+            flex: 1;
+            min-height: 0;
+            margin: 12px 0 0;
+            padding: 11px 3px 0 0;
+            overflow: auto;
+            overscroll-behavior: contain;
+            border-top: 1px solid var(--border);
+            font-size: 12px;
+            line-height: 1.6;
+            scrollbar-color: var(--border-strong) transparent;
+            scrollbar-width: thin;
+        }
+        .media-card__preview-actions { padding: 7px 13px 10px; }
+    }
+
+    // The card's own action, its heart and Details in one row: a pill and two discs.
+    &__preview-actions {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 7px;
+        margin-top: auto;
+        padding: 5px 6px;
+        form { margin: 0; }
+        .button { flex: none; }
+        .button:active:not(:disabled) { transform: scale(.97); }
+    }
+    &__preview-extra { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    &__preview-actions .media-card__preview-primary {
+        min-width: 105px;
+        height: 31px;
+        min-height: 31px;
+        padding: 0 12px;
+        gap: 6px;
+        border-radius: 22px;
+        box-shadow: 0 3px 7px rgb(128 64 247 / 13%);
+        font-size: 11.2px;
+        font-weight: 680;
+        .ui-icon { width: 15px; height: 15px; }
+    }
+    &__preview-actions .media-card__preview-save, &__preview-actions .media-card__preview-details {
+        width: 31px;
+        min-width: 31px;
+        height: 31px;
+        min-height: 31px;
+        padding: 0;
+        border-color: var(--border);
+        border-radius: 50%;
+        background: var(--surface);
+        color: var(--text);
+        .ui-icon { width: 16px; height: 16px; }
+        &:hover:not(:disabled) { border-color: var(--accent-edge); background: var(--accent-soft); color: var(--text); }
+    }
+    &__preview-actions .media-card__preview-save[aria-pressed="true"], &__preview-actions .media-card__preview-save[aria-pressed="true"]:hover:not(:disabled) {
+        border-color: var(--border);
+        background: var(--accent-soft);
+        color: var(--accent-text);
+    }
+
+    // A panel too low for two lines of description (the narrow cards) keeps one, as the mockup does on small screens.
+    @container media-preview (max-height: 275px) {
+        .media-card__preview-body { padding-top: 4px; }
+        .media-card__description { -webkit-line-clamp: 1; }
+        .media-card__preview-actions { padding-top: 3px; }
+    }
+    .media-availability-badge { top: 0; left: 0; }
+    .media-availability-badge__hint { max-width: calc(100cqw - 12px); }
+}
+
+// Grids hold more of the small covers per row; the columns stretch only to a card's largest width.
+.media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 133px), 150px));
+    justify-content: space-between;
+    justify-items: center;
+    gap: 18px 14px;
+    .media-card { width: 100%; max-width: 150px; }
+}
+
+@keyframes media-card-preview-in { from { opacity: 0; transform: translateY(4px); } }
+@keyframes media-card-preview-progress { to { width: 100%; } }

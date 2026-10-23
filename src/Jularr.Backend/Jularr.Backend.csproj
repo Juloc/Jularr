@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Logic/Speech/models.json" LogicalName="Jularr.Speech.models.json" />
+    <InternalsVisibleTo Include="Jularr.Backend.Tests" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="HtmlSanitizer" Version="9.2.1039" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <ProjectReference Include="../Jularr.Integrations/Jularr.Integrations.csproj" />
+    <EmbeddedResource Include="../../database/Account.sql" LogicalName="Jularr.Database.Account.sql" />
+    <EmbeddedResource Include="../../database/Media.sql" LogicalName="Jularr.Database.Media.sql" />
+    <EmbeddedResource Include="../../database/Acquisition.sql" LogicalName="Jularr.Database.Acquisition.sql" />
+    <EmbeddedResource Include="../../database/Instance.sql" LogicalName="Jularr.Database.Instance.sql" />
+    <EmbeddedResource Include="../../database/Storage.sql" LogicalName="Jularr.Database.Storage.sql" />
+    <EmbeddedResource Include="../../database/Library.sql" LogicalName="Jularr.Database.Library.sql" />
+    <EmbeddedResource Include="../../database/Playback.sql" LogicalName="Jularr.Database.Playback.sql" />
+    <EmbeddedResource Include="../../database/Schema.sql" LogicalName="Jularr.Database.Schema.sql" />
+    <EmbeddedResource Include="../../database/migrations/*.sql" LogicalName="Jularr.Database.Migrations.%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,19 @@
+// The mockups' neutral pill: the lavender tint with the accent text, 10px/780; the accent modifier adds the active chip's outline.
+.tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: var(--text-small);
+    font-weight: 780;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+
+    &--accent { border-color: var(--accent-edge); }
+    .ui-icon { width: 14px; height: 14px; }
+    &--warning { border-color: var(--warning-soft); background: var(--warning-soft); color: var(--warning); }
+}

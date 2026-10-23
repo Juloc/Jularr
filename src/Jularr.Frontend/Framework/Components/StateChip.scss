@@ -1,0 +1,62 @@
+// The mockups' status pill: a 6px pip and a short word, 10px/780, on a tint of its own colour. The default is the lavender tint
+// (waiting, requested, in progress); available is green; warning, danger and info take the amber, red and blue tints.
+.state-chip {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: 7px;
+    max-width: 100%;
+    padding: 7px 9px;
+    border-radius: var(--radius-control);
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: var(--text-small);
+    font-weight: 780;
+    line-height: 1.2;
+    white-space: nowrap;
+
+    &__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+    &::before {
+        content: "";
+        flex: none;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    // With an icon of its own instead of the pip.
+    &--icon { gap: 6px; &::before { display: none; } .ui-icon { flex: none; } }
+
+    &--available,
+    &--known,
+    &--watched,
+    &--idle,
+    &--success { background: var(--success-soft); color: var(--success); }
+    &--accent,
+    &--running,
+    &--requested,
+    &--inprogress { background: var(--accent-soft); color: var(--accent-text); }
+    &--warning { background: var(--warning-soft); color: var(--warning); }
+    &--danger,
+    &--failed { background: var(--danger-soft); color: var(--danger); }
+    &--info { background: var(--info-soft); color: var(--info); }
+
+    // Nothing to report yet: the field tint with its own quiet outline.
+    &--neutral { background: var(--field); border: 1px solid var(--border); color: var(--muted); }
+
+    // The icon takes the dot's place.
+    &--icon::before { display: none; }
+
+    &__icon {
+        display: inline-flex;
+        flex: none;
+
+        .ui-icon { width: 14px; height: 14px; }
+    }
+
+    &--spinning &__icon .ui-icon { animation: state-chip-spin 1.6s linear infinite; }
+}
+
+@keyframes state-chip-spin { to { transform: rotate(360deg); } }

@@ -1,0 +1,217 @@
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Library;
+using Jularr.Backend.Data.Enums.Storage;
+using Jularr.Backend.Data.Fields.Instance;
+using Jularr.Backend.Data.Fields.Library;
+using Jularr.Backend.Data.Fields.Media;
+using Jularr.Backend.Data.Fields.Storage;
+
+namespace Jularr.Backend.Data.Logic.Library
+{
+    // Where replaced files go: inside their library, into one folder of a storage connection, or nowhere.
+    internal sealed class ReplacementSettingsData : BaseData
+    {
+        public ReplacementSettingsData(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId,
+            bool? isReadOnly, string? recyclePath, int recycleDays, bool unmonitorsDeletedUnits = false)
+        {
+            UnmonitorsDeletedUnits = unmonitorsDeletedUnits;
+            IsReadOnly = isReadOnly;
+            KeepsReleases = keepsReleases;
+            RecycleModeId = recycleModeId;
+            RecycleStorageMountId = recycleStorageMountId;
+            RecyclePath = recyclePath;
+            RecycleDays = recycleDays;
+        }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.KeepsReleases))]
+        public bool KeepsReleases { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecycleModeId))]
+        public RecycleMode RecycleModeId { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecycleStorageMountId))]
+        public long? RecycleStorageMountId { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId), false)]
+        public StorageProtocolType? StorageProtocolTypeId { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.IsReadOnly), false)]
+        public bool? IsReadOnly { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecyclePath))]
+        public string? RecyclePath { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecycleDays))]
+        public int RecycleDays { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.UnmonitorsDeletedUnits))]
+        public bool UnmonitorsDeletedUnits { get; }
+    }
+
+    internal sealed class ReplacementSettingsSaveData : BaseData
+    {
+        public ReplacementSettingsSaveData(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId, string? recyclePath, int recycleDays, long version, bool unmonitorsDeletedUnits = false)
+        {
+            UnmonitorsDeletedUnits = unmonitorsDeletedUnits;
+            KeepsReleases = keepsReleases;
+            RecycleModeId = recycleModeId;
+            RecycleStorageMountId = recycleStorageMountId;
+            RecyclePath = recyclePath;
+            RecycleDays = recycleDays;
+            Version = version;
+        }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.KeepsReleases))]
+        public bool KeepsReleases { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecycleModeId))]
+        public RecycleMode RecycleModeId { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecycleStorageMountId))]
+        public long? RecycleStorageMountId { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecyclePath))]
+        public string? RecyclePath { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecycleDays))]
+        public int RecycleDays { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.UnmonitorsDeletedUnits))]
+        public bool UnmonitorsDeletedUnits { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.Version))]
+        public long Version { get; }
+    }
+
+    internal sealed class ReplacingAssetsData : BaseData
+    {
+        public ReplacingAssetsData(long[] mediaAssetIds, bool isConfirmed)
+        {
+            MediaAssetIds = mediaAssetIds;
+            IsConfirmed = isConfirmed;
+        }
+
+        // The assets that take the place of the earlier ones.
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Ids))]
+        public long[] MediaAssetIds { get; }
+
+        // An administrator chose them: assets added by hand go too.
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsConfirmed))]
+        public bool IsConfirmed { get; }
+    }
+
+    // A file of an earlier asset of the same film, episode or volume, with the library it lies in.
+    internal sealed class ReplacedFileData : BaseData
+    {
+        public ReplacedFileData(long newMediaAssetId, long storedFileId, long storageMountId, string rootPath,
+            string relativePath, string? earlierQualityKey, int earlierRevision, string? newQualityKey, int newRevision, string? earlierEvidence = null, string? newEvidence = null)
+        {
+            EarlierEvidence = earlierEvidence;
+            NewEvidence = newEvidence;
+            EarlierQualityKey = earlierQualityKey;
+            EarlierRevision = earlierRevision;
+            NewQualityKey = newQualityKey;
+            NewRevision = newRevision;
+            NewMediaAssetId = newMediaAssetId;
+            StoredFileId = storedFileId;
+            StorageMountId = storageMountId;
+            RootPath = rootPath;
+            RelativePath = relativePath;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long NewMediaAssetId { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
+        public long StorageMountId { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath))]
+        public string RootPath { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
+        public string RelativePath { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.QualityKey))]
+        public string? EarlierQualityKey { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Revision))]
+        public int EarlierRevision { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.QualityKey))]
+        public string? NewQualityKey { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Revision))]
+        public int NewRevision { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Payload), false)]
+        public string? EarlierEvidence { get; }
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Payload), false)]
+        public string? NewEvidence { get; }
+    }
+
+    internal sealed class RetiredFilesData : BaseData
+    {
+        public RetiredFilesData(string files)
+        {
+            Files = files;
+        }
+
+        // JSON rows of StoredFileId and NewMediaAssetId: files gone from the library whose history moves to the new asset;
+        // recycled ones add StorageMountId, FolderPath and RecycledPath.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Payload))]
+        public string Files { get; }
+    }
+
+    // A file Jularr put into a recycle folder.
+    internal sealed class RecycledFileData : BaseData
+    {
+        public RecycledFileData(long id, long storageMountId, string folderPath, string relativePath)
+        {
+            Id = id;
+            StorageMountId = storageMountId;
+            FolderPath = folderPath;
+            RelativePath = relativePath;
+        }
+
+        [DataField(typeof(RecycledFileFields), nameof(RecycledFileFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
+        public long StorageMountId { get; }
+
+        [DataField(typeof(RecycledFileFields), nameof(RecycledFileFields.FolderPath))]
+        public string FolderPath { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
+        public string RelativePath { get; }
+    }
+
+    internal sealed class RecycledFileIdsData : BaseData
+    {
+        public RecycledFileIdsData(long[] ids)
+        {
+            Ids = ids;
+        }
+
+        [DataField(typeof(RecycledFileFields), nameof(RecycledFileFields.Ids))]
+        public long[] Ids { get; }
+    }
+
+    internal sealed class StoredFileProtectionData : BaseData
+    {
+        public StoredFileProtectionData(long storedFileId, bool isProtected)
+        {
+            StoredFileId = storedFileId;
+            IsProtected = isProtected;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsProtected))]
+        public bool IsProtected { get; }
+    }
+}

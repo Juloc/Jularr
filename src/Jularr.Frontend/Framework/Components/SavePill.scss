@@ -1,0 +1,39 @@
+// The save pill's own parts; the floating pill itself (position, surface, motion) is the shared FloatingPill.
+.save-pill {
+    padding-left: 16px;
+
+    &--bump { animation: save-pill-bump .35s cubic-bezier(.34, 1.56, .64, 1); }
+
+    &__count {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-right: 4px;
+        color: var(--muted);
+        font-size: var(--text-control);
+        white-space: nowrap;
+
+        &::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-soft);
+        }
+    }
+
+    &--failed &__count { color: var(--danger); }
+    &--failed &__count::before { background: var(--danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 14%, transparent); }
+
+    &--saved &__count, &--saved [data-save-discard] { display: none; }
+    &--saved [data-save-submit] { border-color: var(--success); background: var(--success); color: var(--surface); }
+}
+
+@keyframes save-pill-bump {
+    40% { scale: 1.06; }
+}
+
+// Fields that differ from the loaded page; their own save buttons give way to the pill.
+.ui-field--changed .ui-field__control { border-color: var(--accent); }
+[data-save-ready] [data-form-save] { display: none; }

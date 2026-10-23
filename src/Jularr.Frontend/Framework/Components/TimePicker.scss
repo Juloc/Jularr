@@ -1,0 +1,81 @@
+// Hour and minute side by side in the field's outline; on Android a wheel sheet at the bottom of the screen.
+.ui-time {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-height: calc(var(--field-height) - 2px);
+    padding: 0 6px;
+
+    &__part {
+        width: 2.4ch;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+
+        &:focus-visible { outline: none; border-radius: 6px; background: var(--accent-soft); }
+    }
+
+    &__display {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        font-variant-numeric: tabular-nums;
+    }
+
+    &__panel {
+        position: fixed;
+        inset: auto 0 0;
+        width: min(100%, 420px);
+        margin: 0 auto;
+        padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+        border: 1px solid var(--border);
+        border-radius: var(--radius-dialog) var(--radius-dialog) 0 0;
+        background: var(--surface);
+        box-shadow: var(--shadow-overlay);
+
+        &:popover-open {
+            display: grid;
+            gap: 12px;
+        }
+    }
+
+    &__wheels {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    &__wheel {
+        height: 180px;
+        overflow-y: auto;
+        scroll-snap-type: y mandatory;
+        padding-block: 72px;
+        scrollbar-width: none;
+    }
+
+    &__option {
+        display: block;
+        width: 100%;
+        height: 36px;
+        border: 0;
+        border-radius: 999px;
+        background: none;
+        color: var(--muted);
+        font: inherit;
+        font-size: 18px;
+        font-variant-numeric: tabular-nums;
+        scroll-snap-align: center;
+
+        &[aria-selected="true"] {
+            background: var(--accent-soft);
+            color: var(--accent-text);
+            font-weight: 600;
+        }
+    }
+}

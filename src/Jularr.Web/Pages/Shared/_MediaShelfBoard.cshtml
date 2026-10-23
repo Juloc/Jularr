@@ -1,7 +1,0 @@
-@model MediaShelfBoardModel
-@* A board of discovery shelves (#595), returned by Discover's Shelves handler and injected after first
-   paint. Reusable by the later shelf surfaces (#427/#428/#434). *@
-@foreach (var shelf in Model.Shelves)
-{
-    <partial name="_MediaShelf" model="shelf" />
-}

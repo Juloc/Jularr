@@ -1,0 +1,357 @@
+@use "../../../Framework/Components/MediaHero";
+@use "../../../Framework/Components/EpisodeCard";
+@use "../../../Framework/Components/MediaCard";
+@use "../../../Framework/Components/SelectLinkMenu";
+@use "../../../Framework/Components/ActionMenu";
+@use "../../../Framework/Components/LayoutSwitch";
+@use "../../../Framework/Components/FactGrid";
+
+// The title's own page: the hero, one row of tabs, then the Overview's blocks or the one tab. Colours, radii and type are the shared tokens.
+.details-tabs {
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.details-panel { display: grid; gap: 30px; min-width: 0; }
+
+.details-block {
+    min-width: 0;
+
+    &__heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+
+        h2 { margin: 0; }
+    }
+
+    // The link to the block's own tab.
+    &__all {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-right: -9px;
+        padding: 6px 9px;
+        border-radius: var(--radius-control);
+        color: var(--accent-text);
+        font-size: var(--text-control);
+        font-weight: 760;
+        text-decoration: none;
+
+        &:hover { background: var(--accent-soft); }
+    }
+}
+
+// The white card the lists sit in.
+.details-card {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+
+    // A staff-named section heads the lines under it.
+    > h3 {
+        margin: 0;
+        padding: 10px 16px;
+        background: var(--field);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+    }
+
+    &--list { display: flex; flex-direction: column; }
+
+    &--grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+        gap: 14px;
+        padding: 14px;
+
+        > h3 { grid-column: 1 / -1; padding: 0; background: none; }
+    }
+}
+
+.details-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+
+    &__spacer { flex: 1; }
+}
+
+.details-button__label { display: inline-flex; align-items: center; gap: 6px; }
+
+.details-empty { margin: 0; color: var(--muted); }
+
+// Cast and crew: groups under small headings, portraits in a grid.
+.details-groups { display: grid; gap: 18px; }
+
+.details-sub {
+    margin: 0 0 10px;
+    color: var(--muted);
+    font-size: var(--text-small);
+    font-weight: 810;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+}
+
+.details-people { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+
+.details-person {
+    display: grid;
+    align-content: start;
+    gap: 2px;
+    min-width: 0;
+    color: inherit;
+    font-size: 12.5px;
+    text-decoration: none;
+
+    strong { margin-top: 6px; font-weight: 780; }
+
+    &:hover strong,
+    &:focus-visible strong { color: var(--accent-text); }
+
+    &__photo {
+        position: relative;
+        display: grid;
+        place-items: center;
+        aspect-ratio: 4 / 5;
+        overflow: hidden;
+        border-radius: 16px;
+        background: linear-gradient(150deg, var(--accent-soft), var(--accent-edge));
+        color: var(--accent-outline);
+
+        .ui-icon { width: 42%; height: 42%; stroke-width: 1.2; }
+        .media-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    }
+
+    &__role { color: var(--muted); font-size: 11px; }
+}
+
+.details-franchise {
+    margin: 0 0 12px;
+    color: var(--muted);
+
+    a { color: var(--accent-text); font-weight: 700; text-decoration: none; &:hover { text-decoration: underline; } }
+}
+
+// The typed relations: the list kit's rows with a cover on the tile; a title that opens something is one link stretched over its row, the row's own buttons stay above it.
+.relation-toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+
+.relation-list,
+.relation-results {
+    .list-row { position: relative; }
+    .icon-tile { width: 46px; height: 69px; overflow: hidden; }
+    .icon-tile .media-image { width: 100%; height: 100%; object-fit: cover; }
+    .list-actions { position: relative; z-index: 1; }
+}
+
+.relation-list {
+    --list-columns: minmax(0, 2.6fr) minmax(130px, 1.1fr) minmax(90px, .8fr) minmax(125px, 1fr) minmax(110px, .9fr);
+    --list-columns-medium: minmax(0, 2.4fr) minmax(125px, 1.1fr) minmax(120px, 1fr) minmax(100px, .9fr);
+}
+
+.relation-results { --list-columns: minmax(0, 1fr) auto; }
+
+.relation__title {
+    color: inherit;
+    text-decoration: none;
+
+    &::after { content: ""; position: absolute; inset: 0; }
+    &:hover { color: var(--accent-text); }
+}
+
+.relation-dialog { display: grid; gap: 16px; }
+
+// The summary and the facts side by side; stacked on narrower screens.
+.details-facts-block { display: grid; gap: 16px; }
+
+.details-facts {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+
+    @media (max-width: 1180px) { grid-template-columns: minmax(0, 1fr); }
+}
+
+.details-summary {
+    padding: 18px 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+
+    &__text { margin: 0; font-size: 13px; line-height: 1.7; }
+    &__genres { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+}
+
+.details-collections { display: grid; gap: 8px; }
+
+.details-collection {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    max-width: 560px;
+}
+
+.details-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+td .details-chips { flex-wrap: nowrap; }
+.details-chip { white-space: nowrap; }
+
+.details-chip {
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--field);
+    font-size: var(--text-small);
+    font-weight: 780;
+
+    &--accent { border-color: transparent; background: var(--accent-soft); color: var(--accent-text); }
+}
+
+// Volumes as covers with their state; the chosen one has its chapters under the row.
+.details-volumes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+
+.details-volume {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    padding: 9px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    color: inherit;
+    text-decoration: none;
+
+    &:hover { border-color: var(--accent-outline); }
+    &--picked { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+    strong { font-size: 12px; font-weight: 780; }
+
+    &__cover {
+        position: relative;
+        display: grid;
+        place-items: center;
+        aspect-ratio: 2 / 3;
+        overflow: hidden;
+        border-radius: var(--radius-small);
+        background: linear-gradient(150deg, var(--accent-soft), var(--accent-edge));
+
+        .media-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    }
+
+    &__number { color: var(--accent-text); font-size: 30px; font-weight: 850; letter-spacing: -1px; }
+    &__tag { position: absolute; top: 8px; left: 8px; }
+    &__facts { color: var(--muted); font-size: 10.5px; }
+}
+
+.details-chapters {
+    margin-top: 22px;
+
+    &__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        background: var(--field);
+        font-size: 13px;
+        font-weight: 780;
+    }
+
+    &__title { min-width: 0; }
+}
+
+// A line of chapters, with the number, the name, the state and the actions.
+.details-row {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--border);
+
+    &:last-child { border-bottom: 0; }
+    &:hover { background: var(--field); }
+
+    &__number { color: var(--muted); font-size: 11px; font-weight: 700; text-align: end; }
+    &__title { min-width: 0; font-weight: 700; }
+}
+
+// The small buttons at the end of a line or a table row; a title that is read, heard or watched has its check in green.
+.details-row__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+
+    > div { display: flex; gap: 5px; }
+    form { margin: 0; }
+
+    .button--icon {
+        width: 30px;
+        min-height: 30px;
+
+        .ui-icon { width: 14px; height: 14px; }
+
+        &[aria-pressed="true"] { border-color: transparent; background: var(--success-soft); color: var(--success); }
+    }
+}
+
+.details-tracks { display: grid; gap: 12px; }
+
+.details-disc {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+// Editions and platforms as cards; the one the primary action opens has the accent outline.
+.details-editions { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; margin-bottom: 16px; }
+
+.details-edition {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    color: inherit;
+    text-decoration: none;
+
+    &:is(a):hover { border-color: var(--accent-outline); }
+    &--picked { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+    &__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 13px;
+
+        > strong { flex: 1; min-width: 0; }
+        > .state-chip { flex: none; white-space: nowrap; }
+    }
+    &__facts { color: var(--muted); font-size: 11px; }
+}
+
+.details-files { display: grid; gap: 12px; }
+
+.details-files > h3 { margin: 6px 0 0; }

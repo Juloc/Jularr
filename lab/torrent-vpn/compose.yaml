@@ -1,0 +1,94 @@
+﻿name: jularr-torrent-vpn
+
+# Lab: does a torrent client run in a container, does a VPN tunnel work there, and does the
+# download stop when the tunnel is gone.
+#
+#   docker compose -f lab/torrent-vpn/compose.yaml up -d qbittorrent
+#   docker compose -f lab/torrent-vpn/compose.yaml --profile probe run --rm probe
+#
+# With the tunnel (the provider configuration is not in the repository):
+#
+#   docker compose -f lab/torrent-vpn/compose.yaml -f lab/torrent-vpn/compose.vpn.yaml up -d
+#   docker compose -f lab/torrent-vpn/compose.yaml -f lab/torrent-vpn/compose.vpn.yaml --profile probe run --rm probe
+#
+# See README.md for the questions and the results.
+
+services:
+  # The tunnel. Gluetun offers the kill switch: when the tunnel is down, the container has no route.
+  vpn:
+    image: ghcr.io/qdm12/gluetun:latest
+    profiles: ["vpn"]
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    # prepare-config.ps1 writes this file: the type of the tunnel and, when the configuration
+    # asks for them, the access data. It is not in the repository.
+    env_file:
+      - path: ./vpn/vpn.env
+        required: false
+    environment:
+      # The name server of the provider from the configuration, inside the tunnel: nothing
+      # goes out unencrypted, and no name server outside the tunnel is needed.
+      DNS_SERVER: "off"
+      DNS_UPSTREAM_RESOLVER_TYPE: plain
+      DNS_UPSTREAM_PLAIN_ADDRESSES: ${VPN_DNS:-10.2.0.1:53}
+      # The path to the server is narrower than the discovery suggests: with 1320 the handshake
+      # of larger sites breaks, with 1280 it does not.
+      WIREGUARD_MTU: ${VPN_MTU:-1280}
+      # The control server of the tunnel is private: the measurement needs it to close the tunnel.
+      HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE: '{"auth":"apikey","apikey":"${VPN_API_KEY}"}'
+      FIREWALL_INPUT_PORTS: ${VPN_INPUT_PORTS:-6881}
+      FIREWALL_OUTBOUND_BLOCKED_PORTS: 6881
+    volumes:
+      # The configuration of the provider, in the place Gluetun reads it from.
+      - ./vpn/jularr.conf:/gluetun/wireguard/wg0.conf:ro
+      - ./vpn:/vpn:ro
+    ports:
+      - "127.0.0.1:8888:8888" # http proxy
+      - "127.0.0.1:8000:8000" # control server
+    restart: unless-stopped
+
+  # The torrent client. It talks to the tunnel through the shared network and speaks to Jularr later.
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    environment:
+      WEBUI_PORT: 8080
+      WEBUI_HOST_HEADER_VALIDATION: "false"
+      PUID: 1000
+      PGID: 1000
+      TZ: UTC
+    volumes:
+      - ./qbittorrent/config:/config
+      - ./qbittorrent/downloads:/downloads
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+
+  # The measurements: the public address, the leaks, the torrent and the kill switch.
+  probe:
+    # The image carries curl; nothing is installed at run time, because a tunnel that is down
+    # must not reach a package mirror either.
+    image: curlimages/curl:latest
+    profiles: ["probe"]
+    entrypoint: ["sh"]
+    command: ["/app/run.sh"]
+    depends_on:
+      - qbittorrent
+    environment:
+      VPN_CONTROL_URL: http://vpn:8000
+      QBITTORRENT_URL: http://qbittorrent:8080
+      QBITTORRENT_USER: ${QBITTORRENT_USER:-admin}
+      QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD}
+      API_KEY: ${VPN_API_KEY:-}
+      TORRENT_URL: ${TORRENT_URL:-https://releases.ubuntu.com/24.04/ubuntu-24.04.5-live-server-amd64.iso.torrent}
+      DOWNLOAD_DIR: /downloads
+    volumes:
+      - ./qbittorrent/downloads:/downloads
+      - ./run.sh:/app/run.sh:ro
+    working_dir: /app
+
+networks:
+  default:
+    driver: bridge
+

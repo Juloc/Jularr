@@ -1,0 +1,64 @@
+name: Frontend
+
+on:
+  pull_request:
+    paths:
+      - 'src/Jularr.Frontend/**'
+      - 'src/Jularr.Backend/**'
+      - 'docs/FRONTEND_CONVENTIONS.md'
+      - '.github/workflows/frontend.yml'
+  push:
+    branches: [clean-start]
+    paths:
+      - 'src/Jularr.Frontend/**'
+      - 'src/Jularr.Backend/**'
+      - '.github/workflows/frontend.yml'
+  # Started by hand on clean-start when the release commit changed no frontend path (see docs/RELEASE.md).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  razor-and-ui-resources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/Jularr.Frontend/package-lock.json
+      - name: Restore locked frontend toolchain
+        working-directory: src/Jularr.Frontend
+        run: npm ci --no-audit --no-fund
+      - name: Compile, typecheck and verify production assets
+        working-directory: src/Jularr.Frontend
+        run: |
+          npm run check
+          npm test
+      - name: Verify canonical UI resource declarations
+        run: node src/Jularr.Frontend/Tools/verify-ui-resources.mjs
+      - name: Build Razor frontend and Backend dependencies
+        run: dotnet build src/Jularr.Frontend/Jularr.Frontend.csproj --configuration Release
+      - name: Verify production publish contains hashed assets and manifests
+        run: |
+          dotnet publish src/Jularr.Frontend/Jularr.Frontend.csproj --configuration Release --no-build --output /tmp/jularr-frontend
+          test -s /tmp/jularr-frontend/Assets/Generated/manifest.json
+          test -s /tmp/jularr-frontend/Assets/Generated/icons.json
+          test -n "$(find /tmp/jularr-frontend/wwwroot/build/assets -name '*-*.css' -print -quit)"
+          test -n "$(find /tmp/jularr-frontend/wwwroot/build/assets -name 'icons-*.svg' -print -quit)"

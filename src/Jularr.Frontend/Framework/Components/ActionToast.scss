@@ -1,0 +1,58 @@
+// The hint after an action: the save pill's look (surface, 1px line, overlay shadow, accent dot), centred above the bottom edge, never part of the layout.
+.action-toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(40px + env(safe-area-inset-bottom));
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    max-width: min(560px, calc(100vw - 32px));
+    padding: 10px 18px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: var(--shadow-overlay);
+    color: var(--text);
+    font-size: var(--text-body);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    translate: -50% 0;
+
+    &__text {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+
+        &::before {
+            content: "";
+            flex: none;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-soft);
+        }
+    }
+
+    &--failed &__text::before {
+        background: var(--danger);
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 14%, transparent);
+    }
+
+    &--show { animation: action-toast var(--action-toast-time, 2200ms) cubic-bezier(.34, 1.56, .64, 1) both; }
+
+    // Above the save pill while that shows.
+    body:has(.save-pill:not([hidden])) & { bottom: calc(96px + env(safe-area-inset-bottom)); }
+
+    @media (max-width: 780px) {
+        bottom: calc(96px + env(safe-area-inset-bottom));
+        body:has(.save-pill:not([hidden])) & { bottom: calc(152px + env(safe-area-inset-bottom)); }
+    }
+}
+
+@keyframes action-toast {
+    0% { opacity: 0; visibility: visible; translate: -50% 16px; scale: .94; }
+    10%, 85% { opacity: 1; visibility: visible; translate: -50% 0; scale: 1; }
+    100% { opacity: 0; visibility: hidden; translate: -50% 0; scale: 1; }
+}

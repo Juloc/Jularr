@@ -1,0 +1,235 @@
+using Jularr.Backend.Data.Enums.Service;
+using System.Net;
+using System.Net.Http.Json;
+using System.Security;
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Fields.Profile;
+using Jularr.Backend.Service.Core;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Service.Public.Authentication.V1;
+using Jularr.Backend.Infrastructure.Sql;
+using Npgsql;
+
+namespace Jularr.Backend.Tests
+{
+    [TestClass]
+    public sealed class ServiceApiTests
+    {
+        [TestMethod]
+        public void UnknownErrors_ReadAsUnknownAndShowTheirMessageToAdministratorsOnly()
+        {
+            // Known errors keep their text; a code without text or a fault reads as unknown.
+            var context = new DefaultHttpContext();
+            Assert.AreEqual("errors.not_found", ServiceError.Describe(new KeyNotFoundException("gone"), context, NullLogger.Instance).ResourceKey);
+            var undefined = ServiceError.Describe(new ServiceUnavailableException("no_such_text"), context, NullLogger.Instance);
+            Assert.IsFalse(undefined.IsDefined);
+            Assert.AreEqual("errors.internal_error", undefined.ResourceKey);
+            Assert.IsNull(undefined.Detail);
+
+            ServiceError.ShowDetailTo(context, false);
+            Assert.IsNull(ServiceError.Describe(new InvalidOperationException("private error"), context, NullLogger.Instance).Detail);
+            ServiceError.ShowDetailTo(context, true);
+            Assert.AreEqual("InvalidOperationException: private error", ServiceError.Describe(new InvalidOperationException("private error"), context, NullLogger.Instance).Detail);
+            Assert.IsNull(ServiceError.Describe(new KeyNotFoundException("gone"), context, NullLogger.Instance).Detail);
+            var known = ServiceError.Describe(new ServiceUnavailableException("plex_unavailable"), context, NullLogger.Instance);
+            Assert.AreEqual("errors.plex_unavailable", known.ResourceKey);
+            Assert.IsNull(known.Detail);
+        }
+
+        [TestMethod]
+        public void Registration_MissingDatabaseConfiguration_IsRejected()
+        {
+            var services = new ServiceCollection();
+            var configuration = new ConfigurationBuilder().Build();
+
+            Assert.ThrowsExactly<InvalidOperationException>(() => services.AddJularrServices(configuration));
+            Assert.IsFalse(services.Any(descriptor => descriptor.ServiceType == typeof(SqlDatabase)));
+        }
+
+        [TestMethod]
+        public async Task Registration_BackendOwnsDatabase_DirectAndHttpServicesShareRuntime()
+        {
+            var data = Path.Combine(Path.GetTempPath(), "jularr-tests", Guid.NewGuid().ToString("N"));
+            var builder = WebApplication.CreateBuilder();
+            builder.WebHost.UseTestServer();
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["JULARR_DB"] = Infrastructure.TestPostgres.ResolveConnectionString(nameof(Registration_BackendOwnsDatabase_DirectAndHttpServicesShareRuntime)),
+                ["DataPath"] = data,
+                ["Authentication:SessionLifetimeHours"] = "21"
+            });
+            builder.Services.AddJularrServices(builder.Configuration);
+            var app = builder.Build();
+            NpgsqlDataSource database;
+            try
+            {
+                // An empty database receives its baselines when the host starts; internal dependencies resolve centrally.
+                app.UseExceptionHandler();
+                app.UseRateLimiter();
+                app.MapJularrServices();
+                await app.StartAsync();
+                database = app.Services.GetRequiredService<SqlDatabase>().DataSource;
+                Assert.IsNull(app.Services.GetService<NpgsqlDataSource>());
+                await using var scope = app.Services.CreateAsyncScope();
+                Assert.AreSame(database, scope.ServiceProvider.GetRequiredService<SqlDatabase>().DataSource);
+                Assert.AreEqual(21, scope.ServiceProvider.GetRequiredService<IOptions<AuthenticationOptions>>().Value.SessionLifetimeHours);
+                var service = scope.ServiceProvider.GetRequiredService<ReadAuthenticationV1>();
+                var result = await service.ExecuteAsync<AuthenticationResultV1>();
+                Assert.IsFalse(result.IsAuthenticated);
+
+                // Verify the shared HTTP adapter.
+                using var client = app.GetTestClient();
+                using var response = await client.GetAsync("/api/v1/auth");
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+                Assert.IsFalse((await response.Content.ReadFromJsonAsync<AuthenticationResultV1>())!.IsAuthenticated);
+            }
+            finally
+            {
+                await app.DisposeAsync();
+                if (Directory.Exists(data))
+                {
+                    Directory.Delete(data, true);
+                }
+            }
+
+            // Host disposal closes its pool.
+            await Assert.ThrowsExactlyAsync<ObjectDisposedException>(async () => await database.OpenConnectionAsync());
+        }
+
+        [TestMethod]
+        public async Task Api_ExplicitPublicService_BindsAndUsesSharedErrors()
+        {
+            var builder = WebApplication.CreateBuilder();
+            builder.WebHost.UseTestServer();
+            builder.Services.AddJularrServices(
+                new NpgsqlDataSourceBuilder("Host=127.0.0.1;Port=1;Username=unused;Database=unused;Timeout=1").Build(),
+                typeof(ServiceApiTests).Assembly);
+            await using var app = builder.Build();
+            app.UseExceptionHandler();
+            app.UseRateLimiter();
+            app.MapJularrServices();
+            app.MapGet("/test-token", (HttpContext http, IAntiforgery antiforgery) =>
+                antiforgery.GetAndStoreTokens(http).RequestToken);
+            await app.StartAsync();
+            using var client = app.GetTestClient();
+
+            using var token = await client.GetAsync("/test-token");
+            client.DefaultRequestHeaders.Add("Cookie", token.Headers.GetValues("Set-Cookie").Single().Split(';')[0]);
+            client.DefaultRequestHeaders.Add("RequestVerificationToken", await token.Content.ReadAsStringAsync());
+            var id = 31L;
+            using var success = await client.PostAsJsonAsync("/api/test/" + id, new EchoData("value"));
+            Assert.AreEqual(HttpStatusCode.OK, success.StatusCode);
+            var result = await success.Content.ReadFromJsonAsync<EchoResult>();
+            Assert.AreEqual(id, result!.Id);
+            Assert.AreEqual("value", result.Value);
+            Assert.AreEqual(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/api/not-exposed", new EchoData("value"))).StatusCode);
+
+            using var invalid = await client.PostAsJsonAsync("/api/test/" + id, new EchoData(" "));
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+            using var error = System.Text.Json.JsonDocument.Parse(await invalid.Content.ReadAsStringAsync());
+            Assert.AreEqual("invalid_data", error.RootElement.GetProperty("code").GetString());
+            Assert.AreEqual("errors.invalid_data", error.RootElement.GetProperty("resourceKey").GetString());
+            Assert.AreEqual("errors.validation.required", error.RootElement.GetProperty("errorResourceKeys")
+                .GetProperty("Value")[0].GetString());
+            using var failed = await client.PostAsJsonAsync("/api/test/" + id, new EchoData("fail"));
+            Assert.AreEqual(HttpStatusCode.InternalServerError, failed.StatusCode);
+            Assert.IsFalse((await failed.Content.ReadAsStringAsync()).Contains("private error", StringComparison.Ordinal));
+            using var malformed = await client.PostAsync("/api/test/" + id, new StringContent("{", System.Text.Encoding.UTF8, "application/json"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, malformed.StatusCode);
+            Assert.IsTrue((await malformed.Content.ReadAsStringAsync()).Contains("invalid_request", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
+        public async Task PublicGate_ProfilePermissionAndResource_AreDenied()
+        {
+            await using var database = new NpgsqlDataSourceBuilder("Host=127.0.0.1;Port=1;Username=unused;Database=unused").Build();
+            var gate = new ServiceGate(new SessionAuthentication(database), new HttpContextAccessor(), new UserActivity(TimeProvider.System));
+            var caller = await gate.RequireCallerAsync(ServiceArea.Public, default);
+            await gate.RequireAccessAsync(caller, ServicePermission.Public, default);
+            await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireAccessAsync(caller, new("profile.self.read"), default));
+
+            var runtime = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System));
+            var service = runtime.Create<ParameterlessService>();
+            var response = await service.ExecuteAsync<EchoResult>();
+            Assert.AreEqual("no parameters", response.Value);
+
+            // Resource parameters remain mandatory even with the convenient overload.
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => runtime.Create<EchoService>()
+                .ExecuteAsync<EchoResult>(new EchoData("value")));
+        }
+
+        public sealed class EchoParameters : BaseParameters
+        {
+            public EchoParameters(long profileId)
+            {
+                ProfileId = profileId;
+            }
+
+            [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+            public long ProfileId { get; }
+        }
+
+        public sealed class EchoData : BaseData
+        {
+            public EchoData(string value)
+            {
+                Value = value;
+            }
+
+            [DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName))]
+            public string Value { get; }
+        }
+
+        public sealed class EchoResult : BaseData, IServiceOutput
+        {
+            public EchoResult(long id, string value)
+            {
+                Id = id;
+                Value = value;
+            }
+
+            public long Id { get; }
+
+            public string Value { get; }
+        }
+
+        [ServiceEndpoint("POST", "/api/test/{profileId:long}")]
+        public sealed class EchoService : PublicService<EchoParameters, EchoData>
+        {
+            protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+            protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<EchoResult>()];
+            protected override ModuleRequirement GetInstanceModules(EchoParameters parameters) => ModuleRequirement.None;
+            protected override Task<IServiceOutput> OnExecute() => Data.Value == "fail"
+                ? throw new InvalidOperationException("private error")
+                : Task.FromResult<IServiceOutput>(new EchoResult(Parameters.ProfileId, Data.Value));
+        }
+
+        public sealed class NotExposedService : PublicService<EchoParameters, EchoData>
+        {
+            protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+            protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<EchoResult>()];
+            protected override ModuleRequirement GetInstanceModules(EchoParameters parameters) => ModuleRequirement.None;
+        }
+
+        public sealed class EmptyParameters : BaseParameters
+        {
+        }
+
+        public sealed class ParameterlessService : PublicService<EmptyParameters, NoData>
+        {
+            protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+            protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<EchoResult>()];
+            protected override ModuleRequirement GetInstanceModules(EmptyParameters parameters) => ModuleRequirement.None;
+            protected override Task<IServiceOutput> OnExecute() =>
+                Task.FromResult<IServiceOutput>(new EchoResult(1, "no parameters"));
+        }
+    }
+}

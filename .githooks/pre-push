@@ -21,5 +21,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     range="${remote_sha}..${local_sha}"
   fi
 
-  "${repository_root}/scripts/verify-authorship.sh" --range "${range}"
+  # Existing clean-start history stays unchanged.
+  base_ref="refs/remotes/${remote_name}/clean-start"
+  if [[ "${remote_ref}" == refs/heads/* && "${remote_ref}" != refs/heads/clean-start && "${remote_ref}" != refs/heads/dev && "${remote_ref}" != refs/heads/main ]] && git merge-base --is-ancestor "${base_ref}" "${local_sha}" 2>/dev/null; then
+    "${repository_root}/scripts/verify-authorship.sh" --range "${range}" --exclude "$(git rev-parse "${base_ref}")"
+  else
+    "${repository_root}/scripts/verify-authorship.sh" --range "${range}"
+  fi
 done

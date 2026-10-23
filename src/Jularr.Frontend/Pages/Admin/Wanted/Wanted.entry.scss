@@ -1,0 +1,6 @@
+// The wanted list on the list kit: the grid of its columns at three widths.
+.wanted-list {
+    --list-columns: minmax(230px, 2.4fr) minmax(140px, 1.2fr) minmax(90px, .7fr) minmax(150px, .9fr) minmax(140px, 1fr) minmax(130px, .9fr);
+    --list-columns-medium: minmax(230px, 2.4fr) minmax(140px, 1.2fr) minmax(90px, .7fr) minmax(150px, .9fr) minmax(130px, .9fr);
+    --list-columns-narrow: minmax(200px, 2.2fr) minmax(140px, 1.2fr) minmax(90px, .7fr) minmax(130px, .9fr);
+}

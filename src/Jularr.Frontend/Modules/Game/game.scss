@@ -1,0 +1,48 @@
+// The game fills the page; EmulatorJS draws its own controls inside the screen.
+.game {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    min-height: 100dvh;
+    background: #000;
+    color: #fff;
+
+    &__top {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: max(8px, env(safe-area-inset-top)) 12px 8px;
+    }
+
+    &__title {
+        margin: 0;
+        overflow: hidden;
+        font-size: 1rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    &__played {
+        flex: none;
+        margin-inline-start: auto;
+        font-size: 13px;
+        opacity: 0.75;
+    }
+
+    &__screen {
+        min-height: 0;
+    }
+
+    &__note {
+        margin: 0;
+        padding: 8px 12px max(8px, env(safe-area-inset-bottom));
+    }
+
+    &__status {
+        display: grid;
+        place-content: center;
+        gap: 16px;
+        min-height: 100dvh;
+        padding: 24px;
+        text-align: center;
+    }
+}

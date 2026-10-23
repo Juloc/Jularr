@@ -1,0 +1,32 @@
+// The Jobs page's part of the list kit: the grid of its columns at three widths, and the history block.
+
+.jobs-list {
+    --list-columns: minmax(200px, 2.4fr) minmax(112px, 1.05fr) minmax(115px, 1.2fr) minmax(115px, 1.2fr) minmax(100px, 1.1fr) minmax(250px, 1.6fr);
+    --list-columns-medium: minmax(190px, 2fr) minmax(112px, 1fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(250px, 1.4fr);
+    --list-columns-narrow: minmax(160px, 2fr) minmax(112px, 1fr) minmax(115px, 1fr) minmax(250px, 1.3fr);
+}
+
+// What the queue did, newest first.
+.jobs-history-block {
+    display: grid;
+    gap: 12px;
+
+    h2 { margin: 0; }
+    a:not(.button) { justify-self: start; color: var(--accent-text); font-size: var(--text-control); font-weight: 700; text-decoration: none; &:hover { text-decoration: underline; } }
+}
+
+.jobs-history {
+    --list-columns: minmax(0, 3fr) minmax(130px, 1.2fr) minmax(140px, 1.3fr);
+}
+
+// The health check's answer above the jobs: the state, how many services answer and when it last looked.
+.jobs-health {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-size: var(--text-control);
+
+    .button { margin-left: auto; }
+}

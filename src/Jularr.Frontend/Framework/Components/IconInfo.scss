@@ -1,0 +1,53 @@
+.icon-info {
+    position: relative;
+    width: fit-content;
+    max-width: 100%;
+
+    &__trigger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-width: 44px;
+        min-height: 44px;
+        padding: 4px 6px;
+        border-radius: var(--radius-control);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+        list-style: none;
+        text-decoration: none;
+
+        &::-webkit-details-marker { display: none; }
+        .ui-icon { width: var(--icon-size); height: var(--icon-size); flex: 0 0 auto; }
+    }
+
+    &__label,
+    &__trigger::after {
+        display: none;
+        position: absolute;
+        z-index: 5;
+        top: 100%;
+        left: 0;
+        width: max-content;
+        max-width: 150px;
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-small);
+        background: var(--surface);
+        color: var(--text);
+        font-size: var(--text-control);
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+        box-shadow: var(--shadow-overlay);
+    }
+
+    // Summary remains painted when closed.
+    &__trigger::after { content: attr(aria-label); }
+
+    &[open] > &__label,
+    &:hover > &__trigger::after,
+    &:focus-within > &__trigger::after { display: block; }
+
+    &[open] > &__trigger::after { display: none; }
+}

@@ -1,0 +1,14 @@
+# Das Labor und seine Geheimnisse
+
+# Alles im Ordner der Konfigurationen gehoert nicht ins Repository: die Datei des Anbieters
+# mit Schluessel und IDs, die Angaben fuer den Container mit den Zugangsdaten.
+vpn/*
+!vpn/PROVIDERS.md
+!vpn/jularr.conf.example
+
+# Das temporaere Passwort des Torrent-Clients.
+.env
+
+# Der Zustand und die Downloads des Clients.
+qbittorrent/config/
+qbittorrent/downloads/
