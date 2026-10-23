@@ -11,17 +11,20 @@ namespace Jularr.Integrations.Logic.Nyaa
         // The feed names its own fields.
         private static readonly XNamespace Fields = "https://nyaa.media/xmlns/nyaa";
 
-        // The mirror answers the search and names the host that carries the file with the torrent.
-        private const string DownloadHost = "https://nyaa.si";
+        // Download from the same configured index host as the RSS item; do not redirect to a different provider.
+        private const string DefaultIndex = "https://nyaa.media";
 
         // The literature of the index: English translated, the other languages and the raw text.
         public static readonly string[] LiteratureCategories = ["3_1", "3_2", "3_3"];
 
         // The file with the torrent of an entry; the number of the entry names it.
-        public static Uri TorrentUri(string id) => new(DownloadHost + "/download/" + Uri.EscapeDataString(id) + ".torrent");
+        public static Uri TorrentUri(string id) => new(DefaultIndex + "/download/" + Uri.EscapeDataString(id) + ".torrent");
+
+        public static Uri TorrentUri(string id, string viewUri) =>
+            new(new Uri(viewUri).GetLeftPart(UriPartial.Authority) + "/download/" + Uri.EscapeDataString(id) + ".torrent");
 
         // The page of an entry; it shows what the file holds and the magnet to it.
-        public static Uri ViewUri(string id) => new(DownloadHost + "/view/" + Uri.EscapeDataString(id));
+        public static Uri ViewUri(string id) => new(DefaultIndex + "/view/" + Uri.EscapeDataString(id));
 
         // Every category is asked in turn; the search of a language brings its own file.
         public async Task<IReadOnlyList<NyaaEntry>> SearchAsync(Uri site, string query, IReadOnlyCollection<string> categories, CancellationToken ct)
@@ -48,7 +51,8 @@ namespace Jularr.Integrations.Logic.Nyaa
             try
             {
                 await using var stream = await response.Content.ReadAsStreamAsync(ct);
-                document = XDocument.Load(stream);
+                using var xml = XmlReader.Create(stream, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
+                document = XDocument.Load(xml);
             }
             catch (XmlException exception)
             {
