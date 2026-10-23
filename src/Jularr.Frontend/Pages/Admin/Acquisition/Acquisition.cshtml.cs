@@ -145,7 +145,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             if (_selected is { } opened)
             {
                 if (ConfirmDelete) page.Content.Add(DeleteDialog(opened, csrf));
-                else if (opened.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab && (ShowSearch || _searchInput is not null)) page.Content.Add(SearchDialog(opened, csrf));
+                else if ((opened.AcquisitionConnectionTypeId is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa) && (ShowSearch || _searchInput is not null)) page.Content.Add(SearchDialog(opened, csrf));
             }
 
             if (FormError is not null && _searchInput is null && _input is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
@@ -186,7 +186,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             };
             if (note is not null) body.Add(new Div(new Span(new Truncated(note)).Class("feature-card__note")).Class("feature-card__row"));
             body.Add(new Div(new Span(new Text("acquisition.connection.lastTest")).Class("feature-card__note"), Time(item.CheckedAt)).Class("feature-card__row"));
-            if (Role == AcquisitionConnectionRole.Search && item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab)
+            if (Role == AcquisitionConnectionRole.Search && (item.AcquisitionConnectionTypeId is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa))
             {
                 body.Add(new Div(new Span(new Text("acquisition.connection.today")).Class("feature-card__note"), Usage(item)).Class("feature-card__row"));
             }
@@ -198,7 +198,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             {
                 Post("Test", item.Id, csrf, [], new Button(Glyph("pulse", 14), new Text("acquisition.connection.test")).Compact().Soft().Submit())
             };
-            if (item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab)
+            if (item.AcquisitionConnectionTypeId is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa)
             {
                 start.Add(new A(Glyph("search", 14), new Text("acquisition.connection.search")).Class("button button--compact button--soft").Attribute("href", Address(item.Id) + "&search=true"));
             }
