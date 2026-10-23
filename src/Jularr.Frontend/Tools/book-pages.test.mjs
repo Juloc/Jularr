@@ -24,6 +24,7 @@ test('one column measurement counts the same scrolled LTR and RTL content withou
 });
 
 function harness(fetchChapter, cached = new Map(), section = 1) {
+    let currentImages = [];
     const events = new Map(), windowEvents = new Map(), documentEvents = new Map();
     const tasks = new Map();
     let clock = 0, identity = 0, measuring = '', maximumRulers = 0, attached = 0, parsed = 0;
@@ -33,7 +34,7 @@ function harness(fetchChapter, cached = new Map(), section = 1) {
         remove() { attached--; }
     };
     const status = { hidden: true, dataset: { readyLabel: 'Book pages: {0}', calculatingLabel: 'calculating', pausedLabel: 'paused', unavailableLabel: 'unavailable' } };
-    const content = { cloneNode: () => ruler, querySelectorAll: () => [] };
+    const content = { cloneNode: () => ruler, querySelectorAll: () => currentImages };
     const reader = {
         dataset: { section: String(section), sections: '3', sectionsUrl: '/sections/', mode: 'paged', illustrations: 'true' },
         querySelector: selector => selector.includes('book-pages') ? status : null,
@@ -77,6 +78,7 @@ function harness(fetchChapter, cached = new Map(), section = 1) {
         }
     }
     return { reader, counter, layout, events, windowEvents, documentEvents, document, ruler, status, advance,
+        setImages: images => { currentImages = images; },
         stats: () => ({ maximumRulers, attached, parsed, tasks: tasks.size, measuring }) };
 }
 
@@ -235,4 +237,31 @@ test('repeated turns allow the in-flight chapter to finish without repeated canc
     await h.advance();
     assert.equal(h.reader.dataset.bookPageCount, '11');
     assert.deepEqual(requests.map(request => request.url), ['/sections/0', '/sections/2']);
+});
+
+test('late illustrations defer cache lookup but retry it after the current chapter finishes loading', async () => {
+    const cache = new Map();
+    const requests = [];
+    const fetchChapter = async url => {
+        requests.push(url);
+        return new Response(JSON.stringify({ sectionIndex: Number(url.at(-1)), html: '4' }));
+    };
+    const first = harness(fetchChapter, cache);
+    first.counter.update(first.layout);
+    await first.advance();
+    await first.advance();
+    assert.equal(first.reader.dataset.bookPageCount, '11');
+
+    const next = harness(fetchChapter, cache);
+    next.setImages([{ complete: false, naturalWidth: 0 }]);
+    next.counter.update(next.layout);
+    await next.advance();
+    assert.equal(next.reader.dataset.bookPageState, 'paused');
+    assert.equal(requests.length, 2, 'loading an illustration must not cause redundant chapter reads');
+    next.setImages([{ complete: true, naturalWidth: 250 }]);
+    next.counter.update(next.layout);
+    await next.advance();
+    assert.equal(next.reader.dataset.bookPageState, 'ready');
+    assert.equal(next.reader.dataset.bookPageCount, '11');
+    assert.equal(requests.length, 2, 'the completed cache is restored once the illustration settles');
 });

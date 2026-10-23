@@ -46,7 +46,8 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
         const counted = Number(reader.dataset.bookPageCount), before = Number(reader.dataset.bookPageBefore);
         const whole = reader.dataset.bookPageState === 'ready' && Number.isInteger(counted) && counted > 0 && Number.isInteger(before);
         const offset = whole ? before : 0;
-        label.textContent = reader.dataset.pageLabel!.replace('{0}', String(offset + spread * columns + 1)).replace('{1}', String(offset + Math.min(pages, (spread + 1) * columns)))
+        const template = whole ? reader.dataset.pageLabel! : reader.dataset.chapterPageLabel!;
+        label.textContent = template.replace('{0}', String(offset + spread * columns + 1)).replace('{1}', String(offset + Math.min(pages, (spread + 1) * columns)))
             .replace('{2}', String(whole ? counted : pages));
     };
     new MutationObserver(labelPages).observe(reader, { attributes: true, attributeFilter: ['data-book-page-count', 'data-book-page-before'] });

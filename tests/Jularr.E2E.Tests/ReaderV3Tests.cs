@@ -228,11 +228,11 @@ namespace Jularr.E2E.Tests
 
                     // One page model: the label, the page counter, a turn and the slider agree.
                     var count = int.Parse((await reader.GetAttributeAsync("data-page-count"))!);
-                    await Assertions.Expect(page.Locator("[data-role=pages]")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex($"^Pages 1–2 of ({count}|\\d+)$"));
+                    await Assertions.Expect(page.Locator("[data-role=pages]")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex($@"^(?:Pages 1–2 of (?:{count}|\d+)|Ch\. 1–2/(?:{count}|\d+))$"));
                     var before = int.Parse(await page.Locator("[data-role=seek] input").InputValueAsync());
                     await page.Locator("[data-turn='1']").ClickAsync();
                     await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookState === 'idle' && document.querySelector('.reader').dataset.page === '3'");
-                    await Assertions.Expect(page.Locator("[data-role=pages]")).ToContainTextAsync("Pages 3–4 of ");
+                    await Assertions.Expect(page.Locator("[data-role=pages]")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex(@"^(?:Pages 3–4 of \d+|Ch\. 3–4/\d+)$"));
                     CollectionAssert.AreEqual(new[] { "3", "4" }, await page.Locator("[data-book-number]").EvaluateAllAsync<string[]>("items => items.map(item => item.textContent)"));
                     Assert.IsTrue(int.Parse(await page.Locator("[data-role=seek] input").InputValueAsync()) > before, "The slider follows the turned page.");
                     await AssertPaperPositionsAsync(page, $"{width}x{height} second spread");
@@ -243,7 +243,7 @@ namespace Jularr.E2E.Tests
 
                 await OpenReaderAsync(page, 390, 844);
                 Assert.AreEqual("1", await reader.GetAttributeAsync("data-columns"));
-                await Assertions.Expect(page.Locator("[data-role=pages]")).ToContainTextAsync("Pages 1–1 of ");
+                await Assertions.Expect(page.Locator("[data-role=pages]")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex(@"^(?:Pages 1–1 of \d+|Ch\. 1–1/\d+)$"));
                 await AssertPaperPositionsAsync(page, "390 single page");
                 await Evidence.SaveAsync(page, "reader-v3-single-390-light");
 

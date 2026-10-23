@@ -219,6 +219,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-note-label", texts["reader.note"])
                 .Attribute("data-query", Query ?? "")
                 .Attribute("data-page-label", texts["reader.pagePosition"])
+                .TextAttribute("data-chapter-page-label", "reader.chapterPagePosition")
                 .Attribute("data-animation-failed", texts["reader.animationUnavailable"])
                 .Attribute("data-figure-label", texts["reader.figure.open"])
                 .Attribute("data-offsets", string.Join(',', _offsets.Select(offset => offset.CharactersBefore.ToString(CultureInfo.InvariantCulture))))

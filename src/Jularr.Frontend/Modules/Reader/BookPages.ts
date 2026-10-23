@@ -191,6 +191,15 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
             cancel(); layout = undefined; key = ''; cachePending = false; counts = []; clearTotal();
             state(reader.dataset.mode === 'paged' ? 'unavailable' : 'off'); return;
         }
+        // An undecoded illustration can change the visible chapter's page count.
+        // Defer cache validation until it finishes, then retry the saved layout.
+        const images = reader.dataset.illustrations === 'false' ? [] : Array.from(content.querySelectorAll('img'));
+        if (images.some(image => !image.complete || !image.naturalWidth)) {
+            cancel(); layout = undefined; key = ''; resetCounts(); clearTotal();
+            if (images.some(image => image.complete && !image.naturalWidth)) { failed = true; state('unavailable'); }
+            else state('paused');
+            return;
+        }
         const style = getComputedStyle(content);
         const nextKey = JSON.stringify(['book-page-layout-v2', reader.dataset.sectionsUrl, sections, next.width, next.height, next.columns, next.gap, next.rtl, style.font, style.letterSpacing,
             style.getPropertyValue('--reader-text-width'), style.getPropertyValue('--reader-paragraph'), reader.dataset.indent, reader.dataset.hyphenation, reader.dataset.illustrations, document.documentElement.lang]);
@@ -219,13 +228,6 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
             });
         }
         layout = next;
-        const images = reader.dataset.illustrations === 'false' ? [] : Array.from(content.querySelectorAll('img'));
-        if (images.some(image => !image.complete || !image.naturalWidth)) {
-            cancel(); count(section, undefined); pendingIndex = Math.min(pendingIndex, section); clearTotal();
-            if (images.some(image => image.complete && !image.naturalWidth)) { failed = true; state('unavailable'); }
-            else state('paused');
-            return;
-        }
         if (counts[section] !== undefined && counts[section] !== next.pages) {
             // The visible section is authoritative even when the layout fingerprint is unchanged.
             cancel(); resetCounts(); clearTotal(); cachePending = false;

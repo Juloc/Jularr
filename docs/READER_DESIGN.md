@@ -155,7 +155,9 @@ Failures/oversized/unauthorized chapters leave totals unavailable without blocki
 reading or endless retry. Translated views without all translated chapter HTML
 do not substitute original text counts. Scroll mode does not run this count.
 Only complete counts publish the total, preceding pages and current global page;
-image adapters already know their source count. Completed numeric counts are cached
+image adapters already know their source count. Until that happens the footer explicitly
+labels local chapter page numbers with a short localized chapter prefix, rather than
+presenting them as whole-book page numbers. Completed numeric counts are cached
 in the browser's bounded IndexedDB layout store, keyed by immutable reading document
 and exact geometry/typography settings. Opening another chapter restores the whole-book
 count without fetching every section again; the currently rendered chapter must still

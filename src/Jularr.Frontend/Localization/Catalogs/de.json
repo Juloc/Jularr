@@ -13048,6 +13048,10 @@
    "Pages {0}–{1} of {2}",
    "Seiten {0}–{1} von {2}"
   ],
+  "reader.chapterPagePosition": [
+   "Ch. {0}–{1}/{2}",
+   "Kap. {0}–{1}/{2}"
+  ],
   "reader.seek.pages": [
    "Page position",
    "Seitenposition"

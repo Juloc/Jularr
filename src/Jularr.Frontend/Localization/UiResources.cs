@@ -431,6 +431,7 @@ namespace Jularr.Frontend.Localization
             new("reader.hyphenation", "Hyphenation"),
             new("reader.illustrations", "Show illustrations"),
             new("reader.pagePosition", "Pages {0}–{1} of {2}"),
+            new("reader.chapterPagePosition", "Ch. {0}–{1}/{2}"),
             new("reader.seek.book", "Position in the book"),
             new("reader.seek.pages", "Page position"),
             new("reader.bookPages.calculating", "Calculating book pages…"),
