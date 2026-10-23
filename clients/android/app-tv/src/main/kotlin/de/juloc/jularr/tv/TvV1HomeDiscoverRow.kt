@@ -62,7 +62,8 @@ internal fun tvV1HomeVideoFeeds(
                 val catalog = if (scope.isCatalog) kept?.catalogItems.orEmpty()
                     .filter { it.workId != null ||
                         (it.namespace.isNotBlank() && it.externalId.isNotBlank()) }
-                    .distinctBy { Triple(it.namespace, it.externalId, it.workId) }
+                    .sortedByDescending { it.workId != null }
+                    .distinctBy { it.namespace to it.externalId }
                     else emptyList()
                 if (items.isEmpty() && catalog.isEmpty()) null else TvV1HomeVideoFeed(
                     scope.slug, scope.mediaTypeId, scope.mediaSubtypeId, feed, items,
