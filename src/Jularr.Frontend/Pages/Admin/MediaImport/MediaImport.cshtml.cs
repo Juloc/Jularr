@@ -413,7 +413,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         public async Task<IActionResult> OnGetBookEditionsAsync(string? workId)
         {
             if (!texts.CanImportMedia()) return Forbid();
-            if (workId is null || !System.Text.RegularExpressions.Regex.IsMatch(workId, @"\AOL[0-9]{1,12}W\z"))
+            if (workId is null || !global::System.Text.RegularExpressions.Regex.IsMatch(workId, @"\AOL[0-9]{1,12}W\z"))
                 return BadRequest();
 
             var result = await editions.ExecuteAsync<MediaImportEditionsV1>(new MediaImportEditionParametersV1(workId), HttpContext.RequestAborted);
