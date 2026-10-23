@@ -36,7 +36,7 @@ namespace Jularr.Backend.Service.Core
                 http.Response.Cookies.Append(CookieName, id.ToString("D"), new CookieOptions
                 {
                     HttpOnly = true,
-                    Secure = true,
+                    Secure = http.Request.IsHttps,
                     SameSite = SameSiteMode.Lax,
                     Path = "/",
                     IsEssential = true,

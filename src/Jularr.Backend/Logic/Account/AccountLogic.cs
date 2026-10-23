@@ -260,6 +260,39 @@ namespace Jularr.Backend.Logic.Account
             }
         }
 
+        // The signed-in account changes its own password: the current one is verified in the same transaction.
+        public static async Task ChangePasswordAsync(this LogicContext ctx, long accountId, string currentPassword, string newPassword, CancellationToken ct)
+        {
+            AccountPasswordPolicy.Require(newPassword, "NewPassword");
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    account."Id",
+                    account."CredentialRevision",
+                    password."PasswordHash",
+                    account."IsEnabled",
+                    FALSE AS "RequiresSecondFactor"
+                FROM
+                    "Accounts" AS account
+                INNER JOIN
+                    "AccountPasswords" AS password ON password."AccountId" = account."Id"
+                WHERE
+                    account."Id" = @AccountId
+                FOR UPDATE OF
+                    account, password;
+                """;
+            sql.Parameters.Add(new AccountParameters(accountId));
+            var account = await ctx.ReadOptionalAsync<AccountAuthenticationData>(sql, ct);
+            if (account?.PasswordHash is null
+                || PasswordHasher.VerifyHashedPassword(account, account.PasswordHash, currentPassword) == PasswordVerificationResult.Failed)
+            {
+                throw new DataValidationException("CurrentPassword", "password_incorrect");
+            }
+
+            await ctx.WritePasswordAsync(new AccountPasswordData(accountId, PasswordHasher.HashPassword(account, newPassword)), ct);
+        }
+
         private static async Task WritePasswordAsync(this LogicContext ctx, AccountPasswordData data, CancellationToken ct)
         {
             var sql = new SqlStatement();

@@ -4,12 +4,14 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Playback;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.Public.Localization.V1;
+using Jularr.Backend.Data.User.Account.V1;
 using Jularr.Backend.Data.User.AniList.V1;
 using Jularr.Backend.Data.User.Home.V1;
 using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Service.Public.Localization.V1;
+using Jularr.Backend.Service.User.Account.V1;
 using Jularr.Backend.Service.User.AniList.V1;
 using Jularr.Backend.Service.User.Home.V1;
 using Jularr.Backend.Service.User.Playback.V1;
@@ -27,7 +29,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.Settings
 {
     public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, ReadProfileMediaV1 readMedia, UpdateProfileMediaV1 updateMedia,
-        UpdateProfilePinV1 updatePin, RemoveProfilePinV1 removePin, DeleteProfileV1 deleteProfile, ReadUiLocalesV1 readLocales, ReadHomeLayoutV1 readLayout, SaveHomeLayoutV1 saveLayout,
+        UpdateProfilePinV1 updatePin, ChangeAccountPasswordV1 changePassword, RemoveProfilePinV1 removePin, DeleteProfileV1 deleteProfile, ReadUiLocalesV1 readLocales, ReadHomeLayoutV1 readLayout, SaveHomeLayoutV1 saveLayout,
         ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAvailableSpeechModelsV1 readSpeechModels, ReadPlaybackPreferencesV1 readPlayback, SavePlaybackPreferencesV1 savePlayback,
         ReadAniListConnectionV1 readAniList, ConnectAniListV1 connectAniList, DisconnectAniListV1 disconnectAniList, UpdateAniListPushV1 updateAniListPush,
         IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
@@ -46,6 +48,7 @@ namespace Jularr.Frontend.Pages.User.Settings
         private IReadOnlyList<ProfileMediaV1> _media = [];
         private bool _savingMedia;
         private bool _savingPin;
+        private bool _savingPassword;
         private SpeechPreferencesV1? _speech;
         private SaveSpeechPreferencesDataV1? _speechInput;
         private IReadOnlyList<SpeechModelV1> _speechModels = [];
@@ -58,6 +61,7 @@ namespace Jularr.Frontend.Pages.User.Settings
             page.Navigation("nav.settings");
             page.Asset("Modules/Appearance/appearance.entry.scss");
             page.Asset("Framework/Components/SortableList.entry.ts");
+            page.Asset("Framework/Components/PasswordReveal.entry.ts");
             page.Asset("Modules/Speech/settings.entry.ts");
             page.Asset("Modules/Speech/settings.entry.scss");
             page.Content.Add(new UiSection("appearance.title", [new Appearance()]));
@@ -75,7 +79,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                         form.Text(x => x.DisplayName, "profile.field.displayName", "nickname");
                         form.Select(x => x.UiLocaleId, "profile.field.uiLocale", options);
                         form.Save();
-                    }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia || _savingPin || _savingAniList || _speechInput is not null || _playbackInput is not null ? null : FormError));
+                    }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia || _savingPin || _savingPassword || _savingAniList || _speechInput is not null || _playbackInput is not null ? null : FormError));
 
                     // Hidden types leave the profile's lists; they stay reachable.
                     if (_media.Count > 0)
@@ -87,6 +91,15 @@ namespace Jularr.Frontend.Pages.User.Settings
                         }, Url.Page("/User/Settings/Settings", "Media"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                             new UpdateProfileMediaDataV1([.. _media.Where(item => item.IsHidden).Select(item => item.Key)]), _savingMedia ? FormError : null));
                     }
+
+                    // Anyone signed in changes their own password here; the current one proves who asks.
+                    content.Add(new Form<ChangeAccountPasswordDataV1>(form =>
+                    {
+                        form.Password(x => x.CurrentPassword, "account.password.current", "current-password", new FieldHelp(Trailing: new PasswordReveal(assets)));
+                        form.Password(x => x.NewPassword, "account.password.new", "new-password", new FieldHelp("account.register.passwordPlaceholder", "", Trailing: new PasswordReveal(assets)));
+                        form.Password(x => x.NewPasswordConfirmation, "account.password.confirm", "new-password", new FieldHelp(Trailing: new PasswordReveal(assets)));
+                        form.Submit("account.password.save");
+                    }, Url.Page("/User/Settings/Settings", "Password"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, null, _savingPassword ? FormError : null));
 
                     // PIN and deletion belong to the Profiles module.
                     if (texts.CanManageProfiles())
@@ -361,6 +374,15 @@ namespace Jularr.Frontend.Pages.User.Settings
             var shown = shownKeys ?? [];
             await saveLayout.ExecuteAsync<UpdateResult>(new HomeLayoutParametersV1(), new SaveHomeLayoutDataV1(order, [.. order.Where(key => !shown.Contains(key, StringComparer.Ordinal))]),
                 HttpContext.RequestAborted);
+            return RedirectToPage("/User/Settings/Settings");
+        }
+
+        public async Task<IActionResult> OnPostPasswordAsync(string? currentPassword, string? newPassword, string? newPasswordConfirmation)
+        {
+            _savingPassword = true;
+            await changePassword.ExecuteAsync<UpdateResult>(new ChangeAccountPasswordParametersV1(),
+                new ChangeAccountPasswordDataV1(currentPassword ?? "", newPassword ?? "", newPasswordConfirmation ?? ""), HttpContext.RequestAborted);
+            Hint("account.password.changed");
             return RedirectToPage("/User/Settings/Settings");
         }
 
