@@ -10,7 +10,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public AcquisitionConnectionData(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? capabilities, long version, string? username,
             int? maxConnections, byte[]? protectedPassword, int[] mediaTypeIds, bool searchesAutomatically, int? queryLimit, int? grabLimit, int queryCount, int grabCount, DateTime? retryAt,
-            string? host, int? port, bool? useSsl, long? downloadStorageMountId = null, bool removesCompleted = true)
+            string? host, int? port, bool? useSsl, long? downloadStorageMountId = null, bool removesCompleted = true, string? incompleteRemotePath = null, string? incompleteLocalPath = null)
         {
             DownloadStorageMountId = downloadStorageMountId;
             Host = host;
@@ -38,6 +38,8 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             RemovesCompleted = removesCompleted;
             RemotePath = remotePath;
             LocalPath = localPath;
+            IncompleteRemotePath = incompleteRemotePath;
+            IncompleteLocalPath = incompleteLocalPath;
             Capabilities = capabilities;
             Version = version;
         }
@@ -92,6 +94,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.LocalPath))]
         public string? LocalPath { get; }
 
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteRemotePath))]
+        public string? IncompleteRemotePath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteLocalPath))]
+        public string? IncompleteLocalPath { get; }
+
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadStorageMountId))]
         public long? DownloadStorageMountId { get; }
 
@@ -140,7 +148,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public AcquisitionConnectionSaveData(long? id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
             int? maxConnections, byte[]? protectedPassword, int[] mediaTypeIds, bool searchesAutomatically, int? queryLimit, int? grabLimit, string? host = null, int? port = null,
-            bool? useSsl = null, long? downloadStorageMountId = null, bool removesCompleted = true)
+            bool? useSsl = null, long? downloadStorageMountId = null, bool removesCompleted = true, string? incompleteRemotePath = null, string? incompleteLocalPath = null)
         {
             DownloadStorageMountId = downloadStorageMountId;
             Host = host;
@@ -165,6 +173,8 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             RemovesCompleted = removesCompleted;
             RemotePath = remotePath;
             LocalPath = localPath;
+            IncompleteRemotePath = incompleteRemotePath;
+            IncompleteLocalPath = incompleteLocalPath;
         }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
@@ -213,6 +223,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.LocalPath))]
         public string? LocalPath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteRemotePath))]
+        public string? IncompleteRemotePath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteLocalPath))]
+        public string? IncompleteLocalPath { get; }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadStorageMountId))]
         public long? DownloadStorageMountId { get; }

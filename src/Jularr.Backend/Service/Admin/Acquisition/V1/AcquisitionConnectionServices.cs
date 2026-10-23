@@ -51,6 +51,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."RemovesCompleted",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."IncompleteRemotePath",
+                    connection."IncompleteLocalPath",
                     connection."DownloadStorageMountId",
                     connection."Username",
                     connection."MaxConnections",
@@ -113,6 +115,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."RemovesCompleted",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."IncompleteRemotePath",
+                    connection."IncompleteLocalPath",
                     connection."DownloadStorageMountId",
                     connection."Username",
                     connection."MaxConnections",
@@ -344,7 +348,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Opds or AcquisitionConnectionType.Usenet or AcquisitionConnectionType.OpenSubtitles ? data.Username : null,
                 data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? data.MaxConnections ?? 8 : null, password, data.MediaTypeIds,
                 data.SearchesAutomatically, data.QueryLimit, data.GrabLimit, data.Host, data.Port, data.UseSsl, data.DownloadStorageMountId,
-                data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd || data.RemovesCompleted);
+                data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd || data.RemovesCompleted, data.IncompleteRemotePath, data.IncompleteLocalPath);
         }
 
         // Keyless indexers send no key.

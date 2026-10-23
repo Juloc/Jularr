@@ -140,6 +140,12 @@ namespace Jularr.Integrations.Data.Sabnzbd
         public IReadOnlyList<SabnzbdHistoryJob> Jobs { get; }
     }
 
+    internal enum SabnzbdJobCommand { Pause, Resume, RemoveFromQueue, RemoveFromHistory, RemoveOrphan }
+
+    internal sealed record SabnzbdConsoleSnapshot(IReadOnlyList<SabnzbdQueueJob> Queue, IReadOnlyList<SabnzbdHistoryJob> History,
+        long? SpeedBytesPerSecond, long? FreeBytes, bool IsPaused, long? TodayBytes, long? WeekBytes, long? MonthBytes, long? TotalBytes,
+        IReadOnlyList<string> OrphanFolders, string? ReportedCompletePath, string? ReportedIncompletePath);
+
     // Messages never contain the API key.
     internal sealed class SabnzbdException(string message, Exception? innerException = null) : Exception(message, innerException);
 }
