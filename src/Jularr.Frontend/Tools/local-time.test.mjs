@@ -29,9 +29,9 @@ test("local calendar date can change around midnight and invalid timestamps reta
 
 test("IANA timezone cookie persists the device zone and is stable across reloads", () => {
     const first = timeZoneCookieHeader("", "Europe/Berlin", true);
-    assert.match(first, /^jularr_time_zone=Europe\\/Berlin; Path=\\/; Max-Age=31536000; SameSite=Lax; Secure$/);
+    assert.equal(first, "jularr_time_zone=Europe/Berlin; Path=/; Max-Age=31536000; SameSite=Lax; Secure");
     assert.equal(timeZoneCookieHeader("other=1; jularr_time_zone=Europe/Berlin", "Europe/Berlin", true), null);
-    assert.match(timeZoneCookieHeader("jularr_time_zone=UTC", "America/New_York", false), /America\\/New_York/);
+    assert.ok(timeZoneCookieHeader("jularr_time_zone=UTC", "America/New_York", false)?.includes("America/New_York"));
     assert.equal(timeZoneCookieHeader("", "untrusted;cookie=injected", false), null);
     assert.equal(timeZoneCookieHeader("", undefined, false), null);
 });
@@ -54,5 +54,6 @@ test("DST autumn fold retains the correct date while two instants share the same
     const early = formatLocalTime("2026-10-25T00:30:00.000Z", "datetime", "de-DE", "Europe/Berlin");
     const late = formatLocalTime("2026-10-25T01:30:00.000Z", "datetime", "de-DE", "Europe/Berlin");
     assert.equal(early, late);
-    assert.match(early, /25\\.10\\.26.*02:30/);
+    assert.ok(early?.includes("25.10.26"));
+    assert.ok(early?.includes("02:30"));
 });
