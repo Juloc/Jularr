@@ -105,7 +105,7 @@ onPage(import.meta.url, () => document.querySelectorAll<HTMLElement>('[data-fold
         const root = button.closest<HTMLElement>('[data-folder-fragment]');
         const input = root?.querySelector<HTMLInputElement>('[data-folder-new-name]');
         const name = input?.value.trim() ?? '';
-        if (!name || name === '.' || name === '..' || /[\\\\/]/.test(name)) {
+        if (!name || name === '.' || name === '..' || name.includes('/') || name.includes('\\')) {
             input?.focus();
             return;
         }
