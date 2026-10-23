@@ -527,6 +527,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
             var externalLookups = 0;
             var deferred = false;
             var imported = 0;
+            var refreshed = new HashSet<long>();
             var nfoFolders = new Dictionary<string, (IReadOnlyDictionary<string, string> Ids, bool Conflicted)>(StringComparer.Ordinal);
             var plexFolders = new Dictionary<string, PlexMatchHints>(StringComparer.Ordinal);
             var emptyHints = MediaPathParser.ParsePlexMatch("");
@@ -796,7 +797,51 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     }
                     catch (DataValidationException)
                     {
-                        // Incomplete episode structure remains available for manual review.
+                        // A Work that a media server sync created has no seasons and episodes yet; they are read once, then the file is tried again.
+                        if (mediaType != MediaType.Series || providerUnavailable || refreshed.Contains(workId.Value))
+                        {
+                            continue;
+                        }
+
+                        if (externalLookups > 0 && lookups.Elapsed >= LookupBudget)
+                        {
+                            deferred = true;
+                            continue;
+                        }
+
+                        externalLookups++;
+                        refreshed.Add(workId.Value);
+                        try
+                        {
+                            var id = workId.Value;
+                            var tmdb = await Context.ExecuteBatchAsync((ctx, ct) =>
+                            {
+                                var sql = new SqlStatement();
+                                sql.Statement =
+                                    """
+                                    SELECT identity."Namespace", identity."Value"
+                                    FROM "WorkExternalIdentities" AS identity
+                                    WHERE identity."WorkId" = @Id AND identity."Namespace" = 'tmdb_tv';
+                                    """;
+                                sql.Parameters.Add(new WorkIdData(id));
+                                return ctx.ReadSql.ReadOptionalAsync<WorkIdentityProbeData>(sql, ct);
+                            }, CancellationToken);
+                            if (tmdb is not null && int.TryParse(tmdb.Value, out var tmdbId) && tmdbId > 0)
+                            {
+                                provider ??= await _metadata.ConnectAsync(Context, CancellationToken);
+                                await _metadata.ImportAsync(Context, provider, mediaType, null, tmdbId, CancellationToken);
+                                imported++;
+                                await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileAsync(assignment, ct), CancellationToken);
+                            }
+                        }
+                        catch (ServiceUnavailableException)
+                        {
+                            providerUnavailable = true;
+                        }
+                        catch (Exception exception) when (exception is DataValidationException or KeyNotFoundException)
+                        {
+                            // Incomplete episode structure remains available for manual review.
+                        }
                     }
                 }
             }
