@@ -11,7 +11,9 @@ using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Sabnzbd;
+using Jularr.Integrations.Data.Qbittorrent;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Logic.Qbittorrent;
 using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Backend.Service.Admin.Activity.V1
@@ -26,14 +28,17 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             new(connection.HttpAddress, AcquisitionConnectionInput.Unprotect(protector, connection.ProtectedApiKey));
 
         public static bool IsSabnzbd(DownloadActionData download) => download.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd;
+        public static bool IsQbittorrent(DownloadActionData download) => download.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent;
+        public static QbittorrentConnection TorrentConnection(AcquisitionConnectionData connection, IDataProtector protector) =>
+            new(connection.HttpAddress, connection.Username, AcquisitionConnectionInput.Unprotect(protector, connection.ProtectedPassword));
 
         // Jularr's own downloaders wait when told to: their jobs are simply not run while paused.
         public static bool IsNative(DownloadActionData download) => download.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet || DirectSources.IsDirect(download.AcquisitionConnectionTypeId);
 
         // Tells the client, or marks the own downloader's job, to wait or to go on; false when the download cannot be paused.
-        public static async Task<bool> SetPausedAsync(LogicContext context, SabnzbdClient sabnzbd, IDataProtector protector, DownloadActionData download, bool isPaused, CancellationToken ct)
+        public static async Task<bool> SetPausedAsync(LogicContext context, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, IDataProtector protector, DownloadActionData download, bool isPaused, CancellationToken ct)
         {
-            var usable = download.AttentionKey is null && (IsSabnzbd(download) && download.ExternalId is not null || IsNative(download));
+            var usable = download.AttentionKey is null && ((IsSabnzbd(download) || IsQbittorrent(download)) && download.ExternalId is not null || IsNative(download));
             if (!usable)
             {
                 return false;
@@ -52,6 +57,20 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 }
             }
 
+            if (IsQbittorrent(download))
+            {
+                var connection = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadAcquisitionConnectionAsync(download.AcquisitionConnectionId, token), ct);
+                try
+                {
+                    await qbittorrent.SetPausedAsync(TorrentConnection(connection, protector), download.ExternalId!, isPaused, ct);
+                }
+                catch (Exception exception) when (exception is HttpRequestException or QbittorrentException
+                    || exception is TaskCanceledException && !ct.IsCancellationRequested)
+                {
+                    throw new ServiceUnavailableException("acquisition_unavailable");
+                }
+            }
+
             await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 await ctx.SetDownloadPausedAsync(new DownloadPauseData(download.OperationId, isPaused), token);
@@ -65,13 +84,15 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
     public sealed class RemoveActivityDownloadV1 : AdminService<ActivityOperationParametersV1, RemoveActivityDownloadDataV1>
     {
         private readonly SabnzbdClient _sabnzbd;
+        private readonly QbittorrentClient _qbittorrent;
         private readonly DownloadStorage _downloads;
         private readonly TimeProvider _time;
         private readonly IDataProtector _protector;
 
-        internal RemoveActivityDownloadV1(SabnzbdClient sabnzbd, DownloadStorage downloads, TimeProvider time, IDataProtectionProvider protection)
+        internal RemoveActivityDownloadV1(SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadStorage downloads, TimeProvider time, IDataProtectionProvider protection)
         {
             _sabnzbd = sabnzbd;
+            _qbittorrent = qbittorrent;
             _downloads = downloads;
             _time = time;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
@@ -101,6 +122,21 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 }
             }
 
+            if (DownloadActions.IsQbittorrent(download) && download.ExternalId is { } torrentHash)
+            {
+                var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(download.AcquisitionConnectionId, ct), CancellationToken);
+                try
+                {
+                    // Explicit removal in Activity deletes the job and its torrent payload.
+                    await _qbittorrent.RemoveAsync(DownloadActions.TorrentConnection(connection, _protector), torrentHash, true, CancellationToken);
+                }
+                catch (Exception exception) when (exception is HttpRequestException or QbittorrentException
+                    || exception is TaskCanceledException && !CancellationToken.IsCancellationRequested)
+                {
+                    throw new ServiceUnavailableException("acquisition_unavailable");
+                }
+            }
+
             var nextSearchAt = Data.BlocksRelease ? _time.GetUtcNow().UtcDateTime : _time.GetUtcNow().UtcDateTime + DownloadActions.RemovedRetry;
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
@@ -108,7 +144,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 return true;
             }, CancellationToken);
 
-            if (!DownloadActions.IsSabnzbd(download))
+            if (DownloadActions.IsNative(download))
             {
                 await ClearOwnFoldersAsync(download);
             }
@@ -138,11 +174,13 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
     public sealed class PauseActivityDownloadV1 : AdminService<ActivityOperationParametersV1, PauseActivityDownloadDataV1>
     {
         private readonly SabnzbdClient _sabnzbd;
+        private readonly QbittorrentClient _qbittorrent;
         private readonly IDataProtector _protector;
 
-        internal PauseActivityDownloadV1(SabnzbdClient sabnzbd, IDataProtectionProvider protection)
+        internal PauseActivityDownloadV1(SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, IDataProtectionProvider protection)
         {
             _sabnzbd = sabnzbd;
+            _qbittorrent = qbittorrent;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
         }
 
@@ -157,7 +195,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 ?? throw new KeyNotFoundException("The download is not in the queue.");
 
             // SABnzbd is told to wait, Jularr's own downloaders skip the job.
-            if (!await DownloadActions.SetPausedAsync(Context, _sabnzbd, _protector, download, Data.IsPaused, CancellationToken))
+            if (!await DownloadActions.SetPausedAsync(Context, _sabnzbd, _qbittorrent, _protector, download, Data.IsPaused, CancellationToken))
             {
                 throw new DataValidationException(nameof(PauseActivityDownloadDataV1.IsPaused), "invalid_transition");
             }
@@ -171,11 +209,13 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
     public sealed class PauseActivityQueueV1 : AdminService<PauseActivityQueueParametersV1, PauseActivityDownloadDataV1>
     {
         private readonly SabnzbdClient _sabnzbd;
+        private readonly QbittorrentClient _qbittorrent;
         private readonly IDataProtector _protector;
 
-        internal PauseActivityQueueV1(SabnzbdClient sabnzbd, IDataProtectionProvider protection)
+        internal PauseActivityQueueV1(SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, IDataProtectionProvider protection)
         {
             _sabnzbd = sabnzbd;
+            _qbittorrent = qbittorrent;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
         }
 
@@ -191,7 +231,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             {
                 if (await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadDownloadActionAsync(id, ct), CancellationToken) is { } download)
                 {
-                    await DownloadActions.SetPausedAsync(Context, _sabnzbd, _protector, download, Data.IsPaused, CancellationToken);
+                    await DownloadActions.SetPausedAsync(Context, _sabnzbd, _qbittorrent, _protector, download, Data.IsPaused, CancellationToken);
                 }
             }
 
