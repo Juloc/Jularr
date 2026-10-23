@@ -13483,6 +13483,54 @@
   "reader.translation.localQuality": [
    "TranslateGemma · local",
    "TranslateGemma · lokal"
+  ],
+  "errors.validation.password_incorrect": [
+   "The current password is not correct.",
+   "Das aktuelle Passwort ist nicht korrekt."
+  ],
+  "account.password.current": [
+   "Current password",
+   "Aktuelles Passwort"
+  ],
+  "account.password.new": [
+   "New password",
+   "Neues Passwort"
+  ],
+  "account.password.confirm": [
+   "Confirm new password",
+   "Neues Passwort bestätigen"
+  ],
+  "account.password.save": [
+   "Change password",
+   "Passwort ändern"
+  ],
+  "account.password.changed": [
+   "Password changed.",
+   "Passwort geändert."
+  ],
+  "errors.validation.reset_invalid": [
+   "This link is not valid any more. Ask an administrator for a new one.",
+   "Dieser Link ist nicht mehr gültig. Bitte einen Administrator um einen neuen."
+  ],
+  "account.reset.title": [
+   "Set a new password",
+   "Neues Passwort festlegen"
+  ],
+  "account.reset.submit": [
+   "Save password",
+   "Passwort speichern"
+  ],
+  "account.reset.done": [
+   "Your password is saved. You can sign in now.",
+   "Dein Passwort ist gespeichert. Du kannst dich jetzt anmelden."
+  ],
+  "admin.accounts.passwordLink": [
+   "Create password link",
+   "Passwort-Link erzeugen"
+  ],
+  "admin.accounts.passwordLinkShown": [
+   "Give this link to the person. It sets a new password, works once and is valid for 24 hours. It is shown only now.",
+   "Diesen Link der Person geben. Er setzt ein neues Passwort, funktioniert einmal und ist 24 Stunden gültig. Er wird nur jetzt angezeigt."
   ]
  }
 }
