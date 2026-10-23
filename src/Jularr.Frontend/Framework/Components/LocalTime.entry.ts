@@ -4,7 +4,7 @@ import { formatLocalTime, type LocalTimeDisplay } from "./LocalTime";
 function localize(root: ParentNode): void {
     const elements: Element[] = [];
     if (root instanceof Element && root.matches("[data-local-time]")) elements.push(root);
-    elements.push(...root.querySelectorAll("[data-local-time]"));
+    elements.push(...Array.from(root.querySelectorAll("[data-local-time]")));
     const locale = document.documentElement.lang || navigator.language;
     for (const element of elements) {
         const iso = element.getAttribute("datetime") ?? element.getAttribute("data-utc");
@@ -21,6 +21,6 @@ function localize(root: ParentNode): void {
 localize(document);
 new MutationObserver(records => {
     for (const record of records) {
-        for (const node of record.addedNodes) if (node instanceof Element) localize(node);
+        for (const node of Array.from(record.addedNodes)) if (node instanceof Element) localize(node);
     }
 }).observe(document.documentElement, { childList: true, subtree: true });
