@@ -1,0 +1,69 @@
+name: Android
+
+on:
+  workflow_dispatch:
+
+  pull_request:
+    paths:
+      - "clients/android/**"
+      - "design/player/**"
+      - ".github/workflows/android.yml"
+  push:
+    branches:
+      - "dev"
+    paths:
+      - "clients/android/**"
+      - "design/player/**"
+      - ".github/workflows/android.yml"
+permissions:
+  contents: read
+
+jobs:
+  # Unit tests and lint for every module that ships in the default build. The optional
+  # core-tts-sherpa module stays out: its AAR is not published to Maven Central and CI has
+  # no way to fetch it (see clients/android/settings.gradle.kts).
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "9.8.0"
+
+      - name: Test and lint Android
+        working-directory: clients/android
+        run: >-
+          gradle --stacktrace --parallel --build-cache
+          :core-api:testDebugUnitTest
+          :core-model:testDebugUnitTest
+          :core-player:testDebugUnitTest
+          :core-session:testDebugUnitTest
+          :core-design:testDebugUnitTest
+          :core-tts:testDebugUnitTest
+          :core-update:testDebugUnitTest
+          :app-mobile:testDebugUnitTest
+          :app-tv:testDebugUnitTest
+          :app-mobile:lintDebug
+          :app-tv:lintDebug
+          :core-api:lintDebug
+          :core-model:lintDebug
+          :core-player:lintDebug
+          :core-session:lintDebug
+          :core-design:lintDebug
+          :core-tts:lintDebug
+          :core-update:lintDebug

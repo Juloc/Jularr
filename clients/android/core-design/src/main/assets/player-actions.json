@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "event": "jularr:player-action",
+  "actions": [
+    { "id": "playPause", "category": "transport" },
+    { "id": "seekBack10", "category": "transport" },
+    { "id": "seekForward10", "category": "transport" },
+    { "id": "seekTo", "category": "transport" },
+    { "id": "selectAudioTrack", "category": "track" },
+    { "id": "selectSubtitleTrack", "category": "track" },
+    { "id": "repeatCurrentCue", "category": "learning" },
+    { "id": "learnCurrentCue", "category": "learning" },
+    { "id": "openWord", "category": "learning" },
+    { "id": "markKnown", "category": "learning" },
+    { "id": "addToLearning", "category": "learning" },
+    { "id": "openCompanion", "category": "companion" },
+    { "id": "closeOverlay", "category": "overlay" },
+    { "id": "exitPlayer", "category": "navigation" }
+  ]
+}
