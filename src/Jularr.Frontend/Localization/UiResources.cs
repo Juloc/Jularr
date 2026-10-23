@@ -3268,6 +3268,12 @@ namespace Jularr.Frontend.Localization
             new("console.kind.music", "Music"),
             new("console.kind.game", "Games"),
             new("console.open", "Open downloader"),
+            new("console.cleanupStatus", "Jularr cleanup ledger"),
+            new("console.cleanupEmpty", "No automatic cleanup records yet."),
+            new("console.cleanupWaiting", "Cleanup queued"),
+            new("console.cleanupRetry", "Cleanup retry scheduled"),
+            new("console.cleaned", "Removed from client"),
+            new("console.jobId", "SABnzbd job ID"),
             new("console.cleanup", "Delete files"),
             new("console.filesWarning", "Deletion is available only for files not associated with a current or known SABnzbd job. Inspect the preview before confirming."),
         ];

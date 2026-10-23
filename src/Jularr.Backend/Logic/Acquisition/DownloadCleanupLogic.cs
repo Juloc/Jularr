@@ -77,8 +77,57 @@ namespace Jularr.Backend.Logic.Acquisition
         public string? ErrorKey { get; }
     }
 
+    internal sealed class DownloadCleanupClientData : BaseData
+    {
+        public DownloadCleanupClientData(long acquisitionConnectionId) => AcquisitionConnectionId = acquisitionConnectionId;
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
+        public long AcquisitionConnectionId { get; }
+    }
+
+    internal sealed class DownloadCleanupStatusData : BaseData
+    {
+        public DownloadCleanupStatusData(string externalId, string reason, int attemptCount, DateTime retryAt, DateTime? completedAt, string? lastError)
+        {
+            ExternalId = externalId;
+            Reason = reason;
+            AttemptCount = attemptCount;
+            RetryAt = retryAt;
+            CompletedAt = completedAt;
+            LastError = lastError;
+        }
+
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.JobId))]
+        public string ExternalId { get; }
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Action))]
+        public string Reason { get; }
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Page))]
+        public int AttemptCount { get; }
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RetryAt))]
+        public DateTime RetryAt { get; }
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RetryAt), false)]
+        public DateTime? CompletedAt { get; }
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Status), false)]
+        public string? LastError { get; }
+    }
+
     internal static class DownloadCleanupLogic
     {
+        public static Task<IReadOnlyList<DownloadCleanupStatusData>> ReadDownloadCleanupStatusesAsync(
+            this LogicContext ctx, DownloadCleanupClientData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT "ExternalId", "Reason", "AttemptCount", "RetryAt", "CompletedAt", "LastError"
+                FROM "DownloadClientCleanups"
+                WHERE "AcquisitionConnectionId" = @AcquisitionConnectionId
+                ORDER BY "Id" DESC
+                LIMIT 100;
+                """;
+            sql.Parameters.Add(data);
+            return ctx.ReadSql.ReadListAsync<DownloadCleanupStatusData>(sql, ct);
+        }
+
         // Insert only for the corresponding enabled policy; a repeated callback is idempotent.
         public static Task QueueImportedCleanupAsync(this LogicContext ctx, DownloadCleanupKeyData data, CancellationToken ct)
         {

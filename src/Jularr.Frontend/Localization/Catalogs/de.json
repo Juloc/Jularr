@@ -4,6 +4,12 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "console.cleanupStatus": ["Jularr cleanup ledger","Jularr-Bereinigung"],
+  "console.cleanupEmpty": ["No automatic cleanup records yet.","Noch keine automatischen Bereinigungen."],
+  "console.cleanupWaiting": ["Cleanup queued","Bereinigung vorgemerkt"],
+  "console.cleanupRetry": ["Cleanup retry scheduled","Erneuter Löschversuch geplant"],
+  "console.cleaned": ["Removed from client","Aus SABnzbd entfernt"],
+  "console.jobId": ["SABnzbd job ID","SABnzbd-Auftrags-ID"],
   "acquisition.connection.removesFailed": ["Remove failed SABnzbd jobs and source files", "Fehlgeschlagene SABnzbd-Jobs und Quelldateien entfernen"],
   "console.general": ["General","Allgemein"],
   "console.downloads": ["Downloads","Downloads"],

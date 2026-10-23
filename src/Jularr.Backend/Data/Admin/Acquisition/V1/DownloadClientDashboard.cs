@@ -10,7 +10,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             BaseDataList<DownloadClientQueueItemV1> queue, BaseDataList<DownloadClientHistoryItemV1> history, string[] categories,
             long? todayBytes, long? weekBytes, long? monthBytes, long? totalBytes, string[] orphanFolders,
             string? completePath, string? incompletePath, bool completeAvailable, bool incompleteAvailable, BaseDataList<DownloadClientFolderEntryV1> files,
-            string? reportedCompletePath = null, string? reportedIncompletePath = null)
+            string? reportedCompletePath = null, string? reportedIncompletePath = null,
+            BaseDataList<DownloadClientCleanupStatusV1>? cleanups = null)
         {
             SpeedBytesPerSecond = speedBytesPerSecond;
             FreeBytes = freeBytes;
@@ -32,6 +33,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             Files = files;
             ReportedCompletePath = reportedCompletePath;
             ReportedIncompletePath = reportedIncompletePath;
+            Cleanups = cleanups ?? new BaseDataList<DownloadClientCleanupStatusV1>([]);
         }
 
         [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Bytes))]
@@ -84,11 +86,34 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         public BaseDataList<DownloadClientFolderEntryV1> Files { get; }
 
+        public BaseDataList<DownloadClientCleanupStatusV1> Cleanups { get; }
+
         [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Path))]
         public string? ReportedCompletePath { get; }
 
         [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Path))]
         public string? ReportedIncompletePath { get; }
+    }
+
+    public sealed class DownloadClientCleanupStatusV1 : BaseResponse
+    {
+        public DownloadClientCleanupStatusV1(string jobId, string reason, int attemptCount, DateTime retryAt, DateTime? completedAt, string? lastError)
+        {
+            JobId = jobId; Reason = reason; AttemptCount = attemptCount; RetryAt = retryAt;
+            CompletedAt = completedAt; LastError = lastError;
+        }
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.JobId))]
+        public string JobId { get; }
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Action))]
+        public string Reason { get; }
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Page))]
+        public int AttemptCount { get; }
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RetryAt))]
+        public DateTime RetryAt { get; }
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RetryAt), false)]
+        public DateTime? CompletedAt { get; }
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Status), false)]
+        public string? LastError { get; }
     }
 
     public sealed class DownloadClientQueueItemV1 : BaseResponse

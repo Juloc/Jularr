@@ -40,6 +40,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
             var connection = new SabnzbdConnection(client.HttpAddress, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedApiKey));
             var snapshot = await _client.ReadConsoleAsync(connection, CancellationToken);
+            var cleanups = await Context.ExecuteBatchAsync((ctx, token) =>
+                ctx.ReadDownloadCleanupStatusesAsync(new DownloadCleanupClientData(Parameters.AcquisitionConnectionId), token), CancellationToken);
             var categories = await _client.ReadCategoriesAsync(connection, CancellationToken);
             var files = DownloadClientFolderInspector.Inspect(client.LocalPath, snapshot, client.IncompleteLocalPath, client.RemotePath, client.IncompleteRemotePath);
 
@@ -55,7 +57,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 [.. snapshot.OrphanFolders.Where(name => name.Length <= 200).Take(200)],
                 files.CompletePath, files.IncompletePath,
                 files.CompleteAvailable, files.IncompleteAvailable, new BaseDataList<DownloadClientFolderEntryV1>(files.Entries),
-                snapshot.ReportedCompletePath, snapshot.ReportedIncompletePath);
+                snapshot.ReportedCompletePath, snapshot.ReportedIncompletePath,
+                new BaseDataList<DownloadClientCleanupStatusV1>([.. cleanups.Select(item =>
+                    new DownloadClientCleanupStatusV1(item.ExternalId, item.Reason, item.AttemptCount, item.RetryAt, item.CompletedAt, item.LastError))]));
         }
     }
 

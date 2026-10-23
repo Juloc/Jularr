@@ -68,6 +68,15 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             return new Section(new H2(new Text("console.history")),
                 data.History.Count == 0 ? new P(new Text("console.historyEmpty")) : rows,
                 data.HistoryLimited ? new P(new Text("console.limit")).Class("download-console__note") : new Span(),
+                new H2(new Text("console.cleanupStatus")),
+                data.Cleanups.Count == 0 ? new P(new Text("console.cleanupEmpty")) :
+                    new Table<DownloadClientCleanupStatusV1>(data.Cleanups)
+                        .Text(item => item.JobId, "console.jobId")
+                        .Content("console.status", item => new Text(item.CompletedAt is not null ? "console.cleaned" :
+                            item.LastError is null ? "console.cleanupWaiting" : "console.cleanupRetry"))
+                        .Content("console.actions", item => new ValueText(item.LastError ?? "—"))
+                        .Content("console.timeLeft", item => new ValueText(item.CompletedAt is not null ? "—" :
+                            item.RetryAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))),
                 new A(new Text("console.refresh")).Attribute("href", Address(connectionId) + "&Pane=history").Class("button"))
                 .Class("download-console__section");
         }
