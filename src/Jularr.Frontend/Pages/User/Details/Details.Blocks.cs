@@ -59,7 +59,7 @@ namespace Jularr.Frontend.Pages.User.Details
 
             // The files of a book, a comic or an album are already its volumes, tracks and editions.
             var listed = kind is WorkKind.Book or WorkKind.Manga or WorkKind.LightNovel or WorkKind.Music && blocks.Any(block => block.TabKey is "volumes" or "tracks" or "editions");
-            var hasFiles = !listed && (items.Count > 0 || kind == WorkKind.Game && _platforms is { Count: > 0 });
+            var hasFiles = !listed && (items.Count > 0 || TabKey == "files" && PageNumber > 1 || kind == WorkKind.Game && _platforms is { Count: > 0 });
             if (hasFiles)
             {
                 var versions = kind is WorkKind.Film or WorkKind.Game;

@@ -110,6 +110,48 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ReaderNotes_FragmentPagesOwnNotesWithoutOpeningBook_AndChecksSourceVisibility()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var (asset, _) = await CreateBooksAsync(host, storage.Path, "Notes book", "Other book");
+            await OpenAsync(host, asset);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "ReadingAnnotations" ("ProfileId", "MediaAssetId", "SectionIndex", "StartBlock", "StartOffset", "EndBlock", "EndOffset", "Quote", "HighlightColorTypeId")
+                SELECT 101, {{asset}}, 0, 0, 0, 0, 1, 'Private note ' || lpad(n::text, 3, '0'), 1 FROM generate_series(1, 60) n;
+                UPDATE "ReadingDocuments" SET "LastReadAt" = now() - interval '30 days';
+                """.Replace("{{asset}}", asset.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            var lastRead = await host.ScalarAsync("SELECT \"LastReadAt\" FROM \"ReadingDocuments\" LIMIT 1");
+            var address = "/Read/" + asset + "?handler=Notes&s=0";
+            using var first = await host.SendAsync(HttpMethod.Get, address);
+            var html = await first.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, html);
+            Assert.AreEqual(48, Regex.Matches(html, "class=\"reader__note\"").Count);
+            StringAssert.Contains(html, "data-infinite-list=\".reader__notes\"");
+            Assert.IsFalse(html.Contains("data-role=\"content\"", StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains("handler=Notes", StringComparison.Ordinal), "The native next link must still open the Reader.");
+            using var next = await host.SendAsync(HttpMethod.Get, address + "&n=2");
+            Assert.AreEqual(12, Regex.Matches(await next.Content.ReadAsStringAsync(), "class=\"reader__note\"").Count);
+            Assert.AreEqual(lastRead, await host.ScalarAsync("SELECT \"LastReadAt\" FROM \"ReadingDocuments\" LIMIT 1"));
+
+            using var assigned = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/accounts/41/profiles/202");
+            using var switched = await host.SendAsync(HttpMethod.Put, "/api/v1/auth/profile/202");
+            Assert.AreEqual(HttpStatusCode.OK, switched.StatusCode);
+            using var foreign = await host.SendAsync(HttpMethod.Get, address);
+            Assert.AreEqual(HttpStatusCode.OK, foreign.StatusCode);
+            Assert.IsFalse((await foreign.Content.ReadAsStringAsync()).Contains("Private note", StringComparison.Ordinal));
+            using var back = await host.SendAsync(HttpMethod.Put, "/api/v1/auth/profile/101");
+            await host.Fixture.RunSqlAsync("INSERT INTO \"ProfileMediaRules\" (\"ProfileId\", \"MediaTypeId\", \"IsBlocked\") SELECT 101, \"MediaTypeId\", TRUE FROM \"Works\" WHERE \"Id\" = (SELECT \"WorkId\" FROM \"MediaAssets\" WHERE \"Id\" = " + asset + ")");
+            using var blocked = await host.SendAsync(HttpMethod.Get, address);
+            Assert.AreEqual(HttpStatusCode.NotFound, blocked.StatusCode);
+            Assert.IsFalse((await blocked.Content.ReadAsStringAsync()).Contains("Private note", StringComparison.Ordinal));
+            using var signedOut = await host.SendAsync(HttpMethod.Delete, "/api/v1/auth/session");
+            using var anonymous = await host.SendAsync(HttpMethod.Get, address);
+            Assert.IsTrue((int)anonymous.StatusCode is >= 300 and < 500);
+            Assert.IsFalse((await anonymous.Content.ReadAsStringAsync()).Contains("Private note", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
         public async Task Annotations_StayWithTheProfileAndMarkTheReader()
         {
             using var storage = new TemporaryDirectory();
