@@ -14,10 +14,12 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 {
     // The queue on the list kit: four live figures, one row of filter chips with their counts, the downloads and jobs as rows with what a person can do with each, and a drawer of details per row.
     public sealed class ActivityModel(ReadActivityV1 read, ReadActivitySummaryV1 summary, RetryActivityV1 retry, DismissActivityV1 dismiss, SaveActivitySourceLinkV1 sourceLink, RemoveActivityDownloadV1 remove,
-        PauseActivityDownloadV1 pause, RetryActivityImportV1 retryImport, PauseActivityQueueV1 pauseQueue, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
+        PauseActivityDownloadV1 pause, RetryActivityImportV1 retryImport, PauseActivityQueueV1 pauseQueue, ReadTorrentFilesV1 torrentFiles, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private PageResult<ActivityItemV1>? _items;
         private ActivitySummaryV1? _summary;
+        private BaseDataList<TorrentFileV1>? _openedTorrentFiles;
+        private bool _torrentFileLookupFailed;
 
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
@@ -28,6 +30,9 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         // The entry whose drawer is open: its address works without script, with script the drawer opens in place.
         [BindProperty(SupportsGet = true, Name = "operation")]
         public long? OpenOperationId { get; set; }
+
+        [BindProperty(SupportsGet = true, Name = "files")]
+        public bool ShowFiles { get; set; }
 
         private bool IsHistory => Filter == ActivityFilterType.History;
 
@@ -255,6 +260,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 if (item.CanRetryImport) actions.Add(IconAction(item, "RetryImport", "sync", "activity.retryImport", csrf));
                 if (item.CanImportManually) actions.Add(IconLink("folder", "activity.importManually", "/Admin/ManualImport?operationId=" + item.Id.ToString(CultureInfo.InvariantCulture)));
                 if (item.CanPause) actions.Add(item.DownloadStateTypeId == DownloadStateType.Paused ? IconAction(item, "Resume", "play", "activity.resume", csrf) : IconAction(item, "Pause", "pause", "activity.pause", csrf));
+                if (item.CanBrowseFiles) actions.Add(IconLink("folder", "activity.files.view", Address(operation: item.Id) + "&files=true"));
             }
 
             actions.Add(Drawer.Opener(new A(Glyph("dots", 18)).Class("button button--icon").Attribute("href", Address(operation: item.Id)).TextAttribute("aria-label", "activity.details").TextAttribute("title", "activity.details"), DrawerId(item)));
@@ -295,6 +301,28 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             {
                 if (item.ManualUrl is { } manual) body.Add(Drawer.Block("activity.source.check", ManualLink(item, manual, csrf)));
                 body.Add(new Div(Confirmed(item, "Remove", "activity.remove", "activity.removeConfirm", csrf), Confirmed(item, "RemoveAndBlock", "activity.removeAndBlock", "activity.removeAndBlockConfirm", csrf)).Class("activity-confirms"));
+            }
+
+            if (item.CanBrowseFiles)
+            {
+                if (OpenOperationId == item.Id && ShowFiles)
+                {
+                    IUiComponent files = _torrentFileLookupFailed
+                        ? new P(new Text("activity.files.unavailable"))
+                        : _openedTorrentFiles is { Items.Count: > 0 } available
+                            ? new Div([.. available.Items.Select(file =>
+                                new Div(new Truncated(file.Name),
+                                    new Span(new ValueText(ByteSize.Format(file.SizeBytes) + " · "
+                                        + file.ProgressPercent.ToString(CultureInfo.InvariantCulture) + "%"))
+                                        .Class("list-value")).Class("activity-file-row"))])
+                            : new P(new Text("activity.files.empty"));
+                    body.Add(Drawer.Block("activity.files", files));
+                }
+                else
+                {
+                    body.Add(new A(new Text("activity.files.view")).Class("button button--soft")
+                        .Attribute("href", Address(operation: item.Id) + "&files=true"));
+                }
             }
 
             var title = item.WorkTitle ?? (item.OperationTypeId == OperationType.Job ? texts["jobs.job." + item.Title] : item.Title);
@@ -414,6 +442,18 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         {
             _items = await read.ExecuteAsync<PageResult<ActivityItemV1>>(new ReadActivityParametersV1(Filter, Math.Max(1, PageNumber)), HttpContext.RequestAborted);
             _summary = await summary.ExecuteAsync<ActivitySummaryV1>(new ReadActivitySummaryParametersV1(), HttpContext.RequestAborted);
+            if (ShowFiles && OpenOperationId is { } id && _items.Items.Any(item => item.Id == id && item.CanBrowseFiles))
+            {
+                try
+                {
+                    _openedTorrentFiles = await torrentFiles.ExecuteAsync<BaseDataList<TorrentFileV1>>(
+                        new ActivityOperationParametersV1(id), HttpContext.RequestAborted);
+                }
+                catch (ServiceUnavailableException)
+                {
+                    _torrentFileLookupFailed = true;
+                }
+            }
         }
 
         // The page's own address with what was chosen; defaults stay out of it.
