@@ -7,6 +7,7 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Sabnzbd;
 using Jularr.Integrations.Logic.Sabnzbd;
@@ -121,7 +122,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 throw new DataValidationException(nameof(relative), "invalid_transition");
 
             var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-            var path = Path.GetFullPath(Path.Combine(root, Path.Combine(segments)));
+            var path = Path.GetFullPath(segments.Aggregate(root, Path.Combine));
             if (!string.Equals(path, root, comparison) && !path.StartsWith(root + Path.DirectorySeparatorChar, comparison))
                 throw new DataValidationException(nameof(relative), "invalid_transition");
 
@@ -183,16 +184,18 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             stack.Push(full);
             long bytes = 0;
             var count = 0;
+            var visited = 0;
             var facts = new StringBuilder();
             while (stack.Count > 0)
             {
                 var next = stack.Pop();
                 var attrs = File.GetAttributes(next);
                 if ((attrs & FileAttributes.ReparsePoint) != 0) throw new DataValidationException(nameof(relative), "invalid_transition");
+                visited++;
                 facts.Append(Path.GetRelativePath(root, next)).Append('|').Append((int)attrs).Append('|');
                 if ((attrs & FileAttributes.Directory) != 0)
                 {
-                    foreach (var child in Directory.EnumerateFileSystemEntries(next)) stack.Push(child);
+                    foreach (var child in Directory.EnumerateFileSystemEntries(next).OrderByDescending(item => item, StringComparer.Ordinal)) stack.Push(child);
                 }
                 else
                 {
@@ -202,7 +205,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     count++;
                 }
                 facts.Append('\n');
-                if (count + stack.Count > MaxFilesToDelete)
+                if (visited + stack.Count > MaxFilesToDelete)
                     throw new DataValidationException(nameof(relative), "invalid_transition");
             }
             var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(facts.ToString())));
@@ -257,7 +260,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     public sealed class BrowseDownloadClientFilesV1 : AdminService<AcquisitionConnectionParametersV1, DownloadClientFolderRequestV1>
     {
         private readonly DownloadClientFilesReader _reader;
-        internal BrowseDownloadClientFilesV1(DownloadClientFilesReader reader) => _reader = reader;
+        internal BrowseDownloadClientFilesV1(SabnzbdClient client, IDataProtectionProvider protection) => _reader = new DownloadClientFilesReader(client, protection);
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<DownloadClientBrowseResultV1>()];
         protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 p) => ModuleRequirement.All("Acquisition");
@@ -270,7 +273,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     public sealed class PreviewDownloadClientFileDeleteV1 : AdminService<AcquisitionConnectionParametersV1, DownloadClientFolderRequestV1>
     {
         private readonly DownloadClientFilesReader _reader;
-        internal PreviewDownloadClientFileDeleteV1(DownloadClientFilesReader reader) => _reader = reader;
+        internal PreviewDownloadClientFileDeleteV1(SabnzbdClient client, IDataProtectionProvider protection) => _reader = new DownloadClientFilesReader(client, protection);
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<DownloadClientDeletionPreviewV1>()];
         protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 p) => ModuleRequirement.All("Acquisition");
@@ -283,7 +286,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     public sealed class DeleteDownloadClientFilesV1 : AdminService<AcquisitionConnectionParametersV1, DownloadClientFolderRequestV1>
     {
         private readonly DownloadClientFilesReader _reader;
-        internal DeleteDownloadClientFilesV1(DownloadClientFilesReader reader) => _reader = reader;
+        internal DeleteDownloadClientFilesV1(SabnzbdClient client, IDataProtectionProvider protection) => _reader = new DownloadClientFilesReader(client, protection);
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 p) => ModuleRequirement.All("Acquisition");

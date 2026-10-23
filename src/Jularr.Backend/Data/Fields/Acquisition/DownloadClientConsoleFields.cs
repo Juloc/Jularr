@@ -17,6 +17,8 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly IntField ProgressPercent = new() { Minimum = 0, Maximum = 100, Required = false };
         public static readonly IntField TimeLeftSeconds = new() { Minimum = 0, Required = false };
         public static readonly BoolField Flag = new();
+        public static readonly IntField Page = new() { Minimum = 0, Maximum = 50000 };
+        public static readonly StringField Fingerprint = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false, Trim = true };
         public static readonly StringArrayField Categories = new() { MaximumLength = 200, ItemMaximumLength = 64 };
         public static readonly StringArrayField OrphanFolders = new() { MaximumLength = 200, ItemMaximumLength = 200 };
     }
