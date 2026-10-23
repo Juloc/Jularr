@@ -631,6 +631,14 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         parsed = MediaPathParser.ApplyPlexMatch(parsed, file.RelativePath[(rootFolder.Length + 1)..], parts[^1], rootHints, seasonHints);
                     }
 
+                    // A file of several episodes (S01E12-E13): the first is its unit, the others it covers.
+                    IReadOnlyList<decimal> furtherEpisodes = [];
+                    if (mediaType == MediaType.Series && parsed.WorkUnitTypeId != WorkUnitType.Episode && MediaPathParser.ParseEpisodeRange(file.RelativePath) is { } range)
+                    {
+                        parsed = new MediaPathInfo(parsed.Title, parsed.Year, WorkUnitType.Episode, range.Episodes[0], range.Season);
+                        furtherEpisodes = [.. range.Episodes.Skip(1)];
+                    }
+
                     if (parsed.Title.Length > 500 || mediaType == MediaType.Series && parsed.WorkUnitTypeId != WorkUnitType.Episode)
                     {
                         Note("the name does not give season and episode", file.RelativePath);
@@ -894,7 +902,14 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     var assignment = new StoredFileAssignmentData(file.Id, workId, null, parsed.WorkUnitTypeId, parsed.UnitNumber, parsed.ParentUnitNumber, null, false);
                     try
                     {
-                        await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileAsync(assignment, ct), CancellationToken);
+                        if (furtherEpisodes.Count > 0)
+                        {
+                            await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileRangeAsync(assignment, furtherEpisodes, ct), CancellationToken);
+                        }
+                        else
+                        {
+                            await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileAsync(assignment, ct), CancellationToken);
+                        }
                     }
                     catch (DataValidationException)
                     {
