@@ -113,6 +113,21 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Client_ListsIndividualFilesForActivity()
+        {
+            var fake = new FakeQbittorrent();
+            using var http = new HttpClient(fake);
+            var client = new QbittorrentClient(http);
+            var files = await client.GetFilesAsync(new QbittorrentConnection("http://torrent:8080", "admin", "secret"), "abc123", default);
+            Assert.AreEqual(2, files.Count);
+            Assert.AreEqual("novel/volume1.epub", files[0].Name);
+            Assert.AreEqual(1024, files[0].SizeBytes);
+            Assert.AreEqual(0.6, files[0].Progress);
+            Assert.IsTrue(files[0].IsSelected);
+            Assert.IsFalse(files[1].IsSelected);
+        }
+
+        [TestMethod]
         public void StoppedUploading_IsCompletedAndPaused_AndStoppedDownloadingIsNotComplete()
         {
             var seed = new QbittorrentTorrent("abc", "novel", "stoppedUP", 1, 100, 100, 0, 2, 0, "/downloads/novel", "/downloads");
@@ -186,6 +201,10 @@ namespace Jularr.Backend.Tests
                             json = json.Replace("[", "[{\"hash\":\"unrelated\",\"name\":\"Example Novel v01\",\"state\":\"downloading\",\"progress\":0.1,\"size\":100,\"completed\":10,\"dlspeed\":10,\"num_complete\":1,\"num_incomplete\":2,\"added_on\":9999999999},", StringComparison.Ordinal);
                         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") });
                     }
+                    case "/api/v2/torrents/files":
+                        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(
+                            "[{\"name\":\"novel/volume1.epub\",\"size\":1024,\"progress\":0.6,\"priority\":1},{\"name\":\"note.txt\",\"size\":20,\"progress\":0,\"priority\":0}]",
+                            Encoding.UTF8, "application/json") });
                     case "/api/v2/torrents/stop":
                     case "/api/v2/torrents/start":
                     case "/api/v2/torrents/delete":
