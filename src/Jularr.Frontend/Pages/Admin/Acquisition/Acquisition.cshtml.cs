@@ -102,6 +102,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/Modal.entry.ts");
             page.Asset("Pages/Admin/Acquisition/Acquisition.entry.scss");
+            page.Asset("Pages/Admin/Acquisition/DownloadConsole.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
             page.Asset("Framework/Components/Truncated.entry.ts");
             page.Asset("Framework/Components/Form.entry.ts");

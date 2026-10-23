@@ -23,7 +23,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 "history" => DownloadHistory(data, id, csrf),
                 "files" => DownloadFiles(id, csrf),
                 _ => DownloadQueue(data, id, csrf)
-            }).Class("download-console");
+            }).Class("download-console").Attribute("data-auto-refresh", Pane is "downloads" or "history" ? "true" : "false");
         }
 
         private IUiComponent DownloadQueue(DownloadClientDashboardV1 data, long connectionId, string? csrf)
