@@ -55,6 +55,7 @@ class TvV1ClientFlowMigrationTest {
     @Test fun homeAndSearchUseActualServerSideVideoFiltersAndOnlyVideoContinue() = runBlocking {
         val seenQueries = mutableListOf<String?>()
         val seenTypes = mutableListOf<List<Int>>()
+        val seenSubtypes = mutableListOf<List<Int>>()
         val backend = object : TvCatalogV1Client by fallback {
             override suspend fun libraryFiltered(
                 page: Int, pageSize: Int, filters: TvCatalogV1Filters,
@@ -62,6 +63,7 @@ class TvV1ClientFlowMigrationTest {
             ): TvPageV1<TvWorkCardV1> {
                 seenQueries.add(query)
                 seenTypes.add(filters.mediaTypeIds.orEmpty())
+                seenSubtypes.add(filters.mediaSubtypeIds)
                 return TvPageV1(listOf(card(701)), page, pageSize)
             }
             override suspend fun continueWatching() = listOf(
@@ -90,6 +92,26 @@ class TvV1ClientFlowMigrationTest {
         assertEquals(listOf("701"), flow.search("Anime").anime.map { it.id })
         assertEquals(listOf(null, "Anime"), seenQueries)
         assertEquals(listOf(listOf(1, 2), listOf(1, 2)), seenTypes)
+        assertEquals(listOf(listOf(1), listOf(1)), seenSubtypes)
+    }
+
+    @Test fun favoritesUseActualVideoAndAnimeFiltersAndServerSort() = runBlocking {
+        val requests = mutableListOf<Triple<Int, TvCatalogV1Filters, Int?>>()
+        val backend = object : TvCatalogV1Client by fallback {
+            override suspend fun watchlistFiltered(
+                page: Int, pageSize: Int, filters: TvCatalogV1Filters, sortTypeId: Int?,
+            ): TvPageV1<TvWorkCardV1> {
+                requests.add(Triple(page, filters, sortTypeId))
+                return TvPageV1(listOf(card(701)), page, pageSize)
+            }
+        }
+        val flow = TvV1ClientFlow(backend, permissions)
+        assertEquals(701L, flow.watchlistPage(1, 1).items.single().id)
+        assertEquals(701L, flow.watchlistPage(2, 2).items.single().id)
+        assertEquals(listOf(1, 2), requests.map { it.first })
+        assertEquals(listOf(1, 2), requests.map { it.third })
+        assertTrue(requests.all { it.second.mediaTypeIds == listOf(1, 2) })
+        assertTrue(requests.all { it.second.mediaSubtypeIds == listOf(1) })
     }
 
     @Test fun workDetailsPreserveFractionalUnitAndRealPlaybackAssetOnly() = runBlocking {
