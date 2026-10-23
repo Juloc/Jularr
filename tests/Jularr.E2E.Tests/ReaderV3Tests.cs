@@ -243,6 +243,8 @@ namespace Jularr.E2E.Tests
 
                 await OpenReaderAsync(page, 390, 844);
                 Assert.AreEqual("1", await reader.GetAttributeAsync("data-columns"));
+                var leftMargin = await page.Locator(".reader__content p").First.EvaluateAsync<double>("p => p.getBoundingClientRect().left - p.closest('.reader__content').getBoundingClientRect().left");
+                Assert.IsTrue(leftMargin >= 30, "Single-page text inset must be applied before pagination is measured.");
                 await Assertions.Expect(page.Locator("[data-role=pages]")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex(@"^(?:Pages 1–1 of \d+|Ch\. 1–1/\d+)$"));
                 await AssertPaperPositionsAsync(page, "390 single page");
                 await Evidence.SaveAsync(page, "reader-v3-single-390-light");

@@ -127,6 +127,8 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
             const two = settings.layout === 'spread' || settings.layout === 'auto' && width >= Math.max(640, settings.size * 36 + 40);
             columns = two ? 2 : 1;
             reader.style.setProperty('--reader-columns', String(columns));
+            // The single-page text inset must be active before calculating CSS-column pagination.
+            reader.dataset.columns = String(columns);
             content.removeAttribute('data-pad');
             const gap = parseFloat(getComputedStyle(content).columnGap) || 0;
             step = content.clientWidth + gap;
