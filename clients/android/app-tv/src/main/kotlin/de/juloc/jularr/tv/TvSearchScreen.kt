@@ -157,6 +157,10 @@ fun TvSearchScreen(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
             )
+            // A client-side category may hide every result of the first server page.
+            if (onLoadMore != null) Button(onClick = onLoadMore) {
+                Text("Weitere Ergebnisse laden")
+            }
         } else {
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 230.dp),
