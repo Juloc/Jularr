@@ -143,8 +143,8 @@ function initializePendingPreview(): void {
                     }
                     if (finishedStages.has(event.stage)) complete.add(event.index);
                     progress.value = complete.size;
-                    heading.textContent = (texts[event.stage] ?? event.stage) + " · " + complete.size + " / " + progress.max;
-                    if (state) state.scrollIntoView({ block: "nearest" });
+                    const title = state?.parentElement?.firstElementChild?.textContent;
+                    heading.textContent = (title ? title + " · " : "") + (texts[event.stage] ?? event.stage) + " · " + complete.size + " / " + progress.max;
                 } else if (event.kind === "done") {
                     finished = true;
                     heading.textContent = labels?.phaseComplete ?? "Preview ready";
