@@ -1,0 +1,40 @@
+name: Install Chromium
+description: >-
+  Download Playwright's Chromium and check that the runner image already has the system libraries it links against
+  (the image ships Chrome, so it usually does). Only when a library is missing the apt route is taken: apt is hardened,
+  each attempt has a time limit and a failed one is repeated. A slow mirror then no longer stalls every browser job.
+runs:
+  using: composite
+  steps:
+    - name: Download the browser
+      shell: bash
+      run: pwsh tests/Jularr.E2E.Tests/bin/Release/net10.0/playwright.ps1 install chromium
+    - name: Check the system libraries
+      id: libraries
+      shell: bash
+      run: |
+        missing=0
+        while IFS= read -r binary; do
+          if ldd "${binary}" 2>/dev/null | grep -q "not found"; then
+            echo "::warning::${binary} misses libraries: $(ldd "${binary}" | grep 'not found' | awk '{print $1}' | tr '\n' ' ')"
+            missing=1
+          fi
+        done < <(find ~/.cache/ms-playwright -type f \( -name chrome -o -name headless_shell -o -name chrome-headless-shell \))
+        echo "missing=${missing}" >> "${GITHUB_OUTPUT}"
+    - uses: ./.github/actions/harden-apt
+      if: steps.libraries.outputs.missing == '1'
+    - name: Install the missing system libraries through apt
+      if: steps.libraries.outputs.missing == '1'
+      shell: bash
+      run: |
+        for attempt in 1 2 3; do
+          if timeout -k 10 300 pwsh tests/Jularr.E2E.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium; then exit 0; fi
+          echo "::warning::Chromium install attempt ${attempt} failed or timed out; retrying"
+          # timeout stops pwsh only: the apt/dpkg children it started would keep the dpkg lock.
+          sudo pkill -9 -x apt-get || true
+          sudo pkill -9 -x dpkg || true
+          sudo dpkg --configure -a || true
+          sleep 5
+        done
+        echo "::error::Chromium could not be installed."
+        exit 1
