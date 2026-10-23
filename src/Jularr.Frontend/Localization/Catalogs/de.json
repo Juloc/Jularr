@@ -4,6 +4,22 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "activity.view.queue": [
+   "Queue",
+   "Warteschlange"
+  ],
+  "activity.view.history": [
+   "History",
+   "Verlauf"
+  ],
+  "activity.views": [
+   "Download views",
+   "Download-Ansichten"
+  ],
+  "activity.files.noJobs": [
+   "No torrent downloads on this page.",
+   "Auf dieser Seite gibt es keine Torrent-Downloads."
+  ],
   "activity.files": [
    "Files",
    "Dateien"
