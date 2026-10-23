@@ -250,10 +250,10 @@ namespace Jularr.Integrations.Logic.OpenLibrary
                 : [];
 
         // Qualifiers, not arbitrary mentions: "The Audiobook Handbook" is a valid printed book.
-        [GeneratedRegex(@"(?:^audiobook[\s:-]+)|(?:[\(\[]|\s[-:]\s)(?:(?:unabridged|abridged)\s+)?(?:audiobooks?|audio[ -]?books?|audio[ -]?cds?|hörbücher?|hoerbuecher?)(?:[\)\]]|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        [GeneratedRegex(@"(?:^audiobook[\s:-]+)|(?:[\(\[]\s*|\s*[-:–—]\s+)(?:(?:unabridged|abridged)\s+)?(?:audiobooks?|audio[ -]?books?|audio[ -]?cds?|hörbuch|hörbücher|hoerbuch|hoerbuecher)(?:\s+edition)?(?:\s*[\)\]]|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
         private static partial Regex AudioEditionTitle();
 
-        [GeneratedRegex(@"^\s*(?:(?:unabridged|abridged)\s+)?(?:audiobooks?|audio[ -]?books?|audio[ -]?cds?|audio[ -]?cassettes?|mp3[ -]?cds?|hörbücher?|hoerbuecher?|spoken[ -]?word|audible[ -]?audio)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        [GeneratedRegex(@"^\s*(?:(?:unabridged|abridged)\s+)?(?:audiobooks?|audio[ -]?books?|audio[ -]?cds?|audio[ -]?cassettes?|mp3[ -]?cds?|hörbuch|hörbücher|hoerbuch|hoerbuecher|spoken[ -]?word|audible[ -]?audio)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
         private static partial Regex AudioFormat();
 
         [GeneratedRegex("^OL[0-9]{1,12}W$")]
