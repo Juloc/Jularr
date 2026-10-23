@@ -374,7 +374,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         public override void Validate()
         {
             base.Validate();
-            if (!System.Text.RegularExpressions.Regex.IsMatch(WorkId, @"\AOL[0-9]{1,12}W\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+            if (!global::System.Text.RegularExpressions.Regex.IsMatch(WorkId, @"\AOL[0-9]{1,12}W\z", global::System.Text.RegularExpressions.RegexOptions.CultureInvariant))
                 throw new DataValidationException(nameof(WorkId), "invalid_value");
         }
     }
