@@ -60,6 +60,8 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(catalog.Single(item => item.Key == "standardebooks").IsConfigured);
             Assert.IsFalse(catalog.Single(item => item.Key == "opds").IsConfigured);
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT \"AcquisitionConnectionTypeId\"::bigint FROM \"AcquisitionConnections\" ORDER BY \"Id\" LIMIT 1"));
+            // Bulk setup must not silently activate download sources before a workspace is confirmed.
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT \"IsEnabled\"::int::bigint FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 3 LIMIT 1"));
 
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Sources");
             var html = await page.Content.ReadAsStringAsync();
