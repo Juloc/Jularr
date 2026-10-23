@@ -127,7 +127,12 @@ private fun TvSidebarLink(
             .selectable(selected = selectedHere, onClick = { onSelect(item.route) })
             .reportFocus { hasFocus ->
                 focused = hasFocus
-                if (hasFocus) focusMemory.remember("sidebar", TvNavigation.screenKey(item.route))
+                if (hasFocus) focusMemory.remember("sidebar", when (item.route) {
+                    TvRoute.Home -> "home"
+                    TvRoute.Watchlist -> "watchlist"
+                    TvRoute.Settings -> "settings"
+                    TvRoute.ProfileSelect -> "profile_select"
+                })
             }
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
