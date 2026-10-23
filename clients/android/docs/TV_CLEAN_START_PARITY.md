@@ -54,15 +54,21 @@ Do not replace the original TV screens or add a backend endpoint without owner d
    account lists, history, and every original feature are **not** restored yet.
    The active V1 path now has tested stack-aware navigation, original TV detail
    composables, and a V1 episode detail page built from verified V1 DTOs.
-2. **Multiaccount / device identity**: current encrypted tokens are scoped by *server
-   origin*, not account identity. Additional sign-ins to the same Jularr server do not
-   yet have the old multiaccount account-picking behavior. No username is fabricated.
+2. **Multiaccount / device identity**: encrypted device bearers are now isolated in
+   independently selectable account slots under each server origin; new accounts can
+   be paired without overwriting existing ones. Account labels are local opaque slot
+   names rather than invented server usernames. Live Android-Keystore switching
+   and stale-request rotation still require device tests.
 3. **Discover**: provider search in the active TV screen currently covers movie/series.
    The API adapter supports books/manga/other external catalog types and person/credit
    details for non-video catalog types still need dedicated TV screens; film/series
    Work credits, person details and local filmography are now wired.
-4. **Home**: full personalized shelf composition is not yet parity. HomeLayout exposes
-   visibility/order; it does not materialize arbitrary recommendation rows.
+4. **Home**: the Web Home uses real provider-backed Discover rankings, *not*
+   a new personalized recommendation endpoint. V1 already supports
+   `/api/v1/discover/shelves`, `/api/v1/discover/feed` and scopes. The TV Home
+   now displays scoped Trending/Top/New/Upcoming under HomeLayout shelf 5
+   when available, and separately preserves local Continue and Recently Added.
+   Provider availability, TV hero parity and physical D-Pad need real testing.
 5. **Playback**: the Media3 + V1 extras wiring has no confirmed real-device/live-server
    verification for HLS segment token rotations, codecs, FFmpeg remux, stop/restart,
    audio switching and subtitle track rendering.
@@ -208,11 +214,15 @@ The latest Android CI and live hardware tests remain separate quality gates.
   supports pairing additional accounts and switching between their active tokens.
   Each token update is bound to its immutable slot ID, avoiding cross-account
   contamination from an in-flight request. Usernames are not inferred from tokens.
-- Home now reads supported video shelf order/visibility (Continue Watching and
-  Recently Added) from `/api/v1/home/layout`. Reading/listening shelves are not video
-  TV content. A general personalized Recommendations shelf has no directly
-  equivalent combined content contract; Work-level recommendations must not
-  be passed off as personalized Home recommendations.
+- Home reads configured visibility/order (Continue Watching, Recently Added
+  and Recommendations) from `/api/v1/home/layout`. The Web Home builds
+  Recommendations from existing `/api/v1/discover/shelves` and provider
+  `/api/v1/discover/feed` calls for Trending/Top/New/Upcoming by scope.
+  The TV now uses that same source, never guesses a WorkId from a TMDB ID,
+  and presents ranked rows using the original TV D-Pad navigation style.
+  Non-video Reading/Listening shelves are outside the video TV screen.
+  Favorites on Web are backed by the existing Watchlist API, so TV labels
+  now say Favoriten without creating a new backend route.
 - Home/search/watchlist now read a first 100-item page and expose focusable
   D-pad `Weitere laden` controls; subsequent pages are requested individually
   with the correct query and V1 ID mapping. The old 20-page/2,000-result cutoff
