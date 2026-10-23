@@ -65,6 +65,39 @@ namespace Jularr.Integrations.Logic.OpenLibrary
             return new OpenLibraryWork(workId, title, [.. authors.Select(author => author.Name)], year, description, cover > 0 ? cover : null) { People = authors };
         }
 
+        // An ISBN identifies an edition, never a separate Work. Resolve its one canonical Work before importing it.
+        public async Task<OpenLibraryWork?> ReadWorkForIsbnAsync(string isbn, CancellationToken ct)
+        {
+            if (isbn.Length != 13 || !isbn.All(char.IsAsciiDigit))
+            {
+                throw new OpenLibraryException(OpenLibraryFailure.NotFound, "Invalid ISBN.");
+            }
+
+            JsonDocument document;
+            try
+            {
+                document = await GetAsync("isbn/" + isbn + ".json", ct);
+            }
+            catch (OpenLibraryException exception) when (exception.Failure == OpenLibraryFailure.NotFound)
+            {
+                return null;
+            }
+
+            using (document)
+            {
+                if (!document.RootElement.TryGetProperty("works", out var works) || works.ValueKind != JsonValueKind.Array)
+                {
+                    return null;
+                }
+
+                var ids = works.EnumerateArray().Where(value => value.ValueKind == JsonValueKind.Object)
+                    .Select(value => ReadString(value, "key"))
+                    .Where(key => key is not null && WorkId().IsMatch(key.Split('/').Last()))
+                    .Select(key => key!.Split('/').Last()).Distinct(StringComparer.Ordinal).Take(2).ToArray();
+                return ids.Length == 1 ? await ReadWorkAsync(ids[0], ct) : null;
+            }
+        }
+
         // The work's editions; one page is enough to know its languages and formats.
         public async Task<IReadOnlyList<OpenLibraryEdition>> ReadEditionsAsync(string workId, CancellationToken ct)
         {
