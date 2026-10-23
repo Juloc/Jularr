@@ -4,6 +4,22 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "activity.files": [
+   "Files",
+   "Dateien"
+  ],
+  "activity.files.view": [
+   "View torrent files",
+   "Torrent-Dateien anzeigen"
+  ],
+  "activity.files.empty": [
+   "No torrent files were reported.",
+   "Keine Torrent-Dateien gefunden."
+  ],
+  "activity.files.unavailable": [
+   "The torrent client's file list is currently unavailable.",
+   "Die Dateiliste des Torrent-Clients ist derzeit nicht verfügbar."
+  ],
   "hint.acquisition.Nyaa.placeholder": [
    "https://nyaa.media",
    "https://nyaa.media"
