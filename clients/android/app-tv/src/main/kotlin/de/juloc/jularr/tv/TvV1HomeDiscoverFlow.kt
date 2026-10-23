@@ -91,7 +91,15 @@ internal class TvV1HomeDiscoverFlow(
                 }
             }.awaitAll().filterNotNull()
         }
-        val complete = tvV1HomeVideoFeeds(scopes, cached + extra)
+        // An empty/malformed cached pair must not shadow a valid provider answer
+        // for the same scope/feed. Keep unaffected cached rows authoritative.
+        val merged = cached.filterNot { old ->
+            extra.any {
+                it.scopeSlug == old.scopeSlug &&
+                    it.discoverFeedTypeId == old.discoverFeedTypeId
+            }
+        } + extra
+        val complete = tvV1HomeVideoFeeds(scopes, merged)
         onUpdate(complete)
         return complete
     }
