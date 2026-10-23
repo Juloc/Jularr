@@ -64,6 +64,18 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
+        public async Task<OpenLibraryWork?> ReadWorkForIsbnAsync(string isbn, CancellationToken ct)
+        {
+            try
+            {
+                return await openLibrary.ReadWorkForIsbnAsync(isbn, ct);
+            }
+            catch (OpenLibraryException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
         public async Task<long> ImportAsync(LogicContext context, MediaSubtype? subtype, string workId, CancellationToken ct)
         {
             // Read before the short write batch.
