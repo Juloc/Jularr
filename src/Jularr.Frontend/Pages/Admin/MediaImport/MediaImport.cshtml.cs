@@ -159,7 +159,8 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 .Attribute("data-import-has-more", result.RemainingJson is null ? "false" : "true"));
             var shown = rows.Where(row => row.OutcomeTypeId != MediaImportOutcomeType.Skipped).ToArray();
             content.Add(new Div(new Table<MediaImportResultRowV1>(shown)
-                .Content("media.title", row => new Div(new Truncated(row.Title ?? "—")).Class("media-import__title"))
+                .Content("media.title", row => new Div(new Truncated(row.Title ?? "—")).Class("media-import__title")
+                    .Attribute("data-import-result-index", row.Index.ToString(CultureInfo.InvariantCulture)))
                 .Content("table.status", row => row.Searches
                     ? new Div(Chip(OutcomeChip(row.OutcomeTypeId), "import.outcome." + row.OutcomeTypeId), Chip(("info", "search"), "import.searches")).Class("media-import__chips")
                     : Chip(OutcomeChip(row.OutcomeTypeId), "import.outcome." + row.OutcomeTypeId))
