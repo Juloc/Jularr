@@ -111,7 +111,7 @@ namespace Jularr.Backend.Tests
             {
                 var html = await downloads.Content.ReadAsStringAsync();
                 Assert.AreEqual(HttpStatusCode.OK, downloads.StatusCode, html);
-                StringAssert.Contains(html, "Jularr's own Usenet downloader needs");
+                StringAssert.Contains(html, "Jularr&#x27;s own Usenet downloader needs");
             }
 
             // After confirming Direct storage, Anna's Archive may be configured without a warning.
