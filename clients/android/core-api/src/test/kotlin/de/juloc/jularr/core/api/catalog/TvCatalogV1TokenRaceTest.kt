@@ -29,6 +29,7 @@ class TvCatalogV1TokenRaceTest {
         val finishFirst = CountDownLatch(1)
         val sawUnauthorized = AtomicBoolean(false)
         val unexpected = AtomicReference<Throwable?>()
+        val delivered = AtomicReference<List<TvContinueItemV1>?>()
 
         server.createContext("/api/v1/continue") { exchange ->
             if (exchange.requestHeaders.getFirst("Authorization") == "Bearer fresh-token") {
@@ -41,7 +42,11 @@ class TvCatalogV1TokenRaceTest {
                 } else if (delayedStatus == 401) {
                     exchange.respond(401, """{"code":"invalid_token","resourceKey":"invalid_token"}""")
                 } else {
-                    exchange.respond(200, "[]", "stale-token")
+                    exchange.respond(200, """[{"workId":666,"mediaAssetId":9222,
+                        "mediaAssetTypeId":1,"mediaTypeId":2,"mediaSubtypeId":null,
+                        "title":"Old account private media","releaseYear":2026,"posterUrl":null,
+                        "workUnitTypeId":2,"unitNumber":1,"parentUnitNumber":1,
+                        "positionMs":1000,"durationMs":40000,"progression":null}]""", "stale-token")
                 }
             }
         }
@@ -54,7 +59,7 @@ class TvCatalogV1TokenRaceTest {
             val api = HttpTvCatalogV1Client("http://127.0.0.1:${server.address.port}", tokens)
             val delayed = Thread {
                 try {
-                    runBlocking { api.continueWatching() }
+                    delivered.set(runBlocking { api.continueWatching() })
                 } catch (failure: AppApiException) {
                     if (failure.statusCode == 401) sawUnauthorized.set(true) else unexpected.set(failure)
                 } catch (failure: Throwable) {
@@ -71,6 +76,10 @@ class TvCatalogV1TokenRaceTest {
             assertNull(unexpected.get())
             assertFalse("A stale 401 must not sign out the refreshed profile", sawUnauthorized.get())
             assertEquals("fresh-token", tokens.current)
+            assertEquals(
+                "A late HTTP 200 from the previous viewer must be discarded and re-read",
+                emptyList<TvContinueItemV1>(), delivered.get(),
+            )
         } finally {
             finishFirst.countDown()
             server.stop(0)
