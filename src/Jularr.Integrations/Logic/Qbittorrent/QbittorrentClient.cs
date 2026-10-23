@@ -113,6 +113,22 @@ namespace Jularr.Integrations.Logic.Qbittorrent
             return new QbittorrentSnapshot(torrents);
         }
 
+        public async Task<IReadOnlyList<QbittorrentFile>> GetFilesAsync(QbittorrentConnection connection, string hash, CancellationToken ct)
+        {
+            var session = await LoginAsync(connection, ct);
+            if (session is null) throw new QbittorrentException("The torrent client did not accept the login.");
+            using var response = await SendAsync(connection, session, HttpMethod.Get,
+                "/api/v2/torrents/files?hash=" + Uri.EscapeDataString(hash), null, ct);
+            if (!response.IsSuccessStatusCode) throw new QbittorrentException("Cannot list the torrent files.");
+
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            return [.. document.RootElement.EnumerateArray().Select(item => new QbittorrentFile(
+                ReadString(item, "name") ?? "",
+                Math.Max(0, ReadLong(item, "size")),
+                Math.Clamp(ReadDouble(item, "progress"), 0, 1),
+                ReadLong(item, "priority") > 0))];
+        }
+
         public async Task RemoveAsync(QbittorrentConnection connection, string hash, bool deleteFiles, CancellationToken ct)
         {
             var session = await LoginAsync(connection, ct);
