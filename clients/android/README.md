@@ -2,13 +2,13 @@
 
 This directory contains the first-party Android phone and Android TV clients defined by [`docs/ANDROID_CLIENTS.md`](../../docs/ANDROID_CLIENTS.md).
 
-The clients talk to the server over the `/api/client/v1` contract; `core-api` owns that contract and mirrors it to the server.
+The active **Android TV** client authenticates with device-pairing bearer tokens and uses the clean-start `/api/v1` catalog, profile and playback contracts. The historic `/api/client/v1` documentation reflects the imported phone/legacy foundation, not the launched TV runtime. See [TV V1 audit](docs/TV_V1_FULL_AUDIT_2026-10-23.md).
 
 ## Modules
 
 - `app-mobile`: phone shell; the full Jularr web UI remains the normal Library/Learn/Settings surface, while episode playback becomes native.
-- `app-tv`: native TV shell and player surface.
-- `core-api`: versioned `/api/client/v1` route/compatibility contract.
+- `app-tv`: native V1 TV shell, pairing, catalog, Favorites, Discover and Media3 player. Dormant cookie-controller paths were removed from this module.
+- `core-api`: shared historical mobile-client APIs plus the TV-specific bearer-authenticated `/api/v1` catalog, profile, playback and playback-extras adapters.
 - `core-model`: shared immutable client models.
 - `core-player`: Media3 player/session foundation and deterministic direct/fallback selection.
 - `core-session`: shared playback-session/companion command models for the later pairing slice.
@@ -43,7 +43,7 @@ gradle :core-api:testDebugUnitTest :core-model:testDebugUnitTest :core-player:te
 gradle :app-mobile:assembleDebug :app-tv:assembleDebug
 ```
 
-The shared models/routes mirror the current server `/api/client/v1` contract, including profile-scoped playback progress and media-storage recovery/Wake-on-LAN capability state.
+The active TV app uses `/api/v1`; Wake-on-Demand is server-controlled and the TV retries only `storage_waking`. Android JVM/HTTP contract tests are not physical TV/Media3/NAS end-to-end verification. For device acceptance use [TV V1 E2E test plan](docs/TV_V1_PARITY_E2E_TESTPLAN.md).
 
 ## Parallel app ownership
 
