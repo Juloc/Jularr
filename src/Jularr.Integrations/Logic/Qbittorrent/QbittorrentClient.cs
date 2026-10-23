@@ -132,7 +132,7 @@ namespace Jularr.Integrations.Logic.Qbittorrent
         public async Task RemoveAsync(QbittorrentConnection connection, string hash, bool deleteFiles, CancellationToken ct)
         {
             var session = await LoginAsync(connection, ct);
-            if (session is null) return;
+            if (session is null) throw new QbittorrentException("The torrent client did not accept the login.");
             using var response = await SendAsync(connection, session, HttpMethod.Post, DeletePath,
                 [new("hashes", hash), new("deleteFiles", deleteFiles ? "true" : "false")], ct);
             if (!response.IsSuccessStatusCode) throw new QbittorrentException("The torrent client did not remove the torrent.");
@@ -141,7 +141,7 @@ namespace Jularr.Integrations.Logic.Qbittorrent
         public async Task SetPausedAsync(QbittorrentConnection connection, string hash, bool isPaused, CancellationToken ct)
         {
             var session = await LoginAsync(connection, ct);
-            if (session is null) return;
+            if (session is null) throw new QbittorrentException("The torrent client did not accept the login.");
             // qBittorrent 5 renamed pause/resume to stop/start.
             using var response = await SendAsync(connection, session, HttpMethod.Post,
                 isPaused ? "/api/v2/torrents/stop" : "/api/v2/torrents/start", [new("hashes", hash)], ct);
