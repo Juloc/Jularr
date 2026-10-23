@@ -83,6 +83,46 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Sources_ShowNativeStoragePrerequisitesBeforeActivation()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+
+            using (var catalog = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Sources"))
+            {
+                var html = await catalog.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, catalog.StatusCode, html);
+                StringAssert.Contains(html, "native-storage-notice");
+                StringAssert.Contains(html, "Anna's Archive");
+                StringAssert.Contains(html, "/Admin/DownloadStorage");
+            }
+
+            using (var newAnna = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition?Type=AnnasArchive"))
+            {
+                var html = await newAnna.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, newAnna.StatusCode, html);
+                StringAssert.Contains(html, "native-storage-notice");
+                StringAssert.Contains(html, "Configure download storage");
+            }
+
+            using (var downloads = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads"))
+            {
+                var html = await downloads.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, downloads.StatusCode, html);
+                StringAssert.Contains(html, "Jularr's own Usenet downloader needs");
+            }
+
+            // After confirming Direct storage, Anna's Archive may be configured without a warning.
+            await DownloadStorageTests.ConfigureAsync(host, storage.Path, Jularr.Backend.Data.Enums.Storage.DownloadStorageArea.Direct);
+            using (var configured = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition?Type=AnnasArchive"))
+            {
+                var html = await configured.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, configured.StatusCode, html);
+                Assert.IsFalse(html.Contains("native-storage-notice", StringComparison.Ordinal));
+            }
+        }
+
+        [TestMethod]
         public async Task Opds_LogsInOnlyAtItsOwnOriginRenewsSignedLinksAndImports()
         {
             using var storage = new TemporaryDirectory();
