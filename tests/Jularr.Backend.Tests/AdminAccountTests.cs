@@ -228,6 +228,51 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Redirect, deniedPage.StatusCode);
         }
 
+        [TestMethod]
+        public async Task PasswordLink_SetsANewPasswordOnce_AndEndsTheOpenSessions()
+        {
+            await using var host = await Host.CreateAsync();
+            await SignInAsync(host);
+            var accountId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Accounts\" WHERE \"Email\" = 'a@example.test'"))!;
+
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/accounts/" + accountId + "/password-link");
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var token = (await created.Content.ReadFromJsonAsync<AccountPasswordLinkResultV1>())!.Token;
+            Assert.AreEqual(43, token.Length);
+
+            const string next = "Brand-New-Password-99";
+            using var weak = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/password-reset", new ResetPasswordDataV1(token, "short-1", "short-1"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, weak.StatusCode);
+            using var unknown = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/password-reset", new ResetPasswordDataV1(new string('A', 43), next, next));
+            Assert.AreEqual(HttpStatusCode.BadRequest, unknown.StatusCode);
+
+            using var reset = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/password-reset", new ResetPasswordDataV1(token, next, next));
+            Assert.AreEqual(HttpStatusCode.OK, reset.StatusCode, await reset.Content.ReadAsStringAsync());
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/password-reset", new ResetPasswordDataV1(token, next + "x", next + "x"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, again.StatusCode);
+
+            // The new password ends the sessions that were open.
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/accounts/" + accountId);
+            Assert.AreEqual(HttpStatusCode.Unauthorized, read.StatusCode);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var oldLogin = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            Assert.AreEqual(HttpStatusCode.Unauthorized, oldLogin.StatusCode);
+            using var newLogin = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", next));
+            Assert.AreEqual(HttpStatusCode.OK, newLogin.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task ResetPasswordPage_RendersForAVisitor_WithTheTokenAndPasswordFields()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            var token = new string('A', 43);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Account/ResetPassword?token=" + token);
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode);
+            var html = await page.Content.ReadAsStringAsync();
+            StringAssert.Contains(html, token);
+            StringAssert.Contains(html, "type=\"password\"");
+        }
+
         private static async Task SignInAsync(Host host)
         {
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");

@@ -338,8 +338,11 @@ namespace Jularr.Backend.Tests
             var body = await login.Content.ReadAsStringAsync();
             Assert.IsFalse(body.Contains("token", StringComparison.OrdinalIgnoreCase));
             Assert.IsFalse(body.Contains("password", StringComparison.OrdinalIgnoreCase));
+            // The cookie is Secure only when the request itself is https: a browser drops a Secure cookie that comes over
+            // plain http (a server reached by its LAN address), which made every sign-in end on the sign-in page.
             Assert.IsTrue(login.Headers.GetValues("Set-Cookie").Any(value => value.Contains("httponly", StringComparison.OrdinalIgnoreCase)
-                && value.Contains("secure", StringComparison.OrdinalIgnoreCase)));
+                && value.Contains("samesite=strict", StringComparison.OrdinalIgnoreCase)
+                && !value.Contains("secure", StringComparison.OrdinalIgnoreCase)));
 
             using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/profiles/101");
             Assert.AreEqual(HttpStatusCode.OK, read.StatusCode);
@@ -351,6 +354,31 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"AccountSessions\" SET \"RevokedAt\" = now()");
             using var revoked = await host.SendAsync(HttpMethod.Get, "/api/v1/profiles/101");
             Assert.AreEqual(HttpStatusCode.Unauthorized, revoked.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task ChangePassword_NeedsTheCurrentPassword_TheNewOneSignsIn_AndTheOldOneStops()
+        {
+            await using var host = await Host.CreateAsync();
+            await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("A@example.test", Password));
+            Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
+
+            const string next = "Another-Password-77";
+            using var wrongCurrent = await host.SendAsync(HttpMethod.Put, "/api/v1/account/password", new { currentPassword = "wrong-password-1", newPassword = next, newPasswordConfirmation = next });
+            Assert.AreEqual(HttpStatusCode.BadRequest, wrongCurrent.StatusCode);
+            using var mismatch = await host.SendAsync(HttpMethod.Put, "/api/v1/account/password", new { currentPassword = Password, newPassword = next, newPasswordConfirmation = next + "x" });
+            Assert.AreEqual(HttpStatusCode.BadRequest, mismatch.StatusCode);
+            using var weak = await host.SendAsync(HttpMethod.Put, "/api/v1/account/password", new { currentPassword = Password, newPassword = "short-1", newPasswordConfirmation = "short-1" });
+            Assert.AreEqual(HttpStatusCode.BadRequest, weak.StatusCode);
+
+            using var changed = await host.SendAsync(HttpMethod.Put, "/api/v1/account/password", new { currentPassword = Password, newPassword = next, newPasswordConfirmation = next });
+            Assert.AreEqual(HttpStatusCode.OK, changed.StatusCode);
+
+            using var oldPassword = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("A@example.test", Password));
+            Assert.AreEqual(HttpStatusCode.Unauthorized, oldPassword.StatusCode);
+            using var newPassword = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("A@example.test", next));
+            Assert.AreEqual(HttpStatusCode.OK, newPassword.StatusCode);
         }
 
         [TestMethod]

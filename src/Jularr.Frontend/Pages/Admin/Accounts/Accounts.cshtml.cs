@@ -14,7 +14,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
 {
     public sealed class AccountsModel(ReadAccountsV1 accounts, ReadAccountV1 account, UpdateAccountV1 update, ReadAccountProfilesV1 profiles,
         AddAccountProfileV1 addProfile, RemoveAccountProfileV1 removeProfile, ReadAccountSessionsV1 sessions, RevokeAccountSessionV1 revokeSession,
-        ReadProfileMediaAccessV1 readMedia, UpdateProfileMediaAccessV1 updateMedia, ResetProfilePinV1 resetPin, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadProfileMediaAccessV1 readMedia, UpdateProfileMediaAccessV1 updateMedia, ResetProfilePinV1 resetPin, CreateAccountPasswordLinkV1 passwordLink, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private PageResult<AccountDetailsV1>? _accounts;
         private AccountDetailsV1? _selected;
@@ -27,6 +27,9 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
         private long? _pinProfileId;
         private PageResult<AccountSessionDetailsV1>? _sessions;
         private RevokeAccountSessionParametersV1? _revocation;
+        private string? _passwordLinkUrl;
+        private DateTime? _passwordLinkExpires;
+        private bool _creatingLink;
 
         [BindProperty(SupportsGet = true)]
         public long? AccountId { get; set; }
@@ -44,6 +47,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
         {
             page.Title("admin.accounts.title");
             page.Navigation("nav.admin");
+            page.Asset("Pages/Admin/Accounts/Accounts.entry.scss");
 
             // Responsive list and editor.
             page.Content.Add(new Split(split =>
@@ -79,6 +83,15 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                         _input ?? new UpdateAccountDataV1(_selected.DisplayName, _selected.AccountRoleTypeId, _selected.IsEnabled, _selected.MayConfirmSources, _selected.TranscodingPriority),
                         _input is null ? null : FormError));
                     split.Secondary.Add(new P(new Text("admin.accounts.sessionWarning")));
+
+                    // A link with which the person (the Owner for their own account, too) sets a new password.
+                    split.Secondary.Add(new Form<AccountParametersV1>(form => form.Submit("admin.accounts.passwordLink"),
+                        Address(_selected.Id) + "&handler=PasswordLink", antiforgery.GetAndStoreTokens(HttpContext).RequestToken, null, _creatingLink ? FormError : null));
+                    if (_passwordLinkUrl is not null)
+                    {
+                        split.Secondary.Add(new P(new Text("admin.accounts.passwordLinkShown")).Attribute("role", "status"));
+                        split.Secondary.Add(new P(new ValueText(_passwordLinkUrl)).Class("account-link"));
+                    }
 
                     // Assign existing profile access.
                     split.Secondary.Add(new H2(new Text("admin.accounts.profiles")));
@@ -193,6 +206,18 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
             _mediaProfileId = profileId;
             await updateMedia.ExecuteAsync<UpdateResult>(new ProfileMediaAccessParametersV1(profileId), new UpdateProfileMediaAccessDataV1(blockedKeys ?? []), HttpContext.RequestAborted);
             return LocalRedirect(Address(AccountId));
+        }
+
+        public async Task<IActionResult> OnPostPasswordLinkAsync()
+        {
+            _creatingLink = true;
+            var result = await passwordLink.ExecuteAsync<AccountPasswordLinkResultV1>(SelectedParameters(), default, HttpContext.RequestAborted);
+            _creatingLink = false;
+            _passwordLinkUrl = $"{Request.Scheme}://{Request.Host}/Account/ResetPassword?token={result.Token}";
+            _passwordLinkExpires = result.ExpiresAt;
+            await LoadDataAsync();
+            PreparePage();
+            return Page();
         }
 
         public async Task<IActionResult> OnPostResetPinAsync(long profileId)
