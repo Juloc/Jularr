@@ -276,3 +276,29 @@ subtype. Items carry `namespace` and `externalId`, not a TMDB ID.
   without genuine metadata.
 - New JVM tests validate priority, the 8-item limit, repeated works and
   catalog identity; real remote/TV visual playback tests remain outstanding.
+
+
+## V1 Favorites Collections (2026-10-23)
+
+- **Web Favorites is not merely Watchlist**: the clean-start server exposes
+  `GET /api/v1/collections` and paged
+  `GET /api/v1/collections/{collectionId}/works` with `profile.collections`
+  and enabled `Library` + `Collections` modules. The original TV Favorites
+  screen now offers a D-Pad-accessible collections switcher.
+- The normal Favorites page is always available when Library is allowed.
+  Collections are optional and failed/unavailable collection listing never
+  replaces the base favorites with fabricated data. A selected collection
+  supplies its own video Works and page cursor, keeping **CollectionId** separate
+  from **WorkId**. Media types 1/2 plus Anime subtype 1 are requested; nonvideo
+  Works are filtered before sending cards into TV detail/Media3 flows.
+- Returning with the remote's Back key exits the collection first, then
+  the original TV route. Large collections request the next 100 items only
+  when the user activates **Weitere Favoriten laden**.
+- Tests verify existing backend JSON/routes, authorization bearer, subtype
+  filter, profile module/permission gating, pagination beyond 100 Works,
+  and no substitution of WorkId for CollectionId.
+- **Not yet part of the TV client:** collection editing, creation, deletion
+  and membership changes; these are intentionally not fabricated or enabled
+  without a confirmed writable UI contract. Web can manage the collections.
+  Device D-Pad/focus and live multiaccount collection switching are still
+  release acceptance tests.
