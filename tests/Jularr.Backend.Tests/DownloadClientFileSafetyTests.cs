@@ -57,6 +57,28 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void MountRelativePaths_NeverEscapeTheirSelectedStorageRoot()
+        {
+            Assert.AreEqual("Downloads/Complete", DownloadClientFileSafety.StorageRoot(
+                "complete", "/data/complete", "Downloads/Complete", "/data/complete"));
+            Assert.AreEqual("Movies", DownloadClientFileSafety.StorageRoot(
+                "complete", "/data/complete/movies", "Movies", "/data/complete"));
+            Assert.AreEqual("Downloads/Complete/category", DownloadClientFileSafety.StorageRoot(
+                "complete", "/data/complete", "Downloads/Complete", "/data/complete/category"));
+            Assert.AreEqual("Downloads/Incomplete", DownloadClientFileSafety.StorageRoot(
+                "incomplete", "/data/incomplete", "Downloads/Incomplete", "/data/incomplete"));
+
+            Assert.ThrowsExactly<DataValidationException>(() =>
+                DownloadClientFileSafety.StorageRoot("complete", "/data/complete", "../out", "/data/complete"));
+            Assert.ThrowsExactly<DataValidationException>(() =>
+                DownloadClientFileSafety.StorageRoot("complete", "/data/complete", "/outside", "/data/complete"));
+            Assert.ThrowsExactly<DataValidationException>(() =>
+                DownloadClientFileSafety.StorageRoot("complete", "/data/complete", "Downloads", "/other"));
+            Assert.ThrowsExactly<DataValidationException>(() => DownloadClientFileSafety.StorageRelative("../out"));
+            Assert.ThrowsExactly<DataValidationException>(() => DownloadClientFileSafety.StorageRelative("other\\out"));
+        }
+
+        [TestMethod]
         public void TraversalAndRootDeletion_AreRejected()
         {
             var root = Path.Combine(Path.GetTempPath(), "jularr-sab-console-" + Guid.NewGuid().ToString("N"));
