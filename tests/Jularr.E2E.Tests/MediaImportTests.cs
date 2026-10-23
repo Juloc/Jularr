@@ -111,6 +111,9 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(rows.Nth(0).Locator(".state-chip svg")).ToHaveCountAsync(1);
                 var book = rows.Nth(2);
                 await Assertions.Expect(book.Locator("select[name='Choices[2].Choice']")).ToHaveValueAsync("openlibrary:OL66554W");
+                await book.GetByRole(AriaRole.Button, new() { Name = "Compare editions" }).ClickAsync();
+                await Assertions.Expect(book.Locator("[data-import-edition-details]")).ToContainTextAsync("9780141439518");
+                await Assertions.Expect(book.Locator("[data-import-edition-details]")).ToContainTextAsync("Paperback");
                 await Assertions.Expect(book.Locator("input[type=checkbox][name='Choices[2].Include']")).Not.ToBeCheckedAsync();
                 await Assertions.Expect(rows.Nth(0).Locator("input[type=checkbox][name='Choices[0].Include']")).ToBeCheckedAsync();
                 await Assertions.Expect(rows.Nth(0).Locator("select[name='Choices[0].Action']")).ToHaveValueAsync("");

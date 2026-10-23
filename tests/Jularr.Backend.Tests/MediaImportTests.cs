@@ -544,6 +544,8 @@ namespace Jularr.Backend.Tests
             var body = await response.Content.ReadAsStringAsync();
             StringAssert.Contains(body, "Paperback");
             StringAssert.Contains(body, "9780141439518");
+            StringAssert.Contains(body, "Penguin");
+            StringAssert.Contains(body, "eng");
             Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
             using var invalid = await host.SendAsync(HttpMethod.Get, "/Admin/Import?handler=BookEditions&workId=invalid");
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);

@@ -335,8 +335,17 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
 
             if (row.TypeKey == "book" && row.Candidates.Any(candidate => candidate.Source == "openlibrary"))
             {
-                parts.Add(new Button(new Text("import.editions")).Compact().Attribute("type", "button")
-                    .Attribute("data-import-editions", ""));
+                var compare = new Button(new Text("import.editions")).Compact().Attribute("type", "button").Attribute("data-import-editions", "");
+                compare.TextAttribute("data-import-edition-loading", "import.edition.loading");
+                compare.TextAttribute("data-import-edition-choose", "import.edition.choose");
+                compare.TextAttribute("data-import-edition-empty", "import.edition.empty");
+                compare.TextAttribute("data-import-edition-error", "import.edition.error");
+                compare.TextAttribute("data-import-edition-title", "import.edition.title");
+                compare.TextAttribute("data-import-edition-language", "import.edition.language");
+                compare.TextAttribute("data-import-edition-year", "import.edition.year");
+                compare.TextAttribute("data-import-edition-format", "import.edition.format");
+                compare.TextAttribute("data-import-edition-publisher", "import.edition.publisher");
+                parts.Add(compare);
             }
 
             return new Div([.. parts]).Class("media-import__stack");
