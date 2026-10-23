@@ -539,6 +539,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     {
                         form.Content(new FolderPicker(assets, browse, input.LocalPath ?? "", nameof(input.LocalPath), "/Admin/Storage",
                             storageMountFieldName: nameof(input.DownloadStorageMountId), isVisible: input.DownloadStorageMountId is not null));
+                        form.Content(new FolderPicker(assets, browse, input.IncompleteLocalPath ?? "", nameof(input.IncompleteLocalPath), "/Admin/Storage",
+                            storageMountFieldName: nameof(input.DownloadStorageMountId), isVisible: input.DownloadStorageMountId is not null));
                     }
                 }
 
