@@ -72,14 +72,14 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public void Selection_NoFallback_Leaves_TheOriginal_Without_Preference()
+        public void Selection_NoFallback_LeavesOtherLanguagesForManualReview()
         {
-            // Without a fallback the original language is not preferred; the other file wins the tie.
             var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.None, "IT"),
                 [Candidate("Héctor García - IKIGAI (ES) (epub)"), Candidate("Héctor García - IKIGAI (IT) (epub)")]);
 
-            Assert.IsNotNull(result.Winner);
-            Assert.AreEqual("Héctor García - IKIGAI (ES) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+            Assert.IsNull(result.Winner);
+            Assert.IsTrue(result.Ranked.All(evaluation => evaluation.Decision == SelectionDecision.ManualReview));
+            Assert.IsTrue(result.Ranked.All(evaluation => evaluation.Reasons.Any(reason => reason.Code == "LanguageNotAllowed")));
         }
 
         [TestMethod]
@@ -135,6 +135,28 @@ namespace Jularr.Backend.Tests
             Assert.IsNotNull(result.Winner);
             Assert.AreEqual("Héctor García - IKIGAI (DE) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
             Assert.AreEqual("IndexerPriority", result.WinnerReason!.Code);
+        }
+
+        [TestMethod]
+        public void Selection_RequestedLanguageBeatsHigherPriorityFallback()
+        {
+            var result = ReleaseSelectionEngine.Select(Profile(),
+                [Candidate("Héctor García - IKIGAI (EN) (epub)", false, 1, "Usenet"),
+                 Candidate("Héctor García - IKIGAI (DE) (epub)", false, 50, "Anna")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (DE) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+        }
+
+        [TestMethod]
+        public void Selection_UnrequestedLanguageIsManualEvenWhenItIsTheOnlyResult()
+        {
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Original, "JA"),
+                [Candidate("Héctor García - IKIGAI (ES) (epub)")]);
+
+            Assert.IsNull(result.Winner);
+            Assert.AreEqual(SelectionDecision.ManualReview, result.Ranked.Single().Decision);
+            Assert.AreEqual("LanguageNotAllowed", result.Ranked.Single().Reasons.Last().Code);
         }
 
         [TestMethod]

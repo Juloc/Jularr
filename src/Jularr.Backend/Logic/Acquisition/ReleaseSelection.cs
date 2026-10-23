@@ -21,9 +21,10 @@ namespace Jularr.Backend.Logic.Acquisition
             var fallback = asked.Length > 0 ? [] : evaluations.Where(evaluation => UpgradePolicy.IsFallback(profile, evaluation.Candidate.Languages)).ToArray();
 
             var ranked = evaluations
-                .OrderBy(evaluation => evaluation.Candidate.IndexerPriority)
+                .OrderBy(evaluation => profile.IsBook && profile.LanguageOrder.Length > 0
+                    ? asked.Contains(evaluation) ? 0 : fallback.Contains(evaluation) ? 1 : 2 : 0)
+                .ThenBy(evaluation => evaluation.Candidate.IndexerPriority)
                 .ThenBy(evaluation => evaluation.Candidate.IsPart ? 1 : 0)
-                .ThenBy(evaluation => asked.Contains(evaluation) ? 0 : fallback.Contains(evaluation) ? 1 : 2)
                 .ThenBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible => 0, SelectionDecision.ManualReview => 1, _ => 2 })
                 .ThenBy(evaluation => evaluation.QualityRank)
                 .ThenByDescending(evaluation => evaluation.Score?.FormatScore ?? 0)
@@ -82,6 +83,14 @@ namespace Jularr.Backend.Logic.Acquisition
             if (!score.Accepted)
             {
                 return new CandidateEvaluation(candidate, SelectionDecision.Rejected, score, reliability, reasons);
+            }
+
+            // An unrequested language needs a deliberate manual choice; fallback is not an unrestricted download.
+            if (profile.IsBook && profile.LanguageOrder.Length > 0
+                && !UpgradePolicy.IsRequested(profile, candidate.Languages) && !UpgradePolicy.IsFallback(profile, candidate.Languages))
+            {
+                reasons.Add(new SelectionReason(SelectionReasonKind.Profile, "LanguageNotAllowed"));
+                return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
             }
 
             // What is no upgrade of the present quality is only taken by hand, as another version.
