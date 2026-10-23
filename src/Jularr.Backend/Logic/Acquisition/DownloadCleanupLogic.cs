@@ -147,7 +147,7 @@ namespace Jularr.Backend.Logic.Acquisition
                   AND connection."AcquisitionConnectionTypeId" = 2
                   AND (
                     operation."OperationStatusTypeId" = 3 AND connection."RemovesCompleted"
-                    OR operation."OperationStatusTypeId" = 4 AND connection."RemovesFailed"
+                    OR operation."OperationStatusTypeId" = 4 AND operation."ErrorKey" = 'download_failed' AND connection."RemovesFailed"
                   )
                   AND NOT EXISTS (
                     SELECT 1 FROM "DownloadClientCleanups" AS cleanup
@@ -192,6 +192,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 WHERE operation."Id" = @OperationId
                   AND operation."OperationTypeId" = 2
                   AND operation."OperationStatusTypeId" = 4
+                  AND operation."ErrorKey" = 'download_failed'
                   AND operation."ExternalId" IS NOT NULL
                   AND connection."AcquisitionConnectionTypeId" = 2
                   AND connection."RemovesFailed"
