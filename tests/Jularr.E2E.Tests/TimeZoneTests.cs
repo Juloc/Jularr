@@ -24,9 +24,9 @@ namespace Jularr.E2E.Tests
             var germanTime = germanPage.Locator("time[data-local-time]").First;
             await Assertions.Expect(germanTime).ToBeVisibleAsync();
             var instant = await germanTime.GetAttributeAsync("datetime");
-            var germanText = await germanTime.InnerTextAsync();
             var formatted = await germanTime.EvaluateAsync<string>("element => new Intl.DateTimeFormat(document.documentElement.lang || navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(element.getAttribute('datetime')))");
-            Assert.AreEqual(formatted, germanText, "The page must show the browser-local hour, not Docker UTC.");
+            await Assertions.Expect(germanTime).ToHaveTextAsync(formatted);
+            var germanText = await germanTime.InnerTextAsync();
 
             await CheckCalendarTodayAsync(germanPage, "Europe/Berlin");
 
@@ -41,7 +41,9 @@ namespace Jularr.E2E.Tests
             var americanTime = americanPage.Locator("time[data-local-time]").First;
             await Assertions.Expect(americanTime).ToBeVisibleAsync();
             Assert.AreEqual(instant, await americanTime.GetAttributeAsync("datetime"));
-            Assert.AreNotEqual(germanText, await americanTime.InnerTextAsync(), "The same UTC instant must be shown with two different hours.");
+            var americanFormatted = await americanTime.EvaluateAsync<string>("element => new Intl.DateTimeFormat(document.documentElement.lang || navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(element.getAttribute('datetime')))");
+            await Assertions.Expect(americanTime).ToHaveTextAsync(americanFormatted);
+            Assert.AreNotEqual(germanText, americanFormatted, "The same UTC instant must be shown with two different hours.");
 
             await CheckCalendarTodayAsync(americanPage, "America/New_York");
         }
