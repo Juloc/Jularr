@@ -465,6 +465,41 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ImportPage_StreamsActualPerRowOutcomes_BeforeCompletion()
+        {
+            await using var host = await CreateHostAsync(new FakeProviders());
+            using var form = await host.SendAsync(HttpMethod.Get, "/Admin/Import");
+            var token = LibraryTests.Token(await form.Content.ReadAsStringAsync());
+            const string list = """
+                {"version":1,"items":[
+                  {"type":"movie","ids":{"tmdb":"603"},"title":"The Matrix"},
+                  {"type":"movie","ids":{"tmdb":"604"},"title":"The Matrix Reloaded"}
+                ]}
+                """;
+            using var response = await host.SendAsync(HttpMethod.Post, "/Admin/Import?handler=ApplyStream", new FormUrlEncodedContent(
+            [
+                KeyValuePair.Create("__RequestVerificationToken", token),
+                KeyValuePair.Create("Json", list),
+                KeyValuePair.Create("Action", "1")
+            ]));
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            Assert.AreEqual("application/x-ndjson", response.Content.Headers.ContentType?.MediaType);
+            var lines = (await response.Content.ReadAsStringAsync()).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            Assert.AreEqual(4, lines.Length);
+            using var first = System.Text.Json.JsonDocument.Parse(lines[0]);
+            using var rowOne = System.Text.Json.JsonDocument.Parse(lines[1]);
+            using var rowTwo = System.Text.Json.JsonDocument.Parse(lines[2]);
+            using var last = System.Text.Json.JsonDocument.Parse(lines[3]);
+            Assert.AreEqual("started", first.RootElement.GetProperty("kind").GetString());
+            Assert.AreEqual("row", rowOne.RootElement.GetProperty("kind").GetString());
+            Assert.AreEqual("The Matrix", rowOne.RootElement.GetProperty("title").GetString());
+            Assert.AreEqual("Added", rowOne.RootElement.GetProperty("status").GetString());
+            Assert.AreEqual("row", rowTwo.RootElement.GetProperty("kind").GetString());
+            Assert.AreEqual("done", last.RootElement.GetProperty("kind").GetString());
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
         public async Task ImportPage_ANormalUser_IsRefused()
         {
             await using var host = await CreateHostAsync(new FakeProviders());
