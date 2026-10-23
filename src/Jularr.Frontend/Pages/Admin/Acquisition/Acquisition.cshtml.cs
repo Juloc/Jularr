@@ -311,7 +311,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 ["handler"] = "Folders", ["storageMountId"] = storageMountId.ToString(CultureInfo.InvariantCulture)
             });
             using var writer = new StringWriter(CultureInfo.InvariantCulture);
-            FolderPicker.Directories(address, path ?? "", result.Select(item => item.Name).ToArray(), texts, afterName, result.Count == StorageDirectoryV1.PageSize)
+            FolderPicker.Directories(address, path ?? "", result.Select(item => item.Name).ToArray(), texts, afterName, result.Count == StorageDirectoryV1.PageSize,
+                    selectedLabel: string.IsNullOrEmpty(path) ? texts["storage.paths.connectionRoot"] : path)
                 .WriteTo(writer, HtmlEncoder.Default, texts);
             Response.Headers.CacheControl = "no-store";
             return Content(writer.ToString(), "text/html");
@@ -471,7 +472,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                         var browse = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(Address(existing?.Id, type, "Folders"),
                             "storageMountId", input.DownloadStorageMountId?.ToString(CultureInfo.InvariantCulture) ?? "");
                         form.Content(new FolderPicker(assets, browse, input.LocalPath ?? "", nameof(input.LocalPath), "/Admin/Storage",
-                            storageMountFieldName: nameof(input.DownloadStorageMountId), isVisible: input.DownloadStorageMountId is not null));
+                            storageMountFieldName: nameof(input.DownloadStorageMountId), isVisible: input.DownloadStorageMountId is not null,
+                            selectedLabel: string.IsNullOrEmpty(input.LocalPath) ? texts["storage.paths.connectionRoot"] : input.LocalPath));
                     }
                     else form.Text(item => item.LocalPath, "acquisition.connection.localPath");
                 }
