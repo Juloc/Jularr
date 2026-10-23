@@ -32,7 +32,7 @@ import de.juloc.jularr.core.api.catalog.TvDiscoverScopeV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverShelfV1
 
 /** Canonical provider scope/ID data; a TMDB ID is NEVER a WorkId. */
-internal data class TvV1HomeVideoFeed(
+data class TvV1HomeVideoFeed(
     val scopeSlug: String,
     val mediaTypeId: Int,
     val mediaSubtypeId: Int?,
