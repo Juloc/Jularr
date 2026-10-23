@@ -46,6 +46,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import de.juloc.jularr.core.api.catalog.TvContinueItemV1
+import de.juloc.jularr.core.api.catalog.TvDiscoverCatalogItemV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverItemV1
 import de.juloc.jularr.core.model.AnimeSummary
 import de.juloc.jularr.core.model.ClientLibrary
@@ -69,6 +70,7 @@ fun TvHomeScreen(
     onLoadMoreVideos: (() -> Unit)? = null,
     discoverFeeds: List<TvV1HomeVideoFeed> = emptyList(),
     onDiscoverItem: (TvDiscoverItemV1) -> Unit = {},
+    onDiscoverCatalogItem: (TvV1HomeVideoFeed, TvDiscoverCatalogItemV1) -> Unit = { _, _ -> },
 ) {
     var filter by remember {
         mutableStateOf(
@@ -129,6 +131,9 @@ fun TvHomeScreen(
             restoringItem?.startsWith("continue:") == true -> "continue-row"
             restoringItem?.startsWith("discover:") == true -> visibleDiscoverFeeds
                 .firstOrNull { restoringItem.startsWith("discover:${it.key}:") }
+                ?.let { "discover:${it.key}" }
+            restoringItem?.startsWith("catalog:") == true -> visibleDiscoverFeeds
+                .firstOrNull { restoringItem.startsWith("catalog:${it.key}:") }
                 ?.let { "discover:${it.key}" }
             restoringItem?.startsWith("anime:") == true -> {
                 val id = restoringItem.removePrefix("anime:")
@@ -314,14 +319,25 @@ fun TvHomeScreen(
                                     tvV1HomeFeedTitle(feed),
                                     style = MaterialTheme.typography.titleLarge,
                                 )
-                                TvV1HomeDiscoverRow(
-                                    feed = feed,
-                                    serverOrigin = serverOrigin,
-                                    requestHeaders = requestHeaders,
-                                    focusMemory = focusMemory,
-                                    restoringItem = restoringItem,
-                                    onOpen = onDiscoverItem,
-                                )
+                                if (feed.isCatalog) {
+                                    TvV1HomeCatalogRow(
+                                        feed = feed,
+                                        serverOrigin = serverOrigin,
+                                        requestHeaders = requestHeaders,
+                                        focusMemory = focusMemory,
+                                        restoringItem = restoringItem,
+                                        onOpen = onDiscoverCatalogItem,
+                                    )
+                                } else {
+                                    TvV1HomeDiscoverRow(
+                                        feed = feed,
+                                        serverOrigin = serverOrigin,
+                                        requestHeaders = requestHeaders,
+                                        focusMemory = focusMemory,
+                                        restoringItem = restoringItem,
+                                        onOpen = onDiscoverItem,
+                                    )
+                                }
                             }
                         }
                     }
