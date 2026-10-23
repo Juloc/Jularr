@@ -211,6 +211,29 @@ the selected native client, so an unused news server cannot block a scoped SAB j
 
 ## Native and direct download storage
 
+### Exposing an existing host/NAS mount to the download picker
+
+The shipped `compose.yaml` requires an explicit `JULARR_MEDIA` value; it no longer
+silently binds `./media` when that variable is absent. Set this to an **existing
+path on the Docker host** (for example `/mnt/arr_bay4_media`) that is already
+mounted before starting Jularr. Docker then exposes it inside the container as
+`/media`, which the image (and compose environment) allow as a Local storage
+connection. Select `/media` in Storage, then select distinct, already existing
+`Incomplete` and `Complete` subfolders under that connection on the native
+Usenet and direct/browser download storage page. Both download types require
+confirmation independently; no import or cleanup path is inferred from SABnzbd.
+
+If the NAS is attached to a Debian Docker VM, the `JULARR_MEDIA` path refers
+to the **VM host**, not an SMB path known only to Jularr. Check the mount on
+the host with `findmnt -T /mnt/arr_bay4_media`, and verify the container sees
+the files with `docker compose exec jularr ls -la /media`. Do not rely on a
+bind mount of the parent of a NAS mount when nested mounts are not propagated;
+point `JULARR_MEDIA` directly at the mounted directory. A direct SMB connection
+managed by Jularr can still serve libraries and SAB imports, but is not a
+filesystem path for NNTP, 7-Zip, PAR2 or the browser downloader. Mount the
+share in Docker and configure it as a Local path to use it for those jobs.
+
+
 Configure Jularr's own downloads at `/Admin/DownloadStorage`, or at
 `/Setup/DownloadStorage` after library connections when Acquisition is enabled.
 The canonical `DownloadStorageSettings` rows in the fresh Library baseline
