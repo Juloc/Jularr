@@ -136,14 +136,14 @@ function initializeLiveImport(): void {
                 input.value = value;
                 next.append(input);
             };
-            for (const [name, value] of source) {
-                if (typeof value !== "string") continue;
+            source.forEach((value, name) => {
+                if (typeof value !== "string") return;
                 if (name === "__RequestVerificationToken" || name === "Action" || name.startsWith("Defaults[")) hidden(name, value);
                 const match = /^Choices\[(\d+)\]\.(.+)$/.exec(name);
-                if (!match) continue;
+                if (!match) return;
                 const position = waiting.indexOf(Number(match[1]));
                 if (position >= 0 && match[2] !== "Index") hidden("Choices[" + position + "]." + match[2], value);
-            }
+            });
             for (let index = 0; index < waiting.length; index++) hidden("Choices[" + index + "].Index", String(index));
             hidden("Json", remaining);
             const button = document.createElement("button");
