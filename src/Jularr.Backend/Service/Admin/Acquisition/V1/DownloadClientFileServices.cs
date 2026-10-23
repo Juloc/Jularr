@@ -260,8 +260,16 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         // never its mapped root or a sibling; symlinks and overly large trees are refused.
         internal static void DeleteVerifiedCompleted(string root, string relative)
         {
+            // A move-mode import can already have removed the source before cleanup runs.
+            // Validate containment before checking whether that target still exists.
+            if (string.IsNullOrWhiteSpace(relative) || relative.Split('/', '\\').Any(x => x is "." or ".." or ""))
+                throw new DataValidationException(nameof(relative), "invalid_path");
+            var targetPath = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            if (!targetPath.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, comparison))
+                throw new DataValidationException(nameof(relative), "invalid_path");
+            if (!File.Exists(targetPath) && !Directory.Exists(targetPath)) return;
             var target = SafePath(root, relative);
-            if (!File.Exists(target) && !Directory.Exists(target)) return;
 
             var pending = new Stack<string>();
             pending.Push(target);
