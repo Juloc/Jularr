@@ -2,7 +2,7 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // The indexers and the download clients as cards of their own: added in a dialog with Cancel, their settings inputs inside the card saved by the page's pill, tested and switched in place, one row of navigation.
+    // The indexers and the download clients as cards of their own: added in a dialog with Cancel, settings saved by the card's own button, tested and switched in place.
     [TestClass]
     public sealed class DownloadPagesTests
     {
@@ -51,18 +51,17 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".kpi-tile", new() { HasText = "Disabled" }).Locator(".kpi-tile__value")).ToHaveTextAsync("1");
                 Assert.AreEqual(7, await page.EvaluateAsync<int>("window.__downloadsProbe"));
 
-                // Editing is typing in the card: no Edit button, no dialog. The stored key is not echoed; a new key and priority are saved by the page's pill.
+                // Editing is inside the card; its explicit Save action does not reveal stored secrets.
                 var card = Row(page, "Fake indexer");
                 Assert.AreEqual(0, await page.GetByRole(AriaRole.Link, new() { Name = "Edit", Exact = true }).CountAsync());
                 await Assertions.Expect(card.Locator("[name=Name]")).ToHaveValueAsync("Fake indexer");
                 await Assertions.Expect(card.Locator("[name=ApiKey]")).ToHaveValueAsync("");
                 await Assertions.Expect(card.Locator("[name=ApiKey]")).ToHaveAttributeAsync("type", "password");
                 Assert.IsFalse((await page.ContentAsync()).Contains(FakeServices.IndexerKey, StringComparison.Ordinal), "The page shows the stored key.");
-                await Assertions.Expect(page.Locator("[data-save-pill]")).ToBeHiddenAsync();
+                await Assertions.Expect(card.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true })).ToBeVisibleAsync();
                 await card.Locator("[name=ApiKey]").FillAsync("another-key");
                 await card.Locator("[name=Priority]").FillAsync("7");
-                await Assertions.Expect(page.Locator("[data-save-pill] .save-pill__count")).ToHaveTextAsync("2 changes");
-                await Steps.SaveAsync(page);
+                await Steps.SubmitAsync(page, card.Locator("form", new() { Has = card.Locator("[name=Priority]") }));
                 Assert.AreEqual(0, await page.GetByRole(AriaRole.Dialog).CountAsync(), "Saving inline opens no dialog.");
                 await Assertions.Expect(Row(page, "Fake indexer").Locator("[name=Priority]")).ToHaveValueAsync("7");
                 await Assertions.Expect(Row(page, "Fake indexer").Locator("[name=ApiKey]")).ToHaveValueAsync("");
@@ -81,8 +80,10 @@ namespace Jularr.E2E.Tests
                 await form.Locator("[name=Name]").FillAsync("Fake SABnzbd");
                 await form.Locator("[name=BaseUrl]").FillAsync(new Uri(fakes.Address, "sabnzbd/").ToString());
                 await form.Locator("[name=ApiKey]").FillAsync(FakeServices.ClientKey);
+                await Assertions.Expect(form.Locator("[name=DownloadCategory]")).ToHaveCountAsync(0);
                 await form.Locator("[name=LocalPath]").FillAsync(fakes.Downloads);
                 await Steps.SubmitAsync(page, form);
+                await Assertions.Expect(Row(page, "Fake SABnzbd").GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true })).ToBeVisibleAsync();
                 await Steps.FollowAsync(page, Row(page, "Fake SABnzbd").GetByRole(AriaRole.Button, new() { Name = "Test connection", Exact = true }));
                 await Assertions.Expect(Row(page, "Fake SABnzbd")).ToContainTextAsync("Reachable");
                 await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
