@@ -9188,6 +9188,34 @@
    "Preview import",
    "Vorschau anzeigen"
   ],
+  "import.phase.matching": [
+   "Matching library works",
+   "Werke abgleichen"
+  ],
+  "import.phase.isbn": [
+   "Resolving ISBN",
+   "ISBN auflösen"
+  ],
+  "import.phase.searching": [
+   "Searching provider",
+   "Beim Anbieter suchen"
+  ],
+  "import.phase.candidates": [
+   "Candidates found",
+   "Treffer gefunden"
+  ],
+  "import.phase.no_match": [
+   "No candidates",
+   "Keine Treffer"
+  ],
+  "import.phase.waiting": [
+   "Waiting for next preview",
+   "Wartet auf weitere Suche"
+  ],
+  "import.phase.complete": [
+   "Preview ready",
+   "Vorschau bereit"
+  ],
   "import.refresh": [
    "Update preview",
    "Vorschau aktualisieren"
