@@ -153,7 +153,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 apply.Attribute("data-import-apply", "");
                 apply.TextAttribute("data-import-complete", "import.resultTitle");
                 apply.TextAttribute("data-import-continue", "import.continue");
-                apply.TextAttribute("data-import-failed", "import.outcome.Failed");
+                apply.TextAttribute("data-import-failed", "import.interrupted");
                 form.Submit(apply);
             }, Address + "?handler=Preview", csrf, new MediaImportDataV1(null, listing.Json, action, defaults), FormError)).Class("media-import__preview"));
         }
