@@ -4,6 +4,8 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Acquisition;
+using Jularr.Integrations.Data.Qbittorrent;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Qbittorrent;
