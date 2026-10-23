@@ -1,0 +1,11 @@
+name: Harden apt
+description: >-
+  Force IPv4 and short network timeouts for apt, so a slow or half-reachable mirror cannot stall a job
+  for minutes (Playwright installs its system libraries through apt).
+runs:
+  using: composite
+  steps:
+    - name: Configure apt
+      shell: bash
+      run: |
+        printf 'Acquire::ForceIPv4 "true";\nAcquire::Retries "3";\nAcquire::http::Timeout "20";\nAcquire::https::Timeout "20";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network >/dev/null

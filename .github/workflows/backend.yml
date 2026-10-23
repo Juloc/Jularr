@@ -167,9 +167,21 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('tests/Jularr.E2E.Tests/Jularr.E2E.Tests.csproj') }}
+      - name: Harden apt
+        if: matrix.kind == 'e2e'
+        uses: ./.github/actions/harden-apt
       - name: Install Chromium and its system libraries
         if: matrix.kind == 'e2e'
-        run: pwsh tests/Jularr.E2E.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+        run: |
+          # The system libraries come through apt; a slow mirror must not stall the job: apt is hardened
+          # (IPv4, short timeouts), each attempt has a time limit and a failed one is repeated.
+          for attempt in 1 2 3; do
+            if timeout 300 pwsh tests/Jularr.E2E.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium; then exit 0; fi
+            echo "::warning::Chromium install attempt ${attempt} failed or timed out; retrying"
+            sleep 5
+          done
+          echo "::error::Chromium could not be installed."
+          exit 1
 
       # The assembly disables in-process parallelism; lanes are separate dotnet test processes with
       # their own fixture state and databases. TRX files record the durations for tests/ci-durations.json.
