@@ -9524,6 +9524,10 @@
    "Failed",
    "Fehlgeschlagen"
   ],
+  "import.interrupted": [
+   "Connection interrupted. Some titles may already be imported. Update the preview before importing again.",
+   "Verbindung unterbrochen. Einige Titel können bereits importiert sein. Vor einem erneuten Import zuerst die Vorschau aktualisieren."
+  ],
   "admin.works.source.isbn": [
    "ISBN",
    "ISBN"
