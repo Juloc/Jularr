@@ -61,6 +61,7 @@ let importRunning = false;
 let importTotal = 0;
 let importProcessed = 0;
 let continuePending = false;
+const completedRows = new Map<number, HTMLTableRowElement>();
 
 function initializeProgress(): void {
     const page = document.querySelector<HTMLElement>(".media-import");
@@ -83,6 +84,7 @@ function initializeProgress(): void {
         lastUnsearched = Number.POSITIVE_INFINITY;
         previewSteps = 0;
         importRunning = false;
+        completedRows.clear();
         show(feedback.dataset.waiting ?? "");
     });
     previewForm?.addEventListener("submit", event => {
@@ -91,6 +93,7 @@ function initializeProgress(): void {
             if (!importRunning) {
                 importTotal = summarize(Array.from(previewForm.querySelectorAll<HTMLInputElement>("[data-import-row]"))).count;
                 importProcessed = 0;
+                completedRows.clear();
             }
             importRunning = true;
             previewRunning = false;
@@ -103,6 +106,16 @@ function initializeProgress(): void {
     });
 
     if (resultHead && importRunning) {
+        // The server returns one bounded batch per request. Preserve every
+        // returned work row, replacing earlier deferred/unavailable states by index.
+        const tbody = page.querySelector<HTMLTableSectionElement>(".media-import__rows tbody");
+        if (tbody) {
+            for (const row of Array.from(tbody.querySelectorAll<HTMLTableRowElement>("tr"))) {
+                const index = Number(row.querySelector<HTMLElement>("[data-import-result-index]")?.dataset.importResultIndex);
+                if (Number.isInteger(index) && index >= 0) completedRows.set(index, row.cloneNode(true) as HTMLTableRowElement);
+            }
+            tbody.replaceChildren(...Array.from(completedRows.entries()).sort(([a], [b]) => a - b).map(([, row]) => row.cloneNode(true)));
+        }
         const processed = Number(resultHead.dataset.importProcessed ?? "0");
         importProcessed += Math.max(0, processed);
         show(feedback.dataset.applying ?? "", String(importProcessed), String(importTotal));
