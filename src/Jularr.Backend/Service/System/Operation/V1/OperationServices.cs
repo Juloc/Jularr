@@ -524,6 +524,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
         private async Task<bool> AssignCatalogFoldersAsync(long libraryRootId, MediaType mediaType, StorageFiles storage, string directory)
         {
             var matches = new Dictionary<(string Title, int? Year, string Ids), long?>();
+            var failures = new Dictionary<(string Title, int? Year, string Ids), string>();
             TmdbConnection? provider = null;
             var providerUnavailable = false;
             var lookups = Stopwatch.StartNew();
@@ -782,6 +783,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                     if (tmdbId is not null && tmdbId != resolved)
                                     {
                                         verified = false;
+                                        failures[key] = "the ids name different TMDB series (" + tmdbId + " and " + resolved + ")";
                                         break;
                                     }
 
@@ -797,6 +799,14 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                         workId = await _metadata.ImportAsync(Context, provider, mediaType, null, id, CancellationToken);
                                         imported++;
                                     }
+                                    else
+                                    {
+                                        failures[key] = "TMDB " + id + " carries imdb " + (details.ImdbId ?? "none") + " and tvdb " + (details.TvdbId?.ToString() ?? "none");
+                                    }
+                                }
+                                else if (!failures.ContainsKey(key))
+                                {
+                                    failures[key] = "none of the ids resolves to a TMDB " + (mediaType == MediaType.Series ? "series" : "film");
                                 }
                             }
                             catch (ServiceUnavailableException)
@@ -806,6 +816,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             catch (Exception exception) when (exception is KeyNotFoundException or DataValidationException)
                             {
                                 // Unresolved IDs and ids of two different Works remain available for manual identification.
+                                failures[key] = exception.GetType().Name + ": " + exception.Message;
                             }
                         }
 
@@ -817,7 +828,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
                     if (workId is null)
                     {
-                        Note(providerUnavailable ? "the catalog is not available" : ids.Count == 0 ? "no id and no single Work of that title" : "no Work holds the ids " + string.Join(", ", ids.Select(item => item.Key + " " + item.Value)) + " and the catalog could not name them", file.RelativePath);
+                        Note(providerUnavailable ? "the catalog is not available" : ids.Count == 0 ? "no id and no single Work of that title" : "no Work holds the ids " + string.Join(", ", ids.Select(item => item.Key + " " + item.Value)) + " and the catalog could not name them: " + failures.GetValueOrDefault(key, "no reason recorded"), file.RelativePath);
                         continue;
                     }
 
