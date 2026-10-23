@@ -1072,7 +1072,7 @@ namespace Jularr.E2E.Tests
                     return [];
                 }");
                 Assert.AreEqual(2, emptyArea.Length, "The fitted picture must leave a real empty area on one axis.");
-                await page.Mouse.ClickAsync(emptyArea[0], emptyArea[1]);
+                await page.Mouse.ClickAsync((float)emptyArea[0], (float)emptyArea[1]);
                 await Assertions.Expect(view).ToBeHiddenAsync();
                 await page.Mouse.ClickAsync(box.X + box.Width / 2, box.Y + box.Height / 2);
                 await Assertions.Expect(view).ToBeVisibleAsync();
