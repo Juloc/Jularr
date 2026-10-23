@@ -197,12 +197,14 @@ fun TvWatchlistScreen(
     LaunchedEffect(infoEntry?.id) {
         if (infoEntry != null) runCatching { infoFocus.requestFocus() }
     }
-    BackHandler(enabled = sortOpen || infoEntry != null) {
-        if (infoEntry != null) {
-            infoEntry = null
-            focusRevision += 1
-        } else {
-            sortOpen = false
+    BackHandler(enabled = sortOpen || infoEntry != null || selectedCollectionId != null) {
+        when {
+            infoEntry != null -> {
+                infoEntry = null
+                focusRevision += 1
+            }
+            sortOpen -> sortOpen = false
+            selectedCollectionId != null -> onSelectCollection(null)
         }
     }
 
