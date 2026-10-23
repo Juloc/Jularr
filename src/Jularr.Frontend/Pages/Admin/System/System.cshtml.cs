@@ -29,7 +29,7 @@ namespace Jularr.Frontend.Pages.Admin.System
                 ("system.queued", Link(health.QueuedOperations.ToString(CultureInfo.CurrentCulture), "/Admin/Activity")),
                 ("system.failed", Link(health.FailedOperations.ToString(CultureInfo.CurrentCulture), "/Admin/Activity")),
                 ("system.storageOffline", Link(health.StorageOffline.ToString(CultureInfo.CurrentCulture), "/Admin/Storage")),
-                ("system.lastBackup", Link(health.LastBackupAt?.ToLocalTime().ToString("g", CultureInfo.CurrentCulture) ?? texts["system.never"], "/Admin/Backup"))]));
+                ("system.lastBackup", Link(health.LastBackupAt is { } backedUp ? new LocalTime(backedUp) : new ValueText(texts["system.never"]), "/Admin/Backup"))]));
             page.Content.Add(new UiSection("system.tools", [new Table<ToolStateV1>(health.Tools)
                 .Content("system.tool", item => new Text("system.tool." + item.Key))
                 .Content("table.status", item => new Text(item.IsAvailable ? "system.configured" : "system.missing"))]));
@@ -39,7 +39,9 @@ namespace Jularr.Frontend.Pages.Admin.System
                 .Content("table.size", item => new ValueText(ByteSize.Format(item.Bytes)))]));
         }
 
-        private static IUiComponent Link(string value, string href) => new A(new ValueText(value)).Attribute("href", href);
+        private static IUiComponent Link(string value, string href) => Link(new ValueText(value), href);
+
+        private static IUiComponent Link(IUiComponent value, string href) => new A(value).Attribute("href", href);
 
         public async Task<IActionResult> OnGetAsync()
         {
