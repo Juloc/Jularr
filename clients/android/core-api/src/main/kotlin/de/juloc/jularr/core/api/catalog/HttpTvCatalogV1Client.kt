@@ -206,12 +206,17 @@ class HttpTvCatalogV1Client(
                             false
                         }
                     }
-                    // A late 401 cannot sign out the profile switched in the meantime.
-                    // Read/PUT catalog operations are safe to retry once with the new bearer.
-                    if (obsolete && status == HttpURLConnection.HTTP_UNAUTHORIZED && attempt == 0 &&
-                        deviceTokens.current != null
-                    ) {
-                        continue
+                    // A response started under an earlier profile is stale even when
+                    // HTTP 200 succeeds. Do not expose its catalog or favourites to
+                    // another viewer. Only GET is safely retried; PUT/POST must never
+                    // replay after an uncertain profile/account switch.
+                    if (obsolete) {
+                        if (method == "GET" && attempt == 0 && deviceTokens.current != null) {
+                            continue
+                        }
+                        throw IllegalStateException(
+                            "The account/profile changed during the catalog request; refresh the screen.",
+                        )
                     }
                     if (status !in 200..299) throw appApiException(status, payload)
                     answer = payload
