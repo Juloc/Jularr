@@ -180,11 +180,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var body = new List<IUiComponent>();
             var note = state switch
             {
-                "backoff" => texts["acquisition.connection.backoff"] + " " + item.RetryAt!.Value.ToLocalTime().ToString("g", CultureInfo.CurrentCulture),
+                "backoff" => texts["acquisition.connection.backoff"],
                 "error" => texts["errors." + item.ErrorKey],
                 _ => null
             };
-            if (note is not null) body.Add(new Div(new Span(new Truncated(note)).Class("feature-card__note")).Class("feature-card__row"));
+            if (note is not null) body.Add(new Div(new Span(new Truncated(note), state == "backoff" ? new Span(new ValueText(" "), new LocalTime(item.RetryAt!.Value)) : new Span()).Class("feature-card__note")).Class("feature-card__row"));
             body.Add(new Div(new Span(new Text("acquisition.connection.lastTest")).Class("feature-card__note"), Time(item.CheckedAt)).Class("feature-card__row"));
             if (Role == AcquisitionConnectionRole.Search && item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab)
             {
@@ -491,7 +491,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private static IUiComponent Dim() => new Span(new ValueText("–")).Class("list-value list-value--dim");
 
         private static IUiComponent Time(DateTime? value) => value is { } time
-            ? new Span(new ValueText(time.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("list-value")
+            ? new Span(new LocalTime(time)).Class("list-value")
             : Dim();
 
         // Today's queries and grabs of an indexer against its limits.
