@@ -157,7 +157,7 @@ namespace Jularr.Backend.Tests
                     case "/api/v2/torrents/info":
                     {
                         if (query.Length > 1) LastHashFilter = query[1..];
-                        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(TorrentJson.Replace("\\\"added_on\\\":", "\\\"tags\\\":\\\"" + Tag + "\\\",\\\"added_on\\\":", StringComparison.Ordinal), Encoding.UTF8, "application/json") });
+                        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(TorrentJson.Replace("\"added_on\":", "\"tags\":\"" + Tag + "\",\"added_on\":", StringComparison.Ordinal), Encoding.UTF8, "application/json") });
                     }
                     case "/api/v2/torrents/stop":
                     case "/api/v2/torrents/start":
