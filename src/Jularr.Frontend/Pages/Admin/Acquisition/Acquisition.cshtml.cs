@@ -308,14 +308,14 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         public async Task<IActionResult> OnPostAsync([BindRequired] AcquisitionConnectionType acquisitionConnectionTypeId, string? name, string? baseUrl, string? apiKey,
             bool? isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
             int? maxConnections, string? password, int[]? mediaTypeIds, bool? searchesAutomatically, int? queryLimit, int? grabLimit, string? host, int? port, bool? useSsl,
-            long? downloadStorageMountId, bool? removesCompleted, string? incompleteRemotePath, string? incompleteLocalPath)
+            long? downloadStorageMountId, bool? removesCompleted, string? incompleteRemotePath, string? incompleteLocalPath, bool? removesFailed)
         {
             // A card's inputs leave out the switch, which is its own action: the stored state stays.
             var ct = HttpContext.RequestAborted;
             var enabled = isEnabled ?? (AcquisitionConnectionId is { } stored ? (await connection.ExecuteAsync<AcquisitionConnectionDetailsV1>(new AcquisitionConnectionParametersV1(stored), ct)).IsEnabled : true);
             _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl, apiKey, enabled, priority, Categories(categories),
                 downloadCategory, remotePath, localPath, username, maxConnections, password, mediaTypeIds, searchesAutomatically ?? true, queryLimit, grabLimit, host, port, useSsl,
-                downloadStorageMountId, removesCompleted ?? true, incompleteRemotePath, incompleteLocalPath);
+                downloadStorageMountId, removesCompleted ?? true, incompleteRemotePath, incompleteLocalPath, removesFailed ?? true);
             if (AcquisitionConnectionId is { } existing)
             {
                 await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(existing), _input, ct);
@@ -437,7 +437,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private static SaveAcquisitionConnectionDataV1 InputOf(AcquisitionConnectionDetailsV1 selected, bool? isEnabled = null) =>
             new(selected.Name, selected.AcquisitionConnectionTypeId, selected.BaseUrl, null, isEnabled ?? selected.IsEnabled, selected.Priority, selected.Categories,
                 selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username, selected.MaxConnections, null, selected.MediaTypeIds,
-                selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl, selected.DownloadStorageMountId, selected.RemovesCompleted, selected.IncompleteRemotePath, selected.IncompleteLocalPath);
+                selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl, selected.DownloadStorageMountId, selected.RemovesCompleted, selected.IncompleteRemotePath, selected.IncompleteLocalPath, selected.RemovesFailed);
 
         // The inputs of a connection: a card's own (saved by the pill) or, without one, the new connection's in its dialog.
         private Form<SaveAcquisitionConnectionDataV1> ConnectionForm(AcquisitionConnectionType type, string? csrf, AcquisitionConnectionDetailsV1? existing)
@@ -518,6 +518,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 {
                     form.Text(item => item.DownloadCategory, "acquisition.connection.category");
                     form.Toggle(item => item.RemovesCompleted, "acquisition.connection.removesCompleted");
+                    form.Toggle(item => item.RemovesFailed, "acquisition.connection.removesFailed");
                     // SAB reports its real Complete path; only the Jularr-visible folder is chosen here.
                     if (existing?.RemotePath is { } detected)
                         form.Content(new P(new Strong(new Text("acquisition.connection.remotePath")), new ValueText(": " + detected)));

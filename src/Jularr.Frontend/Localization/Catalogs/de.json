@@ -4,6 +4,7 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "acquisition.connection.removesFailed": ["Remove failed SABnzbd jobs and source files", "Fehlgeschlagene SABnzbd-Jobs und Quelldateien entfernen"],
   "console.general": ["General","Allgemein"],
   "console.downloads": ["Downloads","Downloads"],
   "console.statistics": ["Statistics","Statistik"],
