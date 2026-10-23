@@ -149,6 +149,11 @@ namespace Jularr.Backend.Logic.Acquisition
                     operation."OperationStatusTypeId" = 3 AND connection."RemovesCompleted"
                     OR operation."OperationStatusTypeId" = 4 AND connection."RemovesFailed"
                   )
+                  AND NOT EXISTS (
+                    SELECT 1 FROM "DownloadClientCleanups" AS cleanup
+                    WHERE cleanup."AcquisitionConnectionId" = operation."AcquisitionConnectionId"
+                      AND cleanup."ExternalId" = operation."ExternalId"
+                  )
                 ORDER BY operation."Id" DESC
                 LIMIT 100
                 ON CONFLICT ("AcquisitionConnectionId", "ExternalId") DO NOTHING;
