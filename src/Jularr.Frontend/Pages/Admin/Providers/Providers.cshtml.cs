@@ -17,7 +17,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Providers
 {
-    // The registry's providers as cards (state, switch, test) whose settings are inputs inside the card, saved by the page's pill; the media servers' users are mapped to profiles in a list below their cards.
+    // The registry's providers as cards (state, switch, test) whose settings and Save buttons are inside each card; the media servers' users are mapped to profiles in a list below their cards.
     public sealed class ProvidersModel(ReadProvidersV1 providers, UpdateProviderV1 update, SaveProviderSecretV1 saveSecret, ReadPlexServerV1 readPlex, SavePlexServerV1 savePlex,
         SyncPlexServerV1 syncPlex, DisconnectPlexServerV1 disconnectPlex, ReadPlexSignInV1 readSignIn, UpdatePlexSignInV1 updateSignIn, ReadMediaServerV1 readServer, SaveMediaServerV1 saveServer, SyncMediaServerV1 syncServer,
         DisconnectMediaServerV1 disconnectServer, ReadMediaServerLinksV1 readLinks, SaveMediaServerLinkV1 saveLink, ReadProfileChoicesV1 readProfiles, FrontendAssets assets, IAntiforgery antiforgery,
@@ -129,7 +129,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 body.Add(new Div(new Span(new ValueText(line)).Class("feature-card__note")).Class("feature-card__row"));
             }
 
-            // The settings are inputs of the card itself: the protected key, the Plex server or the Jellyfin/Emby connection.
+            // The settings and explicit Save buttons belong to the individual provider card.
             if (NeedsKey(provider.Key)) body.Add(SecretForm(provider, csrf));
             if (provider.Key == "plex" && _plex is { } plex) DefinePlex(body, plex, csrf);
             if (type is { } serverKind && _servers.TryGetValue(serverKind, out var connection)) DefineMediaServer(body, serverKind, connection.Server, csrf);
@@ -167,7 +167,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 var anilist = provider.Key == "anilist";
                 if (provider.Key is "igdb" or "anilist") form.Text(item => item.ClientId, anilist ? "admin.providers.anilistClientId" : "admin.providers.clientId");
                 form.Password(item => item.Secret, anilist ? "admin.providers.anilistClientSecret" : provider.Key == "igdb" ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password");
-                form.Save();
+                form.Submit("common.save");
             }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture) + "&handler=Secret", csrf, new SaveProviderSecretDataV1(null), _secretFailedFor == provider.Id ? FormError : null);
 
         // The Plex server: address and token side by side, the plex.tv connection beside them, then who signs in and registers with it.
@@ -179,7 +179,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 form.Password(item => item.Token, "admin.plex.token", "new-password");
                 form.Action(new Button(new Text("admin.plex.pin.start")).Compact().Soft().Attribute("formaction", Home + "?handler=PlexPin").Attribute("formnovalidate", "formnovalidate")
                     .Attribute("data-no-draft", ""));
-                form.Save();
+                form.Submit("common.save");
             }, Home + "?handler=Plex", csrf, _plexInput ?? new SavePlexServerDataV1(plex.BaseUrl ?? "", null), _plexInput is null ? null : FormError));
             if (_pin is { } pin)
             {
@@ -204,7 +204,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                         form.Choices(item => item.RegistrationSections, "admin.plex.registrationSections", signIn.SectionKeys.Zip(signIn.SectionTitles, (key, title) => new SelectOption(key, title)));
                     }
 
-                    form.Save();
+                    form.Submit("common.save");
                 }, Home + "?handler=PlexSignIn", csrf, _signInInput ?? new SavePlexSignInDataV1(signIn.SignIn, signIn.Registration, signIn.RegistrationApproval, signIn.RegistrationSections),
                     _signInInput is null ? null : FormError));
             }
@@ -216,7 +216,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             {
                 form.Text(item => item.BaseUrl, "admin.mediaServer.baseUrl", help: new FieldHelp(Placeholder: "hint.mediaServer.baseUrl.placeholder"));
                 form.Password(item => item.ApiKey, "admin.mediaServer.apiKey", "new-password");
-                form.Save();
+                form.Submit("common.save");
             }, Home + "?mediaServerTypeId=" + type + "&handler=MediaServer", csrf, _serverInput == type ? _serverData : new SaveMediaServerDataV1(server.BaseUrl ?? "", null), _serverInput == type ? FormError : null));
         }
 
