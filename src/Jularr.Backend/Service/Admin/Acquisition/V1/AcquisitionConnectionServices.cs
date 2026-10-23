@@ -16,6 +16,8 @@ using Jularr.Integrations.Data.Qbittorrent;
 using Jularr.Integrations.Data.Sabnzbd;
 using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Newznab;
+using Jularr.Integrations.Logic.Nyaa;
+using Jularr.Integrations.Data.Nyaa;
 using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Data.Subtitles;
@@ -262,11 +264,13 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     {
         private const int Limit = 25;
         private readonly NewznabClient _newznab;
+        private readonly NyaaClient _nyaa;
         private readonly IDataProtector _protector;
 
-        internal SearchAcquisitionConnectionV1(NewznabClient newznab, IDataProtectionProvider protection)
+        internal SearchAcquisitionConnectionV1(NewznabClient newznab, NyaaClient nyaa, IDataProtectionProvider protection)
         {
             _newznab = newznab;
+            _nyaa = nyaa;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
         }
 
@@ -279,6 +283,22 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         {
             // One free-text query of an indexer, counted like any other.
             var indexer = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(Parameters.AcquisitionConnectionId, ct), CancellationToken);
+            if (indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Nyaa)
+            {
+                try
+                {
+                    var items = await _nyaa.SearchAsync(new Uri(indexer.HttpAddress.TrimEnd('/') + "/"),
+                        Data.Query, NyaaClient.LiteratureCategories, CancellationToken);
+                    return new BaseDataList<IndexerReleaseV1>([.. items.Take(Limit).Select(item =>
+                        new IndexerReleaseV1(TextLimit.Cut(item.Title, 1000)!, item.SizeBytes, item.Published.UtcDateTime))]);
+                }
+                catch (Exception exception) when (exception is NyaaException or HttpRequestException
+                    || exception is TaskCanceledException && !CancellationToken.IsCancellationRequested)
+                {
+                    throw new ServiceUnavailableException("acquisition_unavailable");
+                }
+            }
+
             if (indexer.AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab)
             {
                 throw new DataValidationException(nameof(SearchAcquisitionConnectionDataV1.Query), "invalid_transition");
