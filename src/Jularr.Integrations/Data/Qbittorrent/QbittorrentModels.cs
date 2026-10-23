@@ -69,7 +69,7 @@ namespace Jularr.Integrations.Data.Qbittorrent
     internal sealed class QbittorrentTorrent
     {
         public QbittorrentTorrent(string hash, string name, string state, double progress, long sizeBytes, long downloadedBytes,
-            long downloadSpeed, int seeds, int peers, string? contentPath, string? savePath, long? addedAt = null, string? errorReason = null)
+            long downloadSpeed, int seeds, int peers, string? contentPath, string? savePath, long? addedAt = null, string? errorReason = null, IReadOnlyList<string>? tags = null)
         {
             Hash = hash;
             Name = name;
@@ -84,6 +84,7 @@ namespace Jularr.Integrations.Data.Qbittorrent
             SavePath = savePath;
             AddedAt = addedAt;
             ErrorReason = errorReason;
+            Tags = tags ?? [];
         }
 
         public string Hash { get; }
@@ -111,14 +112,15 @@ namespace Jularr.Integrations.Data.Qbittorrent
 
         // The client's own reason, when it has one.
         public string? ErrorReason { get; }
+        public IReadOnlyList<string> Tags { get; }
 
-        public bool IsCompleted => Progress >= 1 && State is not ("error" or "missingFiles");
+        public bool IsCompleted => Progress >= 1 && !IsFailed && State is not ("checkingDL" or "checkingUP" or "moving");
 
         public bool IsFailed => State is "error" or "missingFiles";
 
-        public bool IsPaused => State is "paused" or "pausedUP";
+        public bool IsPaused => State is "paused" or "pausedDL" or "pausedUP" or "stoppedDL" or "stoppedUP";
 
-        public bool IsActive => State is "downloading" or "stalledDL" or "metaDL" or "forcedMetaDL" or "checkingDL" or "queuedDL" or "allocating";
+        public bool IsActive => State is "downloading" or "stalledDL" or "metaDL" or "forcedMetaDL" or "checkingDL" or "queuedDL" or "allocating" or "forcedDL";
     }
 
     internal sealed class QbittorrentSnapshot
