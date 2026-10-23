@@ -527,6 +527,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
             var externalLookups = 0;
             var deferred = false;
             var imported = 0;
+            var refreshed = new HashSet<long>();
             var nfoFolders = new Dictionary<string, (IReadOnlyDictionary<string, string> Ids, bool Conflicted)>(StringComparer.Ordinal);
             var plexFolders = new Dictionary<string, PlexMatchHints>(StringComparer.Ordinal);
             var emptyHints = MediaPathParser.ParsePlexMatch("");
@@ -698,31 +699,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         }, CancellationToken);
                         workId = candidates.Count == 1 ? candidates[0].Id : null;
 
-                        // A partial identity match may belong to an existing Work. Do not create a duplicate catalog entry.
-                        var hasKnownIdentity = false;
-                        if (workId is null && ids.Count > 0)
-                        {
-                            var owners = await Context.ExecuteBatchAsync((ctx, ct) =>
-                            {
-                                var sql = new SqlStatement();
-                                sql.Statement =
-                                    """
-                                    SELECT DISTINCT
-                                        identity."WorkId" AS "Id"
-                                    FROM
-                                        jsonb_to_recordset(@ProviderIds::jsonb) AS expected("Namespace" text, "Value" text)
-                                        JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = expected."Namespace"
-                                            AND identity."Value" = expected."Value"
-                                    LIMIT 1;
-                                    """;
-                                sql.Parameters.Add(new WorkFolderMatchData(mediaType, parsed.Title, parsed.Year, supplied));
-                                return ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
-                            }, CancellationToken);
-                            hasKnownIdentity = owners.Count > 0;
-                        }
-
-                        // An unknown provider identity is never resolved by title alone.
-                        if (workId is null && !hasKnownIdentity && ids.Count > 0 && !providerUnavailable
+                        // An identity the Work does not carry completely is checked with the provider, never guessed from the part that matches or from the title:
+                        // the provider names one series for every id, and importing it extends the Work that already holds one of them.
+                        if (workId is null && ids.Count > 0 && !providerUnavailable
                             && ids.Keys.All(name => name is "imdb" or "tvdb" or "tmdb_movie" or "tmdb_tv")
                             && (mediaType == MediaType.Series || !ids.ContainsKey("tvdb")))
                         {
@@ -772,9 +751,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             {
                                 providerUnavailable = true;
                             }
-                            catch (KeyNotFoundException)
+                            catch (Exception exception) when (exception is KeyNotFoundException or DataValidationException)
                             {
-                                // Unresolved IDs remain available for manual identification.
+                                // Unresolved IDs and ids of two different Works remain available for manual identification.
                             }
                         }
 
@@ -789,6 +768,34 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         continue;
                     }
 
+                    // A series that a media server sync left without named seasons and episodes gets them from the catalog once, before its files are linked.
+                    if (mediaType == MediaType.Series && !providerUnavailable && refreshed.Add(workId.Value))
+                    {
+                        if (externalLookups > 0 && lookups.Elapsed >= LookupBudget)
+                        {
+                            deferred = true;
+                            refreshed.Remove(workId.Value);
+                        }
+                        else if (await ReadMissingStructureAsync(workId.Value) is { } tmdbId)
+                        {
+                            externalLookups++;
+                            try
+                            {
+                                provider ??= await _metadata.ConnectAsync(Context, CancellationToken);
+                                await _metadata.ImportAsync(Context, provider, mediaType, null, tmdbId, CancellationToken);
+                                imported++;
+                            }
+                            catch (ServiceUnavailableException)
+                            {
+                                providerUnavailable = true;
+                            }
+                            catch (Exception exception) when (exception is DataValidationException or KeyNotFoundException)
+                            {
+                                // The series keeps the units its files create.
+                            }
+                        }
+                    }
+
                     var assignment = new StoredFileAssignmentData(file.Id, workId, null, parsed.WorkUnitTypeId, parsed.UnitNumber, parsed.ParentUnitNumber, null, false);
                     try
                     {
@@ -800,6 +807,28 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     }
                 }
             }
+        }
+
+        // The TMDB id of a series none of whose episodes has a name yet; null when it has one or no TMDB id to read.
+        private async Task<int?> ReadMissingStructureAsync(long workId)
+        {
+            var identity = await Context.ExecuteBatchAsync((ctx, ct) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT identity."Namespace", identity."Value"
+                    FROM "WorkExternalIdentities" AS identity
+                    WHERE identity."WorkId" = @Id AND identity."Namespace" = 'tmdb_tv'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM "WorkUnits" AS unit
+                            WHERE unit."WorkId" = identity."WorkId" AND unit."WorkUnitTypeId" = 2 AND unit."Title" IS NOT NULL
+                        );
+                    """;
+                sql.Parameters.Add(new WorkIdData(workId));
+                return ctx.ReadSql.ReadOptionalAsync<WorkIdentityProbeData>(sql, ct);
+            }, CancellationToken);
+            return identity is not null && int.TryParse(identity.Value, out var tmdbId) && tmdbId > 0 ? tmdbId : null;
         }
 
         private async Task<PlexMatchHints> ReadPlexMatchAsync(StorageFiles storage, string directory, string folder)

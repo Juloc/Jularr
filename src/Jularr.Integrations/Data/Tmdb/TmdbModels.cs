@@ -66,34 +66,6 @@ namespace Jularr.Integrations.Data.Tmdb
         public string? PosterPath { get; }
     }
 
-    internal sealed class TmdbEpisode
-    {
-        public TmdbEpisode(int seasonNumber, int episodeNumber, string? name, DateOnly? airDate, string? overview, string? stillPath, int? runtime, IReadOnlyList<ProviderPerson>? people = null)
-        {
-            People = people ?? [];
-            SeasonNumber = seasonNumber;
-            EpisodeNumber = episodeNumber;
-            Name = name;
-            AirDate = airDate;
-            Overview = overview;
-            StillPath = stillPath;
-            Runtime = runtime;
-        }
-
-        public int SeasonNumber { get; }
-        public int EpisodeNumber { get; }
-        public string? Name { get; }
-        public DateOnly? AirDate { get; }
-        public string? Overview { get; }
-        public string? StillPath { get; }
-
-        // Minutes.
-        public int? Runtime { get; }
-
-        // Guest stars and who directed and wrote the episode.
-        public IReadOnlyList<ProviderPerson> People { get; }
-    }
-
     internal sealed class TmdbWork
     {
         public TmdbWork(TmdbMediaKind kind, int id, string title, string? originalTitle, int? year, string? overview, string? posterPath, string? backdropPath, string? imdbId, int? tvdbId,

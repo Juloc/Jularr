@@ -893,6 +893,119 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Operations" WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" = 1 """));
         }
 
+        [TestMethod]
+        public async Task Scan_WorkWithoutEpisodes_GetsItsEpisodesFromTmdbThenTakesTheFile()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, services: services =>
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
+            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
+            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
+            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+
+            // What a media server sync leaves: the series with its ids, but no seasons or episodes.
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (2, 'Show 1', 2020) RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", item."Namespace", item."Value" FROM work CROSS JOIN (VALUES ('imdb', 'tt2000001'), ('tmdb_tv', '1')) AS item ("Namespace", "Value");
+                """);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Show 1 - tt2000001", "Season 1 - tt2000001");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Show 1 - S01E01 - Pilot WEBDL-1080p [DE+EN] tt2000001.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
+        public async Task Scan_WorkWithoutEpisodes_TakesSeasonsAndEpisodesFromTvdb()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, services: services =>
+            {
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries());
+                services.AddHttpClient<Jularr.Integrations.Logic.Tvdb.TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTvdbSeries());
+            });
+            foreach (var key in new[] { "tmdb", "tvdb" })
+            {
+                var provider = (long)(await host.ScalarAsync($"""SELECT "Id" FROM "Providers" WHERE "Key" = '{key}'"""))!;
+                using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
+                Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+            }
+
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (2, 'Show 1', 2020) RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", item."Namespace", item."Value" FROM work CROSS JOIN (VALUES ('imdb', 'tt2000001'), ('tmdb_tv', '1'), ('tvdb', '4001')) AS item ("Namespace", "Value");
+                """);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Show 1 - tt2000001", "Season 1 - tt2000001");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Show 1 - S01E02 - Second WEBDL-1080p tt2000001.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual("Second from TVDB", await host.ScalarAsync("""SELECT "Title" FROM "WorkUnits" WHERE "WorkUnitTypeId" = 2 AND "Number" = 2 """));
+            Assert.AreEqual(3L, await host.ScalarAsync("""SELECT count(*) FROM "WorkUnits" WHERE "WorkUnitTypeId" = 2 """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
+        public async Task Scan_WorkKnowsOnlyOneOfTheFolderIds_StillTakesTheFile()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, services: services =>
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
+            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
+            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
+            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (2, 'Show 1', 2020) RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "Id", 'imdb', 'tt2000001' FROM work;
+                """);
+            var mountId = await CreateMountAsync(host);
+            var show = Path.Combine(storage.Path, mountId.ToString(), "Series", "Show 1 - tt2000001");
+            var folder = Path.Combine(show, "Season 1");
+            Directory.CreateDirectory(folder);
+            // The media server's own file names a second id the Work has not stored.
+            File.WriteAllText(Path.Combine(show, "tvshow.nfo"), "<tvshow><title>Show 1</title><uniqueid type=\"imdb\">tt2000001</uniqueid><uniqueid type=\"tvdb\">4001</uniqueid></tvshow>");
+            File.WriteAllText(Path.Combine(folder, "Show 1 - S01E02 - Second WEBDL-1080p tt2000001.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        // TheTVDB names the series 4001 with a special and two episodes; TMDB would name only one episode.
+        private sealed class FakeTvdbSeries : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                var path = request.RequestUri!.AbsolutePath;
+                var json = path switch
+                {
+                    "/v4/login" => """{"data":{"token":"tvdb-test-token"}}""",
+                    "/v4/search/remoteid/tt2000001" => """{"data":[{"series":{"id":4001}}]}""",
+                    "/v4/series/4001/extended" => """{"data":{"id":4001,"name":"Show 1","remoteIds":[{"sourceName":"IMDb","id":"tt2000001"}]}}""",
+                    "/v4/series/4001/episodes/default" => """{"data":{"episodes":[{"id":10,"seasonNumber":0,"number":1,"name":"Special from TVDB"},{"id":11,"seasonNumber":1,"number":1,"name":"First from TVDB"},{"id":12,"seasonNumber":1,"number":2,"name":"Second from TVDB"}]},"links":{"next":null}}""",
+                    _ => null
+                };
+                return Task.FromResult(json is null ? new HttpResponseMessage(HttpStatusCode.NotFound) :
+                    new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") });
+            }
+        }
+
         // Every imdb id 2000001 to 2000099 is a series of its own.
         private sealed class FakeTmdbSeries : HttpMessageHandler
         {
@@ -900,7 +1013,11 @@ namespace Jularr.Backend.Tests
             {
                 var path = request.RequestUri!.AbsolutePath;
                 string? json = null;
-                if (path.StartsWith("/3/find/tt20000", StringComparison.Ordinal))
+                if (path == "/3/find/4001")
+                {
+                    json = """{"movie_results":[],"tv_results":[{"id":1}]}""";
+                }
+                else if (path.StartsWith("/3/find/tt20000", StringComparison.Ordinal))
                 {
                     json = $$"""{"movie_results":[],"tv_results":[{"id":{{int.Parse(path[^2..])}}}]}""";
                 }

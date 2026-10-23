@@ -166,20 +166,6 @@ namespace Jularr.Integrations.Logic.Tmdb
 
         private static bool IsYouTubeKey(string? value) => value is { Length: 11 } && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
 
-        public async Task<IReadOnlyList<TmdbEpisode>> ReadSeasonAsync(TmdbConnection connection, int seriesId, int seasonNumber, CancellationToken ct)
-        {
-            using var document = await ReadAsync(connection, "tv/" + seriesId.ToString(CultureInfo.InvariantCulture) + "/season/" + seasonNumber.ToString(CultureInfo.InvariantCulture), [], ct);
-            return document.RootElement.TryGetProperty("episodes", out var episodes) && episodes.ValueKind == JsonValueKind.Array
-                ? episodes.EnumerateArray()
-                    .Where(episode => Int(episode, "episode_number") is > 0)
-                    .Select(episode => new TmdbEpisode(Int(episode, "season_number") ?? seasonNumber, Int(episode, "episode_number")!.Value, Text(episode, "name"), Date(episode, "air_date"),
-                        Text(episode, "overview"), Text(episode, "still_path"), Int(episode, "runtime"),
-                        [.. Items(episode, "guest_stars").Select(person => Person(person, ProviderPerson.GuestStar, Text(person, "character"))).OfType<ProviderPerson>().Take(10),
-                            .. Crew(episode).OfType<ProviderPerson>().DistinctBy(person => (person.Id ?? person.Name, person.Role)).Take(6)]))
-                    .ToArray()
-                : [];
-        }
-
         // TMDB's daily list of every id with its popularity: public, gzip, one JSON object per line; published around 08:00 UTC.
         private static readonly Uri ExportHost = new("https://files.tmdb.org/p/exports/");
 
