@@ -2,6 +2,7 @@ package de.juloc.jularr.tv
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -81,7 +82,7 @@ internal fun TvV1HomeCatalogRow(
                     serverOrigin = serverOrigin,
                     requestHeaders = requestHeaders,
                     contentDescription = item.title,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
                 )
                 Text(
                     item.title,
