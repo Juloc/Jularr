@@ -167,8 +167,8 @@ fun TvWatchlistScreen(
     // The TV's collection endpoint is explicitly video-scoped. A previously
     // selected Books filter must not make a non-empty video collection appear
     // empty, nor should Books be offered as a valid filter for that collection.
-    LaunchedEffect(selectedCollectionId) {
-        if (selectedCollectionId != null && category == TvWatchlistCategory.BOOKS) {
+    LaunchedEffect(selectedCollectionId, serverSort) {
+        if ((selectedCollectionId != null || serverSort != null) && category == TvWatchlistCategory.BOOKS) {
             category = TvWatchlistCategory.ALL
         }
     }
@@ -283,7 +283,7 @@ fun TvWatchlistScreen(
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(
                         TvWatchlistCategory.entries.filter {
-                            selectedCollectionId == null || it != TvWatchlistCategory.BOOKS
+                            (selectedCollectionId == null && serverSort == null) || it != TvWatchlistCategory.BOOKS
                         },
                         key = { it.name },
                     ) { option ->
