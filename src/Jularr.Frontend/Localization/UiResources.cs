@@ -1125,7 +1125,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.outcome.source_gate", "The source asks for a manual login or confirmation"),
             new("acquisition.connection.categories", "Categories"),
             new("acquisition.connection.remotePath", "SABnzbd completed-download folder (read only)"),
-            new("acquisition.connection.localPath", "Folder inside Jularr storage connection"),
+            new("acquisition.connection.localPath", "Absolute folder path inside Jularr"),
             new("acquisition.connection.addIndexer", "Add indexer"),
             new("acquisition.connection.addClient", "Add download client"),
             new("acquisition.connection.addUsenet", "Add news server"),
