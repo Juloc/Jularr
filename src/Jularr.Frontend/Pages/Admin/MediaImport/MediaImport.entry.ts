@@ -62,6 +62,7 @@ let importTotal = 0;
 let importProcessed = 0;
 let continuePending = false;
 const completedRows = new Map<number, HTMLTableRowElement>();
+let remainingOriginalIndices: number[] | null = null;
 
 function initializeProgress(): void {
     const page = document.querySelector<HTMLElement>(".media-import");
@@ -85,6 +86,7 @@ function initializeProgress(): void {
         previewSteps = 0;
         importRunning = false;
         completedRows.clear();
+        remainingOriginalIndices = null;
         show(feedback.dataset.waiting ?? "");
     });
     previewForm?.addEventListener("submit", event => {
@@ -94,6 +96,7 @@ function initializeProgress(): void {
                 importTotal = summarize(Array.from(previewForm.querySelectorAll<HTMLInputElement>("[data-import-row]"))).count;
                 importProcessed = 0;
                 completedRows.clear();
+                remainingOriginalIndices = null;
             }
             importRunning = true;
             previewRunning = false;
@@ -110,10 +113,20 @@ function initializeProgress(): void {
         // returned work row, replacing earlier deferred/unavailable states by index.
         const tbody = page.querySelector<HTMLTableSectionElement>(".media-import__rows tbody");
         if (tbody) {
+            const nextRemaining: number[] = [];
             for (const row of Array.from(tbody.querySelectorAll<HTMLTableRowElement>("tr"))) {
-                const index = Number(row.querySelector<HTMLElement>("[data-import-result-index]")?.dataset.importResultIndex);
-                if (Number.isInteger(index) && index >= 0) completedRows.set(index, row.cloneNode(true) as HTMLTableRowElement);
+                const item = row.querySelector<HTMLElement>("[data-import-result-index]");
+                if (!item) continue;
+                const index = Number(item.dataset.importResultIndex);
+                if (!Number.isInteger(index) || index < 0) continue;
+                // Continuation JSON reindexes remaining rows from zero. Keep their
+                // original positions so titles and outcomes do not overwrite others.
+                const original = remainingOriginalIndices ? remainingOriginalIndices[index] : index;
+                if (original === undefined) continue;
+                completedRows.set(original, row.cloneNode(true) as HTMLTableRowElement);
+                if (item.dataset.importResultOutcome === "Deferred" || item.dataset.importResultOutcome === "Unavailable") nextRemaining.push(original);
             }
+            remainingOriginalIndices = nextRemaining;
             tbody.replaceChildren(...Array.from(completedRows.entries()).sort(([a], [b]) => a - b).map(([, row]) => row.cloneNode(true)));
         }
         const processed = Number(resultHead.dataset.importProcessed ?? "0");
