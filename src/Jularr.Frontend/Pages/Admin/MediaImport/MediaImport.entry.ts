@@ -373,8 +373,10 @@ function initializeLiveImport(): void {
             // Some rows may already have committed; never promise a rollback or blindly retry.
             panel.classList.add("media-import__activity--failed");
             pending(apply.dataset.importFailed ?? "Failed");
-            for (const button of controls) button.disabled = false;
-            apply.disabled = false;
+            // The server may still be committing the last item. Re-preview to
+            // reconcile committed Works before another write; never blindly retry.
+            for (const button of controls) if (button !== apply) button.disabled = false;
+            apply.disabled = true;
         } finally {
             --runningImportRequests;
             form.removeAttribute("aria-busy");
