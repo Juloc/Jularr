@@ -37,7 +37,7 @@ import de.juloc.jularr.core.model.WatchlistItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Transitional data host for the *original* TV Compose screens, not a replacement TV design.
@@ -346,9 +346,9 @@ fun TvV1CatalogHost(
                             it.items.isNotEmpty()
                     }) continue
                     val remote = try {
-                        withTimeout(8_000L) {
+                        withTimeoutOrNull(8_000L) {
                             catalog.discoverFeed(scope.mediaTypeId, feed)
-                        }
+                        } ?: emptyList()
                     } catch (cancel: CancellationException) {
                         throw cancel
                     } catch (failure: AppApiException) {
