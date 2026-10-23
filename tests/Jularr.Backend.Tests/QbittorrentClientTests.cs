@@ -100,10 +100,34 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("abc123", client.LastHashes);
         }
 
+        [TestMethod]
+        public async Task Grab_AssignsOnlyTheTaggedTorrent_NotTheNewestOrSameNamedUnrelatedTorrent()
+        {
+            var client = new FakeQbittorrent { IncludeUnrelated = true };
+            using var http = new HttpClient(client);
+            var sut = new QbittorrentClient(http);
+            var result = await sut.GrabAsync(new QbittorrentConnection("http://torrent:8080", "admin", "secret"),
+                new QbittorrentGrabRequest(new Uri("https://nyaa.media/download/1.torrent"), "/downloads/complete", "Example Novel v01"), default);
+            Assert.IsTrue(result.Success);
+            Assert.AreEqual("abc123", result.Hash);
+        }
+
+        [TestMethod]
+        public void StoppedUploading_IsCompletedAndPaused_AndStoppedDownloadingIsNotComplete()
+        {
+            var seed = new QbittorrentTorrent("abc", "novel", "stoppedUP", 1, 100, 100, 0, 2, 0, "/downloads/novel", "/downloads");
+            var stopped = new QbittorrentTorrent("def", "novel", "stoppedDL", 0.3, 100, 30, 0, 0, 0, "/downloads/novel", "/downloads");
+            Assert.IsTrue(seed.IsPaused);
+            Assert.IsTrue(seed.IsCompleted);
+            Assert.IsTrue(stopped.IsPaused);
+            Assert.IsFalse(stopped.IsCompleted);
+        }
+
         // The client as it answers: a session cookie on the login, the version, the list and the actions.
         private sealed class FakeQbittorrent : HttpMessageHandler
         {
             public bool AcceptLogin { get; init; } = true;
+            public bool IncludeUnrelated { get; init; } = false;
             public int Logins { get; private set; }
             public string? Password { get; private set; }
             public string? AddedUrl { get; private set; }
@@ -157,7 +181,10 @@ namespace Jularr.Backend.Tests
                     case "/api/v2/torrents/info":
                     {
                         if (query.Length > 1) LastHashFilter = query[1..];
-                        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(TorrentJson.Replace("\"added_on\":", "\"tags\":\"" + Tag + "\",\"added_on\":", StringComparison.Ordinal), Encoding.UTF8, "application/json") });
+                        var json = TorrentJson.Replace("\"added_on\":", "\"tags\":\"" + Tag + "\",\"added_on\":", StringComparison.Ordinal);
+                        if (IncludeUnrelated)
+                            json = json.Replace("[", "[{\"hash\":\"unrelated\",\"name\":\"Example Novel v01\",\"state\":\"downloading\",\"progress\":0.1,\"size\":100,\"completed\":10,\"dlspeed\":10,\"num_complete\":1,\"num_incomplete\":2,\"added_on\":9999999999},", StringComparison.Ordinal);
+                        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") });
                     }
                     case "/api/v2/torrents/stop":
                     case "/api/v2/torrents/start":
