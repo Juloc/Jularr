@@ -2554,6 +2554,7 @@ namespace Jularr.Frontend.Localization
             new("operation.created", "Queued at"),
             new("activity.empty.Queue", "Nothing here."),
             new("activity.details", "Details"),
+            new("acquisition.connection.downloadPathWarning", "Select a folder that Jularr can read. Until a download path is mapped, grabs from this client cannot start."),
             new("activity.files", "Files"),
             new("activity.view.queue", "Queue"),
             new("activity.view.history", "History"),
