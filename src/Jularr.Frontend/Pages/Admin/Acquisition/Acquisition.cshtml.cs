@@ -191,7 +191,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 body.Add(new Div(new Span(new Text("acquisition.connection.today")).Class("feature-card__note"), Usage(item)).Class("feature-card__row"));
             }
 
-            // The settings are inputs of the card; the page's pill saves them. A key or password is never shown again.
+            // Each connection has its own visible save action. A key or password is never shown again.
             body.Add(ConnectionForm(item.AcquisitionConnectionTypeId, csrf, item));
 
             var start = new List<IUiComponent>
@@ -422,8 +422,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     form.Select(item => item.IsEnabled, "acquisition.connection.enabled", [new SelectOption("True", texts["acquisition.connection.on"]), new SelectOption("False", texts["acquisition.connection.off"])]);
                 }
 
-                // Empty media scope serves all types. SABnzbd connections can use separate
-                // categories per type while sharing the same SAB server and path mapping.
+                // Empty media scope serves all types. Jularr identifies media independently
+                // of SABnzbd's optional download categories.
                 if (type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd)
                 {
                     form.Choices(item => item.MediaTypeIds, "acquisition.connection.mediaTypes", Enum.GetValues<MediaType>()
@@ -449,7 +449,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 // Only download clients place files and report their own paths.
                 if (type == AcquisitionConnectionType.Sabnzbd)
                 {
-                    form.Text(item => item.DownloadCategory, "acquisition.connection.category");
+                    // Use SABnzbd's default completed directory. Categories are an internal
+                    // SABnzbd feature, not something users need to configure for Jularr.
                     form.Toggle(item => item.RemovesCompleted, "acquisition.connection.removesCompleted");
                     // SAB reports its real Complete path; only the Jularr-visible folder is chosen here.
                     if (existing?.RemotePath is { } detected)
@@ -462,14 +463,17 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                         ]);
                     }
                     else form.Hidden(item => item.DownloadStorageMountId);
-                    form.Text(item => item.LocalPath, "acquisition.connection.localPath");
-                    var browse = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(Address(existing?.Id, type, "Folders"),
-                        "storageMountId", input.DownloadStorageMountId?.ToString(CultureInfo.InvariantCulture) ?? "");
                     if (texts.Can("storage.read"))
                     {
+                        // Exactly one folder control. The picker writes to this hidden field;
+                        // the selected storage connection already appears in the selector.
+                        form.Hidden(item => item.LocalPath);
+                        var browse = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(Address(existing?.Id, type, "Folders"),
+                            "storageMountId", input.DownloadStorageMountId?.ToString(CultureInfo.InvariantCulture) ?? "");
                         form.Content(new FolderPicker(assets, browse, input.LocalPath ?? "", nameof(input.LocalPath), "/Admin/Storage",
                             storageMountFieldName: nameof(input.DownloadStorageMountId), isVisible: input.DownloadStorageMountId is not null));
                     }
+                    else form.Text(item => item.LocalPath, "acquisition.connection.localPath");
                 }
 
                 if (existing is null)
@@ -477,7 +481,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     form.Cancel();
                     form.Submit("common.save");
                 }
-                else form.Save();
+                else form.Submit("common.save");
             }, Address(existing?.Id, type), csrf, input, _input is not null && (existing is null || submitted) ? FormError : null);
         }
 
