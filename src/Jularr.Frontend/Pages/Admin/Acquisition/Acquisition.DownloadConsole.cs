@@ -86,6 +86,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             if (_fileBrowser is not { } folder)
             {
                 body.Add(new P(new Text("console.notMapped")));
+                var remote = area == "complete" ? _downloadDashboard?.ReportedCompletePath : _downloadDashboard?.ReportedIncompletePath;
+                if (remote is not null) body.Add(new P(new ValueText("SABnzbd: " + remote)).Class("download-console__note"));
                 return new Section([.. body]).Class("download-console__section");
             }
 

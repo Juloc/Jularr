@@ -9,7 +9,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         public DownloadClientDashboardV1(long? speedBytesPerSecond, long? freeBytes, bool isPaused, bool queueLimited, bool historyLimited,
             BaseDataList<DownloadClientQueueItemV1> queue, BaseDataList<DownloadClientHistoryItemV1> history, string[] categories,
             long? todayBytes, long? weekBytes, long? monthBytes, long? totalBytes, string[] orphanFolders,
-            string? completePath, string? incompletePath, bool completeAvailable, bool incompleteAvailable, BaseDataList<DownloadClientFolderEntryV1> files)
+            string? completePath, string? incompletePath, bool completeAvailable, bool incompleteAvailable, BaseDataList<DownloadClientFolderEntryV1> files,
+            string? reportedCompletePath = null, string? reportedIncompletePath = null)
         {
             SpeedBytesPerSecond = speedBytesPerSecond;
             FreeBytes = freeBytes;
@@ -29,6 +30,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             CompleteAvailable = completeAvailable;
             IncompleteAvailable = incompleteAvailable;
             Files = files;
+            ReportedCompletePath = reportedCompletePath;
+            ReportedIncompletePath = reportedIncompletePath;
         }
 
         [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Bytes))]
@@ -80,6 +83,12 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         public bool IncompleteAvailable { get; }
 
         public BaseDataList<DownloadClientFolderEntryV1> Files { get; }
+
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Path))]
+        public string? ReportedCompletePath { get; }
+
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Path))]
+        public string? ReportedIncompletePath { get; }
     }
 
     public sealed class DownloadClientQueueItemV1 : BaseResponse

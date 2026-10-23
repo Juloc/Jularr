@@ -54,7 +54,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 snapshot.TodayBytes, snapshot.WeekBytes, snapshot.MonthBytes, snapshot.TotalBytes,
                 [.. snapshot.OrphanFolders.Where(name => name.Length <= 200).Take(200)],
                 files.CompletePath, files.IncompletePath,
-                files.CompleteAvailable, files.IncompleteAvailable, new BaseDataList<DownloadClientFolderEntryV1>(files.Entries));
+                files.CompleteAvailable, files.IncompleteAvailable, new BaseDataList<DownloadClientFolderEntryV1>(files.Entries),
+                snapshot.ReportedCompletePath, snapshot.ReportedIncompletePath);
         }
     }
 
