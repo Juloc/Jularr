@@ -24,6 +24,7 @@ class TvV1DeviceSession(
     },
 ) {
     private var origin: String? = null
+    private var accountSlot: String? = null
     private var tokens: DeviceTokenStore? = null
     private var api: AppApiClient? = null
 
@@ -39,18 +40,48 @@ class TvV1DeviceSession(
         return requireNotNull(tokens)
     }
 
-    /** Select one server, restoring only that server's encrypted device token. */
+    /** Select the active account slot on one server, never another account's bearer. */
     fun selectServer(rawOrigin: String) {
         val normalized = TvServerOrigin.normalize(rawOrigin)
-        if (origin == normalized && api != null) return
-
-        val store = DeviceTokenStore(
-            initialToken = persistence.loadToken(normalized),
-            onChanged = { token -> persistence.storeToken(normalized, token) },
-        )
+        val vault = persistence as? TvV1AccountPersistence
+        val slot = vault?.ensureV1Account(normalized)
+        if (origin == normalized && accountSlot == slot && api != null) return
+        val store = if (vault != null && slot != null) {
+            DeviceTokenStore(
+                initialToken = vault.loadV1AccountToken(normalized, slot),
+                onChanged = { token -> vault.storeV1AccountToken(normalized, slot, token) },
+            )
+        } else {
+            DeviceTokenStore(
+                initialToken = persistence.loadToken(normalized),
+                onChanged = { token -> persistence.storeToken(normalized, token) },
+            )
+        }
         origin = normalized
+        accountSlot = slot
         tokens = store
         api = apiFactory(normalized, store)
+    }
+
+    fun accounts(): List<TvV1SavedAccount> =
+        (persistence as? TvV1AccountPersistence)?.let { vault ->
+            origin?.let(vault::listV1Accounts)
+        } ?: emptyList()
+
+    fun selectAccount(id: String) {
+        val server = requireNotNull(origin)
+        val vault = persistence as? TvV1AccountPersistence
+            ?: error("Multiple accounts are not supported by this credential store.")
+        vault.activateV1Account(server, id)
+        selectServer(server)
+    }
+
+    fun beginNewAccount() {
+        val server = requireNotNull(origin)
+        val vault = persistence as? TvV1AccountPersistence
+            ?: error("Multiple accounts are not supported by this credential store.")
+        vault.createV1Account(server)
+        selectServer(server)
     }
 
     /** Verify a stored token; a revoked token is cleared by the HTTP client on 401. */
@@ -88,11 +119,19 @@ class TvV1DeviceSession(
     /** Only clear this selected server's local credentials; never touch legacy cookies. */
     fun forgetDevice() {
         val currentOrigin = origin ?: return
-        persistence.storeToken(currentOrigin, null)
-        tokens = DeviceTokenStore(
-            onChanged = { token -> persistence.storeToken(currentOrigin, token) },
-        )
-        api = apiFactory(currentOrigin, requireNotNull(tokens))
+        val vault = persistence as? TvV1AccountPersistence
+        val slot = accountSlot
+        if (vault != null && slot != null) {
+            vault.storeV1AccountToken(currentOrigin, slot, null)
+        } else {
+            persistence.storeToken(currentOrigin, null)
+        }
+        // Force a new token store, so no stale bearer is retained in memory.
+        origin = null
+        accountSlot = null
+        tokens = null
+        api = null
+        selectServer(currentOrigin)
     }
 
     private fun client(): AppApiClient =

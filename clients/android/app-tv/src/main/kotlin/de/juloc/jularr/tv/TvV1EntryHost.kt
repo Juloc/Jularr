@@ -30,7 +30,9 @@ import kotlinx.coroutines.isActive
 fun TvV1EntryHost(
     settings: TvServerSettings,
     session: TvV1DeviceSession,
-    onAuthenticated: @Composable (String, InstanceCapabilities) -> Unit = { origin, _ ->
+    onAuthenticated: @Composable (
+        String, InstanceCapabilities, () -> Unit, () -> Unit, () -> Unit, () -> Unit, () -> Unit
+    ) -> Unit = { origin, _, _, _, _, _, _ ->
         TvV1AuthenticatedPendingCatalog(origin)
     },
 ) {
@@ -119,6 +121,32 @@ fun TvV1EntryHost(
             },
         )
 
+        TvV1EntryPhase.AccountSelection -> TvCenteredPanel(
+            title = "Account auswählen",
+            description = "Jede Anmeldung besitzt einen eigenen verschlüsselten Geräte-Token.",
+        ) {
+            session.accounts().forEach { account ->
+                Button(onClick = {
+                    session.selectAccount(account.id)
+                    capabilities = null
+                    error = null
+                    phase = TvV1EntryPhase.Restoring
+                }) {
+                    Text(account.label + if (account.hasToken) "" else " · Kopplung erforderlich")
+                }
+            }
+            Button(onClick = {
+                session.beginNewAccount()
+                capabilities = null
+                pairing = null
+                error = null
+                phase = TvV1EntryPhase.Pairing
+            }) { Text("Weiteren Account koppeln") }
+            Button(onClick = {
+                phase = TvV1EntryPhase.Restoring
+            }) { Text("Abbrechen") }
+        }
+
         TvV1EntryPhase.Restoring -> TvCenteredPanel(
             title = "Jularr TV",
             description = "Verbindung zur Jularr-Instanz wird geprüft.",
@@ -153,7 +181,38 @@ fun TvV1EntryHost(
             }
         }
 
-        TvV1EntryPhase.Authenticated -> onAuthenticated(requireNotNull(origin), requireNotNull(capabilities))
+        TvV1EntryPhase.Authenticated -> onAuthenticated(
+            requireNotNull(origin),
+            requireNotNull(capabilities),
+            {
+                // A revoked bearer cannot reuse an authenticated catalog screen.
+                pairing = null
+                capabilities = null
+                phase = TvV1EntryPhase.Pairing
+            },
+            {
+                // Changing profiles rotates the device bearer; reload permissions and
+                // discard the previous profile's cached library/continue data.
+                capabilities = null
+                phase = TvV1EntryPhase.Restoring
+            },
+            {
+                capabilities = null
+                pairing = null
+                phase = TvV1EntryPhase.Pairing
+            },
+            {
+                capabilities = null
+                pairing = null
+                phase = TvV1EntryPhase.Setup
+            },
+            {
+                // The current viewer's catalog is disposed while choosing another
+                // device bearer. Do not touch other saved slots.
+                capabilities = null
+                phase = TvV1EntryPhase.AccountSelection
+            },
+        )
 
         TvV1EntryPhase.Failed -> TvCenteredPanel(
             title = "Verbindung fehlgeschlagen",
@@ -194,7 +253,7 @@ private fun TvV1AuthenticatedPendingCatalog(origin: String) {
     }
 }
 
-private enum class TvV1EntryPhase { Setup, Restoring, Pairing, Authenticated, Failed }
+private enum class TvV1EntryPhase { Setup, Restoring, Pairing, Authenticated, AccountSelection, Failed }
 
 private fun Exception.tvV1FriendlyError(): String =
     when (this) {

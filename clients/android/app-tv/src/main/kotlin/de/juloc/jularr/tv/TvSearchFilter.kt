@@ -17,12 +17,7 @@ object TvSearchFilter {
     ): List<AnimeSummary> {
         val needle = query.trim()
         return library.filter { anime ->
-            val isMovie = anime.format.equals("MOVIE", ignoreCase = true)
-            val matchesType = when (category) {
-                TvContentFilter.ALL, TvContentFilter.ANIME -> true
-                TvContentFilter.SERIES -> !isMovie
-                TvContentFilter.MOVIES -> isMovie
-            }
+            val matchesType = category.includes(anime.format)
             matchesType && (
                 needle.isBlank() ||
                     anime.title.contains(needle, ignoreCase = true) ||

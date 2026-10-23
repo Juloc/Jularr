@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import de.juloc.jularr.core.model.AnimeSummary
@@ -48,9 +49,15 @@ fun TvSearchScreen(
     onQueryChange: (String) -> Unit,
     onFilterChange: (TvContentFilter) -> Unit,
     onAnime: (AnimeSummary) -> Unit,
+    serverQueryResults: Boolean = false,
+    onOpenDiscover: (() -> Unit)? = null,
+    onLoadMore: (() -> Unit)? = null,
+    pagingError: String? = null,
 ) {
-    val results = remember(library, query, selectedFilter) {
-        TvSearchFilter.matches(library.anime, query, selectedFilter)
+    // clean-start performs query matching server-side, including aliases not present
+    // in the summary card. Do not discard valid server results with a second local match.
+    val results = remember(library, query, selectedFilter, serverQueryResults) {
+        TvSearchFilter.matches(library.anime, if (serverQueryResults) "" else query, selectedFilter)
     }
     val focusColor = rememberTvFocusColor()
     val searchFocus = remember { FocusRequester() }
@@ -125,6 +132,11 @@ fun TvSearchScreen(
             screenKey = "search",
             onSelect = onFilterChange,
         )
+        if (onOpenDiscover != null) {
+            Button(onClick = onOpenDiscover) {
+                Text("Im gesamten Katalog suchen (Discover)")
+            }
+        }
 
         Text(
             stringResource(
@@ -135,6 +147,9 @@ fun TvSearchScreen(
             style = MaterialTheme.typography.titleLarge,
         )
 
+        if (pagingError != null) {
+            Text(pagingError, color = MaterialTheme.colorScheme.error)
+        }
         if (results.isEmpty()) {
             Text(
                 if (query.isBlank()) stringResource(R.string.tv_search_empty_library)
@@ -206,7 +221,12 @@ fun TvSearchScreen(
                         }
                     }
                 }
-            }
+                if (onLoadMore != null) {
+                    item(key = "load-more") {
+                        Button(onClick = onLoadMore) { Text("Weitere Ergebnisse laden") }
+                    }
+                }
         }
     }
+}
 }

@@ -52,6 +52,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import de.juloc.jularr.core.api.catalog.TvCollectionV1
 import de.juloc.jularr.core.model.ContinueWatchingItem
 import de.juloc.jularr.core.model.WatchlistItem
 import java.util.Locale
@@ -126,6 +127,14 @@ fun TvWatchlistScreen(
     requestHeaders: Map<String, String>,
     focusMemory: TvFocusMemory,
     onOpenAnime: (animeId: String) -> Unit,
+    onOpenVideoWork: ((workId: String) -> Unit)? = null,
+    onLoadMore: (() -> Unit)? = null,
+    pagingError: String? = null,
+    collections: List<TvCollectionV1> = emptyList(),
+    selectedCollectionId: Long? = null,
+    onSelectCollection: (Long?) -> Unit = {},
+    collectionLoading: Boolean = false,
+    collectionError: String? = null,
 ) {
     if (!supported) {
         TvCenteredPanel(
@@ -152,6 +161,14 @@ fun TvWatchlistScreen(
                 it.name == focusMemory.recall("watchlist-sort")
             } ?: TvWatchlistSort.NEWEST,
         )
+    }
+    // The TV's collection endpoint is explicitly video-scoped. A previously
+    // selected Books filter must not make a non-empty video collection appear
+    // empty, nor should Books be offered as a valid filter for that collection.
+    LaunchedEffect(selectedCollectionId) {
+        if (selectedCollectionId != null && category == TvWatchlistCategory.BOOKS) {
+            category = TvWatchlistCategory.ALL
+        }
     }
     var sortOpen by remember { mutableStateOf(false) }
     var sortPreviouslyOpened by remember { mutableStateOf(false) }
@@ -188,12 +205,14 @@ fun TvWatchlistScreen(
     LaunchedEffect(infoEntry?.id) {
         if (infoEntry != null) runCatching { infoFocus.requestFocus() }
     }
-    BackHandler(enabled = sortOpen || infoEntry != null) {
-        if (infoEntry != null) {
-            infoEntry = null
-            focusRevision += 1
-        } else {
-            sortOpen = false
+    BackHandler(enabled = sortOpen || infoEntry != null || selectedCollectionId != null) {
+        when {
+            infoEntry != null -> {
+                infoEntry = null
+                focusRevision += 1
+            }
+            sortOpen -> sortOpen = false
+            selectedCollectionId != null -> onSelectCollection(null)
         }
     }
 
@@ -228,8 +247,42 @@ fun TvWatchlistScreen(
                     }
                 }
 
+                if (collections.isNotEmpty()) {
+                    Text(
+                        "Sammlungen",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        item(key = "all-favorites") {
+                            Button(onClick = { onSelectCollection(null) }) {
+                                Text(if (selectedCollectionId == null) "✓ Alle Favoriten" else "Alle Favoriten")
+                            }
+                        }
+                        items(collections, key = { "collection:${it.id}" }) { collection ->
+                            Button(onClick = { onSelectCollection(collection.id) }) {
+                                Text(
+                                    (if (collection.id == selectedCollectionId) "✓ " else "") +
+                                        collection.name +
+                                        (collection.workCount?.let { " · $it" } ?: ""),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+                collectionError?.let { message ->
+                    Text(message, color = MaterialTheme.colorScheme.error)
+                }
+
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(TvWatchlistCategory.entries.toList(), key = { it.name }) { option ->
+                    items(
+                        TvWatchlistCategory.entries.filter {
+                            selectedCollectionId == null || it != TvWatchlistCategory.BOOKS
+                        },
+                        key = { it.name },
+                    ) { option ->
                         var focused by remember(option) { mutableStateOf(false) }
                         val shape = RoundedCornerShape(24.dp)
                         Box(
@@ -257,7 +310,12 @@ fun TvWatchlistScreen(
                     }
                 }
 
-                if (entries.isEmpty()) {
+                if (pagingError != null) {
+                    Text(pagingError, color = MaterialTheme.colorScheme.error)
+                }
+                if (collectionLoading) {
+                    Text("Favoriten werden geladen …", color = Color.White)
+                } else if (entries.isEmpty()) {
                     TvCenteredPanel(
                         title = stringResource(R.string.tv_watchlist_title),
                         description = stringResource(R.string.tv_watchlist_empty),
@@ -300,9 +358,19 @@ fun TvWatchlistScreen(
                                         entry.mediaType.equals("anime", ignoreCase = true)
                                     }
                                     if (playableId != null) onOpenAnime(playableId)
-                                    else infoEntry = entry
+                                    else {
+                                        val workId = entry.localMediaId
+                                        if (workId != null && onOpenVideoWork != null) {
+                                            onOpenVideoWork(workId)
+                                        } else infoEntry = entry
+                                    }
                                 },
                             )
+                        }
+                        if (onLoadMore != null) {
+                            item(key = "load-more") {
+                                Button(onClick = onLoadMore) { Text("Weitere Favoriten laden") }
+                            }
                         }
                     }
                 }

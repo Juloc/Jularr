@@ -59,9 +59,10 @@ class JularrMedia3Player(context: Context) : Closeable {
         playWhenReady: Boolean = true,
         requestHeaders: Map<String, String> = emptyMap(),
         metadata: JularrPlaybackMetadata? = null,
+        subtitleConfigurations: List<MediaItem.SubtitleConfiguration> = emptyList(),
     ) {
         httpDataSourceFactory.setDefaultRequestProperties(requestHeaders)
-        exoPlayer.setMediaItem(buildMediaItem(uri, metadata))
+        exoPlayer.setMediaItem(buildMediaItem(uri, metadata, subtitleConfigurations))
         exoPlayer.prepare()
 
         if (startPositionMs > 0) {
@@ -69,6 +70,14 @@ class JularrMedia3Player(context: Context) : Closeable {
         }
 
         exoPlayer.playWhenReady = playWhenReady
+    }
+
+    /**
+     * Update credentials on the shared Media3 HTTP factory after an API response rotates
+     * the device bearer. This is especially important for subsequent HLS segment requests.
+     */
+    fun updateRequestHeaders(requestHeaders: Map<String, String>) {
+        httpDataSourceFactory.setDefaultRequestProperties(requestHeaders)
     }
 
     override fun close() {
@@ -79,13 +88,14 @@ class JularrMedia3Player(context: Context) : Closeable {
     private fun buildMediaItem(
         uri: Uri,
         metadata: JularrPlaybackMetadata?,
+        subtitleConfigurations: List<MediaItem.SubtitleConfiguration>,
     ): MediaItem {
-        if (metadata == null) {
-            return MediaItem.fromUri(uri)
-        }
-
-        return MediaItem.Builder()
+        val builder = MediaItem.Builder()
             .setUri(uri)
+            .setSubtitleConfigurations(subtitleConfigurations)
+        if (metadata == null) return builder.build()
+
+        return builder
             .setMediaId(metadata.mediaId)
             .setMediaMetadata(
                 MediaMetadata.Builder()

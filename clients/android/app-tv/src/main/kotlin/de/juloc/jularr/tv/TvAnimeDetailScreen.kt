@@ -46,6 +46,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import de.juloc.jularr.core.api.catalog.TvWorkEpisodeV1
 import de.juloc.jularr.core.model.AnimeDetail
 import de.juloc.jularr.core.model.ContinueWatchingItem
 import de.juloc.jularr.core.model.EpisodeSummary
@@ -79,6 +80,12 @@ fun TvAnimeScreen(
     onEpisode: (EpisodeSummary) -> Unit,
     onPlayEpisode: (EpisodeSummary) -> Unit,
     onBack: () -> Unit,
+    onPlayMovie: (() -> Unit)? = null,
+    isWatchlisted: Boolean = false,
+    onToggleWatchlist: (() -> Unit)? = null,
+    onOpenCredits: (() -> Unit)? = null,
+    specialEpisodes: List<TvWorkEpisodeV1> = emptyList(),
+    onPlaySpecialEpisode: (TvWorkEpisodeV1) -> Unit = {},
 ) {
     val context = LocalContext.current
     val accent = remember(context) { TvPlayerDesignLoader.load(context).accent }
@@ -203,10 +210,26 @@ fun TvAnimeScreen(
                                     ),
                                 )
                             }
+                        } else if (onPlayMovie != null) {
+                            Button(
+                                onClick = onPlayMovie,
+                                modifier = Modifier.focusRequester(heroFocus),
+                            ) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                                Text(" " + stringResource(R.string.tv_anime_play))
+                            }
+                        }
+                        if (onToggleWatchlist != null) {
+                            Button(onClick = onToggleWatchlist) {
+                                Text(if (isWatchlisted) "Von Watchlist entfernen" else "Zur Watchlist")
+                            }
+                        }
+                        if (onOpenCredits != null) {
+                            Button(onClick = onOpenCredits) { Text("Mitwirkende") }
                         }
                         Button(
                             onClick = onBack,
-                            modifier = if (activeEpisode == null)
+                            modifier = if (activeEpisode == null && onPlayMovie == null)
                                 Modifier.focusRequester(heroFocus) else Modifier,
                         ) {
                             Text(stringResource(R.string.tv_action_back))
@@ -405,6 +428,35 @@ fun TvAnimeScreen(
                     }
                 }
             }
+            // Real WorkUnit episode numbers may contain decimals (for example 2.5).
+            // Keep them as BigDecimal instead of fabricating an integer EpisodeSummary.
+            val specials = specialEpisodes.filter { it.seasonNumber == selectedSeason }
+            if (specials.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = "fractional-episodes") {
+                    Text("Sonderfolgen", style = MaterialTheme.typography.titleLarge)
+                }
+                gridItems(specials, key = { "special:${it.id}" }) { episode ->
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = episode.playableMediaAssetId() != null,
+                        onClick = { onPlaySpecialEpisode(episode) },
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text(
+                                "S${episode.seasonNumber} E${episode.number.stripTrailingZeros().toPlainString()}",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(episode.title ?: "Sonderfolge ohne Titel")
+                            Text(
+                                if (episode.playableMediaAssetId() != null) "Abspielen"
+                                else "Keine lokale Mediendatei",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+            }
+
         }
     }
 }

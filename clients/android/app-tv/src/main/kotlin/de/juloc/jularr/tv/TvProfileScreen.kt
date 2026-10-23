@@ -49,7 +49,7 @@ import de.juloc.jularr.core.update.UpdateCheckResult
  */
 @Composable
 fun TvProfileScreen(
-    account: ClientAccount,
+    account: ClientAccount?,
     serverOrigin: String,
     currentVersionName: String,
     updateState: TvUpdateState,
@@ -63,6 +63,8 @@ fun TvProfileScreen(
     onChangeServer: () -> Unit,
     onSwitchAccount: (() -> Unit)? = null,
     onSwitchProfile: (() -> Unit)? = null,
+    onOpenStatistics: (() -> Unit)? = null,
+    onOpenSessions: (() -> Unit)? = null,
     playbackPreferences: ClientPlaybackPreferences? = null,
     busy: Boolean = false,
     error: String? = null,
@@ -156,11 +158,17 @@ fun TvProfileScreen(
                         TvSettingRow(stringResource(R.string.tv_profile_switch_profile), null, onClick = onSwitchProfile)
                     }
                 }
+                if (onOpenStatistics != null) {
+                    item { TvSettingRow("Nutzungsstatistik", null, onClick = onOpenStatistics) }
+                }
+                if (onOpenSessions != null) {
+                    item { TvSettingRow("Aktive Sitzungen", null, onClick = onOpenSessions) }
+                }
                 if (onSwitchAccount != null) {
                     item {
                         TvSettingRow(
                             stringResource(R.string.tv_profile_switch_account),
-                            account.userName,
+                            account?.userName,
                             onClick = onSwitchAccount,
                         )
                     }
