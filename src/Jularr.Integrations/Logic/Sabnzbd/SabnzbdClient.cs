@@ -165,7 +165,7 @@ namespace Jularr.Integrations.Logic.Sabnzbd
         {
             var id = ValidateNzoId(nzoId);
             using var response = await SendAsync(connection,
-                [new("mode", "history"), new("name", "delete"), new("value", id), new("del_files", "1")], ct);
+                [new("mode", "history"), new("name", "delete"), new("value", id), new("del_files", "1"), new("archive", "0")], ct);
             RequireStatus(await RequireBodyAsync(response, ct));
         }
 
