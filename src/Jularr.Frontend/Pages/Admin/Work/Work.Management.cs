@@ -726,7 +726,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     .Text(item => item.QualityKey, "wanted.search.quality")
                     .Resource(item => item.AcquisitionReleaseStatusTypeId, "table.status", status => "acquisition.release." + status)
                     .Content("wanted.search.reason", item => item.ReasonKey is { } reason ? new Text("acquisition.outcome." + reason) : new Span())
-                    .Content("wanted.history.date", item => new ValueText(item.CreatedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)))
+                    .Content("wanted.history.date", item => new LocalTime(item.CreatedAt))
                     .Content("common.actions", item => item.AcquisitionReleaseStatusTypeId == Jularr.Backend.Data.Enums.Acquisition.AcquisitionReleaseStatusType.Grabbed || !CanAcquire
                         ? new Span()
                         : new Form<MarkWantedReleaseDataV1>(form =>
