@@ -373,6 +373,32 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             return Page();
         }
 
+        // Stream provider/identity search stages as the preview is prepared. The final HTML form stays unchanged.
+        public async Task<IActionResult> OnPostPreviewStreamAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
+        {
+            if (!texts.CanImportMedia()) return Forbid();
+            Read(file, json, action, defaults, choices);
+            BeginProgressStream();
+            await WriteProgressAsync(new { kind = "started" });
+            preview.OnItemProgressAsync = (index, stage, count) => WriteProgressAsync(new { kind = "row", index, stage, count });
+
+            try
+            {
+                var result = await preview.ExecuteAsync<MediaImportPreviewV1>(_input!, HttpContext.RequestAborted);
+                await WriteProgressAsync(new { kind = "done", total = result.Rows.Count, unsearched = result.Unsearched });
+            }
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                await WriteProgressAsync(new { kind = "error" });
+            }
+
+            return new EmptyResult();
+        }
+
         public async Task<IActionResult> OnPostApplyAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
         {
             Read(file, json, action, defaults, choices);
@@ -386,18 +412,10 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         {
             if (!texts.CanImportMedia()) return Forbid();
             Read(file, json, action, defaults, choices);
-            Response.ContentType = "application/x-ndjson; charset=utf-8";
-            Response.Headers.CacheControl = "no-store";
-            Response.Headers["X-Accel-Buffering"] = "no";
+            BeginProgressStream();
 
-            async Task EmitAsync(object update)
-            {
-                await Response.WriteAsync(JsonSerializer.Serialize(update) + "\n", HttpContext.RequestAborted);
-                await Response.Body.FlushAsync(HttpContext.RequestAborted);
-            }
-
-            await EmitAsync(new { kind = "started" });
-            run.OnRowProcessedAsync = row => EmitAsync(new
+            await WriteProgressAsync(new { kind = "started" });
+            run.OnRowProcessedAsync = row => WriteProgressAsync(new
             {
                 kind = "row",
                 index = row.Index,
@@ -410,7 +428,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             try
             {
                 var result = await run.ExecuteAsync<MediaImportResultV1>(_input!, HttpContext.RequestAborted);
-                await EmitAsync(new { kind = "done", remaining = result.RemainingJson });
+                await WriteProgressAsync(new { kind = "done", remaining = result.RemainingJson });
             }
             catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
             {
@@ -419,10 +437,23 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             catch (Exception)
             {
                 // A streaming response has already started, so return a generic error event instead of HTML.
-                await EmitAsync(new { kind = "error" });
+                await WriteProgressAsync(new { kind = "error" });
             }
 
             return new EmptyResult();
+        }
+
+        private void BeginProgressStream()
+        {
+            Response.ContentType = "application/x-ndjson; charset=utf-8";
+            Response.Headers.CacheControl = "no-store";
+            Response.Headers["X-Accel-Buffering"] = "no";
+        }
+
+        private async Task WriteProgressAsync(object update)
+        {
+            await Response.WriteAsync(JsonSerializer.Serialize(update) + "\\n", HttpContext.RequestAborted);
+            await Response.Body.FlushAsync(HttpContext.RequestAborted);
         }
 
         private void Read(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
