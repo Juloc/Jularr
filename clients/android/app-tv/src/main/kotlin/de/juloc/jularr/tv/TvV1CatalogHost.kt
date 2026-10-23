@@ -114,6 +114,9 @@ fun TvV1CatalogHost(
     var selectedPersonId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
     var selectedPerson by remember(serverOrigin) { mutableStateOf<TvPersonV1?>(null) }
     var personWorks by remember(serverOrigin) { mutableStateOf<List<TvWorkCardV1>>(emptyList()) }
+    var personWorksNextPage by remember(serverOrigin) { mutableStateOf<Int?>(null) }
+    var personWorksPagingBusy by remember(serverOrigin) { mutableStateOf(false) }
+    var personWorksPagingError by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var fractionalEpisodes by remember(serverOrigin) {
         mutableStateOf<List<de.juloc.jularr.core.api.catalog.TvWorkEpisodeV1>>(emptyList())
     }
@@ -217,6 +220,31 @@ fun TvV1CatalogHost(
         }
     }
 
+    fun loadMorePersonWorks() {
+        val requestedPerson = selectedPersonId ?: return
+        val requestedPage = personWorksNextPage ?: return
+        if (personWorksPagingBusy || page != TvV1CatalogPage.Person) return
+        personWorksPagingBusy = true
+        personWorksPagingError = null
+        scope.launch {
+            try {
+                val result = catalog.personWorks(requestedPerson, requestedPage, pageSize = 100)
+                check(result.page == requestedPage && result.pageSize == 100)
+                if (page == TvV1CatalogPage.Person && selectedPersonId == requestedPerson) {
+                    personWorks = (personWorks + result.items.filter {
+                        TvV1LegacyUiModels.isVideo(it.mediaTypeId)
+                    }).distinctBy { it.id }
+                    personWorksNextPage = if (result.items.size == 100) requestedPage + 1 else null
+                }
+            } catch (failure: AppApiException) {
+                if (failure.statusCode == 401) onAuthenticationExpired()
+                else personWorksPagingError = "Filmografie: ${failure.code} (HTTP ${failure.statusCode})"
+            } catch (failure: Exception) {
+                personWorksPagingError = failure.message ?: "Weitere Werke konnten nicht geladen werden."
+            } finally { personWorksPagingBusy = false }
+        }
+    }
+
     fun back() {
         error = null
         val restored = TvV1AppController.back(navigation)
@@ -299,8 +327,11 @@ fun TvV1CatalogHost(
                 TvV1CatalogPage.Person -> {
                     val personId = requireNotNull(selectedPersonId)
                     selectedPerson = catalog.person(personId)
-                    personWorks = loadCatalogPages { n -> catalog.personWorks(personId, page = n, pageSize = 100) }
-                        .filter { TvV1LegacyUiModels.isVideo(it.mediaTypeId) }
+                    val first = catalog.personWorks(personId, page = 1, pageSize = 100)
+                    check(first.page == 1 && first.pageSize == 100)
+                    personWorks = first.items.filter { TvV1LegacyUiModels.isVideo(it.mediaTypeId) }
+                    personWorksNextPage = if (first.items.size == 100) 2 else null
+                    personWorksPagingError = null
                 }
                 TvV1CatalogPage.PlaybackPending, TvV1CatalogPage.Player,
                 TvV1CatalogPage.MovieEditions, TvV1CatalogPage.Settings,
@@ -695,6 +726,8 @@ fun TvV1CatalogHost(
                 selectedPersonId = id
                 selectedPerson = null
                 personWorks = emptyList()
+                personWorksNextPage = null
+                personWorksPagingError = null
                 openPage(TvV1CatalogPage.Person, workId = detailWorkId, personId = id)
             },
             onRetry = { reload += 1 },
@@ -709,6 +742,9 @@ fun TvV1CatalogHost(
             requestHeaders = authorization,
             onWork = { id -> openWork(id.toString()) },
             onRetry = { reload += 1 },
+            onLoadMore = if (personWorksNextPage != null && !personWorksPagingBusy) ::loadMorePersonWorks else null,
+            loadingMore = personWorksPagingBusy,
+            pagingError = personWorksPagingError,
             onBack = ::back,
         )
         TvV1CatalogPage.MovieEditions -> TvCenteredPanel(
@@ -758,20 +794,6 @@ fun TvV1CatalogHost(
             onBack = ::back,
         )
     }
-}
-
-/** PageResult<T> has no guaranteed total count: keep requesting until a short page. */
-private suspend fun <T> loadCatalogPages(
-    fetch: suspend (Int) -> de.juloc.jularr.core.api.catalog.TvPageV1<T>,
-): List<T> {
-    val items = mutableListOf<T>()
-    for (page in 1..20) {
-        val response = fetch(page)
-        require(response.page == page) { "Unerwartete Jularr-Seitennummer." }
-        items.addAll(response.items)
-        if (response.items.size < 100) return items
-    }
-    error("Die Bibliothek überschreitet 2000 Einträge. Pagination muss erweitert werden.")
 }
 
 @Composable
