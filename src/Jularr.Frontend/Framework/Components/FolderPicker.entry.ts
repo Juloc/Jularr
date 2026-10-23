@@ -101,6 +101,43 @@ onPage(import.meta.url, () => document.querySelectorAll<HTMLElement>('[data-fold
         }
     }
 
+    async function createFolder(button: HTMLElement): Promise<void> {
+        const root = button.closest<HTMLElement>('[data-folder-fragment]');
+        const input = root?.querySelector<HTMLInputElement>('[data-folder-new-name]');
+        const name = input?.value.trim() ?? '';
+        if (!name || name === '.' || name === '..' || /[\\\\/]/.test(name)) {
+            input?.focus();
+            return;
+        }
+        const url = new URL(currentUrl, location.href);
+        const mountId = url.searchParams.get('storageMountId');
+        if (!mountId || !/^\\d+$/.test(mountId)) return;
+        const relativePath = url.searchParams.get('path') ?? '';
+        const token = picker.closest('form')?.querySelector<HTMLInputElement>('input[name="__RequestVerificationToken"]')?.value ?? '';
+        content!.inert = true;
+        status!.hidden = false;
+        status!.setAttribute('role', 'status');
+        status!.textContent = picker.dataset.folderLoading ?? '';
+        try {
+            const response = await fetch(`/api/v1/admin/storage/mounts/${mountId}/download-directory`, {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', RequestVerificationToken: token },
+                body: JSON.stringify({ relativePath, directoryName: name })
+            });
+            if (!response.ok) throw new Error('Folder creation failed.');
+            url.searchParams.set('path', relativePath ? relativePath + '/' + name : name);
+            url.searchParams.delete('afterName');
+            content!.inert = false;
+            await load(url.href);
+        } catch {
+            status!.hidden = false;
+            status!.setAttribute('role', 'alert');
+            status!.textContent = picker.dataset.folderError ?? '';
+        } finally {
+            content!.inert = false;
+        }
+    }
+
     // Opening and folder navigation preserve the surrounding form draft.
     opener.addEventListener('click', event => {
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
@@ -124,6 +161,12 @@ onPage(import.meta.url, () => document.querySelectorAll<HTMLElement>('[data-fold
         if (link) {
             event.preventDefault();
             void load(link.href);
+            return;
+        }
+        const create = event.target.closest<HTMLElement>('[data-folder-create]');
+        if (create && !content.inert) {
+            event.preventDefault();
+            void createFolder(create);
             return;
         }
         const choose = event.target.closest<HTMLElement>('[data-folder-choose]');
