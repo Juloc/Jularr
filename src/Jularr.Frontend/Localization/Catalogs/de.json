@@ -2701,8 +2701,8 @@
    "SABnzbd-Zielordner (nur Anzeige)"
   ],
   "acquisition.connection.localPath": [
-   "Folder inside Jularr storage connection",
-   "Unterordner in der Jularr-Speicherverbindung"
+   "Absolute folder path inside Jularr",
+   "Absoluter Ordnerpfad in Jularr"
   ],
   "acquisition.connection.addIndexer": [
    "Add indexer",
