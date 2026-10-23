@@ -33,7 +33,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             try
             {
                 var found = await client.SearchAsync(Site(source), target.CanonicalTitle, categories.Keys, ct);
-                return [.. found.Select(entry => Offer(source, entry, categories[entry.Category]))];
+                return [.. found.Where(entry => categories.ContainsKey(entry.Category)).Select(entry => Offer(source, entry, categories[entry.Category]))];
             }
             catch (Exception exception) when (exception is NyaaException or HttpRequestException
                 || exception is TaskCanceledException && !ct.IsCancellationRequested)
@@ -93,7 +93,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var code = language ?? LanguageOf(entry.Title);
             var name = entry.Title + (code is { Length: > 0 } ? " (" + code.ToUpperInvariant() + ")" : "");
             return new ReleaseOffer(name.Length <= 1000 ? name : name[..1000], source.Id, source.Name, source.Priority, "nyaa:" + entry.Id,
-                NyaaClient.TorrentUri(entry.Id), entry.ViewUri, entry.SizeBytes, entry.Published, ["title"]);
+                NyaaClient.TorrentUri(entry.Id, entry.ViewUri), entry.ViewUri, entry.SizeBytes, entry.Published, ["title"]);
         }
 
         // The title names the language of the file: (FR) or [Manga FR].
