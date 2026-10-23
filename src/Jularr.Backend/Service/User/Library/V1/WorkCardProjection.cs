@@ -45,27 +45,26 @@ namespace Jularr.Backend.Service.User.Library.V1
             acquisition."AvailabilityStateId",
             availability."AvailableUnits",
             availability."MonitoredUnits",
-            tracks."AudioLanguages",
-            tracks."SubtitleLanguages",
+            coalesce(tracks."AudioLanguages", '{}') AS "AudioLanguages",
+            coalesce(tracks."SubtitleLanguages", '{}') AS "SubtitleLanguages",
             workProgress."ProgressStateId",
             workProgress."ProgressPercent"
             """;
 
         // Where the profile stands with the title: finished when its own progress or every unit is completed,
         // in progress when anything was started, else not started. Needs only the Work as "work" and the profile.
-        public const string ProgressJoin =
+        private const string ProgressCounts =
             """
-            CROSS JOIN LATERAL (
                 SELECT
+                    leaf."WorkId",
                     count(*)::integer AS "Total",
                     count(*) FILTER (WHERE unitProgress."IsCompleted")::integer AS "Done",
                     count(*) FILTER (WHERE NOT unitProgress."IsCompleted" AND (coalesce(unitProgress."PositionMs", 0) > 0 OR coalesce(unitProgress."Progression", 0) > 0))::integer AS "Started"
                 FROM
                     "WorkUnits" AS leaf
-                    LEFT JOIN "MediaProgress" AS unitProgress ON unitProgress."ProfileId" = @ProfileId AND unitProgress."WorkId" = work."Id" AND unitProgress."WorkUnitId" = leaf."Id"
+                    LEFT JOIN "MediaProgress" AS unitProgress ON unitProgress."ProfileId" = @ProfileId AND unitProgress."WorkId" = leaf."WorkId" AND unitProgress."WorkUnitId" = leaf."Id"
                 WHERE
-                    leaf."WorkId" = work."Id"
-                    AND NOT EXISTS (
+                    NOT EXISTS (
                         SELECT
                             1
                         FROM
@@ -73,7 +72,15 @@ namespace Jularr.Backend.Service.User.Library.V1
                         WHERE
                             child."ParentWorkUnitId" = leaf."Id"
                     )
-            ) AS unitCounts
+                GROUP BY
+                    leaf."WorkId"
+            """;
+
+        public const string ProgressJoin = "LEFT JOIN (" + ProgressCounts + ") AS unitCounts ON unitCounts.\"WorkId\" = work.\"Id\"\n" + ProgressStateJoin;
+        public const string PageProgressJoin = "LEFT JOIN \"UnitProgressCounts\" AS unitCounts ON unitCounts.\"WorkId\" = work.\"Id\"\n" + ProgressStateJoin;
+
+        private const string ProgressStateJoin =
+            """
             LEFT JOIN "MediaProgress" AS ownProgress ON ownProgress."ProfileId" = @ProfileId AND ownProgress."WorkId" = work."Id" AND ownProgress."WorkUnitId" IS NULL
             CROSS JOIN LATERAL (
                 SELECT
@@ -98,24 +105,40 @@ namespace Jularr.Backend.Service.User.Library.V1
             ) AS workProgress
             """;
 
-        // One page of cards. The candidates are only the ordered, bounded Work ids of a list (its filters, order, LIMIT @PageSize OFFSET @Offset);
-        // the projection below, which is the expensive part, runs for the shown page alone and not for every Work the list could hold.
+        // One ordered page: sorting and cards share the unit progress counts. Per-title availability runs for the selected Works alone.
         public static string Page(string candidates, string isWatchlisted) =>
             $$"""
+            WITH "UnitProgressCounts" AS MATERIALIZED (
+                {{ProgressCounts}}
+            )
             SELECT
                 {{Columns}},
                 {{isWatchlisted}} AS "IsWatchlisted"
             FROM
                 unnest(ARRAY({{candidates}})) WITH ORDINALITY AS picked ("Id", "Place")
                 JOIN "Works" AS work ON work."Id" = picked."Id"
-                JOIN "ProfileWorks" AS visible ON visible."ProfileId" = @ProfileId AND visible."WorkId" = work."Id"
-                {{Joins}}
+                JOIN LATERAL (
+                    SELECT
+                        profileWork."Title",
+                        profileWork."MediaSubtypeId"
+                    FROM
+                        "ProfileWorks" AS profileWork
+                    WHERE
+                        profileWork."ProfileId" = @ProfileId
+                        AND profileWork."WorkId" = work."Id"
+                    -- Keep the profile view parameterized by the selected Work.
+                    OFFSET 0
+                ) AS visible ON TRUE
+                {{CardJoins}}
+                {{PageProgressJoin}}
             ORDER BY
                 picked."Place";
             """;
 
         // The joins every card needs; the profile is the one the query reads for.
-        public const string Joins =
+        public const string Joins = CardJoins + "\n" + ProgressJoin;
+
+        private const string CardJoins =
             """
             JOIN "ProfileWorkStates" AS profileState ON profileState."ProfileId" = @ProfileId AND profileState."WorkId" = work."Id"
             LEFT JOIN LATERAL (
@@ -198,24 +221,36 @@ namespace Jularr.Backend.Service.User.Library.V1
                         ) AS "ProfileAudio"
                     FROM
                         "MediaAssets" AS asset
-                        JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
                     WHERE
                         asset."WorkId" = work."Id"
-                        AND asset."WorkUnitId" IS NOT DISTINCT FROM unitSet."UnitId"
+                        AND (asset."WorkUnitId" = unitSet."UnitId" OR asset."WorkUnitId" IS NULL AND unitSet."UnitId" IS NULL)
+                        AND EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "StoredFiles" AS file
+                            WHERE
+                                file."MediaAssetId" = asset."Id"
+                                AND file."MissingSince" IS NULL
+                                AND NOT file."IsSubtitle"
+                            -- Probe the indexed asset instead of merging the file inventory per unit.
+                            OFFSET 0
+                        )
                     LIMIT 1
                 ) AS present ON TRUE
             ) AS availability
-            CROSS JOIN LATERAL (
+            LEFT JOIN (
                 SELECT
+                    asset."WorkId",
                     coalesce(array_agg(DISTINCT track."Language") FILTER (WHERE track."MediaTrackTypeId" = 2 AND track."Language" IS NOT NULL), '{}') AS "AudioLanguages",
                     coalesce(array_agg(DISTINCT track."Language") FILTER (WHERE track."MediaTrackTypeId" = 3 AND track."Language" IS NOT NULL), '{}') AS "SubtitleLanguages"
                 FROM
                     "MediaAssets" AS asset
                     JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL
                     JOIN "MediaTracks" AS track ON track."StoredFileId" = file."Id"
-                WHERE
-                    asset."WorkId" = work."Id"
-            ) AS tracks
+                GROUP BY
+                    asset."WorkId"
+            ) AS tracks ON tracks."WorkId" = work."Id"
             CROSS JOIN LATERAL (
                 -- What happens with the title before the library holds it: a running download,
                 -- a running search, a request that waits.
@@ -272,6 +307,6 @@ namespace Jularr.Backend.Service.User.Library.V1
                         LIMIT 1
                     ) AS wanted ON TRUE
             ) AS acquisition
-            """ + "\n" + ProgressJoin;
+            """;
     }
 }

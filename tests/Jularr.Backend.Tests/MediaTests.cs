@@ -22,6 +22,43 @@ namespace Jularr.Backend.Tests
     public sealed class MediaTests
     {
         [TestMethod]
+        public async Task Library_RecentFiles_IgnoreMissingVersionsAndKeepUnitAssetsSeparate()
+        {
+            await using var host = await CreateHostAsync();
+            var mount = await LibraryTests.CreateMountAsync(host);
+            var root = await LibraryTests.CreateRootAsync(host, mount, "Recent", MediaType.Series);
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (10, 2, 'Show'), (20, 1, 'Film'), (30, 1, 'Missing');
+                INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works";
+                INSERT INTO "WorkEditions" ("WorkId") SELECT "Id" FROM "Works";
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId")
+                SELECT "WorkId", "WorkId", "Id" FROM "WorkEditions";
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId")
+                SELECT 21, 20, "Id" FROM "WorkEditions" WHERE "WorkId" = 20;
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number", "IsMonitored") VALUES (10, 10, 2, 1, FALSE), (11, 10, 2, 2, TRUE);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId")
+                VALUES (10, 10, 10, 10, 1), (20, 20, 20, NULL, 1), (21, 20, 21, NULL, 1);
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "CreatedAt", "MissingSince")
+                VALUES ({root}, 'show.mkv', 100, now(), now(), 10, '2026-01-02', NULL),
+                    ({root}, 'film.mkv', 100, now(), now(), 20, '2026-01-01', NULL),
+                    ({root}, 'missing-version.mkv', 100, now(), now(), 21, '2026-01-03', now());
+                """);
+
+            CollectionAssert.AreEqual(new long[] { 10, 20, 30 }, await LibraryAsync(host, ""));
+            var film = await ReadCardAsync(host, "/api/v1/library", 20);
+            Assert.AreEqual(1, film.AvailableUnits);
+            Assert.AreEqual(1, film.MonitoredUnits);
+            var show = await ReadCardAsync(host, "/api/v1/library", 10);
+            Assert.AreEqual(0, show.AvailableUnits);
+            Assert.AreEqual(1, show.MonitoredUnits);
+
+            // A returned file changes the order immediately, with no stale result cache.
+            await host.Fixture.RunSqlAsync("""UPDATE "StoredFiles" SET "MissingSince" = NULL WHERE "MediaAssetId" = 21""");
+            CollectionAssert.AreEqual(new long[] { 20, 10, 30 }, await LibraryAsync(host, ""));
+            Assert.AreEqual(1, (await ReadCardAsync(host, "/api/v1/library", 20)).AvailableUnits);
+        }
+
+        [TestMethod]
         public async Task Work_ManualCreationAndStaleEdit_PreserveIdentityAndTitleProvenance()
         {
             await using var host = await CreateHostAsync();

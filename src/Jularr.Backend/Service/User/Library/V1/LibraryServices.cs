@@ -30,7 +30,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                 LibrarySortType.Title => "visible.\"Title\", work.\"Id\"",
                 _ => "available.\"AddedAt\" DESC NULLS LAST, visible.\"Title\", work.\"Id\""
             };
-            var progress = Parameters.LibrarySortTypeId == LibrarySortType.Progress ? WorkCardProjection.ProgressJoin : "";
+            var progress = Parameters.LibrarySortTypeId == LibrarySortType.Progress ? WorkCardProjection.PageProgressJoin : "";
             var sql = new SqlStatement();
             sql.Statement = WorkCardProjection.Page(
                 $$"""
@@ -39,15 +39,16 @@ namespace Jularr.Backend.Service.User.Library.V1
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
-                    LEFT JOIN LATERAL (
+                    LEFT JOIN (
                         SELECT
+                            asset."WorkId",
                             max(file."CreatedAt") AS "AddedAt"
                         FROM
                             "MediaAssets" AS asset
                             JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL
-                        WHERE
-                            asset."WorkId" = work."Id"
-                    ) AS available ON TRUE
+                        GROUP BY
+                            asset."WorkId"
+                    ) AS available ON available."WorkId" = work."Id"
                     LEFT JOIN "WorkExternalIdentities" AS plex ON plex."WorkId" = work."Id" AND plex."Namespace" = 'plex'
                     {{progress}}
                 WHERE
@@ -96,6 +97,7 @@ namespace Jularr.Backend.Service.User.Library.V1
             sql.Parameters.Add(new LibraryPageFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.ReleaseYearFrom, Parameters.ReleaseYearTo, Parameters.Query));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
+            sql.DisableJit = true;
             return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
         }
     }

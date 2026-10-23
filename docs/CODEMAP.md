@@ -165,6 +165,10 @@ Behavior and integration tests are in [Jularr.Backend.Tests](../tests/Jularr.Bac
 - Real Razor forms, antiforgery, language settings, selection rotation, session revocation and logout: `FrontendAuthenticationTests.cs`; requires built Frontend assets.
 - `Infrastructure/TestPostgres.cs`: explicit isolated PostgreSQL fixture; never use the application database.
 
+## Performance measurements
+
+- [Library read benchmark](LIBRARY_PERFORMANCE.md): opt-in `LibraryPerformanceTests`, authenticated service/HTTP p95, SQL plans and card snapshots on isolated PostgreSQL.
+
 ## Not integrated
 
 Anime absolute numbering, artwork for Games, offline play, email verification, 2FA/WebAuthn completion,
