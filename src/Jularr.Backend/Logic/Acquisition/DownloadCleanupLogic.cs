@@ -144,6 +144,9 @@ namespace Jularr.Backend.Logic.Acquisition
                 WHERE operation."OperationTypeId" = 2
                   AND operation."OperationStatusTypeId" IN (3, 4)
                   AND operation."ExternalId" IS NOT NULL
+                  AND operation."FinishedAt" >= (
+                      SELECT version."AppliedAt" FROM "DatabaseSchemaVersions" AS version WHERE version."Version" = 2
+                  )
                   AND connection."AcquisitionConnectionTypeId" = 2
                   AND (
                     operation."OperationStatusTypeId" = 3 AND connection."RemovesCompleted"
