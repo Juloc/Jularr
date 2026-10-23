@@ -88,7 +88,10 @@ internal class TvV1ClientFlow(
         require(page >= 1)
         val result = api.libraryFiltered(
             page = page, pageSize = PageSize,
-            filters = TvCatalogV1Filters(mediaTypeIds = listOf(1, 2)),
+            filters = TvCatalogV1Filters(
+                mediaTypeIds = listOf(1, 2),
+                mediaSubtypeIds = listOf(1), // Named Anime subtype is excluded by type-only SQL filters.
+            ),
             query = query?.trim()?.ifEmpty { null },
         )
         check(result.page == page && result.pageSize == PageSize)
@@ -117,10 +120,18 @@ internal class TvV1ClientFlow(
         )
     }
 
-    suspend fun watchlistPage(page: Int): PageSlice<TvWorkCardV1> {
+    /** Server-sorted video-only favorites; never pretend partial pages are globally sorted. */
+    suspend fun watchlistPage(page: Int, sortTypeId: Int = 1): PageSlice<TvWorkCardV1> {
         ensureLibrary()
-        require(page >= 1)
-        val result = api.watchlist(page = page, pageSize = PageSize)
+        require(page >= 1 && sortTypeId in listOf(1, 2))
+        val result = api.watchlistFiltered(
+            page = page, pageSize = PageSize,
+            filters = TvCatalogV1Filters(
+                mediaTypeIds = listOf(1, 2),
+                mediaSubtypeIds = listOf(1),
+            ),
+            sortTypeId = sortTypeId,
+        )
         check(result.page == page && result.pageSize == PageSize)
         return PageSlice(result.items, result.items.size == PageSize)
     }
