@@ -38,16 +38,16 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(reserve.Locator("[data-byte-input]")).ToHaveValueAsync("512");
                 await reserve.Locator("[data-byte-input]").FillAsync("0");
 
-                await ChooseAsync(page, form, folders.Library, "Incomplete", 0);
+                await CreateAndChooseAsync(page, form, folders.Library, "New incomplete", 0);
                 await ChooseAsync(page, form, folders.Library, "Complete & Bücher", 1);
-                await Assertions.Expect(form.Locator("[name=IncompletePath]")).ToHaveValueAsync("Incomplete");
+                await Assertions.Expect(form.Locator("[name=IncompletePath]")).ToHaveValueAsync("New incomplete");
                 await Assertions.Expect(form.Locator("[name=CompletePath]")).ToHaveValueAsync("Complete & Bücher");
                 Assert.AreEqual(originalAddress, page.Url);
                 Assert.AreEqual(0, navigations);
                 await Assertions.Expect(form.Locator("[name=FreeSpaceReserveBytes]")).ToHaveValueAsync("0");
                 await Steps.SubmitAsync(page, form);
                 form = page.Locator("form[action*='downloadStorageAreaId=1']");
-                await Assertions.Expect(form.Locator("[name=IncompletePath]")).ToHaveValueAsync("Incomplete");
+                await Assertions.Expect(form.Locator("[name=IncompletePath]")).ToHaveValueAsync("New incomplete");
                 await Assertions.Expect(form.Locator("[name=CompletePath]")).ToHaveValueAsync("Complete & Bücher");
                 await Assertions.Expect(form.Locator("[name=MaxJobBytes]")).ToHaveValueAsync("");
                 await Assertions.Expect(page.Locator("form[action*='downloadStorageAreaId=2'] [name=IncompleteStorageMountId]")).ToHaveValueAsync("");
@@ -61,6 +61,19 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "download-storage-" + width);
                 throw;
             }
+        }
+
+        private static async Task CreateAndChooseAsync(IPage page, ILocator form, string mountPath, string path, int field)
+        {
+            await form.GetByRole(AriaRole.Link, new() { Name = "Browse folders", Exact = true }).Nth(field).ClickAsync();
+            var picker = page.GetByRole(AriaRole.Dialog, new() { Name = "Browse folders", Exact = true });
+            await picker.GetByRole(AriaRole.Link, new() { Name = "Library · " + mountPath, Exact = true }).ClickAsync();
+            await picker.GetByRole(AriaRole.Textbox, new() { Name = "New folder name", Exact = true }).FillAsync(path);
+            await picker.GetByRole(AriaRole.Button, new() { Name = "Create folder", Exact = true }).ClickAsync();
+            await Assertions.Expect(picker.GetByRole(AriaRole.Button, new() { Name = "Use this folder", Exact = true })).ToBeVisibleAsync();
+            await picker.GetByRole(AriaRole.Button, new() { Name = "Use this folder", Exact = true }).ClickAsync();
+            await Assertions.Expect(picker).Not.ToBeVisibleAsync();
+            Assert.IsTrue(Directory.Exists(Path.Combine(mountPath, path)));
         }
 
         private static async Task ChooseAsync(IPage page, ILocator form, string mountPath, string path, int field)

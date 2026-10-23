@@ -26,6 +26,25 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void FilesystemFreeSpace_UsesContainingMountRatherThanRootDriveEnumeration()
+        {
+            using var directory = new TemporaryDirectory();
+            var path = directory.Path;
+            // The same code path also handles a CIFS/NFS mount propagated into a Docker
+            // container, where DriveInfo.GetDrives may not enumerate the child mount.
+            var mountPath = Path.GetPathRoot(path)!;
+            if (OperatingSystem.IsLinux())
+            {
+                var mount = new DirectoryInfo(path);
+                while (mount is not null && !StorageFileSystem.IsMountPoint(mount.FullName)) mount = mount.Parent;
+                Assert.IsNotNull(mount);
+                mountPath = mount.FullName;
+            }
+            var drive = new DriveInfo(mountPath);
+            Assert.AreEqual(drive.AvailableFreeSpace, StorageFileSystem.AvailableFreeSpace(path));
+        }
+
+        [TestMethod]
         public void ParallelJobs_EnforcesConfiguredLimitAndRejectsDuplicateExecution()
         {
             var reservations = new DownloadStorageReservations();
@@ -143,6 +162,19 @@ namespace Jularr.Backend.Tests
                 new SaveStorageMountDataV1("Downloads", StorageProtocolType.Local, null, folder.Path, null, null, null, false, null));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             var mountId = (await created.Content.ReadFromJsonAsync<CreateStorageMountResultV1>())!.Id;
+            // A native download folder can be created within a configured local mount from the picker.
+            using (var createdFolder = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts/" + mountId + "/download-directory",
+                new CreateDownloadDirectoryDataV1("", "Picker created")))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, createdFolder.StatusCode, await createdFolder.Content.ReadAsStringAsync());
+                Assert.IsTrue(Directory.Exists(Path.Combine(folder.Path, "Picker created")));
+            }
+            using (var traversal = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts/" + mountId + "/download-directory",
+                new CreateDownloadDirectoryDataV1("", "../outside")))
+            {
+                Assert.AreEqual(HttpStatusCode.BadRequest, traversal.StatusCode);
+                Assert.IsFalse(Directory.Exists(Path.Combine(folder.Path, "..", "outside")));
+            }
             const string route = "/api/v1/admin/storage/downloads/1";
             using var empty = await host.SendAsync(HttpMethod.Get, route);
             Assert.AreEqual(HttpStatusCode.OK, empty.StatusCode, await empty.Content.ReadAsStringAsync());
