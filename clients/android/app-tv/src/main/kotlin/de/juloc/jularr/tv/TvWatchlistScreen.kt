@@ -52,6 +52,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import de.juloc.jularr.core.api.catalog.TvCollectionV1
 import de.juloc.jularr.core.model.ContinueWatchingItem
 import de.juloc.jularr.core.model.WatchlistItem
 import java.util.Locale
@@ -129,6 +130,11 @@ fun TvWatchlistScreen(
     onOpenVideoWork: ((workId: String) -> Unit)? = null,
     onLoadMore: (() -> Unit)? = null,
     pagingError: String? = null,
+    collections: List<TvCollectionV1> = emptyList(),
+    selectedCollectionId: Long? = null,
+    onSelectCollection: (Long?) -> Unit = {},
+    collectionLoading: Boolean = false,
+    collectionError: String? = null,
 ) {
     if (!supported) {
         TvCenteredPanel(
@@ -231,6 +237,33 @@ fun TvWatchlistScreen(
                     }
                 }
 
+                if (collections.isNotEmpty()) {
+                    Text(
+                        "Sammlungen",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        item(key = "all-favorites") {
+                            Button(onClick = { onSelectCollection(null) }) {
+                                Text(if (selectedCollectionId == null) "✓ Alle Favoriten" else "Alle Favoriten")
+                            }
+                        }
+                        items(collections, key = { "collection:${it.id}" }) { collection ->
+                            Button(onClick = { onSelectCollection(collection.id) }) {
+                                Text(
+                                    (if (collection.id == selectedCollectionId) "✓ " else "") + collection.name,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+                collectionError?.let { message ->
+                    Text(message, color = MaterialTheme.colorScheme.error)
+                }
+
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(TvWatchlistCategory.entries.toList(), key = { it.name }) { option ->
                         var focused by remember(option) { mutableStateOf(false) }
@@ -263,7 +296,9 @@ fun TvWatchlistScreen(
                 if (pagingError != null) {
                     Text(pagingError, color = MaterialTheme.colorScheme.error)
                 }
-                if (entries.isEmpty()) {
+                if (collectionLoading) {
+                    Text("Favoriten werden geladen …", color = Color.White)
+                } else if (entries.isEmpty()) {
                     TvCenteredPanel(
                         title = stringResource(R.string.tv_watchlist_title),
                         description = stringResource(R.string.tv_watchlist_empty),
@@ -317,7 +352,7 @@ fun TvWatchlistScreen(
                         }
                         if (onLoadMore != null) {
                             item(key = "load-more") {
-                                Button(onClick = onLoadMore) { Text("Weitere Watchlist-Einträge laden") }
+                                Button(onClick = onLoadMore) { Text("Weitere Favoriten laden") }
                             }
                         }
                     }
