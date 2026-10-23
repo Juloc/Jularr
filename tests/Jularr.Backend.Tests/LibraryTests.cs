@@ -977,8 +977,8 @@ namespace Jularr.Backend.Tests
             var show = Path.Combine(storage.Path, mountId.ToString(), "Series", "Show 1 - tt2000001");
             var folder = Path.Combine(show, "Season 1");
             Directory.CreateDirectory(folder);
-            // The media server's own file names a second id the Work has not stored.
-            File.WriteAllText(Path.Combine(show, "tvshow.nfo"), "<tvshow><title>Show 1</title><uniqueid type=\"imdb\">tt2000001</uniqueid><uniqueid type=\"tvdb\">4001</uniqueid></tvshow>");
+            // The media server's own file names more ids than the Work stores, one of them (TVmaze) that no catalog here can check.
+            File.WriteAllText(Path.Combine(show, "tvshow.nfo"), "<tvshow><title>Show 1</title><uniqueid type=\"imdb\">tt2000001</uniqueid><uniqueid type=\"tvdb\">4001</uniqueid><uniqueid type=\"tmdb\">1</uniqueid><uniqueid type=\"tvmaze\">55350</uniqueid></tvshow>");
             File.WriteAllText(Path.Combine(folder, "Show 1 - S01E02 - Second WEBDL-1080p tt2000001.mkv"), "episode");
             var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
 

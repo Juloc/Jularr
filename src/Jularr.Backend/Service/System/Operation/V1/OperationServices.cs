@@ -23,6 +23,7 @@ using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Storage;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
 
@@ -132,9 +133,11 @@ namespace Jularr.Backend.Service.System.Operation.V1
         private readonly GameRomIdentification _roms;
         private readonly MusicTagIdentification _music;
         private readonly WorkMetadata _metadata;
+        private readonly ILogger<ExecuteLibraryScanV1> _logger;
 
-        internal ExecuteLibraryScanV1(StorageAccess storage, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music, WorkMetadata metadata)
+        internal ExecuteLibraryScanV1(StorageAccess storage, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music, WorkMetadata metadata, ILogger<ExecuteLibraryScanV1> logger)
         {
+            _logger = logger;
             _storage = storage;
             _probe = probe;
             _roms = roms;
@@ -528,6 +531,18 @@ namespace Jularr.Backend.Service.System.Operation.V1
             var deferred = false;
             var imported = 0;
             var refreshed = new HashSet<long>();
+
+            // Why files stay unmatched, with one example each; written to the log when the pass ends.
+            var reasons = new Dictionary<string, (int Count, string Example)>(StringComparer.Ordinal);
+            void Note(string reason, string example) => reasons[reason] = reasons.TryGetValue(reason, out var seen) ? (seen.Count + 1, seen.Example) : (1, example);
+            void Report()
+            {
+                foreach (var (reason, seen) in reasons.OrderByDescending(item => item.Value.Count))
+                {
+                    _logger.LogWarning("Library scan {LibraryRootId}: {Count} files stay unmatched ({Reason}), for example {Example}", libraryRootId, seen.Count, reason, seen.Example);
+                }
+            }
+
             var nfoFolders = new Dictionary<string, (IReadOnlyDictionary<string, string> Ids, bool Conflicted)>(StringComparer.Ordinal);
             var plexFolders = new Dictionary<string, PlexMatchHints>(StringComparer.Ordinal);
             var emptyHints = MediaPathParser.ParsePlexMatch("");
@@ -550,6 +565,8 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 }, CancellationToken);
                 if (files.Count == 0)
                 {
+                    Report();
+
                     // A scan that imported nothing gains nothing from another one.
                     return deferred && imported > 0;
                 }
@@ -560,6 +577,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     var parsed = MediaPathParser.Parse(file.RelativePath, mediaType);
                     var (pathIds, conflicted) = MediaPathParser.ProviderIds(file.RelativePath, mediaType);
                     var ids = pathIds.ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
+                    string? conflict = conflicted ? "the ids in the path disagree" : null;
 
                     if (mediaType == MediaType.Series && file.RelativePath.Contains('/'))
                     {
@@ -590,11 +608,17 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         }
 
                         conflicted |= rootHints.Conflicted || seasonHints.Conflicted;
+                        if (rootHints.Conflicted || seasonHints.Conflicted)
+                        {
+                            conflict ??= ".plexmatch is unreadable or invalid";
+                        }
+
                         foreach (var (source, value) in rootHints.Ids.Concat(seasonHints.Ids))
                         {
                             if (ids.TryGetValue(source, out var previous) && !previous.Equals(value, StringComparison.OrdinalIgnoreCase))
                             {
                                 conflicted = true;
+                                conflict ??= ".plexmatch names another " + source + " id than the path";
                                 break;
                             }
 
@@ -606,6 +630,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
                     if (parsed.Title.Length > 500 || mediaType == MediaType.Series && parsed.WorkUnitTypeId != WorkUnitType.Episode)
                     {
+                        Note("the name does not give season and episode", file.RelativePath);
                         continue;
                     }
                     if (file.RelativePath.Contains('/'))
@@ -623,11 +648,17 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         }
 
                         conflicted |= nfo.Conflicted;
+                        if (nfo.Conflicted)
+                        {
+                            conflict ??= "the nfo file is unreadable, too large or not a " + (mediaType == MediaType.Series ? "tvshow" : "movie") + " file";
+                        }
+
                         foreach (var (source, value) in nfo.Ids)
                         {
                             if (ids.TryGetValue(source, out var existing) && !existing.Equals(value, StringComparison.OrdinalIgnoreCase))
                             {
                                 conflicted = true;
+                                conflict ??= "the nfo file names another " + source + " id than the path";
                                 break;
                             }
 
@@ -637,7 +668,14 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
                     if (conflicted)
                     {
+                        Note(conflict ?? "the hints disagree", file.RelativePath);
                         continue;
+                    }
+
+                    // Only ids a catalog here can check name a title; the rest (TVmaze, AniList, ...) that a media server writes must not keep a file from it.
+                    foreach (var unverifiable in ids.Keys.Where(name => name is not ("imdb" or "tvdb" or "tmdb_movie" or "tmdb_tv")).ToArray())
+                    {
+                        ids.Remove(unverifiable);
                     }
 
                     var supplied = JsonSerializer.Serialize(ids.OrderBy(item => item.Key, StringComparer.Ordinal)
@@ -702,7 +740,6 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         // An identity the Work does not carry completely is checked with the provider, never guessed from the part that matches or from the title:
                         // the provider names one series for every id, and importing it extends the Work that already holds one of them.
                         if (workId is null && ids.Count > 0 && !providerUnavailable
-                            && ids.Keys.All(name => name is "imdb" or "tvdb" or "tmdb_movie" or "tmdb_tv")
                             && (mediaType == MediaType.Series || !ids.ContainsKey("tvdb")))
                         {
                             // Every scan reads at least one title, so a long list always moves forward.
@@ -765,6 +802,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
                     if (workId is null)
                     {
+                        Note(providerUnavailable ? "the catalog is not available" : ids.Count == 0 ? "no id and no single Work of that title" : "no Work holds the ids " + string.Join(", ", ids.Select(item => item.Key + " " + item.Value)) + " and the catalog could not name them", file.RelativePath);
                         continue;
                     }
 
