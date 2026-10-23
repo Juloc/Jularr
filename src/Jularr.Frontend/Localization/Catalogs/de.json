@@ -4,6 +4,22 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "hint.acquisition.Nyaa.placeholder": [
+   "https://nyaa.media",
+   "https://nyaa.media"
+  ],
+  "hint.acquisition.Nyaa.info": [
+   "Nyaa RSS search endpoint; no API key required.",
+   "Nyaa-RSS-Suchquelle; kein API-Schlüssel erforderlich."
+  ],
+  "hint.acquisition.Qbittorrent.placeholder": [
+   "http://qbittorrent:8080",
+   "http://qbittorrent:8080"
+  ],
+  "hint.acquisition.Qbittorrent.info": [
+   "Address of the qBittorrent Web UI, reachable from Jularr.",
+   "Adresse der qBittorrent-Weboberfläche, die Jularr erreichen kann."
+  ],
   "progress.saveFailed": [
    "Progress could not be saved. Jularr will retry temporary failures.",
    "Der Fortschritt konnte nicht gespeichert werden. Jularr versucht es bei vorübergehenden Fehlern erneut."
