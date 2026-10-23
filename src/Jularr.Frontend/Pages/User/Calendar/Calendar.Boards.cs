@@ -66,7 +66,7 @@ namespace Jularr.Frontend.Pages.User.Calendar
                 content.Add(new Div([.. strips]).Class("calendar__strips"));
             }
 
-            var cell = new Section([.. content]).Class(classes);
+            var cell = new Section([.. content]).Class(classes).Attribute("data-calendar-day", day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
             return day == Today ? cell.Attribute("aria-current", "date") : cell;
         }
 

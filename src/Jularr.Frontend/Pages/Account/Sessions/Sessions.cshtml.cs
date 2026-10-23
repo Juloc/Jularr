@@ -47,8 +47,8 @@ namespace Jularr.Frontend.Pages.Account.Sessions
                             form.Save();
                         }, Url.Page("/Account/Sessions/Sessions", "PlaybackQuality", new { sessionPublicId = session.Id }), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                             new SessionPlaybackQualityDataV1(session.PlaybackQuality)),
-                        new P(new Text("session.created"), new ValueText(session.CreatedAt.ToString("u", CultureInfo.InvariantCulture))),
-                        new P(new Text("session.expires"), new ValueText(session.ExpiresAt.ToString("u", CultureInfo.InvariantCulture))),
+                        new P(new Text("session.created"), new LocalTime(session.CreatedAt)),
+                        new P(new Text("session.expires"), new LocalTime(session.ExpiresAt)),
                         new Form<RevokeSessionParametersV1>(form =>
                         {
                             form.Hidden(x => x.SessionPublicId);
