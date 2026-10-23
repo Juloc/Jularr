@@ -123,6 +123,8 @@ namespace Jularr.Integrations.Data.Qbittorrent
         public bool IsActive => State is "downloading" or "stalledDL" or "metaDL" or "forcedMetaDL" or "checkingDL" or "queuedDL" or "allocating" or "forcedDL";
     }
 
+    internal sealed record QbittorrentFile(string Name, long SizeBytes, double Progress, bool IsSelected);
+
     internal sealed class QbittorrentSnapshot
     {
         public QbittorrentSnapshot(IReadOnlyList<QbittorrentTorrent> torrents)
