@@ -21,6 +21,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         private const int SearchesPerPreview = 60;
         private readonly MediaImportPlanner _planner;
 
+        // Optional request-scoped status events for the interactive preview.
+        public Func<int, string, int?, Task>? OnItemProgressAsync { get; set; }
+
         internal PreviewMediaImportV1(MediaImportPlanner planner)
         {
             _planner = planner;
@@ -35,7 +38,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         {
             var json = await MediaImportText.ReadAsync(Data, CancellationToken);
             var items = MediaImportParser.Parse(json);
-            var plan = await _planner.PlanAsync(Context, items, Data, SearchesPerPreview, CancellationToken);
+            var plan = await _planner.PlanAsync(Context, items, Data, SearchesPerPreview, CancellationToken, OnItemProgressAsync);
             var profiles = await Context.ExecuteBatchAsync((ctx, ct) => MediaImportQueries.ReadProfilesAsync(ctx, ct), CancellationToken);
             var libraries = await Context.ExecuteBatchAsync((ctx, ct) => MediaImportQueries.ReadLibrariesAsync(ctx, ct), CancellationToken);
             var rows = plan.Rows.Select(row => new MediaImportRowV1(row.Item.Index, row.Item.TypeKey, row.Item.Type, row.Item.Subtype, row.Item.Title, row.Item.Year, row.Item.Creator, row.Status, row.Problem, row.ProblemDetail,
