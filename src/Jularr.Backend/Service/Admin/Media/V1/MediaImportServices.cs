@@ -48,6 +48,29 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         }
     }
 
+    // On-demand comparison for ambiguous book choices. The importer never uses
+    // display-only edition details as another Work identity.
+    [ServiceEndpoint("GET", "/api/v1/admin/media-import/editions/{workId}")]
+    public sealed class ReadMediaImportEditionsV1 : AdminService<MediaImportEditionParametersV1>
+    {
+        private readonly BookMetadata _books;
+        internal ReadMediaImportEditionsV1(BookMetadata books) => _books = books;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<MediaImportEditionsV1>()];
+        protected override ModuleRequirement GetInstanceModules(MediaImportEditionParametersV1 parameters) => ModuleRequirement.All("Library", "Requests");
+        protected override ServicePermission GetPermission(MediaImportEditionParametersV1 parameters, Type resultType) => new("media.manual.update");
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            var editions = await _books.ReadEditionsAsync(Parameters.WorkId, CancellationToken);
+            return new MediaImportEditionsV1(new BaseDataList<MediaImportEditionV1>(editions
+                .OrderBy(edition => edition.Year ?? int.MaxValue).ThenBy(edition => edition.Title).Take(30)
+                .Select(edition => new MediaImportEditionV1(
+                    TextLimit.Cut(edition.Title, 500), TextLimit.Cut(edition.Language, 50),
+                    TextLimit.Cut(edition.PhysicalFormat, 500), TextLimit.Cut(edition.Publisher, 500),
+                    edition.Year is >= 1800 and <= 2200 ? edition.Year : null,
+                    edition.Isbns.FirstOrDefault(isbn => isbn.Length <= 20)))));
+        }
+    }
+
     // The import itself: every ticked row is added from its provider entry and, as chosen, monitored and searched. Repeating a list changes nothing that is already there.
     [ServiceEndpoint("POST", "/api/v1/admin/media-import")]
     public sealed class RunMediaImportV1 : AdminService<MediaImportParametersV1, MediaImportDataV1>

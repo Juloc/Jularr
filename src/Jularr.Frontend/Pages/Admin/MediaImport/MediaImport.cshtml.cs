@@ -14,7 +14,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
 {
     // A list of titles added at once: the file, what each entry is and would do, and what became of each.
     [RequestFormLimits(ValueCountLimit = 20_000, ValueLengthLimit = 4_194_304)]
-    public sealed class MediaImportModel(PreviewMediaImportV1 preview, RunMediaImportV1 run, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
+    public sealed class MediaImportModel(PreviewMediaImportV1 preview, RunMediaImportV1 run, ReadMediaImportEditionsV1 editions, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private const string Address = "/Admin/Import";
         private MediaImportDataV1? _input;
@@ -333,6 +333,12 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                     new Button(new Text("import.search.go")).Compact().Submit()).Class("media-import__search"));
             }
 
+            if (row.TypeKey == "book" && row.Candidates.Any(candidate => candidate.Source == "openlibrary"))
+            {
+                parts.Add(new Button(new Text("import.editions")).Compact().Attribute("type", "button")
+                    .Attribute("data-import-editions", ""));
+            }
+
             return new Div([.. parts]).Class("media-import__stack");
         }
 
@@ -393,6 +399,27 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             if (!texts.CanImportMedia()) return Forbid();
             PreparePage();
             return Page();
+        }
+
+        public async Task<IActionResult> OnGetBookEditionsAsync(string? workId)
+        {
+            if (!texts.CanImportMedia()) return Forbid();
+            if (workId is null || !System.Text.RegularExpressions.Regex.IsMatch(workId, @"\AOL[0-9]{1,12}W\z"))
+                return BadRequest();
+
+            var result = await editions.ExecuteAsync<MediaImportEditionsV1>(new MediaImportEditionParametersV1(workId), HttpContext.RequestAborted);
+            return new JsonResult(new
+            {
+                items = result.Editions.Select(item => new
+                {
+                    title = item.Title,
+                    language = item.Language,
+                    format = item.Format,
+                    publisher = item.Publisher,
+                    year = item.Year,
+                    isbn = item.Isbn
+                })
+            });
         }
 
         public IActionResult OnGetExample()

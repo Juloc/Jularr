@@ -33,6 +33,8 @@ The example file (all eight types) is offered on the page and in
 
 The book catalog uses Open Library Works, which can include both print/ebook and audiobook editions. Normal books with mixed print/audio editions remain searchable. Results explicitly labelled as audio editions (for example `- Audiobook`, `(Hörbuch)`) and Open Library records with **only** audio formats are not offered as regular book candidates. An ISBN resolving to an explicitly audio-only edition is not automatically bound to a book Work; the item remains subject to normal manual matching. Missing/incomplete provider formats cannot be reliably classified and may still require manual review. Audiobooks are not deleted from the Work's legitimate other editions.
 
+The editable preview also offers an **on-demand edition comparison** for ambiguous Open Library books: real publisher, language, year, physical format and available ISBNs for the selected Work (up to 30), read-only and permission-gated. A Work is not duplicated when another edition is displayed. Missing publisher metadata stays blank instead of being guessed.
+
 ## Flow
 
 1. Choose a `.json` file in the file input (drop zone, name, size, remove) or paste the list, and choose how titles are added. **Default is Add only**: adding catalog entries does not schedule a search or download; Monitor and Monitor+Search require explicit selection. The preview summarizes how many selected titles would be monitored and searched, including per-row overrides. The page offers the example as a download and as a sample to copy.

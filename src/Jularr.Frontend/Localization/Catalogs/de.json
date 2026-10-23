@@ -9216,6 +9216,16 @@
    "Check edition",
    "Ausgabe prüfen"
   ],
+  "import.editions": ["Compare editions", "Ausgaben vergleichen"],
+  "import.edition.loading": ["Loading editions…", "Ausgaben laden…"],
+  "import.edition.choose": ["Select an Open Library book first", "Zuerst ein Open-Library-Buch wählen"],
+  "import.edition.empty": ["No edition details available", "Keine Ausgabendetails verfügbar"],
+  "import.edition.error": ["Edition details could not be loaded", "Ausgabendetails konnten nicht geladen werden"],
+  "import.edition.title": ["Edition", "Ausgabe"],
+  "import.edition.language": ["Language", "Sprache"],
+  "import.edition.year": ["Year", "Jahr"],
+  "import.edition.format": ["Format", "Format"],
+  "import.edition.publisher": ["Publisher", "Verlag"],
   "import.phase.matching": [
    "Matching library works",
    "Werke abgleichen"

@@ -227,3 +227,23 @@
 }
 .media-import__intent-warning[data-import-search-warning="hidden"],
 .media-import__intent-warning[hidden] { display: none; }
+
+.media-import__edition-details {
+    max-width: min(680px, 100%);
+    max-height: 280px;
+    overflow: auto;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    font-size: var(--text-control);
+}
+.media-import__edition-details table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: start;
+}
+.media-import__edition-details th, .media-import__edition-details td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}

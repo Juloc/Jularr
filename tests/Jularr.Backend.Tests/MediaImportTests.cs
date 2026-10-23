@@ -536,6 +536,20 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ImportPage_BookEditionComparison_ReturnsActualFormats_WithoutWritingWorks()
+        {
+            await using var host = await CreateHostAsync(new FakeProviders());
+            using var response = await host.SendAsync(HttpMethod.Get, "/Admin/Import?handler=BookEditions&workId=OL66554W");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            var body = await response.Content.ReadAsStringAsync();
+            StringAssert.Contains(body, "Paperback");
+            StringAssert.Contains(body, "9780141439518");
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+            using var invalid = await host.SendAsync(HttpMethod.Get, "/Admin/Import?handler=BookEditions&workId=invalid");
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+        }
+
+        [TestMethod]
         public async Task ImportPage_StreamsActualPerRowOutcomes_BeforeCompletion()
         {
             await using var host = await CreateHostAsync(new FakeProviders());

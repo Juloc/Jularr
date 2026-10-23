@@ -523,10 +523,91 @@ function initializeLiveImport(): void {
     });
 }
 
+// Provider editions are requested only for the selected Open Library Work.
+// Keep the comparison read-only: its ISBNs describe editions, not alternative Works.
+function initializeEditionComparison(): void {
+    document.querySelectorAll<HTMLButtonElement>("[data-import-editions]").forEach(button => {
+        if (button.dataset.ready !== undefined) return;
+        button.dataset.ready = "";
+        button.addEventListener("click", async () => {
+            const parent = button.closest<HTMLElement>(".media-import__stack");
+            const selected = parent?.querySelector<HTMLSelectElement>('select[name$=".Choice"]')?.value;
+            let details = parent?.querySelector<HTMLElement>("[data-import-edition-details]");
+            if (details) { details.remove(); return; }
+            details = document.createElement("div");
+            details.className = "media-import__edition-details";
+            details.setAttribute("data-import-edition-details", "");
+            details.setAttribute("role", "status");
+            details.textContent = button.dataset.importEditionLoading ?? "Loading editions…";
+            parent?.append(details);
+            if (!selected?.startsWith("openlibrary:")) {
+                details.textContent = button.dataset.importEditionChoose ?? "Select an Open Library book first.";
+                return;
+            }
+            const workId = selected.slice("openlibrary:".length);
+            if (!/^OL[0-9]{1,12}W$/.test(workId)) {
+                details.textContent = button.dataset.importEditionChoose ?? "Select an Open Library book first.";
+                return;
+            }
+            button.disabled = true;
+            try {
+                const url = new URL("/Admin/Import", window.location.href);
+                url.searchParams.set("handler", "BookEditions");
+                url.searchParams.set("workId", workId);
+                const response = await fetch(url, { credentials: "same-origin" });
+                if (!response.ok) throw new Error("Edition lookup failed");
+                const payload = await response.json() as { items?: { title?: string; language?: string; format?: string; publisher?: string; year?: number; isbn?: string }[] };
+                const items = payload.items ?? [];
+                if (items.length === 0) {
+                    details.textContent = button.dataset.importEditionEmpty ?? "No edition details are available.";
+                    return;
+                }
+                details.textContent = "";
+                const table = document.createElement("table");
+                const head = document.createElement("thead");
+                const heading = document.createElement("tr");
+                const keys = ["title", "language", "year", "format", "publisher", "isbn"] as const;
+                const names = [
+                    button.dataset.importEditionTitle ?? "Edition",
+                    button.dataset.importEditionLanguage ?? "Language",
+                    button.dataset.importEditionYear ?? "Year",
+                    button.dataset.importEditionFormat ?? "Format",
+                    button.dataset.importEditionPublisher ?? "Publisher",
+                    "ISBN"
+                ];
+                names.forEach(name => {
+                    const th = document.createElement("th");
+                    th.textContent = name;
+                    heading.append(th);
+                });
+                head.append(heading);
+                table.append(head);
+                const body = document.createElement("tbody");
+                for (const edition of items) {
+                    const row = document.createElement("tr");
+                    for (const key of keys) {
+                        const cell = document.createElement("td");
+                        cell.textContent = String(edition[key] ?? "—");
+                        row.append(cell);
+                    }
+                    body.append(row);
+                }
+                table.append(body);
+                details.append(table);
+            } catch {
+                details.textContent = button.dataset.importEditionError ?? "Edition details could not be loaded.";
+            } finally {
+                button.disabled = false;
+            }
+        });
+    });
+}
+
 onPage(import.meta.url, () => {
     initializeSource();
     initializePreview();
     initializePendingPreview();
     initializeRefreshPreview();
     initializeLiveImport();
+    initializeEditionComparison();
 });

@@ -363,6 +363,64 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         }
     }
 
+    // A public-provider edition comparison is read-only and permission-gated.
+    public sealed class MediaImportEditionParametersV1 : BaseParameters
+    {
+        public MediaImportEditionParametersV1(string workId) => WorkId = workId;
+
+        [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Key))]
+        public string WorkId { get; }
+
+        public override void Validate()
+        {
+            base.Validate();
+            if (!System.Text.RegularExpressions.Regex.IsMatch(WorkId, @"\AOL[0-9]{1,12}W\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+                throw new DataValidationException(nameof(WorkId), "invalid_value");
+        }
+    }
+
+    public sealed class MediaImportEditionV1 : BaseResponse
+    {
+        public MediaImportEditionV1(string? title, string? language, string? format, string? publisher, int? year, string? isbn)
+        {
+            Title = title;
+            Language = language;
+            Format = format;
+            Publisher = publisher;
+            Year = year;
+            Isbn = isbn;
+        }
+
+        [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Title), false)]
+        public string? Title { get; }
+
+        [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Key), false)]
+        public string? Language { get; }
+
+        [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Title), false)]
+        public string? Format { get; }
+
+        [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Title), false)]
+        public string? Publisher { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? Year { get; }
+
+        [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Key), false)]
+        public string? Isbn { get; }
+    }
+
+    public sealed class MediaImportEditionsV1 : BaseResponse
+    {
+        public MediaImportEditionsV1(BaseDataList<MediaImportEditionV1> editions) => Editions = editions;
+        public BaseDataList<MediaImportEditionV1> Editions { get; }
+        public override void Validate()
+        {
+            base.Validate();
+            Editions.Validate(nameof(Editions));
+        }
+    }
+
     // One list in the shape the importer reads.
     public static class MediaImportExample
     {
