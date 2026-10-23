@@ -184,6 +184,7 @@ function initializeLiveImport(): void {
                     status.className = "media-import__activity-outcome";
                     entry.append(status);
                     history.append(entry);
+                    history.scrollTop = history.scrollHeight;
                     if (update.status === "Deferred" || update.status === "Unavailable") waiting.push(update.index);
                 } else if (update.kind === "done") {
                     finished = true;
@@ -212,7 +213,7 @@ function initializeLiveImport(): void {
         } catch {
             // Some rows may already have committed; never promise a rollback or blindly retry.
             panel.classList.add("media-import__activity--failed");
-            pending((apply.textContent ?? "").trim() + " — interrupted; inspect the processed rows before retrying");
+            pending(apply.dataset.importFailed ?? "Failed");
             for (const button of controls) button.disabled = false;
             apply.disabled = false;
         } finally {
