@@ -24,8 +24,10 @@ using Jularr.Backend.Service.Admin.Provider.V1;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Sabnzbd;
+using Jularr.Integrations.Data.Qbittorrent;
 using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Storage;
@@ -470,17 +472,19 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private static readonly TimeSpan InterruptedRetry = TimeSpan.FromMinutes(30);
         private const int DirectPerCycle = 5;
         private readonly SabnzbdClient _sabnzbd;
+    private readonly QbittorrentClient _qbittorrent;
         private readonly IDataProtector _protector;
         private readonly TimeProvider _time;
         private readonly DownloadImport _import;
         private readonly StorageAccess _storage;
         private readonly RunDirectDownloadJobV1 _runner;
 
-        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, DownloadImport import, IDataProtectionProvider protection, TimeProvider time, StorageAccess storage, RunDirectDownloadJobV1 runner)
+        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadImport import, IDataProtectionProvider protection, TimeProvider time, StorageAccess storage, RunDirectDownloadJobV1 runner)
         {
             _runner = runner;
             _storage = storage;
             _sabnzbd = sabnzbd;
+            _qbittorrent = qbittorrent;
             _import = import;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
             _time = time;
@@ -514,6 +518,57 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     continue;
                 }
 
+                // A torrent client reports the state of its torrents; the finished file is read from its folder.
+                if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent)
+                {
+                    var torrentClient = new QbittorrentConnection(connection.HttpAddress, connection.Username,
+                        AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedPassword));
+                    QbittorrentSnapshot snapshot;
+                    try
+                    {
+                        var hashes = group.Select(download => download.ExternalId).OfType<string>().ToArray();
+                        snapshot = await _qbittorrent.GetSnapshotAsync(torrentClient, hashes, CancellationToken);
+                    }
+                    catch (Exception exception) when (exception is HttpRequestException or QbittorrentException or JsonException
+                        || exception is TaskCanceledException && !CancellationToken.IsCancellationRequested)
+                    {
+                        continue;
+                    }
+
+                    var torrents = snapshot.Torrents.ToDictionary(torrent => torrent.Hash, StringComparer.Ordinal);
+                    var torrentProgress = group.Where(download => download.ExternalId is not null && torrents.ContainsKey(download.ExternalId!))
+                        .Select(download =>
+                        {
+                            var torrent = torrents[download.ExternalId!];
+                            return new
+                            {
+                                download.OperationId,
+                                ProgressPercent = (int?)Math.Clamp((int)Math.Round(torrent.Progress * 100), 0, 99),
+                                SizeBytes = (long?)torrent.SizeBytes,
+                                RemainingBytes = (long?)Math.Max(0, torrent.SizeBytes - torrent.DownloadedBytes),
+                                EtaSeconds = (int?)null,
+                                DownloadStateTypeId = (byte)DownloadLogic.ReadDownloadState(torrent.IsPaused ? "Paused" : torrent.IsFailed ? "Failed" : "Downloading")
+                            };
+                        })
+                        .ToArray();
+                    if (torrentProgress.Length > 0)
+                    {
+                        await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                        {
+                            await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(JsonSerializer.Serialize(torrentProgress)), ct);
+                            return true;
+                        }, CancellationToken);
+                    }
+
+                    foreach (var download in group.Where(download => download.ExternalId is not null
+                        && torrents.TryGetValue(download.ExternalId!, out var torrent) && torrent.IsCompleted))
+                    {
+                        // The file the client wrote is read from the folder Jularr mapped.
+                        await ImportAsync(download, connection, torrents[download.ExternalId!].ContentPath);
+                    }
+
+                    continue;
+                }
                 var client = new SabnzbdConnection(connection.HttpAddress, AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey));
                 SabnzbdQueueSnapshot queue;
                 SabnzbdHistorySnapshot history;
