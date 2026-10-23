@@ -19,7 +19,6 @@ import de.juloc.jularr.core.api.AppApiException
 import de.juloc.jularr.core.api.catalog.HttpTvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvContinueItemV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverItemV1
-import de.juloc.jularr.core.api.catalog.TvDiscoverShelfV1
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvWorkAvailabilityV1
 import de.juloc.jularr.core.api.catalog.TvPersonV1
@@ -37,7 +36,6 @@ import de.juloc.jularr.core.model.WatchlistItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Transitional data host for the *original* TV Compose screens, not a replacement TV design.
@@ -308,73 +306,27 @@ fun TvV1CatalogHost(
         }
     }
 
-    // The Web Home already uses /api/v1/discover/shelves and feed fallbacks.
-    // Load Discover separately from the local library; a slow TMDB provider must
-    // never suppress Continue Watching, Recently Added or NAS-backed titles.
+    // Remote rankings are optional: the library/Continue sections are independent.
+    // Refresh only while Home is mounted; scoped concurrency and timeout are
+    // implemented in the typed V1 flow, not in the Compose presentation layer.
     LaunchedEffect(catalog, capabilities, page, homeShelfOrder, reload) {
         if (page != TvV1CatalogPage.Home || 5 !in homeShelfOrder ||
             !capabilities.hasModule("Library") ||
             !capabilities.hasPermission("profile.media.read")
-        ) return@LaunchedEffect
-
+        ) {
+            discoverHomeFeeds = emptyList()
+            return@LaunchedEffect
+        }
         discoverHomeFeeds = emptyList()
         try {
-            val scopes = catalog.discoverScopes().filter {
-                !it.isCatalog && (it.mediaTypeId == 1 || it.mediaTypeId == 2)
-            }
-            val cached = try {
-                catalog.discoverShelves()
-            } catch (cancel: CancellationException) {
-                throw cancel
-            } catch (failure: AppApiException) {
-                if (failure.statusCode == 401) throw failure
-                emptyList()
-            } catch (_: Exception) {
-                emptyList()
-            }
-            val fetched = cached.toMutableList()
-            discoverHomeFeeds = tvV1HomeVideoFeeds(scopes, fetched)
-
-            // /discover/shelves holds locally cached whole catalogs. For regular
-            // movie/series scopes without cached data, use the provider fallback
-            // the Web Home already uses. Do not map a subtype scope to a generic
-            // media-type feed, which would falsely claim subtype membership.
-            for (scope in scopes.filter { it.mediaSubtypeId == null }) {
-                for (feed in scope.feeds.filter { it in 1..4 }.distinct().sorted()) {
-                    if (fetched.any {
-                        it.scopeSlug == scope.slug && it.discoverFeedTypeId == feed &&
-                            it.items.isNotEmpty()
-                    }) continue
-                    val remote = try {
-                        withTimeoutOrNull(8_000L) {
-                            catalog.discoverFeed(scope.mediaTypeId, feed)
-                        } ?: emptyList()
-                    } catch (cancel: CancellationException) {
-                        throw cancel
-                    } catch (failure: AppApiException) {
-                        if (failure.statusCode == 401) throw failure
-                        emptyList()
-                    } catch (_: Exception) {
-                        emptyList()
-                    }
-                    if (remote.isNotEmpty()) {
-                        fetched.removeAll {
-                            it.scopeSlug == scope.slug && it.discoverFeedTypeId == feed
-                        }
-                        fetched.add(
-                            TvDiscoverShelfV1(scope.slug, feed, remote, emptyList()),
-                        )
-                        discoverHomeFeeds = tvV1HomeVideoFeeds(scopes, fetched)
-                    }
-                }
-            }
+            TvV1HomeDiscoverFlow(catalog).load { discoverHomeFeeds = it }
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (failure: AppApiException) {
             if (failure.statusCode == 401) onAuthenticationExpired()
-            // Optional Discover provider errors must not blank local Home media.
+            // A provider error must not replace local library content.
         } catch (_: Exception) {
-            // Provider may be disabled or offline. Existing local shelves remain.
+            // Optional provider content is unavailable; the local Home remains.
         }
     }
 
