@@ -29,7 +29,8 @@ function syncBrowserTimeZone(): boolean {
 }
 
 let observedDay = localTodayIso(new Date());
-const dateSensitive = isDateSensitivePage(location.pathname);
+// Navigation swaps change location.pathname without re-running this module.
+const dateSensitive = (): boolean => isDateSensitivePage(location.pathname);
 
 function refreshTimeContext(): void {
     const changedZone = syncBrowserTimeZone();
@@ -37,7 +38,7 @@ function refreshTimeContext(): void {
     const changedDay = day !== observedDay;
     observedDay = day;
 
-    if (dateSensitive && (changedZone || changedDay)) {
+    if (dateSensitive() && (changedZone || changedDay)) {
         location.reload();
         return;
     }
@@ -45,7 +46,7 @@ function refreshTimeContext(): void {
 }
 
 // A direct URL to Calendar/Work may arrive before the first timezone cookie exists.
-if (syncBrowserTimeZone() && dateSensitive) {
+if (syncBrowserTimeZone() && dateSensitive()) {
     location.reload();
 } else {
     localize(document);
@@ -57,5 +58,5 @@ if (syncBrowserTimeZone() && dateSensitive) {
 
     document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshTimeContext(); });
     window.addEventListener("pageshow", refreshTimeContext);
-    if (dateSensitive) window.setInterval(refreshTimeContext, 60_000);
+    window.setInterval(refreshTimeContext, 60_000);
 }
