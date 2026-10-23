@@ -24,7 +24,7 @@ import kotlinx.coroutines.isActive
  * centered-panel components. It does not enter the legacy controller after pairing: that
  * controller still requests /api/client/v1 and must only be reconnected with the v1 catalog.
  *
- * [onAuthenticated] is the explicit future integration point for the original TV screens.
+ * [onAuthenticated] renders the live V1 catalog after device authentication.
  */
 @Composable
 fun TvV1EntryHost(
@@ -32,9 +32,7 @@ fun TvV1EntryHost(
     session: TvV1DeviceSession,
     onAuthenticated: @Composable (
         String, InstanceCapabilities, () -> Unit, () -> Unit, () -> Unit, () -> Unit, () -> Unit
-    ) -> Unit = { origin, _, _, _, _, _, _ ->
-        TvV1AuthenticatedPendingCatalog(origin)
-    },
+    ) -> Unit,
 ) {
     val storedOrigin = remember { settings.origin }
     var origin by remember { mutableStateOf(storedOrigin) }
@@ -235,21 +233,6 @@ fun TvV1EntryHost(
                 }
             }
         }
-    }
-}
-
-/** Never call the old /api/client/v1 controller while the media adapter is not installed. */
-@Composable
-private fun TvV1AuthenticatedPendingCatalog(origin: String) {
-    TvCenteredPanel(
-        title = "Gerät verbunden",
-        description = origin,
-    ) {
-        Text(
-            "Die Anmeldung über /api/v1 funktioniert. " +
-                "Die vorhandene TV-Oberfläche wird mit der Medien-API verbunden.",
-            style = MaterialTheme.typography.bodyLarge,
-        )
     }
 }
 
