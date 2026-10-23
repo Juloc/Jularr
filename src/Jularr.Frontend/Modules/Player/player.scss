@@ -94,7 +94,17 @@
         &:is(:hover, :focus-visible)::after { opacity: 1; }
         &:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     }
-    &__preview { position: absolute; bottom: calc(100% + 10px); z-index: 3; border-radius: 8px; background-repeat: no-repeat; background-color: #000; pointer-events: none; }
+    &__preview {
+        position: absolute; bottom: calc(100% + 10px); z-index: 3; display: grid; place-items: center;
+        border: 1px solid rgb(255 255 255 / 22%); border-radius: 8px; background-repeat: no-repeat;
+        background-color: #17181b; pointer-events: none; box-shadow: 0 4px 18px rgb(0 0 0 / 40%);
+        &[hidden] { display: none; }
+    }
+    &__preview-time {
+        padding: 4px 7px; border-radius: 5px; background: rgb(0 0 0 / 78%);
+        color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 650;
+    }
+    &__preview--image { place-items: end center; padding-bottom: 4px; box-sizing: border-box; }
     &__actions { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
     &__audio, &__transport, &__options { display: flex; align-items: center; gap: 2px; }
     &__transport { justify-content: center; }
