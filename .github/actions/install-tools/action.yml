@@ -21,13 +21,28 @@ runs:
         WITH_CJXL: ${{ inputs.cjxl }}
       run: |
         set -euo pipefail
+        # apt on hosted runners can stall (IPv6, a slow mirror): every network step has a short timeout,
+        # IPv4 is forced, and the whole install is retried instead of hanging for minutes.
+        apt_opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::ForceIPv4=true -o Dpkg::Use-Pty=0)
         sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
-        curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+        curl -fsSL --retry 3 --retry-delay 2 --max-time 30 https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
         echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "${VERSION_CODENAME}")-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
         packages=(postgresql-client-18)
         if [[ "${WITH_FFMPEG}" == "true" ]]; then packages+=(ffmpeg); fi
         if [[ "${WITH_CJXL}" == "true" ]]; then packages+=(libjxl-tools); fi
-        sudo apt-get update -qq
-        sudo apt-get install -qq --yes --no-install-recommends "${packages[@]}"
+        installed=false
+        for attempt in 1 2 3; do
+          if sudo timeout 120 apt-get update -qq "${apt_opts[@]}"             && sudo env DEBIAN_FRONTEND=noninteractive timeout 240 apt-get install -qq --yes --no-install-recommends "${apt_opts[@]}" "${packages[@]}"; then
+            installed=true
+            break
+          fi
+          echo "::warning::apt attempt ${attempt} failed or timed out; retrying"
+          sudo dpkg --configure -a || true
+          sleep 5
+        done
+        if [[ "${installed}" != "true" ]]; then
+          echo "::error::Installing the test tools failed three times."
+          exit 1
+        fi
         echo "/usr/lib/postgresql/18/bin" >> "${GITHUB_PATH}"
         /usr/lib/postgresql/18/bin/pg_dump --version
