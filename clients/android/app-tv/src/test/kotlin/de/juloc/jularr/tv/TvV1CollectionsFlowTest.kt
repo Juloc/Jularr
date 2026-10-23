@@ -35,7 +35,7 @@ class TvV1CollectionsFlowTest {
             override suspend fun collectionWorks(collectionId: Long, page: Int, pageSize: Int): TvPageV1<TvWorkCardV1> {
                 requested.add(collectionId to page)
                 return TvPageV1(
-                    if (page == 1) (1L..100L).map(::card)
+                    if (page == 1) (1L..100L).map { card(it) }
                     else listOf(card(101L), card(102L, 3)),
                     page, pageSize,
                 )
