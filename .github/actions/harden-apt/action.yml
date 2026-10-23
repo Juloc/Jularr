@@ -1,11 +1,18 @@
 name: Harden apt
 description: >-
-  Force IPv4 and short network timeouts for apt, so a slow or half-reachable mirror cannot stall a job
-  for minutes (Playwright installs its system libraries through apt).
+  Make apt reliable on a fresh hosted runner: the background apt jobs of the image are stopped, a leftover
+  apt/dpkg process of an earlier attempt can be cleaned, IPv4 and short network timeouts are forced and
+  apt waits for the dpkg lock instead of failing at once (Playwright installs its system libraries through apt).
 runs:
   using: composite
   steps:
     - name: Configure apt
       shell: bash
       run: |
-        printf 'Acquire::ForceIPv4 "true";\nAcquire::Retries "3";\nAcquire::http::Timeout "20";\nAcquire::https::Timeout "20";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network >/dev/null
+        sudo systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null || true
+        printf 'Acquire::ForceIPv4 "true";\nAcquire::Retries "3";\nAcquire::http::Timeout "20";\nAcquire::https::Timeout "20";\nDPkg::Lock::Timeout "180";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-network >/dev/null
+        # Wait (at most two minutes) until nobody else holds the dpkg lock.
+        for _ in $(seq 1 60); do
+          if ! sudo fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock >/dev/null 2>&1; then break; fi
+          sleep 2
+        done

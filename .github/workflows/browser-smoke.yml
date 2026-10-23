@@ -70,6 +70,10 @@ jobs:
           for attempt in 1 2 3; do
             if timeout 300 pwsh tests/Jularr.E2E.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium; then exit 0; fi
             echo "::warning::Chromium install attempt ${attempt} failed or timed out; retrying"
+            # timeout stops pwsh only: the apt/dpkg children it started would keep the dpkg lock.
+            sudo pkill -9 -x apt-get || true
+            sudo pkill -9 -x dpkg || true
+            sudo dpkg --configure -a || true
             sleep 5
           done
           echo "::error::Chromium could not be installed."
