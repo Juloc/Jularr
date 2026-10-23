@@ -39,7 +39,7 @@
 - Full validation commands are in [.agent/project.yaml](.agent/project.yaml); run them only for a release or an explicit full-validation request.
 - Review your own diff before committing; state what was verified and any remaining integration gaps.
 - Start each approved package on its own feature branch from `origin/clean-start`, use one bundled commit and a separate PR, and push after focused verification. Do not merge automatically: each PR requires green checks, documented verification and explicit owner approval to merge. [BACKEND_NEXT](docs/BACKEND_NEXT.md) is reference material, not blanket scope approval. Preserve existing work, never force push, and never merge into `dev`/`main`.
-- Both author and committer must be exactly `Juloc <juli.hiresch@gmail.com>`; no AI attribution or additional contributor trailers.
+- Both author and committer must be exactly `Juloc <juli.hiresch@gmail.com>`; no AI attribution or additional contributor trailers. The only other accepted committer is GitHub itself (`GitHub <noreply@github.com>`) on squash and merge commits made on github.com; their author must still be Juloc.
 - Feature push checks exclude already merged `origin/clean-start` ancestors; newly contributed commits and target-branch pushes remain fully checked. Never rewrite historical authorship.
 - Before committing, run `node scripts/install-git-hooks.mjs`. Never bypass hooks with `--no-verify`.
 - Keep commit messages compact. Do not rewrite historical authorship.

@@ -45,7 +45,11 @@ verify_commit_range() {
 
   while IFS= read -r commit; do
     verify_identity "author of ${commit}" "$(git show -s --format='%an <%ae>' "$commit")"
-    verify_identity "committer of ${commit}" "$(git show -s --format='%cn <%ce>' "$commit")"
+    # GitHub itself is the committer of squash and merge commits made on github.com; the author is still verified.
+    committer="$(git show -s --format='%cn <%ce>' "$commit")"
+    if [[ "$committer" != 'GitHub <noreply@github.com>' ]]; then
+      verify_identity "committer of ${commit}" "$committer"
+    fi
     fail_if_forbidden_trailer "$(git show -s --format='%B' "$commit")"
   done < <(git rev-list "${revisions[@]}")
 }
