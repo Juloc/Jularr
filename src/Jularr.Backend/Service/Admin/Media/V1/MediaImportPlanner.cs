@@ -39,7 +39,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             _ => ["igdb"]
         };
 
-        public async Task<MediaImportPlan> PlanAsync(LogicContext context, IReadOnlyList<MediaImportItem> items, MediaImportDataV1 data, int searches, CancellationToken ct)
+        public async Task<MediaImportPlan> PlanAsync(LogicContext context, IReadOnlyList<MediaImportItem> items, MediaImportDataV1 data, int searches, CancellationToken ct, Func<int, string, int?, Task>? onProgressAsync = null)
         {
             var choices = data.Choices.ToDictionary(choice => choice.Index);
             if (choices.Keys.Any(index => index >= items.Count)) throw new DataValidationException(nameof(data.Choices), "unknown_reference");
@@ -75,6 +75,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     continue;
                 }
 
+                if (onProgressAsync is not null) await onProgressAsync(index, "isbn", null);
                 var key = "import.isbn." + isbn.Value;
                 if (!cache.TryGetValue(key, out OpenLibraryWork? book))
                 {
@@ -138,7 +139,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 .OrderBy(index => QueryOf(choices.GetValueOrDefault(index)) is null).ThenBy(index => index).ToArray();
             foreach (var index in open)
             {
-                if (await SearchAsync(context, items[index], QueryOf(choices.GetValueOrDefault(index)), budget, ct) is { } results) candidates[index] = results;
+                if (onProgressAsync is not null) await onProgressAsync(index, "searching", null);
+                var results = await SearchAsync(context, items[index], QueryOf(choices.GetValueOrDefault(index)), budget, ct);
+                if (results is not null) candidates[index] = results;
+                if (onProgressAsync is not null) await onProgressAsync(index, results is null ? "waiting" : results.Count > 0 ? "candidates" : "no_match", results?.Count);
             }
 
             var rows = new List<MediaImportPlanRow>(items.Count);
@@ -201,7 +205,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     else firstOf[key] = index;
                 }
 
-                rows.Add(Decide(row, choice, data, defaults));
+                row = Decide(row, choice, data, defaults);
+                rows.Add(row);
+                if (onProgressAsync is not null) await onProgressAsync(index, row.Status.ToString(), row.Candidates.Count);
             }
 
             var unsearched = rows.Count(row => row.Status == MediaImportStatusType.Open && !row.IsSearched && (row.Item.Title is not null || row.Query is not null));
