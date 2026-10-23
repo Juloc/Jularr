@@ -9188,6 +9188,26 @@
    "Preview import",
    "Vorschau anzeigen"
   ],
+  "import.progress.previewing": [
+   "Preview: {0} of {1} entries checked. Searching the rest in batches.",
+   "Vorschau: {0} von {1} Einträgen geprüft. Die übrigen werden in Abschnitten gesucht."
+  ],
+  "import.progress.applying": [
+   "Import: {0} of {1} selected entries processed. Updating after each batch.",
+   "Import: {0} von {1} ausgewählten Einträgen verarbeitet. Fortschritt wird nach jedem Abschnitt aktualisiert."
+  ],
+  "import.progress.waiting": [
+   "Working on the request. Results will appear when this batch finishes.",
+   "Anfrage läuft. Die Ergebnisse erscheinen, sobald dieser Abschnitt fertig ist."
+  ],
+  "import.progress.finished": [
+   "Import finished: {0} of {1} entries processed.",
+   "Import beendet: {0} von {1} Einträgen verarbeitet."
+  ],
+  "import.progress.paused": [
+   "Automatic processing paused: {0} of {1} entries completed. Check the remaining entries or provider connection.",
+   "Automatische Verarbeitung angehalten: {0} von {1} Einträgen erledigt. Restliche Einträge oder Anbieter-Verbindung prüfen."
+  ],
   "import.refresh": [
    "Update preview",
    "Vorschau aktualisieren"
