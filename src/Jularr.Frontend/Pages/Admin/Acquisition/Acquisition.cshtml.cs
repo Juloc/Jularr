@@ -466,9 +466,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     else form.Hidden(item => item.DownloadStorageMountId);
                     if (texts.Can("storage.read"))
                     {
-                        // Exactly one folder control. The picker writes to this hidden field;
-                        // the selected storage connection already appears in the selector.
-                        form.Hidden(item => item.LocalPath);
+                        // One backing input serves either direct container paths (no
+                        // storage connection) or a mount-relative folder picker.
+                        // CSS exposes only the control relevant to the selected mount.
+                        form.Text(item => item.LocalPath, "acquisition.connection.localPath");
                         var browse = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(Address(existing?.Id, type, "Folders"),
                             "storageMountId", input.DownloadStorageMountId?.ToString(CultureInfo.InvariantCulture) ?? "");
                         form.Content(new FolderPicker(assets, browse, input.LocalPath ?? "", nameof(input.LocalPath), "/Admin/Storage",
