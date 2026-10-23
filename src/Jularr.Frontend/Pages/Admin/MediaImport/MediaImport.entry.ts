@@ -315,99 +315,162 @@ function initializeLiveImport(): void {
 
         let processed = 0;
         let finished = false;
-        const waiting: number[] = [];
         const pending = (state: string) => {
             heading.textContent = state + " · " + processed + " / " + total;
         };
         pending((apply.textContent ?? "").trim());
 
-        const addContinuation = (remaining: string): void => {
-            const next = document.createElement("form");
-            next.method = "post";
+        // The server limits provider imports to 40 new titles per pass. Continue
+        // automatically only while a batch made forward progress, mapping each
+        // deferred row back to its original position and preserving its decisions.
+        // An unavailable provider / stalled run is left for explicit retry.
+        const makeContinuation = (current: FormData, waiting: number[], remaining: string): FormData => {
+            const next = new FormData();
+            current.forEach((value, name) => {
+                if (typeof value !== "string") return;
+                if (name === "__RequestVerificationToken" || name === "Action" || name.startsWith("Defaults[")) {
+                    next.append(name, value);
+                    return;
+                }
+                const match = /^Choices\[(\d+)\]\.(.+)$/.exec(name);
+                if (!match) return;
+                const position = waiting.indexOf(Number(match[1]));
+                if (position !== -1 && match[2] !== "Index") next.append("Choices[" + position + "]." + match[2], value);
+            });
+            for (let index = 0; index < waiting.length; index++) next.append("Choices[" + index + "].Index", String(index));
+            next.set("Json", remaining);
+            return next;
+        };
+
+        const addManualContinuation = (next: FormData): void => {
+            const continuation = document.createElement("form");
+            continuation.method = "post";
             const target = new URL(form.action, window.location.href);
             target.searchParams.set("handler", "Preview");
-            next.action = target.toString();
-            const hidden = (name: string, value: string): void => {
+            continuation.action = target.toString();
+            next.forEach((value, name) => {
+                if (typeof value !== "string") return;
                 const input = document.createElement("input");
                 input.type = "hidden";
                 input.name = name;
                 input.value = value;
-                next.append(input);
-            };
-            source.forEach((value, name) => {
-                if (typeof value !== "string") return;
-                if (name === "__RequestVerificationToken" || name === "Action" || name.startsWith("Defaults[")) hidden(name, value);
-                const match = /^Choices\[(\d+)\]\.(.+)$/.exec(name);
-                if (!match) return;
-                const position = waiting.indexOf(Number(match[1]));
-                if (position >= 0 && match[2] !== "Index") hidden("Choices[" + position + "]." + match[2], value);
+                continuation.append(input);
             });
-            for (let index = 0; index < waiting.length; index++) hidden("Choices[" + index + "].Index", String(index));
-            hidden("Json", remaining);
             const button = document.createElement("button");
             button.type = "submit";
             button.className = "button button--primary";
             button.textContent = apply.dataset.importContinue ?? "Continue";
-            next.append(button);
-            panel.append(next);
+            continuation.append(button);
+            panel.append(continuation);
         };
 
+        const itemNodes = new Map<number, { name: HTMLElement; status: HTMLElement }>();
         try {
-            const endpoint = new URL(form.action, window.location.href);
-            endpoint.searchParams.set("handler", "ApplyStream");
-            const response = await fetch(endpoint, { method: "POST", body: source, credentials: "same-origin", headers: { Accept: "application/x-ndjson" } });
-            if (!response.ok || !response.body) throw new Error("Import request failed");
+            const list = JSON.parse(String(source.get("Json") ?? "")) as { items?: { title?: string }[] };
+            list.items?.forEach((item, index) => {
+                const entry = document.createElement("li");
+                const name = document.createElement("span");
+                name.textContent = item?.title || "#" + String(index + 1);
+                const status = document.createElement("span");
+                status.className = "media-import__activity-outcome";
+                entry.append(name, status);
+                history.append(entry);
+                itemNodes.set(index, { name, status });
+            });
+        } catch {
+            // Server validation still owns the list.
+        }
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = "";
-            const handle = (update: ImportEvent): void => {
-                if (update.kind === "row") {
-                    processed++;
-                    progress.value = processed;
-                    pending((apply.textContent ?? "").trim());
-                    const entry = document.createElement("li");
-                    if (update.workId !== null) {
-                        const link = document.createElement("a");
-                        link.href = "/Admin/Works/" + String(update.workId);
-                        link.textContent = update.title || "#" + String(update.index + 1);
-                        entry.append(link);
-                    } else {
-                        const title = document.createElement("span");
-                        title.textContent = update.title || "#" + String(update.index + 1);
-                        entry.append(title);
+        let current = source;
+        let indices = Array.from({ length: total }, (_, index) => index);
+        const settled = new Set<number>();
+        const maximumWaves = Math.ceil(total / 40) + 2;
+        try {
+            for (let wave = 0; wave < maximumWaves; wave++) {
+                const endpoint = new URL(form.action, window.location.href);
+                endpoint.searchParams.set("handler", "ApplyStream");
+                const response = await fetch(endpoint, { method: "POST", body: current, credentials: "same-origin", headers: { Accept: "application/x-ndjson" } });
+                if (!response.ok || !response.body) throw new Error("Import request failed");
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = "";
+                let waveFinished = false;
+                let remaining: string | null = null;
+                let added = 0;
+                let unavailable = false;
+                const waiting: number[] = [];
+
+                const handle = (update: ImportEvent): void => {
+                    if (update.kind === "row") {
+                        const originalIndex = indices[update.index];
+                        if (originalIndex === undefined) throw new Error("Invalid result index");
+                        const node = itemNodes.get(originalIndex);
+                        if (node) {
+                            if (update.title) node.name.textContent = update.title;
+                            node.status.textContent = update.outcome;
+                            if (update.workId !== null && node.name.tagName !== "A") {
+                                const link = document.createElement("a");
+                                link.href = "/Admin/Works/" + String(update.workId);
+                                link.textContent = node.name.textContent;
+                                node.name.replaceWith(link);
+                                node.name = link;
+                            }
+                        }
+                        if (update.status === "Deferred" || update.status === "Unavailable") {
+                            waiting.push(update.index);
+                            if (update.status === "Unavailable") unavailable = true;
+                        } else {
+                            settled.add(originalIndex);
+                        }
+                        if (update.status === "Added" || update.status === "AddedAndMonitored") added++;
+                        processed = settled.size;
+                        progress.value = processed;
+                        pending((apply.textContent ?? "").trim());
+                        if (node) node.status.scrollIntoView({ block: "nearest" });
+                    } else if (update.kind === "done") {
+                        waveFinished = true;
+                        remaining = update.remaining;
+                    } else if (update.kind === "error") {
+                        throw new Error("Import interrupted");
                     }
-                    const status = document.createElement("span");
-                    status.textContent = update.outcome;
-                    status.className = "media-import__activity-outcome";
-                    entry.append(status);
-                    history.append(entry);
-                    history.scrollTop = history.scrollHeight;
-                    if (update.status === "Deferred" || update.status === "Unavailable") waiting.push(update.index);
-                } else if (update.kind === "done") {
-                    finished = true;
-                    panel.classList.add("media-import__activity--done");
-                    pending(apply.dataset.importComplete ?? "Completed");
-                    if (update.remaining) addContinuation(update.remaining);
-                } else if (update.kind === "error") {
-                    throw new Error("Import interrupted");
-                }
-            };
+                };
 
-            for (;;) {
-                const chunk = await reader.read();
-                if (chunk.done) break;
-                buffer += decoder.decode(chunk.value, { stream: true });
-                let cut: number;
-                while ((cut = buffer.indexOf("\n")) !== -1) {
-                    const line = buffer.slice(0, cut).trim();
-                    buffer = buffer.slice(cut + 1);
-                    if (line) handle(JSON.parse(line) as ImportEvent);
+                for (;;) {
+                    const chunk = await reader.read();
+                    if (chunk.done) break;
+                    buffer += decoder.decode(chunk.value, { stream: true });
+                    let cut: number;
+                    while ((cut = buffer.indexOf("\n")) !== -1) {
+                        const line = buffer.slice(0, cut).trim();
+                        buffer = buffer.slice(cut + 1);
+                        if (line) handle(JSON.parse(line) as ImportEvent);
+                    }
                 }
+                buffer += decoder.decode();
+                if (buffer.trim()) handle(JSON.parse(buffer) as ImportEvent);
+                if (!waveFinished) throw new Error("Import did not finish");
+
+                if (!remaining) {
+                    finished = true;
+                    break;
+                }
+
+                const next = makeContinuation(current, waiting, remaining);
+                if (added === 0 || unavailable || wave === maximumWaves - 1) {
+                    addManualContinuation(next);
+                    finished = true;
+                    break;
+                }
+
+                indices = waiting.map(index => indices[index]);
+                current = next;
             }
-            buffer += decoder.decode();
-            if (buffer.trim()) handle(JSON.parse(buffer) as ImportEvent);
+
             if (!finished) throw new Error("Import did not finish");
+            panel.classList.add("media-import__activity--done");
+            pending(apply.dataset.importComplete ?? "Completed");
+
         } catch {
             // Some rows may already have committed; never promise a rollback or blindly retry.
             panel.classList.add("media-import__activity--failed");
