@@ -128,6 +128,34 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadListAsync<DownloadCleanupStatusData>(sql, ct);
         }
 
+        // Crash recovery: completion is committed before the caller can enqueue its remote cleanup.
+        // Rebuild missing ledger rows from finished Operations, but never touch attention/waiting imports.
+        public static Task QueueMissedDownloadCleanupsAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO "DownloadClientCleanups" ("AcquisitionConnectionId", "ExternalId", "Reason", "OperationId")
+                SELECT operation."AcquisitionConnectionId", operation."ExternalId",
+                       CASE WHEN operation."OperationStatusTypeId" = 3 THEN 'imported' ELSE 'failed' END,
+                       operation."Id"
+                FROM "Operations" AS operation
+                JOIN "AcquisitionConnections" AS connection ON connection."Id" = operation."AcquisitionConnectionId"
+                WHERE operation."OperationTypeId" = 2
+                  AND operation."OperationStatusTypeId" IN (3, 4)
+                  AND operation."ExternalId" IS NOT NULL
+                  AND connection."AcquisitionConnectionTypeId" = 2
+                  AND (
+                    operation."OperationStatusTypeId" = 3 AND connection."RemovesCompleted"
+                    OR operation."OperationStatusTypeId" = 4 AND connection."RemovesFailed"
+                  )
+                ORDER BY operation."Id" DESC
+                LIMIT 100
+                ON CONFLICT ("AcquisitionConnectionId", "ExternalId") DO NOTHING;
+                """;
+            return ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         // Insert only for the corresponding enabled policy; a repeated callback is idempotent.
         public static Task QueueImportedCleanupAsync(this LogicContext ctx, DownloadCleanupKeyData data, CancellationToken ct)
         {
