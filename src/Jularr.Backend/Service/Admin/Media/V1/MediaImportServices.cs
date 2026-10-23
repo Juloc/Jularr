@@ -57,6 +57,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         private readonly ILogger<RunMediaImportV1> _logger;
         private bool _searches;
 
+        // Optional request-scoped progress sink for the interactive import page; the normal API stays unchanged.
+        public Func<MediaImportResultRowV1, Task>? OnRowProcessedAsync { get; set; }
+
         internal RunMediaImportV1(MediaImportPlanner planner, MetadataCatalog catalog, AcquisitionSearchSignal searchSignal, ILogger<RunMediaImportV1> logger)
         {
             _planner = planner;
@@ -81,6 +84,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var added = 0;
             foreach (var row in plan.Rows)
             {
+                try
+                {
                 var title = row.MatchTitle ?? row.Item.Title;
                 MediaImportResultRowV1 Result(MediaImportOutcomeType outcome, long? id = null, bool searches = false) => new(row.Item.Index, title, outcome, searches, id ?? row.WorkId);
                 if (row.Status == MediaImportStatusType.Invalid && row.Problem == "excluded")
@@ -154,6 +159,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 var searches = monitored && row.Action == MediaImportActionType.MonitorAndSearch;
                 _searches |= searches;
                 results.Add(Result(created ? monitored ? MediaImportOutcomeType.AddedAndMonitored : MediaImportOutcomeType.Added : monitored ? MediaImportOutcomeType.Monitored : MediaImportOutcomeType.Unchanged, workId, searches));
+                }
+                finally
+                {
+                    if (OnRowProcessedAsync is { } notify && results.LastOrDefault()?.Index == row.Item.Index)
+                    {
+                        await notify(results[^1]);
+                    }
+                }
             }
 
             // Each row is named as the library names its title.
