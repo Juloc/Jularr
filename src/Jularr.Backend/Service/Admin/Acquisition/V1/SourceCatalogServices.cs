@@ -72,6 +72,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         public bool IsConfigured(SourceCatalogEntry entry) => entry switch
         {
             { ProviderKey: { } key } => providers.Any(provider => provider.Key == key && provider.IsEnabled),
+            { ConnectionType: AcquisitionConnectionType.AnnasArchive } => connections.Any(connection => connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.AnnasArchive),
             { ConnectionType: { } type, DefaultBaseUrl: { } baseUrl } => connections.Any(connection => connection.AcquisitionConnectionTypeId == type && Points(connection, baseUrl)),
             { ConnectionType: { } type } => connections.Any(connection => connection.AcquisitionConnectionTypeId == type
                 && !SourceCatalog.Entries.Any(known => known.DefaultBaseUrl is { } baseUrl && Points(connection, baseUrl))),
