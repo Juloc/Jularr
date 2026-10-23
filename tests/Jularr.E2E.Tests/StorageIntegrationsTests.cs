@@ -89,15 +89,14 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(tmdb).ToContainTextAsync("Setup needed");
                 await Assertions.Expect(tmdb).ToContainTextAsync("Missing");
 
-                // The key field sits in the card itself: no Settings button, no dialog; typing shows the page's pill and the pill saves it.
+                // The provider's key and its own Save button live in the same card; no shared page-level pill.
                 Assert.AreEqual(0, await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).CountAsync());
                 var key = tmdb.Locator("[name=Secret]");
                 await Assertions.Expect(key).ToBeVisibleAsync();
                 await Assertions.Expect(key).ToHaveAttributeAsync("type", "password");
-                await Assertions.Expect(page.Locator("[data-save-pill]")).ToBeHiddenAsync();
+                await Assertions.Expect(tmdb.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true })).ToBeVisibleAsync();
                 await key.FillAsync(FakeServices.TmdbToken);
-                await Assertions.Expect(page.Locator("[data-save-pill] .save-pill__count")).ToHaveTextAsync("1 change");
-                await Steps.SaveAsync(page);
+                await Steps.SubmitAsync(page, tmdb.Locator("form[action*='handler=Secret']"));
                 Assert.AreEqual(0, await page.GetByRole(AriaRole.Dialog).CountAsync());
 
                 // The key is never written back: the card only says one is stored, and the field is empty again.
@@ -170,10 +169,9 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(jellyfin.Locator("[name=ApiKey]")).ToHaveValueAsync("");
                 await Assertions.Expect(jellyfin.Locator("[name=ApiKey]")).ToHaveAttributeAsync("type", "password");
                 await Assertions.Expect(page.Locator("#provider-emby [name=BaseUrl]")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("#provider-emby").GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true })).ToBeVisibleAsync();
                 await page.Locator("#provider-emby [name=BaseUrl]").FillAsync("http://emby.test:8096");
-                await Assertions.Expect(page.Locator("[data-save-pill] .save-pill__count")).ToHaveTextAsync("1 change");
-                await page.GetByRole(AriaRole.Button, new() { Name = "Discard", Exact = true }).ClickAsync();
-                await Assertions.Expect(page.Locator("[data-save-pill]")).ToBeHiddenAsync();
+                await page.ReloadAsync();
                 await Assertions.Expect(page.Locator("#provider-emby [name=BaseUrl]")).ToHaveValueAsync("");
 
                 // The users of the server: who is linked, who still waits for a profile.
