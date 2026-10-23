@@ -101,7 +101,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             // Show missing prerequisites before a source is enabled or a download attempted.
             if (!_directStorageReady && items.Any(item => NativeDownloadStorageNotice.RequiresDirectStorage(item.AcquisitionConnectionTypeId)))
                 page.Content.Add(NativeDownloadStorageNotice.Message(DownloadStorageArea.Direct));
-            if (!_usenetStorageReady && Role == AcquisitionConnectionRole.Download)
+            if (!_usenetStorageReady && items.Any(item => item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet))
                 page.Content.Add(NativeDownloadStorageNotice.Message(DownloadStorageArea.Usenet));
             var reachable = items.Count(item => State(item) == "healthy");
             var failing = items.Count(item => State(item) is "error" or "backoff");
@@ -166,7 +166,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var cards = new List<IUiComponent>([.. items.Select(item => Card(item, csrf))]);
             if (!_directStorageReady && items.Any(item => NativeDownloadStorageNotice.RequiresDirectStorage(item.AcquisitionConnectionTypeId)))
                 page.Content.Add(NativeDownloadStorageNotice.Message(DownloadStorageArea.Direct));
-            if (!_usenetStorageReady && Role == AcquisitionConnectionRole.Download)
+            if (!_usenetStorageReady && items.Any(item => item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet))
                 page.Content.Add(NativeDownloadStorageNotice.Message(DownloadStorageArea.Usenet));
 
             // The card that adds one: each kind opens its dialog.
