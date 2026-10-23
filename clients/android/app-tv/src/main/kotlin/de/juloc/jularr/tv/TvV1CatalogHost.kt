@@ -98,6 +98,7 @@ fun TvV1CatalogHost(
     var homeShelfOrder by remember(serverOrigin) { mutableStateOf(listOf(1, 4, 5)) }
     var discoverHomeFeeds by remember(serverOrigin) { mutableStateOf<List<TvV1HomeVideoFeed>>(emptyList()) }
     var selectedDiscoverItem by remember(serverOrigin) { mutableStateOf<TvDiscoverItemV1?>(null) }
+    var selectedCatalogEntry by remember(serverOrigin) { mutableStateOf<TvV1CatalogSelection?>(null) }
     var watchlist by remember(serverOrigin) { mutableStateOf<List<WatchlistItem>>(emptyList()) }
     var details by remember(serverOrigin) { mutableStateOf<AnimeDetail?>(null) }
     var isWatchlisted by remember(serverOrigin) { mutableStateOf(false) }
@@ -370,7 +371,21 @@ fun TvV1CatalogHost(
                                 if (local != null) {
                                     openWork(local.toString())
                                 } else if (item.tmdbId != null) {
+                                    selectedCatalogEntry = null
                                     selectedDiscoverItem = item
+                                    openPage(TvV1CatalogPage.Discover)
+                                }
+                            },
+                            onDiscoverCatalogItem = { feed, item ->
+                                val local = item.workId
+                                if (local != null) {
+                                    openWork(local.toString())
+                                } else if (item.namespace.isNotBlank() && item.externalId.isNotBlank()) {
+                                    selectedDiscoverItem = null
+                                    selectedCatalogEntry = TvV1CatalogSelection(
+                                        feed.mediaTypeId, item.namespace, item.externalId,
+                                        feed.mediaSubtypeId,
+                                    )
                                     openPage(TvV1CatalogPage.Discover)
                                 }
                             },
@@ -497,6 +512,7 @@ fun TvV1CatalogHost(
                         pagingError = pagingError,
                         onOpenDiscover = {
                             selectedDiscoverItem = null
+                            selectedCatalogEntry = null
                             openPage(TvV1CatalogPage.Discover)
                         },
                         onLoadMore = if (searchNextPage != null && !fetchingNextPage) {
@@ -509,6 +525,7 @@ fun TvV1CatalogHost(
         TvV1CatalogPage.Discover -> TvV1DiscoverScreen(
             catalog = catalog,
             initialItem = selectedDiscoverItem,
+            initialCatalog = selectedCatalogEntry,
             serverOrigin = serverOrigin,
             requestHeaders = authorization,
             onLocalWork = { id -> openWork(id.toString()) },
