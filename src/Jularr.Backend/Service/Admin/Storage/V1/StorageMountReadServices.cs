@@ -130,6 +130,47 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
             Task.FromResult<IServiceOutput>(new BaseDataList<StorageLocalPathV1>(_options.LocalPaths.Order(StringComparer.Ordinal).Select(path => new StorageLocalPathV1(path)).ToArray()));
     }
 
+    // Only native download storage needs filesystem directories for articles, repair, unpack and browser staging.
+    // Direct SMB is deliberately excluded: external tools need a real container-visible mount.
+    [ServiceEndpoint("POST", "/api/v1/admin/storage/mounts/{storageMountId:long}/download-directory")]
+    public sealed class CreateDownloadDirectoryV1 : AdminService<StorageMountParametersV1, CreateDownloadDirectoryDataV1>
+    {
+        private readonly StorageAccess _storage;
+
+        internal CreateDownloadDirectoryV1(StorageAccess storage) => _storage = storage;
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(StorageMountParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(StorageMountParametersV1 parameters, Type resultType) => new("acquisition.manage");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(Parameters.StorageMountId, ct), CancellationToken);
+            try
+            {
+                if (mount.IsReadOnly || _storage.Open(mount) is not LocalStorageFiles files)
+                {
+                    throw new ServiceUnavailableException("download_storage_mount_required");
+                }
+
+                var parent = files.ResolveDirectory(Data.RelativePath);
+                if (StorageFileSystem.DownloadFilesystemIdentity(parent) is null)
+                {
+                    throw new ServiceUnavailableException("download_storage_mount_required");
+                }
+
+                var child = string.IsNullOrEmpty(Data.RelativePath) ? Data.DirectoryName : Data.RelativePath + "/" + Data.DirectoryName;
+                await files.CreateDirectoryAsync(child, CancellationToken);
+                return new UpdateResult(true);
+            }
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+            {
+                throw new ServiceUnavailableException("download_storage_unavailable");
+            }
+        }
+    }
+
     [ServiceEndpoint("POST", "/api/v1/admin/storage/mounts/{storageMountId:long}/directories")]
     public sealed class ReadStorageDirectoriesV1 : AdminService<StorageMountParametersV1, ReadStorageDirectoriesDataV1>
     {
