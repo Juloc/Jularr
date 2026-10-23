@@ -33,12 +33,25 @@ test("Feature and PR checks preserve merged history but reject new foreign autho
         git("commit", "--allow-empty", "-m", "Original baseline");
         const original = git("rev-parse", "HEAD");
         const merged = run("git", ["commit", "--allow-empty", "-m", "Existing merged frontend"], {
-            env: { ...owner, GIT_COMMITTER_NAME: "GitHub", GIT_COMMITTER_EMAIL: "noreply@github.com" }
+            env: { ...owner, GIT_AUTHOR_NAME: "Other", GIT_AUTHOR_EMAIL: "other@example.test", GIT_COMMITTER_NAME: "Other", GIT_COMMITTER_EMAIL: "other@example.test" }
         });
         assert.equal(merged.status, 0, merged.stderr);
         const base = git("rev-parse", "HEAD");
         git("commit", "--allow-empty", "-m", "New backend integration");
         const good = git("rev-parse", "HEAD");
+
+        // GitHub itself is the committer of a squash or merge commit made on github.com; its author is still checked.
+        const web = run("git", ["commit", "--allow-empty", "-m", "Web squash merge"], {
+            env: { ...owner, GIT_COMMITTER_NAME: "GitHub", GIT_COMMITTER_EMAIL: "noreply@github.com" }
+        });
+        assert.equal(web.status, 0, web.stderr);
+        assert.equal(verify("HEAD", good).status, 0);
+        const foreignWeb = run("git", ["commit", "--allow-empty", "-m", "Web merge by somebody else"], {
+            env: { ...owner, GIT_AUTHOR_NAME: "Other", GIT_AUTHOR_EMAIL: "other@example.test", GIT_COMMITTER_NAME: "GitHub", GIT_COMMITTER_EMAIL: "noreply@github.com" }
+        });
+        assert.equal(foreignWeb.status, 0, foreignWeb.stderr);
+        assert.equal(verify("HEAD", good).status, 1);
+        git("reset", "--hard", good);
 
         // Run the actual CI script with a stale event and the current fetched target.
         mkdirSync(resolve(directory, "scripts"));
@@ -60,7 +73,7 @@ test("Feature and PR checks preserve merged history but reject new foreign autho
         assert.equal(checkPullRequest(git("rev-parse", "HEAD"), original, "clean-start").status, 1);
 
         // The hook only permits exclusions on feature pushes.
-        git("update-ref", "refs/remotes/origin/clean-start", base);
+        git("update-ref", "refs/remotes/origin/main", base);
         const hook = resolve(repository, ".githooks/pre-push");
         const push = (sha, target, previous) => run(bash, [hook, "origin"], {
             input: `refs/heads/codex/test ${sha} refs/heads/${target} ${previous}\n`
@@ -69,7 +82,7 @@ test("Feature and PR checks preserve merged history but reject new foreign autho
         assert.equal(push(good, "codex/test", zero).status, 0);
         assert.equal(push(good, "fix/test", zero).status, 0);
         assert.equal(push(good, "fix/test", original).status, 0);
-        for (const target of ["clean-start", "dev", "main"]) {
+        for (const target of ["dev", "main"]) {
             assert.equal(push(good, target, original).status, 1);
         }
         assert.equal(push(git("rev-parse", "HEAD"), "codex/test", good).status, 1);

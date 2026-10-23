@@ -317,7 +317,7 @@ namespace Jularr.Backend.Service.Core
                 options.EventsType = typeof(SessionCookieEvents);
                 options.SlidingExpiration = false;
                 options.Cookie.HttpOnly = true;
-                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
                 options.Cookie.SameSite = SameSiteMode.Strict;
             });
 
@@ -653,7 +653,7 @@ namespace Jularr.Backend.Service.Core
             {
                 await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
                 http.User = new ClaimsPrincipal(new ClaimsIdentity());
-                http.Response.Cookies.Delete(AuthenticationNonceCookieName, new CookieOptions { Path = "/", Secure = true, HttpOnly = true, SameSite = SameSiteMode.Strict });
+                http.Response.Cookies.Delete(AuthenticationNonceCookieName, new CookieOptions { Path = "/", Secure = http.Request.IsHttps, HttpOnly = true, SameSite = SameSiteMode.Strict });
                 http.Response.Headers["RequestVerificationToken"] = antiforgery.GetAndStoreTokens(http).RequestToken;
             }
 
@@ -677,7 +677,7 @@ namespace Jularr.Backend.Service.Core
                 http.Response.Cookies.Append(AuthenticationNonceCookieName, challenge.BrowserNonce, new CookieOptions
                 {
                     HttpOnly = true,
-                    Secure = true,
+                    Secure = http.Request.IsHttps,
                     SameSite = SameSiteMode.Strict,
                     Path = "/",
                     Expires = challenge.ExpiresAt

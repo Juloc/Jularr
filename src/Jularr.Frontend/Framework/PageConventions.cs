@@ -59,6 +59,7 @@ namespace Jularr.Frontend.Framework
             conventions.AllowAnonymousToPage("/Setup/Start/Start");
             conventions.AllowAnonymousToPage("/Account/DeviceLink/DeviceLink");
             conventions.AllowAnonymousToPage("/Account/Register/Register");
+            conventions.AllowAnonymousToPage("/Account/ResetPassword/ResetPassword");
             conventions.AllowAnonymousToPage("/Development/ShellPreview/ShellPreview");
             return conventions;
         }

@@ -1,7 +1,10 @@
 using System.Security;
+using System.Security.Cryptography;
+using System.Text;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Logic.Account;
+using Jularr.Backend.Data.Logic.Authentication;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.Logic.Session;
 using Jularr.Backend.Data.Logic.Setup;
@@ -258,6 +261,139 @@ namespace Jularr.Backend.Logic.Account
                     return candidate;
                 }
             }
+        }
+
+        // The signed-in account changes its own password: the current one is verified in the same transaction.
+        public static async Task ChangePasswordAsync(this LogicContext ctx, long accountId, string currentPassword, string newPassword, CancellationToken ct)
+        {
+            AccountPasswordPolicy.Require(newPassword, "NewPassword");
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    account."Id",
+                    account."CredentialRevision",
+                    password."PasswordHash",
+                    account."IsEnabled",
+                    FALSE AS "RequiresSecondFactor"
+                FROM
+                    "Accounts" AS account
+                INNER JOIN
+                    "AccountPasswords" AS password ON password."AccountId" = account."Id"
+                WHERE
+                    account."Id" = @AccountId
+                FOR UPDATE OF
+                    account, password;
+                """;
+            sql.Parameters.Add(new AccountParameters(accountId));
+            var account = await ctx.ReadOptionalAsync<AccountAuthenticationData>(sql, ct);
+            if (account?.PasswordHash is null
+                || PasswordHasher.VerifyHashedPassword(account, account.PasswordHash, currentPassword) == PasswordVerificationResult.Failed)
+            {
+                throw new DataValidationException("CurrentPassword", "password_incorrect");
+            }
+
+            await ctx.WritePasswordAsync(new AccountPasswordData(accountId, PasswordHasher.HashPassword(account, newPassword)), ct);
+        }
+
+        // An administrator creates a link for an account; only the hash of its token is stored and an older open link ends.
+        public static async Task<(string Token, DateTime ExpiresAt)> CreatePasswordResetAsync(this LogicContext ctx, long accountId, CancellationToken ct)
+        {
+            var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace('+', '-').Replace('/', '_').TrimEnd('=');
+            var expiresAt = DateTime.UtcNow.AddHours(24);
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AccountAuthChallenges"
+                SET
+                    "ConsumedAt" = statement_timestamp()
+                WHERE
+                    "AccountId" = @AccountId
+                    AND "AuthChallengePurposeTypeId" = 2
+                    AND "ConsumedAt" IS NULL;
+                """;
+            sql.Parameters.Add(new AccountParameters(accountId));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "AccountAuthChallenges" ("AccountId", "AuthChallengePurposeTypeId", "TokenHash", "CredentialRevision", "ExpiresAt")
+                SELECT
+                    account."Id", @AuthChallengePurposeTypeId, @TokenHash, account."CredentialRevision", @ExpiresAt
+                FROM
+                    "Accounts" AS account
+                WHERE
+                    account."Id" = @AccountId;
+                """;
+            sql.Parameters.Add(new PasswordResetCreationData(accountId, SHA256.HashData(Encoding.UTF8.GetBytes(token)), expiresAt));
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new KeyNotFoundException("The account was not found.");
+            }
+
+            return (token, expiresAt);
+        }
+
+        // The link works once, for the revision of the credentials it was made for; a new password ends every open session.
+        public static async Task ResetPasswordAsync(this LogicContext ctx, string token, string newPassword, CancellationToken ct)
+        {
+            AccountPasswordPolicy.Require(newPassword, "NewPassword");
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    challenge."Id",
+                    challenge."AccountId"
+                FROM
+                    "AccountAuthChallenges" AS challenge
+                INNER JOIN
+                    "Accounts" AS account ON account."Id" = challenge."AccountId"
+                WHERE
+                    challenge."TokenHash" = @TokenHash
+                    AND challenge."AuthChallengePurposeTypeId" = 2
+                    AND challenge."ConsumedAt" IS NULL
+                    AND challenge."ExpiresAt" > statement_timestamp()
+                    AND challenge."CredentialRevision" = account."CredentialRevision"
+                    AND account."IsEnabled"
+                FOR UPDATE OF
+                    challenge, account;
+                """;
+            sql.Parameters.Add(new PasswordResetTokenData(SHA256.HashData(Encoding.UTF8.GetBytes(token))));
+            var claim = await ctx.ReadOptionalAsync<PasswordResetClaimData>(sql, ct)
+                ?? throw new DataValidationException("Token", "reset_invalid");
+
+            var account = new AccountAuthenticationData(claim.AccountId, 1, null, true, false);
+            await ctx.WritePasswordAsync(new AccountPasswordData(claim.AccountId, PasswordHasher.HashPassword(account, newPassword)), ct);
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AccountAuthChallenges"
+                SET
+                    "ConsumedAt" = statement_timestamp()
+                WHERE
+                    "Id" = @Id;
+                """;
+            sql.Parameters.Add(new AuthChallengeIdData(claim.Id));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Accounts"
+                SET
+                    "CredentialRevision" = "CredentialRevision" + 1
+                WHERE
+                    "Id" = @AccountId;
+                """;
+            sql.Parameters.Add(new AccountParameters(claim.AccountId));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            await ctx.RevokeOutdatedAccountSessionsAsync(new AccountParameters(claim.AccountId), ct);
         }
 
         private static async Task WritePasswordAsync(this LogicContext ctx, AccountPasswordData data, CancellationToken ct)

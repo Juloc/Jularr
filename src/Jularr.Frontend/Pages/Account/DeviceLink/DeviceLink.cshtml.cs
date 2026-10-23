@@ -97,7 +97,7 @@ namespace Jularr.Frontend.Pages.Account.DeviceLink
             return match.Success ? (Guid.Parse(match.Groups["id"].Value), match.Groups["code"].Value) : null;
         }
 
-        private static CookieOptions CookieOptions() => new() { HttpOnly = true, Secure = true, SameSite = SameSiteMode.Strict, Path = "/Devices/Link" };
+        private CookieOptions CookieOptions() => new() { HttpOnly = true, Secure = Request.IsHttps, SameSite = SameSiteMode.Strict, Path = "/Devices/Link" };
 
         [GeneratedRegex("^(?<id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\.(?<code>[0-9]{6})$")]
         private static partial Regex PairingValue();

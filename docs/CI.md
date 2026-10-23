@@ -1,10 +1,10 @@
-# clean-start CI gates
+# main CI gates
 
 The ordinary PR gate is deliberately bounded. The full test suite is retained,
 not deleted. Per-test timings are kept in the `timings-*` artifacts of every run
 and, as class totals, in [`tests/ci-durations.json`](../tests/ci-durations.json).
 
-| Workflow | PRs | After merge into `clean-start` | Purpose |
+| Workflow | PRs | After merge into `main` | Purpose |
 | --- | --- | --- | --- |
 | `Backend / prepare` + `backend (n/2)` + `test` | Always reported (`test` is the required check); skips builds on docs-only PRs | No | Build once, smoke methods, then the affected module tests selected from PR changes in two balanced shards |
 | `Frontend / razor-and-ui-resources` | When frontend/backend UI files change | Yes, matching paths | Frontend typecheck, JS tests, localization, Razor build and publish verification |
@@ -98,12 +98,12 @@ registered on the default branch. Keep focused test evidence in the PR.
 ## Nightly limitation
 
 The repository's default branch is `main`; GitHub scheduled Actions execute
-**only from the default branch**. A `schedule` entry on `clean-start`
-would run against `main` (once present there), not against `clean-start`.
+**only from the default branch**. A `schedule` entry on `main`
+would run against `main` (once present there), not against `main`.
 Therefore this PR does **not** claim to have enabled a working
-`clean-start` nightly run. The full suite is automatic after each
-`clean-start` push, and PRs can opt into it with `ci/full`.
-A future default-branch dispatcher can schedule a run at `clean-start`
+`main` nightly run. The full suite is automatic after each
+`main` push, and PRs can opt into it with `ci/full`.
+A future default-branch dispatcher can schedule a run at `main`
 once that change is explicitly approved.
 
 ## Performance and failure handling
@@ -112,7 +112,7 @@ once that change is explicitly approved.
   approximately 2–5 minutes on ordinary changes; browser smoke 3–5 minutes.
   Larger changes can take longer; the package smoke is conditional.
 - The full suite takes about 15 minutes in total (smoke, then the longest shard) and never blocks normal PR feedback.
-  When several agents merge changes rapidly, newer `clean-start` pushes cancel
+  When several agents merge changes rapidly, newer `main` pushes cancel
   obsolete branch validation runs; the newest branch revision still receives
   Full CI, Frontend and container checks. Manual Full CI is not cancelled.
 - Never hide a failed check by changing its filter or marking it successful.
