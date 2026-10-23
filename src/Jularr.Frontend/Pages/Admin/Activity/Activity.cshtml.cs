@@ -34,7 +34,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         [BindProperty(SupportsGet = true, Name = "files")]
         public bool ShowFiles { get; set; }
 
-        private bool IsHistory => Filter == ActivityFilterType.History;
+        private bool IsHistory => !ShowFiles && Filter == ActivityFilterType.History;
 
         protected override void Define(Page page)
         {
@@ -49,17 +49,19 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
             // The row of the entry's pages with the queue's own filters, then the figures.
             page.NoPageRow();
-            page.Content.Add(new ListToolbar(Chips(_summary)));
+            page.Content.Add(new ListToolbar(Modes(_summary)));
+            if (!IsHistory && !ShowFiles) page.Content.Add(new ListToolbar(Chips(_summary)));
             if (_summary is { } numbers) page.Content.Add(Kpis(numbers));
 
             if (_items is { } items)
             {
-                var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text(IsHistory ? "activity.empty.History" : "activity.empty.Queue")));
+                var visible = ShowFiles ? [.. items.Items.Where(item => item.CanBrowseFiles)] : items.Items;
+                var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text(ShowFiles ? "activity.files.noJobs" : IsHistory ? "activity.empty.History" : "activity.empty.Queue")));
                 var columns = IsHistory
                     ? new List<ListColumn> { new("activity.item", ListRole.Main), new("table.status", ListRole.Status), new("activity.reason", ListRole.Data, 1), new("activity.size", ListRole.Data, 2), new("operation.created"), new("common.actions", ListRole.Actions) }
                     : [new("activity.item", ListRole.Main), new("table.status", ListRole.Status), new("activity.source", ListRole.Data, 2), new("activity.transfer", ListRole.Data, 1), new("common.actions", ListRole.Actions)];
-                page.Content.Add(new ListPanel("activity.list", columns, [.. items.Items.Select(item => IsHistory ? HistoryRow(item, csrf) : QueueRow(item, csrf))], empty).Modifier(IsHistory ? "activity-list activity-history" : "activity-list activity-queue").Paged());
-                page.Content.AddRange(items.Items.Select(item => DrawerOf(item, csrf)));
+                page.Content.Add(new ListPanel("activity.list", columns, [.. visible.Select(item => IsHistory ? HistoryRow(item, csrf) : QueueRow(item, csrf))], empty).Modifier(IsHistory ? "activity-list activity-history" : "activity-list activity-queue").Paged());
+                page.Content.AddRange(visible.Select(item => DrawerOf(item, csrf)));
             }
 
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -75,6 +77,17 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
         private static IUiComponent Live(string name, string text) => new Span(new ValueText(text)).Attribute("data-live", LiveKeys.Queue).Attribute("data-live-text", name);
 
+        // Queue, history and files stay three distinct destinations.
+        private NavigationTabs Modes(ActivitySummaryV1? numbers) => AdminMenu.Row(texts, Request,
+        [
+            new NavigationTab("activity.view.queue", Address(filter: ActivityFilterType.All), !ShowFiles && !IsHistory,
+                Count: numbers?.AllCount, Icon: Glyph("download", 14)),
+            new NavigationTab("activity.view.history", Address(filter: ActivityFilterType.History), IsHistory,
+                Count: numbers?.HistoryCount, Icon: Glyph("history", 14)),
+            new NavigationTab("activity.files", Address(filter: ActivityFilterType.All) + "&files=true", ShowFiles,
+                Icon: Glyph("folder", 14))
+        ], ariaLabelKey: "activity.views");
+
         // One chip per part of the queue with how many entries it holds.
         private NavigationTabs Chips(ActivitySummaryV1? numbers)
         {
@@ -82,7 +95,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             var filters = new (ActivityFilterType Filter, int Count)[]
             {
                 (ActivityFilterType.All, numbers.AllCount), (ActivityFilterType.Active, numbers.ActiveCount), (ActivityFilterType.Waiting, numbers.WaitingCount),
-                (ActivityFilterType.Import, numbers.UnpackingCount), (ActivityFilterType.Errors, numbers.ErrorCount), (ActivityFilterType.History, numbers.HistoryCount)
+                (ActivityFilterType.Import, numbers.UnpackingCount), (ActivityFilterType.Errors, numbers.ErrorCount)
             };
             return AdminMenu.Row(texts, Request, [.. filters.Select(entry => new NavigationTab("activity.filter." + entry.Filter, Address(filter: entry.Filter), entry.Filter == Filter, Count: entry.Count, Icon: Glyph(FilterIcon(entry.Filter), 14)))], ariaLabelKey: "activity.filters");
         }
