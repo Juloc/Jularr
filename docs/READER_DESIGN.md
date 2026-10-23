@@ -114,8 +114,10 @@ a vector drawing (as an SVG that keeps its labels), a table or an irregular mult
 layout becomes such a figure instead of a tiny inline picture; EPUB pictures become
 figures by their declared kind or their size. A tap or click, Enter or Space on a figure
 opens the full-screen view (`dialog.reader-figure`): the picture fits the screen; wheel,
-pinch, double tap and the three buttons zoom, dragging moves a zoomed picture, Escape or
-a tap on the empty stage closes it. On the printed pages of the book view the figure is
+pinch, double tap, the zoom buttons and the 100–800% range adjust magnification.
+Dragging pans within the visible picture's actual fitted bounds, not the full viewport.
+The close button, Escape or a tap on the empty letterboxed stage closes the modal;
+pointer events in the modal cannot reopen the printed picture behind it. On the printed pages of the book view the figure is
 found by position, because those pages take no pointer events. A page only the original
 PDF can show stands in the text as a one-line note with a link to its page and is left
 out of the EPUB. The figure's look follows the global tokens; the cursor is `zoom-in`.

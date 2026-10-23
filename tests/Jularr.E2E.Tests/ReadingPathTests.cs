@@ -1039,10 +1039,47 @@ namespace Jularr.E2E.Tests
                 var view = page.Locator("dialog.reader-figure");
                 await Assertions.Expect(view).ToBeVisibleAsync();
                 Assert.IsTrue(await view.Locator(".reader-figure__image").EvaluateAsync<bool>("image => image.naturalWidth > 0 && image.getBoundingClientRect().width > innerWidth * 0.2"));
+                var stage = view.Locator(".reader-figure__stage");
+                var picture = view.Locator(".reader-figure__image");
+                Assert.IsTrue(await picture.EvaluateAsync<bool>("image => image.clientWidth <= image.parentElement.clientWidth && image.clientHeight <= image.parentElement.clientHeight"));
                 await view.Locator("[data-figure-zoom=in]").ClickAsync();
-                Assert.AreEqual("true", await view.Locator(".reader-figure__stage").GetAttributeAsync("data-zoomed"));
+                Assert.AreEqual("true", await stage.GetAttributeAsync("data-zoomed"));
                 await view.Locator("[data-figure-zoom=fit]").ClickAsync();
-                Assert.AreEqual("false", await view.Locator(".reader-figure__stage").GetAttributeAsync("data-zoomed"));
+                Assert.AreEqual("false", await stage.GetAttributeAsync("data-zoomed"));
+
+                // A precise zoom value must move the image within its actual fitted bounds, not a viewport-sized invisible image box.
+                await view.Locator("[data-figure-scale]").EvaluateAsync<bool>("slider => { slider.value = '500'; slider.dispatchEvent(new Event('input', { bubbles: true })); return true; }");
+                Assert.AreEqual("500%", await view.Locator("[data-figure-level]").InnerTextAsync());
+                Assert.AreEqual("5", await stage.EvaluateAsync<string>("element => element.style.getPropertyValue('--figure-scale')"));
+                var stageBox = (await stage.BoundingBoxAsync())!;
+                var cx = stageBox.X + stageBox.Width / 2;
+                var cy = stageBox.Y + stageBox.Height / 2;
+                await page.Mouse.MoveAsync(cx, cy);
+                await page.Mouse.DownAsync();
+                await page.Mouse.MoveAsync(cx + 90, cy + 75);
+                await page.Mouse.UpAsync();
+                Assert.IsTrue(await stage.EvaluateAsync<bool>("element => parseFloat(element.style.getPropertyValue('--figure-x')) !== 0 || parseFloat(element.style.getPropertyValue('--figure-y')) !== 0"),
+                    "A zoomed image must be draggable.");
+                await view.Locator("[data-figure-zoom=fit]").ClickAsync();
+                Assert.AreEqual("false", await stage.GetAttributeAsync("data-zoomed"));
+
+                // Clicking in the letterboxed area exits; the Reader underneath must not immediately reopen the figure.
+                var emptyArea = await page.EvaluateAsync<double[]>(@"() => {
+                    const stage = document.querySelector('.reader-figure__stage').getBoundingClientRect();
+                    const image = document.querySelector('.reader-figure__image').getBoundingClientRect();
+                    if (image.left > stage.left + 15) return [stage.left + 5, stage.top + stage.height / 2];
+                    if (image.top > stage.top + 15) return [stage.left + stage.width / 2, stage.top + 5];
+                    return [];
+                }");
+                Assert.AreEqual(2, emptyArea.Length, "The fitted picture must leave a real empty area on one axis.");
+                await page.Mouse.ClickAsync(emptyArea[0], emptyArea[1]);
+                await Assertions.Expect(view).ToBeHiddenAsync();
+                await page.Mouse.ClickAsync(box.X + box.Width / 2, box.Y + box.Height / 2);
+                await Assertions.Expect(view).ToBeVisibleAsync();
+                await view.Locator("[data-figure-close]").ClickAsync();
+                await Assertions.Expect(view).ToBeHiddenAsync();
+                await page.Mouse.ClickAsync(box.X + box.Width / 2, box.Y + box.Height / 2);
+                await Assertions.Expect(view).ToBeVisibleAsync();
                 await Evidence.SaveAsync(page, "reader-figure-fullscreen");
                 await page.Keyboard.PressAsync("Escape");
                 await Assertions.Expect(view).ToBeHiddenAsync();

@@ -403,6 +403,9 @@ namespace Jularr.Frontend.Pages.User.Reader
                 new Button(new Icon("zoom-out", assets)).IconOnly(texts["reader.figure.zoomOut"]).Attribute("data-figure-zoom", "out"),
                 new Button(new Icon("zoom-in", assets)).IconOnly(texts["reader.figure.zoomIn"]).Attribute("data-figure-zoom", "in"),
                 new Button(new Icon("fit", assets)).IconOnly(texts["reader.figure.fit"]).Attribute("data-figure-zoom", "fit"),
+                new Input().Attribute("type", "range").Attribute("min", "100").Attribute("max", "800").Attribute("step", "1").Attribute("value", "100")
+                    .Attribute("aria-label", texts["reader.figure.zoomLevel"]).Attribute("data-figure-scale", "").Class("reader-figure__scale"),
+                new Span(new ValueText("100%")).Class("reader-figure__level").Attribute("data-figure-level", ""),
                 new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("data-figure-close", "")
             ).Class("reader-figure__tools"),
             new Div(new Img().Attribute("alt", "").Class("reader-figure__image")).Class("reader-figure__stage")

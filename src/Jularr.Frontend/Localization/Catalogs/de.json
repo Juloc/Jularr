@@ -10120,6 +10120,10 @@
    "Figure",
    "Abbildung"
   ],
+  "reader.figure.zoomLevel": [
+   "Image zoom",
+   "Bildzoom"
+  ],
   "reader.figure.zoomIn": [
    "Zoom in",
    "Vergrößern"

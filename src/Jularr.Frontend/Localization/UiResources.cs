@@ -452,6 +452,7 @@ namespace Jularr.Frontend.Localization
             new("reader.smart.failed", "The reading copy of this PDF could not be created. Reading is not affected."),
             new("reader.figure.open", "Open full screen"),
             new("reader.figure.view", "Figure"),
+            new("reader.figure.zoomLevel", "Image zoom"),
             new("reader.figure.zoomIn", "Zoom in"),
             new("reader.figure.zoomOut", "Zoom out"),
             new("reader.figure.fit", "Fit to screen"),
