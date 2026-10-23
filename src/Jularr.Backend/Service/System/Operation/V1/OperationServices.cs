@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Diagnostics;
 using System.Text;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
@@ -124,7 +125,8 @@ namespace Jularr.Backend.Service.System.Operation.V1
     {
         private const int BatchSize = 500;
         private const int CandidateBatchSize = 100;
-        private const int ExternalLookupsPerScan = 16;
+        // New catalog titles are read from the provider for as long as this budget lasts; a scan that stops on it queues the next one.
+        internal static TimeSpan LookupBudget { get; set; } = TimeSpan.FromMinutes(8);
         private readonly StorageAccess _storage;
         private readonly MediaProbeClient _probe;
         private readonly GameRomIdentification _roms;
@@ -243,12 +245,20 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
 
             // Link completely new folders to their catalog identity without moving files.
-            if (root.MediaTypeId is MediaType.Movie or MediaType.Series)
-            {
-                await AssignCatalogFoldersAsync(root.Id, root.MediaTypeId, storage, directory);
-            }
+            var unfinished = root.MediaTypeId is MediaType.Movie or MediaType.Series
+                && await AssignCatalogFoldersAsync(root.Id, root.MediaTypeId, storage, directory);
 
             await Context.ExecuteBatchAsync((ctx, ct) => ctx.UpdateOperationAsync(new OperationProgressData(Parameters.OperationId, processed, OperationStatusType.Completed), ct), CancellationToken);
+            if (unfinished)
+            {
+                // Titles still waiting for their catalog entry are taken by the next scan, which starts once this one is completed.
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.QueueLibraryScanAsync(new OperationCreationData(OperationKind.LibraryScan, root.Id, null), ct);
+                    return true;
+                }, CancellationToken);
+            }
+
             return new UpdateResult(true);
         }
 
@@ -508,12 +518,15 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
         }
 
-        private async Task AssignCatalogFoldersAsync(long libraryRootId, MediaType mediaType, StorageFiles storage, string directory)
+        private async Task<bool> AssignCatalogFoldersAsync(long libraryRootId, MediaType mediaType, StorageFiles storage, string directory)
         {
             var matches = new Dictionary<(string Title, int? Year, string Ids), long?>();
             TmdbConnection? provider = null;
             var providerUnavailable = false;
+            var lookups = Stopwatch.StartNew();
             var externalLookups = 0;
+            var deferred = false;
+            var imported = 0;
             var nfoFolders = new Dictionary<string, (IReadOnlyDictionary<string, string> Ids, bool Conflicted)>(StringComparer.Ordinal);
             var plexFolders = new Dictionary<string, PlexMatchHints>(StringComparer.Ordinal);
             var emptyHints = MediaPathParser.ParsePlexMatch("");
@@ -536,7 +549,8 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 }, CancellationToken);
                 if (files.Count == 0)
                 {
-                    return;
+                    // A scan that imported nothing gains nothing from another one.
+                    return deferred && imported > 0;
                 }
 
                 foreach (var file in files)
@@ -708,10 +722,17 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         }
 
                         // An unknown provider identity is never resolved by title alone.
-                        if (workId is null && !hasKnownIdentity && ids.Count > 0 && !providerUnavailable && externalLookups < ExternalLookupsPerScan
+                        if (workId is null && !hasKnownIdentity && ids.Count > 0 && !providerUnavailable
                             && ids.Keys.All(name => name is "imdb" or "tvdb" or "tmdb_movie" or "tmdb_tv")
                             && (mediaType == MediaType.Series || !ids.ContainsKey("tvdb")))
                         {
+                            // Every scan reads at least one title, so a long list always moves forward.
+                            if (externalLookups > 0 && lookups.Elapsed >= LookupBudget)
+                            {
+                                deferred = true;
+                                continue;
+                            }
+
                             externalLookups++;
                             try
                             {
@@ -743,6 +764,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                         && (ids.GetValueOrDefault("tvdb") is not { } tvdb || details.TvdbId is null || details.TvdbId.ToString() == tvdb))
                                     {
                                         workId = await _metadata.ImportAsync(Context, provider, mediaType, null, id, CancellationToken);
+                                        imported++;
                                     }
                                 }
                             }
