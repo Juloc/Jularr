@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -51,6 +52,7 @@ import de.juloc.jularr.core.api.catalog.TvDiscoverItemV1
 import de.juloc.jularr.core.model.AnimeSummary
 import de.juloc.jularr.core.model.ClientLibrary
 import de.juloc.jularr.core.model.ContinueWatchingItem
+import kotlinx.coroutines.delay
 
 @Composable
 fun TvHomeScreen(
@@ -98,6 +100,20 @@ fun TvHomeScreen(
     }
     val featured = selected.firstOrNull { !it.bannerImageUrl.isNullOrBlank() }
         ?: selected.firstOrNull()
+    val heroCandidates = remember(visibleDiscoverFeeds) {
+        tvV1HomeHeroCandidates(visibleDiscoverFeeds)
+    }
+    var heroIndex by remember(heroCandidates) { mutableIntStateOf(0) }
+    var heroFocused by remember { mutableStateOf(false) }
+    val selectedHero = heroCandidates.getOrNull(heroIndex)
+    // The original TV hero remains a single focus surface; switching is paused
+    // while the remote is focused on the hero, avoiding unexpected activations.
+    LaunchedEffect(heroCandidates, heroFocused) {
+        while (heroCandidates.size > 1 && !heroFocused) {
+            delay(9_000L)
+            heroIndex = (heroIndex + 1) % heroCandidates.size
+        }
+    }
     val formats = remember(library) { library.anime.associateBy { it.id } }
     val inProgress = remember(library, continueWatching, filter) {
         continueWatching.filter { item ->
@@ -108,7 +124,7 @@ fun TvHomeScreen(
     val series = selected.filterNot { it.format.equals("MOVIE", ignoreCase = true) || it.format.equals("ANIME_MOVIE", ignoreCase = true) }
     val rows = buildList {
         add("filters")
-        if (featured != null) add("hero")
+        if (featured != null || selectedHero != null) add("hero")
         if (error != null) add("error")
         shelfOrder.forEach { shelf ->
             when (shelf) {
@@ -121,12 +137,12 @@ fun TvHomeScreen(
         if (inProgress.isNotEmpty()) addAll(listOf("continue-title", "continue-row"))
         if (series.isNotEmpty()) addAll(listOf("series-title", "series-row"))
         if (movies.isNotEmpty()) addAll(listOf("movies-title", "movies-row"))
-        if (selected.isEmpty()) add("empty")
+        if (selected.isEmpty() && selectedHero == null) add("empty")
         add("search")
     }
-    LaunchedEffect(restoringItem) {
+    LaunchedEffect(restoringItem, rows) {
         val targetRow = when {
-            restoringItem == "hero:${featured?.id}" -> "hero"
+            restoringItem == "hero" || restoringItem?.startsWith("hero:") == true -> "hero"
             restoringItem?.startsWith("v1continue:") == true -> "v1-continue-row"
             restoringItem?.startsWith("continue:") == true -> "continue-row"
             restoringItem?.startsWith("discover:") == true -> visibleDiscoverFeeds
@@ -170,79 +186,101 @@ fun TvHomeScreen(
                 )
             }
 
-            if (featured != null) {
-                item(key = "hero:${featured.id}") {
-                    val heroFocus = remember(featured.id) { FocusRequester() }
-                    LaunchedEffect(restoringItem, featured.id) {
-                        if (restoringItem == "hero:${featured.id}") {
+            if (featured != null || selectedHero != null) {
+                item(key = "hero") {
+                    val heroFocus = remember { FocusRequester() }
+                    LaunchedEffect(restoringItem) {
+                        if (restoringItem == "hero" || restoringItem?.startsWith("hero:") == true) {
                             runCatching { heroFocus.requestFocus() }
                         }
                     }
-                    var focused by remember(featured.id) { mutableStateOf(false) }
                     val shape = RoundedCornerShape(20.dp)
+                    val image = selectedHero?.imageUrl ?: featured?.bannerImageUrl ?: featured?.coverImageUrl
+                    val title = selectedHero?.title ?: featured?.title.orEmpty()
+                    val context = if (selectedHero != null) {
+                        listOfNotNull(selectedHero.releaseYear?.toString(), selectedHero.subtitle)
+                            .joinToString(" · ")
+                    } else {
+                        listOfNotNull(
+                            featured?.seasonYear?.toString(), featured?.format,
+                            featured?.episodeCount?.takeIf { it > 0 }?.let {
+                                stringResource(R.string.tv_anime_episode_count, it)
+                            },
+                        ).joinToString(" · ")
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(340.dp)
                             .clip(shape)
-                            .tvFocusIndication(focused, focusColor, shape)
+                            .tvFocusIndication(heroFocused, focusColor, shape)
                             .focusRequester(heroFocus)
-                            .clickable { onAnime(featured) }
+                            .clickable {
+                                val active = selectedHero
+                                if (active != null) {
+                                    active.discoverItem?.let(onDiscoverItem)
+                                        ?: active.catalogItem?.let { cat ->
+                                            active.catalogFeed?.let { feed ->
+                                                onDiscoverCatalogItem(feed, cat)
+                                            }
+                                        }
+                                } else featured?.let(onAnime)
+                            }
                             .reportFocus {
-                                focused = it
-                                if (it) focusMemory.remember("home", "hero:${featured.id}")
+                                heroFocused = it
+                                if (it) focusMemory.remember("home", "hero")
                             },
                     ) {
                         TvArtwork(
-                            url = featured.bannerImageUrl ?: featured.coverImageUrl,
+                            url = image,
                             serverOrigin = serverOrigin,
                             requestHeaders = requestHeaders,
-                            contentDescription = featured.title,
+                            contentDescription = title,
                             modifier = Modifier.fillMaxSize(),
                         )
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.horizontalGradient(
-                                        0.0f to Color.Black.copy(alpha = 0.85f),
-                                        0.65f to Color.Black.copy(alpha = 0.22f),
-                                        1.0f to Color.Transparent,
-                                    ),
+                            modifier = Modifier.fillMaxSize().background(
+                                Brush.horizontalGradient(
+                                    0.0f to Color.Black.copy(alpha = 0.85f),
+                                    0.65f to Color.Black.copy(alpha = 0.22f),
+                                    1.0f to Color.Transparent,
                                 ),
+                            ),
                         )
                         Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .fillMaxWidth(0.72f)
-                                .padding(28.dp),
+                            modifier = Modifier.align(Alignment.BottomStart)
+                                .fillMaxWidth(0.72f).padding(28.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             Text(
-                                text = featured.title,
-                                color = Color.White,
+                                text = title, color = Color.White,
                                 style = MaterialTheme.typography.headlineLarge,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                text = listOfNotNull(
-                                    featured.seasonYear?.toString(),
-                                    featured.format,
-                                    featured.episodeCount.takeIf { it > 0 }?.let {
-                                        stringResource(R.string.tv_anime_episode_count, it)
-                                    },
-                                ).joinToString(" · "),
-                                color = Color.White.copy(alpha = 0.8f),
+                                text = context, color = Color.White.copy(alpha = 0.8f),
                                 style = MaterialTheme.typography.bodyLarge,
                             )
+                            selectedHero?.overview?.takeIf(String::isNotBlank)?.let { overview ->
+                                Text(
+                                    text = overview, color = Color.White.copy(alpha = 0.88f),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 3, overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White)
                                 Text(
                                     " " + stringResource(R.string.tv_home_hero_details),
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.White, style = MaterialTheme.typography.titleMedium,
                                 )
+                                if (heroCandidates.size > 1) {
+                                    Text(
+                                        "   ${heroIndex + 1} / ${heroCandidates.size}",
+                                        color = Color.White.copy(alpha = 0.7f),
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
                             }
                         }
                     }
