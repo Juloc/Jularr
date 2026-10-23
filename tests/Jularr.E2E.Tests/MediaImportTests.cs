@@ -244,18 +244,13 @@ namespace Jularr.E2E.Tests
                 await page.Locator("select[name='Choices[40].Action']").SelectOptionAsync(new SelectOptionValue { Label = "Add only" });
                 await page.Locator("select[name='Choices[41].Action']").SelectOptionAsync(new SelectOptionValue { Label = "Monitor" });
                 await page.Locator("[data-import-apply]").ClickAsync();
+                // Forty provider imports are bounded per server pass, but the browser
+                // continues the remaining two automatically, preserving their per-row actions.
                 await Assertions.Expect(page.Locator(".media-import__activity--done")).ToHaveCountAsync(1);
-                await Assertions.Expect(page.Locator(".media-import__activity-list li", new() { HasText = "Waiting for the next run" })).ToHaveCountAsync(2);
-                await Evidence.SaveAsync(page, "media-import-result-continue");
-
-                // The rest comes back as the first rows of the next preview with their own choices.
-                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Continue with the rest" }));
-                await Assertions.Expect(rows).ToHaveCountAsync(2);
-                await Assertions.Expect(rows.Nth(0).Locator("select[name='Choices[0].Action'] option:checked")).ToHaveTextAsync("Add only");
-                await Assertions.Expect(rows.Nth(1).Locator("select[name='Choices[1].Action'] option:checked")).ToHaveTextAsync("Monitor");
-                await Evidence.SaveAsync(page, "media-import-continued");
-                await page.Locator("[data-import-apply]").ClickAsync();
-                await Assertions.Expect(page.Locator(".media-import__activity--done")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".media-import__activity progress")).ToHaveJSPropertyAsync("value", 42);
+                await Assertions.Expect(page.Locator(".media-import__activity-list li")).ToHaveCountAsync(42);
+                await Assertions.Expect(page.Locator(".media-import__activity form")).ToHaveCountAsync(0);
+                await Evidence.SaveAsync(page, "media-import-auto-batches");
                 await Assertions.Expect(page.Locator(".media-import__activity-list li", new() { HasText = "Bulk Movie 30040" })).ToContainTextAsync("Added");
                 await Assertions.Expect(page.Locator(".media-import__activity-list li", new() { HasText = "Bulk Movie 30041" })).ToContainTextAsync("Added, monitored");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());

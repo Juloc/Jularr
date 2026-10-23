@@ -381,6 +381,7 @@ function initializeLiveImport(): void {
             // Server validation still owns the list.
         }
 
+        let hasRemaining = false;
         let current = source;
         let indices = Array.from({ length: total }, (_, index) => index);
         const settled = new Set<number>();
@@ -459,6 +460,7 @@ function initializeLiveImport(): void {
                 const next = makeContinuation(current, waiting, remaining);
                 if (added === 0 || unavailable || wave === maximumWaves - 1) {
                     addManualContinuation(next);
+                    hasRemaining = true;
                     finished = true;
                     break;
                 }
@@ -468,8 +470,8 @@ function initializeLiveImport(): void {
             }
 
             if (!finished) throw new Error("Import did not finish");
-            panel.classList.add("media-import__activity--done");
-            pending(apply.dataset.importComplete ?? "Completed");
+            panel.classList.add(hasRemaining ? "media-import__activity--partial" : "media-import__activity--done");
+            pending(hasRemaining ? (apply.dataset.importPartial ?? "Some titles are waiting") : (apply.dataset.importComplete ?? "Completed"));
 
         } catch {
             // Some rows may already have committed; never promise a rollback or blindly retry.

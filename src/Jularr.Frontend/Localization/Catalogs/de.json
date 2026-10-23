@@ -9188,6 +9188,10 @@
    "Preview import",
    "Vorschau anzeigen"
   ],
+  "import.phase.partial": [
+   "Import paused: some titles are still waiting",
+   "Import pausiert: Einige Titel warten noch"
+  ],
   "import.intent.summary": [
    "{0} selected · {1} to monitor · {2} to search",
    "{0} ausgewählt · {1} überwachen · {2} automatisch suchen"

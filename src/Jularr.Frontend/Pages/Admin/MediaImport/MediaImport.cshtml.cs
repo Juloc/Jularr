@@ -162,6 +162,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 apply.Attribute("formaction", Address + "?handler=Apply");
                 apply.Attribute("data-import-apply", "");
                 apply.TextAttribute("data-import-complete", "import.resultTitle");
+                apply.TextAttribute("data-import-partial", "import.phase.partial");
                 apply.TextAttribute("data-import-continue", "import.continue");
                 apply.TextAttribute("data-import-failed", "import.interrupted");
                 form.Submit(apply);
