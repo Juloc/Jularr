@@ -133,6 +133,13 @@ namespace Jularr.E2E.Tests
                 await FlipAsync(rows.Nth(3).Locator("input[name='Choices[3].Include']"));
                 await Assertions.Expect(all).ToBeCheckedAsync();
 
+                // A refresh of the existing preview uses the same live provider stream
+                // and does not discard the person's row selection and actions.
+                var refreshedRequest = page.WaitForRequestAsync(request => request.Url.Contains("handler=PreviewStream", StringComparison.Ordinal));
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Update preview" }));
+                Assert.AreEqual("POST", (await refreshedRequest).Method);
+                await Assertions.Expect(page.Locator("[data-import-count]")).ToHaveTextAsync("4 of 4 selected");
+
                 // A narrow screen keeps the page in its width.
                 await page.SetViewportSizeAsync(390, 844);
                 Assert.IsFalse(await page.Locator("body").EvaluateAsync<bool>("body => body.scrollWidth > innerWidth + 1"));
