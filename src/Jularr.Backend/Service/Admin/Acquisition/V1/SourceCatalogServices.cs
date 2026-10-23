@@ -8,6 +8,7 @@ using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Provider;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Acquisition.V1
