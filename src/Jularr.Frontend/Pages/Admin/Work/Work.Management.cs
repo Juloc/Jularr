@@ -267,7 +267,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         {
             var columns = ColumnsOf(work);
             var isVolume = work.MediaTypeId == MediaType.Book;
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var today = BrowserTimeZone.Today(HttpContext.Request);
             var rows = new List<IUiComponent>();
             var strips = new List<IUiComponent>();
             foreach (var episode in episodes)
