@@ -672,6 +672,12 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         continue;
                     }
 
+                    // Only ids a catalog here can check name a title; the rest (TVmaze, AniList, ...) that a media server writes must not keep a file from it.
+                    foreach (var unverifiable in ids.Keys.Where(name => name is not ("imdb" or "tvdb" or "tmdb_movie" or "tmdb_tv")).ToArray())
+                    {
+                        ids.Remove(unverifiable);
+                    }
+
                     var supplied = JsonSerializer.Serialize(ids.OrderBy(item => item.Key, StringComparer.Ordinal)
                         .Select(item => new { Namespace = item.Key, Value = item.Value }));
                     var key = (parsed.Title.ToUpperInvariant(), parsed.Year, supplied);
@@ -734,7 +740,6 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         // An identity the Work does not carry completely is checked with the provider, never guessed from the part that matches or from the title:
                         // the provider names one series for every id, and importing it extends the Work that already holds one of them.
                         if (workId is null && ids.Count > 0 && !providerUnavailable
-                            && ids.Keys.All(name => name is "imdb" or "tvdb" or "tmdb_movie" or "tmdb_tv")
                             && (mediaType == MediaType.Series || !ids.ContainsKey("tvdb")))
                         {
                             // Every scan reads at least one title, so a long list always moves forward.
