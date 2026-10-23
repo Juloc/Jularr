@@ -123,6 +123,27 @@ class TvV1HomeDiscoverFlowTest {
         assertEquals(47, result.first().items.single().tmdbId)
     }
 
+    @Test fun badCachedCatalogPairDoesNotSuppressValidProviderFallback() = runBlocking {
+        val anime = TvDiscoverScopeV1("anime", 2, 1, true, listOf(1))
+        val item = TvDiscoverCatalogItemV1(
+            namespace = "anilist", externalId = "17", title = "Correct anime",
+            releaseYear = 2026, author = null, workId = null,
+            posterUrl = null, rating = null, mediaStateTypeId = null,
+        )
+        val client = object : TvCatalogV1Client by fallback {
+            override suspend fun discoverScopes() = listOf(anime)
+            override suspend fun discoverShelves(scopeSlug: String?) = listOf(
+                TvDiscoverShelfV1("anime", 1, emptyList(), emptyList()),
+            )
+            override suspend fun discoverCatalogFeed(
+                mediaTypeId: Int, feedTypeId: Int, mediaSubtypeId: Int?,
+            ) = listOf(item)
+        }
+        val result = TvV1HomeDiscoverFlow(client).load {}
+        assertEquals("17", result.single().catalogItems.single().externalId)
+        assertEquals("anime", result.single().scopeSlug)
+    }
+
     @Test fun unauthorizedProviderResponseMustPropagateInsteadOfHidingProfileExpiry() {
         val client = object : TvCatalogV1Client by fallback {
             override suspend fun discoverScopes() = scopes.take(1)
