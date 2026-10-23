@@ -465,6 +465,47 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ImportPage_PreviewStream_ReportsIndividualIsbnAndSearchStagesWithoutImporting()
+        {
+            await using var host = await CreateHostAsync(new FakeProviders());
+            using var form = await host.SendAsync(HttpMethod.Get, "/Admin/Import");
+            var token = LibraryTests.Token(await form.Content.ReadAsStringAsync());
+            const string list = """
+                {"version":1,"items":[
+                  {"type":"book","title":"Pride and Prejudice","author":"Jane Austen"},
+                  {"type":"book","ids":{"isbn":"9780141439518"},"title":"Pride and Prejudice","author":"Jane Austen"}
+                ]}
+                """;
+            using var response = await host.SendAsync(HttpMethod.Post, "/Admin/Import?handler=PreviewStream", new FormUrlEncodedContent(
+            [
+                KeyValuePair.Create("__RequestVerificationToken", token),
+                KeyValuePair.Create("Json", list),
+                KeyValuePair.Create("Action", "1")
+            ]));
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            Assert.AreEqual("application/x-ndjson", response.Content.Headers.ContentType?.MediaType);
+            var lines = (await response.Content.ReadAsStringAsync()).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var updates = lines.Select(line => System.Text.Json.JsonDocument.Parse(line)).ToArray();
+            try
+            {
+                Assert.AreEqual("started", updates[0].RootElement.GetProperty("kind").GetString());
+                Assert.IsTrue(updates.Any(update => update.RootElement.GetProperty("kind").GetString() == "row"
+                    && update.RootElement.GetProperty("index").GetInt32() == 0 && update.RootElement.GetProperty("stage").GetString() == "searching"));
+                Assert.IsTrue(updates.Any(update => update.RootElement.GetProperty("kind").GetString() == "row"
+                    && update.RootElement.GetProperty("index").GetInt32() == 1 && update.RootElement.GetProperty("stage").GetString() == "isbn"));
+                Assert.IsTrue(updates.Any(update => update.RootElement.GetProperty("kind").GetString() == "row"
+                    && update.RootElement.GetProperty("index").GetInt32() == 1 && update.RootElement.GetProperty("stage").GetString() == "New"));
+                Assert.AreEqual("done", updates[^1].RootElement.GetProperty("kind").GetString());
+                Assert.AreEqual(2, updates[^1].RootElement.GetProperty("total").GetInt32());
+                Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+            }
+            finally
+            {
+                foreach (var update in updates) update.Dispose();
+            }
+        }
+
+        [TestMethod]
         public async Task ImportPage_StreamsActualPerRowOutcomes_BeforeCompletion()
         {
             await using var host = await CreateHostAsync(new FakeProviders());
