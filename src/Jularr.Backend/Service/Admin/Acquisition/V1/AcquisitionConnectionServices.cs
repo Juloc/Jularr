@@ -283,30 +283,38 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         {
             // One free-text query of an indexer, counted like any other.
             var indexer = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(Parameters.AcquisitionConnectionId, ct), CancellationToken);
+            if (indexer.AcquisitionConnectionTypeId is not (AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa))
+                throw new DataValidationException(nameof(SearchAcquisitionConnectionDataV1.Query), "invalid_transition");
+
+            if (!AcquisitionConnectionLogic.HasQueries(indexer, 0))
+                throw new ServiceUnavailableException("acquisition_query_limit_reached");
+
             if (indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Nyaa)
             {
+                IReadOnlyList<NyaaEntry> nyaaItems;
                 try
                 {
-                    var nyaaItems = await _nyaa.SearchAsync(new Uri(indexer.HttpAddress.TrimEnd('/') + "/"),
+                    nyaaItems = await _nyaa.SearchAsync(new Uri(indexer.HttpAddress.TrimEnd('/') + "/"),
                         Data.Query, NyaaClient.LiteratureCategories, CancellationToken);
-                    return new BaseDataList<IndexerReleaseV1>([.. nyaaItems.Take(Limit).Select(item =>
-                        new IndexerReleaseV1(TextLimit.Cut(item.Title, 1000)!, item.SizeBytes, item.Published.UtcDateTime))]);
                 }
                 catch (Exception exception) when (exception is NyaaException or HttpRequestException
                     || exception is TaskCanceledException && !CancellationToken.IsCancellationRequested)
                 {
+                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    {
+                        await ctx.RecordIndexerUseAsync(new IndexerUseData(indexer.Id, 1, false), ct);
+                        return true;
+                    }, CancellationToken);
                     throw new ServiceUnavailableException("acquisition_unavailable");
                 }
-            }
 
-            if (indexer.AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab)
-            {
-                throw new DataValidationException(nameof(SearchAcquisitionConnectionDataV1.Query), "invalid_transition");
-            }
-
-            if (!AcquisitionConnectionLogic.HasQueries(indexer, 0))
-            {
-                throw new ServiceUnavailableException("acquisition_query_limit_reached");
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.RecordIndexerUseAsync(new IndexerUseData(indexer.Id, 1, true), ct);
+                    return true;
+                }, CancellationToken);
+                return new BaseDataList<IndexerReleaseV1>([.. nyaaItems.Take(Limit).Select(item =>
+                    new IndexerReleaseV1(TextLimit.Cut(item.Title, 1000)!, item.SizeBytes, item.Published.UtcDateTime))]);
             }
 
             IReadOnlyList<NewznabItem> items = [];
