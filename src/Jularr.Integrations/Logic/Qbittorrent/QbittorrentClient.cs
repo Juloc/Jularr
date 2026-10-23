@@ -42,17 +42,36 @@ namespace Jularr.Integrations.Logic.Qbittorrent
             var session = await LoginAsync(connection, ct);
             if (session is null) return new QbittorrentGrabResult(false, null, "acquisition_unavailable");
 
-            using var response = await SendAsync(connection, session, HttpMethod.Post, AddPath,
-                [new("urls", request.TorrentUrl.ToString()), new("savepath", request.SavePath)], ct);
-            if (!response.IsSuccessStatusCode) return new QbittorrentGrabResult(false, null, "acquisition_grab_failed");
+            // A unique tag is correlated with the torrent that qBittorrent accepted.
+            // Never guess from a title or the most recently added torrent: another client may
+            // add a different release at exactly the same time.
+            var tag = "jularr-" + Guid.NewGuid().ToString("N");
+            using (var tagResponse = await SendAsync(connection, session, HttpMethod.Post, "/api/v2/torrents/createTags",
+                [new("tags", tag)], ct))
+            {
+                if (!tagResponse.IsSuccessStatusCode) return new QbittorrentGrabResult(false, null, "acquisition_grab_failed");
+            }
 
-            // The client answers "Ok." without naming the torrent; its list does.
-            for (var attempt = 0; attempt < 10; attempt++)
+            using (var response = await SendAsync(connection, session, HttpMethod.Post, AddPath,
+                [new("urls", request.TorrentUrl.ToString()), new("savepath", request.SavePath), new("tags", tag)], ct))
+            {
+                // HTTP 200 can still contain "Fails." for an already-known or rejected torrent.
+                if (!response.IsSuccessStatusCode || (await response.Content.ReadAsStringAsync(ct)).Trim().Equals("Fails.", StringComparison.OrdinalIgnoreCase))
+                {
+                    return new QbittorrentGrabResult(false, null, "acquisition_grab_failed");
+                }
+            }
+
+            for (var attempt = 0; attempt < 20; attempt++)
             {
                 var snapshot = await GetSnapshotAsync(connection, null, ct);
-                var torrent = snapshot.Torrents.FirstOrDefault(item => item.Name == request.Title) ??
-                    snapshot.Torrents.OrderByDescending(item => item.AddedAt).FirstOrDefault();
-                if (torrent is not null) return new QbittorrentGrabResult(true, torrent.Hash);
+                var matches = snapshot.Torrents.Where(item => item.Tags.Contains(tag, StringComparer.Ordinal)).ToArray();
+                if (matches.Length == 1 && !string.IsNullOrWhiteSpace(matches[0].Hash))
+                {
+                    return new QbittorrentGrabResult(true, matches[0].Hash);
+                }
+
+                if (matches.Length > 1) break; // Ambiguous data must never be assigned to an operation.
                 await Task.Delay(500, ct);
             }
 
@@ -107,7 +126,17 @@ namespace Jularr.Integrations.Logic.Qbittorrent
         {
             var session = await LoginAsync(connection, ct);
             if (session is null) return;
-            using var response = await SendAsync(connection, session, HttpMethod.Post, isPaused ? PausePath : ResumePath, [new("hashes", hash)], ct);
+            // qBittorrent 5 renamed pause/resume to stop/start.
+            using var response = await SendAsync(connection, session, HttpMethod.Post,
+                isPaused ? "/api/v2/torrents/stop" : "/api/v2/torrents/start", [new("hashes", hash)], ct);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                using var legacy = await SendAsync(connection, session, HttpMethod.Post, isPaused ? PausePath : ResumePath,
+                    [new("hashes", hash)], ct);
+                if (!legacy.IsSuccessStatusCode) throw new QbittorrentException("The torrent client did not change the torrent.");
+                return;
+            }
+
             if (!response.IsSuccessStatusCode) throw new QbittorrentException("The torrent client did not change the torrent.");
         }
 
@@ -118,7 +147,8 @@ namespace Jularr.Integrations.Logic.Qbittorrent
                 [new("username", connection.UserName ?? ""), new("password", connection.Password ?? "")], ct, withoutSession: true);
             if (!response.IsSuccessStatusCode) return null;
 
-            foreach (var cookie in response.Headers.GetValues("Set-Cookie"))
+            if (!response.Headers.TryGetValues("Set-Cookie", out var cookies)) return null;
+            foreach (var cookie in cookies)
             {
                 foreach (var part in cookie.Split(';', StringSplitOptions.RemoveEmptyEntries))
                 {
@@ -161,7 +191,8 @@ namespace Jularr.Integrations.Logic.Qbittorrent
             var contentPath = ReadString(item, "content_path");
             var savePath = ReadString(item, "save_path");
             var addedAt = item.TryGetProperty("added_on", out var added) && added.ValueKind == JsonValueKind.Number ? added.GetInt64() : (long?)null;
-            return new QbittorrentTorrent(hash, name, state, progress, size, downloaded, speed, seeds, peers, contentPath, savePath, addedAt);
+            var tags = (ReadString(item, "tags") ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            return new QbittorrentTorrent(hash, name, state, progress, size, downloaded, speed, seeds, peers, contentPath, savePath, addedAt, tags: tags);
         }
 
         private static string? ReadString(JsonElement item, string name) =>
