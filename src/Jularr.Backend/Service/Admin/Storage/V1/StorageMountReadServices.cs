@@ -7,6 +7,7 @@ using Jularr.Backend.Data.Logic.Storage;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.Options;
 
