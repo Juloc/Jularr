@@ -287,9 +287,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             {
                 try
                 {
-                    var items = await _nyaa.SearchAsync(new Uri(indexer.HttpAddress.TrimEnd('/') + "/"),
+                    var nyaaItems = await _nyaa.SearchAsync(new Uri(indexer.HttpAddress.TrimEnd('/') + "/"),
                         Data.Query, NyaaClient.LiteratureCategories, CancellationToken);
-                    return new BaseDataList<IndexerReleaseV1>([.. items.Take(Limit).Select(item =>
+                    return new BaseDataList<IndexerReleaseV1>([.. nyaaItems.Take(Limit).Select(item =>
                         new IndexerReleaseV1(TextLimit.Cut(item.Title, 1000)!, item.SizeBytes, item.Published.UtcDateTime))]);
                 }
                 catch (Exception exception) when (exception is NyaaException or HttpRequestException
