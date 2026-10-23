@@ -165,7 +165,7 @@ class TvV1ClientFlowMigrationTest {
             )
         }
         val home = TvV1ClientFlow(backend, permissions).home()
-        assertEquals(listOf(4), home.shelfOrder)
+        assertEquals(listOf(5, 4), home.shelfOrder)
         assertFalse(home.showContinueWatching)
     }
 
