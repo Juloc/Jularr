@@ -2416,6 +2416,8 @@ namespace Jularr.Frontend.Localization
             new("downloadStorage.mountRequired", "This direct SMB connection can serve libraries. Downloading and unpacking need the share mounted inside the Jularr container; configure that mount first."),
             new("downloadStorage.noStorage", "No storage connections are configured. Add a local path exposed through Compose or a mounted SMB/NFS share in Storage first."),
             new("folderPicker.choose", "Use this folder"),
+            new("folderPicker.newFolder", "New folder name"),
+            new("folderPicker.create", "Create folder"),
             new("folderPicker.loading", "Loading folders…"),
             new("folderPicker.failed", "Folders could not be loaded. Your selection has not changed. Close the browser and try again."),
             new("folderPicker.first", "First folders"),
