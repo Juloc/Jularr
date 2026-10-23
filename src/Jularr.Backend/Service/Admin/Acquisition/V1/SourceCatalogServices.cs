@@ -3,10 +3,12 @@ using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Provider;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Acquisition.V1
@@ -41,6 +43,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             return await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 var state = await SourceCatalogState.ReadAsync(ctx.ReadSql, ct);
+                var direct = await ctx.ReadDownloadStorageSettingsAsync(DownloadStorageArea.Direct, ct);
+                var directReady = direct.IncompleteStorageMountId is not null && direct.CompleteStorageMountId is not null
+                    && direct.IncompletePath is not null && direct.CompletePath is not null
+                    && direct.IncompleteFilesystemIdentity is not null && direct.CompleteFilesystemIdentity is not null
+                    && direct.FreeSpaceReserveBytes is not null;
                 var added = new List<string>();
                 var needsAccount = new List<string>();
                 foreach (var entry in SourceCatalog.Entries.Where(entry => !state.IsConfigured(entry)))
@@ -51,7 +58,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     }
                     else if (entry is { Availability: SourceAvailability.Ready, ConnectionType: { } type, DefaultBaseUrl: { } baseUrl })
                     {
-                        await ctx.CreateAcquisitionConnectionAsync(new AcquisitionConnectionSaveData(null, entry.Name, type, baseUrl, null, true, 50, [], null, null, null, null, null, null, [], true, null, null), ct);
+                        // Do not auto-enable keyless native download sources before their storage is confirmed.
+                        var enabled = type is not (AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Opds or AcquisitionConnectionType.AnnasArchive) || directReady;
+                        await ctx.CreateAcquisitionConnectionAsync(new AcquisitionConnectionSaveData(null, entry.Name, type, baseUrl, null, enabled, 50, [], null, null, null, null, null, null, [], true, null, null), ct);
                         added.Add(entry.Key);
                     }
                     else if (entry is { Availability: SourceAvailability.Ready, ProviderKey: { } provider })

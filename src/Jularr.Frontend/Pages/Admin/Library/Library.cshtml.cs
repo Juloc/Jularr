@@ -73,7 +73,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     .Content("table.size", item => new ValueText(ByteSize.Format(item.TotalBytes)))
                     .Content("library.overview.attention", Attention)
                     .Content("library.overview.scanned", item => item.IsScanning ? new Text("library.overview.scanning")
-                        : item.LastScanAt is { } scanned ? new ValueText(scanned.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)) : new Text("library.overview.never"));
+                        : item.LastScanAt is { } scanned ? new LocalTime(scanned) : new Text("library.overview.never"));
 
                 // Scanning reads the storage, which needs its administration.
                 if (CanRename)
@@ -161,7 +161,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 new KpiTile("library.tab.Overview", new ValueText(libraries.Count.ToString("N0", CultureInfo.CurrentCulture)), new Framework.Icon("library", assets, 20)),
                 new KpiTile("storage.paths.files", new ValueText(libraries.Sum(item => item.FileCount).ToString("N0", CultureInfo.CurrentCulture)), new Framework.Icon("document", assets, 20)),
                 new KpiTile("library.unmatched", new ValueText(libraries.Sum(item => item.UnmatchedCount).ToString("N0", CultureInfo.CurrentCulture)), new Framework.Icon("status", assets, 20)),
-                new KpiTile("library.overview.scanned", scanned is { } at ? new ValueText(at.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)) : new Text("library.overview.never"), new Framework.Icon("sync", assets, 20)));
+                new KpiTile("library.overview.scanned", scanned is { } at ? new LocalTime(at) : new Text("library.overview.never"), new Framework.Icon("sync", assets, 20)));
         }
 
         private Form<AssignLibraryFileDataV1> Assignment(LibraryFileDetailsV1 file, string? csrf)

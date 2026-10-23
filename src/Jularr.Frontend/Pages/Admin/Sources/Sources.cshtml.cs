@@ -1,23 +1,32 @@
 using System.Globalization;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
+using Jularr.Backend.Service.Admin.Storage.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Sources
 {
-    public sealed class SourcesModel(ReadSourceCatalogV1 read, SetUpSourcesV1 setUp, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class SourcesModel(ReadSourceCatalogV1 read, SetUpSourcesV1 setUp, ReadDownloadStorageSettingsV1 downloadStorage,
+        IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private IReadOnlyList<SourceCatalogItemV1> _sources = [];
+        private bool _directStorageReady = true;
 
         protected override void Define(Page page)
         {
             page.Title("admin.sources.title");
             page.Navigation("nav.admin");
+            page.Asset("Pages/Admin/Acquisition/Acquisition.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+
+            // Warn before adding a native book source, not after its first failed grab.
+            if (!_directStorageReady) page.Content.Add(NativeDownloadStorageNotice.Message(DownloadStorageArea.Direct));
 
             // Every enabled source is searched together; setup adds what needs nothing from the Owner.
             page.Content.Add(new Form<SourceCatalogParametersV1>(form => form.Submit("sources.setUpAll"), "/Admin/Acquisition/Sources?handler=SetUp", csrf, new SourceCatalogParametersV1()));
@@ -68,6 +77,8 @@ namespace Jularr.Frontend.Pages.Admin.Sources
         protected override async Task LoadDataAsync()
         {
             _sources = await read.ExecuteAsync<BaseDataList<SourceCatalogItemV1>>(new SourceCatalogParametersV1(), HttpContext.RequestAborted);
+            var settings = await downloadStorage.ExecuteAsync<DownloadStorageSettingsV1>(new DownloadStorageParametersV1(DownloadStorageArea.Direct), HttpContext.RequestAborted);
+            _directStorageReady = NativeDownloadStorageNotice.IsConfigured(settings);
         }
     }
 }

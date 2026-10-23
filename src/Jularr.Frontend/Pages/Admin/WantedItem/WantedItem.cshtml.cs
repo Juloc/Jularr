@@ -62,7 +62,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
             if (item.RequestedLanguages.Length > 0) content.Add(new P(new Text("request.language"), new ValueText(": " + string.Join(", ", item.RequestedLanguages))));
             if (item.LastSearchedAt is { } searchedAt)
             {
-                content.Add(new P(new Text("wanted.lastSearch"), new ValueText(": " + searchedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))));
+                content.Add(new P(new Text("wanted.lastSearch"), new ValueText(": "), new LocalTime(searchedAt)));
             }
 
             var actions = new List<IUiComponent>();
@@ -184,7 +184,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
                     .Resource(item => item.AcquisitionReleaseStatusTypeId, "table.status", status => "acquisition.release." + status)
                     .Content("wanted.search.reason", item => item.ReasonKey is { } reason ? new Text("acquisition.outcome." + reason) : new Span())
                     .Content("wanted.progress", item => new ValueText(item.ProgressPercent?.ToString(CultureInfo.InvariantCulture) ?? ""))
-                    .Content("wanted.history.date", item => new ValueText(item.CreatedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)))
+                    .Content("wanted.history.date", item => new LocalTime(item.CreatedAt))
                     .Content("common.actions", item => item.AcquisitionReleaseStatusTypeId == AcquisitionReleaseStatusType.Grabbed
                         ? new Span()
                         : new Form<MarkWantedReleaseDataV1>(form =>
