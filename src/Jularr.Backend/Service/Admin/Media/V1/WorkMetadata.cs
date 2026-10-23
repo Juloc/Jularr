@@ -29,12 +29,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         private readonly IDataProtector _protector;
         private readonly IMemoryCache _cache;
         private readonly CoverStore _covers;
+        private readonly TvdbMetadata _tvdb;
 
-        public WorkMetadata(TmdbClient tmdb, IDataProtectionProvider protection, IMemoryCache cache, CoverStore covers)
+        public WorkMetadata(TmdbClient tmdb, IDataProtectionProvider protection, IMemoryCache cache, CoverStore covers, TvdbMetadata tvdb)
         {
             _tmdb = tmdb;
             _cache = cache;
             _covers = covers;
+            _tvdb = tvdb;
             _protector = protection.CreateProtector(SaveProviderSecretV1.ProtectorPurpose);
         }
 
@@ -189,10 +191,32 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             TmdbWork work;
             var units = new List<object>();
             var people = new List<object>();
+            TvdbStructure? tvdb = null;
             try
             {
                 work = await _tmdb.ReadWorkAsync(connection, Kind(mediaType), tmdbId, ct);
-                foreach (var season in work.Seasons)
+
+                // A series takes its seasons and episodes from TheTVDB; TMDB's only stand in where TVDB cannot name them.
+                if (mediaType == MediaType.Series)
+                {
+                    tvdb = await _tvdb.TryReadStructureAsync(context, work.TvdbId, work.ImdbId, ct);
+                }
+
+                if (tvdb is not null)
+                {
+                    foreach (var season in tvdb.Episodes.GroupBy(episode => episode.SeasonNumber).OrderBy(group => group.Key))
+                    {
+                        units.Add(new { Season = season.Key, Episode = (int?)null, Title = (string?)null, ReleasedOn = season.Min(episode => episode.Aired), Overview = (string?)null,
+                            ImageUrl = (string?)null, RuntimeMinutes = (int?)null });
+                        foreach (var episode in season.OrderBy(item => item.EpisodeNumber))
+                        {
+                            units.Add(new { Season = season.Key, Episode = (int?)episode.EpisodeNumber, Title = TextLimit.Cut(episode.Name, 500), ReleasedOn = episode.Aired, Overview = (string?)null,
+                                ImageUrl = (string?)null, RuntimeMinutes = episode.Runtime is > 0 and <= 1440 ? episode.Runtime : null });
+                        }
+                    }
+                }
+
+                foreach (var season in tvdb is null ? work.Seasons : [])
                 {
                     units.Add(new { Season = season.SeasonNumber, Episode = (int?)null, Title = TextLimit.Cut(season.Name, 500), ReleasedOn = season.AirDate, Overview = (string?)null,
                         ImageUrl = TmdbClient.PosterUrl(season.PosterPath), RuntimeMinutes = (int?)null });
@@ -215,9 +239,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 identities.Add(new { Namespace = "imdb", Value = imdb });
             }
 
-            if (work.TvdbId is { } tvdb)
+            if ((work.TvdbId ?? tvdb?.TvdbId) is { } tvdbId)
             {
-                identities.Add(new { Namespace = "tvdb", Value = tvdb.ToString(CultureInfo.InvariantCulture) });
+                identities.Add(new { Namespace = "tvdb", Value = tvdbId.ToString(CultureInfo.InvariantCulture) });
             }
 
             // Texts are in the instance language; images, the trailer and studio names are language-neutral.

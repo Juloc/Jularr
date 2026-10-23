@@ -16,9 +16,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         private readonly IDataProtector _protector = protection.CreateProtector(SaveProviderSecretV1.ProtectorPurpose);
 
-        public async Task<TvdbSession> ConnectAsync(LogicContext context, CancellationToken ct)
+        public async Task<TvdbSession> ConnectAsync(LogicContext context, CancellationToken ct) =>
+            await LoginAsync(await context.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), ct), ct);
+
+        private async Task<TvdbSession> LoginAsync(ProviderCredentialData? credential, CancellationToken ct)
         {
-            var credential = await context.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), ct);
             if (credential is not { IsEnabled: true, ProtectedSecret: { } secret })
             {
                 throw new ServiceUnavailableException("metadata_unavailable");
@@ -84,6 +86,42 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
+        // The seasons and episodes TheTVDB names for a series found by its TVDB id or, failing that, its IMDb id; none when TVDB is not set up, does not know
+        // the series, disagrees with its IMDb id or is unavailable, so the caller keeps what it has.
+        public async Task<TvdbStructure?> TryReadStructureAsync(LogicContext context, int? tvdbId, string? imdbId, CancellationToken ct)
+        {
+            if (tvdbId is null && imdbId is null)
+            {
+                return null;
+            }
+
+            try
+            {
+                var credential = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), token), ct);
+                var session = await LoginAsync(credential, ct);
+                var id = tvdbId ?? await FindSeriesByImdbAsync(session, imdbId!, ct);
+                if (id is null)
+                {
+                    return null;
+                }
+
+                var series = await ReadSeriesAsync(session, id.Value, ct);
+                if (imdbId is not null && series.ImdbId is not null && !string.Equals(imdbId, series.ImdbId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+
+                var episodes = await ReadEpisodesAsync(session, id.Value, ct);
+                return episodes.Count == 0 || episodes.GroupBy(episode => (episode.SeasonNumber, episode.EpisodeNumber)).Any(group => group.Count() != 1)
+                    ? null
+                    : new TvdbStructure(id.Value, episodes);
+            }
+            catch (Exception exception) when (exception is ServiceUnavailableException or KeyNotFoundException or DataValidationException)
+            {
+                return null;
+            }
+        }
+
         private static Exception Translate(TvdbException exception) => exception.Failure switch
         {
             TvdbFailure.NotFound => new KeyNotFoundException("TheTVDB does not know this series."),
@@ -93,4 +131,6 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             _ => new ServiceUnavailableException("metadata_unavailable")
         };
     }
+
+    internal sealed record TvdbStructure(int TvdbId, IReadOnlyList<TvdbEpisode> Episodes);
 }
