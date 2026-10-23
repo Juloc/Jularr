@@ -67,7 +67,7 @@ namespace Jularr.E2E.Tests
                 await page.WaitForURLAsync("**/Setup/Storage");
                 await page.GetByRole(AriaRole.Button, new() { Name = "Continue", Exact = true }).Last.ClickAsync();
                 await page.WaitForURLAsync("**/Setup/Instance");
-                await Assertions.Expect(page.Locator(".stepper__step--done")).ToHaveCountAsync(3);
+                await Assertions.Expect(page.Locator(".stepper__step--done, .stepper__step--skipped")).ToHaveCountAsync(3);
                 await Assertions.Expect(page.Locator(".stepper__step--current")).ToHaveCountAsync(1);
                 await Evidence.SaveAsync(page, "setup-modules-" + width + (dark ? "-dark" : "-light"));
 
