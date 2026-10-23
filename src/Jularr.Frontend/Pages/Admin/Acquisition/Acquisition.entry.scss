@@ -3,3 +3,113 @@
     display: grid;
     gap: 16px;
 }
+
+
+// Jularr's existing light, rounded settings language; no duplicate card chrome.
+.download-console {
+    min-width: 0;
+
+    &__section {
+        display: grid;
+        gap: 14px;
+        padding: 18px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel);
+        box-shadow: var(--shadow);
+
+        h2 { font-size: 16px; margin: 0; }
+        > p { margin: 0; }
+    }
+
+    &__metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    &__metric {
+        min-width: 0;
+        padding: 14px 16px;
+        background: var(--accent-soft);
+        border: 1px solid var(--accent-line);
+        border-radius: var(--radius-panel);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+
+        span { font-size: 12px; color: var(--muted); }
+        strong { font-size: 20px; overflow-wrap: anywhere; }
+    }
+
+    &__progress {
+        display: flex;
+        min-width: 120px;
+        align-items: center;
+        gap: 8px;
+
+        progress {
+            width: 90px;
+            max-width: 100%;
+            height: 7px;
+            accent-color: var(--accent);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        span { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    }
+
+    &__actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 7px;
+        .ui-form__actions { margin: 0; }
+    }
+
+    &__confirm {
+        display: grid;
+        gap: 8px;
+        max-width: 320px;
+
+        p { margin: 0; color: var(--danger); }
+        .button { justify-self: start; }
+    }
+
+    &__note { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+
+    &__state { font-size: 12px; white-space: nowrap; }
+    &__state--error { color: var(--danger); }
+    &__state--warning { color: var(--muted); }
+
+    &__folders {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    &__folder {
+        min-width: 0;
+        display: grid;
+        align-content: start;
+        gap: 12px;
+
+        h2 { margin: 0; }
+        p { margin: 0; }
+        .page-table-wrap { min-width: 0; }
+    }
+
+    .page-table-wrap { box-shadow: none; }
+    .page-table td { vertical-align: middle; }
+}
+
+@media (max-width: 1100px) {
+    .download-console__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .download-console__folders { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 650px) {
+    .download-console__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .download-console__section { padding: 12px; }
+    .download-console__metric { padding: 12px; }
+}
