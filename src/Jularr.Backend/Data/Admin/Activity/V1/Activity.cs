@@ -40,11 +40,12 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     public sealed class ActivityItemV1 : BaseResponse
     {
         public ActivityItemV1(long id, OperationType operationTypeId, OperationStatusType operationStatusTypeId, string title, long? workId, string? workTitle, int? progressPercent,
-            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false, string? indexerName = null, long? bytesPerSecond = null)
+            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false, string? indexerName = null, long? bytesPerSecond = null, bool canBrowseFiles = false)
         {
             IndexerName = indexerName;
             BytesPerSecond = bytesPerSecond;
             CanPause = canPause;
+            CanBrowseFiles = canBrowseFiles;
             CanRetryImport = canRetryImport;
             IsWaiting = isWaiting;
             CanImportManually = canImportManually;
@@ -126,6 +127,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // SABnzbd can be told to wait while the download runs.
         [DataField(typeof(OperationFields), nameof(OperationFields.CanPause))]
         public bool CanPause { get; }
+
+        // A qBittorrent job can expose its individual file progress in the Activity drawer.
+        [DataField(typeof(OperationFields), nameof(OperationFields.CanPause))]
+        public bool CanBrowseFiles { get; }
 
         // A waiting download is read again on request.
         [DataField(typeof(OperationFields), nameof(OperationFields.CanRetryImport))]
