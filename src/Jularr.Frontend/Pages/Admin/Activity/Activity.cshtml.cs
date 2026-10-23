@@ -55,7 +55,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
             if (_items is { } items)
             {
-                IReadOnlyList<ActivityItemV1> visible = ShowFiles ? [.. items.Items.Where(item => item.CanBrowseFiles)] : items.Items;
+                IReadOnlyList<ActivityItemV1> visible = items.Items;
                 var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text(ShowFiles ? "activity.files.noJobs" : IsHistory ? "activity.empty.History" : "activity.empty.Queue")));
                 var columns = IsHistory
                     ? new List<ListColumn> { new("activity.item", ListRole.Main), new("table.status", ListRole.Status), new("activity.reason", ListRole.Data, 1), new("activity.size", ListRole.Data, 2), new("operation.created"), new("common.actions", ListRole.Actions) }
@@ -453,7 +453,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
         protected override async Task LoadDataAsync()
         {
-            _items = await read.ExecuteAsync<PageResult<ActivityItemV1>>(new ReadActivityParametersV1(Filter, Math.Max(1, PageNumber)), HttpContext.RequestAborted);
+            _items = await read.ExecuteAsync<PageResult<ActivityItemV1>>(new ReadActivityParametersV1(Filter, Math.Max(1, PageNumber), torrentOnly: ShowFiles), HttpContext.RequestAborted);
             _summary = await summary.ExecuteAsync<ActivitySummaryV1>(new ReadActivitySummaryParametersV1(), HttpContext.RequestAborted);
             if (ShowFiles && OpenOperationId is { } id && _items.Items.Any(item => item.Id == id && item.CanBrowseFiles))
             {
