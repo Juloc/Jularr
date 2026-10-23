@@ -196,7 +196,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             {
                 work = await _tmdb.ReadWorkAsync(connection, Kind(mediaType), tmdbId, ct);
 
-                // A series takes its seasons and episodes from TheTVDB; TMDB's only stand in where TVDB cannot name them.
+                // A series takes its seasons and episodes from TheTVDB only, like Sonarr; where TVDB cannot name them yet the Work is created without and the next scan asks again.
                 if (mediaType == MediaType.Series)
                 {
                     tvdb = await _tvdb.TryReadStructureAsync(context, work.TvdbId, work.ImdbId, ct);
@@ -213,18 +213,6 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                             units.Add(new { Season = season.Key, Episode = (int?)episode.EpisodeNumber, Title = TextLimit.Cut(episode.Name, 500), ReleasedOn = episode.Aired, Overview = (string?)null,
                                 ImageUrl = (string?)null, RuntimeMinutes = episode.Runtime is > 0 and <= 1440 ? episode.Runtime : null });
                         }
-                    }
-                }
-
-                foreach (var season in tvdb is null ? work.Seasons : [])
-                {
-                    units.Add(new { Season = season.SeasonNumber, Episode = (int?)null, Title = TextLimit.Cut(season.Name, 500), ReleasedOn = season.AirDate, Overview = (string?)null,
-                        ImageUrl = TmdbClient.PosterUrl(season.PosterPath), RuntimeMinutes = (int?)null });
-                    foreach (var episode in await _tmdb.ReadSeasonAsync(connection, tmdbId, season.SeasonNumber, ct))
-                    {
-                        units.Add(new { Season = season.SeasonNumber, Episode = (int?)episode.EpisodeNumber, Title = TextLimit.Cut(episode.Name, 500), ReleasedOn = episode.AirDate,
-                            Overview = TextLimit.Cut(episode.Overview, 4000), ImageUrl = TmdbClient.StillUrl(episode.StillPath), RuntimeMinutes = episode.Runtime is > 0 and <= 1440 ? episode.Runtime : null });
-                        people.AddRange(WorkPeopleLogic.Rows(episode.People, WorkUnitType.Episode, season.SeasonNumber, episode.EpisodeNumber));
                     }
                 }
             }
