@@ -1,4 +1,4 @@
-import { inserted, onPage } from "../../Modules/Navigation/PageSwap";
+import { inserted, onPage, regionSwapped } from "../../Modules/Navigation/PageSwap";
 import "./InfiniteList.scss";
 
 interface Position { address: string; pages: number; y: number }
@@ -29,7 +29,8 @@ onPage(import.meta.url, () => {
     const keys = new Set(Array.from(target.children, child => child.getAttribute("data-list-key")).filter(key => key !== null));
     const save = () => {
         if (!root.isConnected || restoring) return;
-        history.replaceState({ ...history.state, infinite: { address, pages, y: scrollY } satisfies Position }, "");
+        // A direct visit may reach this setup before htmx marks its initial history entry.
+        history.replaceState({ ...history.state, htmx: true, infinite: { address, pages, y: scrollY } satisfies Position }, "");
     };
     const observer = new IntersectionObserver(entries => {
         if (entries.some(entry => entry.isIntersecting) && !restoring && !failed) void load();
@@ -47,6 +48,14 @@ onPage(import.meta.url, () => {
             const incoming = html.querySelector<HTMLElement>("[data-infinite-list]");
             if (!incoming || incoming.dataset.infiniteList !== root.dataset.infiniteList) throw new Error("List unavailable");
             const grid = html.querySelector(root.dataset.infiniteList!);
+            const pageAddress = new URL(response.url);
+            // Card actions return to the whole list being read, rather than the fetched chunk alone.
+            for (const form of Array.from(grid?.querySelectorAll<HTMLFormElement>("form[action]") ?? [])) {
+                const action = new URL(form.action, location.href);
+                if (action.origin !== location.origin || action.searchParams.get("returnUrl") !== pageAddress.pathname + pageAddress.search) continue;
+                action.searchParams.set("returnUrl", address);
+                form.action = action.pathname + action.search;
+            }
             // A shorter or empty final page has no next link.
             for (const child of Array.from(grid?.children ?? [])) {
                 const key = child.getAttribute("data-list-key");
@@ -55,6 +64,7 @@ onPage(import.meta.url, () => {
                 target.append(child);
             }
             inserted(target);
+            regionSwapped();
             const following = incoming.querySelector<HTMLAnchorElement>("[data-infinite-next]");
             if (following) next.href = following.href;
             else { next.remove(); next = null; observer.disconnect(); }

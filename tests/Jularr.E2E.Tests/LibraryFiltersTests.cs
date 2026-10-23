@@ -39,6 +39,18 @@ namespace Jularr.E2E.Tests
                 var cards = page.Locator(".library-grid .media-card");
                 await Assertions.Expect(cards).ToHaveCountAsync(48);
                 Assert.IsFalse((await cards.AllTextContentsAsync()).Any(text => text.Contains("Film 121", StringComparison.Ordinal)));
+                // Back also works after a direct visit, before any boosted form created a history entry.
+                await page.Locator("[data-infinite-list]").ScrollIntoViewIfNeededAsync();
+                await Assertions.Expect(cards).ToHaveCountAsync(96);
+                await cards.Nth(70).GetByRole(AriaRole.Button, new() { Name = "Add to favorites", Exact = true }).ClickAsync();
+                await Assertions.Expect(cards).ToHaveCountAsync(96);
+                await Assertions.Expect(cards.Nth(70).GetByRole(AriaRole.Button, new() { Name = "Remove from favorites", Exact = true })).ToBeVisibleAsync();
+                await cards.Nth(70).Locator(".media-card__link").ClickAsync();
+                await page.WaitForURLAsync("**/Details/**");
+                await page.GoBackAsync();
+                await Assertions.Expect(cards).ToHaveCountAsync(96);
+                await page.GotoAsync("/Library?sort=Title");
+                await Assertions.Expect(cards).ToHaveCountAsync(48);
                 await page.GetByRole(AriaRole.Button, new() { Name = "Open filter", Exact = true }).ClickAsync();
                 await page.Locator("#library-filter [name=genre][value=Drama]").CheckAsync();
                 await page.Locator("#library-filter [name=audio][value=eng]").CheckAsync();
