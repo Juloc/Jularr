@@ -84,7 +84,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 Count: numbers?.AllCount, Icon: Glyph("download", 14)),
             new NavigationTab("activity.view.history", Address(filter: ActivityFilterType.History), IsHistory,
                 Count: numbers?.HistoryCount, Icon: Glyph("history", 14)),
-            new NavigationTab("activity.files", Address(filter: ActivityFilterType.All) + "&files=true", ShowFiles,
+            new NavigationTab("activity.files", Address(filter: ActivityFilterType.All, files: true), ShowFiles,
                 Icon: Glyph("folder", 14))
         ], ariaLabelKey: "activity.views");
 
@@ -470,12 +470,13 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         }
 
         // The page's own address with what was chosen; defaults stay out of it.
-        private string Address(int? pageNumber = null, ActivityFilterType? filter = null, string? handler = null, long? operation = null)
+        private string Address(int? pageNumber = null, ActivityFilterType? filter = null, string? handler = null, long? operation = null, bool? files = null)
         {
             var query = new List<string>();
             if ((filter ?? Filter) != ActivityFilterType.All) query.Add("Filter=" + (filter ?? Filter));
             var number = pageNumber ?? (filter is null ? Math.Max(1, PageNumber) : 1);
             if (number > 1) query.Add("PageNumber=" + number.ToString(CultureInfo.InvariantCulture));
+            if (files ?? (filter is null && ShowFiles)) query.Add("files=true");
             if (handler is not null) query.Add("handler=" + handler);
             if (operation is { } open) query.Add("operation=" + open.ToString(CultureInfo.InvariantCulture));
             return "/Admin/Activity" + (query.Count > 0 ? "?" + string.Join("&", query) : "");
