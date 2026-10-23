@@ -80,6 +80,11 @@ namespace Jularr.Backend.Tests
                 25, null, null, null, null));
             Assert.AreEqual(HttpStatusCode.OK, bare.StatusCode, await bare.Content.ReadAsStringAsync());
             StringAssert.Contains(html, "/Admin/Acquisition?Type=AnnasArchive");
+
+            using var browserPage = await host.SendAsync(HttpMethod.Get, "/Admin/Browser");
+            var browserHtml = await browserPage.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, browserPage.StatusCode, browserHtml);
+            StringAssert.Contains(browserHtml, "docker compose exec -u root jularr jularr-browser install");
         }
 
         [TestMethod]

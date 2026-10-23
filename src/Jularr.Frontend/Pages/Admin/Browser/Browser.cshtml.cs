@@ -26,7 +26,24 @@ namespace Jularr.Frontend.Pages.Admin.Browser
         {
             page.Title("admin.browser.title");
             page.Navigation("nav.admin");
+            page.Asset("Framework/Components/CodeSample.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+
+            // The host's browser is optional and never installs privileged packages through the web service.
+            if (_status is { } browser)
+            {
+                var key = browser.IsRunning ? "admin.browser.running" : browser.IsAvailable ? "admin.browser.configured" : "admin.browser.missing";
+                var tone = browser.IsRunning ? UiTone.Success : browser.IsAvailable ? UiTone.Warning : UiTone.Neutral;
+                page.Content.Add(new Div(new StateChip(new Text(key), tone),
+                    browser.LastError is { } error ? new P(new ValueText(error)) : new Span()));
+                if (!browser.IsAvailable)
+                {
+                    page.Content.Add(new P(new Text("admin.browser.setupHint")));
+                    page.Content.Add(new CodeSample("admin.browser.installSteps",
+                        "docker compose exec -u root jularr jularr-browser install\ndocker compose exec -d jularr jularr-browser run\n# Set JULARR_BROWSER_ADDRESS=http://127.0.0.1:9222 in .env, then redeploy",
+                        assets));
+                }
+            }
 
             // What the browser is and what it did last.
             page.Content.Add(new H2(new Text("admin.browser.state")));

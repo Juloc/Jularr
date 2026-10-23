@@ -9056,6 +9056,26 @@
    "Browser",
    "Browser"
   ],
+  "admin.browser.running": [
+   "Browser connected",
+   "Browser verbunden"
+  ],
+  "admin.browser.configured": [
+   "Browser configured but not connected",
+   "Browser eingerichtet, aber nicht verbunden"
+  ],
+  "admin.browser.missing": [
+   "Browser not configured",
+   "Browser nicht eingerichtet"
+  ],
+  "admin.browser.setupHint": [
+   "Install Chrome inside this Jularr container. Package installation requires container root and cannot run from the web interface. No additional container is needed.",
+   "Chrome wird im bestehenden Jularr-Container installiert. Die Installation benötigt Root-Rechte im Container und kann nicht über die Weboberfläche ausgeführt werden. Ein zusätzlicher Container ist nicht nötig."
+  ],
+  "admin.browser.installSteps": [
+   "Show installation commands",
+   "Installationsbefehle anzeigen"
+  ],
   "admin.browser.state": [
    "What the browser did",
    "Was der Browser getan hat"
