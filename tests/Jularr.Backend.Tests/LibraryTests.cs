@@ -836,6 +836,90 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Scan_ManyUnknownImdbIds_ResolvesEverySeriesInOneScan()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, services: services =>
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
+            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
+            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
+            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+
+            var mountId = await CreateMountAsync(host);
+            for (var number = 1; number <= 20; number++)
+            {
+                var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", $"Show {number} - tt{2000000 + number}", "Season 1");
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(Path.Combine(folder, $"Show {number} - S01E01 tt{2000000 + number}.mkv"), "episode");
+            }
+
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(20L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Operations" WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" = 1 """));
+        }
+
+        [TestMethod]
+        public async Task Scan_OutOfLookupBudget_QueuesTheNextScanForTheRest()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, services: services =>
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
+            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
+            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
+            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+
+            var mountId = await CreateMountAsync(host);
+            for (var number = 1; number <= 3; number++)
+            {
+                var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", $"Show {number} - tt{2000000 + number}", "Season 1");
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(Path.Combine(folder, $"Show {number} - S01E01 tt{2000000 + number}.mkv"), "episode");
+            }
+
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            var budget = ExecuteLibraryScanV1.LookupBudget;
+            ExecuteLibraryScanV1.LookupBudget = TimeSpan.Zero;
+            try
+            {
+                await ScanAsync(host, rootId);
+            }
+            finally
+            {
+                ExecuteLibraryScanV1.LookupBudget = budget;
+            }
+
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Operations" WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" = 1 """));
+        }
+
+        // Every imdb id 2000001 to 2000099 is a series of its own.
+        private sealed class FakeTmdbSeries : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                var path = request.RequestUri!.AbsolutePath;
+                string? json = null;
+                if (path.StartsWith("/3/find/tt20000", StringComparison.Ordinal))
+                {
+                    json = $$"""{"movie_results":[],"tv_results":[{"id":{{int.Parse(path[^2..])}}}]}""";
+                }
+                else if (path.StartsWith("/3/tv/", StringComparison.Ordinal) && !path.Contains("/season/", StringComparison.Ordinal))
+                {
+                    var id = int.Parse(path["/3/tv/".Length..]);
+                    json = $$"""{"id":{{id}},"name":"Show {{id}}","first_air_date":"2020-01-01","external_ids":{"imdb_id":"tt{{2000000 + id}}"},"seasons":[{"season_number":1,"name":"Season 1","episode_count":1}]}""";
+                }
+                else if (path.EndsWith("/season/1", StringComparison.Ordinal))
+                {
+                    json = """{"episodes":[{"season_number":1,"episode_number":1,"name":"Pilot"}]}""";
+                }
+
+                return Task.FromResult(json is null ? new HttpResponseMessage(HttpStatusCode.NotFound) :
+                    new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") });
+            }
+        }
+
+        [TestMethod]
         public async Task Scan_WithoutProviderId_MatchesUniqueLocalizedTitle()
         {
             using var storage = new TemporaryDirectory();
