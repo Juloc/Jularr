@@ -18,6 +18,7 @@ import androidx.tv.material3.Text
 import de.juloc.jularr.core.api.AppApiException
 import de.juloc.jularr.core.api.catalog.HttpTvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvContinueItemV1
+import de.juloc.jularr.core.api.catalog.TvCollectionV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverItemV1
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvWorkAvailabilityV1
@@ -100,6 +101,9 @@ fun TvV1CatalogHost(
     var selectedDiscoverItem by remember(serverOrigin) { mutableStateOf<TvDiscoverItemV1?>(null) }
     var selectedCatalogEntry by remember(serverOrigin) { mutableStateOf<TvV1CatalogSelection?>(null) }
     var watchlist by remember(serverOrigin) { mutableStateOf<List<WatchlistItem>>(emptyList()) }
+    var collections by remember(serverOrigin) { mutableStateOf<List<TvCollectionV1>>(emptyList()) }
+    var selectedCollectionId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
+    var collectionsError by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var details by remember(serverOrigin) { mutableStateOf<AnimeDetail?>(null) }
     var isWatchlisted by remember(serverOrigin) { mutableStateOf(false) }
     var watchlistBusy by remember(serverOrigin) { mutableStateOf(false) }
@@ -174,13 +178,16 @@ fun TvV1CatalogHost(
             else -> null
         } ?: return
         val requestedQuery = searchQuery
+        val requestedCollection = selectedCollectionId
         fetchingNextPage = true
         pagingError = null
         scope.launch {
             try {
                 if (which == TvV1CatalogPage.Watchlist) {
-                    val result = flow.watchlistPage(next)
-                    if (page == which) {
+                    val result = if (requestedCollection != null) {
+                        flow.collectionPage(requestedCollection, next)
+                    } else flow.watchlistPage(next)
+                    if (page == which && selectedCollectionId == requestedCollection) {
                         val cards = TvV1LegacyUiModels.watchlist(result.items)
                         watchlist = (watchlist + cards).distinctBy { it.id }
                         watchlistNextPage = if (result.hasMore) next + 1 else null
@@ -240,7 +247,8 @@ fun TvV1CatalogHost(
     // TvPlayerScreen handles Back itself so it can end its /api/v1 session first.
     BackHandler(enabled = page != TvV1CatalogPage.Home && page != TvV1CatalogPage.Player) { back() }
 
-    LaunchedEffect(serverOrigin, page, searchQuery, detailWorkId, selectedPersonId, reload) {
+    LaunchedEffect(serverOrigin, page, searchQuery, detailWorkId, selectedPersonId,
+        selectedCollectionId, reload) {
         error = null
         loading = true
         try {
@@ -261,8 +269,14 @@ fun TvV1CatalogHost(
                     pagingError = null
                 }
                 TvV1CatalogPage.Watchlist -> {
-                    watchlist = flow.watchlist()
-                    watchlistNextPage = if (watchlist.size == 100) 2 else null
+                    // Collections and the ordinary Watchlist are separate, real
+                    // API data sources. Never reuse stale works when selecting one.
+                    watchlist = emptyList()
+                    val first = if (selectedCollectionId != null) {
+                        flow.collectionPage(requireNotNull(selectedCollectionId), 1)
+                    } else flow.watchlistPage(1)
+                    watchlist = TvV1LegacyUiModels.watchlist(first.items)
+                    watchlistNextPage = if (first.hasMore) 2 else null
                     pagingError = null
                 }
                 TvV1CatalogPage.Details -> {
@@ -304,6 +318,32 @@ fun TvV1CatalogHost(
             error = failure.message ?: "Die Medien konnten nicht geladen werden."
         } finally {
             loading = false
+        }
+    }
+
+    // Collections are optional to the user's Favorites. Failure to list them
+    // must not blank the main Watchlist or open a session with missing rights.
+    LaunchedEffect(serverOrigin, page, flow, reload) {
+        if (page != TvV1CatalogPage.Watchlist || !flow.canReadCollections()) {
+            collections = emptyList()
+            collectionsError = null
+            if (!flow.canReadCollections()) selectedCollectionId = null
+            return@LaunchedEffect
+        }
+        try {
+            val loaded = flow.collections()
+            collections = loaded
+            collectionsError = null
+            if (selectedCollectionId != null && loaded.none { it.id == selectedCollectionId }) {
+                selectedCollectionId = null
+            }
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (failure: AppApiException) {
+            if (failure.statusCode == 401) onAuthenticationExpired()
+            else collectionsError = "Sammlungen: ${failure.code} (HTTP ${failure.statusCode})"
+        } catch (failure: Exception) {
+            collectionsError = failure.message ?: "Sammlungen konnten nicht geladen werden."
         }
     }
 
@@ -401,7 +441,7 @@ fun TvV1CatalogHost(
                         TvV1CatalogPage.Watchlist -> {
                             if (error != null) {
                                 TvV1ApiMessage(
-                                    "Watchlist", requireNotNull(error),
+                                    "Favoriten", requireNotNull(error),
                                     onRetry = { reload += 1 },
                                     onBack = { back() },
                                 )
@@ -418,6 +458,18 @@ fun TvV1CatalogHost(
                                     { loadNextPage(TvV1CatalogPage.Watchlist) }
                                 } else null,
                                 pagingError = pagingError,
+                                collections = collections,
+                                selectedCollectionId = selectedCollectionId,
+                                collectionError = collectionsError,
+                                collectionLoading = loading,
+                                onSelectCollection = { id ->
+                                    if (id != selectedCollectionId) {
+                                        selectedCollectionId = id
+                                        watchlist = emptyList()
+                                        watchlistNextPage = null
+                                        pagingError = null
+                                    }
+                                },
                             )
                         }
                         else -> Unit
