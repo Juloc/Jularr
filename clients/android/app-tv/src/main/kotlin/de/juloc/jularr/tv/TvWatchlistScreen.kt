@@ -326,11 +326,12 @@ fun TvWatchlistScreen(
                         content = {},
                     )
                 } else if (visible.isEmpty()) {
-                    TvCenteredPanel(
-                        title = stringResource(R.string.tv_watchlist_title),
-                        description = stringResource(R.string.tv_watchlist_filter_empty),
-                        content = {},
-                    )
+                    Text(stringResource(R.string.tv_watchlist_filter_empty), color = Color.White)
+                    // The chosen category may have no matches in the first server page.
+                    // Keep pagination reachable instead of trapping the viewer in an empty state.
+                    if (onLoadMore != null) Button(onClick = onLoadMore) {
+                        Text("Weitere Favoriten laden")
+                    }
                 } else {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 230.dp),
