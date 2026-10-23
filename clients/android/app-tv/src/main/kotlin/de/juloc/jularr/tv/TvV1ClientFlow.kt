@@ -3,6 +3,7 @@ package de.juloc.jularr.tv
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Filters
 import de.juloc.jularr.core.api.catalog.TvContinueItemV1
+import de.juloc.jularr.core.api.catalog.TvCollectionV1
 import de.juloc.jularr.core.api.catalog.TvPageV1
 import de.juloc.jularr.core.api.catalog.TvWorkAvailabilityV1
 import de.juloc.jularr.core.api.catalog.TvWorkCardV1
@@ -92,6 +93,28 @@ internal class TvV1ClientFlow(
         )
         check(result.page == page && result.pageSize == PageSize)
         return PageSlice(result.items, result.items.size == PageSize)
+    }
+
+    /** Collections are optional. Never use the Watchlist permission as a substitute. */
+    fun canReadCollections(): Boolean =
+        capabilities.hasModule("Library") &&
+            capabilities.hasModule("Collections") &&
+            capabilities.hasPermission("profile.collections")
+
+    suspend fun collections(): List<TvCollectionV1> {
+        check(canReadCollections()) { "This profile cannot access collections." }
+        return api.collections().filter { it.id > 0 && it.name.isNotBlank() }
+    }
+
+    suspend fun collectionPage(collectionId: Long, page: Int): PageSlice<TvWorkCardV1> {
+        check(canReadCollections()) { "This profile cannot access collections." }
+        require(collectionId > 0 && page >= 1)
+        val result = api.collectionWorks(collectionId, page, PageSize)
+        check(result.page == page && result.pageSize == PageSize)
+        return PageSlice(
+            result.items.filter { TvV1LegacyUiModels.isVideo(it.mediaTypeId) },
+            result.items.size == PageSize,
+        )
     }
 
     suspend fun watchlistPage(page: Int): PageSlice<TvWorkCardV1> {
