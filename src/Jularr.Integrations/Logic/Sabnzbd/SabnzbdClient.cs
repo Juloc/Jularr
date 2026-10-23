@@ -160,6 +160,15 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             }
         }
 
+        // Remove a terminal history job only: never cancel an active queue item during automatic cleanup.
+        public async Task RemoveHistoryJobAsync(SabnzbdConnection connection, string nzoId, CancellationToken ct)
+        {
+            var id = ValidateNzoId(nzoId);
+            using var response = await SendAsync(connection,
+                [new("mode", "history"), new("name", "delete"), new("value", id), new("del_files", "1")], ct);
+            RequireStatus(await RequireBodyAsync(response, ct));
+        }
+
         public async Task PauseJobAsync(SabnzbdConnection connection, string nzoId, bool isPaused, CancellationToken ct)
         {
             ValidateNzoId(nzoId);
