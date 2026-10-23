@@ -62,6 +62,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var known = await ReadKnownAsync(context, identities.SelectMany(list => list), ct);
             var lookups = new Budget(LookupsPerPlan);
             var conflicts = new HashSet<int>();
+            var resolvedAny = false;
 
             // An edition ISBN can identify a Work even when this Jularr instance has not imported it yet.
             // Provider metadata is checked against the requested title/author before using that Work id.
@@ -103,11 +104,15 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     continue;
                 }
 
-                if (other is null) identities[index].Add(new MediaImportId("openlibrary", book.WorkId));
+                if (other is null)
+                {
+                    identities[index].Add(new MediaImportId("openlibrary", book.WorkId));
+                    resolvedAny = true;
+                }
             }
 
             // The ISBN-resolved Work may already exist with another ISBN in the local database.
-            known = await ReadKnownAsync(context, identities.SelectMany(list => list), ct);
+            if (resolvedAny) known = await ReadKnownAsync(context, identities.SelectMany(list => list), ct);
 
             // Video titles named only by IMDb or TVDB find their TMDB entry.
             var budget = new Budget(searches);
