@@ -23,10 +23,19 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import de.juloc.jularr.core.api.AppApiException
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
+import de.juloc.jularr.core.api.catalog.TvDiscoverCatalogEntryV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverItemV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverScopeV1
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+
+/** External catalog identity; never cast to a TMDB ID or Jularr WorkId. */
+internal data class TvV1CatalogSelection(
+    val mediaTypeId: Int,
+    val namespace: String,
+    val externalId: String,
+    val mediaSubtypeId: Int?,
+)
 
 /**
  * Discover results reuse the original TV search input, card artwork and D-pad buttons.
@@ -41,12 +50,19 @@ internal fun TvV1DiscoverScreen(
     onBack: () -> Unit,
     onUnauthorized: () -> Unit,
     initialItem: TvDiscoverItemV1? = null,
+    initialCatalog: TvV1CatalogSelection? = null,
 ) {
     var scopes by remember(catalog) { mutableStateOf<List<TvDiscoverScopeV1>>(emptyList()) }
     var selectedType by remember(catalog) { mutableStateOf<Int?>(null) }
     var query by remember(catalog) { mutableStateOf("") }
     var results by remember(catalog) { mutableStateOf<List<TvDiscoverItemV1>>(emptyList()) }
     var selectedExternal by remember(catalog, initialItem) { mutableStateOf(initialItem) }
+    var selectedCatalog by remember(catalog, initialCatalog) { mutableStateOf(initialCatalog) }
+    var catalogDetail by remember(catalog, initialCatalog) {
+        mutableStateOf<TvDiscoverCatalogEntryV1?>(null)
+    }
+    var catalogLoading by remember(catalog, initialCatalog) { mutableStateOf(false) }
+    var catalogError by remember(catalog, initialCatalog) { mutableStateOf<String?>(null) }
     var loading by remember(catalog) { mutableStateOf(false) }
     var error by remember(catalog) { mutableStateOf<String?>(null) }
     var retry by remember(catalog) { mutableStateOf(0) }
@@ -88,6 +104,63 @@ internal fun TvV1DiscoverScreen(
             error = failure.message ?: "Discover konnte nicht geladen werden."
         } finally { loading = false }
     }
+    LaunchedEffect(selectedCatalog, catalog) {
+        val selection = selectedCatalog ?: return@LaunchedEffect
+        catalogLoading = true
+        catalogDetail = null
+        catalogError = null
+        try {
+            catalogDetail = catalog.discoverCatalogEntry(
+                selection.mediaTypeId, selection.namespace,
+                selection.externalId, selection.mediaSubtypeId,
+            )
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (failure: AppApiException) {
+            if (failure.statusCode == 401) onUnauthorized()
+            else catalogError = "Katalogdetails: ${failure.code} (HTTP ${failure.statusCode})"
+        } catch (failure: Exception) {
+            catalogError = failure.message ?: "Katalogdetails konnten nicht geladen werden."
+        } finally {
+            catalogLoading = false
+        }
+    }
+
+    if (selectedCatalog != null) {
+        val detail = catalogDetail
+        TvCenteredPanel(
+            title = detail?.title ?: "Katalogeintrag",
+            description = detail?.overview.orEmpty(),
+        ) {
+            when {
+                catalogLoading -> Text("Katalogdetails werden geladen …")
+                catalogError != null -> {
+                    Text(requireNotNull(catalogError), color = MaterialTheme.colorScheme.error)
+                    Button(onClick = {
+                        // Refresh via a distinct selection object to rerun the request.
+                        selectedCatalog = null
+                        catalogDetail = null
+                    }) { Text("Zurück zu Discover") }
+                }
+                detail == null -> Text("Für diesen Katalogeintrag liegen keine Details vor.")
+                else -> {
+                    Text(
+                        listOfNotNull(detail.releaseYear?.toString(), detail.author)
+                            .joinToString(" · "),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    detail.workId?.let { local ->
+                        Button(onClick = { onLocalWork(local) }) {
+                            Text("In der Bibliothek öffnen")
+                        }
+                    } ?: Text("Noch kein lokales Jularr-Werk.")
+                }
+            }
+            Button(onClick = { selectedCatalog = null }) { Text("Zurück zu Discover") }
+        }
+        return
+    }
+
     val external = selectedExternal
     // Provider data is read on demand and replaces search-summary details.
     LaunchedEffect(external?.mediaTypeId, external?.tmdbId) {
