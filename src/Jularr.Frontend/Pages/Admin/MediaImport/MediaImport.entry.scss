@@ -1,5 +1,12 @@
 // The import mockup: the source and the behaviour as two cards side by side (stacked on a narrow page), then the preview table with its dock.
 .media-import {
+    &__feedback {
+        position: sticky; top: 8px; z-index: 5; margin: 0 0 14px;
+        padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius-control);
+        background: var(--surface); color: var(--text); font-size: var(--text-control);
+        box-shadow: var(--shadow-overlay);
+        &[hidden] { display: none; }
+    }
     // The two cards of the first step share the form's grid.
     &__upload .ui-form {
         grid-template-columns: minmax(0, 1.3fr) minmax(min(100%, 360px), .7fr);
