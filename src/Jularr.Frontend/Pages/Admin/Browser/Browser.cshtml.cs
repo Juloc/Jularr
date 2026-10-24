@@ -46,6 +46,11 @@ namespace Jularr.Frontend.Pages.Admin.Browser
                     page.Content.Add(new P(new ValueText(browser.DownloadedBytes.ToString(CultureInfo.InvariantCulture)),
                         new ValueText(" / " + browser.TotalBytes.ToString(CultureInfo.InvariantCulture) + " bytes")));
                 }
+                if (browser.InstalledVersion is { } packageVersion)
+                    page.Content.Add(new P(new Text("admin.browser.version"), new ValueText(": " + packageVersion)));
+                if (browser.ManagedSizeBytes > 0)
+                    page.Content.Add(new P(new Text("admin.browser.diskUsage"),
+                        new ValueText(": " + (browser.ManagedSizeBytes / 1048576d).ToString("0.0", CultureInfo.CurrentCulture) + " MiB")));
                 if (browser.InstallationError is { } installError) page.Content.Add(new P(new ValueText(installError)));
                 // Never change externally owned Chrome installations through managed-package actions.
                 var managed = string.IsNullOrWhiteSpace(browser.RemoteAddress) &&
