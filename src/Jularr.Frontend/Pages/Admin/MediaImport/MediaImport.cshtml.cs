@@ -522,7 +522,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         public async Task<IActionResult> OnGetLatestJobAsync()
         {
             if (!texts.CanImportMedia()) return Forbid();
-            var latest = await latestJob.ExecuteAsync<MediaImportJobCreatedV1>(cancellationToken: HttpContext.RequestAborted);
+            var latest = await latestJob.ExecuteAsync<MediaImportLatestJobV1>(cancellationToken: HttpContext.RequestAborted);
             return new JsonResult(new { jobId = latest.JobId });
         }
 
