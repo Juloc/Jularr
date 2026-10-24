@@ -1,6 +1,8 @@
 # CI gates for main and dev
 
-The ordinary PR gate is deliberately bounded. The full test suite is retained,
+The ordinary PR gate is deliberately bounded. An opted-in Full PR skips the
+fast Backend build; its stable `Backend / test` gate waits for the reusable Full
+regression instead of compiling and testing the backend twice. The full suite is retained,
 not deleted. Per-test timings are kept in the `timings-*` artifacts of every run
 and, as class totals, in [`tests/ci-durations.json`](../tests/ci-durations.json).
 
@@ -10,7 +12,7 @@ and, as class totals, in [`tests/ci-durations.json`](../tests/ci-durations.json)
 | `Frontend / razor-and-ui-resources` | When frontend/backend UI files change | Yes, matching paths | Frontend typecheck, JS tests, localization, Razor build and publish verification |
 | `Browser Smoke / smoke` | Frontend, E2E tests or schema changed | No | Fresh owner setup and sign-in in real Chromium |
 | `Image / minimal-compose` | Docker/Compose/packaging or database schema changed | Yes, including source changes | Build the shipped container and start the supplied Compose stack |
-| `Backend Full` (`smoke`, `backend (n/4)`, `e2e (n/4)`, `gate`) | Only as opted-in reusable `Backend / full-regression` job | Every push | Entire backend and browser suite, real FFmpeg, JPEG XL and backup-tool regression |
+| `Backend Full` (`smoke`, `backend (n/4)`, `e2e (n/4)`, `gate`) | Only as opted-in reusable `Backend / full-regression` job | Every push to `main` | Entire backend and browser suite, real FFmpeg, JPEG XL and backup-tool regression |
 
 PR checks are scoped to PRs targeting `main` or `dev`; ordinary feature-branch pushes do not start Actions. Draft PRs retain the lightweight `Backend / test` and authorship checks, while builds, browser smoke, image smoke and full regression wait until `ready_for_review`. Pure frontend/E2E changes no longer run the backend compilation; dedicated frontend/browser jobs cover those areas. `Backend Full` is a reusable job within `Backend` for opt-in PRs, so ordinary PRs create no separate skipped full workflow run.
 
@@ -83,7 +85,7 @@ alone. New tests are compiled by Fast CI, but not all executed until Full CI.
 
 For PR-specific integration validation, add the `ci/full` label to the PR,
 or put `[full-ci]` in its title. For ready PRs, `Backend / full-regression` invokes the reusable `Backend Full` graph. Removing the label/title marker returns later PR revisions to fast
-checks. The title marker works without creating a repository label. The standalone `Backend Full` workflow remains available on `main`/`dev` pushes or manual `workflow_dispatch`. Keep focused test evidence in the PR.
+checks. The title marker works without creating a repository label. The standalone `Backend Full` workflow remains available on `main` pushes or manual `workflow_dispatch`. Keep focused test evidence in the PR.
 
 ## Branch protection and status checks
 
