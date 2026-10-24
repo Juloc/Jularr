@@ -99,6 +99,12 @@ namespace Jularr.Integrations.Logic.Browser
                         State = "removing";
                         await ExecuteAsync("uninstall", ct);
                     }
+                    else if (!options.InstallLocally)
+                    {
+                        // An externally managed browser stays installed, but Jularr's own profile and
+                        // temporary files are always discarded when the module is disabled.
+                        RemoveOwnedProfile();
+                    }
 
                     State = "disabled";
                 }
@@ -121,6 +127,22 @@ namespace Jularr.Integrations.Logic.Browser
             finally
             {
                 _gate.Release();
+            }
+        }
+
+        private void RemoveOwnedProfile()
+        {
+            if (!Directory.Exists(_home)) return;
+            foreach (var owned in new[] { "profile", "downloads", "cache", "config", "tmp", "share", "state" })
+            {
+                var path = Path.Combine(_home, owned);
+                if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+                else if (File.Exists(path)) File.Delete(path);
+            }
+
+            if (!Directory.EnumerateFileSystemEntries(_home).Any())
+            {
+                Directory.Delete(_home);
             }
         }
 
