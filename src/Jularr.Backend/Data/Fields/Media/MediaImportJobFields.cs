@@ -5,6 +5,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly GuidField JobId = new();
         public static readonly GuidField LatestJobId = new() { Required = false };
         public static readonly LongField Sequence = new() { Minimum = 0 };
+        public static readonly StringField Stage = new() { MaximumLength = 16, AllowBlank = false };
         public static readonly LongField WorkId = new() { Minimum = 1, Required = false };
     }
 }
