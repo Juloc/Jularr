@@ -92,6 +92,8 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".option-groups--extras [data-module=Profiles]")).ToBeVisibleAsync();
                 await Assertions.Expect(page.Locator(".option-groups--extras [data-module=Diagnostics]")).ToBeVisibleAsync();
                 // Optional settings are shown even when their media type is off.
+                await page.Locator("[data-media=Book] .toggle").ClickAsync();
+                await Assertions.Expect(page.Locator("[data-media=Book] input[type=checkbox]")).Not.ToBeCheckedAsync();
                 await Assertions.Expect(page.Locator("[data-module=Translation]")).ToBeVisibleAsync();
 
                 // Complete means every module AND all media types/subtypes.
