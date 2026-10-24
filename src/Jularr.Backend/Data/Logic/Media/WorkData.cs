@@ -32,19 +32,30 @@ namespace Jularr.Backend.Data.Logic.Media
         public int? ReleaseYear { get; }
     }
 
-    internal sealed class BookFolderMatchData : BaseData
+    internal sealed class BookSubtypeData : BaseData
     {
-        public BookFolderMatchData(MediaSubtype? mediaSubtypeId, string canonicalTitle)
+        public BookSubtypeData(MediaSubtype? mediaSubtypeId)
         {
             MediaSubtypeId = mediaSubtypeId;
-            CanonicalTitle = canonicalTitle;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId), false)]
         public MediaSubtype? MediaSubtypeId { get; }
+    }
+
+    internal sealed class BookWorkTitleData : BaseData
+    {
+        public BookWorkTitleData(long id, string title)
+        {
+            Id = id;
+            Title = title;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
-        public string CanonicalTitle { get; }
+        public string Title { get; }
     }
 
     internal sealed class WorkFolderMatchData : BaseData

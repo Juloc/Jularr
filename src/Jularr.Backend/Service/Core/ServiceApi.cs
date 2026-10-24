@@ -216,6 +216,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<PlaybackSubtitles>();
             services.TryAddTransient<WantedAcquisition>();
             services.TryAddTransient<MetadataCatalog>();
+            services.TryAddSingleton<ExternalFeedCache>();
             services.TryAddTransient<MediaImportPlanner>();
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<TvdbMetadata>();

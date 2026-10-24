@@ -50,8 +50,8 @@ existing, separate policy. Manual orphan cleanup also uses an atomic
 quarantine and a confirmed folder fingerprint; it refuses active or known
 history jobs. A failed deletion is not restored as a partially deleted job.
 
-Database migrations are **0002** (SABnzbd/incomplete/cleanup), **0003**
-(torrent connection types) and **0004** (source-inventory fingerprint). Never
+Database migrations are **0003** (SABnzbd/incomplete/cleanup), **0004**
+(torrent connection types) and **0005** (source-inventory fingerprint). Never
 edit the frozen baseline or previously applied migrations.
 
 ## Release gates

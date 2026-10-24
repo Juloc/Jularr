@@ -25,6 +25,18 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void ReleaseCountdown_ChangesAtLocalMidnight_NotAtUtcMidnight()
+        {
+            var instant = new DateTimeOffset(2026, 10, 23, 23, 30, 0, TimeSpan.Zero);
+            var release = new DateOnly(2026, 10, 25);
+            Assert.AreEqual(1, release.DayNumber - BrowserTimeZone.TodayAt(instant, "Europe/Berlin").DayNumber);
+            Assert.AreEqual(2, release.DayNumber - BrowserTimeZone.TodayAt(instant, "America/New_York").DayNumber);
+            var lastAllowed = new DateOnly(2026, 11, 7);
+            Assert.AreEqual(14, lastAllowed.DayNumber - BrowserTimeZone.TodayAt(instant, "Europe/Berlin").DayNumber);
+            Assert.AreEqual(15, lastAllowed.DayNumber - BrowserTimeZone.TodayAt(instant, "America/New_York").DayNumber);
+        }
+
+        [TestMethod]
         public void Today_RejectsInvalidCookieAndFallsBackToUtc()
         {
             var instant = new DateTimeOffset(2026, 10, 23, 23, 30, 0, TimeSpan.Zero);

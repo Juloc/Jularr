@@ -385,6 +385,7 @@ namespace Jularr.Backend.Tests
             // The first look fetches and keeps the image, the next ones are answered from the cache; the browser never goes to the provider.
             using var first = await host.SendAsync(HttpMethod.Get, address);
             Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
+            Assert.AreEqual(TimeSpan.FromDays(7), first.Headers.CacheControl!.MaxAge);
             CollectionAssert.AreEqual(FakeImages.Png, await first.Content.ReadAsByteArrayAsync());
             using var second = await host.SendAsync(HttpMethod.Get, address);
             Assert.AreEqual(HttpStatusCode.OK, second.StatusCode);

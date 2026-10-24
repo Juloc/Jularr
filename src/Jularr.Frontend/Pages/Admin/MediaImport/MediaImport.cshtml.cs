@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Encodings.Web;
+using System.Text.Json;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
@@ -13,7 +14,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
 {
     // A list of titles added at once: the file, what each entry is and would do, and what became of each.
     [RequestFormLimits(ValueCountLimit = 20_000, ValueLengthLimit = 4_194_304)]
-    public sealed class MediaImportModel(PreviewMediaImportV1 preview, RunMediaImportV1 run, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
+    public sealed class MediaImportModel(PreviewMediaImportV1 preview, RunMediaImportV1 run, ReadMediaImportEditionsV1 editions, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private const string Address = "/Admin/Import";
         private MediaImportDataV1? _input;
@@ -47,7 +48,14 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         {
             // Script reads the list and says whether it can be read; without script nothing is claimed.
             var status = new Span(new Text("import.list.empty")).Class("media-import__status").Attribute("hidden", "hidden").Attribute("data-import-status", "").Attribute("data-state", "empty")
-                .TextAttribute("data-empty", "import.list.empty").TextAttribute("data-valid", "import.list.valid").TextAttribute("data-invalid", "import.list.invalid");
+                .TextAttribute("data-empty", "import.list.empty").TextAttribute("data-valid", "import.list.valid").TextAttribute("data-invalid", "import.list.invalid")
+                .TextAttribute("data-phase-matching", "import.phase.matching").TextAttribute("data-phase-isbn", "import.phase.isbn")
+                .TextAttribute("data-phase-searching", "import.phase.searching").TextAttribute("data-phase-candidates", "import.phase.candidates")
+                .TextAttribute("data-phase-no-match", "import.phase.no_match").TextAttribute("data-phase-waiting", "import.phase.waiting")
+                .TextAttribute("data-phase-complete", "import.phase.complete")
+                .TextAttribute("data-stage-new", "import.status.New").TextAttribute("data-stage-in-library", "import.status.InLibrary")
+                .TextAttribute("data-stage-duplicate", "import.status.Duplicate").TextAttribute("data-stage-open", "import.status.Open")
+                .TextAttribute("data-stage-invalid", "import.status.Invalid");
             var sample = new Div(new CodeSample("import.sample", MediaImportExample.Json, assets),
                 new A(new Icon("download", assets, 14), new Text("import.example")).Class("button").Attribute("href", Address + "?handler=Example").Attribute("download", MediaImportExample.FileName))
                 .Class("media-import__sample ui-field--wide");
@@ -66,7 +74,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                     behavior.Select(item => item.Action, "import.action", ActionOptions());
                     behavior.Content(sample);
                 });
-            }, Address + "?handler=Preview", csrf, _input ?? new MediaImportDataV1(null, null, MediaImportActionType.MonitorAndSearch), FormError)).Class("media-import__upload"));
+            }, Address + "?handler=Preview", csrf, _input ?? new MediaImportDataV1(null, null, MediaImportActionType.AddOnly), FormError)).Class("media-import__upload"));
         }
 
         private void Preview(List<IUiComponent> content, MediaImportPreviewV1 listing, string csrf)
@@ -78,8 +86,24 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             summary.Add(new A(new Text("import.restart")).Class("button button--compact").Attribute("href", Address));
             content.Add(new Div(new H2(new Text("import.previewTitle")), new Div([.. summary]).Class("media-import__summary")).Class("media-import__head"));
 
+            // The refresh/search-more form uses the same per-work live labels as the first preview.
+            content.Add(new Span(new Text("import.phase.matching")).Class("media-import__status")
+                .Attribute("hidden", "hidden").Attribute("data-import-status", "")
+                .TextAttribute("data-phase-matching", "import.phase.matching")
+                .TextAttribute("data-phase-isbn", "import.phase.isbn")
+                .TextAttribute("data-phase-searching", "import.phase.searching")
+                .TextAttribute("data-phase-candidates", "import.phase.candidates")
+                .TextAttribute("data-phase-no-match", "import.phase.no_match")
+                .TextAttribute("data-phase-waiting", "import.phase.waiting")
+                .TextAttribute("data-phase-complete", "import.phase.complete")
+                .TextAttribute("data-stage-new", "import.status.New")
+                .TextAttribute("data-stage-in-library", "import.status.InLibrary")
+                .TextAttribute("data-stage-duplicate", "import.status.Duplicate")
+                .TextAttribute("data-stage-open", "import.status.Open")
+                .TextAttribute("data-stage-invalid", "import.status.Invalid"));
+
             // The defaults of each kind of title the list holds.
-            var action = _input?.Action ?? MediaImportActionType.MonitorAndSearch;
+            var action = _input?.Action ?? MediaImportActionType.AddOnly;
             var kinds = rows.Where(row => row.MediaTypeId is not null).GroupBy(row => row.TypeKey, StringComparer.Ordinal).Select(group => group.First()).ToDictionary(row => row.TypeKey, StringComparer.Ordinal);
             var defaults = new BaseDataList<MediaImportDefaultV1>(kinds.Keys.Select(key => _input?.Defaults.FirstOrDefault(item => item.Key == key) ?? new MediaImportDefaultV1(key, null, null)));
             var selectable = rows.Where(CanInclude).ToArray();
@@ -104,6 +128,16 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                     }
                 });
 
+                // Selection and side effects are visible before any row is committed.
+                var intended = rows.Where(row => row.IsIncluded).ToArray();
+                var monitorCount = intended.Count(row => row.CanMonitor && row.Action != MediaImportActionType.AddOnly);
+                var searchCount = intended.Count(row => row.CanMonitor && row.Action == MediaImportActionType.MonitorAndSearch);
+                var intent = new Div(
+                    new Strong(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["import.intent.summary"], intended.Length, monitorCount, searchCount))).Attribute("data-import-summary", ""),
+                    new Span(new Text("import.intent.searchWarning")).Class("media-import__intent-warning").Attribute("data-import-search-warning", searchCount == 0 ? "hidden" : "visible"))
+                    .Class("media-import__intent").Attribute("data-import-intent", "").TextAttribute("data-template", "import.intent.summary");
+                form.Note(intent);
+
                 // One row per title; a column of its own for a profile or library only where some title has the choice.
                 var table = new Table<MediaImportRowV1>(rows)
                     .Content("import.col.include", IncludeCell)
@@ -127,6 +161,12 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 var apply = new Button(new Text("import.apply")).Primary();
                 apply.Attribute("formaction", Address + "?handler=Apply");
                 apply.Attribute("data-import-apply", "");
+                apply.TextAttribute("data-import-complete", "import.resultTitle");
+                apply.TextAttribute("data-import-partial", "import.phase.partial");
+                apply.TextAttribute("data-import-retry-failed", "import.retryFailed");
+                apply.TextAttribute("data-import-download-report", "import.downloadReport");
+                apply.TextAttribute("data-import-continue", "import.continue");
+                apply.TextAttribute("data-import-failed", "import.interrupted");
                 form.Submit(apply);
             }, Address + "?handler=Preview", csrf, new MediaImportDataV1(null, listing.Json, action, defaults), FormError)).Class("media-import__preview"));
         }
@@ -158,7 +198,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         private IEnumerable<(string Name, string Value)> Continuation(MediaImportResultV1 result, string remaining)
         {
             yield return ("json", remaining);
-            yield return ("action", ((byte)(_input?.Action ?? MediaImportActionType.MonitorAndSearch)).ToString(CultureInfo.InvariantCulture));
+            yield return ("action", ((byte)(_input?.Action ?? MediaImportActionType.AddOnly)).ToString(CultureInfo.InvariantCulture));
             var position = 0;
             foreach (var item in (IEnumerable<MediaImportDefaultV1>?)_input?.Defaults ?? [])
             {
@@ -220,7 +260,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             if (CanInclude(row))
             {
                 var include = new Toggle("import.row.include", row.IsIncluded);
-                include.Control.Attribute("name", name + "Include").Attribute("data-import-row", "");
+                include.Control.Attribute("name", name + "Include").Attribute("data-import-row", "").Attribute("data-can-monitor", row.CanMonitor ? "true" : "false");
 
                 // The first value wins when the switch is on.
                 parts.Add(new Div(include).Class("media-import__include"));
@@ -283,7 +323,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             var posted = _posted.GetValueOrDefault(row.Index)?.Choice;
             var selected = posted ?? row.Choice ?? row.Candidates.FirstOrDefault(candidate => candidate.IsSuggested)?.Choice ?? "";
             var options = new List<IUiComponent> { Item("", texts["import.choose"], selected == "") };
-            options.AddRange(row.Candidates.Select(candidate => Item(candidate.Choice, string.Join(" · ", new[] { WithYear(candidate.Title, candidate.ReleaseYear), candidate.Creator, texts["admin.works.source." + candidate.Source] }
+            options.AddRange(row.Candidates.Select(candidate => Item(candidate.Choice, string.Join(" · ", new[] { candidate.IsSuggested ? texts["import.match.suggested"] : texts["import.match.review"], WithYear(candidate.Title, candidate.ReleaseYear), candidate.Creator, texts["admin.works.source." + candidate.Source] }
                 .Where(text => !string.IsNullOrEmpty(text))), candidate.Choice == selected)));
             var parts = new List<IUiComponent> { Field(new Select([.. options]).Attribute("name", name + "Choice").TextAttribute("aria-label", "import.choose")) };
             if (row.StatusTypeId == MediaImportStatusType.Open)
@@ -291,6 +331,21 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 parts.Add(new Div(Field(new Input().Attribute("type", "text").Attribute("name", name + "Query").Attribute("maxlength", "200").Attribute("autocomplete", "off")
                         .Attribute("value", row.Query ?? "").TextAttribute("aria-label", "import.search").TextAttribute("placeholder", "import.search")),
                     new Button(new Text("import.search.go")).Compact().Submit()).Class("media-import__search"));
+            }
+
+            if (row.TypeKey == "book" && row.Candidates.Any(candidate => candidate.Source == "openlibrary"))
+            {
+                var compare = new Button(new Text("import.editions")).Compact().Attribute("type", "button").Attribute("data-import-editions", "").Attribute("hidden", "hidden");
+                compare.TextAttribute("data-import-edition-loading", "import.edition.loading");
+                compare.TextAttribute("data-import-edition-choose", "import.edition.choose");
+                compare.TextAttribute("data-import-edition-empty", "import.edition.empty");
+                compare.TextAttribute("data-import-edition-error", "import.edition.error");
+                compare.TextAttribute("data-import-edition-title", "import.edition.title");
+                compare.TextAttribute("data-import-edition-language", "import.edition.language");
+                compare.TextAttribute("data-import-edition-year", "import.edition.year");
+                compare.TextAttribute("data-import-edition-format", "import.edition.format");
+                compare.TextAttribute("data-import-edition-publisher", "import.edition.publisher");
+                parts.Add(compare);
             }
 
             return new Div([.. parts]).Class("media-import__stack");
@@ -355,6 +410,27 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             return Page();
         }
 
+        public async Task<IActionResult> OnGetBookEditionsAsync(string? workId)
+        {
+            if (!texts.CanImportMedia()) return Forbid();
+            if (workId is null || !global::System.Text.RegularExpressions.Regex.IsMatch(workId, @"\AOL[0-9]{1,12}W\z"))
+                return BadRequest();
+
+            var result = await editions.ExecuteAsync<MediaImportEditionsV1>(new MediaImportEditionParametersV1(workId), HttpContext.RequestAborted);
+            IUiComponent content = result.Editions.Count == 0
+                ? new P(new Text("import.edition.empty"))
+                : new Table<MediaImportEditionV1>(result.Editions).Compact()
+                    .Text(item => item.Title, "import.edition.title")
+                    .Text(item => item.Language, "import.edition.language")
+                    .Text(item => item.Year, "import.edition.year")
+                    .Text(item => item.Format, "import.edition.format")
+                    .Text(item => item.Publisher, "import.edition.publisher")
+                    .Content("import.edition.isbn", item => new ValueText(item.Isbn ?? "—"));
+            using var writer = new StringWriter(CultureInfo.CurrentCulture);
+            content.WriteTo(writer, HtmlEncoder.Default, texts);
+            return Content(writer.ToString(), "text/html; charset=utf-8");
+        }
+
         public IActionResult OnGetExample()
         {
             if (!texts.CanImportMedia()) return Forbid();
@@ -369,19 +445,94 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             return Page();
         }
 
+        // Stream provider/identity search stages as the preview is prepared. The final HTML form stays unchanged.
+        public async Task<IActionResult> OnPostPreviewStreamAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
+        {
+            if (!texts.CanImportMedia()) return Forbid();
+            Read(file, json, action, defaults, choices);
+            BeginProgressStream();
+            await WriteProgressAsync(new { kind = "started" });
+            preview.OnItemProgressAsync = (index, stage, count) => WriteProgressAsync(new { kind = "row", index, stage, count });
+
+            try
+            {
+                var result = await preview.ExecuteAsync<MediaImportPreviewV1>(_input!, HttpContext.RequestAborted);
+                await WriteProgressAsync(new { kind = "done", total = result.Rows.Count, unsearched = result.Unsearched });
+            }
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                await WriteProgressAsync(new { kind = "error" });
+            }
+
+            return new EmptyResult();
+        }
+
         public async Task<IActionResult> OnPostApplyAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
         {
-            Read(file, json, action, defaults, choices);
+            Read(file, json, action, defaults, choices, apply: true);
             _result = await run.ExecuteAsync<MediaImportResultV1>(_input!, HttpContext.RequestAborted);
             PreparePage();
             return Page();
         }
 
-        private void Read(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
+        // The interactive page streams actual outcomes after each processed title; ordinary HTML posting stays supported.
+        public async Task<IActionResult> OnPostApplyStreamAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
         {
-            _input = new MediaImportDataV1(file is { Length: > 0 } ? new UploadedFile(file.FileName, file.Length, file.OpenReadStream) : null, json, action ?? MediaImportActionType.MonitorAndSearch,
+            if (!texts.CanImportMedia()) return Forbid();
+            Read(file, json, action, defaults, choices, apply: true);
+            BeginProgressStream();
+
+            await WriteProgressAsync(new { kind = "started" });
+            run.OnRowProcessedAsync = row => WriteProgressAsync(new
+            {
+                kind = "row",
+                index = row.Index,
+                title = row.Title,
+                outcome = texts["import.outcome." + row.OutcomeTypeId],
+                status = row.OutcomeTypeId.ToString(),
+                workId = row.WorkId
+            });
+
+            try
+            {
+                var result = await run.ExecuteAsync<MediaImportResultV1>(_input!, HttpContext.RequestAborted);
+                await WriteProgressAsync(new { kind = "done", remaining = result.RemainingJson });
+            }
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                // A streaming response has already started, so return a generic error event instead of HTML.
+                await WriteProgressAsync(new { kind = "error" });
+            }
+
+            return new EmptyResult();
+        }
+
+        private void BeginProgressStream()
+        {
+            Response.ContentType = "application/x-ndjson; charset=utf-8";
+            Response.Headers.CacheControl = "no-store";
+            Response.Headers["X-Accel-Buffering"] = "no";
+        }
+
+        private async Task WriteProgressAsync(object update)
+        {
+            await Response.WriteAsync(JsonSerializer.Serialize(update) + "\n", HttpContext.RequestAborted);
+            await Response.Body.FlushAsync(HttpContext.RequestAborted);
+        }
+
+        private void Read(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices, bool apply = false)
+        {
+            _input = new MediaImportDataV1(file is { Length: > 0 } ? new UploadedFile(file.FileName, file.Length, file.OpenReadStream) : null, json, action ?? MediaImportActionType.AddOnly,
                 new((defaults ?? []).Where(row => row.Key is not null).Select(row => new MediaImportDefaultV1(row.Key!, row.AcquisitionProfileId, row.LibraryRootId))),
-                new((choices ?? []).Where(row => row.Index is not null).Select(row => new MediaImportChoiceV1(row.Index!.Value, row.Include, row.Choice, row.Query, row.Action, row.AcquisitionProfileId, row.LibraryRootId))));
+                new((choices ?? []).Where(row => row.Index is not null).Select(row => new MediaImportChoiceV1(row.Index!.Value, apply ? row.Include ?? false : row.Include, row.Choice, row.Query, row.Action, row.AcquisitionProfileId, row.LibraryRootId))));
             _posted = _input.Choices.ToDictionary(choice => choice.Index);
         }
 
