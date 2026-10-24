@@ -170,7 +170,9 @@ namespace Jularr.E2E.Tests
             await page.Locator("dialog#connection-editor form").GetByLabel(searchesAutomatically ? "Automatic and manual" : "Manual only", new() { Exact = true }).CheckAsync();
             await SubmitAsync(page, page.Locator("dialog#connection-editor form"));
             await page.GotoAsync("/Admin/Acquisition/Downloads");
-            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client" }));
+            // The downloads page offers SABnzbd and qBittorrent with the same visible label.
+            // The scenario configures a SABnzbd test client, so select its typed link.
+            await FollowAsync(page, page.Locator("a[href*='Type=Sabnzbd']"));
             await page.FillAsync("dialog#connection-editor form [name=Name]", "SABnzbd");
             await page.FillAsync("dialog#connection-editor form [name=BaseUrl]", new Uri(fakes.Address, "sabnzbd/").ToString());
             await page.FillAsync("dialog#connection-editor form [name=ApiKey]", FakeServices.ClientKey);
