@@ -27,8 +27,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private static readonly IReadOnlyDictionary<AcquisitionConnectionRole, (AcquisitionConnectionType Type, string LabelKey)[]> Additions =
             new Dictionary<AcquisitionConnectionRole, (AcquisitionConnectionType, string)[]>
             {
-                [AcquisitionConnectionRole.Search] = [(AcquisitionConnectionType.Newznab, "acquisition.connection.addIndexer")],
-                [AcquisitionConnectionRole.Download] = [(AcquisitionConnectionType.Sabnzbd, "acquisition.connection.addClient"), (AcquisitionConnectionType.Usenet, "acquisition.connection.addUsenet")],
+                [AcquisitionConnectionRole.Search] = [(AcquisitionConnectionType.Newznab, "acquisition.connection.addIndexer"), (AcquisitionConnectionType.Nyaa, "acquisition.connection.addIndexer")],
+                [AcquisitionConnectionRole.Download] = [(AcquisitionConnectionType.Sabnzbd, "acquisition.connection.addClient"), (AcquisitionConnectionType.Qbittorrent, "acquisition.connection.addClient"), (AcquisitionConnectionType.Usenet, "acquisition.connection.addUsenet")],
                 [AcquisitionConnectionRole.Subtitles] = []
             };
 
@@ -154,7 +154,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             if (_selected is { } opened)
             {
                 if (ConfirmDelete) page.Content.Add(DeleteDialog(opened, csrf));
-                else if (opened.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab && (ShowSearch || _searchInput is not null)) page.Content.Add(SearchDialog(opened, csrf));
+                else if ((opened.AcquisitionConnectionTypeId is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa) && (ShowSearch || _searchInput is not null)) page.Content.Add(SearchDialog(opened, csrf));
             }
 
             if (FormError is not null && _searchInput is null && _input is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
@@ -199,7 +199,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             };
             if (note is not null) body.Add(new Div(new Span(new Truncated(note), state == "backoff" ? new Span(new ValueText(" "), new LocalTime(item.RetryAt!.Value)) : new Span()).Class("feature-card__note")).Class("feature-card__row"));
             body.Add(new Div(new Span(new Text("acquisition.connection.lastTest")).Class("feature-card__note"), Time(item.CheckedAt)).Class("feature-card__row"));
-            if (Role == AcquisitionConnectionRole.Search && item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab)
+            if (Role == AcquisitionConnectionRole.Search && (item.AcquisitionConnectionTypeId is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa))
             {
                 body.Add(new Div(new Span(new Text("acquisition.connection.today")).Class("feature-card__note"), Usage(item)).Class("feature-card__row"));
             }
@@ -211,7 +211,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             {
                 Post("Test", item.Id, csrf, [], new Button(Glyph("pulse", 14), new Text("acquisition.connection.test")).Compact().Soft().Submit())
             };
-            if (item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab)
+            if (item.AcquisitionConnectionTypeId is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa)
             {
                 start.Add(new A(Glyph("search", 14), new Text("acquisition.connection.search")).Class("button button--compact button--soft").Attribute("href", Address(item.Id) + "&search=true"));
             }
@@ -443,11 +443,16 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     form.Text(item => item.Username, "acquisition.connection.username", "username");
                     form.Password(item => item.Password, "acquisition.connection.password", "new-password");
                 }
+                else if (type == AcquisitionConnectionType.Qbittorrent)
+                {
+                    form.Text(item => item.Username, "acquisition.connection.username", "username");
+                    form.Password(item => item.Password, "acquisition.connection.password", "new-password");
+                }
                 else if (type == AcquisitionConnectionType.AnnasArchive)
                 {
                     form.Password(item => item.ApiKey, "acquisition.connection.memberKey", "new-password");
                 }
-                else if (type != AcquisitionConnectionType.Gutenberg)
+                else if (type is not (AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Nyaa))
                 {
                     form.Password(item => item.ApiKey, "acquisition.connection.apiKey", "new-password");
                 }
@@ -467,9 +472,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 }
 
                 // Indexer categories (empty uses the media type defaults), automatic searches and daily limits.
-                if (type == AcquisitionConnectionType.Newznab)
+                if (type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa)
                 {
-                    form.Text(item => item.Categories, "acquisition.connection.categories");
+                    if (type == AcquisitionConnectionType.Newznab)
+                        form.Text(item => item.Categories, "acquisition.connection.categories");
                     form.Select(item => item.SearchesAutomatically, "acquisition.connection.searches",
                         [new SelectOption("True", texts["acquisition.connection.automatic"]), new SelectOption("False", texts["acquisition.connection.manualOnly"])]);
                     form.Number(item => item.QueryLimit, "acquisition.connection.queryLimit");
@@ -483,10 +489,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 }
 
                 // Only download clients place files and report their own paths.
-                if (type == AcquisitionConnectionType.Sabnzbd)
+                if (type is AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.Qbittorrent)
                 {
-                    form.Text(item => item.DownloadCategory, "acquisition.connection.category");
-                    form.Toggle(item => item.RemovesCompleted, "acquisition.connection.removesCompleted");
+                    if (type == AcquisitionConnectionType.Sabnzbd)
+                    {
+                        form.Text(item => item.DownloadCategory, "acquisition.connection.category");
+                        form.Toggle(item => item.RemovesCompleted, "acquisition.connection.removesCompleted");
+                    }
                     // SAB reports its real Complete path; only the Jularr-visible folder is chosen here.
                     if (existing?.RemotePath is { } detected)
                         form.Content(new P(new Strong(new Text("acquisition.connection.remotePath")), new ValueText(": " + detected)));
@@ -499,6 +508,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     }
                     else form.Hidden(item => item.DownloadStorageMountId);
                     form.Text(item => item.LocalPath, "acquisition.connection.localPath");
+                    if (string.IsNullOrWhiteSpace(input.LocalPath) && input.DownloadStorageMountId is null
+                        || existing is { RemotePath: null })
+                        form.Content(new P(new Text("acquisition.connection.downloadPathWarning")).Attribute("role", "status"));
                     var browse = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(Address(existing?.Id, type, "Folders"),
                         "storageMountId", input.DownloadStorageMountId?.ToString(CultureInfo.InvariantCulture) ?? "");
                     if (texts.Can("storage.read"))

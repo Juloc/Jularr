@@ -4,6 +4,58 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "acquisition.connection.downloadPathWarning": [
+   "Select a folder that Jularr can read. Until a download path is mapped, grabs from this client cannot start.",
+   "Wähle einen Ordner aus, auf den Jularr zugreifen kann. Ohne zugeordneten Downloadpfad können keine Downloads über diesen Client gestartet werden."
+  ],
+  "activity.view.queue": [
+   "Queue",
+   "Warteschlange"
+  ],
+  "activity.view.history": [
+   "History",
+   "Verlauf"
+  ],
+  "activity.views": [
+   "Download views",
+   "Download-Ansichten"
+  ],
+  "activity.files.noJobs": [
+   "No torrent downloads on this page.",
+   "Auf dieser Seite gibt es keine Torrent-Downloads."
+  ],
+  "activity.files": [
+   "Files",
+   "Dateien"
+  ],
+  "activity.files.view": [
+   "View torrent files",
+   "Torrent-Dateien anzeigen"
+  ],
+  "activity.files.empty": [
+   "No torrent files were reported.",
+   "Keine Torrent-Dateien gefunden."
+  ],
+  "activity.files.unavailable": [
+   "The torrent client's file list is currently unavailable.",
+   "Die Dateiliste des Torrent-Clients ist derzeit nicht verfügbar."
+  ],
+  "hint.acquisition.Nyaa.placeholder": [
+   "https://nyaa.media",
+   "https://nyaa.media"
+  ],
+  "hint.acquisition.Nyaa.info": [
+   "Nyaa RSS search endpoint; no API key required.",
+   "Nyaa-RSS-Suchquelle; kein API-Schlüssel erforderlich."
+  ],
+  "hint.acquisition.Qbittorrent.placeholder": [
+   "http://qbittorrent:8080",
+   "http://qbittorrent:8080"
+  ],
+  "hint.acquisition.Qbittorrent.info": [
+   "Address of the qBittorrent Web UI, reachable from Jularr.",
+   "Adresse der qBittorrent-Weboberfläche, die Jularr erreichen kann."
+  ],
   "progress.saveFailed": [
    "Progress could not be saved. Jularr will retry temporary failures.",
    "Der Fortschritt konnte nicht gespeichert werden. Jularr versucht es bei vorübergehenden Fehlern erneut."

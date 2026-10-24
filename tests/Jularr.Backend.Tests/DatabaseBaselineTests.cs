@@ -31,6 +31,8 @@ namespace Jularr.Backend.Tests
 
             await baseline.StartAsync(CancellationToken.None);
             CollectionAssert.AreEquivalent(tables, await TablesAsync(connectionString));
+            Assert.AreEqual(1L, await ScalarAsync(connectionString, "SELECT count(*) FROM \"AcquisitionConnectionTypes\" WHERE \"Id\" = 9 AND \"Key\" = 'Qbittorrent';"));
+            Assert.AreEqual(1L, await ScalarAsync(connectionString, "SELECT count(*) FROM \"AcquisitionConnectionTypes\" WHERE \"Id\" = 10 AND \"Key\" = 'Nyaa';"));
             await using var check = new NpgsqlConnection(connectionString);
             await check.OpenAsync();
             await using var name = new NpgsqlCommand("SELECT \"Name\" FROM \"InstanceSettings\"", check);
@@ -140,7 +142,7 @@ namespace Jularr.Backend.Tests
             var broken = new DatabaseBaseline(cs, migrations:
                 [.. DatabaseBaseline.Migrations, Probe(DatabaseBaseline.CurrentVersion + 1, "CREATE TABLE \"UpgradeProbe\" (\"Id\" bigint);"), Probe(DatabaseBaseline.CurrentVersion + 2, "SELECT 1 / 0;")]);
             var failed = await Assert.ThrowsExactlyAsync<DatabaseUpgradeException>(() => broken.StartAsync(CancellationToken.None));
-            Assert.AreEqual("0003_probe", failed.Migration);
+            Assert.AreEqual($"000{DatabaseBaseline.CurrentVersion + 2}_probe", failed.Migration);
             Assert.AreEqual(0, (await TablesAsync(cs)).Length);
             await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
