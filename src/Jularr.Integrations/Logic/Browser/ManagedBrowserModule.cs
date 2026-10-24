@@ -9,6 +9,7 @@ namespace Jularr.Integrations.Logic.Browser
         private readonly SemaphoreSlim _gate = new(1, 1);
         private readonly string _home = options.ProfilePath;
         private Process? _runner;
+        private DateTime _retryAfterUtc;
 
         public string State { get; private set; } = "disabled";
         public string? LastError { get; private set; }
@@ -48,6 +49,9 @@ namespace Jularr.Integrations.Logic.Browser
             {
                 if (enabled)
                 {
+                    // A failed source/download must not start a new installation on every worker tick.
+                    // Switching the module off clears this backoff so the Owner can retry immediately.
+                    if (DateTime.UtcNow < _retryAfterUtc) return;
                     if (options.InstallLocally && !IsInstalled)
                     {
                         State = "installing";
@@ -89,6 +93,7 @@ namespace Jularr.Integrations.Logic.Browser
                 }
                 else
                 {
+                    _retryAfterUtc = DateTime.MinValue;
                     var marker = Path.Combine(_home, ".enabled");
                     if (File.Exists(marker)) File.Delete(marker);
                     if (browser.Status.IsRunning) await browser.StopAsync();
@@ -110,6 +115,7 @@ namespace Jularr.Integrations.Logic.Browser
                 }
 
                 LastError = null;
+                _retryAfterUtc = DateTime.MinValue;
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -123,6 +129,7 @@ namespace Jularr.Integrations.Logic.Browser
 
                 State = "error";
                 LastError = exception.Message;
+                if (enabled) _retryAfterUtc = DateTime.UtcNow.AddMinutes(5);
             }
             finally
             {
