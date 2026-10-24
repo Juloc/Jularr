@@ -36,6 +36,9 @@ namespace Jularr.Backend.Tests
             var readerHtml = await reader.Content.ReadAsStringAsync();
             StringAssert.Contains(readerHtml, "data-language-choice=" + (char)34 + "de" + (char)34);
             StringAssert.Contains(readerHtml, "data-local-model=" + (char)34 + "translategemma:4b" + (char)34);
+            StringAssert.Contains(readerHtml, "reader__footer");
+            StringAssert.Contains(readerHtml, "data-role=" + (char)34 + "seek" + (char)34);
+            StringAssert.Contains(readerHtml, "data-role=" + (char)34 + "turn-tools" + (char)34);
 
             // An empty Mozilla catalogue still reports English as a bridge; a German book
             // must not offer that as a usable browser route without a de->en model.
@@ -43,7 +46,9 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'de' WHERE \"Id\" = " + document.DocumentId);
             using var germanReader = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
             Assert.AreEqual(HttpStatusCode.OK, germanReader.StatusCode, await germanReader.Content.ReadAsStringAsync());
-            StringAssert.Contains(await germanReader.Content.ReadAsStringAsync(), "data-browser-translation-targets=\"\"");
+            var germanHtml = await germanReader.Content.ReadAsStringAsync();
+            StringAssert.Contains(germanHtml, "data-browser-translation-targets=\"\"");
+            StringAssert.Contains(germanHtml, "reader__footer");
             await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en' WHERE \"Id\" = " + document.DocumentId);
 
             var baseUrl = "/api/v1/reading/documents/" + document.DocumentId + "/sections/0/local-translations/de/translategemma:4b";
