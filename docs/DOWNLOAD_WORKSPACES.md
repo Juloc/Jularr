@@ -36,3 +36,5 @@ The consolidated draft #1572 brings together #1533 (qBittorrent/Nyaa), #1534 (SA
 ## Partial import protection
 
 Automatic SABnzbd source deletion requires every enumerated source file to have been included in the import plan. Finishing a manual import never schedules deletion of unselected source files. Recovery backfills failed-job cleanups only: it cannot infer that a completed import had no leftovers, and never retroactively deletes completed sources.
+
+A manual import may queue source cleanup **only** when it finishes and a complete inventory of the source folder confirms that every file was imported (including imports to other titles and earlier manually handled files). Explicitly finishing a partial import does not authorize deletion of leftovers. A failed source-folder scan disables automatic cleanup but does not block an otherwise valid manual import.

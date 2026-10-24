@@ -432,10 +432,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, finished.Imported);
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
-            // A terminal import schedules durable cleanup for the next monitoring cycle.
+            // Explicitly finishing a partial import must not silently delete unselected payloads.
             await RunAsync<MonitorDownloadsV1>(host);
-            CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
-            Assert.IsFalse(File.Exists(Path.Combine(downloads.Path, "movies", Feature, "third.mkv")), "Explicitly finishing the import permits cleanup of the remaining source folder.");
+            Assert.AreEqual(0, usenet.Commands.Count);
+            Assert.IsTrue(File.Exists(Path.Combine(downloads.Path, "movies", Feature, "third.mkv")),
+                "The unselected third video stays available for a later manual decision.");
         }
 
         // A language a person chose stays through the scan that analyses the file; the streams only decide for files nobody chose for.
@@ -1275,7 +1276,10 @@ namespace Jularr.Backend.Tests
             usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/{{{Feature}}}"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
 
-            Assert.IsFalse(File.Exists(Path.Combine(completed, Feature + ".mkv")), "After successful import, source cleanup is enabled by default.");
+            Assert.IsTrue(File.Exists(Path.Combine(completed, Feature + ".mkv")),
+                "A download with unselected sample files must retain its source directory."); 
+            Assert.IsTrue(File.Exists(Path.Combine(completed, "sample.mkv")),
+                "Non-imported videos are retained, not silently deleted.");
             Assert.AreEqual("existing", File.ReadAllText(Path.Combine(library, "Example Movie (2020) [WEBDL-1080p].mkv")));
             Assert.IsFalse(File.Exists(Path.Combine(library, "Example Movie (2020) [DVD].mkv")));
             Assert.AreEqual("earlier", File.ReadAllText(Path.Combine(storage.Path, "1", "Movies", ".jularr-recycle", "Example Movie (2020)", "Example Movie (2020) [DVD].mkv")));
