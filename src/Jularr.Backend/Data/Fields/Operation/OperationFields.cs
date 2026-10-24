@@ -22,6 +22,7 @@ namespace Jularr.Backend.Data.Fields.Operation
         public static readonly BoolField BlocksRelease = new();
         public static readonly BoolField IsPaused = new();
         public static readonly BoolField CanPause = new();
+        public static readonly BoolField TorrentOnly = new();
         public static readonly BoolField CanRetryImport = new();
         public static readonly BoolField IsWaiting = new();
         public static readonly BoolField CanImportManually = new();
