@@ -106,24 +106,23 @@ class TvV1ParityNavigationMatrixTest {
         }
     }
 
-    @Test fun oldFocusMemoryStillUsesIsolatedScreenAndItemKeys() {
+    @Test fun v1FocusMemorySeparatesScreenAndWorkKeys() {
         val focus = TvFocusMemory()
-        val home = TvNavigation.screenKey(TvRoute.Home)
-        val search = TvNavigation.screenKey(TvRoute.Search)
-        val first = TvNavigation.screenKey(TvRoute.Anime("741"))
-        val second = TvNavigation.screenKey(TvRoute.Anime("742"))
+        val home = "home"
+        val search = "search"
+        val firstWork = "details:741"
+        val secondWork = "details:742"
         focus.remember(home, "continue-9002")
         focus.remember(search, "work-741")
-        focus.remember(first, "episode-8002")
-        focus.remember(second, "episode-8902")
+        focus.remember(firstWork, "episode-8002")
+        focus.remember(secondWork, "episode-8902")
         assertEquals("continue-9002", focus.recall(home))
         assertEquals("work-741", focus.recall(search))
-        assertEquals("episode-8002", focus.recall(first))
-        assertEquals("episode-8902", focus.recall(second))
+        assertEquals("episode-8002", focus.recall(firstWork))
+        assertEquals("episode-8902", focus.recall(secondWork))
         focus.forget(search)
         assertNull(focus.recall(search))
         assertEquals("continue-9002", focus.recall(home))
-        // This only verifies the legacy focus store. The active V1 screen wiring is a separate
-        // physical D-pad acceptance test, not proven by remembering these values.
+        // Unit-level key isolation is not proof of Compose D-pad focus restoration on a device.
     }
 }
