@@ -3,11 +3,13 @@ using System.IO;
 using System.Text.Encodings.Web;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Library.V1;
+using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Admin.Library.V1;
+using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Backend.Service.Admin.Storage.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
@@ -27,7 +29,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
 
     public sealed class LibraryModel(ReadLibraryFilesV1 readFiles, AssignLibraryFileV1 assign, UnassignLibraryFileV1 unassign, ReadLibraryRenamesV1 readRenames,
         ApplyLibraryRenamesV1 applyRenames, ReadReplacementSettingsV1 readReplacement, UpdateReplacementSettingsV1 updateReplacement, KeepOnlyLibraryFileV1 keepOnly, ProtectLibraryFileV1 protect, ReadStorageMountsV1 readMounts, ReadLibraryOverviewV1 readOverview,
-        QueueLibraryScanV1 queueScan, CreateLibraryRootV1 createLibraryRoot, ReadStorageDirectoriesV1 readDirectories, FrontendAssets assets,
+        QueueLibraryScanV1 queueScan, CreateLibraryRootV1 createLibraryRoot, ReadStorageDirectoriesV1 readDirectories, SearchMetadataV1 search, IdentifyLibraryFileV1 identify, FrontendAssets assets,
         IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private IReadOnlyList<LibraryOverviewV1>? _overview;
@@ -39,6 +41,8 @@ namespace Jularr.Frontend.Pages.Admin.Library
         private PageResult<LibraryFileDetailsV1>? _files;
         private LibraryRenamePlanV1? _renames;
         private long? _failedFileId;
+        private SearchMetadataDataV1? _findQuery;
+        private BaseDataList<MetadataSearchResultV1>? _found;
 
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
@@ -46,6 +50,10 @@ namespace Jularr.Frontend.Pages.Admin.Library
         // The files of one library.
         [BindProperty(SupportsGet = true, Name = "root")]
         public long? RootId { get; set; }
+
+        // The unmatched file whose work is being searched.
+        [BindProperty(SupportsGet = true, Name = "find")]
+        public long? FindFileId { get; set; }
 
         // Each view has its address: the overview at /Admin/Library, the others below it.
         private LibraryTab Tab => Request.Path.Value?.TrimEnd('/').Split('/')[^1] is { } last && Enum.TryParse<LibraryTab>(last, true, out var tab) && tab != LibraryTab.Overview
@@ -99,10 +107,11 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     .Content("table.size", item => new ValueText(ByteSize.Format(item.SizeBytes)))
                     .Content("table.status", item => new Text(item.MissingSince is null ? "library.present" : "library.missing"));
                 table = Tab == LibraryTab.Unmatched
-                    ? table.Content("library.assign", item => Assignment(item, csrf))
+                    ? table.Content("library.assign", item => new Div(Assignment(item, csrf), new A(new Text("library.findWork")).Attribute("href", Address() + "&find=" + item.Id.ToString(CultureInfo.InvariantCulture))))
                     : table.Content("table.work", item => item.WorkId is { } workId
                         ? new Div(new A(new ValueText(item.WorkTitle ?? "")).Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)), Release(item, csrf), Subtitles(item))
                         : new Text("library.unmatched"));
+                if (Tab == LibraryTab.Unmatched && FindFileId is { } findId && files.Items.FirstOrDefault(item => item.Id == findId) is { } findFile) page.Content.Add(FindWork(findFile, csrf));
                 page.Content.Add((files.Items.Count > 0 ? (IUiComponent)table : new P(new Text(Tab == LibraryTab.Unmatched ? "library.emptyUnmatched" : "library.empty"))).Paged(files.Items.Count, files.PageSize));
             }
 
@@ -192,6 +201,41 @@ namespace Jularr.Frontend.Pages.Admin.Library
             }, Address(handler: "Assign") + "&storedFileId=" + file.Id.ToString(CultureInfo.InvariantCulture), csrf, input, _failedFileId == file.Id ? FormError : null);
         }
 
+        // A file is identified as a catalog entry: it is searched like on the work's page and the chosen entry becomes the work.
+        private UiSection FindWork(LibraryFileDetailsV1 file, string? csrf)
+        {
+            var id = file.Id.ToString(CultureInfo.InvariantCulture);
+            var content = new List<IUiComponent>
+            {
+                new Form<SearchMetadataDataV1>(form =>
+                {
+                    form.Hidden(item => item.MediaTypeId);
+                    form.Hidden(item => item.MediaSubtypeId);
+                    form.Text(item => item.Query, "media.title");
+                    form.Submit("admin.works.searchMetadata");
+                }, Address(handler: "FindWork") + "&storedFileId=" + id + "&find=" + id, csrf, _findQuery ?? new SearchMetadataDataV1(file.MediaTypeId, file.SuggestedTitle, null, file.MediaSubtypeId))
+            };
+            if (_found is { Count: > 0 } found)
+            {
+                content.Add(new Table<MetadataSearchResultV1>(found)
+                    .Text(item => item.Title, "media.title")
+                    .Content("media.year", item => new ValueText(item.ReleaseYear?.ToString(CultureInfo.InvariantCulture) ?? ""))
+                    .Content("media.author", item => new ValueText(item.Author ?? ""))
+                    .Content("common.actions", item => new Form<IdentifyLibraryFileDataV1>(form =>
+                    {
+                        form.Hidden(data => data.Namespace);
+                        form.Hidden(data => data.ExternalId);
+                        form.Hidden(data => data.WorkUnitTypeId);
+                        form.Hidden(data => data.UnitNumber);
+                        form.Hidden(data => data.ParentUnitNumber);
+                        form.Submit("library.useMatch", item.Title, valueHidden: true);
+                    }, Address(handler: "AssignCatalog") + "&storedFileId=" + id, csrf, new IdentifyLibraryFileDataV1(item.Namespace, item.ExternalId, file.SuggestedWorkUnitTypeId,
+                        file.SuggestedUnitNumber, file.SuggestedParentUnitNumber))));
+            }
+
+            return new UiSection("library.findWork", [.. content]);
+        }
+
         // Keeping one version is the administrator's confirmation, also against a better one.
         // Films and episodes have their subtitles searched by hand while the Subtitles module is on.
         private IUiComponent Subtitles(LibraryFileDetailsV1 item) => item.MediaTypeId is MediaType.Movie or MediaType.Series && texts.Can(null, "Subtitles")
@@ -239,6 +283,26 @@ namespace Jularr.Frontend.Pages.Admin.Library
             _failedFileId = storedFileId;
             var data = new AssignLibraryFileDataV1(workId, string.IsNullOrWhiteSpace(title) ? null : title, workUnitTypeId, unitNumber, parentUnitNumber);
             await assign.ExecuteAsync<AssignLibraryFileResultV1>(new StoredFileParametersV1(storedFileId), data, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
+
+        public async Task<IActionResult> OnPostFindWorkAsync([BindRequired] long storedFileId, [BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? query)
+        {
+            FindFileId = storedFileId;
+            _findQuery = new SearchMetadataDataV1(mediaTypeId, query ?? "", null, mediaSubtypeId);
+            await LoadDataAsync();
+            _found = await search.ExecuteAsync<BaseDataList<MetadataSearchResultV1>>(new SearchMetadataParametersV1(), _findQuery, HttpContext.RequestAborted);
+            if (_found.Count == 0) Hint("discover.noResults");
+            PreparePage();
+            return Page();
+        }
+
+        public async Task<IActionResult> OnPostAssignCatalogAsync([BindRequired] long storedFileId, [BindRequired] string @namespace, [BindRequired] string externalId, WorkUnitType? workUnitTypeId, decimal? unitNumber,
+            decimal? parentUnitNumber)
+        {
+            _failedFileId = storedFileId;
+            var data = new IdentifyLibraryFileDataV1(@namespace, externalId, workUnitTypeId, unitNumber, parentUnitNumber);
+            await identify.ExecuteAsync<AssignLibraryFileResultV1>(new StoredFileParametersV1(storedFileId), data, HttpContext.RequestAborted);
             return LocalRedirect(Address());
         }
 
