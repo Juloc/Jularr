@@ -10424,6 +10424,10 @@
    "Creates the backups that were asked for.",
    "Erstellt die angeforderten Sicherungen."
   ],
+  "jobs.about.mediaImportQueue": [
+   "Imports selected media-list titles in the background and resumes unfinished work after a restart.",
+   "Importiert ausgewählte Titel aus Medienlisten im Hintergrund und setzt unterbrochene Aufträge nach einem Neustart fort."
+  ],
   "jobs.about.downloads": [
    "Follows the progress of external downloads and starts their import when they finish.",
    "Verfolgt den Fortschritt externer Downloads und startet den Import, sobald sie fertig sind."
