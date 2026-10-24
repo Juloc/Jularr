@@ -65,32 +65,35 @@ alle frischen Baselines in einer Transaktion; eine bestehende wird nie veränder
 
 ### Browser für Quellen mit Browserprüfung
 
-Anna's Archive stellt seine Seiten hinter eine Prüfung, die nur ein Browser besteht. Jularr liest
-solche Seiten mit einem echten Chrome oder Chromium, den es **nicht** selbst mitbringt: das Image
-bleibt schlank, der Browser kommt später dazu.
+Der **Browser** ist ein optionales Modul unter **Arr+ / Downloads & Quellen** und
+standardmäßig ausgeschaltet. Beim Einschalten installiert der Jularr-Worker
+Chrome for Testing (derzeit Version `156.0.8078.47`, per SHA-256 für x64/ARM64
+geprüft) ohne Root-Rechte in `DataPath/browser/runtime`. Er startet Chrome
+bei Bedarf innerhalb desselben Jularr-Containers. Es gibt keinen Sidecar-Container,
+keinen Docker-Socket-Zugriff und keinen zusätzlichen veröffentlichten DevTools-Port.
 
-Im Container, einmal je Container (der Browser landet in der Schicht, sein Profil im Volume):
+Im Modul-Schalter bedeutet **Aus**: Browser-Verbindungen beenden, den Prozess
+stoppen und alle von Jularr installierten Browserdateien, Profil/Cookies, Cache,
+Downloads und temporären Installationsdateien löschen. Eine fehlgeschlagene
+Installation darf keine aktivierte Browserverbindung hinterlassen. Nach einem
+Container-Update werden die Browserdateien aus dem Datenvolume weiterverwendet.
+Der Status und Fehler stehen unter `/Admin/Browser`.
 
-```bash
-docker compose exec -u root jularr jularr-browser install   # Browser und Bibliotheken
-docker compose exec -d jularr jularr-browser run            # startet ihn auf Port 9222
-```
+Die Browser-Bibliotheken, Xvfb und Installationswerkzeuge befinden sich im
+Docker-Image; nur der Browser selbst ist optional. Wer einen externen Browser
+über `Browser:RemoteAddress` oder einen eigenen `Browser:Path` konfiguriert,
+kann ihn ebenfalls mit dem Modul aktivieren/deaktivieren. Jularr deinstalliert
+keinen extern verwalteten Browser.
 
-`Browser:RemoteAddress` (z. B. `http://127.0.0.1:9222`) lässt Jularr einen Browser benutzen, der
-schon läuft – auch einen auf einem anderen Rechner. `Browser:Path` startet einen eigenen Browser
-mit dem Profil unter `DataPath/browser`; `Browser:Port` gibt dessen Port an, damit er von außen
-erreichbar ist. Beides zugleich geht nicht: sie teilen sich das Profil.
+Der native Installer bleibt für Diagnose verfügbar:
+`docker compose exec jularr jularr-browser install`, `uninstall`, `run`.
+Im regulären Betrieb ist kein manueller Befehl nötig.
 
-Besteht der Browser die Prüfung der Quelle nicht (ein Captcha), bleibt die Quelle beim Menschen:
-der Link wird von Hand eingetragen. Auf einem Server ohne Grafik erkennt die Prüfung den Browser
-meist, dort hilft ein Browser auf einem Desktop-Rechner, den Jularr über `Browser:RemoteAddress`
-benutzt.
-
-Der Browser prüft die angeforderte HTTPS-Adresse vor der Navigation auf öffentliche IP-Adressen.
-Das ist **keine vollständige Netzwerkisolierung**: Weiterleitungen und nachgeladene Ressourcen
-können weitere Ziele erreichen. Für den Betrieb mit nicht vertrauenswürdigen Seiten ist
-zusätzlich eine ausgehende Netzwerksperre für interne Docker-/VM-Adressen erforderlich.
-Chrome-Startparameter, virtueller Bildschirm und optionale Installation bleiben unverändert.
+**Sicherheitsgrenze:** Die Prüfung einer anfänglichen Browseradresse schützt
+noch nicht gegen alle weitergeleiteten oder nachgeladenen privaten Ziele.
+Die Browser-Egress-Isolation und ein echter Debian-Docker-End-to-End-Test
+sind deshalb weiterhin P0 (#1483); die optionale Browserfunktion sollte
+bis zu diesem Nachweis nicht für nicht vertrauenswürdige Ziele freigegeben werden.
 
 ## Backend im gemeinsamen Host
 

@@ -2940,6 +2940,10 @@
    "Requests",
    "Anfragen"
   ],
+  "instance.module.Browser": [
+   "Source browser",
+   "Quellenbrowser"
+  ],
   "instance.module.Acquisition": [
    "Arr+",
    "Arr+"
@@ -8840,6 +8844,10 @@
    "Accounts & devices",
    "Konten & Geräte"
   ],
+  "setup.modules.acquisition": [
+   "Downloads & sources",
+   "Downloads & Quellen"
+  ],
   "setup.modules.operations": [
    "Administration",
    "Verwaltung"
@@ -9075,6 +9083,34 @@
   "admin.browser.title": [
    "Browser",
    "Browser"
+  ],
+  "admin.browser.moduleState": [
+   "Browser module",
+   "Browser-Modul"
+  ],
+  "admin.browser.phase.disabled": [
+   "Disabled",
+   "Deaktiviert"
+  ],
+  "admin.browser.phase.installing": [
+   "Installing browser",
+   "Browser wird installiert"
+  ],
+  "admin.browser.phase.starting": [
+   "Starting browser",
+   "Browser wird gestartet"
+  ],
+  "admin.browser.phase.ready": [
+   "Ready",
+   "Bereit"
+  ],
+  "admin.browser.phase.removing": [
+   "Removing browser files",
+   "Browserdateien werden entfernt"
+  ],
+  "admin.browser.phase.error": [
+   "Browser error",
+   "Browserfehler"
   ],
   "admin.browser.state": [
    "What the browser did",
@@ -12418,6 +12454,10 @@
   "setup.module.help.Requests": [
    "People can ask for missing media; without Arr+ a request stays a request.",
    "Nutzer können fehlende Medien anfragen; ohne Arr+ bleibt es bei der Anfrage."
+  ],
+  "setup.module.help.Browser": [
+   "Automatically install or remove the browser used when book sources require one.",
+   "Installiert oder entfernt den Browser automatisch, wenn Buchquellen ihn benötigen."
   ],
   "setup.module.help.Acquisition": [
    "Search, monitor, download and import titles; an alternative to Sonarr, Radarr, Readarr and Lidarr.",

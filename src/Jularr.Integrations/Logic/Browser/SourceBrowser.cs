@@ -19,6 +19,8 @@ namespace Jularr.Integrations.Logic.Browser
         public int PageTimeoutSeconds { get; set; } = 30;
         public int DownloadTimeoutSeconds { get; set; } = 600;
         public bool NoSandbox { get; set; }
+        internal bool IsManaged { get; set; }
+        internal bool InstallLocally { get; set; }
 
         // Local HTTP test fixtures need access that production source navigation must not have.
         internal bool AllowPrivateAddressesForTests { get; set; }
@@ -62,7 +64,8 @@ namespace Jularr.Integrations.Logic.Browser
             _downloads = Path.Combine(options.ProfilePath, "downloads");
         }
 
-        public bool IsAvailable => _path is not null || !string.IsNullOrWhiteSpace(_options.RemoteAddress);
+        public bool IsAvailable => (!_options.IsManaged || File.Exists(Path.Combine(_options.ProfilePath, ".enabled")))
+            && (_path is not null || !string.IsNullOrWhiteSpace(_options.RemoteAddress));
 
         public SourceBrowserStatus Status => new(_path, _options.RemoteAddress, _profile, _client is not null, _version, _lastUrl, _lastOutcome, _lastError, _lastAttemptAt, Events.Count);
 
@@ -79,6 +82,7 @@ namespace Jularr.Integrations.Logic.Browser
 
         public async Task<SourceBrowserStatus> StartAsync(CancellationToken ct)
         {
+            if (!IsAvailable) throw new SourceBrowserException("The Browser module is disabled or the browser is not configured.");
             await _gate.WaitAsync(ct);
             try
             {
