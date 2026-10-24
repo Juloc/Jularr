@@ -61,8 +61,13 @@ namespace Jularr.Integrations.Logic.Browser
             _options = options;
             _packages = packages;
             _path = ResolvePath(options.Path);
-            _profile = Path.Combine(options.ProfilePath, "profile");
-            _downloads = Path.Combine(options.ProfilePath, "downloads");
+            // Managed Chrome owns its own profile and download cache under managed/.
+            // Removing the module must never erase the pre-existing/manual browser profile.
+            var profileRoot = packages is not null && options.Path is null && string.IsNullOrWhiteSpace(options.RemoteAddress)
+                ? Path.Combine(options.ProfilePath, "managed")
+                : options.ProfilePath;
+            _profile = Path.Combine(profileRoot, "profile");
+            _downloads = Path.Combine(profileRoot, "downloads");
         }
 
         private string? BrowserPath => _path ?? (_options.Path is null && string.IsNullOrWhiteSpace(_options.RemoteAddress)

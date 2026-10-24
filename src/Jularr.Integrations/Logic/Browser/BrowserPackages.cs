@@ -109,15 +109,8 @@ namespace Jularr.Integrations.Logic.Browser
                 Enabled = false;
                 var installedByJularr = Directory.Exists(_root);
                 if (installedByJularr) Directory.Delete(_root, recursive: true);
-                // Do not erase an older manually configured browser's profile or unrelated files.
-                if (installedByJularr && string.IsNullOrWhiteSpace(options.Path) && string.IsNullOrWhiteSpace(options.RemoteAddress))
-                {
-                    var profile = Path.Combine(options.ProfilePath, "profile");
-                    var downloads = Path.Combine(options.ProfilePath, "downloads");
-                    if (Directory.Exists(profile)) Directory.Delete(profile, recursive: true);
-                    if (Directory.Exists(downloads)) Directory.Delete(downloads, recursive: true);
-                }
-
+                // All managed cache, cookies, downloads, and profile are inside _root.
+                // Older/manual profiles outside _root are intentionally left untouched.
                 Volatile.Write(ref _error, null);
                 Volatile.Write(ref _state, "disabled");
             }
