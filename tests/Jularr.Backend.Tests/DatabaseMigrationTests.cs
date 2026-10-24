@@ -57,6 +57,22 @@ namespace Jularr.Backend.Tests
             """);
 
         [TestMethod]
+        public async Task EmbeddedBrowserMigration_CreatesAnOffByDefaultModuleWithAcquisitionDependency()
+        {
+            var cs = TestPostgres.ResolveConnectionString(nameof(EmbeddedBrowserMigration_CreatesAnOffByDefaultModuleWithAcquisitionDependency));
+            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+
+            Assert.AreEqual(false, await ScalarAsync(cs, "SELECT \"IsEnabled\" FROM \"InstanceModules\" WHERE \"Key\" = 'Browser';"));
+            Assert.AreEqual(1L, await ScalarAsync(cs,
+                "SELECT COUNT(*) FROM \"InstanceModuleDependencies\" WHERE \"ModuleKey\" = 'Browser' AND \"RequiredKey\" = 'Acquisition';"));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+
+            // Starting with the same schema again must leave the disabled preference and dependency untouched.
+            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT COUNT(*) FROM \"InstanceModules\" WHERE \"Key\" = 'Browser';"));
+        }
+
+        [TestMethod]
         public async Task Upgrade_AppliesNumberedMigrations_AfterABackup_KeepsData_AndIsConcurrencySafe()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
