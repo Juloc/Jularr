@@ -45,6 +45,8 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(before.Single(item => item.Key == "openlibrary").IsConfigured);
             Assert.AreEqual(SourceAvailability.ReferenceOnly, before.Single(item => item.Key == "bookwalker").SourceAvailabilityId);
             Assert.AreEqual("https://api.nzbgeek.info", before.Single(item => item.Key == "nzbgeek").DefaultBaseUrl);
+            Assert.AreEqual("https://annas-archive.gl", before.Single(item => item.Key == "annasarchive").DefaultBaseUrl);
+            Assert.AreEqual(SourceAvailability.Planned, before.Single(item => item.Key == "nyaa").SourceAvailabilityId);
 
             // Keys and accounts are asked for, never invented.
             using var setUp = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/acquisition/sources/setup");
@@ -156,6 +158,18 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, sources.SignedHits);
             Assert.IsFalse(sources.AuthorizationSeenBy.Contains("cdn.example.test"));
             Assert.IsTrue(sources.AuthorizationSeenBy.Contains("opds.example.test"));
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_ExistingMirrorIsAlreadyConfigured()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas-archive.pk", null, true, 50, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var catalog = await ReadCatalogAsync(host);
+            Assert.IsTrue(catalog.Single(item => item.Key == "annasarchive").IsConfigured);
         }
 
         [TestMethod]
