@@ -73,4 +73,5 @@ test('standalone safe areas cover login, tablet shell, mobile drawer, modal and 
     }
     assert.match(shell, /max\(13px, env\(safe-area-inset-right\)\)/);
     assert.match(reader, /max\(18px, env\(safe-area-inset-left\)\)/);
+    assert.match(login, /\.login-card \.ui-field__control > input \{ font-size: 16px/);
 });
