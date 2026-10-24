@@ -47,7 +47,7 @@ function initializePreview(): void {
             let monitored = 0;
             let searched = 0;
             for (const row of rows) {
-                if (!row.checked) continue;
+                if (!row.checked || row.dataset.canMonitor !== "true") continue;
                 const match = /^Choices\[(\d+)\]\.Include$/.exec(row.name);
                 if (!match) continue;
                 const own = form?.querySelector<HTMLSelectElement>('select[name="Choices[' + match[1] + '].Action"]');
