@@ -37,7 +37,7 @@ install_browser() {
 remove_browser() {
   [ ! -L "$home" ] || { echo 'Unsafe browser home' >&2; exit 2; }
   [ ! -L "$runtime" ] || { echo 'Unsafe browser runtime' >&2; exit 2; }
-  rm -rf "$runtime" "$home/profile" "$home/downloads"
+  rm -rf "$runtime" "$home/profile" "$home/downloads" "$home/cache" "$home/config" "$home/tmp"
   rm -f "$home/.enabled"
   for dir in "$home"/.install.*; do [ ! -e "$dir" ] || rm -rf "$dir"; done
   rmdir "$home" 2>/dev/null || true
@@ -49,11 +49,12 @@ run_browser() {
   if ! xdpyinfo -display "$display" >/dev/null 2>&1; then
     Xvfb "$display" -screen 0 1280x900x24 -nolisten tcp &
     xvfb=$!
+    sleep 1
   else
     xvfb=
   fi
-  mkdir -p "$home/profile"
-  DISPLAY="$display" "$chrome" --remote-debugging-port="$port" --remote-debugging-address=127.0.0.1 \
+  mkdir -p "$home/profile" "$home/cache" "$home/config" "$home/tmp"
+  XDG_CACHE_HOME="$home/cache" XDG_CONFIG_HOME="$home/config" TMPDIR="$home/tmp" DISPLAY="$display" "$chrome" --remote-debugging-port="$port" --remote-debugging-address=127.0.0.1 \
     --user-data-dir="$home/profile" --no-first-run --no-default-browser-check --no-sandbox \
     --enable-unsafe-swiftshader --use-angle=swiftshader --window-size=1280,900 about:blank &
   browser=$!
