@@ -131,6 +131,34 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, aniList.Searches);
         }
 
+        [TestMethod]
+        public async Task Matching_ConflictingTvdbRangesDoNotPartiallyWrite()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, services: services =>
+            {
+                services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeAniList());
+                services.AddHttpClient<AniBridgeMappings>().ConfigurePrimaryHttpMessageHandler(() => new FakeAniBridge());
+            });
+
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (50, 2, 1, 'Other Anime');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (50, 'tvdb', '100');
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (500, 50, 1, 1), (600, 50, 1, 2);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number")
+                    SELECT 50, 500, 2, n FROM generate_series(1, 12) AS n;
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number")
+                    SELECT 50, 600, 2, n FROM generate_series(1, 12) AS n;
+                INSERT INTO "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value", "EpisodeOffset")
+                    VALUES (500, 'anilist', '66', 0);
+                """);
+
+            await RunAsync(host);
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT "IdentityMatchStatusTypeId"::bigint FROM "WorkIdentityMatches" WHERE "WorkId" = 50"""));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WorkUnitExternalIdentities" WHERE "Value" = '67'"""));
+            Assert.AreEqual(500L, await host.ScalarAsync("""SELECT "WorkUnitId" FROM "WorkUnitExternalIdentities" WHERE "Value" = '66'"""));
+        }
+
         private static async Task RunAsync(Host host)
         {
             await using var scope = host.Services.CreateAsyncScope();
@@ -146,7 +174,9 @@ namespace Jularr.Backend.Tests
                         {
                             "$meta":{"schema_version":"3.0.3"},
                             "anilist:7":{"tvdb_show:88:s1":{"1-12":"1-12"}},
-                            "tvdb_show:99:s1":{"anilist:41":{"1-12":"1-12"}}
+                            "tvdb_show:99:s1":{"anilist:41":{"1-12":"1-12"}},
+                            "tvdb_show:100:s1":{"anilist:67":{"1-12":"1-12"}},
+                            "tvdb_show:100:s2":{"anilist:66":{"1-12":"1-12"}}
                         }
                         """, Encoding.UTF8, "application/json")
                 });

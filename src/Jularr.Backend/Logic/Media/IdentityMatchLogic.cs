@@ -29,59 +29,79 @@ namespace Jularr.Backend.Logic.Media
                 }
             }
 
-            // Season entries land on the Work's regular seasons by number.
+            // Refuse a whole proposed season mapping if an ID is already held by a different unit or offset.
             sql = new SqlStatement();
             sql.Statement =
                 """
-                INSERT INTO
-                    "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value", "EpisodeOffset", "IsManual")
-                SELECT
-                    season."Id",
-                    @Namespace,
-                    item."Value",
-                    item."Offset",
-                    @IsManual
-                FROM
-                    jsonb_to_recordset(@Seasons::jsonb) AS item ("Season" integer, "Value" text, "Offset" integer)
-                    JOIN "WorkUnits" AS season ON season."WorkId" = @WorkId
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM jsonb_to_recordset(@Seasons::jsonb) AS item ("Season" integer, "Value" text, "Offset" integer)
+                    LEFT JOIN "WorkUnits" AS season ON season."WorkId" = @WorkId
                         AND season."WorkUnitTypeId" = 1
                         AND season."ParentWorkUnitId" IS NULL
                         AND season."Number" = item."Season"
-                ON CONFLICT ("Namespace", "Value") DO NOTHING;
-                """;
-            sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
-
-            // Season entries another Work holds leave this one waiting for a person.
-            sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            jsonb_to_recordset(@Seasons::jsonb) AS item ("Season" integer, "Value" text, "Offset" integer)
-                        WHERE
-                            NOT EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "WorkUnitExternalIdentities" AS mapped
-                                    JOIN "WorkUnits" AS season ON season."Id" = mapped."WorkUnitId"
-                                WHERE
-                                    mapped."Namespace" = @Namespace
-                                    AND mapped."Value" = item."Value"
-                                    AND mapped."EpisodeOffset" = item."Offset"
-                                    AND season."WorkId" = @WorkId
-                                    AND season."Number" = item."Season"
-                            )
-                    );
+                    LEFT JOIN "WorkUnitExternalIdentities" AS mapped ON mapped."Namespace" = @Namespace
+                        AND mapped."Value" = item."Value"
+                    WHERE season."Id" IS NULL
+                        OR (mapped."Id" IS NOT NULL
+                            AND (mapped."WorkUnitId" <> season."Id" OR mapped."EpisodeOffset" <> item."Offset"))
+                );
                 """;
             sql.Parameters.Add(data);
             if ((bool)(await ctx.ReadSql.ExecuteScalarAsync(sql, ct))!)
             {
                 status = IdentityMatchStatusType.Review;
+            }
+
+            if (status == IdentityMatchStatusType.Matched)
+            {
+                // No partial imports: only a complete, unopposed proposal is written.
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    INSERT INTO
+                        "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value", "EpisodeOffset", "IsManual")
+                    SELECT
+                        season."Id",
+                        @Namespace,
+                        item."Value",
+                        item."Offset",
+                        @IsManual
+                    FROM
+                        jsonb_to_recordset(@Seasons::jsonb) AS item ("Season" integer, "Value" text, "Offset" integer)
+                        JOIN "WorkUnits" AS season ON season."WorkId" = @WorkId
+                            AND season."WorkUnitTypeId" = 1
+                            AND season."ParentWorkUnitId" IS NULL
+                            AND season."Number" = item."Season"
+                    ON CONFLICT ("Namespace", "Value") DO NOTHING;
+                    """;
+                sql.Parameters.Add(data);
+                await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+                // A concurrent conflicting entry also leaves the match awaiting review.
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM jsonb_to_recordset(@Seasons::jsonb) AS item ("Season" integer, "Value" text, "Offset" integer)
+                        WHERE NOT EXISTS (
+                            SELECT 1
+                            FROM "WorkUnitExternalIdentities" AS mapped
+                                JOIN "WorkUnits" AS season ON season."Id" = mapped."WorkUnitId"
+                            WHERE mapped."Namespace" = @Namespace
+                                AND mapped."Value" = item."Value"
+                                AND mapped."EpisodeOffset" = item."Offset"
+                                AND season."WorkId" = @WorkId
+                                AND season."Number" = item."Season"
+                        )
+                    );
+                    """;
+                sql.Parameters.Add(data);
+                if ((bool)(await ctx.ReadSql.ExecuteScalarAsync(sql, ct))!)
+                {
+                    status = IdentityMatchStatusType.Review;
+                }
             }
 
             // The latest pass replaces the previous one.
