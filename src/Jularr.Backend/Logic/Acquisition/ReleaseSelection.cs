@@ -13,17 +13,15 @@ namespace Jularr.Backend.Logic.Acquisition
 
             var evaluations = candidates.Select(candidate => Evaluate(profile, candidate)).ToArray();
 
-            // The source with the higher priority comes first, as in Readarr: its release is taken and the
-            // quality decides only among the releases of that source. A complete file comes before a file
-            // that is only a part of a work; among the complete ones the languages a request asks for come
-            // first, then the fallback the profile names.
-            var asked = evaluations.Where(evaluation => UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages)).ToArray();
-            var fallback = asked.Length > 0 ? [] : evaluations.Where(evaluation => UpgradePolicy.IsFallback(profile, evaluation.Candidate.Languages)).ToArray();
-
+            // A complete book outranks a partial one. For books the requested language then wins ahead of
+            // source priority; other media retain source priority. Profile rules still decide eligibility.
             var ranked = evaluations
-                .OrderBy(evaluation => evaluation.Candidate.IndexerPriority)
+                .OrderBy(evaluation => profile.IsBook && evaluation.Candidate.IsPart ? 1 : 0)
+                .ThenBy(evaluation => profile.IsBook ? LanguageTier(profile, evaluation.Candidate.Languages) : 0)
+                .ThenBy(evaluation => profile.IsBook && profile.LanguageFallback == LanguageFallbackType.Any
+                    && LanguageTier(profile, evaluation.Candidate.Languages) >= 2 ? evaluation.QualityRank : 0)
+                .ThenBy(evaluation => evaluation.Candidate.IndexerPriority)
                 .ThenBy(evaluation => evaluation.Candidate.IsPart ? 1 : 0)
-                .ThenBy(evaluation => asked.Contains(evaluation) ? 0 : fallback.Contains(evaluation) ? 1 : 2)
                 .ThenBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible => 0, SelectionDecision.ManualReview => 1, _ => 2 })
                 .ThenBy(evaluation => evaluation.QualityRank)
                 .ThenByDescending(evaluation => evaluation.Score?.FormatScore ?? 0)
@@ -38,8 +36,21 @@ namespace Jularr.Backend.Logic.Acquisition
                 .ToArray();
 
             var winner = ranked.FirstOrDefault(evaluation => evaluation.IsSelectable);
-            var runnerUp = winner is null ? null : ranked.Skip(1).FirstOrDefault(evaluation => evaluation.IsSelectable);
+            var runnerUp = winner is null ? null : ranked.SkipWhile(evaluation => !ReferenceEquals(evaluation, winner)).Skip(1).FirstOrDefault(evaluation => evaluation.IsSelectable);
             return new SelectionResult(ranked, winner, winner is null ? null : WinnerReason(profile, winner, runnerUp), OutcomeOf(ranked));
+        }
+
+        // Prefer requested, original, other known languages and finally unknown; source priority breaks ties.
+        private static int LanguageTier(QualityProfile profile, IReadOnlyList<string> languages)
+        {
+            if (profile.LanguageOrder.Length == 0 || UpgradePolicy.IsRequested(profile, languages)) return 0;
+            if (profile.LanguageFallback == LanguageFallbackType.Any)
+            {
+                if (UpgradePolicy.IsOriginal(profile, languages)) return 1;
+                return languages.Count > 0 ? 2 : 3;
+            }
+
+            return UpgradePolicy.IsFallback(profile, languages) ? 1 : 4;
         }
 
         // Closer to the preferred size wins a tie, as in Sonarr.
@@ -84,6 +95,15 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new CandidateEvaluation(candidate, SelectionDecision.Rejected, score, reliability, reasons);
             }
 
+            // An unrequested language needs a deliberate manual choice; fallback is not an unrestricted download.
+            if (profile.IsBook && (profile.LanguageOrder.Length > 0 || profile.LanguageFallback == LanguageFallbackType.None)
+                && (candidate.Identity.Confidence != IdentityConfidence.Ambiguous || profile.AllowAmbiguousIdentity)
+                && !UpgradePolicy.IsRequested(profile, candidate.Languages) && !UpgradePolicy.IsFallback(profile, candidate.Languages))
+            {
+                reasons.Add(new SelectionReason(SelectionReasonKind.Profile, candidate.Languages.Count == 0 ? "LanguageUnknown" : "LanguageNotAllowed"));
+                return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
+            }
+
             // What is no upgrade of the present quality is only taken by hand, as another version.
             if (candidate.InstalledQuality is { } installed && !UpgradePolicy.IsUpgrade(profile, installed, score.QualityKey, false,
                 candidate.InstalledFormatScore, score.FormatScore, candidate.InstalledLanguages, candidate.Languages))
@@ -125,6 +145,18 @@ namespace Jularr.Backend.Logic.Acquisition
             if (runnerUp is null)
             {
                 return new ReleaseReason("OnlyCandidate");
+            }
+
+            if (profile.IsBook && LanguageTier(profile, winner.Candidate.Languages) != LanguageTier(profile, runnerUp.Candidate.Languages))
+            {
+                return new ReleaseReason("PreferredLanguage");
+            }
+
+            if (profile.IsBook && profile.LanguageFallback == LanguageFallbackType.Any
+                && LanguageTier(profile, winner.Candidate.Languages) >= 2 && LanguageTier(profile, runnerUp.Candidate.Languages) >= 2
+                && winner.QualityRank != runnerUp.QualityRank)
+            {
+                return new ReleaseReason("HigherQuality", winner.Score!.QualityKey);
             }
 
             if (winner.Candidate.IndexerPriority != runnerUp.Candidate.IndexerPriority)

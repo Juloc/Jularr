@@ -34,7 +34,7 @@ namespace Jularr.Backend.Logic.Acquisition
             var words = ReleaseWords.Words(offer.Title, Noise);
             var wanted = titles.Select(title => ReleaseWords.Words(title, Noise)).FirstOrDefault(candidate => candidate.Count > 0 && candidate.All(words.Contains))
                 ?? ReleaseWords.Words(titles[0], Noise);
-            var languages = ReleaseWords.ReadLanguages(offer.Title, originalLanguage?.ToUpperInvariant() ?? "EN");
+            var languages = ReleaseWords.ReadLanguages(offer.Title, "");
             var viaId = offer.Stages.Contains("id");
             if (wanted.Count == 0 || !wanted.All(words.Contains))
             {
