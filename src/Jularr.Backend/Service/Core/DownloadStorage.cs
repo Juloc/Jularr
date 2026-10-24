@@ -174,7 +174,7 @@ namespace Jularr.Backend.Service.Core
             CheckIdentity(IncompleteRoot, Settings.IncompleteFilesystemIdentity);
             await new LocalStorageFiles(Path.GetDirectoryName(IncompleteRoot)!).CreateDirectoryAsync(Path.GetFileName(IncompleteRoot), ct);
             var relative = RelativeJob(IncompleteRoot, operationId, mediaType, subtype);
-            await new LocalStorageFiles(IncompleteRoot).CreateDirectoryAsync(relative, ct);
+            await new LocalStorageFiles(IncompleteRoot).CreateDirectoryAsync(relative.Replace(Path.DirectorySeparatorChar, '/'), ct);
             return StorageFileSystem.ResolveDirectory(IncompleteRoot, relative);
         }
 
