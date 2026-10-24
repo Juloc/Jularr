@@ -106,6 +106,31 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(3, aniList.Searches);
         }
 
+        [TestMethod]
+        public async Task Matching_VerifiedTvdbMappingsSkipTitleGuessing()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var aniList = new FakeAniList();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, services: services =>
+            {
+                services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList);
+                services.AddHttpClient<AniBridgeMappings>().ConfigurePrimaryHttpMessageHandler(() => new FakeAniBridge());
+            });
+
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (40, 2, 1, 'Unknown Anime');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (40, 'tvdb', '99');
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (400, 40, 1, 1);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number")
+                    SELECT 40, 400, 2, n FROM generate_series(1, 12) AS n;
+                """);
+
+            await RunAsync(host);
+            Assert.AreEqual("41", await host.ScalarAsync("""SELECT "Value" FROM "WorkUnitExternalIdentities" WHERE "WorkUnitId" = 400"""));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "WorkIdentityMatches" WHERE "WorkId" = 40 AND "IdentityMatchStatusTypeId" = 1"""));
+            Assert.AreEqual(0, aniList.Searches);
+        }
+
         private static async Task RunAsync(Host host)
         {
             await using var scope = host.Services.CreateAsyncScope();
@@ -120,7 +145,8 @@ namespace Jularr.Backend.Tests
                     Content = new StringContent("""
                         {
                             "$meta":{"schema_version":"3.0.3"},
-                            "anilist:7":{"tvdb_show:88:s1":{"1-12":"1-12"}}
+                            "anilist:7":{"tvdb_show:88:s1":{"1-12":"1-12"}},
+                            "tvdb_show:99:s1":{"anilist:41":{"1-12":"1-12"}}
                         }
                         """, Encoding.UTF8, "application/json")
                 });

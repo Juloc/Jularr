@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Jularr.Backend.Service.Core;
+using Jularr.Backend.Data.Logic.Media;
 
 namespace Jularr.Backend.Tests
 {
@@ -36,6 +37,48 @@ namespace Jularr.Backend.Tests
             Assert.IsNull(links[300].TvdbSeriesId);
             Assert.IsNull(links[300].TvdbSeasonNumber);
             Assert.IsFalse(links.ContainsKey(400));
+        }
+
+        [TestMethod]
+        public void AlignTvdb_MapsTwoCoursAndOpenEndedRanges()
+        {
+            using var json = JsonDocument.Parse("""
+                {
+                    "tvdb_show:500:s2": {
+                        "anilist:20": { "1-12": "1-12" },
+                        "anilist:30": { "13-24": "1-12" }
+                    },
+                    "tvdb_show:600:s1": {
+                        "anilist:40": { "1-": "1-" }
+                    }
+                }
+                """);
+            var result = AniBridgeMappings.AlignTvdb(json.RootElement, 500, [new SeasonEpisodesData(2, 24)]);
+            Assert.IsNotNull(result);
+            Assert.IsFalse(result.RequiresReview);
+            CollectionAssert.AreEqual(new[] { (2, 20, 0), (2, 30, 12) }, result.Seasons.ToArray());
+            var openEnded = AniBridgeMappings.AlignTvdb(json.RootElement, 600, [new SeasonEpisodesData(1, 12)]);
+            Assert.IsNotNull(openEnded);
+            CollectionAssert.AreEqual(new[] { (1, 40, 0) }, openEnded.Seasons.ToArray());
+        }
+
+        [TestMethod]
+        public void AlignTvdb_UnsafeRangesRequireReview()
+        {
+            using var json = JsonDocument.Parse("""
+                {
+                    "tvdb_show:500:s1": { "anilist:20": { "1-12": "1-6|2" } },
+                    "tvdb_show:600:s1": { "anilist:30": { "1-12": "1-12" } },
+                    "tvdb_show:600:s2": { "anilist:30": { "1-12": "1-12" } }
+                }
+                """);
+            var scaled = AniBridgeMappings.AlignTvdb(json.RootElement, 500, [new SeasonEpisodesData(1, 12)]);
+            Assert.IsNotNull(scaled);
+            Assert.IsTrue(scaled.RequiresReview);
+            Assert.AreEqual(0, scaled.Seasons.Count);
+            var shared = AniBridgeMappings.AlignTvdb(json.RootElement, 600, [new SeasonEpisodesData(1, 12), new SeasonEpisodesData(2, 12)]);
+            Assert.IsNotNull(shared);
+            Assert.IsTrue(shared.RequiresReview);
         }
 
         [TestMethod]
