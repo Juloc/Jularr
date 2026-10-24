@@ -45,6 +45,16 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(BookDocumentLanguages.ContradictsStrictProfile(strict, ["EN"]));
             Assert.IsFalse(BookDocumentLanguages.ContradictsStrictProfile(strict, ["DE", "EN"]));
             Assert.IsFalse(BookDocumentLanguages.ContradictsStrictProfile(strict, []));
+            Assert.AreEqual("import_book_language_unknown", BookDocumentLanguages.StrictEpubAttentionReason(strict, []));
+            Assert.AreEqual("import_book_language_mismatch", BookDocumentLanguages.StrictEpubAttentionReason(strict, ["EN"]));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(strict, ["DE"]));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(strict, ["DE", "EN"]));
+            var flexible = new QualityProfile("flexible", "Flexible", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true, LanguageOrder = ["DE"], LanguageFallback = LanguageFallbackType.Any
+            };
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(flexible, []));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(flexible, ["EN"]));
             using var unknown = new MemoryStream("not an epub"u8.ToArray());
             CollectionAssert.AreEqual(Array.Empty<string>(), BookDocumentLanguages.ReadEpub(unknown));
         }
