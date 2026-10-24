@@ -14,7 +14,7 @@ namespace Jularr.Backend.Service.Core
     {
         private readonly DownloadStorageReservations _reservations = new();
 
-        public async Task<DownloadStoragePaths> OpenAsync(LogicContext context, DownloadStorageArea area, CancellationToken ct)
+        public async Task<DownloadStoragePaths> OpenAsync(LogicContext context, DownloadStorageArea area, CancellationToken ct, bool skipCapacityCheck = false)
         {
             var settings = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadDownloadStorageSettingsAsync(area, token), ct);
             if (!DownloadStorageLogic.IsConfigured(settings))
@@ -41,7 +41,7 @@ namespace Jularr.Backend.Service.Core
                     throw new ServiceUnavailableException("download_storage_unavailable");
                 }
 
-                foreach (var path in new[] { sourceRoot, destinationRoot })
+                if (!skipCapacityCheck) foreach (var path in new[] { sourceRoot, destinationRoot })
                 {
                     if (StorageFileSystem.AvailableFreeSpace(path) is not { } available || available < settings.FreeSpaceReserveBytes.Value)
                     {
@@ -51,7 +51,7 @@ namespace Jularr.Backend.Service.Core
 
                 var name = ".jularr-" + settings.WorkspaceId.ToString("N");
                 var paths = new DownloadStoragePaths(settings, Path.Combine(sourceRoot, name), Path.Combine(destinationRoot, name), _reservations);
-                paths.CheckCapacity();
+                if (!skipCapacityCheck) paths.CheckCapacity();
                 return paths;
             }
             catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)

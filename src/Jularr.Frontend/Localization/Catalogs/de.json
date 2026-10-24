@@ -13406,6 +13406,30 @@
    "Configure download storage",
    "Download-Speicher einrichten"
   ],
+  "downloadStorage.cleanup.title": [
+   "Direct download cleanup · since last restart",
+   "Bereinigung direkter Downloads · seit dem Neustart"
+  ],
+  "downloadStorage.cleanup.scanned": [
+   "Folders checked",
+   "Geprüfte Ordner"
+  ],
+  "downloadStorage.cleanup.deleted": [
+   "Orphaned folders removed",
+   "Entfernte verwaiste Ordner"
+  ],
+  "downloadStorage.cleanup.bytes": [
+   "Storage reclaimed",
+   "Freigegebener Speicher"
+  ],
+  "downloadStorage.cleanup.skipped": [
+   "Folders kept or skipped",
+   "Behaltene oder übersprungene Ordner"
+  ],
+  "downloadStorage.cleanup.errors": [
+   "Cleanup errors",
+   "Bereinigungsfehler"
+  ],
   "downloadStorage.purpose": [
    "Choose Incomplete and Complete folders for Jularr's own downloads. External clients keep their own download folders.",
    "Wähle die Ordner Incomplete und Complete für die eigenen Downloads von Jularr. Externe Clients behalten ihre eigenen Download-Ordner."
