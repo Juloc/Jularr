@@ -40,8 +40,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
             // Admission and owner identity are verified by the standard AdminService
             // gate, including transactional account/session and module checks.
-            var id = await Context.ExecuteBatchAsync((ctx, ct) =>
-                ctx.QueueMediaImportJobAsync(new MediaImportJobQueueData(Auth.AccountId!.Value, Guid.NewGuid(), encoded, items.Count), ct), CancellationToken);
+            var id = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                var jobId = await ctx.QueueMediaImportJobAsync(
+                    new MediaImportJobQueueData(Auth.AccountId!.Value, Guid.NewGuid(), encoded, items.Count), ct);
+                await ctx.InitializeImportJobRowsAsync(new MediaImportJobIdData(jobId), ct);
+                return jobId;
+            }, CancellationToken);
             _signals.Imports.Notify();
             return new MediaImportJobCreatedV1(id);
         }
