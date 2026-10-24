@@ -6,6 +6,36 @@ using Jularr.Backend.Data.Fields.Operation;
 
 namespace Jularr.Backend.Data.Admin.Media.V1
 {
+    // API clients submit explicit decisions as JSON. The Razor upload adapter
+    // still calls the canonical QueueMediaImportJobV1 with MediaImportDataV1.
+    public sealed class MediaImportJobRequestV1 : BaseData
+    {
+        public MediaImportJobRequestV1(string json, MediaImportActionType action,
+            BaseDataList<MediaImportDefaultV1>? defaults = null,
+            BaseDataList<MediaImportChoiceV1>? choices = null)
+        {
+            Json = json;
+            Action = action;
+            Defaults = defaults ?? new([]);
+            Choices = choices ?? new([]);
+        }
+
+        [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Json))]
+        public string Json { get; }
+
+        [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Action))]
+        public MediaImportActionType Action { get; }
+
+        public BaseDataList<MediaImportDefaultV1> Defaults { get; }
+        public BaseDataList<MediaImportChoiceV1> Choices { get; }
+
+        public override void Validate()
+        {
+            base.Validate();
+            new MediaImportDataV1(null, Json, Action, Defaults, Choices).Validate();
+        }
+    }
+
     public sealed class MediaImportJobParametersV1 : BaseParameters
     {
         public MediaImportJobParametersV1(Guid jobId) => JobId = jobId;
