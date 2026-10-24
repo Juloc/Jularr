@@ -10146,6 +10146,10 @@
    "Missing metadata",
    "Fehlende Metadaten"
   ],
+  "jobs.job.wantedTargets": [
+   "Targets for titles",
+   "Ziele für Titel"
+  ],
   "errors.playback_evicted": [
    "Playback ended because the server needed the capacity. Try again at a lower quality.",
    "Die Wiedergabe wurde beendet, weil der Server die Kapazität brauchte. Versuche es mit niedrigerer Qualität."
@@ -10577,6 +10581,10 @@
   "jobs.about.aniListMatching": [
    "Checks open AniList matches of anime titles.",
    "Prüft offene AniList-Zuordnungen von Anime-Titeln."
+  ],
+  "jobs.about.wantedTargets": [
+   "Gives every title with files a target that is not monitored yet, so each title page offers the same buttons.",
+   "Gibt jedem Titel mit Dateien ein Ziel, das noch nicht überwacht wird, damit jede Titelseite dieselben Buttons hat."
   ],
   "jobs.about.metadataFill": [
    "Reads the description, cover and cast of titles that came without them, for example from a media server, a few at a time.",
