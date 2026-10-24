@@ -13,8 +13,8 @@
   "library.filter.subtitles": ["Subtitle language", "Untertitelsprache"],
   "library.filter.rating": ["Minimum rating", "Mindestbewertung"],
   "list.loadMore": ["Load more", "Weitere laden"],
-  "list.loading": ["Loading more titles…", "Weitere Titel werden geladen…"],
-  "list.retry": ["Could not load more titles. Try again.", "Weitere Titel konnten nicht geladen werden. Erneut versuchen."],
+  "list.loading": ["Loading more entries…", "Weitere Einträge werden geladen…"],
+  "list.retry": ["Could not load more entries. Try again.", "Weitere Einträge konnten nicht geladen werden. Erneut versuchen."],
   "progress.saveFailed": [
    "Progress could not be saved. Jularr will retry temporary failures.",
    "Der Fortschritt konnte nicht gespeichert werden. Jularr versucht es bei vorübergehenden Fehlern erneut."
