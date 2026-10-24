@@ -10,8 +10,11 @@ using Jularr.Integrations.Logic.Browser;
 namespace Jularr.Backend.Service.System.Browser.V1
 {
     // The worker asks the module owner what should run; the installer never reads the database.
-    public sealed class ReconcileBrowserModuleV1(ManagedBrowserModule browser) : SystemService<BrowserParametersV1, RunBrowserActionDataV1>
+    public sealed class ReconcileBrowserModuleV1 : SystemService<BrowserParametersV1, RunBrowserActionDataV1>
     {
+        private readonly ManagedBrowserModule _browser;
+
+        internal ReconcileBrowserModuleV1(ManagedBrowserModule browser) => _browser = browser;
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(BrowserParametersV1 parameters) => ModuleRequirement.None;
@@ -25,7 +28,7 @@ namespace Jularr.Backend.Service.System.Browser.V1
                 return modules.Any(module => module.Key == "Browser" && module.IsEnabled);
             }, CancellationToken);
 
-            await browser.ReconcileAsync(enabled, CancellationToken);
+            await _browser.ReconcileAsync(enabled, CancellationToken);
             return new UpdateResult(true);
         }
     }
