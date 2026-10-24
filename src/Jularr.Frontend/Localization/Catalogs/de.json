@@ -13256,6 +13256,10 @@
    "Free space reserve",
    "Reserve an freiem Speicherplatz"
   ],
+  "downloadStorage.reserveHint": [
+   "Required for confirmation. Enter 0 if you do not want to keep a free-space reserve.",
+   "Für die Bestätigung erforderlich. Gib 0 ein, wenn keine Freiraumreserve eingehalten werden soll."
+  ],
   "downloadStorage.jobLimit": [
    "Optional download size limit",
    "Optionales Limit für die Download-Größe"
@@ -13296,9 +13300,29 @@
    "No storage connections are configured. Add a local path exposed through Compose or a mounted SMB/NFS share in Storage first.",
    "Es sind keine Speicherverbindungen eingerichtet. Füge zuerst unter Speicher einen über Compose bereitgestellten lokalen Pfad oder eine eingebundene SMB/NFS-Freigabe hinzu."
   ],
+  "sources.storage.directMissing": [
+   "Direct downloads need Incomplete and Complete folders plus a confirmed free-space reserve. Anna's Archive, Gutenberg and OPDS cannot download until this is configured.",
+   "Für direkte Downloads fehlen bestätigte Incomplete-/Complete-Ordner oder die Freiraumreserve. Anna’s Archive, Gutenberg und OPDS können bis zur Einrichtung nichts herunterladen."
+  ],
+  "sources.storage.usenetMissing": [
+   "Jularr's own Usenet downloader needs Incomplete and Complete folders plus a confirmed free-space reserve before it can download.",
+   "Der interne Usenet-Downloader benötigt bestätigte Incomplete-/Complete-Ordner und eine Freiraumreserve, bevor Downloads möglich sind."
+  ],
+  "sources.storage.configure": [
+   "Configure download storage",
+   "Download-Speicher konfigurieren"
+  ],
   "folderPicker.choose": [
    "Use this folder",
    "Diesen Ordner verwenden"
+  ],
+  "folderPicker.newFolder": [
+   "New folder name",
+   "Neuer Ordnername"
+  ],
+  "folderPicker.create": [
+   "Create folder",
+   "Ordner erstellen"
   ],
   "folderPicker.loading": [
    "Loading folders…",

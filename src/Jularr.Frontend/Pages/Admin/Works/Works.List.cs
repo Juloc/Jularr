@@ -287,7 +287,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             "library" => Value(item.LibraryName),
             "files" => Value(item.FileCount.ToString("N0", CultureInfo.CurrentCulture)),
             "size" => Value(item.FileCount > 0 ? ByteSize.Format(item.SizeBytes) : null),
-            _ => Value(item.CreatedAt.ToLocalTime().ToString("d", CultureInfo.CurrentCulture))
+            _ => new Span(new LocalTime(item.CreatedAt, "date")).Class("list-value list-value--fill")
         };
 
         // One line that ends in an ellipsis where it has no room; a missing value is a quiet dash.

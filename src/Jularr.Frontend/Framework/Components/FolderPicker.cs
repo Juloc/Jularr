@@ -30,7 +30,7 @@ namespace Jularr.Frontend.Framework
         }
 
         public static IUiComponent Directories(string browseUrl, string path, IReadOnlyList<string> names, UiText texts, string? afterName = null, bool hasMore = false,
-            string? mountsUrl = null, long? storageMountId = null, string? selectedLabel = null, string? warningKey = null)
+            string? mountsUrl = null, long? storageMountId = null, string? selectedLabel = null, string? warningKey = null, bool canCreate = false)
         {
             var trail = new List<IUiComponent>
             {
@@ -50,6 +50,11 @@ namespace Jularr.Frontend.Framework
                     : new Ul([.. names.Select(name => new Li(new A(new Truncated(name))
                         .Attribute("href", QueryHelpers.AddQueryString(browseUrl, "path", path.Length == 0 ? name : path + "/" + name))
                         .Attribute("data-folder-navigate", "")))]).Class("folder-picker__folders"),
+                canCreate ? new Div(
+                    new Input().Attribute("type", "text").Attribute("maxlength", "128").Attribute("placeholder", texts["folderPicker.newFolder"])
+                        .Attribute("aria-label", texts["folderPicker.newFolder"]).Attribute("data-folder-new-name", ""),
+                    new Button(new Text("folderPicker.create")).Attribute("type", "button").Attribute("data-folder-create", "")
+                ).Class("folder-picker__create") : new Span(),
                 new Div(
                     afterName is null ? new Span() : new A(new Text("folderPicker.first"))
                         .Attribute("href", QueryHelpers.AddQueryString(browseUrl, "path", path)).Attribute("data-folder-navigate", ""),

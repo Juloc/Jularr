@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
@@ -13,7 +14,7 @@ using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Operation;
 using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Infrastructure.Sql;
-using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Media.V1;
@@ -136,10 +137,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
         private readonly MusicTagIdentification _music;
         private readonly WorkMetadata _metadata;
         private readonly ILogger<ExecuteLibraryScanV1> _logger;
+        private readonly MetadataCatalog _catalog;
+        private bool _bookCatalogUnavailable;
 
-        internal ExecuteLibraryScanV1(StorageAccess storage, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music, WorkMetadata metadata, ILogger<ExecuteLibraryScanV1> logger)
+        internal ExecuteLibraryScanV1(StorageAccess storage, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music, WorkMetadata metadata, ILogger<ExecuteLibraryScanV1> logger, MetadataCatalog catalog)
         {
             _logger = logger;
+            _catalog = catalog;
             _storage = storage;
             _probe = probe;
             _roms = roms;
@@ -252,6 +256,12 @@ namespace Jularr.Backend.Service.System.Operation.V1
             // Link completely new folders to their catalog identity without moving files.
             var unfinished = root.MediaTypeId is MediaType.Movie or MediaType.Series
                 && await AssignCatalogFoldersAsync(root.Id, root.MediaTypeId, storage, directory);
+
+            // Books, manga and light novels: a folder whose title names one Work (here or in the catalog) is that Work.
+            if (root.MediaTypeId == MediaType.Book)
+            {
+                await AssignBookFoldersAsync(root.Id, root.MediaSubtypeId);
+            }
 
             await Context.ExecuteBatchAsync((ctx, ct) => ctx.UpdateOperationAsync(new OperationProgressData(Parameters.OperationId, processed, OperationStatusType.Completed), ct), CancellationToken);
             if (unfinished)
@@ -631,6 +641,14 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         parsed = MediaPathParser.ApplyPlexMatch(parsed, file.RelativePath[(rootFolder.Length + 1)..], parts[^1], rootHints, seasonHints);
                     }
 
+                    // A file of several episodes (S01E12-E13): the first is its unit, the others it covers.
+                    IReadOnlyList<decimal> furtherEpisodes = [];
+                    if (mediaType == MediaType.Series && parsed.WorkUnitTypeId != WorkUnitType.Episode && MediaPathParser.ParseEpisodeRange(file.RelativePath) is { } range)
+                    {
+                        parsed = new MediaPathInfo(parsed.Title, parsed.Year, WorkUnitType.Episode, range.Episodes[0], range.Season);
+                        furtherEpisodes = [.. range.Episodes.Skip(1)];
+                    }
+
                     if (parsed.Title.Length > 500 || mediaType == MediaType.Series && parsed.WorkUnitTypeId != WorkUnitType.Episode)
                     {
                         Note("the name does not give season and episode", file.RelativePath);
@@ -894,13 +912,179 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     var assignment = new StoredFileAssignmentData(file.Id, workId, null, parsed.WorkUnitTypeId, parsed.UnitNumber, parsed.ParentUnitNumber, null, false);
                     try
                     {
-                        await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileAsync(assignment, ct), CancellationToken);
+                        if (furtherEpisodes.Count > 0)
+                        {
+                            await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileRangeAsync(assignment, furtherEpisodes, ct), CancellationToken);
+                        }
+                        else
+                        {
+                            await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileAsync(assignment, ct), CancellationToken);
+                        }
                     }
                     catch (DataValidationException)
                     {
                         // Incomplete episode structure remains available for manual review.
                     }
                 }
+            }
+        }
+
+        // The title of a book folder names its Work: the one Work of that title and subtype here, else the one catalog entry whose title has exactly the folder's
+        // words (the author, when named in the path, settles several such entries). Volumes keep their numbers, a single book is the whole Work.
+        private async Task AssignBookFoldersAsync(long libraryRootId, MediaSubtype? subtype)
+        {
+            var folders = new Dictionary<string, long?>(StringComparer.Ordinal);
+            var unresolved = new Dictionary<string, string>(StringComparer.Ordinal);
+            var lookups = Stopwatch.StartNew();
+            var catalogLookups = 0;
+            for (var afterId = 0L; ;)
+            {
+                var files = await Context.ExecuteBatchAsync((ctx, ct) =>
+                {
+                    var sql = new SqlStatement();
+                    sql.Statement =
+                        """
+                        SELECT file."Id", file."RelativePath", file."SizeBytes", file."ModifiedAt", NULL::bigint AS "WorkId"
+                        FROM "StoredFiles" AS file
+                        WHERE file."LibraryRootId" = @LibraryRootId AND file."Id" > @AfterId
+                            AND file."MediaAssetId" IS NULL AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                        ORDER BY file."Id"
+                        LIMIT 100;
+                        """;
+                    sql.Parameters.Add(new StoredFileCursorData(libraryRootId, afterId));
+                    return ctx.ReadSql.ReadListAsync<StoredFileCandidateData>(sql, ct);
+                }, CancellationToken);
+                if (files.Count == 0)
+                {
+                    foreach (var (folder, example) in unresolved)
+                    {
+                        _logger.LogWarning("Library scan {LibraryRootId}: the folder {Folder} names no single Work here or in the catalog, for example {Example}", libraryRootId, folder, example);
+                    }
+
+                    return;
+                }
+
+                foreach (var file in files)
+                {
+                    afterId = file.Id;
+                    var parsed = MediaPathParser.Parse(file.RelativePath, MediaType.Book);
+                    if (parsed.Title.Length is 0 or > 500)
+                    {
+                        continue;
+                    }
+
+                    var key = file.RelativePath.Contains('/') ? file.RelativePath.Split('/')[0] : parsed.Title;
+                    if (!folders.TryGetValue(key, out var workId))
+                    {
+                        var catalogAllowed = !_bookCatalogUnavailable && (catalogLookups == 0 || lookups.Elapsed < LookupBudget);
+                        var (found, usedCatalog) = await FindBookWorkAsync(parsed.Title, subtype, file.RelativePath, catalogAllowed);
+                        workId = found;
+                        if (usedCatalog)
+                        {
+                            catalogLookups++;
+                        }
+
+                        if (workId is null)
+                        {
+                            unresolved[key] = file.RelativePath;
+                        }
+
+                        folders[key] = workId;
+                    }
+
+                    if (workId is null)
+                    {
+                        continue;
+                    }
+
+                    var assignment = new StoredFileAssignmentData(file.Id, workId, null, parsed.WorkUnitTypeId, parsed.UnitNumber, parsed.ParentUnitNumber, null, false);
+                    try
+                    {
+                        await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileAsync(assignment, ct), CancellationToken);
+                    }
+                    catch (DataValidationException)
+                    {
+                        // A volume or chapter structure the Work does not allow stays for manual review.
+                    }
+                }
+            }
+        }
+
+        private async Task<(long? WorkId, bool UsedCatalog)> FindBookWorkAsync(string title, MediaSubtype? subtype, string relativePath, bool catalogAllowed)
+        {
+            // The one Work of that title and subtype that is already here.
+            var local = await Context.ExecuteBatchAsync((ctx, ct) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT work."Id"
+                    FROM "Works" AS work
+                    WHERE work."MediaTypeId" = 3
+                        AND work."MediaSubtypeId" IS NOT DISTINCT FROM @MediaSubtypeId
+                        AND (lower(work."CanonicalTitle") = lower(@CanonicalTitle)
+                            OR EXISTS (SELECT 1 FROM "WorkTitles" AS name WHERE name."WorkId" = work."Id" AND lower(name."Title") = lower(@CanonicalTitle)))
+                    ORDER BY work."Id"
+                    LIMIT 2;
+                    """;
+                sql.Parameters.Add(new BookFolderMatchData(subtype, title));
+                return ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
+            }, CancellationToken);
+            if (local.Count == 1)
+            {
+                return (local[0].Id, false);
+            }
+
+            if (local.Count > 1 || !catalogAllowed)
+            {
+                return (null, false);
+            }
+
+            IReadOnlyList<MetadataSearchResultV1> results;
+            try
+            {
+                results = await _catalog.SearchAsync(Context, MediaType.Book, subtype, title, null, CancellationToken);
+            }
+            catch (ServiceUnavailableException)
+            {
+                _bookCatalogUnavailable = true;
+                return (null, false);
+            }
+
+            // Entries with exactly the folder's words as their title; several of them are told apart by an author the path names.
+            var wanted = TitleMatcher.SignificantWords(title);
+            var same = results.Where(result => TitleMatcher.SignificantWords(result.Title).SetEquals(wanted)
+                    || result.OriginalTitle is { } original && TitleMatcher.SignificantWords(original).SetEquals(wanted))
+                .DistinctBy(result => (result.Namespace, result.ExternalId)).ToArray();
+            if (same.Length > 1)
+            {
+                var dot = relativePath.LastIndexOf('.');
+                var pathWords = TitleMatcher.SignificantWords(dot > 0 ? relativePath[..dot] : relativePath);
+                same = [.. same.Where(result => result.Author is { Length: > 0 } author && TitleMatcher.SignificantWords(author).IsSubsetOf(pathWords))];
+            }
+
+            if (same.Length != 1)
+            {
+                return (null, true);
+            }
+
+            if (same[0].WorkId is { } known)
+            {
+                return (known, true);
+            }
+
+            try
+            {
+                return (await _catalog.ImportAsync(Context, MediaType.Book, subtype, same[0].Namespace, same[0].ExternalId, CancellationToken), true);
+            }
+            catch (Exception exception) when (exception is KeyNotFoundException or DataValidationException)
+            {
+                return (null, true);
+            }
+            catch (ServiceUnavailableException)
+            {
+                _bookCatalogUnavailable = true;
+                return (null, true);
             }
         }
 

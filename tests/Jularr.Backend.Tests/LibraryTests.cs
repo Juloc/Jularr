@@ -782,7 +782,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Scan_MultiEpisodeFile_DoesNotLinkToOnlyTheFirstEpisode()
+        public async Task Scan_MultiEpisodeFile_CoversEveryEpisodeItHolds()
         {
             using var storage = new TemporaryDirectory();
             await using var host = await CreateHostAsync(storage.Path);
@@ -801,8 +801,10 @@ namespace Jularr.Backend.Tests
                 """);
 
             await ScanAsync(host, rootId);
-            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
-            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "RelativePath" LIKE '%S01E01-E02.mkv' AND "MediaAssetId" IS NULL """));
+            // The single episode and the double file: the second file is the primary unit of episode 1 as a further version and covers episode 2.
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssetAdditionalUnits" """));
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(DISTINCT "WorkUnitId") FROM "MediaAssetUnitCoverage" """));
         }
 
         [TestMethod]

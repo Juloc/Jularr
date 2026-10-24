@@ -37,7 +37,7 @@ namespace Jularr.Frontend.Pages.Admin.Backup
 
             page.Content.Add(backups.Items.Count > 0
                 ? new Table<BackupV1>(backups.Items)
-                    .Content("admin.backup.createdAt", item => new ValueText(item.CreatedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)))
+                    .Content("admin.backup.createdAt", item => new LocalTime(item.CreatedAt))
                     .Content("table.size", item => new ValueText(ByteSize.Format(item.SizeBytes)))
                     .Content("admin.backup.compatible", item => new Text(item.IsCompatible ? "common.yes" : "admin.backup.otherVersion"))
                     .Content("common.actions", item => new Div([.. Actions(item, backups.CanRestore, csrf)]).Class("backup__actions"))

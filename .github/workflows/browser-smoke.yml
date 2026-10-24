@@ -67,7 +67,7 @@ jobs:
       - name: Check fresh installation, owner setup and sign-in in Chromium
         run: |
           dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build \
-            --filter "FullyQualifiedName~FreshInstance_OwnerSetupSignInAndMenuPages_OpenWithoutErrors" \
+            --filter "FullyQualifiedName~FreshInstance_OwnerSetupSignInAndMenuPages_OpenWithoutErrors|FullyQualifiedName~BrowserZone_FormatsUtcInstantsAndCalendarTodayInTwoZones" \
             --logger "trx;LogFileName=browser-smoke.trx" \
             --results-directory TestResults/ci/browser-smoke
       - name: Keep browser-smoke results
