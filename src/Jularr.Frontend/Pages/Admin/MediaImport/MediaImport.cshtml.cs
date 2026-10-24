@@ -516,6 +516,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                     index = row.Index,
                     title = row.Title,
                     outcome = row.OutcomeTypeId is { } outcome ? texts["import.outcome." + outcome] : null,
+                    stage = texts["import.job.stage." + row.Stage],
                     workId = row.WorkId
                 })
             });
