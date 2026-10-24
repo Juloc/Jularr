@@ -98,26 +98,48 @@ function initializeText(reader: HTMLElement): void {
         });
     }
     let reading = reader.dataset.readingLanguage ?? 'original';
-    if (translate) void translate(reading === 'original' ? '' : reading);
-    reader.querySelectorAll<HTMLButtonElement>('[data-language-choice]').forEach(button => button.addEventListener('click', async () => {
-        reading = button.dataset.languageChoice!;
-        reader.dataset.readingLanguage = reading;
-        if (localModel && reading !== 'original' && !browserTargets.has(reading)) {
-            reader.dataset.translationEngine = 'gemma';
-            quality?.setAttribute('aria-pressed', 'true');
+    const choices = Array.from(reader.querySelectorAll<HTMLButtonElement>('[data-language-choice]'));
+    let savingLanguage = false;
+    choices.forEach(button => button.addEventListener('click', async () => {
+        if (savingLanguage) return;
+        const next = button.dataset.languageChoice!;
+        if (next === reading) return;
+        savingLanguage = true;
+        choices.forEach(choice => choice.disabled = true);
+        if (quality) quality.disabled = true;
+        const panel = reader.querySelector<HTMLElement>('[data-panel=language]');
+        panel?.setAttribute('aria-busy', 'true');
+        const feedback = reader.querySelector<HTMLElement>('[data-role=translation-status]');
+        if (feedback) {
+            feedback.textContent = reader.dataset.languageSavingLabel ?? '';
+            feedback.hidden = false;
         }
-        reader.querySelectorAll<HTMLButtonElement>('[data-language-choice]').forEach(choice => choice.setAttribute('aria-pressed', String(choice === button)));
         try {
             const response = await fetch(reader.dataset.languageUrl!, {
                 method: 'PUT', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json', RequestVerificationToken: reader.dataset.antiforgery! },
-                body: JSON.stringify({ readingLanguage: reading })
+                body: JSON.stringify({ readingLanguage: next })
             });
             if (!response.ok) throw new Error('Language preference was not saved.');
-            if (translate) await translate(reading === 'original' ? '' : reading);
+            reading = next;
+            reader.dataset.readingLanguage = next;
+            if (localModel && next !== 'original' && !browserTargets.has(next)) {
+                reader.dataset.translationEngine = 'gemma';
+                quality?.setAttribute('aria-pressed', 'true');
+            }
+            choices.forEach(choice => choice.setAttribute('aria-pressed', String(choice === button)));
+            if (translate) void translate(next === 'original' ? '' : next);
+            else if (feedback) feedback.hidden = true;
         } catch {
-            const feedback = reader.querySelector<HTMLElement>('[data-role=translation-status]');
-            if (feedback) { feedback.textContent = reader.dataset.translationFailedLabel!; feedback.hidden = false; }
+            if (feedback) {
+                feedback.textContent = reader.dataset.translationFailedLabel ?? '';
+                feedback.hidden = false;
+            }
+        } finally {
+            savingLanguage = false;
+            choices.forEach(choice => choice.disabled = false);
+            if (quality) quality.disabled = false;
+            panel?.removeAttribute('aria-busy');
         }
     }));
 
