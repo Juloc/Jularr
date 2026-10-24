@@ -49,8 +49,11 @@ namespace Jularr.Frontend.Framework
             // Five times: the start of the window, three points between, and now.
             for (var index = 0; index < 5; index++)
             {
-                var label = index == 4 ? texts["resource.now"] : samples[Math.Min(samples.Count - 1, index * samples.Count / 4)].At.ToLocalTime().ToString("t", CultureInfo.CurrentCulture);
-                children.Add(new SvgText(new ValueText(label)).Class("resource-chart__label").Attribute("x", (17 + index * 122).ToString(CultureInfo.InvariantCulture)).Attribute("y", "156"));
+                var sample = samples[Math.Min(samples.Count - 1, index * samples.Count / 4)];
+                var label = index == 4 ? texts["resource.now"] : LocalTime.Fallback(sample.At, "time");
+                var tick = new SvgText(new ValueText(label)).Class("resource-chart__label").Attribute("x", (17 + index * 122).ToString(CultureInfo.InvariantCulture)).Attribute("y", "156");
+                if (index != 4) tick.Attribute("data-local-time", "time").Attribute("data-utc", LocalTime.Iso(sample.At));
+                children.Add(tick);
             }
 
             var latest = samples[^1];

@@ -152,9 +152,9 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 measured is { FreeBytes: { } freeBytes, TotalBytes: { } totalBytes } ? string.Format(CultureInfo.CurrentCulture, texts["storage.space"], ByteSize.Format(freeBytes), ByteSize.Format(totalBytes)) : "",
                 string.Format(CultureInfo.CurrentCulture, texts["storage.used"], percent ?? 0), unknown);
 
-            var checkedText = mount.CheckedAt is { } checkedAt ? string.Format(CultureInfo.CurrentCulture, texts["storage.checkedAt"], checkedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)) : "";
+            IUiComponent checkedText = mount.CheckedAt is { } checkedAt ? LocalTime.Format(texts["storage.checkedAt"], checkedAt) : new Span();
             var body = new List<IUiComponent> { new Div(new Truncated(location)).Class("feature-card__path"), space,
-                new Div(new Span(new ValueText(checkedText)).Class("feature-card__note"), mount.IsNetwork ? new Strong(new Text(mount.WakeMacAddress is null ? "storage.wake.off" : "storage.wake.active")) : new Span()).Class("feature-card__row") };
+                new Div(new Span(checkedText).Class("feature-card__note"), mount.IsNetwork ? new Strong(new Text(mount.WakeMacAddress is null ? "storage.wake.off" : "storage.wake.active")) : new Span()).Class("feature-card__row") };
 
             var start = new List<IUiComponent> { CardAction("Check", mount.Id, new Button(Glyph("sync", 14), new Text("storage.check")).Compact().Submit()) };
             if (mount.WakeMacAddress is not null) start.Add(CardAction("Wake", mount.Id, new Button(Glyph("power", 16)).IconOnly(texts["storage.wake.send"]).Submit()));
@@ -351,8 +351,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 parts.Add(texts["storage.problem." + (code is "permission_denied" or "probe_timeout" ? code : "storage_unavailable")]);
             }
 
-            parts.Add(string.Format(CultureInfo.CurrentCulture, texts["storage.checkedAt"], checkedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)));
-            return new P(new ValueText(string.Join(" · ", parts))).Class("storage__health").Attribute("role", "status");
+            return new P(new ValueText(string.Join(" · ", parts) + " · "), LocalTime.Format(texts["storage.checkedAt"], checkedAt)).Class("storage__health").Attribute("role", "status");
         }
 
         // DSM access, the NAS's own health and power; power asks once more.
