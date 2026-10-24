@@ -6,7 +6,7 @@ import ts from 'typescript';
 
 const source = readFileSync(resolve(import.meta.dirname, '../Modules/Reader/BookGeometry.ts'), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
-const { foldPaper, curlPaper, paperSegments, paperShadow, bookDimensions, paperColour, paperProfile, paperOutline, printPlacement, simplifyOutline, shadowPenumbra } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
+const { foldPaper, curlPaper, paperSegments, paperShadow, bookDimensions, paperColour, paperProfile, paperOutline, printPlacement, fitPrintedInk, simplifyOutline, shadowPenumbra } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
 const area = polygon => Math.abs(polygon.reduce((sum, a, i) => {
     const b = polygon[(i + 1) % polygon.length];
     return sum + a.x * b.y - a.y * b.x;
@@ -292,4 +292,44 @@ test('vertical peels remain responsive and the rounded fold retains every bound 
     const soft = curlPaper(width, height, fold, 24, 14, 16);
     const round = curlPaper(width, height, fold, 24, 14, 16, undefined, 1, false);
     assert.ok(soft.rise < round.rise * .85, 'The held-paper shoulder is flatter than a semicircular roller.');
+});
+
+test('thick book pages keep first and last line ink inside the physical paper edge', () => {
+    const width = 620;
+    for (const pages of [320, 1000, 1500, 2500, 4000]) for (const read of [1, pages / 2, pages]) {
+        const body = bookDimensions(pages, 100, read, 22);
+        for (const side of ['left', 'right']) {
+            const depth = side === 'left' ? body.leftMm : body.rightMm;
+            const profile = paperProfile(depth, body.centreMm, 24, 14);
+            const scale = width / 148, height = profile.height * scale;
+            const runs = Array.from({ length: 35 }, (_, i) => ({
+                left: 28, top: 24 + i * (height - 68) / 34, width: 520, height: 20
+            }));
+            const printLeft = (side === 'left' ? 1 : -1) * profile.inset * scale / 2 + 28;
+            const offsets = fitPrintedInk(profile, side, width, printLeft, runs);
+            assert.equal(offsets.length, runs.length);
+            assert.ok(offsets.every(Number.isFinite));
+            const outline = paperOutline(profile).slice(0, 41);
+            const edge = x => {
+                x = Math.max(0, Math.min(1, x / width));
+                let i = 1;
+                while (i < outline.length - 1 && outline[i].x < x) i++;
+                const a = outline[i - 1], b = outline[i];
+                const t = b.x > a.x ? Math.max(0, Math.min(1, (x - a.x) / (b.x - a.x))) : 0;
+                return -profile.lift * scale + (a.y + (b.y - a.y) * t) * (profile.height + profile.lift) * scale;
+            };
+            for (const [i, run] of runs.entries()) {
+                const x0 = side === 'left' ? width - (printLeft + run.left + run.width) : printLeft + run.left;
+                const x1 = x0 + run.width;
+                const top = -profile.footerLift * scale + run.top + offsets[i];
+                const bottom = top + run.height;
+                const samples = [edge(x0), edge(x1)];
+                for (const point of outline) if (point.x * width > x0 && point.x * width < x1)
+                    samples.push(-profile.lift * scale + point.y * (profile.height + profile.lift) * scale);
+                assert.ok(top >= Math.max(...samples) + 2.99, `Upper clipping: ${pages}/${read}/${side}/${i}`);
+                assert.ok(bottom <= height + Math.min(...samples) - 2.99,
+                    `Lower clipping: ${pages}/${read}/${side}/${i}`);
+            }
+        }
+    }
 });
