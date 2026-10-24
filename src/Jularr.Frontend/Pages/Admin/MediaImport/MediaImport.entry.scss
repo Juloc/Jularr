@@ -41,6 +41,52 @@
         &[data-state="invalid"] { color: var(--danger); }
     }
 
+    // Live operations stay visible while the backend reports each processed row.
+    &__pending,
+    &__activity {
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-control);
+        background: var(--surface);
+    }
+
+    &__pending { color: var(--muted); }
+
+    &__activity {
+        display: grid;
+        gap: 10px;
+        margin-block-end: 16px;
+
+        progress {
+            width: 100%;
+            height: 8px;
+            accent-color: var(--accent);
+        }
+    }
+
+    &__activity--failed { border-color: var(--danger); }
+    &__activity--done { border-color: var(--success); }
+    &__activity-list {
+        display: grid;
+        gap: 5px;
+        padding-inline-start: 24px;
+        margin: 0;
+        max-height: 330px;
+        overflow-y: auto;
+
+        li {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 6px 12px;
+            font-size: var(--text-control);
+        }
+
+        a { min-width: 0; overflow-wrap: anywhere; }
+    }
+
+    &__activity-outcome { color: var(--muted); }
+
     // The example: its button beside the download, the opened box below both.
     &__sample {
         display: grid;
@@ -163,4 +209,41 @@
     .media-import__stack,
     .media-import__status-cell { align-items: flex-end; }
     .media-import__preview .ui-form > .ui-form__actions { bottom: 8px; }
+}
+
+.media-import__intent {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    margin-block: 8px 16px;
+}
+.media-import__intent-warning {
+    font-size: var(--text-control);
+    color: var(--muted);
+}
+.media-import__intent-warning[data-import-search-warning="hidden"],
+.media-import__intent-warning[hidden] { display: none; }
+
+.media-import__edition-details {
+    max-width: min(680px, 100%);
+    max-height: 280px;
+    overflow: auto;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    font-size: var(--text-control);
+}
+.media-import__edition-details table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: start;
+}
+.media-import__edition-details th, .media-import__edition-details td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
 }
