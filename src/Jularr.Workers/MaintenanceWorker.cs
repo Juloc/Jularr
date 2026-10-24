@@ -7,6 +7,8 @@ using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Library.V1;
 using Jularr.Backend.Service.System.Media.V1;
 using Jularr.Backend.Service.System.Operation.V1;
+using Jularr.Backend.Service.System.Acquisition.V1;
+using Jularr.Backend.Data.System.Acquisition.V1;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Workers
@@ -20,6 +22,7 @@ namespace Jularr.Workers
                 await services.GetRequiredService<PruneOperationsV1>().ExecuteAsync<UpdateResult>(new PruneOperationsParametersV1(), default, token);
                 await services.GetRequiredService<CleanRecycleBinsV1>().ExecuteAsync<UpdateResult>(new CleanRecycleBinsParametersV1(), default, token);
                 await services.GetRequiredService<CleanCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token);
+                await services.GetRequiredService<ReconcileDirectDownloadFoldersV1>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default, token);
             }, ct);
     }
 }

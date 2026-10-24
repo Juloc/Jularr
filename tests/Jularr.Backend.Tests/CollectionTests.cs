@@ -87,9 +87,9 @@ namespace Jularr.Backend.Tests
             // A title of the library is found by name and added from the collection page.
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "WantedItems" ("WorkId") VALUES (20);
-                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId")
-                    VALUES (20, 101, 41, 1);
                 INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual") VALUES (20, 'New Film', TRUE);
+                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId")
+                    SELECT 20, 101, 41, "Id" FROM "UiLocales" ORDER BY "Id" LIMIT 1;
                 """);
             using var found = await host.SendAsync(HttpMethod.Get, "/Collections/" + favorites + "?q=New");
             var foundHtml = await found.Content.ReadAsStringAsync();

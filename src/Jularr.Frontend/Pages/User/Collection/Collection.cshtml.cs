@@ -130,7 +130,7 @@ namespace Jularr.Frontend.Pages.User.Collection
             if (!_collection.IsSmart && !string.IsNullOrWhiteSpace(Query))
             {
                 _found = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(query: Query, pageSize: 12,
-                    availabilityTypeIds: [LibraryAvailabilityType.Available, LibraryAvailabilityType.MyRequests, LibraryAvailabilityType.OtherRequests]), token)).Items;
+                    availabilityTypeIds: [LibraryAvailabilityType.Available, LibraryAvailabilityType.MyRequests]), token)).Items;
             }
         }
 

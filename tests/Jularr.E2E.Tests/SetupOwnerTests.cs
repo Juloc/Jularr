@@ -85,7 +85,6 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(playback).Not.ToBeCheckedAsync();
                 var watchGroup = page.Locator(".option-groups--extras .option-group").Filter(new() { Has = page.Locator("[data-module=Trickplay]") });
                 await watchGroup.Locator("summary").ClickAsync();
-                // HTML boolean attributes serialize as an empty value in Chromium.
                 await Assertions.Expect(watchGroup).ToHaveAttributeAsync("open", "");
                 await page.Locator(".option-groups--extras [data-module=Trickplay] .toggle").ClickAsync();
                 await Assertions.Expect(playback).ToBeCheckedAsync();
