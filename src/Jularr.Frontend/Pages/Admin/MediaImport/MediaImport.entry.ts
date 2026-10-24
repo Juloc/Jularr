@@ -435,7 +435,7 @@ function initializeLiveImport(): void {
                         processed = settled.size;
                         progress.value = processed;
                         pending((apply.textContent ?? "").trim());
-                        if (node) node.status.scrollIntoView({ block: "nearest" });
+                        // Keep the page position stable while hundreds of rows report outcomes.
                     } else if (update.kind === "done") {
                         waveFinished = true;
                         remaining = update.remaining;
