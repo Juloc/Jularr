@@ -66,7 +66,8 @@ namespace Jularr.Frontend.Pages.User.DiscoverCatalog
             // A title that already is a Work, or a season of one, opens it.
             if (_entry?.WorkId is { } workId)
             {
-                return LocalRedirect("/Details/" + workId.ToString(CultureInfo.InvariantCulture));
+                var season = _entry.SeasonNumber is { } number ? "?season=" + number.ToString(CultureInfo.InvariantCulture) : "";
+                return LocalRedirect("/Details/" + workId.ToString(CultureInfo.InvariantCulture) + season);
             }
 
             PreparePage();

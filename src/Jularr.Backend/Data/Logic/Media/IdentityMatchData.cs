@@ -51,6 +51,53 @@ namespace Jularr.Backend.Data.Logic.Media
         public int Limit { get; }
     }
 
+    // Discover resolves an AniList entry to a canonical Work without creating another title.
+    internal sealed class AnimeCatalogLookupData : BaseData
+    {
+        public AnimeCatalogLookupData(MediaType mediaTypeId, string aniListId, string? tvdbSeriesId, string? tmdbSeriesId, string? tmdbMovieId, int? seasonNumber)
+        {
+            MediaTypeId = mediaTypeId;
+            AniListId = aniListId;
+            TvdbSeriesId = tvdbSeriesId;
+            TmdbSeriesId = tmdbSeriesId;
+            TmdbMovieId = tmdbMovieId;
+            SeasonNumber = seasonNumber;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
+        public string AniListId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value), false)]
+        public string? TvdbSeriesId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value), false)]
+        public string? TmdbSeriesId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value), false)]
+        public string? TmdbMovieId { get; }
+
+        [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.SeasonNumber), false)]
+        public int? SeasonNumber { get; }
+    }
+
+    internal sealed class AnimeCatalogWorkData : BaseData
+    {
+        public AnimeCatalogWorkData(long workId, int? seasonNumber)
+        {
+            WorkId = workId;
+            SeasonNumber = seasonNumber;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.SeasonNumber), false)]
+        public int? SeasonNumber { get; }
+    }
+
     // A matched Work whose AniList relations are due, with the AniList entries it holds (the entry of a film, a book, or the entries of its seasons).
     internal sealed class IdentityRelationTargetData : BaseData
     {

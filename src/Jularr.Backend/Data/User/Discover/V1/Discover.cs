@@ -290,6 +290,10 @@ namespace Jularr.Backend.Data.User.Discover.V1
         // Author, artist or developer.
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Author))]
         public string? Author { get; init; }
+
+        // The verified TVDB season opened when this is an AniList anime entry.
+        [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.SeasonNumber), false)]
+        public int? SeasonNumber { get; init; }
     }
 
     public sealed class ReadDiscoverCatalogFeedDataV1 : BaseData

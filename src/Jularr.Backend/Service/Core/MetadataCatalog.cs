@@ -23,7 +23,7 @@ using Microsoft.Extensions.Caching.Memory;
 namespace Jularr.Backend.Service.Core
 {
     // Provider search and import of every media type, for the Works page and for Discover.
-    internal sealed class MetadataCatalog(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games, IMemoryCache cache, ExternalFeedCache feeds)
+    internal sealed class MetadataCatalog(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games, IMemoryCache cache, ExternalFeedCache feeds, AniBridgeMappings bridge)
     {
         // Ranked lists of one provider are read one after the other.
         private static readonly SemaphoreSlim BooksGate = new(1, 1);
@@ -85,9 +85,10 @@ namespace Jularr.Backend.Service.Core
         // One catalog title as its catalog describes it; its page never trusts what a link says.
         public async Task<DiscoverCatalogEntryV1> ReadEntryAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string @namespace, string externalId, CancellationToken ct)
         {
-            if (mediaType == MediaType.Series && subtype == MediaSubtype.Anime && @namespace == AniListMetadata.Namespace)
+            if (subtype == MediaSubtype.Anime && @namespace == AniListMetadata.Namespace)
             {
-                return await ReadAnimeAsync(context, AniListId(externalId), ct);
+                if (mediaType == MediaType.Series) return await ReadAnimeAsync(context, AniListId(externalId), ct);
+                if (mediaType == MediaType.Movie) return await ReadAnimeMovieAsync(context, AniListId(externalId), ct);
             }
 
             var key = $"metadata.catalog.entry.{@namespace}.{externalId}";
@@ -115,6 +116,7 @@ namespace Jularr.Backend.Service.Core
         private async Task<DiscoverCatalogEntryV1> ReadAnimeAsync(LogicContext context, int id, CancellationToken ct)
         {
             var media = await ReadAnimeEntryAsync(id, ct);
+            var mapped = await bridge.ReadAsync(id, ct);
 
             // What AniList lacks for this season comes from the series.
             TmdbWork? series = null;
@@ -123,7 +125,7 @@ namespace Jularr.Backend.Service.Core
                 try
                 {
                     var connection = await metadata.ConnectAsync(context, ct);
-                    if (await FindAnimeSeriesAsync(connection, media, ct) is { } tmdbId)
+                    if ((mapped?.TmdbSeriesId ?? await FindAnimeSeriesAsync(connection, media, ct)) is { } tmdbId)
                     {
                         series = await metadata.ReadWorkAsync(connection, MediaType.Series, tmdbId, ct);
                     }
@@ -135,10 +137,80 @@ namespace Jularr.Backend.Service.Core
             }
 
             var known = (await MarkKnownAsync(context, [AniListAnime(media)], ct))[0].WorkId;
+            var linked = await FindAnimeWorkAsync(context, MediaType.Series, id, mapped, ct);
+            var conflict = known is { } existing && linked is { } resolved && existing != resolved.WorkId;
+            var workId = conflict ? null : linked?.WorkId ?? known;
             return new DiscoverCatalogEntryV1(TextLimit.Cut(AniListMetadata.Title(media), 500)!, media.Year is >= 1800 and <= 2200 ? media.Year : null,
                 TextLimit.Cut(media.Description ?? series?.Overview, 4000), media.CoverUrl ?? TmdbClient.PosterUrl(series?.PosterPath), media.BannerUrl ?? TmdbClient.BackdropUrl(series?.BackdropPath),
-                media.TrailerKey ?? series?.Details.TrailerKey, known);
+                media.TrailerKey ?? series?.Details.TrailerKey, workId) { SeasonNumber = conflict ? null : linked?.SeasonNumber };
         }
+
+        private async Task<DiscoverCatalogEntryV1> ReadAnimeMovieAsync(LogicContext context, int id, CancellationToken ct)
+        {
+            var media = await aniList.ReadAsync(AniListMediaType.Anime, id, ct);
+            if (media.Format != "MOVIE") throw new KeyNotFoundException("Not an anime movie.");
+
+            var mapped = await bridge.ReadAsync(id, ct);
+            var known = (await MarkKnownAsync(context, [AniListAnime(media)], ct))[0].WorkId;
+            var linked = await FindAnimeWorkAsync(context, MediaType.Movie, id, mapped, ct);
+            var workId = known is { } existing && linked is { } resolved && existing != resolved.WorkId ? null : linked?.WorkId ?? known;
+            return new DiscoverCatalogEntryV1(TextLimit.Cut(AniListMetadata.Title(media), 500)!, media.Year is >= 1800 and <= 2200 ? media.Year : null,
+                TextLimit.Cut(media.Description, 4000), media.CoverUrl, media.BannerUrl, media.TrailerKey, workId);
+        }
+
+        // An exact external identity wins over a guessed title. Conflicting Works are never silently merged.
+        private Task<AnimeCatalogWorkData?> FindAnimeWorkAsync(LogicContext context, MediaType mediaType, int aniListId, AniBridgeMappings.Link? mapped, CancellationToken ct) =>
+            context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        work."Id" AS "WorkId",
+                        coalesce(
+                            (
+                                SELECT CASE WHEN count(DISTINCT season."Number") = 1 THEN min(season."Number")::integer END
+                                FROM "WorkUnitExternalIdentities" AS identity
+                                JOIN "WorkUnits" AS season ON season."Id" = identity."WorkUnitId"
+                                WHERE identity."Namespace" = 'anilist'
+                                    AND identity."Value" = @AniListId
+                                    AND season."WorkId" = work."Id"
+                                    AND season."WorkUnitTypeId" = 1
+                            ),
+                            (
+                                SELECT season."Number"::integer
+                                FROM "WorkUnits" AS season
+                                WHERE season."WorkId" = work."Id"
+                                    AND season."WorkUnitTypeId" = 1
+                                    AND season."ParentWorkUnitId" IS NULL
+                                    AND season."Number" = @SeasonNumber
+                                LIMIT 1
+                            )
+                        ) AS "SeasonNumber"
+                    FROM "Works" AS work
+                    WHERE work."MediaTypeId" = @MediaTypeId
+                        AND (
+                            EXISTS (
+                                SELECT 1 FROM "WorkExternalIdentities" AS identity
+                                WHERE identity."WorkId" = work."Id"
+                                    AND (identity."Namespace" = 'anilist' AND identity."Value" = @AniListId
+                                        OR identity."Namespace" = 'tvdb' AND identity."Value" = @TvdbSeriesId
+                                        OR identity."Namespace" = 'tmdb_tv' AND identity."Value" = @TmdbSeriesId
+                                        OR identity."Namespace" = 'tmdb_movie' AND identity."Value" = @TmdbMovieId)
+                            )
+                            OR EXISTS (
+                                SELECT 1 FROM "WorkUnitExternalIdentities" AS identity
+                                JOIN "WorkUnits" AS unit ON unit."Id" = identity."WorkUnitId"
+                                WHERE unit."WorkId" = work."Id" AND identity."Namespace" = 'anilist' AND identity."Value" = @AniListId
+                            )
+                        );
+                    """;
+                sql.Parameters.Add(new AnimeCatalogLookupData(mediaType, aniListId.ToString(CultureInfo.InvariantCulture),
+                    mapped?.TvdbSeriesId?.ToString(CultureInfo.InvariantCulture), mapped?.TmdbSeriesId?.ToString(CultureInfo.InvariantCulture),
+                    mapped?.TmdbMovieId?.ToString(CultureInfo.InvariantCulture), mapped?.TvdbSeasonNumber));
+                var candidates = await ctx.ReadSql.ReadListAsync<AnimeCatalogWorkData>(sql, token);
+                return candidates.Count == 1 ? candidates[0] : null;
+            }, ct, mode: SqlAccessMode.ReadOnly);
 
         private async Task<AniListMedia> ReadAnimeEntryAsync(int id, CancellationToken ct)
         {
@@ -367,9 +439,30 @@ namespace Jularr.Backend.Service.Core
                 var media = await ReadAnimeEntryAsync(int.TryParse(externalId, NumberStyles.None, CultureInfo.InvariantCulture, out var aniListId) ? aniListId
                     : throw new KeyNotFoundException("Invalid AniList id."), ct);
                 var connection = await metadata.ConnectAsync(context, ct);
-                return await FindAnimeSeriesAsync(connection, media, ct) is { } tmdbId
+                return ((await bridge.ReadAsync(aniListId, ct))?.TmdbSeriesId ?? await FindAnimeSeriesAsync(connection, media, ct)) is { } tmdbId
                     ? await metadata.ImportAsync(context, connection, MediaType.Series, MediaSubtype.Anime, tmdbId, ct)
                     : throw new KeyNotFoundException("TMDB does not know this anime.");
+            }
+
+            if (mediaType == MediaType.Movie && @namespace == AniListMetadata.Namespace)
+            {
+                var id = AniListId(externalId);
+                var media = await aniList.ReadAsync(AniListMediaType.Anime, id, ct);
+                if (media.Format != "MOVIE") throw new KeyNotFoundException("Not an anime movie.");
+                var mapped = await bridge.ReadAsync(id, ct);
+                var connection = await metadata.ConnectAsync(context, ct);
+                var tmdbId = mapped?.TmdbMovieId;
+                if (tmdbId is null)
+                {
+                    foreach (var title in new[] { media.EnglishTitle, media.RomajiTitle }.OfType<string>().Distinct(StringComparer.Ordinal))
+                    {
+                        tmdbId = AniListMatching.ChooseSeries(await metadata.SearchAsync(connection, MediaType.Movie, title, media.Year, ct), media);
+                        if (tmdbId is not null) break;
+                    }
+                }
+                return tmdbId is { } matched
+                    ? await metadata.ImportAsync(context, connection, MediaType.Movie, MediaSubtype.Anime, matched, ct)
+                    : throw new KeyNotFoundException("TMDB does not know this anime movie.");
             }
 
             // Importing an existing mapping refreshes the same Work.

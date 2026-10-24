@@ -6,6 +6,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.System.Media.V1;
+using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.System.Media.V1;
 using Jularr.Integrations.Data.AniList;
@@ -64,6 +65,14 @@ namespace Jularr.Backend.Tests
 
             Assert.AreEqual("100:1:0,200:2:0,200:3:12", await host.ScalarAsync("""SELECT string_agg("WorkUnitId" || ':' || "Value" || ':' || "EpisodeOffset", ',' ORDER BY "Value") FROM "WorkUnitExternalIdentities" """));
             Assert.AreEqual("10:1,20:2,30:3", await host.ScalarAsync("""SELECT string_agg("WorkId" || ':' || "IdentityMatchStatusTypeId", ',' ORDER BY "WorkId") FROM "WorkIdentityMatches" """));
+
+            // Discover opens the existing TVDB-structured series at the season mapped to this AniList entry.
+            using var details = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/entry",
+                new ReadDiscoverCatalogEntryDataV1(Data.Enums.Media.MediaType.Series, "anilist", "2", Data.Enums.Media.MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, await details.Content.ReadAsStringAsync());
+            var catalog = await details.Content.ReadFromJsonAsync<DiscoverCatalogEntryV1>();
+            Assert.AreEqual(10L, catalog?.WorkId);
+            Assert.AreEqual(2, catalog?.SeasonNumber);
 
             // The person picks one candidate; the mapping is manual. Neither a missing entry nor a decided Work is accepted.
             using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/matches");
