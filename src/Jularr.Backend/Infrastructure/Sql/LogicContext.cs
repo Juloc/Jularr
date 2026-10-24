@@ -41,9 +41,9 @@ namespace Jularr.Backend.Infrastructure.Sql
         internal void AddTransactionalGuard(Func<LogicContext, CancellationToken, Task> check)
         {
             var verified = _transactionalAccessCheck ?? throw new InvalidOperationException("The primary service gate has not been installed.");
-            _transactionalAccessCheck = async (ctx, token) =>
+            _transactionalAccessCheck = async (ctx, mode, token) =>
             {
-                await verified(ctx, token);
+                await verified(ctx, mode, token);
                 await check(ctx, token);
             };
         }
