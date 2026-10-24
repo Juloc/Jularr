@@ -8,7 +8,7 @@ namespace Jularr.E2E.Tests
     {
         private static readonly string[] Jobs =
         [
-            "Library scans", "Backups", "Download tracking", "Wanted search", "Provider sync", "Plex sync", "Jellyfin sync", "Emby sync", "Usenet downloads", "AniList matching", "AniList relations", "AniList sync", "Provider covers",
+            "Library scans", "Backups", "Media imports", "Download tracking", "Wanted search", "Provider sync", "Plex sync", "Jellyfin sync", "Emby sync", "Usenet downloads", "AniList matching", "AniList relations", "AniList sync", "Provider covers",
             "Storage check", "Scan scheduling", "Automatic backup", "Housekeeping", "Seek thumbnails", "Subtitles", "Text recognition", "Catalog sync", "Resource sampling"
         ];
 
@@ -36,10 +36,19 @@ namespace Jularr.E2E.Tests
             {
                 await Owner.SetUpAndSignInAsync(page);
                 await page.GotoAsync("/Admin/Jobs");
+                // The new import queue adds another row; check both pages rather
+                // than requiring every background job on the first 25-row page.
+                var firstPage = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var job in Jobs)
                 {
-                    await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = job, Exact = true })).ToHaveCountAsync(1);
+                    if (await page.GetByRole(AriaRole.Button, new() { Name = job, Exact = true }).CountAsync() == 1)
+                        firstPage.Add(job);
                 }
+                var pager = page.GetByRole(AriaRole.Navigation, new() { Name = "Pages", Exact = true });
+                await pager.GetByRole(AriaRole.Link, new() { Name = "Next", Exact = true }).ClickAsync();
+                foreach (var job in Jobs.Where(job => !firstPage.Contains(job)))
+                    await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = job, Exact = true })).ToHaveCountAsync(1);
+                await pager.GetByRole(AriaRole.Link, new() { Name = "Previous", Exact = true }).ClickAsync();
 
                 // Pausing shows at once and keeps the job from running; resuming undoes it.
                 var trickplay = Row(page, "Seek thumbnails");

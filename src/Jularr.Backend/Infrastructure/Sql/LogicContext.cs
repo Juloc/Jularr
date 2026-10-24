@@ -36,6 +36,22 @@ namespace Jularr.Backend.Infrastructure.Sql
             _transactionalAccessCheck = check;
         }
 
+        // A server-owned job adds its immutable requesting account as a second
+        // transaction gate. This cannot replace the centrally verified ServiceGate.
+        internal void AddTransactionalGuard(Func<LogicContext, CancellationToken, Task> check)
+        {
+            var verified = _transactionalAccessCheck ?? throw new InvalidOperationException("The primary service gate has not been installed.");
+            _transactionalAccessCheck = async (ctx, mode, token) =>
+            {
+                await verified(ctx, mode, token);
+                // The owner guard acquires FOR SHARE locks to close permission
+                // revocation races. Provider metadata lookups use read-only
+                // transactions and cannot acquire these locks; the worker
+                // checks ownership before provider I/O and every write batch.
+                if (mode == SqlAccessMode.ReadWrite) await check(ctx, token);
+            };
+        }
+
         // Each batch rechecks access.
         public Task<TResult> ExecuteBatchAsync<TResult>(Func<LogicContext, CancellationToken, Task<TResult>> action, CancellationToken cancellationToken = default, SqlAccessMode mode = SqlAccessMode.ReadWrite)
         {

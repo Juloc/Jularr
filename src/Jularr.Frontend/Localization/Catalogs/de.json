@@ -6524,6 +6524,7 @@
    "Remove identification",
    "Zuordnung entfernen"
   ],
+  "operation.type.MediaImport": ["Media list import", "Medienlistenimport"],
   "operation.type.LibraryScan": [
    "Library scan",
    "Bibliotheksscan"
@@ -9216,6 +9217,17 @@
    "Download import report",
    "Importbericht herunterladen"
   ],
+  "import.job.title": ["Recent media import", "Letzter Medienimport"],
+  "import.job.queued": ["Queued on server", "Auf dem Server eingeplant"],
+  "import.job.stage.Queued": ["Waiting", "Wartet"],
+  "import.job.stage.Matching": ["Matching metadata", "Metadaten werden abgeglichen"],
+  "import.job.stage.Importing": ["Adding work", "Werk wird hinzugefügt"],
+  "import.job.stage.Done": ["Finished", "Abgeschlossen"],
+  "import.job.running": ["Import running on server", "Import läuft auf dem Server"],
+  "import.job.completed": ["Import complete", "Import abgeschlossen"],
+  "import.job.failed": ["Import stopped", "Import angehalten"],
+  "import.job.disconnected": ["Connection lost. The server keeps the saved progress.", "Verbindung unterbrochen. Der Server speichert den Fortschritt weiter."],
+  "import.job.startFailed": ["Could not queue the import. Review the list and try again.", "Import konnte nicht gestartet werden. Liste prüfen und erneut versuchen."],
   "import.phase.partial": [
    "Import paused: some titles are still waiting",
    "Import pausiert: Einige Titel warten noch"
@@ -10179,6 +10191,7 @@
    "The server is busy, so this plays in a lower quality.",
    "Der Server ist ausgelastet, deshalb läuft dies in niedrigerer Qualität."
   ],
+  "jobs.job.mediaImportQueue": ["Media imports", "Medienimporte"],
   "jobs.job.benchmarkQueue": [
    "Transcoding benchmark",
    "Transcoding-Benchmark"
@@ -10422,6 +10435,10 @@
   "jobs.about.backupQueue": [
    "Creates the backups that were asked for.",
    "Erstellt die angeforderten Sicherungen."
+  ],
+  "jobs.about.mediaImportQueue": [
+   "Imports selected media-list titles in the background and resumes unfinished work after a restart.",
+   "Importiert ausgewählte Titel aus Medienlisten im Hintergrund und setzt unterbrochene Aufträge nach einem Neustart fort."
   ],
   "jobs.about.downloads": [
    "Follows the progress of external downloads and starts their import when they finish.",
