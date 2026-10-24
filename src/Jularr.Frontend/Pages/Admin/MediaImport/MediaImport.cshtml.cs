@@ -260,7 +260,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             if (CanInclude(row))
             {
                 var include = new Toggle("import.row.include", row.IsIncluded);
-                include.Control.Attribute("name", name + "Include").Attribute("data-import-row", "");
+                include.Control.Attribute("name", name + "Include").Attribute("data-import-row", "").Attribute("data-can-monitor", row.CanMonitor ? "true" : "false");
 
                 // The first value wins when the switch is on.
                 parts.Add(new Div(include).Class("media-import__include"));
