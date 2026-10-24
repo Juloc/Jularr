@@ -1,8 +1,12 @@
+using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
 
 namespace Jularr.Backend.Data.Logic.Media
 {
+    internal sealed record MediaImportJobPayload(string Json, MediaImportActionType Action,
+        MediaImportDefaultV1[] Defaults, MediaImportChoiceV1[] Choices);
+
     internal sealed record MediaImportJobQueueData(long AccountId, Guid PublicId, string Payload, int TotalCount);
     internal sealed record MediaImportJobOwnerData(long AccountId);
     internal sealed record MediaImportJobKeyData(Guid JobId, long AccountId);
