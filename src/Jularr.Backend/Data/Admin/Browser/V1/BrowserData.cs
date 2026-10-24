@@ -30,7 +30,8 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
     public sealed class BrowserStatusV1 : BaseResponse
     {
         public BrowserStatusV1(string? path, string? remoteAddress, string profilePath, bool isAvailable, bool isRunning, string? version, string? lastUrl, string? lastOutcome, string? lastError,
-            DateTime? lastAttemptAt, PageResult<BrowserEventV1> events)
+            DateTime? lastAttemptAt, PageResult<BrowserEventV1> events, string installationState = "disabled", string? installationError = null,
+            long downloadedBytes = 0, long totalBytes = 0)
         {
             Path = path;
             RemoteAddress = remoteAddress;
@@ -43,7 +44,23 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
             LastError = lastError;
             LastAttemptAt = lastAttemptAt;
             Events = events;
+            InstallationState = installationState;
+            InstallationError = installationError;
+            DownloadedBytes = downloadedBytes;
+            TotalBytes = totalBytes;
         }
+
+        [DataField(typeof(BrowserFields), nameof(BrowserFields.InstallationState))]
+        public string InstallationState { get; }
+
+        [DataField(typeof(BrowserFields), nameof(BrowserFields.InstallationError), false)]
+        public string? InstallationError { get; }
+
+        [DataField(typeof(BrowserFields), nameof(BrowserFields.DownloadedBytes))]
+        public long DownloadedBytes { get; }
+
+        [DataField(typeof(BrowserFields), nameof(BrowserFields.TotalBytes))]
+        public long TotalBytes { get; }
 
         [DataField(typeof(BrowserFields), nameof(BrowserFields.Path), false)]
         public string? Path { get; }

@@ -61,59 +61,39 @@ kopieren, Release und Datenbankpasswort setzen, `docker compose up -d`, dann `ht
 (auf dem `PATH` gefunden; ein gesetzter Pfad gewinnt, ein leerer schaltet das Programm ab), aller
 Zustand liegt unter `DataPath` (`/data` im Image: `keys`, `backups`, `trickplay`, `translation`, `ocr`),
 Bibliotheken unter `/media` (`Storage:LocalPaths`). Eine leere Datenbank erhält beim ersten Start
-alle frischen Baselines in einer Transaktion; eine bestehende wird nie verändert oder migriert.
+die Baselines mit den nummerierten Migrationen; eine ältere bestehende Version wird nur nach
+erfolgreichem Backup migriert.
 
 ### Browser für Quellen mit Browserprüfung
 
-Anna's Archive stellt seine Seiten hinter eine Prüfung, die nur ein Browser besteht. Jularr liest
-solche Seiten mit einem echten Chrome oder Chromium, den es **nicht** selbst mitbringt: das Image
-bleibt schlank, der Browser kommt später dazu.
+**Standardmäßig deaktiviert.** Das optionale Modul **Browser** lässt sich im Adminbereich
+unter `/Admin/Instance/Modules` einschalten und wieder ausschalten; es hängt von
+**Acquisition** ab. Jularr benötigt dafür keinen zweiten Container, keine Root-Befehle
+aus dem Webprozess und keinen öffentlich erreichbaren Debugging-Port.
 
-Der Browser wird im bestehenden Jularr-Container installiert, nicht in einem Sidecar.
-**Wichtig ist die Reihenfolge:** Zuerst `JULARR_BROWSER_ADDRESS=http://127.0.0.1:9222`
-in der `.env` setzen und die Konfiguration anwenden; **danach** Chrome installieren und starten.
+Beim Einschalten lädt Jularr eine fest vorgegebene, offizielle Chrome-for-Testing-Version
+für Linux x64 oder arm64 in `DataPath/browser/managed`. Download und Entpacken haben
+Größen- und Pfadgrenzen, eine temporäre Installation wird vor der Aktivierung geprüft.
+Der Hintergrunddienst aktiviert Chrome nach der Installation automatisch. Ein Neustart
+oder eine Container-Neuerstellung behält den Browser unter dem persistenten `/data`.
+Der Installationsfortschritt und Fehler erscheinen unter `/Admin/Browser`; die
+Modulverwaltung prüft den Zustand ungefähr alle 30 Sekunden.
 
-```bash
-docker compose up -d jularr                             # Konfiguration vor der Installation anwenden
-docker compose exec -u root jularr jularr-browser install # Browser und Bibliotheken installieren
-docker compose exec -d jularr jularr-browser run          # auf internem Port 9222 starten
-```
+Beim Ausschalten wird die Browserbenutzung unterbunden und der eigene Prozess gestoppt.
+Jularr entfernt nur seine verwalteten Browserdateien, temporären Dateien, Cookies und
+sein Browserprofil; Bibliotheken, NAS-Mounts und andere Downloadordner bleiben erhalten.
+Ein vorhandener manuell konfigurierter Browser über `Browser:Path` oder
+`Browser:RemoteAddress` bleibt als Konfigurationsoption erhalten.
 
-Nach diesen Schritten **kein** `docker compose up --force-recreate` ausführen:
-Der Browser ist derzeit nur in der beschreibbaren Containersicht installiert.
-`docker compose restart` erhält zwar die Installation, beendet aber den separat
-gestarteten Browserprozess; `jularr-browser run` muss danach erneut gestartet werden.
-Ein Redeploy/Update, das den Container neu erstellt, benötigt derzeit eine erneute
-Installation. Das Browserprofil bleibt im persistenten `/data/browser`-Volume.
-Der langfristige, ohne erneute Installation zuverlässige Installer ist in
-[#1550](https://github.com/Juloc/Jularr/issues/1550) erfasst.
+**Sicherheit:** Die normale HTTPS-Adressprüfung ist keine vollständige Browser-
+Netzwerkisolierung. Für nicht vertrauenswürdige Seiten muss die ausgehende
+Verbindungsbegrenzung gegen interne IPs auch für Redirects, Skripte, Frames und
+nachgeladene Ressourcen noch in einer isolierten Debian-Docker-Umgebung nachgewiesen
+werden ([#1483](https://github.com/Juloc/Jularr/issues/1483)). Der optionale Browser
+darf vor diesem Test nicht als sicherer Produktivpfad freigegeben werden. Für Prüfungen,
+die eine Person lösen muss, zeigt Jularr weiterhin den manuellen Link; es gibt keinen
+CAPTCHA-Bypass.
 
-Unter `/Admin/Browser` erscheint der Verbindungsstatus. Er zeigt „verbunden“ erst
-nach erfolgreicher Browserverbindung, nicht unmittelbar nach dem Containerstart.
-Jularr verwendet den verbundenen Browser bei erkannten Quellprüfungen automatisch.
-Die Installation benötigt Container-Root; der als `app` laufende Webprozess darf
-keine Systempakete installieren. Deshalb zeigt die Adminseite die Befehle statt eines
-unsicheren Root-Installationsbuttons.
-
-Der Browser-Debugging-Port bleibt innerhalb des Containers; Compose veröffentlicht
-keinen zusätzlichen Browser-Port. Ein nach außen erreichbarer DevTools-Port wäre ein
-Sicherheitsrisiko.
-
-`Browser:RemoteAddress` (z. B. `http://127.0.0.1:9222`) lässt Jularr einen Browser benutzen, der
-schon läuft – auch einen auf einem anderen Rechner. `Browser:Path` startet einen eigenen Browser
-mit dem Profil unter `DataPath/browser`; `Browser:Port` gibt dessen Port an, damit er von außen
-erreichbar ist. Beides zugleich geht nicht: sie teilen sich das Profil.
-
-Besteht der Browser die Prüfung der Quelle nicht (ein Captcha), bleibt die Quelle beim Menschen:
-der Link wird von Hand eingetragen. Auf einem Server ohne Grafik erkennt die Prüfung den Browser
-meist, dort hilft ein Browser auf einem Desktop-Rechner, den Jularr über `Browser:RemoteAddress`
-benutzt.
-
-Der Browser prüft die angeforderte HTTPS-Adresse vor der Navigation auf öffentliche IP-Adressen.
-Das ist **keine vollständige Netzwerkisolierung**: Weiterleitungen und nachgeladene Ressourcen
-können weitere Ziele erreichen. Für den Betrieb mit nicht vertrauenswürdigen Seiten ist
-zusätzlich eine ausgehende Netzwerksperre für interne Docker-/VM-Adressen erforderlich.
-Chrome-Startparameter, virtueller Bildschirm und optionale Installation bleiben unverändert.
 
 ## Backend im gemeinsamen Host
 

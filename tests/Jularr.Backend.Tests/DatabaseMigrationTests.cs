@@ -126,7 +126,7 @@ namespace Jularr.Backend.Tests
             var options = Backup(folder.Path, out var backups);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
 
-            Assert.AreEqual(7, DatabaseBaseline.CurrentVersion, "All production migrations must have unique contiguous numbers.");
+            Assert.AreEqual(8, DatabaseBaseline.CurrentVersion, "All production migrations must have unique contiguous numbers.");
             await new DatabaseBaseline(cs, options, tools, migrations: [DatabaseBaseline.Migrations[0]]).StartAsync(CancellationToken.None);
             Assert.AreEqual("0002_external_work_feeds", await ScalarAsync(cs,
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 2"));
@@ -145,6 +145,8 @@ namespace Jularr.Backend.Tests
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 6"));
             Assert.AreEqual("0007_download_cleanup_source_inventory", await ScalarAsync(cs,
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 7"));
+            Assert.AreEqual("0008_browser_module", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 8"));
             Assert.AreEqual(1L, await ScalarAsync(cs,
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'PlaybackCompanionStates'"));
             Assert.AreEqual(2L, await ScalarAsync(cs,

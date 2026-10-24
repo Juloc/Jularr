@@ -10,6 +10,70 @@ namespace Jularr.Backend.Tests
     public sealed class SourceBrowserTests
     {
         [TestMethod]
+        [DataRow("CONNECT 127.0.0.1:443 HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\n\\r\\n")]
+        [DataRow("CONNECT 169.254.169.254:443 HTTP/1.1\\r\\nHost: 169.254.169.254\\r\\n\\r\\n")]
+        [DataRow("CONNECT localhost:443 HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n")]
+        [DataRow("CONNECT [::1]:443 HTTP/1.1\\r\\nHost: [::1]\\r\\n\\r\\n")]
+        [DataRow("CONNECT 127.0.0.1:80 HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\n\\r\\n")]
+        [DataRow("GET http://localhost/ HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n")]
+        public async Task EgressProxy_RefusesPrivateHostsAndUnencryptedRequests(string raw)
+        {
+            using var proxy = new BrowserEgressProxy();
+            proxy.Start();
+            using var client = new System.Net.Sockets.TcpClient();
+            await client.ConnectAsync(IPAddress.Loopback, proxy.Port);
+            var stream = client.GetStream();
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(raw.Replace("\\r", "\r").Replace("\\n", "\n")));
+            using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var answer = new byte[512];
+            var size = await stream.ReadAsync(answer, ct.Token);
+            StringAssert.Contains(Encoding.ASCII.GetString(answer, 0, size), "403 Forbidden");
+        }
+
+        [TestMethod]
+        public void EgressProxy_AcceptsOnlyHttpsConnectOn443()
+        {
+            Assert.IsTrue(BrowserEgressProxy.TryConnectAddress("CONNECT example.org:443 HTTP/1.1\\r\\nHost: example.org\\r\\n\\r\\n".Replace("\\r", "\r").Replace("\\n", "\n"), out var host));
+            Assert.AreEqual("example.org", host);
+            Assert.IsFalse(BrowserEgressProxy.TryConnectAddress("CONNECT example.org:80 HTTP/1.1", out _));
+            Assert.IsFalse(BrowserEgressProxy.TryConnectAddress("GET https://example.org/ HTTP/1.1", out _));
+        }
+
+        [TestMethod]
+        public async Task ManagedBrowser_FailedInstallBacksOffAndTurningOffClearsRetry()
+        {
+            var packages = new BrowserPackages(new BrowserOptions { ProfilePath = Path.Combine("relative", "nonexistent-root") });
+            await Assert.ThrowsExactlyAsync<PlatformNotSupportedException>(() => packages.InstallAsync(CancellationToken.None));
+            Assert.AreEqual("failed", packages.State);
+            Assert.IsFalse(packages.CanRetryInstall);
+            await packages.RemoveAsync(CancellationToken.None);
+            Assert.AreEqual("disabled", packages.State);
+            Assert.IsTrue(packages.CanRetryInstall);
+        }
+
+        [TestMethod]
+        public async Task ManagedBrowser_RemovesAbandonedStagingWithoutTouchingOtherFolders()
+        {
+            using var folder = new TemporaryDirectory();
+            var managed = Path.Combine(folder.Path, "managed", "staging");
+            var unrelated = Path.Combine(folder.Path, "library");
+            var previousProfile = Path.Combine(folder.Path, "profile");
+            Directory.CreateDirectory(managed);
+            Directory.CreateDirectory(unrelated);
+            Directory.CreateDirectory(previousProfile);
+            await File.WriteAllTextAsync(Path.Combine(managed, "stale.part"), "incomplete");
+            await File.WriteAllTextAsync(Path.Combine(unrelated, "keep.epub"), "keep");
+            await File.WriteAllTextAsync(Path.Combine(previousProfile, "manual.cookie"), "keep");
+            var packages = new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path });
+
+            Assert.IsTrue(packages.HasManagedData);
+            await packages.RemoveAsync(CancellationToken.None);
+            Assert.IsFalse(packages.HasManagedData);
+            Assert.IsTrue(File.Exists(Path.Combine(unrelated, "keep.epub")));
+            Assert.IsTrue(File.Exists(Path.Combine(previousProfile, "manual.cookie")));
+        }
+
+        [TestMethod]
         public async Task Browser_ReadsAPageBehindACheckAndFetchesItsFile()
         {
             var browser = Environment.GetEnvironmentVariable("JULARR_BROWSER");
