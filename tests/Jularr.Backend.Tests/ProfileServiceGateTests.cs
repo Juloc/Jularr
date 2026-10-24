@@ -27,6 +27,33 @@ namespace Jularr.Backend.Tests
     public sealed class ProfileServiceGateTests
     {
         [TestMethod]
+        public async Task Gate_IndependentInvocationsRetainTheirOwnVerifiedCaller()
+        {
+            await using var fixture = await Fixture.CreateAsync();
+            using var services = CreateServices(fixture);
+            using var scope = services.CreateScope();
+            SetPrincipal(scope.ServiceProvider, fixture.SessionPublicId, fixture.SessionToken);
+            var gate = scope.ServiceProvider.GetRequiredService<IServiceGate>();
+            var user = await gate.RequireCallerAsync(ServiceArea.User, default);
+            var anonymous = await gate.RequireCallerAsync(ServiceArea.Public, default);
+            await gate.RequireAccessAsync(user, new ServicePermission("profile.self.read"), default);
+            await gate.RequireAccessAsync(anonymous, ServicePermission.Public, default);
+            await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireAccessAsync(user with { }, new ServicePermission("profile.self.read"), default));
+        }
+
+        [TestMethod]
+        public async Task ExecuteReadBatches_ParallelInvocationsInOneScopeHaveIndependentAuthorization()
+        {
+            await using var fixture = await Fixture.CreateAsync();
+            using var services = CreateServices(fixture);
+            using var scope = services.CreateScope();
+            SetPrincipal(scope.ServiceProvider, fixture.SessionPublicId, fixture.SessionToken);
+            var service = scope.ServiceProvider.GetRequiredService<ServiceRuntime>().Create(new ReadBatchProbe());
+            var results = await Task.WhenAll(Enumerable.Range(0, 12).Select(_ => service.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileAId), default(NoData))));
+            Assert.IsTrue(results.All(result => result.Id == fixture.ProfileAId));
+        }
+
+        [TestMethod]
         public async Task ExecuteReadBatches_SameAccountCanReadConcurrentlyWithoutAuthorizationLocks()
         {
             await using var fixture = await Fixture.CreateAsync();
