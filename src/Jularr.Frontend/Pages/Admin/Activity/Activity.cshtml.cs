@@ -315,7 +315,14 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
             if (item.CanBrowseFiles)
             {
-                if (OpenOperationId == item.Id && ShowFiles)
+                if (item.SabnzbdConnectionId is { } sabnzbdConnectionId)
+                {
+                    body.Add(Drawer.Block("activity.files",
+                        new A(Glyph("folder", 16), new Text("console.files")).Class("button button--soft")
+                            .Attribute("href", "/Admin/Acquisition/Downloads?PageNumber=1&AcquisitionConnectionId="
+                                + sabnzbdConnectionId.ToString(CultureInfo.InvariantCulture) + "&Pane=files")));
+                }
+                else if (OpenOperationId == item.Id && ShowFiles)
                 {
                     IUiComponent files = _torrentFileLookupFailed
                         ? new P(new Text("activity.files.unavailable"))
@@ -452,7 +459,8 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         {
             _items = await read.ExecuteAsync<PageResult<ActivityItemV1>>(new ReadActivityParametersV1(Filter, Math.Max(1, PageNumber), torrentOnly: ShowFiles), HttpContext.RequestAborted);
             _summary = await summary.ExecuteAsync<ActivitySummaryV1>(new ReadActivitySummaryParametersV1(), HttpContext.RequestAborted);
-            if (ShowFiles && OpenOperationId is { } id && _items.Items.Any(item => item.Id == id && item.CanBrowseFiles))
+            if (ShowFiles && OpenOperationId is { } id
+                && _items.Items.Any(item => item.Id == id && item.CanBrowseFiles && item.SabnzbdConnectionId is null))
             {
                 try
                 {
