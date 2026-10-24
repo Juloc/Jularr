@@ -279,6 +279,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                         + index.ToString(CultureInfo.InvariantCulture) + "/translations/")
                     .Attribute("data-route-url", "/api/v1/translation/routes/")
                     .Attribute("data-translating-label", texts["reader.translating"])
+                    .Attribute("data-language-saving-label", texts["reader.language.saving"])
                     .Attribute("data-translation-failed-label", texts["reader.translationFailed"]);
             }
 
