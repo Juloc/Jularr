@@ -529,6 +529,7 @@ function initializeEditionComparison(): void {
     document.querySelectorAll<HTMLButtonElement>("[data-import-editions]").forEach(button => {
         if (button.dataset.ready !== undefined) return;
         button.dataset.ready = "";
+        button.hidden = false;
         button.addEventListener("click", async () => {
             const parent = button.closest<HTMLElement>(".media-import__stack");
             const selected = parent?.querySelector<HTMLSelectElement>('select[name$=".Choice"]')?.value;
