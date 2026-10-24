@@ -12,9 +12,15 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
     [ServiceEndpoint("GET", "/api/v1/admin/wanted")]
     public sealed class ReadWantedV1 : AdminService<ReadWantedParametersV1>
     {
-        // The targets with whether they hold media and sit below their cutoff: what the list and its counts both read.
+        // Share the cutoff set and keep file existence checks as indexed probes, including with sparse scan statistics.
         internal const string WantedState =
             """
+                    WITH cutoff_state AS MATERIALIZED (
+                        SELECT
+                            below."WantedItemId"
+                        FROM
+                            "WantedBelowCutoff" AS below
+                    )
                     SELECT
                         wanted."Id",
                         wanted."WorkId",
@@ -35,9 +41,18 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                                 1
                             FROM
                                 "MediaAssets" AS asset
-                                JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                             WHERE
                                 asset."WorkId" = wanted."WorkId"
+                                AND EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "StoredFiles" AS available
+                                    WHERE
+                                        available."MediaAssetId" = asset."Id"
+                                        AND available."MissingSince" IS NULL
+                                    OFFSET 0
+                                )
                                 AND (
                                     wanted."GamePlatformId" IS NULL
                                     OR EXISTS (
@@ -64,18 +79,26 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                                         1
                                     FROM
                                         "MediaAssets" AS asset
-                                        JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                                     WHERE
-                                        asset."WorkUnitId" = unit."Id"
+                                        asset."WorkId" = unit."WorkId"
+                                        AND asset."WorkUnitId" = unit."Id"
+                                        AND EXISTS (
+                                            SELECT
+                                                1
+                                            FROM
+                                                "StoredFiles" AS available
+                                            WHERE
+                                                available."MediaAssetId" = asset."Id"
+                                                AND available."MissingSince" IS NULL
+                                            OFFSET 0
+                                        )
                                 )
                         ) AS "HasMedia",
-                        EXISTS (
+                        wanted."Id" IN (
                             SELECT
-                                1
+                                cutoff_state."WantedItemId"
                             FROM
-                                "WantedBelowCutoff" AS below
-                            WHERE
-                                below."WantedItemId" = wanted."Id"
+                                cutoff_state
                         ) AS "IsCutoffUnmet"
                     FROM
                         "WantedItems" AS wanted
@@ -175,6 +198,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 """;
             sql.Parameters.Add(new WantedViewFilterData(Parameters.WantedViewTypeId));
             sql.Page = Page;
+            sql.DisableJit = true;
             return await Context.ReadSql.ReadPageAsync<WantedDetailsV1>(sql, CancellationToken);
         }
     }
@@ -202,6 +226,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 FROM
                     wanted_state;
                 """;
+            sql.DisableJit = true;
             return await Context.ReadSql.ReadRequiredAsync<WantedSummaryV1>(sql, CancellationToken);
         }
     }

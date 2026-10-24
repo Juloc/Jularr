@@ -57,7 +57,7 @@ namespace Jularr.Backend.Service.User.Media.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             // Persisted metadata of a Work the profile may open.
-            var sql = new SqlStatement();
+            var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 $$"""
                 SELECT

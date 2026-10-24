@@ -75,6 +75,33 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public async Task WantedProjection_Upgrade_PreservesDataAndRecordsTheReleaseMigration(bool fromFeedSchema)
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(WantedProjection_Upgrade_PreservesDataAndRecordsTheReleaseMigration) + fromFeedSchema);
+            var options = Backup(folder.Path, out var backups);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: fromFeedSchema ? DatabaseBaseline.Migrations.Take(1).ToArray() : []).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await ExecuteAsync(cs, "INSERT INTO \"WantedItems\" (\"WorkId\") VALUES (501);");
+            if (fromFeedSchema)
+                await ExecuteAsync(cs, """INSERT INTO "ExternalWorkFeeds" ("Key", "Namespace", "MediaTypeId", "DiscoverFeedTypeId", "Page") VALUES ('kept-feed', 'tmdb_movie', 1, 1, 1);""");
+
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual(DatabaseBaseline.CurrentFingerprint, await ScalarAsync(cs, "SELECT \"Fingerprint\" FROM \"DatabaseSchemaVersions\" ORDER BY \"Version\" DESC LIMIT 1;"));
+            Assert.AreEqual("Kept Film", await ScalarAsync(cs, "SELECT \"CanonicalTitle\" FROM \"Works\" WHERE \"Id\" = 501;"));
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"WantedItems\" WHERE \"WorkId\" = 501;"));
+            Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM \"WantedBelowCutoff\";"));
+            if (fromFeedSchema)
+                Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkFeeds" WHERE "Key" = 'kept-feed';"""));
+            Assert.HasCount(1, Directory.GetDirectories(backups));
+        }
+
+        [TestMethod]
         public async Task Upgrade_ProductionFeedMigration_PreservesVersionOneDataAndBacksUpOnce()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
@@ -92,24 +119,26 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Upgrade_FeedVersionTwoToCompanionVersionThree_PreservesFeedsAndCreatesCompanionSchema()
+        public async Task Upgrade_FeedVersionTwoToCompanionVersionFour_PreservesFeedsAndCreatesCompanionSchema()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
-            var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_FeedVersionTwoToCompanionVersionThree_PreservesFeedsAndCreatesCompanionSchema));
+            var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_FeedVersionTwoToCompanionVersionFour_PreservesFeedsAndCreatesCompanionSchema));
             var options = Backup(folder.Path, out var backups);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
 
-            Assert.AreEqual(3, DatabaseBaseline.CurrentVersion, "Both production migrations must have unique contiguous numbers.");
+            Assert.AreEqual(4, DatabaseBaseline.CurrentVersion, "All three production migrations must have unique contiguous numbers.");
             await new DatabaseBaseline(cs, options, tools, migrations: [DatabaseBaseline.Migrations[0]]).StartAsync(CancellationToken.None);
             Assert.AreEqual("0002_external_work_feeds", await ScalarAsync(cs,
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 2"));
             Assert.AreEqual(0L, await ScalarAsync(cs,
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'PlaybackCompanionStates'"));
             await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
-            Assert.AreEqual(3, await ScalarAsync(cs,
-                "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
-            Assert.AreEqual("0003_playback_companion", await ScalarAsync(cs,
+            Assert.AreEqual("0003_wanted_present_asset_projection", await ScalarAsync(cs,
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 3"));
+            Assert.AreEqual(4, await ScalarAsync(cs,
+                "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+            Assert.AreEqual("0004_playback_companion", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 4"));
             Assert.AreEqual(1L, await ScalarAsync(cs,
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'PlaybackCompanionStates'"));
             Assert.AreEqual(2L, await ScalarAsync(cs,
