@@ -72,7 +72,11 @@ namespace Jularr.Backend.Service.User.Translation.V1
                 var installed = await _models.InstalledAsync(server, timeout.Token);
                 return new LocalTranslationAvailabilityV1(OllamaLocalModels.Candidates.FirstOrDefault(candidate => installed.Contains(candidate, StringComparer.Ordinal)));
             }
-            catch (Exception e) when (e is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException)
+            catch (OperationCanceledException) when (!CancellationToken.IsCancellationRequested)
+            {
+                return new LocalTranslationAvailabilityV1(null);
+            }
+            catch (Exception e) when (e is HttpRequestException or JsonException or InvalidDataException)
             {
                 return new LocalTranslationAvailabilityV1(null);
             }
