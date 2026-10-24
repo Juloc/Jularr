@@ -19,6 +19,7 @@ CREATE TABLE "MediaImportJobs" (
 CREATE TABLE "MediaImportJobRows" (
     "OperationId" bigint NOT NULL REFERENCES "MediaImportJobs" ("OperationId") ON DELETE CASCADE,
     "RowIndex" integer NOT NULL CHECK ("RowIndex" BETWEEN 0 AND 1999),
+    "Stage" varchar(16) NOT NULL DEFAULT 'Queued' CHECK ("Stage" IN ('Queued', 'Matching', 'Importing', 'Done')),
     "OutcomeTypeId" smallint NULL CHECK ("OutcomeTypeId" BETWEEN 1 AND 10),
     "Title" varchar(500) NULL,
     "WorkId" bigint NULL REFERENCES "Works" ("Id") ON DELETE SET NULL,
