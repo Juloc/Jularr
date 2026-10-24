@@ -24,3 +24,11 @@ A real NAS/SABnzbd/qBittorrent integration test and shared-root configuration re
 ## Downloader selection and overlap
 
 Compatible transport and supported media types are filtered **before** ascending priority and stable connection-ID tie breaking. This contract is centralized in `DownloadClientSelectionLogic`; the previous special preference for media-scoped connections is removed. This incorporates priority-selection work from #1567 without introducing a second download-folder layout. #1567 is an overlapping open PR and must **not** be merged independently in its current form.
+
+## Consolidated integration branch
+
+The consolidated draft #1572 brings together #1533 (qBittorrent/Nyaa), #1534 (SABnzbd console and persistent cleanup), #1548 (terminal direct staging cleanup) and the downloader selection from #1567. The database upgrades are ordered as SABnzbd version 2 then torrent connection types version 3. This does **not** migrate previously created jobs or client-owned paths.
+
+**Current transport boundaries:** native Usenet/Direct use the media-scoped Jularr job directories; qBittorrent and SABnzbd still receive their own configured save/location mappings. All paths eventually arrive at the existing import owner. Do not infer that the external client payloads already have the new folder structure, and do not delete live torrent payloads or leftovers from partially imported SABnzbd jobs.
+
+**Release prerequisites:** frontend/backend build and tests on the integration head, both numbered migrations on a fresh and upgraded isolated database, real external client + NAS/remount checks, explicit policy for leftover files and seeding, plus the final unified Files experience. Nothing here authorizes an automatic merge.
