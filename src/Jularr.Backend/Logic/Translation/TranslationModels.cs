@@ -30,8 +30,9 @@ namespace Jularr.Backend.Logic.Translation
             var fromEnglish = languages.Where(code => Model(files, Bridge, code) is not null).Order(StringComparer.Ordinal).ToArray();
             var intoEnglish = languages.Where(code => Model(files, code, Bridge) is not null).Order(StringComparer.Ordinal).ToArray();
             // English is a bridge only if a real model exists in the required direction.
-            return (fromEnglish.Length > 0 ? [Bridge, .. intoEnglish] : intoEnglish,
-                intoEnglish.Length > 0 ? [Bridge, .. fromEnglish] : fromEnglish);
+            string[] sources = fromEnglish.Length > 0 ? [Bridge, .. intoEnglish] : intoEnglish;
+            string[] targets = intoEnglish.Length > 0 ? [Bridge, .. fromEnglish] : fromEnglish;
+            return (sources, targets);
         }
 
         // The newest released version with a model and its vocabulary for every build; files for single builds and parts the engine does not use stay out.
