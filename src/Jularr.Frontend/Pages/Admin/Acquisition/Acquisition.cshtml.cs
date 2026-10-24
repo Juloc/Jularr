@@ -376,13 +376,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             {
                 var settings = await downloadStorage.ExecuteAsync<DownloadStorageSettingsV1>(
                     new DownloadStorageParametersV1(DownloadStorageArea.Direct), HttpContext.RequestAborted);
-                _directStorageReady = NativeDownloadStorageNotice.IsConfigured(settings);
+                _directStorageReady = settings.IsConfigured;
             }
             if (Role == AcquisitionConnectionRole.Download)
             {
                 var settings = await downloadStorage.ExecuteAsync<DownloadStorageSettingsV1>(
                     new DownloadStorageParametersV1(DownloadStorageArea.Usenet), HttpContext.RequestAborted);
-                _usenetStorageReady = NativeDownloadStorageNotice.IsConfigured(settings);
+                _usenetStorageReady = settings.IsConfigured;
             }
             if (Role == AcquisitionConnectionRole.Download)
             {

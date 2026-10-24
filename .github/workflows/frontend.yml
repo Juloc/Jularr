@@ -2,13 +2,15 @@ name: Frontend
 
 on:
   pull_request:
+    branches: [main, dev]
+    types: [opened, synchronize, reopened, converted_to_draft, ready_for_review]
     paths:
       - 'src/Jularr.Frontend/**'
       - 'src/Jularr.Backend/**'
       - 'docs/FRONTEND_CONVENTIONS.md'
       - '.github/workflows/frontend.yml'
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'src/Jularr.Frontend/**'
       - 'src/Jularr.Backend/**'
@@ -25,6 +27,7 @@ concurrency:
 
 jobs:
   razor-and-ui-resources:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
