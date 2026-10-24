@@ -1223,23 +1223,6 @@ namespace Jularr.Backend.Logic.Acquisition
             return (await ctx.ReadSql.ReadOptionalAsync<DownloadFinishedData>(sql, ct))?.IsFinished ?? false;
         }
 
-        // A download's files can be cleared only after its operation reaches a terminal state.
-        public static async Task<bool> IsDownloadTerminalAsync(this LogicContext ctx, DownloadOperationParameters data, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    operation."OperationStatusTypeId" IN (3, 4) AS "IsFinished"
-                FROM
-                    "Operations" AS operation
-                WHERE
-                    operation."Id" = @OperationId;
-                """;
-            sql.Parameters.Add(data);
-            return (await ctx.ReadSql.ReadOptionalAsync<DownloadFinishedData>(sql, ct))?.IsFinished ?? false;
-        }
-
         public static async Task CompleteDownloadAsync(this LogicContext ctx, DownloadOperationParameters data, CancellationToken ct)
         {
             var sql = new SqlStatement();
