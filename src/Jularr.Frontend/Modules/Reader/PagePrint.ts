@@ -180,7 +180,14 @@ export function pagePrint(source: HTMLElement, page: number, width: number, heig
                                 pieces.push({ start: startAt + bare.length, end: startAt + value.length });
                         } else pieces.push({ start: startAt, end: startAt + value.length });
                     }
-                    if (pieces.length > 0 && pieces.length <= 32) {
+                    // Only the near-edge words need small spans. The middle of
+                    // the paper is almost flat; keep it as one shaped text run
+                    // to bound both DOM cost and font-shaping discontinuities.
+                    if (pieces.length > 9) {
+                        const last = pieces[pieces.length - 5];
+                        pieces.splice(4, pieces.length - 8, { start: pieces[4].start, end: last.end });
+                    }
+                    if (pieces.length > 0) {
                         const fragments: HTMLElement[] = [];
                         let displayStart = 0;
                         for (const piece of pieces) {
@@ -204,6 +211,7 @@ export function pagePrint(source: HTMLElement, page: number, width: number, heig
                             Object.assign(fragment.style, { position: 'absolute', top: '0',
                                 left: `${leftEdge - box.left}px`, whiteSpace: 'pre', transformOrigin: 'center center' });
                             fragment.textContent = inkText;
+                            if (ink.style.backgroundColor) fragment.style.backgroundColor = ink.style.backgroundColor;
                             fragments.push(fragment);
                         }
                         // Preserve every original character and the existing
