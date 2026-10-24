@@ -12,7 +12,8 @@ function localize(root: ParentNode): void {
         if (!iso || !display) continue;
         const formatted = formatLocalTime(iso, display, locale);
         if (formatted !== null) {
-            if (element.textContent !== formatted) element.textContent = formatted;
+            const label = element.querySelector(".local-time__label") ?? element;
+            if (label.textContent !== formatted) label.textContent = formatted;
             if (element.getAttribute("title") !== iso) element.setAttribute("title", iso);
         }
     }

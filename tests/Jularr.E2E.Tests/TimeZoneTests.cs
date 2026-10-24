@@ -25,8 +25,13 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(germanTime).ToBeVisibleAsync();
             var instant = await germanTime.GetAttributeAsync("datetime");
             var formatted = await germanTime.EvaluateAsync<string>("element => new Intl.DateTimeFormat(document.documentElement.lang || navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(element.getAttribute('datetime')))");
-            await Assertions.Expect(germanTime).ToHaveTextAsync(formatted);
-            var germanText = await germanTime.InnerTextAsync();
+            var germanLabel = germanTime.Locator(".local-time__label");
+            await Assertions.Expect(germanLabel).ToHaveTextAsync(formatted);
+            var germanText = await germanLabel.InnerTextAsync();
+            // Replacing the visible timestamp must not change the width of its containing element.
+            var width = (await germanTime.BoundingBoxAsync())!.Width;
+            await germanLabel.EvaluateAsync("element => element.textContent = 'x'");
+            Assert.IsTrue(Math.Abs((await germanTime.BoundingBoxAsync())!.Width - width) < 1, "The initial UTC fallback must reserve space so localized times do not shift neighboring content.");
 
             await CheckCalendarTodayAsync(germanPage, "Europe/Berlin");
 
@@ -43,7 +48,7 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(americanTime).ToBeVisibleAsync();
             Assert.AreEqual(instant, await americanTime.GetAttributeAsync("datetime"));
             var americanFormatted = await americanTime.EvaluateAsync<string>("element => new Intl.DateTimeFormat(document.documentElement.lang || navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(element.getAttribute('datetime')))");
-            await Assertions.Expect(americanTime).ToHaveTextAsync(americanFormatted);
+            await Assertions.Expect(americanTime.Locator(".local-time__label")).ToHaveTextAsync(americanFormatted);
             Assert.AreNotEqual(germanText, americanFormatted, "The same UTC instant must be shown with two different hours.");
 
             await CheckCalendarTodayAsync(americanPage, "America/New_York");
