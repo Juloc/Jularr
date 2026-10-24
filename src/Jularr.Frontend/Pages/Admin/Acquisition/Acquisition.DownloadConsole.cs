@@ -109,11 +109,18 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             }
             var rows = new Table<DownloadClientFileV1>(folder.Entries)
                 .Content("console.name", entry => entry.IsDirectory
-                    ? new A(new ValueText("📁 " + entry.Name)).Attribute("href", FileAddress(connectionId, area, entry.RelativePath))
+                    ? new A(new Span(new Icon("folder", assets, 18), new ValueText(" " + entry.Name))).Attribute("href", FileAddress(connectionId, area, entry.RelativePath))
                     : new Span(new ValueText(entry.Name)))
                 .Content("console.size", entry => new ValueText(entry.SizeBytes is { } size ? ByteSize.Format(size) : "—"))
-                .Content("console.fileAssignment", entry => new ValueText(entry.Assignment))
-                .Content("console.actions", entry => entry.Assignment is "orphan" or "unassigned"
+                .Content("console.fileAssignment", entry => new Text(entry.Assignment switch
+                {
+                    "orphan" => "console.orphan",
+                    "queue" => "console.queued",
+                    "history" => "console.inHistory",
+                    "unchecked" => "console.unchecked",
+                    _ => "console.unassigned"
+                }))
+                .Content("console.actions", entry => entry.Assignment == "orphan"
                     ? new A(new Text("console.cleanup")).Class("button button--compact button--warn")
                         .Attribute("href", FileAddress(connectionId, area, folder.RelativePath, FilePage) + "&DeleteArea=" + area
                             + "&DeletePath=" + Uri.EscapeDataString(entry.RelativePath))
@@ -129,21 +136,23 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             }
             if (_deletePreview is { } preview)
             {
-                body.Add(new Div(
-                    new P(new ValueText("Löschen bestätigen: " + preview.RelativePath + " · " + preview.Files.ToString(CultureInfo.CurrentCulture)
-                        + " Dateien · " + ByteSize.Format(preview.Bytes))),
-                    new Form<DownloadClientFolderRequestV1>(form =>
-                    {
-                        form.Hidden(item => item.Area);
-                        form.Hidden(item => item.RelativePath);
-                        form.Hidden(item => item.PageNumber);
-                        form.Hidden(item => item.Confirmed);
-                        form.Hidden(item => item.Fingerprint);
-                        form.Submit("console.confirm");
-                    }, Address(connectionId, handler: "DeleteFile"), csrf,
-                        new DownloadClientFolderRequestV1(preview.Area, preview.RelativePath, 1, true, preview.Fingerprint)),
-                    new A(new Text("common.back")).Class("button button--compact")
-                        .Attribute("href", FileAddress(connectionId, area, folder.RelativePath, FilePage))).Class("download-console__confirm"));
+                var returnTo = FileAddress(connectionId, area, folder.RelativePath, FilePage);
+                body.Add(new Modal(assets, "download-file-delete", "console.deleteConfirmTitle",
+                    [
+                        new P(new Text("console.deletePreview")),
+                        new P(new ValueText(preview.RelativePath + " · " + preview.Files.ToString(CultureInfo.CurrentCulture)
+                            + " · " + ByteSize.Format(preview.Bytes))),
+                        new Form<DownloadClientFolderRequestV1>(form =>
+                        {
+                            form.Hidden(item => item.Area);
+                            form.Hidden(item => item.RelativePath);
+                            form.Hidden(item => item.PageNumber);
+                            form.Hidden(item => item.Confirmed);
+                            form.Hidden(item => item.Fingerprint);
+                            form.Cancel().Submit(new Button(new Text("console.confirm")).Warn());
+                        }, Address(connectionId, handler: "DeleteFile"), csrf,
+                            new DownloadClientFolderRequestV1(preview.Area, preview.RelativePath, 1, true, preview.Fingerprint))
+                    ], open: true, returnTo: returnTo));
             }
             body.Add(new P(new Text("console.filesWarning")).Class("download-console__note"));
             return new Section([.. body]).Class("download-console__section");
@@ -159,10 +168,17 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var confirm = ConfirmJobId == jobId;
             if (confirm)
             {
-                return new Div(new P(new Text(history ? "console.removeHistoryConfirm" : "console.cancelConfirm")),
-                    JobForm(connectionId, jobId, removing, "console.confirm", csrf, true),
-                    new A(new Text("common.back")).Attribute("href", Address(connectionId) + "&Pane=" + (history ? "history" : "downloads")).Class("button"))
-                    .Class("download-console__confirm");
+                return new Modal(assets, "download-job-confirm", history ? "console.removeHistoryConfirm" : "console.cancelConfirm",
+                    [
+                        new Form<DownloadClientJobCommandV1>(form =>
+                        {
+                            form.Hidden(item => item.JobId);
+                            form.Hidden(item => item.Action);
+                            form.Hidden(item => item.Confirmed);
+                            form.Cancel().Submit(new Button(new Text("console.confirm")).Warn());
+                        }, Address(connectionId, handler: "Job"), csrf,
+                            new DownloadClientJobCommandV1(jobId, removing, true))
+                    ], open: true, returnTo: Address(connectionId) + "&Pane=" + (history ? "history" : "downloads"));
             }
 
             if (history)

@@ -328,6 +328,25 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             return LocalRedirect(Address());
         }
 
+        // An authorized SSR fragment: polling never reloads forms, other tabs, or the whole document.
+        public async Task<IActionResult> OnGetConsoleAsync()
+        {
+            if (Pane is not ("downloads" or "history"))
+                return BadRequest();
+            var selected = await connection.ExecuteAsync<AcquisitionConnectionDetailsV1>(
+                new AcquisitionConnectionParametersV1(SelectedId()), HttpContext.RequestAborted);
+            if (selected.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd)
+                return BadRequest();
+
+            _downloadDashboard = await inspect.ExecuteAsync<DownloadClientDashboardV1>(
+                new AcquisitionConnectionParametersV1(selected.Id), default, HttpContext.RequestAborted);
+            var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            using var writer = new StringWriter(CultureInfo.InvariantCulture);
+            DownloadClientPane(selected.Id, csrf).WriteTo(writer, HtmlEncoder.Default, texts);
+            Response.Headers.CacheControl = "no-store";
+            return Content(writer.ToString(), "text/html");
+        }
+
         public async Task<IActionResult> OnPostJobAsync(string jobId, string action, bool confirmed = false)
         {
             await manage.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(SelectedId()),

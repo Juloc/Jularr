@@ -3275,6 +3275,8 @@ namespace Jularr.Frontend.Localization
             new("console.cleaned", "Removed from client"),
             new("console.jobId", "SABnzbd job ID"),
             new("console.cleanup", "Delete files"),
+            new("console.deleteConfirmTitle", "Delete verified orphan folder?"),
+            new("console.deletePreview", "The selected folder and its contents will be permanently removed. Files and total size:"),
             new("console.filesWarning", "Deletion is available only for files not associated with a current or known SABnzbd job. Inspect the preview before confirming."),
         ];
     }
