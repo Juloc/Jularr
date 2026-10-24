@@ -60,41 +60,45 @@ jobs:
           test "$status" = "200"
           curl --silent http://127.0.0.1:8097/Setup | grep -q 'name="PasswordConfirmation"'
           docker compose exec -T jularr sh -c 'test -d /data/keys && ls /data'
-      - name: Install, launch and completely remove browser as the unprivileged app
+      - name: Switch browser module on, survive restart and remove all owned files
         env:
           JULARR_VERSION: ci
           JULARR_DB_PASSWORD: ci-only-database-password
         run: |
-          docker compose exec -T jularr sh -ec '
-            test "$(id -un)" = "app"
-            jularr-browser install
-            jularr-browser install
-            test -x /data/browser/runtime/chrome-linux64/chrome
-            mkdir -p /data/browser/.unexpected
-            touch /data/browser/.unexpected/stray
-            printf keep > /data/keep-browser-test
-            jularr-browser run > /tmp/browser-smoke.log 2>&1 &
-            runner=$!
-            trap "kill $runner 2>/dev/null || true; wait $runner 2>/dev/null || true" EXIT
-            ready=0
-            for attempt in $(seq 1 45); do
-              if curl --fail --silent http://127.0.0.1:9222/json/version >/dev/null 2>&1; then ready=1; break; fi
-              sleep 1
-            done
-            if [ "$ready" != 1 ]; then cat /tmp/browser-smoke.log; exit 1; fi
-            kill "$runner"
-            wait "$runner" || true
-            trap - EXIT
-            jularr-browser uninstall
-            jularr-browser uninstall
-            test ! -e /data/browser
-            test "$(cat /data/keep-browser-test)" = keep
-            rm /data/keep-browser-test
-            test ! -e /data/browser/runtime
-            test ! -e /data/browser/profile
-            test ! -e /data/browser/downloads
-            test ! -e /data/browser/cache
-            test ! -e /data/browser/config
-            test ! -e /data/browser/tmp
-          '
-
+          set -euo pipefail
+          docker compose exec -T jularr sh -c 'test "$(id -un)" = "app" && printf keep > /data/keep-browser-test'
+          # Simulate the module-switch persistence layer in this fresh disposable test database.
+          docker compose exec -T postgres psql -U jularr -d jularr -v ON_ERROR_STOP=1 -c 'UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = '\''Browser'\'';'
+          ready=0
+          for attempt in $(seq 1 120); do
+            if docker compose exec -T jularr sh -ec 'test -x /data/browser/runtime/chrome-linux64/chrome && test -f /data/browser/.enabled && curl -fsS http://127.0.0.1:9222/json/version >/dev/null' 2>/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != 1 ]; then docker compose logs jularr | tail -100; exit 1; fi
+          # The runtime in /data must survive a new Jularr container process.
+          docker compose restart jularr
+          ready=0
+          for attempt in $(seq 1 60); do
+            if docker compose exec -T jularr sh -ec 'test -x /data/browser/runtime/chrome-linux64/chrome && curl -fsS http://127.0.0.1:9222/json/version >/dev/null' 2>/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != 1 ]; then docker compose logs jularr | tail -100; exit 1; fi
+          docker compose exec -T jularr sh -ec 'mkdir -p /data/browser/.unexpected && touch /data/browser/.unexpected/stray'
+          docker compose exec -T postgres psql -U jularr -d jularr -v ON_ERROR_STOP=1 -c 'UPDATE "InstanceModules" SET "IsEnabled" = FALSE WHERE "Key" = '\''Browser'\'';'
+          cleaned=0
+          for attempt in $(seq 1 60); do
+            if docker compose exec -T jularr sh -ec 'test ! -e /data/browser && test "$(cat /data/keep-browser-test)" = keep' 2>/dev/null; then
+              cleaned=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$cleaned" != 1 ]; then docker compose logs jularr | tail -100; exit 1; fi
+          docker compose exec -T jularr jularr-browser uninstall
+          docker compose exec -T jularr sh -ec 'test ! -e /data/browser && test "$(cat /data/keep-browser-test)" = keep && rm /data/keep-browser-test'
