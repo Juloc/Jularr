@@ -112,8 +112,9 @@ namespace Jularr.Backend.Logic.Media
             sql.Statement =
                 """
                 SELECT (
-                    EXISTS (SELECT 1 FROM "Accounts" WHERE "Id" = @AccountId AND "IsEnabled" = true AND "AccountRoleTypeId" IN (1, 3))
-                    AND (SELECT count(*) FROM "InstanceModules" WHERE "Key" IN ('Library', 'Requests') AND "IsEnabled") = 2
+                    EXISTS (SELECT 1 FROM "Accounts" WHERE "Id" = @AccountId AND "IsEnabled" = true AND "AccountRoleTypeId" IN (1, 3) FOR SHARE)
+                    AND EXISTS (SELECT 1 FROM "InstanceModules" WHERE "Key" = 'Library' AND "IsEnabled" FOR SHARE)
+                    AND EXISTS (SELECT 1 FROM "InstanceModules" WHERE "Key" = 'Requests' AND "IsEnabled" FOR SHARE)
                 ) AS "Allowed";
                 """;
             sql.Parameters.Add(data);
