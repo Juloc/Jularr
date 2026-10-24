@@ -6,7 +6,7 @@ name: Backend
 on:
   pull_request:
     branches: [main, dev]
-    types: [opened, synchronize, reopened, ready_for_review, labeled, edited]
+    types: [opened, synchronize, reopened, converted_to_draft, ready_for_review, labeled, edited]
 
 permissions:
   contents: read
