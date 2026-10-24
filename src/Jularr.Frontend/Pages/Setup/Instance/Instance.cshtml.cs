@@ -20,24 +20,18 @@ namespace Jularr.Frontend.Pages.Setup.Instance
         // The basic functions, as tinted cards in a grid.
         private static readonly string[] Basics = ["Library", "Playback", "Reading", "Requests", "Acquisition"];
 
-        // The choices that belong to a media type or subtype, under it.
-        private static readonly Dictionary<string, string[]> Subs = new()
-        {
-            ["Series"] = ["Trickplay", "Subtitles"],
-            ["Anime"] = ["AniList"],
-            ["Book"] = ["Translation", "Ocr", "SmartPdf"],
-            ["Manga"] = ["Uploads"],
-            ["Game"] = ["Emulation"]
-        };
-
         // A subtype switches on only below one of these types.
         private static readonly Dictionary<string, string> Parents = new() { ["Anime"] = "Movie Series", ["Manga"] = "Book", ["LightNovel"] = "Book" };
 
-        // The other modules, in groups that open and close.
+        // Only the five primary modules and the media types belong above.
+        // Every smaller capability belongs once, in an accordion for its domain.
         private static readonly (string Title, string Icon, string[] Keys)[] Extras =
         [
-            ("setup.modules.discovery", "search", ["DiscoverCache", "LocalDiscovery"]),
-            ("setup.modules.personal", "users", ["Notifications", "Collections", "Calendar", "Statistics", "UnitGroups", "HomeLayout", "Franchises", "Profiles", "ProgressSync", "Devices", "Registration"]),
+            ("setup.modules.watch", "play", ["Trickplay", "Subtitles", "AniList"]),
+            ("setup.modules.reading", "book", ["Translation", "Ocr", "SmartPdf", "Uploads"]),
+            ("setup.modules.games", "gamepad", ["Emulation"]),
+            ("setup.modules.discovery", "search", ["DiscoverCache", "LocalDiscovery", "Franchises"]),
+            ("setup.modules.personal", "users", ["Notifications", "Collections", "Calendar", "Statistics", "UnitGroups", "HomeLayout", "Profiles", "ProgressSync", "Devices", "Registration"]),
             ("setup.modules.operations", "settings", ["Diagnostics"])
         ];
 
@@ -97,8 +91,9 @@ namespace Jularr.Frontend.Pages.Setup.Instance
                 return string.Format(CultureInfo.CurrentCulture, texts["setup.group.active"], on, modulesList.Count + mediaList.Count);
             }
 
-            // The groups of the other modules; a module no group names goes with the administration ones.
-            var placed = new HashSet<string>(Basics.Concat(Subs.Values.SelectMany(group => group)).Concat(Extras.SelectMany(extra => extra.Keys)));
+            // A newly introduced module has to appear even before it is given an
+            // explicit setup group; place unknown keys in Administration.
+            var placed = new HashSet<string>(Basics.Concat(Extras.SelectMany(extra => extra.Keys)));
             var leftover = _modules.Select(module => module.Key).Where(key => !placed.Contains(key)).ToArray();
             var extraGroups = Extras.Select((extra, index) => (extra.Title, extra.Icon, Keys: extra.Keys.Concat(index == Extras.Length - 1 ? leftover : []).Where(ids.ContainsKey).ToArray())).ToList();
 
@@ -119,8 +114,7 @@ namespace Jularr.Frontend.Pages.Setup.Instance
                     {
                         var types = area.Slugs.Select(slug => MediaAreas.Keys[slug]).Where(mediaInfo.ContainsKey).ToArray();
                         if (types.Length == 0) continue;
-                        var moduleKeys = types.SelectMany(type => Subs.GetValueOrDefault(type, [])).Where(ids.ContainsKey).ToArray();
-                        all.Wrap(group => new OptionGroup(new Icon(area.Icon, assets, 16), texts[area.LabelKey], Count(moduleKeys, types), true, assets, [.. group]), inside =>
+                        all.Wrap(group => new OptionGroup(new Icon(area.Icon, assets, 16), texts[area.LabelKey], Count([], types), true, assets, [.. group]), inside =>
                         {
                             foreach (var type in types)
                             {
@@ -137,16 +131,14 @@ namespace Jularr.Frontend.Pages.Setup.Instance
                                             return Parents.TryGetValue(media.Key, out var parents) ? option.Data("media-parents", parents) : option;
                                         });
                                     }, media => media.Key == type);
-                                    var subs = Subs.GetValueOrDefault(type, []).Where(ids.ContainsKey).ToArray();
-                                    if (subs.Length > 0) part.Wrap(rows => new Div([.. rows]).Class("option-subs"), list => { foreach (var key in subs) ModuleRow(list, key, row => row.Sub()); });
                                 });
                             }
                         });
                     }
                 });
 
-                // Optional modules remain discoverable without opening hidden accordions.
-                // Keep one switch per module, in the same order and form as the API.
+                // Every supplementary module is now below the primary modules
+                // and the media-type switches, grouped by its functionality.
                 fields.Wrap(groups => new Div(new Div(new Strong(new Text("setup.modules.extra"))).Class("setup-modules__extras-heading"), new Div([.. groups]).Class("option-groups option-groups--extras")).Class("setup-modules__extras"), all =>
                 {
                     foreach (var (title, icon, groupKeys) in extraGroups)
