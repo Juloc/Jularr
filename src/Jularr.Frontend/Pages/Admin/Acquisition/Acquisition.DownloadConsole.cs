@@ -75,8 +75,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                         .Content("console.status", item => new Text(item.CompletedAt is not null ? "console.cleaned" :
                             item.LastError is null ? "console.cleanupWaiting" : "console.cleanupRetry"))
                         .Content("console.actions", item => new ValueText(item.LastError ?? "—"))
-                        .Content("console.timeLeft", item => new ValueText(item.CompletedAt is not null ? "—" :
-                            item.RetryAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))),
+                        .Content("console.timeLeft", item => item.CompletedAt is not null
+                            ? new ValueText("—")
+                            : new LocalTime(item.RetryAt)),
                 new A(new Text("console.refresh")).Attribute("href", Address(connectionId) + "&Pane=history").Class("button"))
                 .Class("download-console__section");
         }
