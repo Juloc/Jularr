@@ -86,6 +86,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
             // An unrequested language needs a deliberate manual choice; fallback is not an unrestricted download.
             if (profile.IsBook && profile.LanguageOrder.Length > 0
+                && (candidate.Identity.Confidence != IdentityConfidence.Ambiguous || profile.AllowAmbiguousIdentity)
                 && !UpgradePolicy.IsRequested(profile, candidate.Languages) && !UpgradePolicy.IsFallback(profile, candidate.Languages))
             {
                 reasons.Add(new SelectionReason(SelectionReasonKind.Profile, candidate.Languages.Count == 0 ? "LanguageUnknown" : "LanguageNotAllowed"));
