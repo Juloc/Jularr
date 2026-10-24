@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.AnnasArchive;
@@ -236,9 +237,16 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             return ways;
         }
 
+        // Only documented ISO 639 codes from the source become language evidence. An unknown
+        // catalog field must not be disguised as a real language or guessed from the title.
+        internal static string? TrustedLanguageCode(string? language) =>
+            LanguageCodes.ToTwoLetter(language?.Trim())?.ToUpperInvariant();
+
         private static ReleaseOffer Offer(AcquisitionConnectionData source, string guid, string[] authors, string title, string? language, string format, Uri download, long? sizeBytes, bool isPart = false)
         {
-            var name = (authors.Length > 0 ? string.Join(", ", authors) + " - " : "") + title + (language is { Length: > 0 } ? " (" + language.ToUpperInvariant() + ")" : "") + " (" + format + ")";
+            var verifiedLanguage = TrustedLanguageCode(language);
+            var name = (authors.Length > 0 ? string.Join(", ", authors) + " - " : "") + title
+                + (verifiedLanguage is null ? "" : " (" + verifiedLanguage + ")") + " (" + format + ")";
             return new ReleaseOffer(name.Length <= 1000 ? name : name[..1000], source.Id, source.Name, source.Priority, guid, download, download.ToString(), sizeBytes, null, ["title"]) { IsPart = isPart };
         }
 
