@@ -82,6 +82,7 @@ namespace Jularr.Integrations.Logic.Browser
 
         public async Task<SourceBrowserStatus> StartAsync(CancellationToken ct)
         {
+            if (!IsAvailable) throw new SourceBrowserException("The Browser module is disabled or the browser is not configured.");
             await _gate.WaitAsync(ct);
             try
             {

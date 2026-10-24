@@ -153,7 +153,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public void Browser_ManagedModuleFlagGatesEvenConfiguredBrowser()
+        public async Task Browser_ManagedModuleFlagGatesEvenConfiguredBrowser()
         {
             using var folder = new TemporaryDirectory();
             var root = Path.Combine(folder.Path, "browser");
@@ -166,6 +166,7 @@ namespace Jularr.Backend.Tests
             });
 
             Assert.IsFalse(browser.IsAvailable);
+            await Assert.ThrowsExactlyAsync<Jularr.Integrations.Data.Browser.SourceBrowserException>(() => browser.StartAsync(CancellationToken.None));
             File.WriteAllText(Path.Combine(root, ".enabled"), "1");
             Assert.IsTrue(browser.IsAvailable);
             File.Delete(Path.Combine(root, ".enabled"));
