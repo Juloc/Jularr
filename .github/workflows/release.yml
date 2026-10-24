@@ -183,7 +183,7 @@ jobs:
           test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "${IMAGE}:${VERSION}")" = "${GITHUB_SHA}"
 
   release:
-    needs: [guard, image]
+    needs: [guard, image, tv-sign]
     if: needs.guard.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -206,11 +206,26 @@ jobs:
           args=()
           [[ "${PRERELEASE}" == "false" ]] || args+=(--prerelease)
           gh release create "${TAG}" --verify-tag --title "Jularr ${VERSION}" --generate-notes "${args[@]}"
+      - name: Download previously signed TV package
+        uses: actions/download-artifact@v7
+        with:
+          name: jularr-tv-release-assets
+          path: dist
+      - name: Attach verified Android TV assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.guard.outputs.tag }}
+        run: |
+          set -euo pipefail
+          test -n "$(find dist -maxdepth 1 -name 'Jularr-TV-*.apk' -print -quit)"
+          (cd dist && sha256sum -c Jularr-TV-*.apk.sha256)
+          gh release upload "$TAG" dist/*.apk dist/*.apk.sha256
 
   # Build and sign the TV package in this same trusted Release run. GitHub does
   # not dispatch a second release event from the automatic GITHUB_TOKEN.
   tv-verify:
-    needs: [guard, release]
+    needs: [guard, image]
     if: needs.guard.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -259,7 +274,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -315,12 +330,15 @@ jobs:
           cp "$apk" "dist/Jularr-TV-$version.apk"
           (cd dist && sha256sum "Jularr-TV-$version.apk" > "Jularr-TV-$version.apk.sha256")
           (cd dist && sha256sum -c "Jularr-TV-$version.apk.sha256")
-      - name: Attach signed release assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          TAG: ${{ needs.guard.outputs.tag }}
-        run: gh release upload "$TAG" dist/*
+      - name: Store verified signed APK and checksum for the release
+        uses: actions/upload-artifact@v7
+        with:
+          name: jularr-tv-release-assets
+          if-no-files-found: error
+          path: |
+            dist/*.apk
+            dist/*.sha256
+          retention-days: 1
       - name: Remove signing file
         if: always()
         run: rm -f "$RUNNER_TEMP/jularr-tv-release.jks"
