@@ -129,7 +129,8 @@ namespace Jularr.Frontend.Pages.User.Collection
             _works = await readWorks.ExecuteAsync<PageResult<LibraryItemV1>>(new CollectionWorksParametersV1(Id, Math.Max(1, PageNumber), 48), token);
             if (!_collection.IsSmart && !string.IsNullOrWhiteSpace(Query))
             {
-                _found = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(query: Query, pageSize: 12), token)).Items;
+                _found = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(query: Query, pageSize: 12,
+                    availabilityTypeIds: [LibraryAvailabilityType.Available, LibraryAvailabilityType.MyRequests]), token)).Items;
             }
         }
 

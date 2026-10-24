@@ -85,6 +85,13 @@ export function initializeBookRenderer(reader: HTMLElement) {
         const gap = columns === 2 && side === 'right' ? (parseFloat(getComputedStyle(adapter.group(at)!.source).columnGap) || 0) / 2 : 0;
         print.style.left = `${gap + place.shift}px`;
         print.style.top = `${place.top}px`;
+        // The column gap and the paper curve move the printed text, not the page number.
+        // Centre the footer on the physical sheet rather than its shifted text viewport.
+        const footer = print.querySelector<HTMLElement>('[data-book-number]');
+        if (footer) {
+            const printWidth = parseFloat(print.style.width) || width;
+            footer.style.left = `${(width - printWidth) / 2 - gap - place.shift}px`;
+        }
         return print;
     };
     const exposure = () => {

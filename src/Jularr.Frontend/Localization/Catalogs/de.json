@@ -2879,6 +2879,10 @@
    "Add indexer",
    "Indexer hinzufügen"
   ],
+  "acquisition.connection.addNyaa": [
+   "Add Nyaa indexer",
+   "Nyaa-Indexer hinzufügen"
+  ],
   "acquisition.connection.addClient": [
    "Add download client",
    "Download-Client hinzufügen"

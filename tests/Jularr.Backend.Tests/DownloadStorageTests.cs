@@ -143,7 +143,16 @@ namespace Jularr.Backend.Tests
                 mountPath = mount.FullName;
             }
             var drive = new DriveInfo(mountPath);
-            Assert.AreEqual(drive.AvailableFreeSpace, StorageFileSystem.AvailableFreeSpace(path));
+            // The hosted CI runner writes to the same mount concurrently. Two consecutive
+            // statvfs calls need not report byte-identical values even for the same filesystem.
+            var before = drive.AvailableFreeSpace;
+            var actual = StorageFileSystem.AvailableFreeSpace(path);
+            var after = drive.AvailableFreeSpace;
+            Assert.IsNotNull(actual);
+            const long jitterAllowance = 16L * 1024 * 1024;
+            Assert.IsTrue(actual.Value >= Math.Min(before, after) - jitterAllowance
+                && actual.Value <= Math.Max(before, after) + jitterAllowance,
+                $"Free space should match the containing mount (before {before}, observed {actual.Value}, after {after}).");
         }
 
         [TestMethod]
