@@ -8,6 +8,20 @@
         gap: 16px;
     }
 
+    // Initial setup needs readable explanations without hover or touch popovers:
+    // all primary, media and optional rows can wrap naturally.
+    .option-row__text .truncated__text,
+    .option-group__name .truncated__text {
+        overflow: visible;
+        overflow-wrap: anywhere;
+        text-overflow: clip;
+        white-space: normal;
+    }
+    .option-row__text .truncated--clipped:is(:hover, :focus, :focus-within) > .truncated__tip,
+    .option-group__name .truncated--clipped:is(:hover, :focus, :focus-within) > .truncated__tip {
+        display: none;
+    }
+
     // The name keeps its field width; the groups and the button take the whole row.
     &__form > .ui-form > .ui-field { max-width: 360px; }
 
@@ -52,16 +66,5 @@
             padding-top: 12px;
         }
 
-        // Names and explanations are real wrapping text, not hover-only tips.
-        // No cropped descriptions, including on touch devices.
-        .option-row__text .truncated__text {
-            overflow: visible;
-            overflow-wrap: anywhere;
-            text-overflow: clip;
-            white-space: normal;
-        }
-        .option-row__text .truncated--clipped:is(:hover, :focus, :focus-within) > .truncated__tip {
-            display: none;
-        }
     }
 }
