@@ -44,7 +44,11 @@ namespace Jularr.Backend.Infrastructure.Sql
             _transactionalAccessCheck = async (ctx, mode, token) =>
             {
                 await verified(ctx, mode, token);
-                await check(ctx, token);
+                // The owner guard acquires FOR SHARE locks to close permission
+                // revocation races. Provider metadata lookups use read-only
+                // transactions and cannot acquire these locks; the worker
+                // checks ownership before provider I/O and every write batch.
+                if (mode == SqlAccessMode.ReadWrite) await check(ctx, token);
             };
         }
 
