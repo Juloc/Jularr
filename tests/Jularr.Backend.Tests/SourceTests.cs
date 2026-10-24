@@ -46,6 +46,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(SourceAvailability.ReferenceOnly, before.Single(item => item.Key == "bookwalker").SourceAvailabilityId);
             Assert.AreEqual("https://api.nzbgeek.info", before.Single(item => item.Key == "nzbgeek").DefaultBaseUrl);
             Assert.AreEqual("https://annas-archive.gl", before.Single(item => item.Key == "annasarchive").DefaultBaseUrl);
+            Assert.AreEqual(SourceAvailability.Planned, before.Single(item => item.Key == "nyaa").SourceAvailabilityId);
 
             // Keys and accounts are asked for, never invented.
             using var setUp = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/acquisition/sources/setup");
