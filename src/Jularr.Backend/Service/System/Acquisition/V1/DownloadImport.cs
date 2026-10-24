@@ -117,8 +117,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            // Its job leaves SABnzbd with its files, when the connection is set to; a library file placed by link stays.
-            await RemoveFromClientAsync(context, download.AcquisitionConnectionId, download.ExternalId, ct);
+            // Do not remove a source job with files omitted from the automatic import plan.
+            if (AllFilesCommitted(files.Select(file => file.RelativePath), placements.Select(placement => placement.SourcePath)))
+            {
+                await RemoveFromClientAsync(context, download.AcquisitionConnectionId, download.ExternalId, ct);
+            }
         }
 
         // Links, copies or moves the planned files into the library and assigns them to their work; the failure key names what a person must settle, and nothing is left half done.
@@ -267,6 +270,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             // A connected Plex shows the title right away.
             await plex.RefreshAsync(context, request.MediaTypeId, ct);
             return new ImportCommit(null, assets);
+        }
+
+        internal static bool AllFilesCommitted(IEnumerable<string> sourceFiles, IEnumerable<string> placedFiles)
+        {
+            var placed = placedFiles.ToHashSet(StringComparer.Ordinal);
+            return sourceFiles.All(placed.Contains);
         }
 
         // The files this import itself placed, which did not exist before it chose their names, and the folders that leaves empty. A source is never touched.

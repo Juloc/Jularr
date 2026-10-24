@@ -32,3 +32,7 @@ The consolidated draft #1572 brings together #1533 (qBittorrent/Nyaa), #1534 (SA
 **Current transport boundaries:** native Usenet/Direct use the media-scoped Jularr job directories; qBittorrent and SABnzbd still receive their own configured save/location mappings. All paths eventually arrive at the existing import owner. Do not infer that the external client payloads already have the new folder structure, and do not delete live torrent payloads or leftovers from partially imported SABnzbd jobs.
 
 **Release prerequisites:** frontend/backend build and tests on the integration head, both numbered migrations on a fresh and upgraded isolated database, real external client + NAS/remount checks, explicit policy for leftover files and seeding, plus the final unified Files experience. Nothing here authorizes an automatic merge.
+
+## Partial import protection
+
+Automatic SABnzbd source deletion requires every enumerated source file to have been included in the import plan. Finishing a manual import never schedules deletion of unselected source files. Recovery backfills failed-job cleanups only: it cannot infer that a completed import had no leftovers, and never retroactively deletes completed sources.

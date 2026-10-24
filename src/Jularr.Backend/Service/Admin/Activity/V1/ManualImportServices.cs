@@ -410,7 +410,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
         }
     }
 
-    // Places the chosen files of a waiting download; the download is finished and its job leaves the client as after an import by itself.
+    // Finishing a manual download does not mean every source file was selected.
     [ServiceEndpoint("POST", "/api/v1/admin/activity/{operationId:long}/manual-import")]
     public sealed class RunManualImportDownloadV1 : AdminService<ActivityOperationParametersV1, RunManualImportDownloadDataV1>
     {
@@ -435,11 +435,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             var files = await ManualImport.ListFolderAsync(source, loaded.Target, reference.Directory, CancellationToken);
             var result = await ManualImport.RunAsync(Context, _import, download.WantedItemId, source, reference.Directory, files, isReadOnly, Data.ImportTransferModeId, Data.Files, Auth.AccountId,
                 new ManualImportDownload(download.OperationId, ImportProposal.ReadHandled(download.AttentionProposal), Data.FinishesDownload, download.AttentionProposal), CancellationToken);
-            if (result.FinishedDownload)
-            {
-                await _import.RemoveFromClientAsync(Context, download.AcquisitionConnectionId, download.ExternalId, CancellationToken);
-            }
-
+            // Preserve unselected source files for explicit cleanup in the Files view.
             return result;
         }
     }

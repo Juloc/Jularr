@@ -136,22 +136,18 @@ namespace Jularr.Backend.Logic.Acquisition
             sql.Statement =
                 """
                 INSERT INTO "DownloadClientCleanups" ("AcquisitionConnectionId", "ExternalId", "Reason", "OperationId")
-                SELECT operation."AcquisitionConnectionId", operation."ExternalId",
-                       CASE WHEN operation."OperationStatusTypeId" = 3 THEN 'imported' ELSE 'failed' END,
-                       operation."Id"
+                SELECT operation."AcquisitionConnectionId", operation."ExternalId", 'failed', operation."Id"
                 FROM "Operations" AS operation
                 JOIN "AcquisitionConnections" AS connection ON connection."Id" = operation."AcquisitionConnectionId"
                 WHERE operation."OperationTypeId" = 2
-                  AND operation."OperationStatusTypeId" IN (3, 4)
+                  AND operation."OperationStatusTypeId" = 4
                   AND operation."ExternalId" IS NOT NULL
                   AND operation."FinishedAt" >= (
                       SELECT version."AppliedAt" FROM "DatabaseSchemaVersions" AS version WHERE version."Version" = 2
                   )
                   AND connection."AcquisitionConnectionTypeId" = 2
-                  AND (
-                    operation."OperationStatusTypeId" = 3 AND connection."RemovesCompleted"
-                    OR operation."OperationStatusTypeId" = 4 AND operation."ErrorKey" = 'download_failed' AND connection."RemovesFailed"
-                  )
+                  AND operation."ErrorKey" = 'download_failed'
+                  AND connection."RemovesFailed"
                   AND NOT EXISTS (
                     SELECT 1 FROM "DownloadClientCleanups" AS cleanup
                     WHERE cleanup."AcquisitionConnectionId" = operation."AcquisitionConnectionId"
