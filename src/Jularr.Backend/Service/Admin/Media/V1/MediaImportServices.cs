@@ -112,7 +112,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 if (row.IsIncluded && row.WorkId is null && row.Import is { } import
                     && (added >= NewTitlesPerRun || unavailable.Contains(import.Namespace)))
                 {
-                    result = new MediaImportResultRowV1(row.Item.Index, row.MatchTitle ?? row.Item.Title, MediaImportOutcomeType.Deferred, false);
+                    result = new MediaImportResultRowV1(row.Item.Index, row.MatchTitle ?? row.Item.Title, MediaImportOutcomeType.Deferred, false, null);
                     remaining.Add(row.Item with { Ids = [import] });
                 }
                 else
