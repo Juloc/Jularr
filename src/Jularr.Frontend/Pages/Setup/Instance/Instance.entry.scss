@@ -15,7 +15,7 @@
         display: grid;
         gap: 12px;
         min-width: 0;
-        > h2 { margin: 6px 0 0; font-size: var(--text-body); font-weight: 800; }
+        &-heading { margin: 6px 0 0; font-size: var(--text-body); }
     }
 
     // Give every advanced module a visible card, like the Admin module page.
