@@ -9204,6 +9204,13 @@
    "Download import report",
    "Importbericht herunterladen"
   ],
+  "import.job.title": ["Recent media import", "Letzter Medienimport"],
+  "import.job.queued": ["Queued on server", "Auf dem Server eingeplant"],
+  "import.job.running": ["Import running on server", "Import läuft auf dem Server"],
+  "import.job.completed": ["Import complete", "Import abgeschlossen"],
+  "import.job.failed": ["Import stopped", "Import angehalten"],
+  "import.job.disconnected": ["Connection lost. The server keeps the saved progress.", "Verbindung unterbrochen. Der Server speichert den Fortschritt weiter."],
+  "import.job.startFailed": ["Could not queue the import. Review the list and try again.", "Import konnte nicht gestartet werden. Liste prüfen und erneut versuchen."],
   "import.phase.partial": [
    "Import paused: some titles are still waiting",
    "Import pausiert: Einige Titel warten noch"
