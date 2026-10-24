@@ -97,6 +97,7 @@ namespace Jularr.Backend.Data.Logic.Media
             Creators = works.Select(work => work.Creator).ToArray();
             ImageUrls = works.Select(work => work.ImageUrl).ToArray();
             BackdropUrls = works.Select(work => work.BackdropUrl).ToArray();
+            Ratings = works.Select(work => work.Rating ?? 0).ToArray();
         }
 
         public string Namespace { get; }
@@ -112,6 +113,7 @@ namespace Jularr.Backend.Data.Logic.Media
         public string?[] Creators { get; }
         public string?[] ImageUrls { get; }
         public string?[] BackdropUrls { get; }
+        public decimal[] Ratings { get; }
     }
 
     // One Discover shelf of a whole catalog, or a scope to search without a list: Shelf numbers it within the request.

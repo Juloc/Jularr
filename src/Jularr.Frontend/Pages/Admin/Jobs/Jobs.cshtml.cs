@@ -48,6 +48,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             ["subtitles"] = ("subtitles", UiTone.Accent),
             ["recognition"] = ("text-select", UiTone.Accent),
             ["catalog"] = ("globe", UiTone.Warning),
+            ["discoverFeeds"] = ("globe", UiTone.Warning),
             ["resources"] = ("pulse", UiTone.Accent),
             ["health"] = ("status", UiTone.Success)
         };

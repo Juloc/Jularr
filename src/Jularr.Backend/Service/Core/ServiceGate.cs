@@ -1,10 +1,12 @@
 using System.Security;
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Http;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Data.Logic.Instance;
+using Jularr.Backend.Data.Logic.Session;
 using Jularr.Backend.Logic.Instance;
 using Jularr.Backend.Logic.Session;
 
@@ -19,7 +21,7 @@ namespace Jularr.Backend.Service.Core
         private readonly SessionAuthentication _sessions;
         private readonly IHttpContextAccessor _accessor;
         private readonly UserActivity _activity;
-        private ServiceCaller? _caller;
+        private readonly ConcurrentDictionary<ServiceCaller, byte> _verifiedCallers = new(ReferenceEqualityComparer.Instance);
 
         public ServiceGate(SessionAuthentication sessions, IHttpContextAccessor accessor, UserActivity activity)
         {
@@ -51,12 +53,12 @@ namespace Jularr.Backend.Service.Core
 
         public async Task<ServiceCaller> RequireCallerAsync(ServiceArea area, CancellationToken cancellationToken)
         {
-            _caller = null;
             if (area == ServiceArea.Public)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                _caller = new ServiceCaller(null, null, area, "anonymous");
-                return _caller;
+                var caller = new ServiceCaller(null, null, area, "anonymous");
+                _verifiedCallers.TryAdd(caller, 0);
+                return caller;
             }
 
             // Background work runs outside HTTP requests.
@@ -67,8 +69,9 @@ namespace Jularr.Backend.Service.Core
                     throw new UnauthorizedAccessException("System services are unavailable to requests.");
                 }
 
-                _caller = new ServiceCaller(null, null, area, "system");
-                return _caller;
+                var caller = new ServiceCaller(null, null, area, "system");
+                _verifiedCallers.TryAdd(caller, 0);
+                return caller;
             }
 
             if (area is not (ServiceArea.User or ServiceArea.Admin))
@@ -89,10 +92,11 @@ namespace Jularr.Backend.Service.Core
             // A signed-in request counts as use of Jularr.
             _activity.Touch();
             var parameters = _sessions.Parameters!;
-            _caller = new ServiceCaller(session.AccountId, session.ProfileId, area,
+            var verified = new ServiceCaller(session.AccountId, session.ProfileId, area,
                 parameters.SessionPublicId.ToString("D"), parameters.SessionPublicId, parameters.SessionRevision,
                 session.ProfileOwnerAccountId, parameters.SessionTokenHash, session.AccountRoleTypeId, session.IsDevice);
-            return _caller;
+            _verifiedCallers.TryAdd(verified, 0);
+            return verified;
         }
 
         public Task RequireAccessAsync(ServiceCaller caller, ServicePermission permission, CancellationToken cancellationToken)
@@ -113,7 +117,9 @@ namespace Jularr.Backend.Service.Core
             }
 
             // Revalidate reads; lock writes.
-            var parameters = _sessions.Parameters ?? throw new UnauthorizedAccessException("The session is unavailable.");
+            var parameters = caller is { SessionPublicId: { } id, SessionRevision: { } revision, SessionTokenHash: { } hash }
+                ? new SessionParameters(id, revision, hash)
+                : throw new UnauthorizedAccessException("The session is unavailable.");
             var current = mode == SqlAccessMode.ReadOnly
                 ? await context.ReadSessionProofAsync(parameters, cancellationToken)
                 : await context.ReadSessionAsync(parameters, cancellationToken);
@@ -127,7 +133,7 @@ namespace Jularr.Backend.Service.Core
 
         private void RequirePermission(ServiceCaller caller, ServicePermission permission)
         {
-            if (_caller != caller)
+            if (!_verifiedCallers.ContainsKey(caller))
             {
                 throw new SecurityException("The caller has not been verified.");
             }
