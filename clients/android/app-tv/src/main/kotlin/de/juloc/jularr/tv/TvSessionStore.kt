@@ -13,14 +13,6 @@ import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class TvSavedSession(
-    val id: String,
-    val serverOrigin: String,
-    val userName: String,
-    val cookies: Map<String, String> = emptyMap(),
-    val lastActiveAtMillis: Long = System.currentTimeMillis(),
-)
-
 /**
  * Storage boundary for clean-start device credentials. Implementations must encrypt credentials
  * at rest; app code never places them in the old cookie session map.
@@ -49,110 +41,18 @@ class TvSessionStore(context: Context) : TvV1AccountPersistence {
     )
 
     init {
-        val legacy = preferences.getString(KEY_SESSIONS, null)
-        if (legacy != null) {
-            try {
-                check(preferences.edit()
-                    .putString(KEY_ENCRYPTED_SESSIONS, encrypt(legacy))
-                    .remove(KEY_SESSIONS)
-                    .commit())
-            } catch (exception: Exception) {
-                preferences.edit()
-                    .remove(KEY_SESSIONS)
-                    .remove(KEY_ENCRYPTED_SESSIONS)
-                    .commit()
-                throw IllegalStateException("Could not safely migrate stored TV sessions.", exception)
-            }
+        // V1 device-bearer slots never read the retired /api/client/v1 cookie
+        // sessions. Discard only obsolete cookies, preserving encrypted V1
+        // account slots and previously paired V1 device tokens.
+        if (preferences.contains(KEY_SESSIONS) || preferences.contains(KEY_ENCRYPTED_SESSIONS) ||
+            preferences.contains(KEY_ACTIVE_ID)
+        ) {
+            check(preferences.edit()
+                .remove(KEY_SESSIONS)
+                .remove(KEY_ENCRYPTED_SESSIONS)
+                .remove(KEY_ACTIVE_ID)
+                .commit()) { "Could not remove retired TV cookie credentials." }
         }
-    }
-
-    @Synchronized
-    fun getSessions(): List<TvSavedSession> {
-        val encoded = preferences.getString(KEY_ENCRYPTED_SESSIONS, null) ?: return emptyList()
-        val rawJson = runCatching { decrypt(encoded) }.getOrElse { return emptyList() }
-        return runCatching {
-            val array = JSONArray(rawJson)
-            val list = mutableListOf<TvSavedSession>()
-            for (i in 0 until array.length()) {
-                val obj = array.getJSONObject(i)
-                val cookieObj = obj.optJSONObject("cookies")
-                val cookies = mutableMapOf<String, String>()
-                cookieObj?.keys()?.forEach { key ->
-                    cookies[key] = cookieObj.getString(key)
-                }
-
-                list.add(
-                    TvSavedSession(
-                        id = obj.getString("id"),
-                        serverOrigin = obj.getString("serverOrigin"),
-                        userName = obj.getString("userName"),
-                        cookies = cookies,
-                        lastActiveAtMillis = obj.optLong("lastActiveAtMillis", System.currentTimeMillis()),
-                    ),
-                )
-            }
-            list.sortedByDescending { it.lastActiveAtMillis }
-        }.getOrDefault(emptyList())
-    }
-
-    @Synchronized
-    fun getActiveSession(): TvSavedSession? {
-        val activeId = preferences.getString(KEY_ACTIVE_ID, null)
-        if (activeId == NEW_SIGN_IN) return null
-        val sessions = getSessions()
-        return if (activeId == null) sessions.firstOrNull() else sessions.firstOrNull { it.id == activeId }
-    }
-
-    @Synchronized
-    fun setActiveSessionId(id: String) {
-        preferences.edit().putString(KEY_ACTIVE_ID, id).apply()
-        val sessions = getSessions().map {
-            if (it.id == id) it.copy(lastActiveAtMillis = System.currentTimeMillis()) else it
-        }
-        persistSessions(sessions)
-    }
-
-    @Synchronized
-    fun beginNewSignIn() {
-        preferences.edit().putString(KEY_ACTIVE_ID, NEW_SIGN_IN).apply()
-    }
-
-    @Synchronized
-    fun saveSession(session: TvSavedSession) {
-        val current = getSessions().toMutableList()
-        current.removeAll { it.id == session.id }
-        current.add(0, session.copy(lastActiveAtMillis = System.currentTimeMillis()))
-        persistSessions(current)
-        preferences.edit().putString(KEY_ACTIVE_ID, session.id).apply()
-    }
-
-    @Synchronized
-    fun updateCookiesForActiveSession(cookies: Map<String, String>) {
-        val active = getActiveSession() ?: return
-        val updated = active.copy(
-            cookies = cookies,
-            lastActiveAtMillis = System.currentTimeMillis(),
-        )
-        val current = getSessions().toMutableList()
-        current.removeAll { it.id == active.id }
-        current.add(0, updated)
-        persistSessions(current)
-    }
-
-    @Synchronized
-    fun removeSession(id: String) {
-        val current = getSessions().toMutableList()
-        current.removeAll { it.id == id }
-        persistSessions(current)
-        if (preferences.getString(KEY_ACTIVE_ID, null) == id) {
-            val next = current.firstOrNull()?.id
-            preferences.edit().putString(KEY_ACTIVE_ID, next).apply()
-        }
-    }
-
-    @Synchronized
-    fun clearAll() {
-        preferences.edit().clear().apply()
     }
 
     /**
@@ -176,7 +76,7 @@ class TvSessionStore(context: Context) : TvV1AccountPersistence {
         }
     }
 
-    // New encrypted V1 slots; independent of the original /api/client/v1 cookie accounts.
+    // Encrypted V1 slots; independent of the retired cookie sessions.
     // The token callback ALWAYS captures a slot ID, so an in-flight response for a
     // previous viewer cannot write its rotated bearer into the newly selected slot.
     private fun readV1Accounts(): JSONObject =
@@ -298,28 +198,6 @@ class TvSessionStore(context: Context) : TvV1AccountPersistence {
         return JSONObject(decrypt(encrypted))
     }
 
-    private fun persistSessions(sessions: List<TvSavedSession>) {
-        val array = JSONArray()
-        for (session in sessions) {
-            val obj = JSONObject()
-            obj.put("id", session.id)
-            obj.put("serverOrigin", session.serverOrigin)
-            obj.put("userName", session.userName)
-            obj.put("lastActiveAtMillis", session.lastActiveAtMillis)
-
-            val cookieObj = JSONObject()
-            session.cookies.forEach { (k, v) ->
-                cookieObj.put(k, v)
-            }
-            obj.put("cookies", cookieObj)
-
-            array.put(obj)
-        }
-        check(preferences.edit().putString(KEY_ENCRYPTED_SESSIONS, encrypt(array.toString())).commit()) {
-            "Could not save encrypted TV sessions."
-        }
-    }
-
     private fun secretKey(): SecretKey {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
@@ -360,6 +238,5 @@ class TvSessionStore(context: Context) : TvV1AccountPersistence {
         const val KEY_ENCRYPTED_V1_ACCOUNTS = "encrypted_device_account_slots_v1"
         const val KEY_ACTIVE_ID = "active_session_id"
         const val KEY_ALIAS = "jularr-tv-sessions-key"
-        const val NEW_SIGN_IN = "new-sign-in"
     }
 }
