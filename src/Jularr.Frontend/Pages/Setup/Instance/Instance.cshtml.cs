@@ -147,7 +147,7 @@ namespace Jularr.Frontend.Pages.Setup.Instance
 
                 // Optional modules remain discoverable without opening hidden accordions.
                 // Keep one switch per module, in the same order and form as the API.
-                fields.Wrap(groups => new Div(new H2(new Text("setup.modules.extra")), new Div([.. groups]).Class("option-groups option-groups--extras")).Class("setup-modules__extras"), all =>
+                fields.Wrap(groups => new Div(new Div(new Strong(new Text("setup.modules.extra"))).Class("setup-modules__extras-heading"), new Div([.. groups]).Class("option-groups option-groups--extras")).Class("setup-modules__extras"), all =>
                 {
                     foreach (var (title, icon, groupKeys) in extraGroups)
                     {
