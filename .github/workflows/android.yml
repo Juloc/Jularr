@@ -18,6 +18,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Unit tests and lint for every module that ships in the default build. The optional
   # core-tts-sherpa module stays out: its AAR is not published to Maven Central and CI has
