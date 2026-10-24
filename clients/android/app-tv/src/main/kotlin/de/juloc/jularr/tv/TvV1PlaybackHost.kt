@@ -391,8 +391,10 @@ internal fun TvV1PlaybackHost(
                             "play" -> {
                                 if (player.player.playbackState == Player.STATE_ENDED) player.player.seekTo(0)
                                 player.player.play()
+                                // Real TV decoders can buffer for seconds after play().
+                                // A requested start is confirmed only once Media3 reports playback.
                                 var attempts = 0
-                                while (!player.player.isPlaying && attempts < 12 && isActive && !finishing) {
+                                while (!player.player.isPlaying && attempts < 40 && isActive && !finishing) {
                                     delay(100L)
                                     attempts++
                                 }
@@ -409,8 +411,16 @@ internal fun TvV1PlaybackHost(
                                     false
                                 } else {
                                     player.player.seekTo(target)
-                                    delay(250L)
-                                    kotlin.math.abs(player.player.currentPosition - target) <= 1_500L
+                                    // HLS/remote seeks can be asynchronous. Wait for the actual
+                                    // player position rather than rejecting a still-pending seek.
+                                    var confirmed = false
+                                    var attempts = 0
+                                    while (!confirmed && attempts < 30 && isActive && !finishing) {
+                                        confirmed = kotlin.math.abs(player.player.currentPosition - target) <= 2_000L
+                                        if (!confirmed) delay(100L)
+                                        attempts++
+                                    }
+                                    confirmed
                                 }
                             }
                             else -> false
@@ -442,7 +452,14 @@ internal fun TvV1PlaybackHost(
                     onUnauthorized()
                     return@LaunchedEffect
                 }
-                // A temporary connection/server-side revision mismatch is recoverable.
+                if (failure.statusCode == 403 || failure.statusCode == 404 || failure.statusCode == 410) {
+                    // A revoked/ended session must not keep polling or display a stale QR.
+                    companionEnabled = false
+                    companionInvitation = null
+                    companionError = "Diese Fernbedienungs-Sitzung ist nicht mehr gültig. Erneut koppeln."
+                    return@LaunchedEffect
+                }
+                // Revision conflicts and temporary connection problems are recoverable.
                 // Never substitute a legacy cookie-based companion endpoint.
                 companionError = "Fernbedienung nicht erreichbar (HTTP ${failure.statusCode})."
             } catch (failure: Exception) {
