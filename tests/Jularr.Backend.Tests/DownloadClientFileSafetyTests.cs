@@ -137,6 +137,21 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ImportedSabnzbdHistoryCleanup_DoesNotDeleteFilesAgain()
+        {
+            using var capture = new SabnzbdHistoryDeleteCapture();
+            using var http = new HttpClient(capture);
+            var client = new SabnzbdClient(http);
+            await client.RemoveHistoryJobAsync(new SabnzbdConnection("https://sab.example.test", "secret-key"),
+                "SABnzbd_nzo_123", false, CancellationToken.None);
+
+            Assert.AreEqual("history", capture.Fields["mode"]);
+            Assert.AreEqual("delete", capture.Fields["name"]);
+            Assert.AreEqual("0", capture.Fields["del_files"]);
+            Assert.AreEqual("0", capture.Fields["archive"]);
+        }
+
+        [TestMethod]
         public void AutomaticImportedSourceCleanup_DeletesOnlyMappedJobOutput()
         {
             var root = Path.Combine(Path.GetTempPath(), "jularr-sab-import-" + Guid.NewGuid().ToString("N"));

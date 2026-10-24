@@ -386,7 +386,10 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                             continue;
                         }
 
-                        await sabnzbd.RemoveHistoryJobAsync(client, task.ExternalId, ct);
+                        // Imported source files were already verified and removed locally.
+                        // Do not ask SABnzbd to delete that path again: a client may have
+                        // recreated it between the atomic local rename and history removal.
+                        await sabnzbd.RemoveHistoryJobAsync(client, task.ExternalId, task.Reason != "imported", ct);
                     }
 
                     await context.ExecuteBatchAsync(async (ctx, token) =>
