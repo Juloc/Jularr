@@ -11,7 +11,7 @@ using static Jularr.Backend.Tests.DatabaseBaselineTests;
 
 namespace Jularr.Backend.Tests
 {
-    // The migration mechanism after the release freeze: migrations of the test assembly stand in for the production ones (there are none yet),
+    // The migration mechanism after the release freeze: explicit test migrations use a version-1 fixture independently of production migrations,
     // and a script stands in for pg_dump so the backup-first rule is tested without the PostgreSQL client.
     [TestClass]
     public sealed class DatabaseMigrationTests
@@ -55,6 +55,50 @@ namespace Jularr.Backend.Tests
             INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId") VALUES (41, 'migrate_owner', 'migrate@example.test', 'Migrate Owner', 1);
             INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (501, 1, 'Kept Film');
             """);
+
+        [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public async Task WantedProjection_Upgrade_PreservesDataAndRecordsTheReleaseMigration(bool fromFeedSchema)
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(WantedProjection_Upgrade_PreservesDataAndRecordsTheReleaseMigration) + fromFeedSchema);
+            var options = Backup(folder.Path, out var backups);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: fromFeedSchema ? DatabaseBaseline.Migrations.Take(1).ToArray() : []).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await ExecuteAsync(cs, "INSERT INTO \"WantedItems\" (\"WorkId\") VALUES (501);");
+            if (fromFeedSchema)
+                await ExecuteAsync(cs, """INSERT INTO "ExternalWorkFeeds" ("Key", "Namespace", "MediaTypeId", "DiscoverFeedTypeId", "Page") VALUES ('kept-feed', 'tmdb_movie', 1, 1, 1);""");
+
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual(DatabaseBaseline.CurrentFingerprint, await ScalarAsync(cs, "SELECT \"Fingerprint\" FROM \"DatabaseSchemaVersions\" ORDER BY \"Version\" DESC LIMIT 1;"));
+            Assert.AreEqual("Kept Film", await ScalarAsync(cs, "SELECT \"CanonicalTitle\" FROM \"Works\" WHERE \"Id\" = 501;"));
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"WantedItems\" WHERE \"WorkId\" = 501;"));
+            Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM \"WantedBelowCutoff\";"));
+            if (fromFeedSchema)
+                Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkFeeds" WHERE "Key" = 'kept-feed';"""));
+            Assert.HasCount(1, Directory.GetDirectories(backups));
+        }
+
+        [TestMethod]
+        public async Task Upgrade_ProductionFeedMigration_PreservesVersionOneDataAndBacksUpOnce()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_ProductionFeedMigration_PreservesVersionOneDataAndBacksUpOnce));
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            var options = Backup(folder.Path, out var backups);
+            var current = new DatabaseBaseline(cs, options, Tools(cs, FakeDump(folder.Path, true), null));
+            await current.StartAsync(CancellationToken.None);
+            await current.StartAsync(CancellationToken.None);
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+            Assert.AreEqual("Kept Film", await ScalarAsync(cs, "SELECT \"CanonicalTitle\" FROM \"Works\" WHERE \"Id\" = 501"));
+            Assert.AreEqual(2L, await ScalarAsync(cs, "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('ExternalWorkFeeds', 'ExternalWorkFeedItems')"));
+            Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
+        }
 
         [TestMethod]
         public async Task Upgrade_AppliesNumberedMigrations_AfterABackup_KeepsData_AndIsConcurrencySafe()

@@ -80,6 +80,7 @@ namespace Jularr.Frontend.Pages.User.Details
             page.Navigation("nav.home");
             page.Asset("Pages/User/Details/Details.entry.scss");
             page.Asset("Framework/Components/Truncated.entry.ts");
+            if (TabKey == "files") page.Asset("Framework/Components/InfiniteList.entry.ts");
 
             // Persisted media identity.
             if (_work is { } work)

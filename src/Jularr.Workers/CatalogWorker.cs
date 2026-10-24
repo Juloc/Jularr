@@ -7,11 +7,15 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Workers
 {
-    // Full local discovery: a pass of the provider catalog every minute while the LocalDiscovery module is on.
+    // Public Discover lists and, when enabled, the full local provider catalog.
     internal sealed class CatalogWorker(TimeProvider time, WorkerJobs jobs, WorkerJobRunner runner) : PeriodicWorker(time, jobs, runner, WorkerGroupType.Catalog)
     {
-        protected override async Task RunOnceAsync(CancellationToken ct) =>
+        protected override async Task RunOnceAsync(CancellationToken ct)
+        {
+            await Runner.RunAsync("discoverFeeds", (services, token) =>
+                services.GetRequiredService<RefreshDiscoverFeedsV1>().ExecuteAsync<UpdateResult>(new RefreshDiscoverFeedsParametersV1(), default, token), ct);
             await Runner.RunAsync("catalog", (services, token) =>
                 services.GetRequiredService<SyncExternalWorksV1>().ExecuteAsync<UpdateResult>(new SyncExternalWorksParametersV1(), default, token), ct);
+        }
     }
 }

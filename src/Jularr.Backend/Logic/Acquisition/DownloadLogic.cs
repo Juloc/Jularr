@@ -266,6 +266,12 @@ namespace Jularr.Backend.Logic.Acquisition
             var sql = new SqlStatement();
             sql.Statement =
                 """
+                WITH cutoff_state AS MATERIALIZED (
+                    SELECT
+                        below."WantedItemId"
+                    FROM
+                        "WantedBelowCutoff" AS below
+                )
                 SELECT
                     wanted."Id" AS "WantedItemId"
                 FROM
@@ -302,9 +308,18 @@ namespace Jularr.Backend.Logic.Acquisition
                                 1
                             FROM
                                 "MediaAssets" AS asset
-                                JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                             WHERE
                                 asset."WorkId" = work."Id"
+                                AND EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "StoredFiles" AS available
+                                    WHERE
+                                        available."MediaAssetId" = asset."Id"
+                                        AND available."MissingSince" IS NULL
+                                    OFFSET 0
+                                )
                                 AND (
                                     wanted."GamePlatformId" IS NULL
                                     OR EXISTS (
@@ -328,13 +343,11 @@ namespace Jularr.Backend.Logic.Acquisition
                                 release."WantedItemId" = wanted."Id"
                                 AND operation."OperationStatusTypeId" IN (1, 2)
                         )
-                        OR EXISTS (
+                        OR wanted."Id" IN (
                             SELECT
-                                1
+                                cutoff_state."WantedItemId"
                             FROM
-                                "WantedBelowCutoff" AS below
-                            WHERE
-                                below."WantedItemId" = wanted."Id"
+                                cutoff_state
                         )
                         AND NOT EXISTS (
                             SELECT
@@ -362,9 +375,19 @@ namespace Jularr.Backend.Logic.Acquisition
                                         1
                                     FROM
                                         "MediaAssets" AS asset
-                                        JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                                     WHERE
-                                        asset."WorkUnitId" = unit."Id"
+                                        asset."WorkId" = unit."WorkId"
+                                        AND asset."WorkUnitId" = unit."Id"
+                                        AND EXISTS (
+                                            SELECT
+                                                1
+                                            FROM
+                                                "StoredFiles" AS available
+                                            WHERE
+                                                available."MediaAssetId" = asset."Id"
+                                                AND available."MissingSince" IS NULL
+                                            OFFSET 0
+                                        )
                                 )
                                 AND NOT EXISTS (
                                     SELECT
@@ -388,6 +411,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 LIMIT @Limit;
                 """;
             sql.Parameters.Add(data);
+            sql.DisableJit = true;
             return ctx.ReadSql.ReadListAsync<WantedItemParameters>(sql, ct);
         }
 
@@ -576,6 +600,15 @@ namespace Jularr.Backend.Logic.Acquisition
             var sql = new SqlStatement();
             sql.Statement =
                 """
+                WITH cutoff_units AS MATERIALIZED (
+                    SELECT
+                        below."WorkUnitId"
+                    FROM
+                        "WantedUnitsBelowCutoff" AS below
+                    WHERE
+                        below."WantedItemId" = @WantedItemId
+                        AND below."WorkUnitId" IS NOT NULL
+                )
                 SELECT
                     unit."Id" AS "WorkUnitId",
                     parent."Number"::integer AS "ParentNumber",
@@ -586,9 +619,19 @@ namespace Jularr.Backend.Logic.Acquisition
                             1
                         FROM
                             "MediaAssets" AS asset
-                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                         WHERE
-                            asset."WorkUnitId" = unit."Id"
+                            asset."WorkId" = unit."WorkId"
+                            AND asset."WorkUnitId" = unit."Id"
+                            AND EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "StoredFiles" AS available
+                                WHERE
+                                    available."MediaAssetId" = asset."Id"
+                                    AND available."MissingSince" IS NULL
+                                OFFSET 0
+                            )
                     ) AS "HasMedia",
                     EXISTS (
                         SELECT
@@ -615,8 +658,7 @@ namespace Jularr.Backend.Logic.Acquisition
                             AND (season."Number", earlier."Number") <= (parent."Number", unit."Number")
                     ) END AS "AbsoluteNumber",
                     unit."ReleasedOn",
-                    EXISTS (SELECT 1 FROM "WantedUnitsBelowCutoff" AS below
-                        WHERE below."WantedItemId" = wanted."Id" AND below."WorkUnitId" = unit."Id") AS "NeedsUpgrade"
+                    unit."Id" IN (SELECT below."WorkUnitId" FROM cutoff_units AS below) AS "NeedsUpgrade"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
@@ -631,6 +673,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     unit."Number";
                 """;
             sql.Parameters.Add(new WantedItemParameters(wantedItemId));
+            sql.DisableJit = true;
             return ctx.ReadSql.ReadListAsync<UnitStateData>(sql, ct);
         }
 
@@ -1154,6 +1197,23 @@ namespace Jularr.Backend.Logic.Acquisition
                 """
                 SELECT
                     operation."OperationStatusTypeId" = 3 AS "IsFinished"
+                FROM
+                    "Operations" AS operation
+                WHERE
+                    operation."Id" = @OperationId;
+                """;
+            sql.Parameters.Add(data);
+            return (await ctx.ReadSql.ReadOptionalAsync<DownloadFinishedData>(sql, ct))?.IsFinished ?? false;
+        }
+
+        // A direct download's working files may go after import or a definitive failure, never while awaiting review.
+        public static async Task<bool> IsDownloadTerminalAsync(this LogicContext ctx, DownloadOperationParameters data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    operation."OperationStatusTypeId" IN (3, 4) AS "IsFinished"
                 FROM
                     "Operations" AS operation
                 WHERE

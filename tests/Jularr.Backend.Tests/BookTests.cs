@@ -121,6 +121,53 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Unmatched_FileIsIdentifiedAsACatalogEntry_ThroughTheWorkSearch()
+        {
+            using var storage = new TemporaryDirectory();
+            var sources = new FakeBookSources();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services =>
+            {
+                services.AddHttpClient<OpenLibraryClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
+                services.AddHttpClient<HardcoverClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
+            });
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Books", "Mystery Folder");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Mystery.epub"), "book");
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Books", MediaType.Book);
+            await LibraryTests.ScanAsync(host, rootId);
+            var fileId = (long)(await host.ScalarAsync("""SELECT "Id" FROM "StoredFiles" """))!;
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+
+            // The row offers the search; the search form starts with the folder's title.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Library/Unmatched?find=" + fileId);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "handler=FindWork");
+            StringAssert.Contains(html, "value=\"Mystery Folder\"");
+
+            // The catalog's entries are listed; choosing one makes it the Work.
+            using var found = await host.SendAsync(HttpMethod.Post, "/Admin/Library/Unmatched?PageNumber=1&handler=FindWork&storedFileId=" + fileId + "&find=" + fileId, new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = LibraryTests.Token(html), ["MediaTypeId"] = "3", ["Query"] = "Pride and Prejudice"
+            });
+            html = await found.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, html);
+            StringAssert.Contains(html, "Jane Austen");
+            StringAssert.Contains(html, "handler=AssignCatalog");
+            using var assigned = await host.SendAsync(HttpMethod.Post, "/Admin/Library/Unmatched?PageNumber=1&handler=AssignCatalog&storedFileId=" + fileId, new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = LibraryTests.Token(html), ["Namespace"] = "openlibrary", ["ExternalId"] = "OL66554W"
+            });
+            Assert.AreEqual(HttpStatusCode.Redirect, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" WHERE "CanonicalTitle" = 'Pride and Prejudice' AND "MediaTypeId" = 3 """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""
+                SELECT count(*) FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId" JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = asset."WorkId"
+                WHERE identity."Namespace" = 'openlibrary' AND identity."Value" = 'OL66554W'
+                """));
+        }
+
+        [TestMethod]
         public async Task Book_TheIndexerAndTheDirectSource_AreAskedAtTheSameTime()
         {
             using var storage = new TemporaryDirectory();
@@ -165,6 +212,12 @@ namespace Jularr.Backend.Tests
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual("download_failed", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""));
             Assert.IsFalse(Directory.Exists(Path.Combine(storage.Path, "1", "Books", "Jane Austen")));
+            Assert.AreEqual(0, Directory.EnumerateFiles(downloads.Path, "*", SearchOption.AllDirectories).Count(),
+                "A rejected ebook must not leave files of any extension, including .part.");
+            var operationId = (await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2 LIMIT 1"))!.ToString();
+            Assert.IsFalse(Directory.EnumerateDirectories(downloads.Path, "*", SearchOption.AllDirectories)
+                .Any(directory => Path.GetFileName(directory) == operationId),
+                "A terminal operation must not leave an empty complete or incomplete staging folder.");
             using var activity = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=Queue");
             Assert.AreEqual(OperationType.Download, (await activity.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single().OperationTypeId);
             Assert.AreEqual(wantedId, (long)(await host.ScalarAsync("SELECT \"WantedItemId\" FROM \"AcquisitionReleases\""))!);

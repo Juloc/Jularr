@@ -4,6 +4,17 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "library.filter.availability": ["Show titles", "Titel anzeigen"],
+  "library.availability.Available": ["Available files", "Vorhandene Dateien"],
+  "library.availability.MyRequests": ["My requests", "Eigene Anfragen"],
+  "library.availability.OtherRequests": ["Other requests", "Anfragen anderer"],
+  "library.filter.genres": ["Genres", "Genres"],
+  "library.filter.audio": ["Audio language", "Audiosprache"],
+  "library.filter.subtitles": ["Subtitle language", "Untertitelsprache"],
+  "library.filter.rating": ["Minimum rating", "Mindestbewertung"],
+  "list.loadMore": ["Load more", "Weitere laden"],
+  "list.loading": ["Loading more entries…", "Weitere Einträge werden geladen…"],
+  "list.retry": ["Could not load more entries. Try again.", "Weitere Einträge konnten nicht geladen werden. Erneut versuchen."],
   "progress.saveFailed": [
    "Progress could not be saved. Jularr will retry temporary failures.",
    "Der Fortschritt konnte nicht gespeichert werden. Jularr versucht es bei vorübergehenden Fehlern erneut."
@@ -6520,6 +6531,14 @@
    "Identify as existing work",
    "Einem vorhandenen Werk zuordnen"
   ],
+  "library.findWork": [
+   "Find the work",
+   "Werk suchen"
+  ],
+  "library.useMatch": [
+   "Use this entry",
+   "Diesen Eintrag verwenden"
+  ],
   "library.unassign": [
    "Remove identification",
    "Zuordnung entfernen"
@@ -9077,6 +9096,26 @@
    "Browser",
    "Browser"
   ],
+  "admin.browser.running": [
+   "Browser connected",
+   "Browser verbunden"
+  ],
+  "admin.browser.configured": [
+   "Browser configured but not connected",
+   "Browser eingerichtet, aber nicht verbunden"
+  ],
+  "admin.browser.missing": [
+   "Browser not configured",
+   "Browser nicht eingerichtet"
+  ],
+  "admin.browser.setupHint": [
+   "Install Chrome inside this Jularr container. Package installation requires container root and cannot run from the web interface. No additional container is needed.",
+   "Chrome wird im bestehenden Jularr-Container installiert. Die Installation benötigt Root-Rechte im Container und kann nicht über die Weboberfläche ausgeführt werden. Ein zusätzlicher Container ist nicht nötig."
+  ],
+  "admin.browser.installSteps": [
+   "Show installation commands",
+   "Installationsbefehle anzeigen"
+  ],
   "admin.browser.state": [
    "What the browser did",
    "Was der Browser getan hat"
@@ -9935,6 +9974,10 @@
    "Catalog sync",
    "Katalog-Abgleich"
   ],
+  "jobs.job.discoverFeeds": [
+   "Discover cache",
+   "Entdecken-Cache"
+  ],
   "jobs.job.resources": [
    "Resource sampling",
    "Ressourcenmessung"
@@ -10034,6 +10077,10 @@
   "jobs.job.coverBackfill": [
    "Cover conversion",
    "Titelbilder umwandeln"
+  ],
+  "jobs.job.metadataFill": [
+   "Missing metadata",
+   "Fehlende Metadaten"
   ],
   "errors.playback_evicted": [
    "Playback ended because the server needed the capacity. Try again at a lower quality.",
@@ -10472,6 +10519,10 @@
    "Checks open AniList matches of anime titles.",
    "Prüft offene AniList-Zuordnungen von Anime-Titeln."
   ],
+  "jobs.about.metadataFill": [
+   "Reads the description, cover and cast of titles that came without them, for example from a media server, a few at a time.",
+   "Lädt Beschreibung, Cover und Besetzung von Titeln, die ohne sie kamen, zum Beispiel aus einem Medienserver, einige auf einmal."
+  ],
   "jobs.about.covers": [
    "Fetches and renews the covers of titles from their providers.",
    "Lädt und erneuert die Cover von Titeln bei ihren Anbietern."
@@ -10511,6 +10562,10 @@
   "jobs.about.catalog": [
    "Keeps the local Discover catalog up to date.",
    "Hält den lokalen Discover-Katalog aktuell."
+  ],
+  "jobs.about.discoverFeeds": [
+   "Prepares Discover lists and recommendations and refreshes stored results.",
+   "Bereitet Entdecken-Listen und Empfehlungen vor und aktualisiert gespeicherte Ergebnisse."
   ],
   "jobs.about.resources": [
    "Samples the load of the process for the System page.",

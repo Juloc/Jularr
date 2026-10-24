@@ -14,7 +14,7 @@ set -eu
 
 home="${JULARR_BROWSER_HOME:-/data/browser}"
 port="${JULARR_BROWSER_PORT:-9222}"
-forward="${JULARR_BROWSER_FORWARD_PORT:-9223}"
+forward="${JULARR_BROWSER_FORWARD_PORT:-}"
 display="${JULARR_BROWSER_DISPLAY:-:99}"
 
 program() {
@@ -86,10 +86,9 @@ run_browser() {
         --no-first-run --no-default-browser-check --no-sandbox --enable-unsafe-swiftshader --use-angle=swiftshader \
         --window-size=1280,900 about:blank &
 
-    # The browser answers on its own loopback; a second port leads to it, so the browser can be reached
-    # from outside the container as well.
-    if command -v socat > /dev/null 2>&1; then
-        socat "TCP-LISTEN:$forward,fork,reuseaddr" "TCP:127.0.0.1:$port" &
+    # DevTools stays private to this container by default; an explicit forward remains loopback-only.
+    if [ -n "$forward" ] && command -v socat > /dev/null 2>&1; then
+        socat "TCP-LISTEN:$forward,bind=127.0.0.1,fork,reuseaddr" "TCP:127.0.0.1:$port" &
     fi
 
     # The port answers when the browser is ready.

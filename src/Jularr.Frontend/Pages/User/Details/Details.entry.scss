@@ -352,6 +352,6 @@ td .details-chips { flex-wrap: nowrap; }
     &__facts { color: var(--muted); font-size: 11px; }
 }
 
-.details-files { display: grid; gap: 12px; }
+.details-files, .details-file-items, .details-file-group { display: grid; gap: 12px; }
 
-.details-files > h3 { margin: 6px 0 0; }
+.details-file-group > h3 { margin: 6px 0 0; }
