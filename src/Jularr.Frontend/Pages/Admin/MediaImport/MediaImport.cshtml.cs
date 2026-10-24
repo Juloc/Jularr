@@ -335,7 +335,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
 
             if (row.TypeKey == "book" && row.Candidates.Any(candidate => candidate.Source == "openlibrary"))
             {
-                var compare = new Button(new Text("import.editions")).Compact().Attribute("type", "button").Attribute("data-import-editions", "");
+                var compare = new Button(new Text("import.editions")).Compact().Attribute("type", "button").Attribute("data-import-editions", "").Attribute("hidden", "hidden");
                 compare.TextAttribute("data-import-edition-loading", "import.edition.loading");
                 compare.TextAttribute("data-import-edition-choose", "import.edition.choose");
                 compare.TextAttribute("data-import-edition-empty", "import.edition.empty");
