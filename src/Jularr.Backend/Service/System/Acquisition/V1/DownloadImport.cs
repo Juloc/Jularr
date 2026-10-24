@@ -118,8 +118,10 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            // Do not remove a source job with files omitted from the automatic import plan.
-            if (ImportPlacementLogic.AllSourceFilesSelected((allSourceFiles ?? files).Select(file => file.RelativePath), placements.Select(placement => placement.SourcePath)))
+            // Client-owned files are cleaned only after a complete inventory was supplied.
+            // A missing inventory (for example a single reported path) cannot prove there are no sidecars.
+            if (allSourceFiles is not null
+                && ImportPlacementLogic.AllSourceFilesSelected(allSourceFiles.Select(file => file.RelativePath), placements.Select(placement => placement.SourcePath)))
             {
                 await RemoveFromClientAsync(context, download.AcquisitionConnectionId, download.ExternalId, ct);
             }
