@@ -201,7 +201,7 @@ namespace Jularr.Backend.Tests
             DatabaseMigration[] migrations = [.. DatabaseBaseline.Migrations, Probe(DatabaseBaseline.CurrentVersion + 1, "ALTER TABLE \"InstanceSettings\" ADD COLUMN \"UpgradeProbe\" text NOT NULL DEFAULT 'N+1';")];
             var broken = new DatabaseBaseline(cs, options, tools, [.. migrations, Probe(DatabaseBaseline.CurrentVersion + 2, "SELECT 1 / 0;")]);
             var failedUpgrade = await Assert.ThrowsExactlyAsync<DatabaseUpgradeException>(() => broken.StartAsync(CancellationToken.None));
-            Assert.IsInstanceOfType<PostgresException>(failedUpgrade.InnerException);
+            Assert.IsInstanceOfType<PostgresException>(failedUpgrade.InnerException, failedUpgrade.InnerException?.ToString());
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
             Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'InstanceSettings' AND column_name = 'UpgradeProbe';"));
             Assert.AreEqual(before, await ReleaseDataAsync(cs));

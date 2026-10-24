@@ -243,7 +243,7 @@ namespace Jularr.Backend.Data.Logic.Library
     internal sealed class LibraryFileRowData : BaseData
     {
         public LibraryFileRowData(long id, long libraryRootId, string libraryRootName, MediaType mediaTypeId, string relativePath, long sizeBytes, DateTime? missingSince,
-            long? mediaAssetId, long? workId, string? workTitle, string? romName, bool hasOtherVersions, bool isProtected)
+            long? mediaAssetId, long? workId, string? workTitle, string? romName, bool hasOtherVersions, bool isProtected, MediaSubtype? mediaSubtypeId)
         {
             HasOtherVersions = hasOtherVersions;
             IsProtected = isProtected;
@@ -252,6 +252,7 @@ namespace Jularr.Backend.Data.Logic.Library
             LibraryRootId = libraryRootId;
             LibraryRootName = libraryRootName;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             RelativePath = relativePath;
             SizeBytes = sizeBytes;
             MissingSince = missingSince;
@@ -299,6 +300,25 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsProtected))]
         public bool IsProtected { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaSubtypeId), false)]
+        public MediaSubtype? MediaSubtypeId { get; }
+    }
+
+    // The media type and subtype of the library a file lies in.
+    internal sealed class StoredFileRootData : BaseData
+    {
+        public StoredFileRootData(MediaType mediaTypeId, MediaSubtype? mediaSubtypeId)
+        {
+            MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
+        }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaSubtypeId), false)]
+        public MediaSubtype? MediaSubtypeId { get; }
     }
 
     internal sealed class LibraryFileFilterData : BaseData

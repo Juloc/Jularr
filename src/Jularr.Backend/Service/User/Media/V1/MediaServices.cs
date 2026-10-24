@@ -469,7 +469,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                     "WatchlistEntries" AS entry
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"
                     JOIN "Works" AS work ON work."Id" = entry."WorkId"
-                    {{(needsProgress ? WorkCardProjection.ProgressJoin : "")}}
+                    {{(needsProgress ? WorkCardProjection.PageProgressJoin : "")}}
                 WHERE
                     entry."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"

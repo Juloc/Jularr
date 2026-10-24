@@ -20,6 +20,17 @@ namespace Jularr.Backend.Logic.Media
 
         public static bool IsCatalog(MediaType type, MediaSubtype? subtype) => subtype == MediaSubtype.Anime || type is not (MediaType.Movie or MediaType.Series);
 
+        public static string Namespace(DiscoverScopeV1 scope) => scope.MediaSubtypeId is MediaSubtype.Anime or MediaSubtype.Manga or MediaSubtype.LightNovel
+            ? "anilist"
+            : scope.MediaTypeId switch
+            {
+                MediaType.Movie => "tmdb_movie",
+                MediaType.Series => "tmdb_tv",
+                MediaType.Book => "openlibrary",
+                MediaType.Music => "musicbrainz",
+                _ => "igdb"
+            };
+
         private static DiscoverScopeV1 Scope(string slug, MediaType type, MediaSubtype? subtype, params DiscoverFeedType[] feeds) =>
             new(slug, type, subtype, IsCatalog(type, subtype), feeds);
     }

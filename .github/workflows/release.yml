@@ -84,6 +84,13 @@ jobs:
             exit 1
           fi
 
+          # The owner can release past a red Backend Full once, in writing: the annotated tag message carries the line
+          # "Gate override by owner: <reason>". Frontend always has to be green; the override is shown in the run.
+          override=""
+          if [[ "${REF_TYPE}" == "tag" ]]; then
+            override="$(git for-each-ref "refs/tags/${tag}" --format='%(contents)' | sed -n 's/^Gate override by owner: *\(.\+\)$/\1/p' | head -1)"
+          fi
+
           # The newest completed run of each workflow for exactly this commit must have succeeded.
           failed=false
           for workflow in "Frontend" "Backend Full"; do
@@ -94,8 +101,12 @@ jobs:
               echo "::error::No completed ${workflow} run for ${sha}. Let it finish or start it (see docs/RELEASE.md)."
               failed=true
             elif [[ "${run%%$'\t'*}" != "success" ]]; then
-              echo "::error::The latest ${workflow} run for ${sha} is ${run%%$'\t'*}: ${run#*$'\t'}"
-              failed=true
+              if [[ "${workflow}" == "Backend Full" && -n "${override}" ]]; then
+                echo "::warning::Released past a ${run%%$'\t'*} Backend Full run (${run#*$'\t'}) by the owner's written override: ${override}"
+              else
+                echo "::error::The latest ${workflow} run for ${sha} is ${run%%$'\t'*}: ${run#*$'\t'}"
+                failed=true
+              fi
             else
               echo "${workflow}: success (${run#*$'\t'})"
             fi
