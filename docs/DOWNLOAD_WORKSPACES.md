@@ -38,3 +38,7 @@ The consolidated draft #1572 brings together #1533 (qBittorrent/Nyaa), #1534 (SA
 Automatic SABnzbd source deletion requires every enumerated source file to have been included in the import plan. Finishing a manual import never schedules deletion of unselected source files. Recovery backfills failed-job cleanups only: it cannot infer that a completed import had no leftovers, and never retroactively deletes completed sources.
 
 A manual import may queue source cleanup **only** when it finishes and a complete inventory of the source folder confirms that every file was imported (including imports to other titles and earlier manually handled files). Explicitly finishing a partial import does not authorize deletion of leftovers. A failed source-folder scan disables automatic cleanup but does not block an otherwise valid manual import.
+
+## qBittorrent newly created jobs
+
+New torrents write to `<configured qBittorrent save root>/<media>/j-<operationId>/...` (e.g. `/downloads/complete/anime/j-18453`). The save root still belongs to qBittorrent, and Jularr maps the reported content path back through its configured client/host mount. This change does not migrate existing torrents or move anything during seeding. qBittorrent's own incomplete-file staging policy remains client-configured; do not claim that an external torrent is atomically moved from incomplete to complete by Jularr.

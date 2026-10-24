@@ -337,12 +337,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
             else if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent)
             {
-                // The torrent client writes the file into the folder Jularr reads it from.
+                // New torrents receive the same media-scoped, operation-owned folder as native jobs.
+                // The client retains ownership while seeding; importing never moves its payload.
                 var connection = new QbittorrentConnection(client.HttpAddress, client.Username, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedPassword));
                 try
                 {
+                    var savePath = DownloadWorkspaceLayout.ExternalJobDirectory(client.RemotePath!, operationId, target.MediaTypeId, target.MediaSubtypeId);
                     var result = await _qbittorrent.GrabAsync(connection,
-                        new QbittorrentGrabRequest(offer.DownloadUri, client.RemotePath ?? "", offer.Title), ct);
+                        new QbittorrentGrabRequest(offer.DownloadUri, savePath, offer.Title), ct);
                     if (result.Success && result.Hash is { } hash)
                     {
                         externalId = hash;

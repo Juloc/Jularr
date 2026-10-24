@@ -48,6 +48,21 @@ namespace Jularr.Backend.Tests
             Assert.ThrowsExactly<ArgumentException>(() => DownloadWorkspaceLayout.Relative(44, MediaType.Game, MediaSubtype.Anime));
         }
 
+        [TestMethod]
+        public void TorrentJobFolders_UseDownloaderRootAndSameMediaJobIdentity()
+        {
+            Assert.AreEqual("/downloads/complete/books/j-18452",
+                DownloadWorkspaceLayout.ExternalJobDirectory("/downloads/complete/", 18452, MediaType.Book, null));
+            Assert.AreEqual("/downloads/complete/anime/j-18453",
+                DownloadWorkspaceLayout.ExternalJobDirectory("/downloads/complete", 18453, MediaType.Series, MediaSubtype.Anime));
+            Assert.AreEqual(@"D:\Downloads\manga\j-18454",
+                DownloadWorkspaceLayout.ExternalJobDirectory(@"D:\Downloads\", 18454, MediaType.Book, MediaSubtype.Manga));
+            Assert.ThrowsExactly<ArgumentException>(() =>
+                DownloadWorkspaceLayout.ExternalJobDirectory("/", 18455, MediaType.Movie, null));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+                DownloadWorkspaceLayout.ExternalJobDirectory("/downloads/complete", 0, MediaType.Movie, null));
+        }
+
         private static AcquisitionConnectionData Client(long id, int priority, int[] mediaTypes, bool enabled = true,
             AcquisitionConnectionType type = AcquisitionConnectionType.Sabnzbd) =>
             new(id: id, name: "Downloader", acquisitionConnectionTypeId: type, baseUrl: "http://localhost/", protectedApiKey: null,
