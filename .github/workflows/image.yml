@@ -59,6 +59,9 @@ jobs:
           curl --silent http://127.0.0.1:8097/Setup | grep -q 'name="PasswordConfirmation"'
           docker compose exec -T jularr sh -c 'test -d /data/keys && ls /data'
       - name: Install, launch and completely remove browser as the unprivileged app
+        env:
+          JULARR_VERSION: ci
+          JULARR_DB_PASSWORD: ci-only-database-password
         run: |
           docker compose exec -T jularr sh -ec '
             test "$(id -un)" = "app"
