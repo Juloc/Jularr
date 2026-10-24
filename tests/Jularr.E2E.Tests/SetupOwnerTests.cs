@@ -129,6 +129,8 @@ namespace Jularr.E2E.Tests
                 await readingGroup.Locator("summary").ClickAsync();
                 await Assertions.Expect(page.Locator("[data-module=Translation]")).ToBeVisibleAsync();
                 await Assertions.Expect(page.Locator("[data-module=Translation] .option-row__line .truncated__text")).ToHaveCSSAsync("white-space", "normal");
+                await Assertions.Expect(page.Locator("[data-module=Playback] .option-row__line .truncated__text")).ToHaveCSSAsync("white-space", "normal");
+                await Assertions.Expect(page.Locator("[data-media=Book] .option-row__line .truncated__text")).ToHaveCSSAsync("white-space", "normal");
                 Assert.IsFalse(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth > innerWidth + 1"), "The modules step overflows its viewport.");
 
                 // Complete means every module AND all media types/subtypes.
