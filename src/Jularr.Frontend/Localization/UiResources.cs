@@ -778,6 +778,7 @@ namespace Jularr.Frontend.Localization
             new("setup.preset.mediaServer.line", "Play and read your own files, without download automation."),
             new("setup.preset.requests.line", "Take requests and let Arr+ search, download and import, without player or reader."),
             new("setup.modules.discovery", "Discover & catalogs"),
+            new("setup.modules.extra", "Additional modules — all options"),
             new("setup.group.active", "{0}/{1} on"),
             new("setup.type.help.Movie", "Feature films, also from film series."),
             new("setup.type.help.Series", "TV series with seasons and episodes."),
