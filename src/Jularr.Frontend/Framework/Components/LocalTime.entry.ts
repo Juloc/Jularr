@@ -47,7 +47,8 @@ function updateCivilDates(root: ParentNode, today: string): void {
         const fallback = element.getAttribute("data-work-unaired");
         if (!date || !format || !fallback) continue;
         const label = releaseCountdown(date, today, format, fallback);
-        if (element.textContent !== label) element.textContent = label;
+        const text = element.querySelector("[class~=work-status__label]");
+        if (text && text.textContent !== label) text.textContent = label;
     }
 }
 

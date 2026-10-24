@@ -562,7 +562,14 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 if (unit.ReleasedOn is null) return new Span(new Text("work.status.tba")).Class("work-status work-status--off");
                 var days = unit.ReleasedOn.Value.DayNumber - today.DayNumber;
                 var label = days is >= 1 and <= 14 ? string.Format(CultureInfo.CurrentCulture, texts["work.status.airsIn"], days) : texts["work.status.Unaired"];
-                return new Span(new ValueText(label)).Class("work-status work-status--off")
+                // Reserve the longest translated countdown and fallback once. A date change updates
+                // only the text overlay, never the pill width or the table's column sizing.
+                var maximum = string.Format(CultureInfo.CurrentCulture, texts["work.status.airsIn"], 88);
+                return new Span(
+                    new Span(new ValueText(label)).Class("work-status__label"),
+                    new Span(new ValueText(maximum)).Class("work-status__measure").Attribute("aria-hidden", "true"),
+                    new Span(new ValueText(texts["work.status.Unaired"])).Class("work-status__measure").Attribute("aria-hidden", "true"))
+                    .Class("work-status work-status--off work-status--dated")
                     .Attribute("data-work-released-on", unit.ReleasedOn.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
                     .Attribute("data-work-airs-in", texts["work.status.airsIn"])
                     .Attribute("data-work-unaired", texts["work.status.Unaired"]);
