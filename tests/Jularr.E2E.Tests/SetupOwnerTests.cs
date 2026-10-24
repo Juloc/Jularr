@@ -93,10 +93,10 @@ namespace Jularr.E2E.Tests
 
                 // Every Admin module exists once in Setup, grouped in seven
                 // collapsible, clearly labeled sections below the media types.
-                await Assertions.Expect(page.Locator("[data-module]")).ToHaveCountAsync(27);
+                await Assertions.Expect(page.Locator("[data-module]")).ToHaveCountAsync(28);
                 await Assertions.Expect(page.Locator(".option-groups--extras .option-group")).ToHaveCountAsync(7);
                 await Assertions.Expect(page.Locator(".option-grid [data-module]")).ToHaveCountAsync(5);
-                await Assertions.Expect(page.Locator(".option-groups--extras [data-module]")).ToHaveCountAsync(22);
+                await Assertions.Expect(page.Locator(".option-groups--extras [data-module]")).ToHaveCountAsync(23);
                 await Assertions.Expect(page.Locator(".option-type [data-module]")).ToHaveCountAsync(0);
                 await Assertions.Expect(page.Locator(".option-groups--extras .option-group").Filter(new() { HasText = "Playback & anime" })
                     .Locator("[data-module=Trickplay]")).ToHaveCountAsync(1);
