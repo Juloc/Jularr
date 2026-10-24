@@ -1,6 +1,6 @@
 // A durable import is owned by the server's operation queue, not by this page
 // or a long-lived fetch. Polling may stop freely on navigation and reconnects.
-type JobRow = { index: number; title: string | null; outcome: string | null; workId: number | null };
+type JobRow = { index: number; title: string | null; stage: string; outcome: string | null; workId: number | null };
 type JobState = {
     jobId: string;
     state: "Queued" | "Running" | "Completed" | "Failed";
@@ -82,7 +82,7 @@ export function initializeDurableJobs(): void {
                 const name = entry.querySelector<HTMLElement>("[data-job-title]");
                 const outcome = entry.querySelector<HTMLElement>("[data-job-outcome]");
                 if (name) name.textContent = row.title || "#" + (row.index + 1);
-                if (outcome) outcome.textContent = row.outcome ?? "";
+                if (outcome) outcome.textContent = row.outcome ?? row.stage;
             }
         }
         if (job.error) status.textContent += " · " + job.error;
