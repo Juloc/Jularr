@@ -34,8 +34,11 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."Categories",
                     connection."DownloadCategory",
                     connection."RemovesCompleted",
+                    connection."RemovesFailed",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."IncompleteRemotePath",
+                    connection."IncompleteLocalPath",
                     connection."DownloadStorageMountId",
                     connection."Username",
                     connection."MaxConnections",
@@ -78,8 +81,11 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."Categories",
                     connection."DownloadCategory",
                     connection."RemovesCompleted",
+                    connection."RemovesFailed",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."IncompleteRemotePath",
+                    connection."IncompleteLocalPath",
                     connection."DownloadStorageMountId",
                     connection."Username",
                     connection."MaxConnections",
@@ -269,10 +275,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 """
                 INSERT INTO
                     "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "Host", "Port", "UseSsl", "ProtectedApiKey", "IsEnabled", "Priority", "Categories",
-                        "DownloadCategory", "RemovesCompleted", "RemotePath", "LocalPath", "DownloadStorageMountId", "Username", "MaxConnections", "ProtectedPassword", "MediaTypeIds", "SearchesAutomatically", "QueryLimit", "GrabLimit")
+                        "DownloadCategory", "RemovesCompleted", "RemovesFailed", "RemotePath", "LocalPath", "IncompleteRemotePath", "IncompleteLocalPath", "DownloadStorageMountId", "Username", "MaxConnections", "ProtectedPassword", "MediaTypeIds", "SearchesAutomatically", "QueryLimit", "GrabLimit")
                 VALUES
-                    (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @Host, @Port, @UseSsl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemovesCompleted, @RemotePath,
-                        @LocalPath, @DownloadStorageMountId, @Username, @MaxConnections, @ProtectedPassword, @MediaTypeIds, @SearchesAutomatically, @QueryLimit, @GrabLimit)
+                    (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @Host, @Port, @UseSsl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemovesCompleted, @RemovesFailed, @RemotePath,
+                        @LocalPath, @IncompleteRemotePath, @IncompleteLocalPath, @DownloadStorageMountId, @Username, @MaxConnections, @ProtectedPassword, @MediaTypeIds, @SearchesAutomatically, @QueryLimit, @GrabLimit)
                 RETURNING
                     "Id";
                 """;
@@ -315,8 +321,11 @@ namespace Jularr.Backend.Logic.Acquisition
                     "Categories" = @Categories,
                     "DownloadCategory" = @DownloadCategory,
                     "RemovesCompleted" = @RemovesCompleted,
+                    "RemovesFailed" = @RemovesFailed,
                     "RemotePath" = @RemotePath,
                     "LocalPath" = @LocalPath,
+                    "IncompleteRemotePath" = @IncompleteRemotePath,
+                    "IncompleteLocalPath" = @IncompleteLocalPath,
                     "DownloadStorageMountId" = @DownloadStorageMountId,
                     "Username" = @Username,
                     "MaxConnections" = @MaxConnections,
