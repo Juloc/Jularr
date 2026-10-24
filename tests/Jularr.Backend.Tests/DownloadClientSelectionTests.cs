@@ -16,7 +16,7 @@ namespace Jularr.Backend.Tests
         {
             var general = Client(41, 1, []);
             var scoped = Client(42, 5, [(int)MediaType.Movie]);
-            Assert.AreEqual(general.Id, DownloadClientSelectionLogic.Select([scoped, general], Clock, AcquisitionConnectionType.Sabnzbd)?.Id);
+            Assert.AreEqual(general.Id, DownloadClientSelectionLogic.Select([scoped, general], MediaType.Movie, Clock, AcquisitionConnectionType.Sabnzbd)?.Id);
         }
 
         [TestMethod]
