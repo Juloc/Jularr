@@ -108,7 +108,7 @@ namespace Jularr.Frontend.Framework
             parts.Add(backdropUrl is not null ? new Div(new MediaImage(backdropUrl, "", 1280, 720, priority: true)).Class("media-hero__backdrop")
                 : new Div().Class("media-hero__backdrop"));
             if (_corner is not null) parts.Add(new Div(_corner).Class("media-hero__corner"));
-            var poster = _posterUrl is null ? new Div(_placeholder ?? new Span()).Class("media-hero__placeholder") : (IUiComponent)new MediaImage(_posterUrl, "", 342, 513, priority: true, minViewportWidth: 701);
+            var poster = _posterUrl is null ? new Div(_placeholder ?? new Span()).Class("media-hero__placeholder") : (IUiComponent)new MediaImage(_posterUrl, "", 342, 513);
             var footer = new List<IUiComponent>();
             if (actions.Count > 0) footer.Add(new Div([.. actions]).Class("media-hero__actions"));
             if (_progress is { } progress)

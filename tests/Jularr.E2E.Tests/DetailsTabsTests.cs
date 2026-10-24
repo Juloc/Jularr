@@ -24,7 +24,7 @@ namespace Jularr.E2E.Tests
                     INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") VALUES ('Tabs', 3, 'C:\tabs', FALSE) RETURNING "Id" INTO mount;
                     INSERT INTO "LibraryRoots" ("Name", "MediaTypeId", "StorageMountId", "RelativePath") VALUES ('Tabs series', 2, mount, 'series') RETURNING "Id" INTO root;
                     INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (7001, 2, 'Tabbed Show', 2024), (7002, 1, 'Bare Film', 2020);
-                    INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (7001, 'Overview', 'A show with two seasons.', TRUE), (7001, 'Genres', 'Drama', TRUE);
+                    INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (7001, 'Overview', 'A show with two seasons.', TRUE), (7001, 'Genres', 'Drama', TRUE), (7001, 'Poster', '/__test-only__/details-cover.webp', TRUE);
                     INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear", "Rating", "Votes") VALUES ('tmdb_tv', '777', 2, 'Tabbed Show', 2024, 8.4, 100);
                     INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (7001, 'tmdb_tv', '777');
                     INSERT INTO "WorkEditions" ("WorkId", "LanguageCode") VALUES (7001, 'en') RETURNING "Id" INTO ed;
@@ -52,13 +52,27 @@ namespace Jularr.E2E.Tests
                 END $$;
                 """);
 
+            // CSS-hidden, lazy posters are not requested on mobile. The backdrop remains.
+            await page.SetViewportSizeAsync(390, 844);
+            var posterRequests = 0;
+            page.Request += (_, request) =>
+            {
+                if (request.Url.EndsWith("/__test-only__/details-cover.webp", StringComparison.Ordinal)) posterRequests++;
+            };
+            await page.RouteAsync("**/__test-only__/details-cover.webp", route => route.FulfillAsync(new RouteFulfillOptions { Status = 200, ContentType = "image/gif",
+                BodyBytes = Convert.FromBase64String("R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=") }));
+
             // The Overview: a plain cover, a standalone availability chip, and actions aligned with progress.
             await page.GotoAsync("/Details/7001");
             var hero = page.Locator(".media-hero--poster");
+            await Assertions.Expect(hero.Locator(".media-hero__poster")).ToBeHiddenAsync();
+            await Assertions.Expect(hero.Locator(".media-hero__poster .media-image")).ToHaveAttributeAsync("loading", "lazy");
+            Assert.AreEqual(0, posterRequests, "A CSS-hidden mobile poster must not trigger a network request.");
             await Assertions.Expect(hero.Locator(".media-hero__poster .media-availability-badge")).ToHaveCountAsync(0);
             await Assertions.Expect(hero.Locator(".media-hero__chips .media-availability-badge--inline")).ToBeVisibleAsync();
 
             await page.SetViewportSizeAsync(1440, 900);
+            await Assertions.Expect(hero.Locator(".media-hero__poster .media-image")).ToBeVisibleAsync();
             var posterBox = await hero.Locator(".media-hero__poster").BoundingBoxAsync();
             var contentBox = await hero.Locator(".media-hero__content").BoundingBoxAsync();
             var footerBox = await hero.Locator(".media-hero__footer").BoundingBoxAsync();

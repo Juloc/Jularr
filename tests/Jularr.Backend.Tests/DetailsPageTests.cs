@@ -55,9 +55,9 @@ namespace Jularr.Backend.Tests
             // The page: the rating in the hero, the tabs of what exists (no People, none of Related or Similar), each tab at its own address.
             var overview = await GetAsync(host, "/Details/10");
             StringAssert.Contains(overview, "media-hero__rating");
-            StringAssert.Contains(overview, "<picture>");
-            StringAssert.Contains(overview, "media=\"(max-width: 700px)\"");
-            StringAssert.Contains(overview, "srcset=\"data:image/gif;base64,");
+            StringAssert.Contains(overview, "src=\"https://example.test/poster.webp\"");
+            StringAssert.Contains(overview, "loading=\"lazy\"");
+            Assert.IsFalse(overview.Contains("<picture>", StringComparison.Ordinal));
             StringAssert.Contains(overview, "media-availability-badge--inline");
             StringAssert.Contains(overview, "Open Library");
             StringAssert.Contains(overview, "href=\"/Details/10?tab=volumes\"");
