@@ -33,6 +33,46 @@ namespace Jularr.Backend.Logic.Media
             return (await ctx.ReadRequiredAsync<MediaImportJobIdData>(sql, ct)).JobId;
         }
 
+        public static async Task InitializeImportJobRowsAsync(this LogicContext ctx, MediaImportJobIdData data, CancellationToken ct)
+        {
+            // The normalized immutable snapshot owns all row titles. A duplicate
+            // submit can never modify another pending job's choices or progress.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO "MediaImportJobRows" ("OperationId", "RowIndex", "Title")
+                SELECT job."OperationId", (item."Ordinality" - 1)::integer, left(item."Element"->>'title', 500)
+                FROM "MediaImportJobs" AS job
+                CROSS JOIN LATERAL jsonb_array_elements((job."Payload"->>'Json')::jsonb->'items')
+                    WITH ORDINALITY AS item("Element", "Ordinality")
+                WHERE job."PublicId" = @JobId
+                ON CONFLICT ("OperationId", "RowIndex") DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        public static async Task MarkImportJobStageAsync(this LogicContext ctx, MediaImportJobStageData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH changed AS (
+                    UPDATE "MediaImportJobRows"
+                    SET "Stage" = @Stage, "UpdatedAt" = now()
+                    WHERE "OperationId" = @OperationId AND "RowIndex" = @RowIndex
+                      AND "OutcomeTypeId" IS NULL AND "Stage" <> @Stage
+                    RETURNING "OperationId"
+                )
+                UPDATE "MediaImportJobs"
+                SET "Sequence" = "Sequence" + 1, "UpdatedAt" = now()
+                WHERE "OperationId" = @OperationId
+                  AND EXISTS (SELECT 1 FROM changed);
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static Task<MediaImportJobIdData?> ReadLatestImportJobAsync(this LogicContext ctx, MediaImportJobOwnerData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -66,7 +106,7 @@ namespace Jularr.Backend.Logic.Media
             sql = new SqlStatement();
             sql.Statement =
                 """
-                SELECT row."RowIndex" AS "Index", row."Title", row."OutcomeTypeId", row."WorkId", row."Searches"
+                SELECT row."RowIndex" AS "Index", row."Title", row."Stage", row."OutcomeTypeId", row."WorkId", row."Searches"
                 FROM "MediaImportJobRows" AS row
                 JOIN "MediaImportJobs" AS job ON job."OperationId" = row."OperationId"
                 WHERE job."PublicId" = @JobId AND job."RequestedByAccountId" = @AccountId
@@ -75,7 +115,7 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(data);
             var rows = await ctx.ReadSql.ReadListAsync<MediaImportJobRowData>(sql, ct);
             return new MediaImportJobStatusV1(header.JobId, header.StatusTypeId, header.TotalCount, header.ProcessedCount,
-                header.Sequence, header.ErrorKey, new(rows.Select(row => new MediaImportJobRowV1(row.Index, row.Title, row.OutcomeTypeId, row.WorkId, row.Searches))));
+                header.Sequence, header.ErrorKey, new(rows.Select(row => new MediaImportJobRowV1(row.Index, row.Title, row.Stage, row.OutcomeTypeId, row.WorkId, row.Searches))));
         }
 
         public static Task<MediaImportJobWorkData?> ReadImportJobWorkAsync(this LogicContext ctx, MediaImportJobOperationData data, CancellationToken ct)
@@ -122,10 +162,16 @@ namespace Jularr.Backend.Logic.Media
                     WHERE "OperationId" = @OperationId AND "Cursor" = @RowIndex
                     RETURNING "OperationId"
                 ), journal AS (
-                    INSERT INTO "MediaImportJobRows" ("OperationId", "RowIndex", "OutcomeTypeId", "Title", "WorkId", "Searches", "UpdatedAt")
-                    SELECT "OperationId", @RowIndex, @OutcomeTypeId, @Title, @WorkId, @Searches, now()
-                    FROM checkpoint
-                    ON CONFLICT ("OperationId", "RowIndex") DO NOTHING
+                    INSERT INTO "MediaImportJobRows" ("OperationId", "RowIndex", "Stage", "OutcomeTypeId", "Title", "WorkId", "Searches", "UpdatedAt")
+                    SELECT "OperationId", @RowIndex, 'Done', @OutcomeTypeId, @Title, @WorkId, @Searches, now()
+                    FROM checkpoint WHERE true
+                    ON CONFLICT ("OperationId", "RowIndex") DO UPDATE
+                        SET "Stage" = 'Done',
+                            "OutcomeTypeId" = EXCLUDED."OutcomeTypeId",
+                            "Title" = coalesce(EXCLUDED."Title", "MediaImportJobRows"."Title"),
+                            "WorkId" = EXCLUDED."WorkId",
+                            "Searches" = EXCLUDED."Searches",
+                            "UpdatedAt" = now()
                 )
                 UPDATE "Operations" SET "ProcessedCount" = @RowIndex + 1
                 WHERE "Id" = @OperationId AND "OperationTypeId" = 6 AND "OperationStatusTypeId" = 2
