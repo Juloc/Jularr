@@ -49,8 +49,8 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
             // The row of the entry's pages with the queue's own filters, then the figures.
             page.NoPageRow();
-            page.Content.Add(new ListToolbar(Modes(_summary)));
-            if (!IsHistory && !ShowFiles) page.Content.Add(new ListToolbar(Chips(_summary)));
+            page.Content.Add(new ListToolbar(IsHistory ? new Span(new Text("activity.view.history")) :
+                ShowFiles ? new Span(new Text("activity.files")) : Chips(_summary), Modes()));
             if (_summary is { } numbers) page.Content.Add(Kpis(numbers));
 
             if (_items is { } items)
@@ -77,16 +77,13 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
         private static IUiComponent Live(string name, string text) => new Span(new ValueText(text)).Attribute("data-live", LiveKeys.Queue).Attribute("data-live-text", name);
 
-        // Queue, history and files stay three distinct destinations.
-        private NavigationTabs Modes(ActivitySummaryV1? numbers) => AdminMenu.Row(texts, Request,
+        // Three views share one reusable toolbar and the list kit's compact view switch.
+        private ViewSwitch Modes() => new("activity.views",
         [
-            new NavigationTab("activity.view.queue", Address(filter: ActivityFilterType.All), !ShowFiles && !IsHistory,
-                Count: numbers?.AllCount, Icon: Glyph("download", 14)),
-            new NavigationTab("activity.view.history", Address(filter: ActivityFilterType.History), IsHistory,
-                Count: numbers?.HistoryCount, Icon: Glyph("history", 14)),
-            new NavigationTab("activity.files", Address(filter: ActivityFilterType.All, files: true), ShowFiles,
-                Icon: Glyph("folder", 14))
-        ], ariaLabelKey: "activity.views");
+            new ViewChoice("activity.view.queue", Address(filter: ActivityFilterType.All), Glyph("download", 16), !ShowFiles && !IsHistory),
+            new ViewChoice("activity.view.history", Address(filter: ActivityFilterType.History), Glyph("history", 16), IsHistory),
+            new ViewChoice("activity.files", Address(filter: ActivityFilterType.All, files: true), Glyph("folder", 16), ShowFiles)
+        ]);
 
         // One chip per part of the queue with how many entries it holds.
         private NavigationTabs Chips(ActivitySummaryV1? numbers)
@@ -124,7 +121,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         private ActionDock Dock(string? csrf)
         {
             var actions = new List<IUiComponent>();
-            if (!IsHistory && _items is { Items.Count: > 0 })
+            if (!IsHistory && !ShowFiles && _items is { Items.Count: > 0 })
             {
                 actions.Add(QueueButton("PauseAll", "pause", "activity.pauseAll", csrf));
                 actions.Add(QueueButton("ResumeAll", "play", "activity.resumeAll", csrf));
