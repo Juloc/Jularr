@@ -12,7 +12,6 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 {
     // Stored as an immutable, server-validated snapshot. Once queued, editing
     // a preview cannot alter the choices of an already running job.
-    [ServiceEndpoint("POST", "/api/v1/admin/media-import/jobs")]
     public sealed class QueueMediaImportJobV1 : AdminService<MediaImportParametersV1, MediaImportDataV1>
     {
         private readonly WorkSignals _signals;
@@ -50,6 +49,25 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             _signals.Imports.Notify();
             return new MediaImportJobCreatedV1(id);
         }
+    }
+
+    // REST API uses a JSON-only contract: multipart UploadedFile forms cannot
+    // bind a nested BaseDataList through FormDataBinder. The shared enqueue service
+    // remains the only implementation of admission and operation scheduling.
+    [ServiceEndpoint("POST", "/api/v1/admin/media-import/jobs")]
+    public sealed class QueueMediaImportJobApiV1 : AdminService<MediaImportParametersV1, MediaImportJobRequestV1>
+    {
+        private readonly QueueMediaImportJobV1 _queue;
+        internal QueueMediaImportJobApiV1(QueueMediaImportJobV1 queue) => _queue = queue;
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<MediaImportJobCreatedV1>()];
+        protected override ModuleRequirement GetInstanceModules(MediaImportParametersV1 parameters) => ModuleRequirement.All("Library", "Requests");
+        protected override ServicePermission GetPermission(MediaImportParametersV1 parameters, Type resultType) => new("media.manual.update");
+
+        protected override async Task<IServiceOutput> OnExecute() =>
+            await _queue.ExecuteAsync<MediaImportJobCreatedV1>(
+                new MediaImportDataV1(null, Data.Json, Data.Action, Data.Defaults, Data.Choices), CancellationToken);
     }
 
     [ServiceEndpoint("GET", "/api/v1/admin/media-import/jobs/{jobId:guid}")]
