@@ -123,6 +123,41 @@ class HttpTvCatalogV1ClientTest {
         }
     }
 
+    @Test fun discoverRequestsUseExactV1IdentityAndChosenLocaleWithoutCookies() {
+        val server = server()
+        val submitted = mutableListOf<Triple<String, String, String>>()
+        server.createContext("/api/v1/localization/locales") { exchange ->
+            exchange.reply(200, """[{"id":11,"locale":"de","name":"Deutsch","isRightToLeft":false},
+                {"id":12,"locale":"en","name":"English","isRightToLeft":false}]""")
+        }
+        server.createContext("/api/v1/discover") { exchange ->
+            val body = exchange.requestBody.bufferedReader().use { it.readText() }
+            submitted += Triple(exchange.requestURI.path, exchange.requestHeaders.getFirst("Authorization"), body)
+            exchange.reply(200, """{"id":933}""")
+        }
+        server.start()
+        try {
+            val api = HttpTvCatalogV1Client(
+                "http://127.0.0.1:${server.address.port}", DeviceTokenStore("paired"),
+            )
+            runBlocking {
+                assertEquals(listOf(11L, 12L), api.requestLocales().map { it.id })
+                assertEquals(933L, api.requestDiscoverTmdb(2, 321, 11))
+                assertEquals(933L, api.requestDiscoverCatalog(2, "anilist", "707", 1, 12))
+            }
+            assertEquals("/api/v1/discover/2/321/requests", submitted[0].first)
+            assertEquals("Bearer paired", submitted[0].second)
+            assertEquals(11L, JSONObject(submitted[0].third).getLong("uiLocaleId"))
+            assertEquals("/api/v1/discover/catalog/requests", submitted[1].first)
+            assertEquals("anilist", JSONObject(submitted[1].third).getString("namespace"))
+            assertEquals("707", JSONObject(submitted[1].third).getString("externalId"))
+            assertEquals(1, JSONObject(submitted[1].third).getInt("mediaSubtypeId"))
+            assertEquals(12L, JSONObject(submitted[1].third).getLong("uiLocaleId"))
+        } finally {
+            server.stop(0)
+        }
+    }
+
     @Test fun revokedSessionClearsTokensAndSurfacesServerProblem() {
         val server = server()
         server.createContext("/api/v1/continue") {
