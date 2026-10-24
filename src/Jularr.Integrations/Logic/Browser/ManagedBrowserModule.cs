@@ -31,6 +31,12 @@ namespace Jularr.Integrations.Logic.Browser
 
                     Directory.CreateDirectory(_home);
                     await File.WriteAllTextAsync(Path.Combine(_home, ".enabled"), "1", ct);
+                    if (options.InstallLocally && _runner is { HasExited: true } && browser.Status.IsRunning)
+                    {
+                        // Chrome died but the DevTools socket has not yet noticed. Recreate it.
+                        await browser.StopAsync();
+                    }
+
                     if (!browser.Status.IsRunning)
                     {
                         State = "starting";
@@ -62,8 +68,8 @@ namespace Jularr.Integrations.Logic.Browser
                     if (File.Exists(marker)) File.Delete(marker);
                     if (browser.Status.IsRunning) await browser.StopAsync();
                     StopRunner();
-                    if (options.InstallLocally && (Directory.Exists(Path.Combine(_home, "runtime"))
-                        || Directory.Exists(Path.Combine(_home, "profile")) || Directory.Exists(Path.Combine(_home, "downloads"))))
+                    // Even a killed installer may have left an .install.* staging directory.
+                    if (options.InstallLocally && Directory.Exists(_home))
                     {
                         State = "removing";
                         await ExecuteAsync("uninstall", ct);
