@@ -33,6 +33,7 @@ function initializePreview(): void {
     const form = all?.closest("form") ?? null;
     const intent = form?.querySelector<HTMLElement>("[data-import-intent]");
     const globalAction = form?.querySelector<HTMLSelectElement>('select[name="Action"]');
+    const previewedAction = globalAction?.value;
     if (!all || all.dataset.ready !== undefined) return;
     all.dataset.ready = "";
     const update = () => {
@@ -65,7 +66,9 @@ function initializePreview(): void {
             const warning = intent.querySelector<HTMLElement>("[data-import-search-warning]");
             if (warning) warning.hidden = searched === 0;
         }
-        if (apply) apply.disabled = selection.count === 0;
+        // Existing unmonitored Works become actionable only after the server rerenders
+        // the preview for the newly chosen global action.
+        if (apply) apply.disabled = selection.count === 0 || globalAction?.value !== previewedAction;
     };
 
     all.addEventListener("change", () => {
