@@ -13,7 +13,9 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import de.juloc.jularr.core.api.AppApiException
+import de.juloc.jularr.core.api.TvServerDiscoveryClient
 import de.juloc.jularr.core.model.DevicePairingStarted
+import de.juloc.jularr.core.model.DiscoveredJularrServer
 import de.juloc.jularr.core.model.InstanceCapabilities
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -40,6 +42,24 @@ fun TvV1EntryHost(
     var pairing by remember { mutableStateOf<DevicePairingStarted?>(null) }
     var capabilities by remember { mutableStateOf<InstanceCapabilities?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var discovered by remember { mutableStateOf<List<DiscoveredJularrServer>>(emptyList()) }
+    var discovering by remember { mutableStateOf(false) }
+    var discoveryRevision by remember { mutableStateOf(0) }
+
+    // LAN discovery is best-effort: manual URL setup stays available throughout.
+    LaunchedEffect(phase, discoveryRevision) {
+        if (phase != TvV1EntryPhase.Setup) return@LaunchedEffect
+        discovering = true
+        try {
+            discovered = TvServerDiscoveryClient().discover()
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (_: Exception) {
+            discovered = emptyList()
+        } finally {
+            discovering = false
+        }
+    }
 
     LaunchedEffect(origin, phase) {
         if (origin == null) return@LaunchedEffect
@@ -108,6 +128,9 @@ fun TvV1EntryHost(
             initialOrigin = origin.orEmpty(),
             error = error,
             busy = false,
+            discovering = discovering,
+            discovered = discovered,
+            onDiscoverAgain = { discoveryRevision++ },
             onConnect = { entered ->
                 // TvSetupScreen validates the address before it calls this callback.
                 origin = TvServerOrigin.normalize(entered)
