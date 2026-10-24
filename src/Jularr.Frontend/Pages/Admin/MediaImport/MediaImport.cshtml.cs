@@ -47,7 +47,9 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 new Strong(new Text("import.job.queued")).Attribute("data-import-job-state", "").Attribute("role", "status"),
                 new Span(new ValueText("0 / 0")).Attribute("data-import-job-count", ""),
                 new Progress().Attribute("data-import-job-progress", "").Attribute("max", "1").Attribute("value", "0"),
-                new Ol().Attribute("data-import-job-rows", ""))
+                new Ol().Attribute("data-import-job-rows", ""),
+                new Button(new Text("import.downloadReport")).Attribute("type", "button")
+                    .Attribute("data-import-job-report", "").Attribute("hidden", "hidden"))
                 .Class("media-import__job-panel").Attribute("data-import-job-panel", "").Attribute("hidden", "hidden")
                 .TextAttribute("data-job-queued", "import.job.queued")
                 .TextAttribute("data-job-running", "import.job.running")
