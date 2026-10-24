@@ -11,7 +11,7 @@ namespace Jularr.Frontend.Framework
     public sealed class MediaImage(
         string url, string alt, int width, int height,
         IReadOnlyList<ImageVariant>? variants = null, string? sizes = null,
-        bool priority = false, NoCoverKind kind = NoCoverKind.Poster) : IUiComponent
+        bool priority = false, NoCoverKind kind = NoCoverKind.Poster, int? minViewportWidth = null) : IUiComponent
     {
         // The image where there is an address, otherwise the stand-in (NoCover): the one place a missing cover is decided.
         public static IUiComponent Or(FrontendAssets assets, string? url, string alt, int width, int height, NoCoverKind kind = NoCoverKind.Poster,
@@ -57,8 +57,24 @@ namespace Jularr.Frontend.Framework
                 image.Attribute("sizes", sizes ?? "100vw");
             }
 
+            // A picture source chosen at mobile widths prevents downloading desktop-only
+            // artwork even when the actual image has eager/high-priority loading.
+            if (minViewportWidth is { } viewportWidth)
+            {
+                if (viewportWidth < 2) throw new ArgumentOutOfRangeException(nameof(minViewportWidth));
+                new Picture(
+                    new Source().Attribute("media", "(max-width: " + (viewportWidth - 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + "px)")
+                        .Attribute("srcset", "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="),
+                    image
+                ).WriteTo(writer, encoder, texts);
+                return;
+            }
+
             image.WriteTo(writer, encoder, texts);
         }
+
+        private sealed class Picture(params IUiComponent[] children) : HtmlElement("picture", children);
+        private sealed class Source() : HtmlElement("source");
 
         private static void ValidateUrl(string url)
         {

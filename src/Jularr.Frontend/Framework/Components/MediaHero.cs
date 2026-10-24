@@ -108,7 +108,7 @@ namespace Jularr.Frontend.Framework
             parts.Add(backdropUrl is not null ? new Div(new MediaImage(backdropUrl, "", 1280, 720, priority: true)).Class("media-hero__backdrop")
                 : new Div().Class("media-hero__backdrop"));
             if (_corner is not null) parts.Add(new Div(_corner).Class("media-hero__corner"));
-            var poster = _posterUrl is null ? new Div(_placeholder ?? new Span()).Class("media-hero__placeholder") : (IUiComponent)new MediaImage(_posterUrl, "", 342, 513, priority: true);
+            var poster = _posterUrl is null ? new Div(_placeholder ?? new Span()).Class("media-hero__placeholder") : (IUiComponent)new MediaImage(_posterUrl, "", 342, 513, priority: true, minViewportWidth: 701);
             var footer = new List<IUiComponent>();
             if (actions.Count > 0) footer.Add(new Div([.. actions]).Class("media-hero__actions"));
             if (_progress is { } progress)
@@ -120,13 +120,17 @@ namespace Jularr.Frontend.Framework
                     .Class("media-hero__progress"));
             }
 
-            var content = new List<IUiComponent> { new Div([.. body]).Class("media-hero__body") };
+            var layout = new List<IUiComponent>
+            {
+                new Div(poster).Class("media-hero__poster"),
+                new Div([.. body]).Class("media-hero__content")
+            };
             if (footer.Count > 0)
             {
-                content.Add(new Div([.. footer]).Class(_progress is not null && actions.Count > 0 ? "media-hero__footer media-hero__footer--progress" : "media-hero__footer"));
+                layout.Add(new Div([.. footer]).Class(_progress is not null && actions.Count > 0 ? "media-hero__footer media-hero__footer--progress" : "media-hero__footer"));
             }
 
-            parts.Add(new Div(new Div(poster).Class("media-hero__poster"), new Div([.. content]).Class("media-hero__content")).Class("media-hero__layout"));
+            parts.Add(new Div([.. layout]).Class("media-hero__layout"));
             new Section([.. parts]).Class("media-hero media-hero--poster").WriteTo(writer, encoder, texts);
         }
     }

@@ -61,18 +61,22 @@ namespace Jularr.E2E.Tests
             await page.SetViewportSizeAsync(1440, 900);
             var posterBox = await hero.Locator(".media-hero__poster").BoundingBoxAsync();
             var contentBox = await hero.Locator(".media-hero__content").BoundingBoxAsync();
+            var footerBox = await hero.Locator(".media-hero__footer").BoundingBoxAsync();
             var actionsBox = await hero.Locator(".media-hero__actions").BoundingBoxAsync();
             var progressBox = await hero.Locator(".media-hero__progress").BoundingBoxAsync();
             Assert.IsNotNull(posterBox);
             Assert.IsNotNull(contentBox);
+            Assert.IsNotNull(footerBox);
             Assert.IsNotNull(actionsBox);
             Assert.IsNotNull(progressBox);
-            Assert.IsTrue(Math.Abs(contentBox.Y - posterBox.Y) <= 2, "The desktop poster must start at the top of the content.");
-            Assert.IsTrue(Math.Abs(contentBox.Y + contentBox.Height - (posterBox.Y + posterBox.Height)) <= 2, "The poster must reach the bottom of the content.");
+            Assert.IsTrue(Math.Abs(contentBox.Y - posterBox.Y) <= 2, "The poster and description must start at the same height.");
+            Assert.IsTrue(Math.Abs(posterBox.Height / posterBox.Width - 1.5) <= .04, "Desktop artwork must keep its natural 2:3 cover ratio.");
+            Assert.IsTrue(footerBox.Y >= Math.Max(contentBox.Y + contentBox.Height, posterBox.Y + posterBox.Height), "Actions must be below the cover and description.");
             Assert.IsTrue(Math.Abs(actionsBox.Y + actionsBox.Height - (progressBox.Y + progressBox.Height)) <= 18, "Actions and progress must share a bottom row.");
 
             await page.SetViewportSizeAsync(390, 844);
             await Assertions.Expect(hero.Locator(".media-hero__poster")).ToBeHiddenAsync();
+            await Assertions.Expect(hero.Locator(".media-hero__backdrop")).ToBeVisibleAsync();
             await Assertions.Expect(hero.Locator(".media-hero__chips .media-availability-badge--inline")).ToBeVisibleAsync();
             var mobileActions = await hero.Locator(".media-hero__actions").BoundingBoxAsync();
             var mobileProgress = await hero.Locator(".media-hero__progress").BoundingBoxAsync();

@@ -5,7 +5,7 @@ namespace Jularr.Frontend.Framework
     // Minimal server-side HTML DSL, not a browser DOM or client-side framework.
     public class HtmlElement : IUiComponent
     {
-        private static readonly HashSet<string> VoidTags = ["input", "img", "br", "hr"];
+        private static readonly HashSet<string> VoidTags = ["input", "img", "br", "hr", "source"];
         private readonly string _tag;
         private readonly List<IUiComponent> _children;
         private readonly List<(string Name, string Value)> _attributes = [];
