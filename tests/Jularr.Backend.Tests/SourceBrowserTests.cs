@@ -23,7 +23,7 @@ namespace Jularr.Backend.Tests
             using var client = new System.Net.Sockets.TcpClient();
             await client.ConnectAsync(IPAddress.Loopback, proxy.Port);
             var stream = client.GetStream();
-            await stream.WriteAsync(Encoding.ASCII.GetBytes(raw.Replace("\\\\r", "\\r").Replace("\\\\n", "\\n")));
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(raw.Replace("\\r", "\r").Replace("\\n", "\n")));
             using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var answer = new byte[512];
             var size = await stream.ReadAsync(answer, ct.Token);
@@ -33,7 +33,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void EgressProxy_AcceptsOnlyHttpsConnectOn443()
         {
-            Assert.IsTrue(BrowserEgressProxy.TryConnectAddress("CONNECT example.org:443 HTTP/1.1\\r\\nHost: example.org\\r\\n\\r\\n".Replace("\\\\r", "\\r").Replace("\\\\n", "\\n"), out var host));
+            Assert.IsTrue(BrowserEgressProxy.TryConnectAddress("CONNECT example.org:443 HTTP/1.1\\r\\nHost: example.org\\r\\n\\r\\n".Replace("\\r", "\r").Replace("\\n", "\n"), out var host));
             Assert.AreEqual("example.org", host);
             Assert.IsFalse(BrowserEgressProxy.TryConnectAddress("CONNECT example.org:80 HTTP/1.1", out _));
             Assert.IsFalse(BrowserEgressProxy.TryConnectAddress("GET https://example.org/ HTTP/1.1", out _));
