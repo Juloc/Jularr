@@ -9283,6 +9283,14 @@
    "Browser package",
    "Browser-Paket"
   ],
+  "admin.browser.version": [
+   "Installed version",
+   "Installierte Version"
+  ],
+  "admin.browser.diskUsage": [
+   "Managed storage",
+   "Belegter Speicher"
+  ],
   "admin.browser.installation.disabled": [
    "Disabled / not installed",
    "Deaktiviert / nicht installiert"
