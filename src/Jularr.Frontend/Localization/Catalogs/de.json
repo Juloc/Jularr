@@ -4,6 +4,78 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "companion.title": [
+   "Phone remote",
+   "Handy-Fernbedienung"
+  ],
+  "companion.description": [
+   "Control playback on your paired Jularr TV. You must be signed in with the same account and profile.",
+   "Steuere die Wiedergabe auf deinem verbundenen Jularr-TV. Du musst mit demselben Konto und Profil angemeldet sein."
+  ],
+  "companion.invite": [
+   "TV invitation",
+   "TV-Einladung"
+  ],
+  "companion.invitePlaceholder": [
+   "Paste the invitation from the TV",
+   "Einladung vom Fernseher einfügen"
+  ],
+  "companion.connect": [
+   "Connect",
+   "Verbinden"
+  ],
+  "companion.inviteHint": [
+   "Scan the TV QR code or paste its invitation. Invitations expire after five minutes.",
+   "Scanne den QR-Code am Fernseher oder füge die Einladung ein. Einladungen laufen nach fünf Minuten ab."
+  ],
+  "companion.disconnected": [
+   "Not connected to a TV",
+   "Nicht mit einem Fernseher verbunden"
+  ],
+  "companion.connected": [
+   "Connected to TV",
+   "Mit TV verbunden"
+  ],
+  "companion.connectionLost": [
+   "TV connection lost. Controls are disabled.",
+   "TV-Verbindung unterbrochen. Die Bedienung ist deaktiviert."
+  ],
+  "companion.pending": [
+   "Waiting for TV confirmation…",
+   "Warte auf Bestätigung vom Fernseher …"
+  ],
+  "companion.failed": [
+   "Command could not be confirmed.",
+   "Befehl konnte nicht bestätigt werden."
+  ],
+  "companion.rejected": [
+   "TV rejected the command.",
+   "Der Fernseher hat den Befehl abgelehnt."
+  ],
+  "companion.ended": [
+   "Session ended or access revoked. Pair again.",
+   "Sitzung beendet oder Zugriff entzogen. Bitte erneut koppeln."
+  ],
+  "companion.paired": [
+   "Paired with TV. Waiting for playback state…",
+   "Mit TV gekoppelt. Warte auf Wiedergabestatus …"
+  ],
+  "companion.play": [
+   "Play",
+   "Wiedergabe"
+  ],
+  "companion.pause": [
+   "Pause",
+   "Pause"
+  ],
+  "companion.disconnect": [
+   "Disconnect",
+   "Trennen"
+  ],
+  "companion.seek": [
+   "Position",
+   "Position"
+  ],
   "progress.saveFailed": [
    "Progress could not be saved. Jularr will retry temporary failures.",
    "Der Fortschritt konnte nicht gespeichert werden. Jularr versucht es bei vorübergehenden Fehlern erneut."
@@ -9196,73 +9268,6 @@
    "Preview import",
    "Vorschau anzeigen"
   ],
-  "import.retryFailed": [
-   "Review failed titles only",
-   "Nur fehlgeschlagene Titel erneut prüfen"
-  ],
-  "import.downloadReport": [
-   "Download import report",
-   "Importbericht herunterladen"
-  ],
-  "import.phase.partial": [
-   "Import paused: some titles are still waiting",
-   "Import pausiert: Einige Titel warten noch"
-  ],
-  "import.intent.summary": [
-   "{0} selected · {1} to monitor · {2} to search",
-   "{0} ausgewählt · {1} überwachen · {2} automatisch suchen"
-  ],
-  "import.intent.searchWarning": [
-   "Automatic searching may start downloads. Select Add only to import without searching.",
-   "Automatische Suche kann Downloads starten. Mit Nur hinzufügen werden keine Suchen gestartet."
-  ],
-  "import.match.suggested": [
-   "Likely match",
-   "Wahrscheinlicher Treffer"
-  ],
-  "import.match.review": [
-   "Check edition",
-   "Ausgabe prüfen"
-  ],
-  "import.editions": ["Compare editions", "Ausgaben vergleichen"],
-  "import.edition.loading": ["Loading editions…", "Ausgaben laden…"],
-  "import.edition.choose": ["Select an Open Library book first", "Zuerst ein Open-Library-Buch wählen"],
-  "import.edition.empty": ["No edition details available", "Keine Ausgabendetails verfügbar"],
-  "import.edition.error": ["Edition details could not be loaded", "Ausgabendetails konnten nicht geladen werden"],
-  "import.edition.title": ["Edition", "Ausgabe"],
-  "import.edition.language": ["Language", "Sprache"],
-  "import.edition.year": ["Year", "Jahr"],
-  "import.edition.format": ["Format", "Format"],
-  "import.edition.publisher": ["Publisher", "Verlag"],
-  "import.edition.isbn": ["ISBN", "ISBN"],
-  "import.phase.matching": [
-   "Matching library works",
-   "Werke abgleichen"
-  ],
-  "import.phase.isbn": [
-   "Resolving ISBN",
-   "ISBN auflösen"
-  ],
-  "import.phase.searching": [
-   "Searching provider",
-   "Beim Anbieter suchen"
-  ],
-  "import.phase.candidates": [
-   "Candidates found",
-   "Treffer gefunden"
-  ],
-  "import.phase.no_match": [
-   "No candidates",
-   "Keine Treffer"
-  ],
-  "import.phase.waiting": [
-   "Waiting for next preview",
-   "Wartet auf weitere Suche"
-  ],
-  "import.phase.complete": [
-   "Preview ready",
-   "Vorschau bereit"
-  ],
   "import.refresh": [
    "Update preview",
    "Vorschau aktualisieren"
@@ -9570,10 +9575,6 @@
   "import.outcome.Failed": [
    "Failed",
    "Fehlgeschlagen"
-  ],
-  "import.interrupted": [
-   "Connection interrupted. Some titles may already be imported. Update the preview before importing again.",
-   "Verbindung unterbrochen. Einige Titel können bereits importiert sein. Vor einem erneuten Import zuerst die Vorschau aktualisieren."
   ],
   "admin.works.source.isbn": [
    "ISBN",
