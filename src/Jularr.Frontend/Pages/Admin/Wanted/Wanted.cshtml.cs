@@ -107,10 +107,10 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             var identity = new ListIdentity(TypeTile(item), new A(new Truncated(name)).Class("list-identity__title").Attribute("href", WantedStatus.Home(item.Id)), new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)),
                 select: manage ? ListIdentity.Select("wantedItemIds", item.Id.ToString(CultureInfo.InvariantCulture), BulkForm, "wanted.select") : null);
             var languages = string.Join(", ", item.RequestedLanguages);
-            var searched = item.LastSearchedAt?.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
+            var searched = item.LastSearchedAt;
             var row = new ListRow([identity, State(item), Priority(item), languages.Length > 0 ? new Span(new Truncated(languages)).Class("list-value list-value--fill") : Dim(),
-                searched is not null ? new Span(new ValueText(searched)).Class("list-value") : Dim(), Actions(item, acquire, manage, pageNumber, csrf)],
-                [.. item.WantedPriorityTypeId == WantedPriorityType.High ? new[] { ListPanel.Fact("wanted.priority", Priority(item)) } : Array.Empty<IUiComponent>(), ListPanel.Fact("wanted.lastSearch", searched is not null ? new ValueText(searched) : new ValueText("–"), Glyph("clock", 14))]);
+                searched is { } searchedAt ? new Span(new LocalTime(searchedAt)).Class("list-value") : Dim(), Actions(item, acquire, manage, pageNumber, csrf)],
+                [.. item.WantedPriorityTypeId == WantedPriorityType.High ? new[] { ListPanel.Fact("wanted.priority", Priority(item)) } : Array.Empty<IUiComponent>(), ListPanel.Fact("wanted.lastSearch", searched is { } lastSearchedAt ? new LocalTime(lastSearchedAt) : new ValueText("–"), Glyph("clock", 14))]);
             if (item.IsPaused) row.Tinted(UiTone.Warning);
             return row;
         }

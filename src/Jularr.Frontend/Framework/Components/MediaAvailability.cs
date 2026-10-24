@@ -4,6 +4,8 @@ using Jularr.Backend.Data.Enums.Media;
 
 namespace Jularr.Frontend.Framework
 {
+    public enum MediaAvailabilityBadgeStyle { Overlay, Inline }
+
     // The visual projection of the Backend's media availability state.
     public sealed class MediaAvailability(FrontendAssets assets, MediaAvailabilityState state, int availableUnits = 0, int monitoredUnits = 0) : IUiComponent
     {
@@ -12,8 +14,9 @@ namespace Jularr.Frontend.Framework
         private int MonitoredUnits { get; } = monitoredUnits;
         private bool IsPartial => State is MediaAvailabilityState.Partial or MediaAvailabilityState.PartialOtherAudio;
 
-        // Expanded shows the status capsule at rest, as on a title's own poster; on a card it opens on hover and focus.
-        public IUiComponent Badge(string href, string? previewId = null, bool expanded = false) => new AvailabilityBadge(this, href, previewId, expanded);
+        // One presentation for overlay cards and an optional in-flow chip.
+        public IUiComponent Badge(string? href = null, string? previewId = null, bool expanded = false, MediaAvailabilityBadgeStyle style = MediaAvailabilityBadgeStyle.Overlay)
+            => new AvailabilityBadge(this, href, previewId, expanded, style);
 
         internal string GetLabel(UiText texts)
         {
@@ -57,19 +60,32 @@ namespace Jularr.Frontend.Framework
                 .Attribute("role", "img").Attribute("aria-label", GetLabel(texts)).WriteTo(writer, encoder, texts);
         }
 
-        // Dot and expanded status capsule.
-        private sealed class AvailabilityBadge(MediaAvailability symbol, string href, string? previewId, bool expanded) : IUiComponent
+        // The card overlay and the inline chip share their label and icon.
+        private sealed class AvailabilityBadge(MediaAvailability symbol, string? href, string? previewId, bool expanded, MediaAvailabilityBadgeStyle style) : IUiComponent
         {
             public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
             {
-                if (symbol.State == MediaAvailabilityState.Missing) return;
+                if (style == MediaAvailabilityBadgeStyle.Overlay && symbol.State == MediaAvailabilityState.Missing) return;
+
                 var label = symbol.GetLabel(texts);
                 var badgeLabel = texts["media.availability.tag." + symbol.State];
                 if (symbol.IsPartial) badgeLabel = string.Format(CultureInfo.CurrentCulture, badgeLabel, symbol.AvailableUnits, symbol.MonitoredUnits);
-                var link = new A(new Span(new CompactSymbol(symbol), new Span(new ValueText(badgeLabel)).Class("media-availability-badge__label"))
-                    .Class("media-availability-badge__body"), new Span(new ValueText(label)).Class("media-availability-badge__hint").Attribute("aria-hidden", "true"))
-                    .Class("media-availability-badge media-availability-badge--" + symbol.State.ToString().ToLowerInvariant() + (expanded ? " media-availability-badge--expanded" : ""))
-                    .Attribute("href", href).Attribute("aria-label", label);
+
+                var body = new Span(new CompactSymbol(symbol), new Span(new ValueText(badgeLabel)).Class("media-availability-badge__label state-chip__label"))
+                    .Class("media-availability-badge__body");
+
+                if (style == MediaAvailabilityBadgeStyle.Inline)
+                {
+                    new Span(body).Class("media-availability-badge media-availability-badge--inline state-chip state-chip--icon")
+                        .Attribute("role", "img").Attribute("aria-label", label).WriteTo(writer, encoder, texts);
+                    return;
+                }
+
+                var link = new A(body, new Span(new ValueText(label)).Class("media-availability-badge__hint").Attribute("aria-hidden", "true"))
+                    .Class("media-availability-badge media-availability-badge--" + symbol.State.ToString().ToLowerInvariant()
+                        + (expanded ? " media-availability-badge--expanded" : ""))
+                    .Attribute("href", href ?? throw new InvalidOperationException("An overlay availability badge needs a link."))
+                    .Attribute("aria-label", label);
                 if (previewId is not null) link.Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog").Attribute("data-navigation", "full");
                 link.WriteTo(writer, encoder, texts);
             }

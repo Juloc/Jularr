@@ -66,7 +66,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string[] LanguageOrder { get; init; } = [];
 
         // The fallback when no file carries an asked language: the original language of the work, English, or nothing.
-        public LanguageFallbackType LanguageFallback { get; init; } = LanguageFallbackType.Original;
+        public LanguageFallbackType LanguageFallback { get; init; } = LanguageFallbackType.Any;
         public int MinimumUpgradeFormatScore { get; init; } = 1;
         public ReleaseMonitoring? Monitoring { get; init; }
 

@@ -1,9 +1,11 @@
+using Jularr.Backend.Data.Enums.Sql;
+
 namespace Jularr.Backend.Infrastructure.Sql
 {
     internal sealed class LogicContext
     {
         private readonly SqlContext _sql;
-        private Func<LogicContext, CancellationToken, Task>? _transactionalAccessCheck;
+        private Func<LogicContext, SqlAccessMode, CancellationToken, Task>? _transactionalAccessCheck;
 
         internal LogicContext(SqlContext sql)
         {
@@ -22,7 +24,7 @@ namespace Jularr.Backend.Infrastructure.Sql
         public Task<int> ExecuteAsyncForAffectedRows(SqlStatement sql, CancellationToken cancellationToken = default) =>
             _sql.RequireLogicSql().ExecuteAsync(sql, cancellationToken);
 
-        internal void SetTransactionalAccessCheck(Func<LogicContext, CancellationToken, Task> check)
+        internal void SetTransactionalAccessCheck(Func<LogicContext, SqlAccessMode, CancellationToken, Task> check)
         {
             ArgumentNullException.ThrowIfNull(check);
 
@@ -35,7 +37,7 @@ namespace Jularr.Backend.Infrastructure.Sql
         }
 
         // Each batch rechecks access.
-        public Task<TResult> ExecuteBatchAsync<TResult>(Func<LogicContext, CancellationToken, Task<TResult>> action, CancellationToken cancellationToken = default)
+        public Task<TResult> ExecuteBatchAsync<TResult>(Func<LogicContext, CancellationToken, Task<TResult>> action, CancellationToken cancellationToken = default, SqlAccessMode mode = SqlAccessMode.ReadWrite)
         {
             ArgumentNullException.ThrowIfNull(action);
 
@@ -44,9 +46,10 @@ namespace Jularr.Backend.Infrastructure.Sql
                 throw new InvalidOperationException("Short Execute batches require a centrally verified transactional gate.");
             }
 
-            return _sql.RunShortWriteBatchAsync(
+            return _sql.RunShortBatchAsync(
+                mode,
                 token => action(this, token),
-                token => _transactionalAccessCheck(this, token),
+                token => _transactionalAccessCheck(this, mode, token),
                 cancellationToken);
         }
     }

@@ -328,6 +328,31 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
         public string? AfterName { get; }
     }
 
+    // Create only a direct child inside a confirmed writable filesystem connection.
+    public sealed class CreateDownloadDirectoryDataV1 : BaseData
+    {
+        public CreateDownloadDirectoryDataV1(string relativePath, string directoryName)
+        {
+            RelativePath = relativePath;
+            DirectoryName = directoryName;
+        }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath))]
+        public string RelativePath { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.DirectoryName))]
+        public string DirectoryName { get; }
+
+        public override void Validate()
+        {
+            base.Validate();
+            if (DirectoryName is "." or ".." || DirectoryName.IndexOfAny(['/', '\\']) >= 0)
+            {
+                throw new DataValidationException(nameof(DirectoryName), "invalid_path");
+            }
+        }
+    }
+
     public sealed class StorageDirectoryV1 : BaseResponse
     {
         public const int PageSize = 500;

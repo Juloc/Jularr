@@ -7,6 +7,8 @@ namespace Jularr.Backend.Data.Fields.Reading
     {
         public static readonly LongField DocumentId = new() { Minimum = 1 };
         public static readonly ByteArrayField ContentHash = new() { MinimumLength = 32, MaximumLength = 32 };
+        // Stable source fingerprint plus completed extraction revision for client layout caches.
+        public static readonly StringField Revision = new(NpgsqlDbType.Varchar) { MaximumLength = 160, AllowBlank = false };
         public static readonly IntField AnalyzerVersion = new() { Minimum = 1 };
         public static readonly EnumField ReadingFormatTypeId = new(typeof(ReadingFormatType));
         public static readonly StringField Title = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false };

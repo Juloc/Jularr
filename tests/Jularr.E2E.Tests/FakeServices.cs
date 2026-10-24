@@ -59,6 +59,7 @@ namespace Jularr.E2E.Tests
         public Uri Images => new(Address, "images/");
 
         public int ImageRequests => _imageRequests;
+        public byte[] ImagePayload { get; set; } = Pixel;
 
         private int _imageRequests;
 
@@ -150,7 +151,7 @@ namespace Jularr.E2E.Tests
             app.MapGet("/images/{**path}", () =>
             {
                 Interlocked.Increment(ref services._imageRequests);
-                return Results.Bytes(Pixel, "image/png");
+                return Results.Bytes(services.ImagePayload, "image/png");
             });
             app.MapGet("/musicbrainz/ws/2/{**path}", MusicBrainzAnswer);
             app.MapGet("/openlibrary/{**path}", OpenLibraryAnswer);

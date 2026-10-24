@@ -96,6 +96,9 @@ namespace Jularr.Backend.Tests
             var names = await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT array_to_string(@Names::text[], ',')", Parameters = { new { Names = new[] { "one", "two" } } } });
             Assert.AreEqual("one,two", names);
 
+            var ratings = await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT sum(rating) FROM unnest(@Ratings::numeric[]) AS rating", Parameters = { new { Ratings = new[] { 8.25m, 7.10m } } } });
+            Assert.AreEqual(15.35m, ratings);
+
             var empty = await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT COALESCE(cardinality(@Ids::bigint[]), 0)", Parameters = { new { Ids = (long[]?)null } } });
             Assert.AreEqual(0, empty);
         }

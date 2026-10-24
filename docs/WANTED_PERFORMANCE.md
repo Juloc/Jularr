@@ -1,7 +1,7 @@
 # Wanted read performance
 
 The Wanted list, its summary and the automatic search scheduler read current database
-state. Migration `0002_wanted_present_asset_projection.sql` changes the canonical
+state. Migration `0003_wanted_present_asset_projection.sql` changes the canonical
 `WantedUnitsBelowCutoff` view to reduce assets to existing files before expanding profile
 quality orders. Its quality, format-score, language, platform and monitoring rules remain
 the same. No tables, indexes or stored data change, and there is no persistent cache.

@@ -1,5 +1,7 @@
 using Jularr.Backend.Tests.Infrastructure;
+using Jularr.Backend.Data;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Common;
 using System.Net;
@@ -24,6 +26,86 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class ProfileServiceGateTests
     {
+        [TestMethod]
+        public async Task Gate_IndependentInvocationsRetainTheirOwnVerifiedCaller()
+        {
+            await using var fixture = await Fixture.CreateAsync();
+            using var services = CreateServices(fixture);
+            using var scope = services.CreateScope();
+            SetPrincipal(scope.ServiceProvider, fixture.SessionPublicId, fixture.SessionToken);
+            var gate = scope.ServiceProvider.GetRequiredService<IServiceGate>();
+            var user = await gate.RequireCallerAsync(ServiceArea.User, default);
+            var anonymous = await gate.RequireCallerAsync(ServiceArea.Public, default);
+            await gate.RequireAccessAsync(user, new ServicePermission("profile.self.read"), default);
+            await gate.RequireAccessAsync(anonymous, ServicePermission.Public, default);
+            await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireAccessAsync(user with { }, new ServicePermission("profile.self.read"), default));
+        }
+
+        [TestMethod]
+        public async Task ExecuteReadBatches_ParallelInvocationsInOneScopeHaveIndependentAuthorization()
+        {
+            await using var fixture = await Fixture.CreateAsync();
+            using var services = CreateServices(fixture);
+            using var scope = services.CreateScope();
+            SetPrincipal(scope.ServiceProvider, fixture.SessionPublicId, fixture.SessionToken);
+            var service = scope.ServiceProvider.GetRequiredService<ServiceRuntime>().Create(new ReadBatchProbe());
+            var results = await Task.WhenAll(Enumerable.Range(0, 12).Select(_ => service.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileAId), default(NoData))));
+            Assert.IsTrue(results.All(result => result.Id == fixture.ProfileAId));
+        }
+
+        [TestMethod]
+        public async Task ExecuteReadBatches_SameAccountCanReadConcurrentlyWithoutAuthorizationLocks()
+        {
+            await using var fixture = await Fixture.CreateAsync();
+            using var services = CreateServices(fixture);
+            using var firstScope = services.CreateScope();
+            using var secondScope = services.CreateScope();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            SetPrincipal(firstScope.ServiceProvider, fixture.SessionPublicId, fixture.SessionToken);
+            var first = firstScope.ServiceProvider.GetRequiredService<ServiceRuntime>().Create(new ReadBatchProbe(whileReading: async ct =>
+            {
+                entered.SetResult();
+                await release.Task.WaitAsync(ct);
+            }));
+            var pending = first.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileAId), default(NoData), timeout.Token);
+            try
+            {
+                await entered.Task.WaitAsync(timeout.Token);
+                SetPrincipal(secondScope.ServiceProvider, fixture.SessionPublicId, fixture.SessionToken);
+                var second = secondScope.ServiceProvider.GetRequiredService<ServiceRuntime>().Create(new ReadBatchProbe());
+                var result = await second.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileAId), default(NoData), timeout.Token);
+                Assert.AreEqual(fixture.ProfileAId, result.Id);
+                Assert.IsFalse(pending.IsCompleted, "The second read must finish while the first read is still open.");
+                await using var connection = await fixture.Database.OpenConnectionAsync(timeout.Token);
+                await using var transaction = await connection.BeginTransactionAsync(timeout.Token);
+                await using var command = new Npgsql.NpgsqlCommand("SELECT \"Id\" FROM \"Accounts\" WHERE \"Id\" = 41 FOR NO KEY UPDATE NOWAIT", connection, transaction);
+                Assert.AreEqual(41L, await command.ExecuteScalarAsync(timeout.Token));
+                await transaction.CommitAsync(timeout.Token);
+            }
+            finally
+            {
+                release.TrySetResult();
+                await pending;
+            }
+        }
+
+        [TestMethod]
+        [DataRow("UPDATE \"AccountSessions\" SET \"RevokedAt\" = now()")]
+        [DataRow("UPDATE \"Accounts\" SET \"IsEnabled\" = FALSE WHERE \"Id\" = 41")]
+        [DataRow("UPDATE \"AccountSessions\" SET \"ActiveProfileId\" = NULL")]
+        public async Task ExecuteReadBatch_AuthorizationChangedDuringExternalWork_DeniesBusinessRead(string mutation)
+        {
+            await using var fixture = await Fixture.CreateAsync();
+            using var services = CreateServices(fixture);
+            using var scope = services.CreateScope();
+            SetPrincipal(scope.ServiceProvider, fixture.SessionPublicId, fixture.SessionToken);
+            var service = scope.ServiceProvider.GetRequiredService<ServiceRuntime>().Create(new ReadBatchProbe(beforeReading: _ => fixture.RunSqlAsync(mutation)));
+            await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => service.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileAId), default(NoData)));
+            Assert.IsFalse(service.BusinessRead, "Authorization must fail before the business SELECT.");
+        }
+
         [TestMethod]
         public async Task Gate_AnonymousLegacyAndUnverifiedSession_AreDenied()
         {
@@ -242,6 +324,36 @@ namespace Jularr.Backend.Tests
             await app.StopAsync();
         }
 
+        private sealed class ReadBatchProbe(Func<CancellationToken, Task>? beforeReading = null, Func<CancellationToken, Task>? whileReading = null) : UserService<ReadProfileParametersV1, NoData>
+        {
+            public bool BusinessRead { get; private set; }
+            protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+            protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ReadProfileResultV1>()];
+            protected override ModuleRequirement GetInstanceModules(ReadProfileParametersV1 parameters) => ModuleRequirement.None;
+            protected override ServicePermission GetPermission(ReadProfileParametersV1 parameters, Type resultType) => new("profile.self.read");
+
+            protected override async Task<IServiceOutput> OnExecute()
+            {
+                if (beforeReading is not null)
+                {
+                    await beforeReading(CancellationToken);
+                }
+                return await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    BusinessRead = true;
+                    var sql = new SqlStatement();
+                    sql.Statement = "SELECT \"DisplayName\" FROM \"Profiles\" WHERE \"Id\" = @ProfileId";
+                    sql.Parameters.Add(Parameters);
+                    var name = (string)(await ctx.ReadSql.ExecuteScalarAsync(sql, ct))!;
+                    if (whileReading is not null)
+                    {
+                        await whileReading(ct);
+                    }
+                    return new ReadProfileResultV1(Parameters.ProfileId, name, 1, false);
+                }, CancellationToken, mode: SqlAccessMode.ReadOnly);
+            }
+        }
+
         private static ServiceProvider CreateServices(Fixture fixture)
         {
             var services = new ServiceCollection();
@@ -274,8 +386,8 @@ namespace Jularr.Backend.Tests
                 await fixture.RunSqlAsync(mutation);
             }
 
-            public Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken) =>
-                gate.RequireTransactionalAccessAsync(caller, permission, context, cancellationToken);
+            public Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken, SqlAccessMode mode = SqlAccessMode.ReadWrite) =>
+                gate.RequireTransactionalAccessAsync(caller, permission, context, cancellationToken, mode);
         }
     }
 }

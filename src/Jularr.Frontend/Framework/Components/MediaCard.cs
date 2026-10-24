@@ -147,7 +147,7 @@ namespace Jularr.Frontend.Framework
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
-            var art = MediaImage.Or(assets, posterUrl, title, 342, 513);
+            var art = MediaImage.Or(assets, posterUrl, title, 342, 513, sizes: "auto, 176px");
             var cover = new List<IUiComponent>
             {
                 new A(art).Class("media-card__art").Attribute("href", href).Attribute("aria-label", title)

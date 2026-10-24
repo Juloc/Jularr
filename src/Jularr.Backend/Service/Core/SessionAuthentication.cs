@@ -88,49 +88,16 @@ namespace Jularr.Backend.Service.Core
             }
 
             // Ordinary requests remain read-only.
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    account."Id" AS "AccountId",
-                    account."AccountRoleTypeId",
-                    profile."Id" AS "ProfileId",
-                    profile."OwnerAccountId" AS "ProfileOwnerAccountId",
-                    profile."UiLocaleId",
-                    session."DevicePlatform" IS NOT NULL AS "IsDevice",
-                    session."ExpiresAt"
-                FROM
-                    "AccountSessions" AS session
-                INNER JOIN
-                    "Accounts" AS account ON account."Id" = session."AccountId"
-                LEFT JOIN
-                    "AccountProfiles" AS accountProfile ON accountProfile."AccountId" = account."Id"
-                        AND accountProfile."ProfileId" = session."ActiveProfileId"
-                LEFT JOIN
-                    "Profiles" AS profile ON profile."Id" = accountProfile."ProfileId"
-                WHERE
-                    session."PublicId" = @SessionPublicId
-                    AND session."RotationRevision" = @SessionRevision
-                    AND session."TokenHash" = @SessionTokenHash
-                    AND session."RevokedAt" IS NULL
-                    AND session."ExpiresAt" > statement_timestamp()
-                    AND session."CredentialRevision" = account."CredentialRevision"
-                    AND account."IsEnabled" = TRUE
-                    AND (session."ActiveProfileId" IS NULL OR profile."Id" IS NOT NULL);
-                """;
-            sql.Parameters.Add(parameters);
-
             await using var context = new SqlContext(_database);
             await context.BeginAsync(SqlAccessMode.ReadOnly, cancellationToken: cancellationToken);
-            var session = await context.ReadSql.ReadOptionalAsync<SessionAuthenticationData>(sql, cancellationToken)
-                ?? throw new UnauthorizedAccessException("The session is unavailable.");
+            var session = await new LogicContext(context).ReadSessionProofAsync(parameters, cancellationToken);
             if (bearer && !session.IsDevice)
             {
                 throw new UnauthorizedAccessException("Only device sessions sign in by token.");
             }
 
             Parameters = parameters;
-            return SessionLogic.Effective(session);
+            return session;
         }
     }
 }
