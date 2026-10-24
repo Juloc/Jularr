@@ -1,112 +1,68 @@
 #!/bin/sh
-# A browser for the sources that put one in front of their pages.
-#
-# The image of Jularr stays slim: the browser and its libraries go into the container, the profile of the
-# browser goes into the instance's data volume. The source's check is passed once and stays passed, as long
-# as the volume lives.
-#
-#   install   adds the browser and its libraries (needs root)
-#   run       starts the browser with a fixed port for Jularr to speak to
-#
-# Jularr reads the browser with Browser:RemoteAddress (for example http://127.0.0.1:9222).
-
+# Jularr's managed, unprivileged Chrome for Testing installation. The app owns only this data subtree.
 set -eu
-
+umask 077
 home="${JULARR_BROWSER_HOME:-/data/browser}"
-port="${JULARR_BROWSER_PORT:-9222}"
-forward="${JULARR_BROWSER_FORWARD_PORT:-9223}"
-display="${JULARR_BROWSER_DISPLAY:-:99}"
-
-program() {
-    case "$(uname -m)" in
-        x86_64) echo "/opt/google/chrome/chrome" ;;
-        aarch64) echo "$home/chromium/chrome-linux-arm64/chrome" ;;
-        *) echo "no browser for $(uname -m)" >&2; return 1 ;;
-    esac
-}
-
+case "$home" in /*/browser) ;; *) echo 'Refusing browser home outside a dedicated absolute browser folder' >&2; exit 2 ;; esac
+case "$(uname -m)" in
+  x86_64) platform=linux64; folder=chrome-linux64; sha=e6c94490f0b6b337225aeb2d2a5034858516b7017356980ba94f5176d8774a50 ;;
+  aarch64) platform=linux-arm64; folder=chrome-linux-arm64; sha=9e37000e3ee2731e45e475a6a2eac587d3c0ee5f8aef7cab5211ecd52cf3fb7b ;;
+  *) echo 'Unsupported browser architecture' >&2; exit 2 ;;
+esac
+version=156.0.8078.47
+runtime="$home/runtime"
+chrome="$runtime/$folder/chrome"
 install_browser() {
-    apt-get update
-
-    # The names of the libraries differ between the distributions; only the ones that exist are taken.
-    wanted="ca-certificates curl unzip xvfb socat libasound2 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdbus-1-3 \
-        libdrm2 libgbm1 libglib2.0-0 libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 libxdamage1 \
-        libxext6 libxfixes3 libxkbcommon0 libxrandr2 libxshmfence1 fonts-liberation"
-    packages=""
-    for package in $wanted; do
-        if apt-cache show "$package" > /dev/null 2>&1; then
-            packages="$packages $package"
-        fi
-    done
-    apt-get install -y --no-install-recommends $packages
-
-    case "$(uname -m)" in
-        x86_64)
-            # The browser of Google for this architecture.
-            curl -fsSL "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb" -o /tmp/chrome.deb
-            apt-get install -y /tmp/chrome.deb
-            rm -f /tmp/chrome.deb
-            ;;
-        aarch64)
-            # Google builds no package for this architecture; a Chromium of the same version is used.
-            revision="1243"
-            curl -fsSL "https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/$revision/chromium-linux-arm64.zip" -o /tmp/chromium.zip
-            mkdir -p "$home/chromium"
-            unzip -q -o /tmp/chromium.zip -d "$home/chromium"
-            rm -f /tmp/chromium.zip
-            ;;
-        *)
-            echo "no browser for $(uname -m)" >&2
-            exit 1
-            ;;
-    esac
-
-    chmod +x "$(program)"
-    "$(program)" --version
+  if [ -x "$chrome" ] && [ "$(cat "$runtime/.version" 2>/dev/null || true)" = "$version" ]; then exit 0; fi
+  mkdir -p "$home"
+  if [ -L "$home" ] || [ -L "$runtime" ]; then echo 'Unsafe browser directory' >&2; exit 2; fi
+  stage="$(mktemp -d "$home/.install.XXXXXXXX")"
+  trap 'rm -rf "$stage"' EXIT HUP INT TERM
+  curl --fail --location --proto '=https' --tlsv1.2 --retry 2 --connect-timeout 20 --max-time 240 --max-filesize 300000000 \
+    "https://storage.googleapis.com/chrome-for-testing-public/$version/$platform/$folder.zip" -o "$stage/browser.zip"
+  printf '%s  %s\n' "$sha" "$stage/browser.zip" | sha256sum --check --status
+  unzip -Z1 "$stage/browser.zip" | awk -v root="$folder/" 'index($0,root)!=1 || index($0,"..") || substr($0,1,1)=="/" { bad=1 } END { exit bad }'
+  mkdir -p "$stage/extract"
+  unzip -q "$stage/browser.zip" -d "$stage/extract"
+  if [ ! -f "$stage/extract/$folder/chrome" ]; then echo 'Missing browser executable' >&2; exit 2; fi
+  chmod 0755 "$stage/extract/$folder/chrome"
+  printf '%s\n' "$version" > "$stage/extract/.version"
+  if [ -e "$runtime" ]; then mv "$runtime" "$stage/previous"; fi
+  if ! mv "$stage/extract" "$runtime"; then
+    if [ -d "$stage/previous" ]; then mv "$stage/previous" "$runtime"; fi
+    exit 1
+  fi
+  "$chrome" --version
 }
-
+remove_browser() {
+  [ ! -L "$home" ] || { echo 'Unsafe browser home' >&2; exit 2; }
+  [ ! -L "$runtime" ] || { echo 'Unsafe browser runtime' >&2; exit 2; }
+  rm -rf "$runtime" "$home/profile" "$home/downloads"
+  rm -f "$home/.enabled"
+  for dir in "$home"/.install.*; do [ ! -e "$dir" ] || rm -rf "$dir"; done
+  rmdir "$home" 2>/dev/null || true
+}
 run_browser() {
-    browser="$(program)"
-    if [ ! -x "$browser" ]; then
-        echo "no browser in $browser; run '$0 install' first" >&2
-        exit 1
-    fi
-
-    # Without a screen of its own the browser needs a virtual one.
-    if ! xdpyinfo -display "$display" > /dev/null 2>&1; then
-        Xvfb "$display" -screen 0 1280x900x24 -nolisten tcp &
-        sleep 2
-    fi
-
-    # A lock of an earlier run on another machine would keep the browser from starting.
-    mkdir -p "$home/profile"
-    rm -f "$home/profile/SingletonLock" "$home/profile/SingletonCookie" "$home/profile/SingletonSocket"
-
-    DISPLAY="$display" "$browser" --remote-debugging-port="$port" --user-data-dir="$home/profile" \
-        --no-first-run --no-default-browser-check --no-sandbox --enable-unsafe-swiftshader --use-angle=swiftshader \
-        --window-size=1280,900 about:blank &
-
-    # The browser answers on its own loopback; a second port leads to it, so the browser can be reached
-    # from outside the container as well.
-    if command -v socat > /dev/null 2>&1; then
-        socat "TCP-LISTEN:$forward,fork,reuseaddr" "TCP:127.0.0.1:$port" &
-    fi
-
-    # The port answers when the browser is ready.
-    for _ in $(seq 1 60); do
-        if curl -fsS "http://127.0.0.1:$port/json/version" > /dev/null 2>&1; then
-            echo "the browser answers on port $port"
-            break
-        fi
-        sleep 1
-    done
-
-    # The script stays with the browser, so it lives as long as the container does.
-    wait
+  [ -x "$chrome" ] || { echo 'Browser not installed' >&2; exit 2; }
+  display="${JULARR_BROWSER_DISPLAY:-:99}"
+  port="${JULARR_BROWSER_PORT:-9222}"
+  if ! xdpyinfo -display "$display" >/dev/null 2>&1; then
+    Xvfb "$display" -screen 0 1280x900x24 -nolisten tcp &
+    xvfb=$!
+  else
+    xvfb=
+  fi
+  mkdir -p "$home/profile"
+  DISPLAY="$display" "$chrome" --remote-debugging-port="$port" --remote-debugging-address=127.0.0.1 \
+    --user-data-dir="$home/profile" --no-first-run --no-default-browser-check --no-sandbox \
+    --enable-unsafe-swiftshader --use-angle=swiftshader --window-size=1280,900 about:blank &
+  browser=$!
+  trap 'kill "$browser" 2>/dev/null || true; if [ -n "$xvfb" ]; then kill "$xvfb" 2>/dev/null || true; fi' EXIT HUP INT TERM
+  wait "$browser"
 }
-
 case "${1:-}" in
-    install) install_browser ;;
-    run) run_browser ;;
-    *) echo "usage: $0 install|run" >&2; exit 1 ;;
+  install) install_browser ;;
+  uninstall) remove_browser ;;
+  run) run_browser ;;
+  *) echo 'usage: jularr-browser install|uninstall|run' >&2; exit 2 ;;
 esac
