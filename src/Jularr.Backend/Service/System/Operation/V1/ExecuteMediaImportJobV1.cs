@@ -47,6 +47,14 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 throw new InvalidOperationException("The stored import list no longer matches its checkpoint.");
             }
 
+            // Every canonical short DB write batch rechecks and row-locks the
+            // requesting account and required modules, including after provider I/O.
+            Context.AddTransactionalGuard(async (ctx, ct) =>
+            {
+                if (!(await ctx.CheckImportJobOwnerAsync(new MediaImportJobOwnerData(job.RequestedByAccountId), ct)).Allowed)
+                    throw new UnauthorizedAccessException("The requesting administrator lost import permission.");
+            });
+
             async Task CheckOwnerAsync()
             {
                 var permission = await Context.ExecuteBatchAsync((ctx, ct) =>
