@@ -6,5 +6,4 @@ ALTER TABLE "DownloadClientCleanups"
 
 ALTER TABLE "DownloadClientCleanups"
     ADD CONSTRAINT "DownloadClientCleanups_SourceFingerprintValid"
-    CHECK ("SourceFingerprint" IS NULL OR "SourceFingerprint" ~ '^[0-9A-F]{64}
-);
+    CHECK ("SourceFingerprint" IS NULL OR "SourceFingerprint" ~ '^[0-9A-F]{64}');
