@@ -592,7 +592,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 {
                     if (type == AcquisitionConnectionType.Sabnzbd)
                     {
-                        form.Text(item => item.DownloadCategory, "acquisition.connection.category");
+                        // Existing SABnzbd categories remain as compatibility metadata, not an admin input.
+                        // Download routing belongs to Jularr's transport/media/priority selection.
+                        if (input.DownloadCategory is not null) form.Hidden(item => item.DownloadCategory);
                         form.Toggle(item => item.RemovesCompleted, "acquisition.connection.removesCompleted");
                         form.Toggle(item => item.RemovesFailed, "acquisition.connection.removesFailed");
                     }
