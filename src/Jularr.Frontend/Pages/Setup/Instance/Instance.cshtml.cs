@@ -145,14 +145,16 @@ namespace Jularr.Frontend.Pages.Setup.Instance
                     }
                 });
 
-                fields.Wrap(groups => new Div([.. groups]).Class("option-groups option-groups--extras"), all =>
+                // Optional modules remain discoverable without opening hidden accordions.
+                // Keep one switch per module, in the same order and form as the API.
+                fields.Wrap(groups => new Div(new H2(new Text("setup.modules.extra")), new Div([.. groups]).Class("option-groups option-groups--extras")).Class("setup-modules__extras"), all =>
                 {
                     foreach (var (title, icon, groupKeys) in extraGroups)
                     {
                         if (groupKeys.Length == 0) continue;
-                        all.Wrap(group => new OptionGroup(new Icon(icon, assets, 16), texts[title], Count(groupKeys, []), false, assets, [.. group]), inside =>
+                        all.Wrap(group => new OptionGroup(new Icon(icon, assets, 16), texts[title], Count(groupKeys, []), true, assets, [.. group]), inside =>
                         {
-                            foreach (var key in groupKeys) ModuleRow(inside, key, row => row);
+                            foreach (var key in groupKeys) ModuleRow(inside, key, row => row.Card());
                         });
                     }
                 });
