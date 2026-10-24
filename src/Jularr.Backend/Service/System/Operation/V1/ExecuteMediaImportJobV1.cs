@@ -2,6 +2,7 @@ using System.Text.Json;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Operation;
