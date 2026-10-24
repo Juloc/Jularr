@@ -40,6 +40,18 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ManagedBrowser_FailedInstallBacksOffAndTurningOffClearsRetry()
+        {
+            var packages = new BrowserPackages(new BrowserOptions { ProfilePath = Path.Combine("relative", "nonexistent-root") });
+            await Assert.ThrowsExactlyAsync<PlatformNotSupportedException>(() => packages.InstallAsync(CancellationToken.None));
+            Assert.AreEqual("failed", packages.State);
+            Assert.IsFalse(packages.CanRetryInstall);
+            await packages.RemoveAsync(CancellationToken.None);
+            Assert.AreEqual("disabled", packages.State);
+            Assert.IsTrue(packages.CanRetryInstall);
+        }
+
+        [TestMethod]
         public async Task ManagedBrowser_RemovesAbandonedStagingWithoutTouchingOtherFolders()
         {
             using var folder = new TemporaryDirectory();
