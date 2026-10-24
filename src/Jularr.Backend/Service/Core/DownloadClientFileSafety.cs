@@ -128,10 +128,18 @@ namespace Jularr.Backend.Service.Core
             foreach (var name in names.Take(PageSize))
             {
                 var sub = string.IsNullOrWhiteSpace(relative) ? name! : relative.TrimEnd('/', '\\') + "/" + name;
-                var full = SafePath(root, sub);
-                var attr = File.GetAttributes(full);
-                var isDirectory = (attr & FileAttributes.Directory) != 0;
-                entries.Add(new DownloadClientFileV1(name!, sub, isDirectory, isDirectory ? null : new FileInfo(full).Length, DownloadFileOwnershipLogic.Assignment(area, sub, snapshot)));
+                try
+                {
+                    var full = SafePath(root, sub);
+                    var attr = File.GetAttributes(full);
+                    var isDirectory = (attr & FileAttributes.Directory) != 0;
+                    entries.Add(new DownloadClientFileV1(name!, sub, isDirectory, isDirectory ? null : new FileInfo(full).Length,
+                        DownloadFileOwnershipLogic.Assignment(area, sub, snapshot)));
+                }
+                catch (Exception exception) when (exception is DataValidationException or IOException or UnauthorizedAccessException)
+                {
+                    // A disappearing or linked entry must not hide the rest of the directory.
+                }
             }
             return new DownloadClientBrowseResultV1(area, root, relative ?? "", names.Length > PageSize, new BaseDataList<DownloadClientFileV1>(entries));
         }
