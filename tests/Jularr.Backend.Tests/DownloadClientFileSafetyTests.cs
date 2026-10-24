@@ -135,6 +135,32 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void ManualDeletion_RequiresProviderReportedTopLevelIncompleteOrphan()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "jularr-sab-safety-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(root, "unassigned"));
+            Directory.CreateDirectory(Path.Combine(root, "orphan"));
+            File.WriteAllText(Path.Combine(root, "orphan", "file.part"), "data");
+            try
+            {
+                var snapshot = Snapshot(orphans: ["orphan"]);
+                Assert.ThrowsExactly<DataValidationException>(() =>
+                    DownloadClientFileSafety.Preview("complete", root, "orphan", snapshot));
+                Assert.ThrowsExactly<DataValidationException>(() =>
+                    DownloadClientFileSafety.Preview("incomplete", root, "unassigned", snapshot));
+                Assert.ThrowsExactly<DataValidationException>(() =>
+                    DownloadClientFileSafety.Preview("incomplete", root, "orphan/file.part", snapshot));
+                var preview = DownloadClientFileSafety.Preview("incomplete", root, "orphan", snapshot);
+                Assert.AreEqual(1, preview.Files);
+                Assert.IsTrue(Directory.Exists(Path.Combine(root, "unassigned")));
+            }
+            finally
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+
+        [TestMethod]
         public void TraversalAndRootDeletion_AreRejected()
         {
             var root = Path.Combine(Path.GetTempPath(), "jularr-sab-console-" + Guid.NewGuid().ToString("N"));
