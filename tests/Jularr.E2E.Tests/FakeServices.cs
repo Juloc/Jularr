@@ -189,8 +189,8 @@ namespace Jularr.E2E.Tests
                 "tv/99002/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"Beginning","air_date":"2021-01-05"},{"season_number":1,"episode_number":2,"name":"Ending","air_date":"2021-01-12"}]}"""),
                 "movie/10378" => Json(Movie),
 
-                // A hundred more films for lists longer than one import run.
-                _ when path.StartsWith("movie/3", StringComparison.Ordinal) && int.TryParse(path.AsSpan(6), out var bulk) && bulk is >= 30000 and < 30100 =>
+                // Deterministic provider fixtures for large imports and restart recovery.
+                _ when path.StartsWith("movie/3", StringComparison.Ordinal) && int.TryParse(path.AsSpan(6), out var bulk) && bulk is >= 30000 and < 30400 =>
                     Json("{\"id\":" + bulk + ",\"title\":\"Bulk Movie " + bulk + "\",\"original_title\":\"Bulk Movie " + bulk + "\",\"release_date\":\"2010-01-01\",\"overview\":\"A film of the bulk list.\",\"original_language\":\"en\","
                         + "\"genres\":[{\"id\":16,\"name\":\"Animation\"}],\"external_ids\":{\"imdb_id\":\"tt" + bulk.ToString("D7", System.Globalization.CultureInfo.InvariantCulture) + "\"}}"),
                 "tv/99001" => Json(Series),
