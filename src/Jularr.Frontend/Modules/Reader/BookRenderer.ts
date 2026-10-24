@@ -1,4 +1,4 @@
-import { bookDimensions, paperProfile, paperOutline, printPlacement, type Point } from './BookGeometry';
+import { bookDimensions, paperProfile, paperOutline, printPlacement, fitPrintedInk, type Point } from './BookGeometry';
 import { BookLeaf } from './BookLeaf';
 import { paintBookSolid, paperLighting } from './BookSolid';
 import { pagePrint } from './PagePrint';
@@ -83,8 +83,17 @@ export function initializeBookRenderer(reader: HTMLElement) {
         if (!print) return;
         const place = printPlacement(profile(at, side), side, width / 148);
         const gap = columns === 2 && side === 'right' ? (parseFloat(getComputedStyle(adapter.group(at)!.source).columnGap) || 0) / 2 : 0;
-        print.style.left = `${gap + place.shift}px`;
+        const left = gap + place.shift;
+        print.style.left = `${left}px`;
         print.style.top = `${place.top}px`;
+        const ink = Array.from(print.children).filter((child): child is HTMLElement =>
+            child instanceof HTMLElement && child.hasAttribute('data-print-top'));
+        const positions = ink.map(child => ({
+            left: Number(child.dataset.printLeft), top: Number(child.dataset.printTop),
+            width: Number(child.dataset.printWidth), height: Number(child.dataset.printHeight)
+        }));
+        const offsets = fitPrintedInk(profile(at, side), side, width, left, positions);
+        ink.forEach((child, index) => { child.style.top = `${positions[index].top + offsets[index]}px`; });
         return print;
     };
     const exposure = () => {
