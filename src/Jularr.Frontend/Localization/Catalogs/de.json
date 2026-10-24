@@ -9226,6 +9226,7 @@
   "import.edition.year": ["Year", "Jahr"],
   "import.edition.format": ["Format", "Format"],
   "import.edition.publisher": ["Publisher", "Verlag"],
+  "import.edition.isbn": ["ISBN", "ISBN"],
   "import.phase.matching": [
    "Matching library works",
    "Werke abgleichen"
