@@ -666,6 +666,8 @@ fun TvV1CatalogHost(
             onLocalWork = { id -> openWork(id.toString()) },
             onBack = ::back,
             onUnauthorized = onAuthenticationExpired,
+            canRequest = capabilities.hasModule("Requests") &&
+                capabilities.hasPermission("profile.requests.update"),
         )
         TvV1CatalogPage.Details -> {
             when {
