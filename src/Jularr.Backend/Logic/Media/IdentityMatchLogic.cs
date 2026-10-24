@@ -72,7 +72,9 @@ namespace Jularr.Backend.Logic.Media
                                 WHERE
                                     mapped."Namespace" = @Namespace
                                     AND mapped."Value" = item."Value"
+                                    AND mapped."EpisodeOffset" = item."Offset"
                                     AND season."WorkId" = @WorkId
+                                    AND season."Number" = item."Season"
                             )
                     );
                 """;

@@ -5,12 +5,13 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
+using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.AniList;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
     // Finds the AniList entries of one canonical Work: the Work's own entry, or for a series its seasons along the sequel chain.
-    internal sealed class AniListMatcher(AniListMetadata aniList)
+    internal sealed class AniListMatcher(AniListMetadata aniList, AniBridgeMappings bridge)
     {
         private const int ChainLimit = 30;
 
@@ -18,6 +19,18 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         {
             var type = AniListMatching.Type(target.MediaTypeId, target.MediaSubtypeId) ?? throw new KeyNotFoundException("The Work has no AniList kind.");
             var formats = AniListMatching.Formats(target.MediaTypeId, target.MediaSubtypeId);
+
+            // Provider-ID episode ranges take precedence over a title-and-sequel guess.
+            if (chosenId is null && target.MediaTypeId == MediaType.Series
+                && int.TryParse(target.TvdbId, NumberStyles.None, CultureInfo.InvariantCulture, out var tvdbId)
+                && await bridge.ReadTvdbAsync(tvdbId, seasons, ct) is { } mapped)
+            {
+                var candidates = JsonSerializer.Serialize(mapped.CandidateIds.Select(id => new { Id = id, Title = "AniList " + id, Year = (int?)null, Format = "AniBridge" }));
+                var entries = mapped.RequiresReview ? "[]" : JsonSerializer.Serialize(mapped.Seasons.Select(entry =>
+                    new { entry.Season, Value = entry.AniListId.ToString(CultureInfo.InvariantCulture), entry.Offset }));
+                return new IdentityMatchResultData(target.WorkId, AniListMetadata.Namespace,
+                    mapped.RequiresReview ? IdentityMatchStatusType.Review : IdentityMatchStatusType.Matched, candidates, null, entries, false);
+            }
 
             // A person's choice is taken as it is; otherwise one clear candidate is.
             AniListMedia? match;
@@ -107,6 +120,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     work."MediaSubtypeId",
                     work."CanonicalTitle",
                     work."ReleaseYear"::integer AS "ReleaseYear",
+                    (SELECT identity."Value" FROM "WorkExternalIdentities" AS identity
+                        WHERE identity."WorkId" = work."Id" AND identity."Namespace" = 'tvdb' LIMIT 1) AS "TvdbId",
                     ARRAY(
                         SELECT DISTINCT
                             title."Title"
