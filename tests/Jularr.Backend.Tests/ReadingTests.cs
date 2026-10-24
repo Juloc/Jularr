@@ -741,7 +741,7 @@ namespace Jularr.Backend.Tests
                 // The scanner now resolves unambiguous book folders itself. Only files still
                 // unassigned after scanning need the manual assignment used by older fixtures.
                 var linkedAssetId = await host.ScalarAsync("SELECT \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"Id\" = " + fileId);
-                if (linkedAssetId is null)
+                if (linkedAssetId is not long)
                 {
                     using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + fileId + "/assignment", new AssignLibraryFileDataV1(null, title, null, null, null));
                     Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
