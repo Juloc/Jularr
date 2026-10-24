@@ -2818,6 +2818,8 @@ namespace Jularr.Frontend.Localization
             new("admin.browser.setupHint", "Install Chrome inside this Jularr container. Package installation requires container root and cannot run from the web interface. No additional container is needed."),
             new("admin.browser.installSteps", "Show installation commands"),
             new("admin.browser.installation", "Browser package"),
+            new("admin.browser.version", "Installed version"),
+            new("admin.browser.diskUsage", "Managed storage"),
             new("admin.browser.installation.disabled", "Disabled / not installed"),
             new("admin.browser.installation.downloading", "Downloading"),
             new("admin.browser.installation.extracting", "Installing"),
