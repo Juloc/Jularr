@@ -71,9 +71,18 @@ unter `/Admin/Instance/Modules` einschalten und wieder ausschalten; es hängt vo
 **Acquisition** ab. Jularr benötigt dafür keinen zweiten Container, keine Root-Befehle
 aus dem Webprozess und keinen öffentlich erreichbaren Debugging-Port.
 
-Beim Einschalten lädt Jularr eine fest vorgegebene, offizielle Chrome-for-Testing-Version
-für Linux x64 oder arm64 in `DataPath/browser/managed`. Download und Entpacken haben
-Größen- und Pfadgrenzen, eine temporäre Installation wird vor der Aktivierung geprüft.
+Auf `/Admin/Browser` lässt sich der Browser mit **Installieren** direkt aktivieren,
+ohne `.env`-Eintrag oder zusätzlichen Compose-Dienst. **Aktualisieren** prüft Googles
+offiziellen Chrome-for-Testing-Stable-Kanal auf eine neuere Version, **Reparieren**
+installiert das Paket erneut; **Deinstallieren** deaktiviert das Modul und entfernt
+die verwalteten Dateien. Diese Aktionen werden durch den bestehenden Worker ausgeführt,
+nicht durch Shell- oder Root-Befehle des Webprozesses.
+
+Beim Einschalten lädt Jularr die aktuelle Stable-Version von Chrome for Testing
+für Linux x64 oder arm64 nach `DataPath/browser/managed`. Die Versionsmetadaten
+und das Paket stammen von festgelegten offiziellen HTTPS-Adressen; bei einem Update
+wird die bisherige Installation bis zur geprüften Bereitstellung behalten.
+Download und Entpacken haben Größen- und Pfadgrenzen.
 Der Hintergrunddienst aktiviert Chrome nach der Installation automatisch. Ein Neustart
 oder eine Container-Neuerstellung behält den Browser unter dem persistenten `/data`.
 Der Installationsfortschritt und Fehler erscheinen unter `/Admin/Browser`; die
