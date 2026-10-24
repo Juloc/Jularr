@@ -774,7 +774,7 @@ namespace Jularr.Frontend.Localization
             new("setup.type.name.LightNovel", "Light novels"),
             new("setup.type.name.Music", "Music"),
             new("setup.type.name.Game", "Games"),
-            new("setup.preset.complete.line", "Library, player and reader, Discover, automatic search and import."),
+            new("setup.preset.complete.line", "All modules and all media types, including optional features."),
             new("setup.preset.mediaServer.line", "Play and read your own files, without download automation."),
             new("setup.preset.requests.line", "Take requests and let Arr+ search, download and import, without player or reader."),
             new("setup.modules.discovery", "Discover & catalogs"),
