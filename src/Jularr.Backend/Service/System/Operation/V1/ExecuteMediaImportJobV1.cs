@@ -38,7 +38,11 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var job = await Context.ReadImportJobWorkAsync(new MediaImportJobOperationData(Parameters.OperationId), CancellationToken)
+            // Execute services have no long-lived transaction. The job header
+            // must be loaded in a short, centrally authorized SQL batch.
+            var job = await Context.ExecuteBatchAsync(
+                (ctx, ct) => ctx.ReadImportJobWorkAsync(new MediaImportJobOperationData(Parameters.OperationId), ct),
+                CancellationToken)
                 ?? throw new KeyNotFoundException("The running media import job was not found.");
             var stored = JsonSerializer.Deserialize<MediaImportJobPayload>(job.Payload)
                 ?? throw new InvalidOperationException("The stored media import is invalid.");
