@@ -102,6 +102,7 @@ internal fun PlayerControls(
     onScrubActive: (Boolean) -> Unit,
     onSeekTo: (Long) -> Unit,
     onExit: () -> Unit,
+    onOpenCompanion: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val focusColor = rememberTvFocusColor()
@@ -165,6 +166,9 @@ internal fun PlayerControls(
                 maxLines = 1,
                 modifier = Modifier.weight(1f),
             )
+            onOpenCompanion?.let { open ->
+                Button(onClick = open) { Text("Smartphone") }
+            }
             Text(
                 text = "${formatTime(scrubPreviewMs ?: positionMs)} / ${formatTime(durationMs)}",
                 color = design.muted,
