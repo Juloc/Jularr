@@ -22,7 +22,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         internal QueueMediaImportJobV1(WorkSignals signals) => _signals = signals;
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<MediaImportJobCreatedV1>()];
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<MediaImportLatestJobV1>()];
         protected override ModuleRequirement GetInstanceModules(MediaImportParametersV1 parameters) => ModuleRequirement.All("Library", "Requests");
         protected override ServicePermission GetPermission(MediaImportParametersV1 parameters, Type resultType) => new("media.manual.update");
 
@@ -65,7 +65,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             var latest = await Context.ReadLatestImportJobAsync(new MediaImportJobOwnerData(Auth.AccountId!.Value), CancellationToken);
-            return new MediaImportJobCreatedV1(latest?.JobId ?? Guid.Empty);
+            return new MediaImportLatestJobV1(latest?.JobId);
         }
     }
 }
