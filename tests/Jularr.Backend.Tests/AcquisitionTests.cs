@@ -2557,11 +2557,11 @@ namespace Jularr.Backend.Tests
             foreach (var data in new[]
             {
                 new SaveAcquisitionConnectionDataV1("Native news", AcquisitionConnectionType.Usenet, null,
-                    null, true, 1, [], null, null, null, maxConnections: 1, host: "news.example.test", useSsl: false),
+                    null, true, 10, [], null, null, null, maxConnections: 1, host: "news.example.test", useSsl: false),
                 new SaveAcquisitionConnectionDataV1("Series SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
                     FakeUsenet.ClientKey, true, 1, [], "tv", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Series]),
                 new SaveAcquisitionConnectionDataV1("Movie SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
-                    FakeUsenet.ClientKey, true, 0, [], "films", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Movie])
+                    FakeUsenet.ClientKey, true, 1, [], "films", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Movie])
             })
             {
                 using var added = await host.SendAsync(HttpMethod.Post, Connections, data);
