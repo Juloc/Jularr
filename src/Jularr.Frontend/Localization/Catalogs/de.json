@@ -2876,9 +2876,12 @@
    "Derselbe Pfad für Jularr"
   ],
   "acquisition.connection.addIndexer": [
-  "acquisition.connection.addNyaa": [
    "Add indexer",
    "Indexer hinzufügen"
+  ],
+  "acquisition.connection.addNyaa": [
+   "Add Nyaa indexer",
+   "Nyaa-Indexer hinzufügen"
   ],
   "acquisition.connection.addClient": [
    "Add download client",
