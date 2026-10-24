@@ -4,6 +4,8 @@ name: Browser Smoke
 # in Backend Full after merge, never as a prerequisite for routine PRs.
 on:
   pull_request:
+    branches: [main, dev]
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'src/Jularr.Frontend/**'
       - 'tests/Jularr.E2E.Tests/**'
@@ -19,6 +21,7 @@ concurrency:
 
 jobs:
   smoke:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     services:
