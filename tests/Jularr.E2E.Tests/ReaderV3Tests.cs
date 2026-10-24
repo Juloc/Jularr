@@ -46,8 +46,8 @@ namespace Jularr.E2E.Tests
                 await language.ClickAsync();
                 var hint = page.Locator("[data-panel=language]");
                 await Assertions.Expect(hint).ToBeVisibleAsync();
-                await Assertions.Expect(hint.GetByRole(AriaRole.Link, new() { Name = "Open profile settings" })).ToHaveAttributeAsync("href", "/Settings");
-                await Assertions.Expect(hint).ToContainTextAsync("No reading language is set up yet.");
+                await Assertions.Expect(hint).ToContainTextAsync("No translation engine is available right now.");
+                Assert.AreEqual(0, await hint.GetByRole(AriaRole.Link).CountAsync(), "An unavailable engine is not a missing profile language.");
                 await Evidence.SaveAsync(page, "reader-v3-language-hint-1440");
                 await page.Keyboard.PressAsync("Escape");
 
@@ -334,8 +334,12 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(toggle).ToBeEnabledAsync();
                 await toggle.ClickAsync();
                 await Assertions.Expect(reader).ToHaveAttributeAsync("data-speech-state", "speaking");
+                // The fake synthesis schedules onstart in a later task. Let that
+                // initial whole-word highlight occur before sending a finer boundary;
+                // otherwise onstart can race and overwrite the expected "Cha".
+                await page.WaitForFunctionAsync("() => CSS.highlights.get('reader-speech-word')?.size > 0");
                 await page.EvaluateAsync("() => window.__speech.boundary(0, 3)");
-                await page.WaitForFunctionAsync("() => CSS.highlights.get('reader-speech-word')?.size > 0 && CSS.highlights.get('reader-speech-sentence')?.size > 0");
+                await page.WaitForFunctionAsync("() => [...(CSS.highlights.get('reader-speech-word') ?? [])][0]?.toString() === 'Cha' && CSS.highlights.get('reader-speech-sentence')?.size > 0");
                 var marked = await page.EvaluateAsync<string[]>("() => [[...CSS.highlights.get('reader-speech-word')][0].toString(), [...CSS.highlights.get('reader-speech-sentence')][0].toString()]");
                 Assert.AreEqual("Cha", marked[0], "The word follows the voice.");
                 Assert.IsTrue(marked[1].StartsWith("Chapter One", StringComparison.Ordinal) && marked[1].Length > marked[0].Length, "The sentence around it is marked, too.");
