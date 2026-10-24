@@ -3111,6 +3111,7 @@ namespace Jularr.Frontend.Localization
             new("requests.openWork", "Open title"),
             new("jobs.about.operations", "Scans the connected libraries for new and changed files when a scan is asked for."),
             new("jobs.about.backupQueue", "Creates the backups that were asked for."),
+            new("jobs.about.mediaImportQueue", "Imports selected media-list titles in the background and resumes unfinished work after a restart."),
             new("jobs.about.downloads", "Follows the progress of external downloads and starts their import when they finish."),
             new("jobs.about.wantedSearch", "Looks for new releases of monitored titles, seasons and single episodes."),
             new("jobs.about.providerSync", "Reads the connected media servers and shares their progress. It saves resources while Jularr is used."),
