@@ -1,4 +1,4 @@
-import { bookDimensions, paperProfile, paperOutline, printPlacement, type Point } from './BookGeometry';
+import { bookDimensions, paperProfile, paperOutline, printPlacement, paperInkPose, type Point } from './BookGeometry';
 import { BookLeaf } from './BookLeaf';
 import { paintBookSolid, paperLighting } from './BookSolid';
 import { pagePrint } from './PagePrint';
@@ -83,8 +83,18 @@ export function initializeBookRenderer(reader: HTMLElement) {
         if (!print) return;
         const place = printPlacement(profile(at, side), side, width / 148);
         const gap = columns === 2 && side === 'right' ? (parseFloat(getComputedStyle(adapter.group(at)!.source).columnGap) || 0) / 2 : 0;
-        print.style.left = `${gap + place.shift}px`;
+        const printLeft = gap + place.shift;
+        print.style.left = `${printLeft}px`;
         print.style.top = `${place.top}px`;
+        // Native browser glyphs follow the *same* curved surface as the page.
+        // This decorates the existing measured print, never changing line breaks,
+        // font size, canonical pages or their count.
+        const section = profile(at, side);
+        for (const ink of Array.from(print.querySelectorAll<HTMLElement>('[data-paper-ink]'))) {
+            const x = Number(ink.dataset.paperX), spanWidth = Number(ink.dataset.paperWidth);
+            const pose = paperInkPose(section, side === 'left' ? 'left' : 'right', width, printLeft + x, spanWidth);
+            ink.style.transform = `translateY(${pose.y.toFixed(3)}px) rotate(${pose.angle.toFixed(3)}deg)`;
+        }
         return print;
     };
     const exposure = () => {
