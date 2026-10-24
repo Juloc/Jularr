@@ -728,6 +728,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             // Read the job below the mapped folder without following links.
             IReadOnlyList<StorageFile> files;
+            IReadOnlyList<StorageFile>? allSourceFiles = null;
             StorageFiles source;
             string sourceDirectory;
             long? sourceMountId = null;
@@ -760,12 +761,14 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 {
                     sourceDirectory = path;
                     var found = new List<StorageFile>();
-                    await foreach (var file in source.EnumerateFilesAsync(path, LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId), state, CancellationToken))
+                    await foreach (var file in source.EnumerateFilesAsync(path, null, state, CancellationToken))
                     {
                         found.Add(file);
                     }
 
-                    files = found;
+                    allSourceFiles = found;
+                    var extensions = LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId);
+                    files = extensions is null ? found : found.Where(file => extensions.Contains(Path.GetExtension(file.RelativePath).ToLowerInvariant())).ToArray();
                 }
             }
             catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
@@ -774,7 +777,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            await _import.PlaceAsync(Context, download, source, new ImportSourceRef(sourceMountId, sourceRoot, sourceDirectory), files, state.IsComplete, CancellationToken);
+            await _import.PlaceAsync(Context, download, source, new ImportSourceRef(sourceMountId, sourceRoot, sourceDirectory), files, state.IsComplete, CancellationToken, allSourceFiles);
         }
 
 

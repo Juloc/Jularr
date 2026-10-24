@@ -32,7 +32,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     // Shared by every downloader: plan, check, link or copy and assign; waits and failures are recorded the same way.
     internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, StorageAccess storage, TimeProvider time, SabnzbdClient sabnzbd, IDataProtectionProvider protection, WorkSignals signals)
     {
-        public async Task PlaceAsync(LogicContext context, DownloadData download, StorageFiles source, ImportSourceRef sourceRef, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct)
+        public async Task PlaceAsync(LogicContext context, DownloadData download, StorageFiles source, ImportSourceRef sourceRef, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct,
+            IReadOnlyList<StorageFile>? allSourceFiles = null)
         {
             var sourceDirectory = sourceRef.Directory;
             if (!isComplete)
@@ -118,7 +119,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
 
             // Do not remove a source job with files omitted from the automatic import plan.
-            if (AllFilesCommitted(files.Select(file => file.RelativePath), placements.Select(placement => placement.SourcePath)))
+            if (ImportPlacementLogic.AllSourceFilesSelected((allSourceFiles ?? files).Select(file => file.RelativePath), placements.Select(placement => placement.SourcePath)))
             {
                 await RemoveFromClientAsync(context, download.AcquisitionConnectionId, download.ExternalId, ct);
             }
@@ -270,12 +271,6 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             // A connected Plex shows the title right away.
             await plex.RefreshAsync(context, request.MediaTypeId, ct);
             return new ImportCommit(null, assets);
-        }
-
-        internal static bool AllFilesCommitted(IEnumerable<string> sourceFiles, IEnumerable<string> placedFiles)
-        {
-            var placed = placedFiles.ToHashSet(StringComparer.Ordinal);
-            return sourceFiles.All(placed.Contains);
         }
 
         // The files this import itself placed, which did not exist before it chose their names, and the folders that leaves empty. A source is never touched.

@@ -1,4 +1,4 @@
-using Jularr.Backend.Service.System.Acquisition.V1;
+using Jularr.Backend.Logic.Acquisition;
 
 namespace Jularr.Backend.Tests
 {
@@ -8,9 +8,9 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void AutomaticSourceCleanup_RequiresAllFiles()
         {
-            Assert.IsTrue(DownloadImport.AllFilesCommitted(["episode.mkv"], ["episode.mkv"]));
-            Assert.IsFalse(DownloadImport.AllFilesCommitted(["episode.mkv", "unselected.srt"], ["episode.mkv"]));
-            Assert.IsFalse(DownloadImport.AllFilesCommitted(["episode.mkv", "notes/info.nfo"], ["episode.mkv"]));
+            Assert.IsTrue(ImportPlacementLogic.AllSourceFilesSelected(["episode.mkv"], ["episode.mkv"]));
+            Assert.IsFalse(ImportPlacementLogic.AllSourceFilesSelected(["episode.mkv", "unselected.srt"], ["episode.mkv"]));
+            Assert.IsFalse(ImportPlacementLogic.AllSourceFilesSelected(["episode.mkv", "notes/info.nfo"], ["episode.mkv"]));
         }
     }
 }
