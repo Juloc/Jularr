@@ -32,6 +32,24 @@ namespace Jularr.Integrations.Logic.Browser
         public string ExecutablePath => Path.Combine(_root, "current", "chrome-" + Platform(), "chrome");
         public bool IsInstalled => File.Exists(ExecutablePath) && VersionMatches(Path.Combine(_root, "current", ".jularr-version"));
         public string? InstalledVersion => IsInstalled ? File.ReadAllText(Path.Combine(_root, "current", ".jularr-version")).Trim() : null;
+        public long ManagedSizeBytes
+        {
+            get
+            {
+                if (!Directory.Exists(_root)) return 0;
+                try
+                {
+                    long total = 0;
+                    foreach (var file in Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories))
+                        total = checked(total + new FileInfo(file).Length);
+                    return total;
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OverflowException)
+                {
+                    return 0;
+                }
+            }
+        }
         // 1 checks Stable for updates, 2 forces reinstall even if the version is unchanged.
         public void RequestRefresh(bool repair)
         {
