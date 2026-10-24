@@ -125,6 +125,9 @@ fun TvV1CatalogHost(
     var episodeByUnit by remember(serverOrigin) { mutableStateOf<Map<Long, TvWorkEpisodeV1>>(emptyMap()) }
     var detailAssetByUnit by remember(serverOrigin) { mutableStateOf<Map<String, Long?>>(emptyMap()) }
     var playableMovieAssets by remember(serverOrigin) { mutableStateOf<List<TvWorkAvailabilityV1>>(emptyList()) }
+    var movieAssetNextPage by remember(serverOrigin) { mutableStateOf<Int?>(null) }
+    var movieAssetPagingBusy by remember(serverOrigin) { mutableStateOf(false) }
+    var movieAssetPagingError by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var selectedEpisodeId by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var selectedAssetId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
 
@@ -154,6 +157,9 @@ fun TvV1CatalogHost(
         detailWorkId = workId
         details = null
         episodeByUnit = emptyMap()
+        playableMovieAssets = emptyList()
+        movieAssetNextPage = null
+        movieAssetPagingError = null
         selectedWorkUnitId = null
         selectedEpisodeId = null
         error = null
@@ -246,6 +252,30 @@ fun TvV1CatalogHost(
         }
     }
 
+    fun loadMoreMovieAssets() {
+        val targetWorkId = detailWorkId ?: return
+        val next = movieAssetNextPage ?: return
+        if (movieAssetPagingBusy || page != TvV1CatalogPage.MovieEditions) return
+        movieAssetPagingBusy = true
+        movieAssetPagingError = null
+        scope.launch {
+            try {
+                val result = flow.movieAssetsPage(targetWorkId, next)
+                if (page == TvV1CatalogPage.MovieEditions && detailWorkId == targetWorkId) {
+                    playableMovieAssets = (playableMovieAssets + result.items).distinctBy { it.id }
+                    movieAssetNextPage = if (result.hasMore) next + 1 else null
+                }
+            } catch (failure: AppApiException) {
+                if (failure.statusCode == 401) onAuthenticationExpired()
+                else movieAssetPagingError = "Filmversionen: ${failure.code} (HTTP ${failure.statusCode})"
+            } catch (failure: Exception) {
+                movieAssetPagingError = failure.message ?: "Weitere Filmversionen konnten nicht geladen werden."
+            } finally {
+                movieAssetPagingBusy = false
+            }
+        }
+    }
+
     fun back() {
         error = null
         val restored = TvV1AppController.back(navigation)
@@ -315,6 +345,8 @@ fun TvV1CatalogHost(
                     watchlistError = null
                     detailedTitle = result.title
                     playableMovieAssets = result.availableMovieAssets
+                    movieAssetNextPage = if (result.hasMoreMovieAssets) 2 else null
+                    movieAssetPagingError = null
                     fractionalEpisodes = result.fractionalEpisodes
                     episodeByUnit = result.episodeByUnit
                     detailAssetByUnit = result.assetByUnit
@@ -671,9 +703,9 @@ fun TvV1CatalogHost(
                                     } finally { watchlistBusy = false }
                                 }
                             }} else null,
-                            onPlayMovie = if (playableMovieAssets.isNotEmpty()) {
+                            onPlayMovie = if (playableMovieAssets.isNotEmpty() || movieAssetNextPage != null) {
                                 {
-                                    if (playableMovieAssets.size == 1) {
+                                    if (playableMovieAssets.size == 1 && movieAssetNextPage == null) {
                                         playAsset(playableMovieAssets.single().id)
                                     } else {
                                         openPage(TvV1CatalogPage.MovieEditions)
@@ -752,6 +784,9 @@ fun TvV1CatalogHost(
             title = "Filmversion wählen",
             description = detailedTitle,
         ) {
+            if (playableMovieAssets.isEmpty() && movieAssetNextPage != null) {
+                Text("Auf dieser Seite sind keine abspielbaren Versionen vorhanden.")
+            }
             playableMovieAssets.forEach { asset ->
                 Button(onClick = { playAsset(asset.id) }) {
                     Text(
@@ -762,6 +797,11 @@ fun TvV1CatalogHost(
                         ).joinToString(" · ").ifEmpty { "MediaAsset ${asset.id}" },
                     )
                 }
+            }
+            if (movieAssetPagingBusy) Text("Weitere Filmversionen werden geladen …")
+            movieAssetPagingError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (movieAssetNextPage != null && !movieAssetPagingBusy) {
+                Button(onClick = ::loadMoreMovieAssets) { Text("Weitere Filmversionen laden") }
             }
             Button(onClick = ::back) { Text("Zurück") }
         }
