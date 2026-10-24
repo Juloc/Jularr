@@ -780,9 +780,16 @@ namespace Jularr.Backend.Tests
             foreach (var title in new[] { firstTitle, secondTitle })
             {
                 var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '" + title + "/%'"))!;
-                using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + fileId + "/assignment", new AssignLibraryFileDataV1(null, title, null, null, null));
-                Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
-                assets.Add((long)(await host.ScalarAsync("SELECT \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"Id\" = " + fileId))!);
+                // The scanner now resolves unambiguous book folders itself. Only files still
+                // unassigned after scanning need the manual assignment used by older fixtures.
+                var linkedAssetId = await host.ScalarAsync("SELECT \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"Id\" = " + fileId);
+                if (linkedAssetId is not long)
+                {
+                    using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + fileId + "/assignment", new AssignLibraryFileDataV1(null, title, null, null, null));
+                    Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+                    linkedAssetId = await host.ScalarAsync("SELECT \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"Id\" = " + fileId);
+                }
+                assets.Add((long)linkedAssetId!);
             }
 
             return (assets[0], assets[1]);

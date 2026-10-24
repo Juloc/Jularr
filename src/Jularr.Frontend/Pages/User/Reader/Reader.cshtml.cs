@@ -206,6 +206,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-antiforgery", antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "")
                 .Attribute("data-section", index.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-sections", document.SectionCount.ToString(CultureInfo.InvariantCulture))
+                .Attribute("data-document-revision", document.Revision ?? "")
                 .Attribute("data-sections-url", "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/")
                 .Attribute("data-blocks", current.Blocks.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-before", current.CharactersBefore.ToString(CultureInfo.InvariantCulture))
@@ -219,6 +220,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-note-label", texts["reader.note"])
                 .Attribute("data-query", Query ?? "")
                 .Attribute("data-page-label", texts["reader.pagePosition"])
+                .TextAttribute("data-chapter-page-label", "reader.chapterPagePosition")
                 .Attribute("data-animation-failed", texts["reader.animationUnavailable"])
                 .Attribute("data-figure-label", texts["reader.figure.open"])
                 .Attribute("data-offsets", string.Join(',', _offsets.Select(offset => offset.CharactersBefore.ToString(CultureInfo.InvariantCulture))))
@@ -402,6 +404,9 @@ namespace Jularr.Frontend.Pages.User.Reader
                 new Button(new Icon("zoom-out", assets)).IconOnly(texts["reader.figure.zoomOut"]).Attribute("data-figure-zoom", "out"),
                 new Button(new Icon("zoom-in", assets)).IconOnly(texts["reader.figure.zoomIn"]).Attribute("data-figure-zoom", "in"),
                 new Button(new Icon("fit", assets)).IconOnly(texts["reader.figure.fit"]).Attribute("data-figure-zoom", "fit"),
+                new Input().Attribute("type", "range").Attribute("min", "100").Attribute("max", "800").Attribute("step", "1").Attribute("value", "100")
+                    .Attribute("aria-label", texts["reader.figure.zoomLevel"]).Attribute("data-figure-scale", "").Class("reader-figure__scale"),
+                new Span(new ValueText("100%")).Class("reader-figure__level").Attribute("data-figure-level", ""),
                 new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("data-figure-close", "")
             ).Class("reader-figure__tools"),
             new Div(new Img().Attribute("alt", "").Class("reader-figure__image")).Class("reader-figure__stage")
@@ -557,7 +562,10 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Color(data => data.Colour, "reader.colour")),
             pages ? new Span() : SettingsGroup("motion", "reader.settings.motion", group => group
                 .Select(data => data.Animation, "reader.animation", [new("system", texts["reader.animation.system"]), new("on", texts["reader.animation.on"]), new("off", texts["reader.animation.off"])])
-                .Content(new P(new Text("reader.animation.hint")))))
+                .Content(new P(new Text("reader.animation.hint")))),
+            new P(new Text("reader.settings.saveFailed")).Attribute("data-role", "reader-settings-save-error")
+                .Attribute("role", "alert").Attribute("hidden", "hidden")
+            )
             .Class("reader__panel").Attribute("data-panel", "settings").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.settings"]);
 
         private static IUiComponent SettingsGroup(string name, string title, Action<Form<ReaderSettingsData>> define, bool open = false)

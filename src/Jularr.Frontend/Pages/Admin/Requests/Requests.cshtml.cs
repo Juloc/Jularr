@@ -123,7 +123,7 @@ namespace Jularr.Frontend.Pages.Admin.Requests
         {
             var home = "/Admin/Works/" + item.WorkId.ToString(CultureInfo.InvariantCulture);
             var identity = new ListIdentity(TypeTile(item), new A(new Truncated(item.CanonicalTitle)).Class("list-identity__title").Attribute("href", home), new Text("media.type." + item.MediaTypeId));
-            var requested = new Span(new ValueText(item.CreatedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("list-value");
+            var requested = new Span(new LocalTime(item.CreatedAt)).Class("list-value");
             var row = new ListRow([identity, Status(item), new Span(new Truncated(item.RequesterName)).Class("list-value list-value--fill"), new Span(new Truncated(item.RequestedLanguage)).Class("list-value list-value--fill"), requested, RowActions(item, csrf)],
                 [ListPanel.Fact("table.requester", new ValueText(item.RequesterName)), ListPanel.Fact("table.requestedAt", requested, Glyph("clock", 14))]);
             if (item.AcquisitionRequestStatusTypeId == AcquisitionRequestStatusType.Open) row.Tinted(UiTone.Warning);
@@ -152,7 +152,7 @@ namespace Jularr.Frontend.Pages.Admin.Requests
             {
                 Drawer.State("table.status", Status(item, drawer: true)),
                 Drawer.Facts(("table.type", new Text("media.type." + item.MediaTypeId)), ("table.requester", new ValueText(item.RequesterName)),
-                    ("request.language", new ValueText(item.RequestedLanguage)), ("table.requestedAt", new ValueText(item.CreatedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))))
+                    ("request.language", new ValueText(item.RequestedLanguage)), ("table.requestedAt", new LocalTime(item.CreatedAt)))
             };
 
             var footer = new List<IUiComponent>();

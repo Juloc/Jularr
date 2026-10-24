@@ -192,12 +192,12 @@ namespace Jularr.Backend.Service.Core
             else if (definition.OperationType == ServiceOperationType.Execute)
             {
                 // Recheck access per batch.
-                context.SetTransactionalAccessCheck(async (logic, token) =>
+                context.SetTransactionalAccessCheck(async (logic, mode, token) =>
                 {
-                    await Runtime.Gate.RequireTransactionalAccessAsync(caller, permission, logic, token);
+                    await Runtime.Gate.RequireTransactionalAccessAsync(caller, permission, logic, token, mode);
                     if (modules.Mode != ModuleRequirementMode.None)
                     {
-                        await Runtime.Gate.RequireModulesAsync(modules, logic, true, token);
+                        await Runtime.Gate.RequireModulesAsync(modules, logic, mode == SqlAccessMode.ReadWrite, token);
                     }
                 });
             }
@@ -210,7 +210,7 @@ namespace Jularr.Backend.Service.Core
             else
             {
                 // Authorize before external work.
-                await context.ExecuteBatchAsync((_, _) => Task.FromResult(true), cancellationToken);
+                await context.ExecuteBatchAsync((_, _) => Task.FromResult(true), cancellationToken, SqlAccessMode.ReadOnly);
             }
 
             // Bind this invocation only.

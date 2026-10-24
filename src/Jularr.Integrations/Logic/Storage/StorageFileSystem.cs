@@ -171,7 +171,8 @@ namespace Jularr.Integrations.Logic.Storage
 
         // Disk reservations must inspect the filesystem holding the actual output,
         // not Path.GetPathRoot(output), which would always be "/" on Linux.
-        // If mountinfo and DriveInfo disagree, no free-space claim is trustworthy.
+        // A mount can be visible via mountinfo without being enumerated by DriveInfo.GetDrives
+        // (notably CIFS/NFS bind mounts propagated into Docker). Check the actual mount path instead.
         public static long? AvailableFreeSpace(string directory)
         {
             if (!Directory.Exists(directory))
@@ -182,7 +183,6 @@ namespace Jularr.Integrations.Logic.Storage
             try
             {
                 var fullPath = Path.GetFullPath(directory);
-                var pathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
                 var mountPath = Path.GetPathRoot(fullPath)!;
                 if (OperatingSystem.IsLinux())
                 {
@@ -200,10 +200,11 @@ namespace Jularr.Integrations.Logic.Storage
                     mountPath = parent.FullName;
                 }
 
-                var root = Path.TrimEndingDirectorySeparator(mountPath);
-                var drive = DriveInfo.GetDrives().FirstOrDefault(item =>
-                    string.Equals(Path.TrimEndingDirectorySeparator(item.RootDirectory.FullName), root, pathComparison));
-                return drive is { IsReady: true } ? drive.AvailableFreeSpace : null;
+                // DriveInfo.GetDrives() can omit propagated network bind mounts in containers.
+                // Mountpoint resolution above is based on this process's mountinfo and avoids
+                // accidentally measuring '/' while the NAS is unmounted.
+                var drive = new DriveInfo(mountPath);
+                return drive.IsReady ? drive.AvailableFreeSpace : null;
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
             {

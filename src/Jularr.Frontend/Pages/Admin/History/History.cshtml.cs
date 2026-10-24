@@ -105,7 +105,7 @@ namespace Jularr.Frontend.Pages.Admin.History
             var identity = new ListIdentity(new IconTile(Glyph(icon), tone), title, line is { Length: > 0 } ? new Truncated(line) : new Span());
             var release = item.ReleaseTitle is { Length: > 0 } name ? new Span(new Truncated(name)).Class("list-value list-value--fill") : Dim();
             var source = string.Join(" · ", new[] { item.IndexerName, item.ClientName }.OfType<string>().Distinct());
-            var when = new Span(new ValueText(item.OccurredAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("list-value");
+            var when = new Span(new LocalTime(item.OccurredAt)).Class("list-value");
             var actions = new Div(Drawer.Opener(new Button(Glyph("dots", 18)).IconOnly(texts["history.details"]), DrawerId(item))).Class("list-actions");
             var row = new ListRow([identity, EventChip(item), release, source.Length > 0 ? new Span(new Truncated(source)).Class("list-value list-value--fill") : Dim(), when, actions],
                 [ListPanel.Fact("history.when", when, Glyph("clock", 14))]);
@@ -120,7 +120,7 @@ namespace Jularr.Frontend.Pages.Admin.History
         // One event's details: what it was, the release and where it came from, the file and who did it.
         private IUiComponent DrawerOf(ActivityEventV1 item)
         {
-            var facts = new List<(string, IUiComponent)> { ("history.when", new ValueText(item.OccurredAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))), ("history.by", new ValueText(item.AccountName ?? texts["history.byJularr"])) };
+            var facts = new List<(string, IUiComponent)> { ("history.when", new LocalTime(item.OccurredAt)), ("history.by", new ValueText(item.AccountName ?? texts["history.byJularr"])) };
             if (Unit(item) is { Length: > 0 } unit) facts.Insert(0, ("history.unit", new ValueText(unit)));
             if (item.ReleaseTitle is { Length: > 0 } release) facts.Add(("history.release", new ValueText(release)));
             if (item.QualityKey is { Length: > 0 } quality) facts.Add(("history.quality", new ValueText(quality)));

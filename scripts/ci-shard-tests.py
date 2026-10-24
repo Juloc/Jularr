@@ -132,7 +132,7 @@ def trx_class_durations(folder: Path) -> dict[str, dict[str, float]]:
                 continue
             for kind, (_, namespace) in KINDS.items():
                 if name.startswith(namespace + "."):
-                    result[kind][name] = result[kind].get(name, 0.0) + seconds(outcome.attrib["duration"])
+                    result[kind][name] = result[kind].get(name, 0.0) + seconds(outcome.attrib.get("duration", "00:00:00"))
     return result
 
 

@@ -115,12 +115,12 @@ namespace Jularr.Frontend.Pages.User.Requests
                 Poster(item, details),
                 new Div(
                     new A(new Truncated(item.CanonicalTitle)).Class("request-row__title").Attribute("href", details),
-                    new Div(new Truncated(Meta(item))).Class("request-row__meta"),
+                    new Div(Meta(item)).Class("request-row__meta"),
                     Preferences(item)).Class("request-row__info"),
                 new Div(
                     new LiveProgress(LiveKeys.Request(item.Id)).Request(item.AcquisitionRequestStatusTypeId).Steps().Compact(),
                     item is { LatestStepTypeId: { } step, LatestStepAt: { } at }
-                        ? new Div(new Truncated(texts["request.step." + step] + " · " + at.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("request-row__step")
+                        ? new Div(new Truncated(texts["request.step." + step] + " · "), new LocalTime(at)).Class("request-row__step")
                         : new Span()).Class("request-row__status"),
                 new Div([.. actions]).Class("request-row__actions")
             };
@@ -140,7 +140,7 @@ namespace Jularr.Frontend.Pages.User.Requests
             url.Length > 1 && (url[0] == '/' && url[1] != '/' || Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && uri.UserInfo.Length == 0);
 
         // The type and the day the request was made.
-        private string Meta(RequestDetailsV1 item) => LiveFacts.Join(texts["library.scope." + ScopeOf(item).Slug], item.CreatedAt.ToLocalTime().ToString("d", CultureInfo.CurrentCulture));
+        private IUiComponent Meta(RequestDetailsV1 item) => new Span(new ValueText(texts["library.scope." + ScopeOf(item).Slug] + " · "), new LocalTime(item.CreatedAt, "date"));
 
         private static LibraryScope ScopeOf(RequestDetailsV1 item) =>
             LibraryScopes.All.FirstOrDefault(scope => scope.Subtype is not null && scope.Subtype == item.MediaSubtypeId) ?? LibraryScopes.All.FirstOrDefault(scope => scope.Type == item.MediaTypeId && scope.Subtype is null) ?? LibraryScopes.All[0];
@@ -162,7 +162,7 @@ namespace Jularr.Frontend.Pages.User.Requests
                 new Dt(new Text("request.language")), new Dd(new ValueText(item.RequestedLanguage))
             };
             if (item.QualityName is { } quality) facts.AddRange([new Dt(new Text("request.quality")), new Dd(new ValueText(quality))]);
-            facts.AddRange([new Dt(new Text("table.requestedAt")), new Dd(new ValueText(item.CreatedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)))]);
+            facts.AddRange([new Dt(new Text("table.requestedAt")), new Dd(new LocalTime(item.CreatedAt))]);
 
             var body = new List<IUiComponent>
             {
@@ -173,7 +173,7 @@ namespace Jularr.Frontend.Pages.User.Requests
             {
                 body.Add(new Div(new H3(new Text("requests.activity")),
                     new Ul([.. _steps.Select(step => (IUiComponent)new Li(new Span(new Text("request.step." + step.ActivityEventTypeId)),
-                        new Span(new ValueText(step.OccurredAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("request-drawer__time")))]).Class("request-drawer__steps")).Class("request-drawer__section"));
+                        new Span(new LocalTime(step.OccurredAt)).Class("request-drawer__time")))]).Class("request-drawer__steps")).Class("request-drawer__section"));
             }
 
             var footer = new List<IUiComponent>();
@@ -189,7 +189,7 @@ namespace Jularr.Frontend.Pages.User.Requests
             return new Div(
                 new A(new ValueText("")).Class("request-drawer__scrim").Attribute("href", Address(page: PageNumber)).Attribute("tabindex", "-1").Attribute("aria-hidden", "true"),
                 new Aside(
-                    new Header(new Div(new H2(new ValueText(item.CanonicalTitle)).Attribute("id", "request-drawer-title"), new Span(new ValueText(Meta(item))).Class("request-drawer__meta")),
+                    new Header(new Div(new H2(new ValueText(item.CanonicalTitle)).Attribute("id", "request-drawer-title"), new Span(Meta(item)).Class("request-drawer__meta")),
                         new A(new Icon("close", assets, 18)).Class("button button--icon button--compact").Attribute("href", Address(page: PageNumber)).TextAttribute("aria-label", "common.close")).Class("request-drawer__head"),
                     new Div([.. body]).Class("request-drawer__body"),
                     new Div([.. footer]).Class("request-drawer__foot")).Class("request-drawer").Attribute("role", "dialog").Attribute("aria-modal", "true").Attribute("aria-labelledby", "request-drawer-title"))

@@ -66,7 +66,7 @@ namespace Jularr.Frontend.Pages.User.Calendar
                 content.Add(new Div([.. strips]).Class("calendar__strips"));
             }
 
-            var cell = new Section([.. content]).Class(classes);
+            var cell = new Section([.. content]).Class(classes).Attribute("data-calendar-day", day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
             return day == Today ? cell.Attribute("aria-current", "date") : cell;
         }
 
@@ -99,7 +99,7 @@ namespace Jularr.Frontend.Pages.User.Calendar
                     .Class("calendar__card " + TypeClass(entry)).Attribute("href", DetailsAddress(entry)));
                 var column = new Section(new Span(new ValueText(day.ToString("ddd", CultureInfo.CurrentCulture))).Class("calendar__week-name"),
                     new A(new ValueText(day.Day.ToString(CultureInfo.CurrentCulture))).Class("calendar__big-date").Attribute("href", Address(query with { View = CalendarView.Day, Date = day, Day = null }))
-                        .Attribute("aria-label", LongDate(day)), new Div([.. cards]).Class("calendar__cards")).Class("calendar__week-day" + (day == Today ? " calendar__week-day--today" : ""));
+                        .Attribute("aria-label", LongDate(day)), new Div([.. cards]).Class("calendar__cards")).Class("calendar__week-day" + (day == Today ? " calendar__week-day--today" : "")).Attribute("data-calendar-day", day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                 return day == Today ? column.Attribute("aria-current", "date") : column;
             });
             var narrow = new Div(DateStrip(query, byDay), DayPanel(query, Anchor, byDay[Anchor].ToArray(), true, true)).Class("calendar__board calendar__week-narrow");
@@ -120,7 +120,7 @@ namespace Jularr.Frontend.Pages.User.Calendar
                 var day = WeekStart(Anchor).AddDays(offset);
                 var link = new A(new Span(new ValueText(day.ToString("ddd", CultureInfo.CurrentCulture))), new Strong(new ValueText(day.Day.ToString(CultureInfo.CurrentCulture))),
                     new Span().Class("calendar__dot" + (byDay[day].Any() ? " calendar__dot--filled" : ""))).Class("calendar__strip-date" + (day == Anchor ? " calendar__strip-date--selected" : "") + (day == Today ? " calendar__strip-date--today" : ""))
-                    .Attribute("href", Address(query with { Date = day, Day = null })).Attribute("aria-label", LongDate(day));
+                    .Attribute("href", Address(query with { Date = day, Day = null })).Attribute("aria-label", LongDate(day)).Attribute("data-calendar-day", day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                 return (IUiComponent)(day == Anchor ? link.Attribute("aria-current", "true") : link);
             });
             return new Nav([.. days]).Class("calendar__strip-dates").Attribute("aria-label", texts["calendar.weekDays"]);

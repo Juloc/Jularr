@@ -5,14 +5,12 @@ namespace Jularr.Frontend.Framework
 {
     // Featured title with backdrop artwork; the page decides which title is featured.
     // A page whose breadcrumb already ends with this title keeps the heading for assistive technology only.
-    // With a poster the hero is a title's own: the poster with its availability tag, chips, one line of facts with the catalog's rating,
-    // a summary line that opens on a click, the page's actions, a slot in the top right corner and the profile's progress bottom right.
+    // With a poster, the hero has a plain cover beside top-aligned details and a bottom actions/progress row.
     public sealed class MediaHero(string title, string? backdropUrl, string? meta, string? overview, string? actionKey = null, string? actionHref = null, string? detailsHref = null,
         bool titleInBreadcrumb = false) : IUiComponent
     {
         private string? _posterUrl;
         private bool _hasPoster;
-        private IUiComponent? _tag;
         private IUiComponent? _placeholder;
         private IUiComponent[] _chips = [];
         private IUiComponent[] _actions = [];
@@ -20,12 +18,11 @@ namespace Jularr.Frontend.Framework
         private IUiComponent? _rating;
         private (int Percent, string Label, string? Value)? _progress;
 
-        // The title's own hero: the poster with an optional availability tag over it; a title without a cover shows the placeholder (an icon of its type).
-        public MediaHero Poster(string? posterUrl, IUiComponent? tag = null, IUiComponent? placeholder = null)
+        // A plain cover; a title without art shows the type icon.
+        public MediaHero Poster(string? posterUrl, IUiComponent? placeholder = null)
         {
             _hasPoster = true;
             _posterUrl = posterUrl;
-            _tag = tag;
             _placeholder = placeholder;
             return this;
         }
@@ -92,11 +89,11 @@ namespace Jularr.Frontend.Framework
             if (overview is not null)
             {
                 body.Add(_hasPoster
-                    ? new P(new Truncated(overview)).Class("media-hero__overview").Attribute("data-hero-summary", "true").Attribute("aria-expanded", "false")
+                    ? new P(new Truncated(overview)).Class("media-hero__overview").Attribute("data-hero-summary", "true").Attribute("role", "button").Attribute("tabindex", "0").Attribute("aria-expanded", "false")
                     : new P(new ValueText(overview)).Class("media-hero__overview"));
             }
 
-            if (actions.Count > 0) body.Add(new Div([.. actions]).Class("media-hero__actions"));
+            if (!_hasPoster && actions.Count > 0) body.Add(new Div([.. actions]).Class("media-hero__actions"));
 
             var parts = new List<IUiComponent>();
             if (!_hasPoster)
@@ -111,22 +108,30 @@ namespace Jularr.Frontend.Framework
             parts.Add(backdropUrl is not null ? new Div(new MediaImage(backdropUrl, "", 1280, 720, priority: true)).Class("media-hero__backdrop")
                 : new Div().Class("media-hero__backdrop"));
             if (_corner is not null) parts.Add(new Div(_corner).Class("media-hero__corner"));
-            var poster = new List<IUiComponent>
-            {
-                _posterUrl is null ? new Div(_placeholder ?? new Span()).Class("media-hero__placeholder") : new MediaImage(_posterUrl, "", 342, 513, priority: true)
-            };
-            if (_tag is not null) poster.Add(_tag);
-            parts.Add(new Div(new Div([.. poster]).Class("media-hero__poster"), new Div([.. body]).Class("media-hero__body")).Class("media-hero__layout"));
+            var poster = _posterUrl is null ? new Div(_placeholder ?? new Span()).Class("media-hero__placeholder") : (IUiComponent)new MediaImage(_posterUrl, "", 342, 513);
+            var footer = new List<IUiComponent>();
+            if (actions.Count > 0) footer.Add(new Div([.. actions]).Class("media-hero__actions"));
             if (_progress is { } progress)
             {
                 var caption = new List<IUiComponent> { new Span(new ValueText(progress.Label)) };
                 if (progress.Value is not null) caption.Add(new Span(new ValueText(progress.Value)));
-                parts.Add(new Div(new Div([.. caption]).Class("media-hero__progress-caption"),
+                footer.Add(new Div(new Div([.. caption]).Class("media-hero__progress-caption"),
                     new Progress().Attribute("max", "100").Attribute("value", progress.Percent.ToString(CultureInfo.InvariantCulture)).Attribute("aria-label", progress.Label).Class("media-hero__progress-bar"))
                     .Class("media-hero__progress"));
             }
 
-            new Section([.. parts]).Class(_progress is null ? "media-hero media-hero--poster" : "media-hero media-hero--poster media-hero--progress").WriteTo(writer, encoder, texts);
+            var layout = new List<IUiComponent>
+            {
+                new Div(poster).Class("media-hero__poster"),
+                new Div([.. body]).Class("media-hero__content")
+            };
+            if (footer.Count > 0)
+            {
+                layout.Add(new Div([.. footer]).Class(_progress is not null && actions.Count > 0 ? "media-hero__footer media-hero__footer--progress" : "media-hero__footer"));
+            }
+
+            parts.Add(new Div([.. layout]).Class("media-hero__layout"));
+            new Section([.. parts]).Class("media-hero media-hero--poster").WriteTo(writer, encoder, texts);
         }
     }
 }

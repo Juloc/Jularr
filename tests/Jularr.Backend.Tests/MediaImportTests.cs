@@ -134,6 +134,79 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Import_BookSearch_OmitsAudioOnlyWorks_ButKeepsPrintedBooksAndMixedFormatWorks()
+        {
+            var providers = new FakeProviders();
+            await using var host = await CreateHostAsync(providers);
+            const string list = """
+                {"version":1,"items":[{"type":"book","title":"audio-filter-case"}]}
+                """;
+            var preview = await PreviewAsync(host, list);
+            var names = preview.Rows.Single().Candidates.Select(item => item.Title).ToArray();
+            CollectionAssert.AreEqual(new[] { "Printed Novel", "The Audiobook Handbook" }, names);
+            Assert.IsFalse(preview.Rows[0].Candidates.Any(item => item.IsSuggested));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
+        public async Task Import_AudiobookEditionIsbn_DoesNotAutoImportParentBook()
+        {
+            var providers = new FakeProviders();
+            await using var host = await CreateHostAsync(providers);
+            const string list = """
+                {"version":1,"items":[{"type":"book","ids":{"isbn":"9780141439518"},"title":"Pride and Prejudice","author":"Jane Austen"}]}
+                """;
+            providers.AudioIsbn = true;
+            var preview = await PreviewAsync(host, list);
+            Assert.AreEqual(MediaImportStatusType.Open, preview.Rows.Single().StatusTypeId);
+            Assert.IsNull(preview.Rows.Single().Choice);
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
+        public async Task Import_Isbn_ResolvesUnimportedEditionToCanonicalWork_AndRejectsWrongTitleOrAuthor()
+        {
+            var providers = new FakeProviders();
+            await using var host = await CreateHostAsync(providers);
+
+            const string isbnList = """
+                {"version":1,"items":[
+                  {"type":"book","ids":{"isbn":"9780141439518"},"title":"Pride and Prejudice","author":"Jane Austen"},
+                  {"type":"book","ids":{"isbn":"9781601424440"},"title":"For Women Only, Revised and Updated Edition","author":"Shaunti Feldhahn"}
+                ]}
+                """;
+            var preview = await PreviewAsync(host, isbnList);
+            CollectionAssert.AreEqual(new[] { MediaImportStatusType.New, MediaImportStatusType.New }, preview.Rows.Select(row => row.StatusTypeId).ToArray());
+            CollectionAssert.AreEqual(new[] { "openlibrary:OL66554W", "openlibrary:OL7777W" }, preview.Rows.Select(row => row.Choice).ToArray());
+            Assert.IsTrue(preview.Rows.All(row => row.IsIncluded));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+
+            var result = await RunAsync(host, isbnList, MediaImportActionType.AddOnly);
+            Assert.AreEqual(2, result.Rows.Count(row => row.OutcomeTypeId == MediaImportOutcomeType.Added));
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+
+            // The edition's ISBN now identifies the existing Work; a repeated import never creates a second copy.
+            var repeat = await PreviewAsync(host, isbnList);
+            Assert.IsTrue(repeat.Rows.All(row => row.StatusTypeId == MediaImportStatusType.InLibrary));
+            Assert.AreEqual(2, (await RunAsync(host, isbnList, MediaImportActionType.AddOnly)).Rows.Count(row => row.OutcomeTypeId == MediaImportOutcomeType.Skipped));
+
+            const string mismatched = """
+                {"version":1,"items":[
+                  {"type":"book","ids":{"isbn":"9780141439518"},"title":"Summary of Pride and Prejudice","author":"Jane Austen"},
+                  {"type":"book","ids":{"isbn":"9781601424440"},"title":"For Young Women Only","author":"Shaunti Feldhahn"}
+                ]}
+                """;
+            // Local edition IDs are authoritative for an existing Work; title checks apply before a new Work is imported.
+            var empty = await CreateHostAsync(new FakeProviders());
+            await using (empty)
+            {
+                var unmatched = await PreviewAsync(empty, mismatched);
+                Assert.IsTrue(unmatched.Rows.All(row => row.StatusTypeId == MediaImportStatusType.Open));
+                Assert.AreEqual(0L, await empty.ScalarAsync("""SELECT count(*) FROM "Works" """));
+            }
+        }
+
+        [TestMethod]
         public async Task Import_ListWithIds_PreviewsWithoutChangesThenAddsMonitorsAndRepeatsWithoutDuplicates()
         {
             var providers = new FakeProviders();
@@ -422,6 +495,124 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ImportPage_PreviewStream_ReportsIndividualIsbnAndSearchStagesWithoutImporting()
+        {
+            await using var host = await CreateHostAsync(new FakeProviders());
+            using var form = await host.SendAsync(HttpMethod.Get, "/Admin/Import");
+            var token = LibraryTests.Token(await form.Content.ReadAsStringAsync());
+            const string list = """
+                {"version":1,"items":[
+                  {"type":"book","title":"Pride and Prejudice","author":"Jane Austen"},
+                  {"type":"book","ids":{"isbn":"9780141439518"},"title":"Pride and Prejudice","author":"Jane Austen"}
+                ]}
+                """;
+            using var response = await host.SendAsync(HttpMethod.Post, "/Admin/Import?handler=PreviewStream", new FormUrlEncodedContent(
+            [
+                KeyValuePair.Create("__RequestVerificationToken", token),
+                KeyValuePair.Create("Json", list),
+                KeyValuePair.Create("Action", "1")
+            ]));
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            Assert.AreEqual("application/x-ndjson", response.Content.Headers.ContentType?.MediaType);
+            var lines = (await response.Content.ReadAsStringAsync()).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var updates = lines.Select(line => System.Text.Json.JsonDocument.Parse(line)).ToArray();
+            try
+            {
+                Assert.AreEqual("started", updates[0].RootElement.GetProperty("kind").GetString());
+                Assert.IsTrue(updates.Any(update => update.RootElement.GetProperty("kind").GetString() == "row"
+                    && update.RootElement.GetProperty("index").GetInt32() == 0 && update.RootElement.GetProperty("stage").GetString() == "searching"));
+                Assert.IsTrue(updates.Any(update => update.RootElement.GetProperty("kind").GetString() == "row"
+                    && update.RootElement.GetProperty("index").GetInt32() == 1 && update.RootElement.GetProperty("stage").GetString() == "isbn"));
+                Assert.IsTrue(updates.Any(update => update.RootElement.GetProperty("kind").GetString() == "row"
+                    && update.RootElement.GetProperty("index").GetInt32() == 1 && update.RootElement.GetProperty("stage").GetString() == "New"));
+                Assert.AreEqual("done", updates[^1].RootElement.GetProperty("kind").GetString());
+                Assert.AreEqual(2, updates[^1].RootElement.GetProperty("total").GetInt32());
+                Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+            }
+            finally
+            {
+                foreach (var update in updates) update.Dispose();
+            }
+        }
+
+        [TestMethod]
+        public async Task ImportPage_BookEditionComparison_ReturnsActualFormats_WithoutWritingWorks()
+        {
+            await using var host = await CreateHostAsync(new FakeProviders());
+            using var response = await host.SendAsync(HttpMethod.Get, "/Admin/Import?handler=BookEditions&workId=OL66554W");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            var body = await response.Content.ReadAsStringAsync();
+            StringAssert.Contains(body, "Paperback");
+            StringAssert.Contains(body, "9780141439518");
+            StringAssert.Contains(response.Content.Headers.ContentType?.MediaType ?? "", "text/html");
+            StringAssert.Contains(body, "Penguin");
+            StringAssert.Contains(body, "eng");
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+            using var invalid = await host.SendAsync(HttpMethod.Get, "/Admin/Import?handler=BookEditions&workId=invalid");
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task ImportPage_StreamsActualPerRowOutcomes_BeforeCompletion()
+        {
+            await using var host = await CreateHostAsync(new FakeProviders());
+            using var form = await host.SendAsync(HttpMethod.Get, "/Admin/Import");
+            var token = LibraryTests.Token(await form.Content.ReadAsStringAsync());
+            const string list = """
+                {"version":1,"items":[
+                  {"type":"movie","ids":{"tmdb":"603"},"title":"The Matrix"},
+                  {"type":"movie","ids":{"tmdb":"604"},"title":"The Matrix Reloaded"}
+                ]}
+                """;
+            using var response = await host.SendAsync(HttpMethod.Post, "/Admin/Import?handler=ApplyStream", new FormUrlEncodedContent(
+            [
+                KeyValuePair.Create("__RequestVerificationToken", token),
+                KeyValuePair.Create("Json", list),
+                KeyValuePair.Create("Action", "1")
+            ]));
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            Assert.AreEqual("application/x-ndjson", response.Content.Headers.ContentType?.MediaType);
+            var lines = (await response.Content.ReadAsStringAsync()).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            Assert.AreEqual(4, lines.Length);
+            using var first = System.Text.Json.JsonDocument.Parse(lines[0]);
+            using var rowOne = System.Text.Json.JsonDocument.Parse(lines[1]);
+            using var rowTwo = System.Text.Json.JsonDocument.Parse(lines[2]);
+            using var last = System.Text.Json.JsonDocument.Parse(lines[3]);
+            Assert.AreEqual("started", first.RootElement.GetProperty("kind").GetString());
+            Assert.AreEqual("row", rowOne.RootElement.GetProperty("kind").GetString());
+            Assert.AreEqual("The Matrix", rowOne.RootElement.GetProperty("title").GetString());
+            Assert.AreEqual("Added", rowOne.RootElement.GetProperty("status").GetString());
+            Assert.AreEqual("row", rowTwo.RootElement.GetProperty("kind").GetString());
+            Assert.AreEqual("done", last.RootElement.GetProperty("kind").GetString());
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
+        public async Task ImportPage_ApplyOnlyProcessesRowsExplicitlyIncludedInThePreview()
+        {
+            await using var host = await CreateHostAsync(new FakeProviders());
+            const string list = """
+                {"version":1,"items":[{"type":"movie","ids":{"tmdb":"603"},"title":"The Matrix"}]}
+                """;
+
+            var created = await RunAsync(host, list, MediaImportActionType.AddOnly);
+            Assert.AreEqual(MediaImportOutcomeType.Added, created.Rows.Single().OutcomeTypeId);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Import");
+            var token = LibraryTests.Token(await page.Content.ReadAsStringAsync());
+            using var response = await host.SendAsync(HttpMethod.Post, "/Admin/Import?handler=ApplyStream", new FormUrlEncodedContent(
+            [
+                KeyValuePair.Create("__RequestVerificationToken", token),
+                KeyValuePair.Create("Json", list),
+                KeyValuePair.Create("Action", "3"),
+                KeyValuePair.Create("Choices[0].Index", "0")
+                // No Include field: the original AddOnly preview never offered this Work for monitoring.
+            ]));
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            StringAssert.Contains(await response.Content.ReadAsStringAsync(), "\"status\":\"Skipped\"");
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" """));
+        }
+
+        [TestMethod]
         public async Task ImportPage_ANormalUser_IsRefused()
         {
             await using var host = await CreateHostAsync(new FakeProviders());
@@ -471,6 +662,7 @@ namespace Jularr.Backend.Tests
         {
             public List<string> Requests { get; } = [];
             public bool IsUnavailable { get; set; }
+            public bool AudioIsbn { get; set; }
 
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
@@ -481,7 +673,22 @@ namespace Jularr.Backend.Tests
                 {
                     return Task.FromResult(uri.AbsolutePath switch
                     {
+                        "/search.json" when uri.Query.Contains("audio-filter-case", StringComparison.Ordinal) => Json("""
+                            {"docs":[
+                              {"key":"/works/OL881W","title":"Printed Novel","author_name":["Jane Austen"],"format":["Paperback","Audiobook"]},
+                              {"key":"/works/OL882W","title":"Pride and Prejudice - Audiobook","author_name":["Jane Austen"],"format":["Audiobook"]},
+                              {"key":"/works/OL883W","title":"Audio-Only Edition","author_name":["Jane Austen"],"format":["Audio CD"]},
+                              {"key":"/works/OL885W","title":"Pride and Prejudice (Hörbuch)","author_name":["Jane Austen"]},
+                              {"key":"/works/OL884W","title":"The Audiobook Handbook","author_name":["Jane Austen"],"format":["Paperback"]}
+                            ]}
+                            """),
                         "/search.json" => Json("""{"docs":[{"key":"/works/OL66554W","title":"Pride and Prejudice","author_name":["Jane Austen"],"first_publish_year":1813,"cover_i":14348537,"isbn":["9780141439518"]}]}"""),
+                        "/isbn/9780141439518.json" when AudioIsbn => Json("""{"title":"Pride and Prejudice","physical_format":"Audio CD","works":[{"key":"/works/OL66554W"}]}"""),
+                        "/isbn/9780141439518.json" => Json("""{"works":[{"key":"/works/OL66554W"}]}"""),
+                        "/isbn/9781601424440.json" => Json("""{"works":[{"key":"/works/OL7777W"}]}"""),
+                        "/works/OL7777W.json" => Json("""{"title":"For Women Only","first_publish_date":"2004","authors":[{"author":{"key":"/authors/OL7777A"}}]}"""),
+                        "/works/OL7777W/editions.json" => Json("""{"entries":[{"key":"/books/OL7777M","title":"For Women Only, Revised and Updated Edition","languages":[{"key":"/languages/eng"}],"isbn_13":["9781601424440"],"publish_date":"2013"}]}"""),
+                        "/authors/OL7777A.json" => Json("""{"name":"Shaunti Christine Feldhahn"}"""),
                         "/works/OL66554W.json" => Json("""{"title":"Pride and Prejudice","first_publish_date":"1813","description":{"value":"A novel of manners."},"covers":[14348537],"authors":[{"author":{"key":"/authors/OL21594A"}}]}"""),
                         "/authors/OL21594A.json" => Json("""{"name":"Jane Austen"}"""),
                         "/works/OL66554W/editions.json" => Json("""{"entries":[{"key":"/books/OL1M","title":"Pride and Prejudice","languages":[{"key":"/languages/eng"}],"physical_format":"Paperback","isbn_13":["9780141439518"],"publishers":["Penguin"],"publish_date":"2003"}]}"""),

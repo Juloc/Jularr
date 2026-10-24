@@ -97,6 +97,7 @@ namespace Jularr.Backend.Service.Core
             new("readingCopies", WorkerGroupType.Derivation, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(25), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
 
             // Each catalog decides for itself whether it waits while Jularr is used.
+            new("discoverFeeds", WorkerGroupType.Catalog, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(8)),
             new("catalog", WorkerGroupType.Catalog, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(8)),
             new("resources", WorkerGroupType.Sampler, TimeSpan.FromMinutes(1), TimeSpan.Zero, canRunNow: false),
 

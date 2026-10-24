@@ -56,23 +56,42 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
     try { stored = JSON.parse(localStorage.getItem(Key) ?? 'null'); } catch { /* Device preferences are optional. */ }
     try { profile = JSON.parse(reader.dataset.profileSettings ?? 'null'); } catch { /* A profile without choices leaves the device's. */ }
     const settings = readerSettings({ ...(stored as object | null), ...(profile as object | null) }, reader.dataset.direction === 'rtl');
-    let saving = 0;
-    const saveProfile = (now = false): void => {
+    // One request at a time prevents a slower, older response from overwriting newer profile settings.
+    const saveError = reader.querySelector<HTMLElement>('[data-role=reader-settings-save-error]');
+    let saving = 0, sending = false;
+    let queued: string | undefined;
+    const flushProfile = async (): Promise<void> => {
         const url = reader.dataset.settingsUrl;
-        if (!url) return;
-        window.clearTimeout(saving);
-        const send = (): void => {
-            saving = 0;
-            void fetch(url, {
+        if (!url || sending || !queued) return;
+        sending = true;
+        const body = queued;
+        queued = undefined;
+        try {
+            const response = await fetch(url, {
                 method: 'PUT', credentials: 'same-origin', keepalive: true,
                 headers: { 'Content-Type': 'application/json', RequestVerificationToken: reader.dataset.antiforgery! },
-                body: JSON.stringify({ fontTypeId: settings.font === 'sans' ? 2 : 1, size: settings.size, lineSpacing: settings.spacing, paragraphSpacing: settings.paragraph,
-                    textWidth: settings.width, hyphenation: settings.hyphenation })
-            }).catch(() => { /* The device keeps its copy; the next change tries again. */ });
-        };
-        if (now) send(); else saving = window.setTimeout(send, 600);
+                body
+            });
+            if (!response.ok) throw new Error('Reader profile settings were rejected.');
+            if (!queued && saveError) saveError.hidden = true;
+        } catch {
+            // Local settings remain usable; the next change retries with the latest complete state.
+            if (!queued && saveError) saveError.hidden = false;
+        } finally {
+            sending = false;
+            if (queued) void flushProfile();
+        }
     };
-    window.addEventListener('pagehide', () => { if (saving) saveProfile(true); });
+    const saveProfile = (now = false): void => {
+        if (!reader.dataset.settingsUrl) return;
+        queued = JSON.stringify({ fontTypeId: settings.font === 'sans' ? 2 : 1, size: settings.size, lineSpacing: settings.spacing, paragraphSpacing: settings.paragraph,
+            textWidth: settings.width, hyphenation: settings.hyphenation });
+        if (saveError) saveError.hidden = true;
+        window.clearTimeout(saving);
+        saving = now ? 0 : window.setTimeout(() => { saving = 0; void flushProfile(); }, 600);
+        if (now) void flushProfile();
+    };
+    window.addEventListener('pagehide', () => { if (saving || queued) saveProfile(true); });
     const fields = Array.from(reader.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-panel=settings] input:not([type=hidden]), [data-panel=settings] select'));
     const names: Record<string, keyof ReaderSettings> = { Size: 'size', Spacing: 'spacing', Paragraph: 'paragraph', FontFamily: 'font', TextWidth: 'width', Indent: 'indent', Hyphenation: 'hyphenation', Illustrations: 'illustrations',
         Mode: 'mode', Layout: 'layout', Direction: 'direction', Surface: 'surface', Colour: 'colour', Animation: 'animation', Preset: 'preset', Fit: 'fit' };
