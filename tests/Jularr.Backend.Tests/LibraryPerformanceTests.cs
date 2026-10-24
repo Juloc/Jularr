@@ -18,7 +18,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Http;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Npgsql;
@@ -199,14 +198,16 @@ namespace Jularr.Backend.Tests
             if (cachedOnly)
             {
                 await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'LocalDiscovery'");
-                var cache = host.Services.GetRequiredService<IMemoryCache>();
+                await using var write = new SqlContext(host.Fixture.Database);
+                await write.BeginAsync(SqlAccessMode.ReadWrite);
                 foreach (var feed in new[] { DiscoverFeedType.Top, DiscoverFeedType.New })
                 {
-                    var results = Enumerable.Range(1, 20).Select(n => new MetadataSearchResultV1("anilist", n.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                        "Catalog " + n.ToString("D5", System.Globalization.CultureInfo.InvariantCulture), null, 2026, null, null, null, "https://image.tmdb.org/t/p/w500/" + n + ".jpg")).ToList();
-                    cache.Set($"metadata.catalog.{MediaType.Series}.{MediaSubtype.Anime}.{feed}.{DateTime.UtcNow:yyyy-MM-dd}", results,
-                        new MemoryCacheEntryOptions { Size = results.Count, AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(6) });
+                    var results = Enumerable.Range(1, 20).Select(n => new ExternalWorkData("anilist", n.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        "Catalog " + n.ToString("D5", System.Globalization.CultureInfo.InvariantCulture), null, 2026, null, null,
+                        "https://image.tmdb.org/t/p/w500/" + n + ".jpg", null, DateTime.MinValue)).ToArray();
+                    await new LogicContext(write).SaveExternalFeedAsync(new ExternalFeedData("anilist", MediaType.Series, MediaSubtype.Anime, feed, 1, null, null), results, default);
                 }
+                await write.CommitAsync();
             }
             var samples = int.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_LIBRARY_SAMPLES"), out var count) ? count : 30;
             var budget = double.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_LIBRARY_MAX_MS"), System.Globalization.CultureInfo.InvariantCulture, out var maximum) ? maximum : double.PositiveInfinity;

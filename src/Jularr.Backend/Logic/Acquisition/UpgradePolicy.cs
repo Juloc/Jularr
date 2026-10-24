@@ -109,6 +109,7 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             LanguageFallbackType.English => languages.Any(language => Same("EN", language)),
             LanguageFallbackType.None => false,
+            LanguageFallbackType.Any => true,
             _ => IsOriginal(profile, languages)
         };
 

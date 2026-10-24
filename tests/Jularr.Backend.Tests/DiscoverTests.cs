@@ -12,6 +12,10 @@ using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Request.V1;
+using Jularr.Backend.Data.System.Media.V1;
+using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.System.Media.V1;
+using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.Tmdb;
 using Jularr.Integrations.Data.Tmdb;
@@ -19,6 +23,9 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Configuration;
+using Npgsql;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
 namespace Jularr.Backend.Tests
@@ -27,6 +34,60 @@ namespace Jularr.Backend.Tests
     public sealed class DiscoverTests
     {
         private const string Token = "eyJ-discover-token";
+        public TestContext TestContext { get; set; } = null!;
+
+        [TestMethod]
+        public async Task Catalog_CachedRankings_RefreshKnownWorksAndStillCheckProfileAccess()
+        {
+            var provider = new FakeAniList();
+            await using var host = await CreateHostAsync(anime: provider);
+            foreach (var ranking in new[] { DiscoverFeedType.Top, DiscoverFeedType.New })
+            {
+                using var first = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, ranking, MediaSubtype.Anime));
+                Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
+                Assert.IsNull((await first.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().WorkId);
+            }
+            var requests = provider.Requests;
+            provider.IsUnavailable = true;
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (700, 2, 1, 'Imported series');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (700, 'anilist', '21');
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (700, 'Poster', '/api/v1/covers/works/700/poster?v=1', TRUE);
+                """);
+            foreach (var ranking in new[] { DiscoverFeedType.Top, DiscoverFeedType.New })
+            {
+                using var cached = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, ranking, MediaSubtype.Anime));
+                Assert.AreEqual(HttpStatusCode.OK, cached.StatusCode, await cached.Content.ReadAsStringAsync());
+                var item = (await cached.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single();
+                Assert.AreEqual(700L, item.WorkId);
+                Assert.AreEqual("/api/v1/covers/works/700/poster?v=1", item.PosterUrl);
+            }
+            Assert.AreEqual(requests, provider.Requests, "Warm rankings must not ask the unavailable provider.");
+            await host.Fixture.RunSqlAsync("INSERT INTO \"ProfileMediaRules\" (\"ProfileId\", \"MediaSubtypeId\", \"IsBlocked\") VALUES (101, 1, TRUE)");
+            using var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Top, MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.NotFound, blocked.StatusCode, await blocked.Content.ReadAsStringAsync());
+            Assert.AreEqual(requests, provider.Requests);
+        }
+
+        [TestMethod]
+        public async Task Catalog_OldAnimeTrending_ReadsStoredTitleWithoutProviderRefresh()
+        {
+            var provider = new FakeAniList();
+            await using var host = await CreateHostAsync(anime: provider);
+            var input = new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime);
+            using var first = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", input);
+            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorks\" SET \"FetchedAt\" = now() - interval '7 hours', \"Title\" = 'Kept stale season' WHERE \"Namespace\" = 'anilist'");
+            provider.IsUnavailable = true;
+            using var stale = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", input);
+            Assert.AreEqual(HttpStatusCode.OK, stale.StatusCode, await stale.Content.ReadAsStringAsync());
+            Assert.AreEqual("Kept stale season", (await stale.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().Title);
+            var requests = provider.Requests;
+            using var cooldown = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", input);
+            Assert.AreEqual(HttpStatusCode.OK, cooldown.StatusCode, await cooldown.Content.ReadAsStringAsync());
+            Assert.AreEqual("Kept stale season", (await cooldown.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().Title);
+            Assert.AreEqual(requests, provider.Requests, "The provider cooldown must also apply to stale-cache reads.");
+        }
 
         [TestMethod]
         public async Task Discover_FeedsSearchAndRequest_ResolveOneCanonicalWork()
@@ -75,7 +136,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Catalog_KeepsWhatDiscoverLoaded_AndAnswersTrendingWhileFreshOrTheProviderIsDown()
+        public async Task Catalog_KeepsWhatDiscoverLoaded_AndAnswersTrendingWithoutCheckingAge()
         {
             var tmdb = new FakeTmdb();
             await using var host = await CreateHostAsync(fake: tmdb);
@@ -100,20 +161,22 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorks\" SET \"Title\" = 'Season 2 (kept)' WHERE \"Namespace\" = 'anilist'");
             using var animeAgain = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime));
             Assert.AreEqual("Season 2 (kept)", (await animeAgain.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().Title);
+            await TimeWarmReadsAsync("AniList trending; 0 local Works, 1 result", () => host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime)));
 
-            // An old list is loaded again, and while TMDB cannot answer the last one is shown.
+            // Existing catalog entries remain usable without any provider call, regardless of age.
             await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorks\" SET \"FetchedAt\" = now() - interval '7 hours', \"TrendingRank\" = 1 WHERE \"Namespace\" = 'tmdb_tv'");
             tmdb.IsUnavailable = true;
             using var stale = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Series, DiscoverFeedType.Trending));
             Assert.AreEqual(HttpStatusCode.OK, stale.StatusCode, await stale.Content.ReadAsStringAsync());
             Assert.AreEqual("The Matrix Show", (await stale.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().Title);
-            Assert.IsTrue(tmdb.Requests.Any(request => request.AbsolutePath == "/3/trending/tv/week"));
+            Assert.IsFalse(tmdb.Requests.Any(request => request.AbsolutePath == "/3/trending/tv/week"));
         }
 
         [TestMethod]
         public async Task Catalog_WithoutTheDiscoverCacheModule_KeepsNothingAndAsksTheProviders()
         {
-            await using var host = await CreateHostAsync();
+            var tmdb = new FakeTmdb();
+            await using var host = await CreateHostAsync(fake: tmdb);
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'DiscoverCache'");
             using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
             Assert.AreEqual("The Matrix", (await feed.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().Title);
@@ -121,59 +184,57 @@ namespace Jularr.Backend.Tests
             using var anime = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime));
             Assert.AreEqual(HttpStatusCode.OK, anime.StatusCode, await anime.Content.ReadAsStringAsync());
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorks\""));
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
+            Assert.AreEqual(HttpStatusCode.OK, again.StatusCode, await again.Content.ReadAsStringAsync());
+            Assert.AreEqual(2, tmdb.Requests.Count(request => request.AbsolutePath == "/3/trending/movie/week"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkFeeds\""));
         }
 
         [TestMethod]
-        public async Task Catalog_CachedRankings_RefreshKnownWorksAndStillCheckProfileAccess()
+        public async Task CacheWorker_PreparesFeedsAndRecommendations_ReadsOverlayCurrentState_AndRetainsListsOnFailure()
         {
-            var provider = new FakeAniList();
-            await using var host = await CreateHostAsync(anime: provider);
-            foreach (var ranking in new[] { DiscoverFeedType.Top, DiscoverFeedType.New })
-            {
-                using var first = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, ranking, MediaSubtype.Anime));
-                Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
-                Assert.IsNull((await first.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().WorkId);
-            }
-            var requests = provider.Requests;
-            provider.IsUnavailable = true;
-            await host.Fixture.RunSqlAsync("""
-                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (700, 2, 1, 'Imported series');
-                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (700, 'anilist', '21');
-                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (700, 'Poster', '/api/v1/covers/works/700/poster?v=1', TRUE);
-                """);
-            foreach (var ranking in new[] { DiscoverFeedType.Top, DiscoverFeedType.New })
-            {
-                using var cached = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, ranking, MediaSubtype.Anime));
-                Assert.AreEqual(HttpStatusCode.OK, cached.StatusCode, await cached.Content.ReadAsStringAsync());
-                var item = (await cached.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single();
-                Assert.AreEqual(700L, item.WorkId);
-                Assert.AreEqual("/api/v1/covers/works/700/poster?v=1", item.PosterUrl);
-            }
-            Assert.AreEqual(requests, provider.Requests, "Warm rankings must not ask the unavailable provider.");
-            await host.Fixture.RunSqlAsync("INSERT INTO \"ProfileMediaRules\" (\"ProfileId\", \"MediaSubtypeId\", \"IsBlocked\") VALUES (101, 1, TRUE)");
-            using var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Top, MediaSubtype.Anime));
-            Assert.AreEqual(HttpStatusCode.NotFound, blocked.StatusCode, await blocked.Content.ReadAsStringAsync());
-            Assert.AreEqual(requests, provider.Requests);
-        }
+            var tmdb = new FakeTmdb();
+            await using var host = await CreateHostAsync(fake: tmdb);
+            await host.Fixture.RunSqlAsync("UPDATE \"MediaTypes\" SET \"IsEnabled\" = FALSE WHERE \"Id\" <> 1");
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\" WHERE \"CanonicalTitle\" = 'The Matrix'"))!;
 
-        [TestMethod]
-        public async Task Catalog_StaleAnimeTrending_SurvivesProviderFailureAndCooldown()
-        {
-            var provider = new FakeAniList();
-            await using var host = await CreateHostAsync(anime: provider);
-            var input = new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime);
-            using var first = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", input);
-            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
-            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorks\" SET \"FetchedAt\" = now() - interval '7 hours', \"Title\" = 'Kept stale season' WHERE \"Namespace\" = 'anilist'");
-            provider.IsUnavailable = true;
-            using var stale = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", input);
-            Assert.AreEqual(HttpStatusCode.OK, stale.StatusCode, await stale.Content.ReadAsStringAsync());
-            Assert.AreEqual("Kept stale season", (await stale.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().Title);
-            var requests = provider.Requests;
-            using var cooldown = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", input);
-            Assert.AreEqual(HttpStatusCode.OK, cooldown.StatusCode, await cooldown.Content.ReadAsStringAsync());
-            Assert.AreEqual("Kept stale season", (await cooldown.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().Title);
-            Assert.AreEqual(requests, provider.Requests, "The provider cooldown must also apply to stale-cache reads.");
+            async Task Refresh()
+            {
+                await using var scope = host.Services.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<RefreshDiscoverFeedsV1>().ExecuteAsync<UpdateResult>(new RefreshDiscoverFeedsParametersV1(), default);
+            }
+            await Refresh();
+            Assert.AreEqual(5L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkFeeds\" WHERE \"RefreshedAt\" IS NOT NULL"));
+            var calls = tmdb.Requests.Count;
+            await Refresh();
+            Assert.AreEqual(calls, tmdb.Requests.Count, "Lists that are not due must not be fetched again.");
+
+            using var recommendations = await host.SendAsync(HttpMethod.Post, $"/api/v1/works/{workId}/recommendations");
+            Assert.AreEqual(HttpStatusCode.OK, recommendations.StatusCode, await recommendations.Content.ReadAsStringAsync());
+            Assert.IsNull((await recommendations.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().WorkId);
+            using var next = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/604/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, next.StatusCode, await next.Content.ReadAsStringAsync());
+            var afterImport = tmdb.Requests.Count;
+            using var updated = await host.SendAsync(HttpMethod.Post, $"/api/v1/works/{workId}/recommendations");
+            Assert.AreEqual(HttpStatusCode.OK, updated.StatusCode, await updated.Content.ReadAsStringAsync());
+            var item = (await updated.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single();
+            Assert.IsNotNull(item.WorkId, "Private viewer state must be read again, not persisted with public recommendations.");
+            Assert.AreEqual(MediaStateType.Requested, item.MediaStateTypeId);
+            Assert.AreEqual(afterImport, tmdb.Requests.Count);
+
+            await TimeWarmReadsAsync("Recommendations; 2 local Works, 1 result", () => host.SendAsync(HttpMethod.Post, $"/api/v1/works/{workId}/recommendations"));
+            await TimeWarmReadsAsync("TMDB top; 2 local Works, 1 result", () => host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top)));
+            Assert.AreEqual(afterImport, tmdb.Requests.Count);
+
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkFeeds\" SET \"RefreshedAt\" = now() - interval '13 hours'");
+            tmdb.IsUnavailable = true;
+            await Assert.ThrowsExactlyAsync<ServiceUnavailableException>(Refresh);
+            using var old = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top));
+            Assert.AreEqual(HttpStatusCode.OK, old.StatusCode, await old.Content.ReadAsStringAsync());
+            Assert.AreEqual("The Matrix", (await old.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().Title);
+            Assert.AreEqual(5L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkFeeds\" WHERE \"RefreshedAt\" IS NOT NULL"));
         }
 
         [TestMethod]
@@ -754,12 +815,39 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(list, "Use this match");
         }
 
+        private async Task TimeWarmReadsAsync(string name, Func<Task<HttpResponseMessage>> request)
+        {
+            if (Environment.GetEnvironmentVariable("JULARR_TEST_CACHE_TIMING") != "1") return;
+            async Task<double[]> Measure(int count)
+            {
+                var samples = new double[count];
+                for (var i = 0; i < count; i++)
+                {
+                    var watch = global::System.Diagnostics.Stopwatch.StartNew();
+                    using var response = await request();
+                    Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                    samples[i] = watch.Elapsed.TotalMilliseconds;
+                }
+                return samples;
+            }
+            foreach (var concurrency in new[] { 1, 4 })
+            {
+                var samples = (await Task.WhenAll(Enumerable.Range(0, concurrency).Select(_ => Measure(100 / concurrency)))).SelectMany(values => values).Order().ToArray();
+                TestContext.WriteLine($"Cache timing {name}: pooling enabled; 100 authenticated in-process HTTP requests; concurrency={concurrency}; P50={samples[49]:F1}ms; P95={samples[94]:F1}ms; Max={samples[^1]:F1}ms.");
+            }
+        }
+
         private static async Task<Host> CreateHostAsync(bool razor = false, FakeTmdb? fake = null, FakeAniList? anime = null)
         {
             var tmdb = fake ?? new FakeTmdb();
             var aniList = anime ?? new FakeAniList();
             var host = await Host.CreateAsync(razor: razor, library: true, services: services =>
             {
+                if (Environment.GetEnvironmentVariable("JULARR_TEST_CACHE_TIMING") == "1")
+                {
+                    services.Replace(ServiceDescriptor.Singleton(provider => new SqlDatabase(new NpgsqlDataSourceBuilder(new NpgsqlConnectionStringBuilder(
+                        provider.GetRequiredService<IConfiguration>()["JULARR_DB"]!) { Pooling = true }.ConnectionString).Build())));
+                }
                 services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => tmdb);
                 services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList);
             });

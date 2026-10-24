@@ -11,7 +11,7 @@ using static Jularr.Backend.Tests.DatabaseBaselineTests;
 
 namespace Jularr.Backend.Tests
 {
-    // The migration mechanism after the release freeze: migrations of the test assembly stand in for the production ones (there are none yet),
+    // The migration mechanism after the release freeze: explicit test migrations use a version-1 fixture independently of production migrations,
     // and a script stands in for pg_dump so the backup-first rule is tested without the PostgreSQL client.
     [TestClass]
     public sealed class DatabaseMigrationTests
@@ -57,6 +57,23 @@ namespace Jularr.Backend.Tests
             """);
 
         [TestMethod]
+        public async Task Upgrade_ProductionFeedMigration_PreservesVersionOneDataAndBacksUpOnce()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_ProductionFeedMigration_PreservesVersionOneDataAndBacksUpOnce));
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            var options = Backup(folder.Path, out var backups);
+            var current = new DatabaseBaseline(cs, options, Tools(cs, FakeDump(folder.Path, true), null));
+            await current.StartAsync(CancellationToken.None);
+            await current.StartAsync(CancellationToken.None);
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+            Assert.AreEqual("Kept Film", await ScalarAsync(cs, "SELECT \"CanonicalTitle\" FROM \"Works\" WHERE \"Id\" = 501"));
+            Assert.AreEqual(2L, await ScalarAsync(cs, "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('ExternalWorkFeeds', 'ExternalWorkFeedItems')"));
+            Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
+        }
+
+        [TestMethod]
         public async Task Upgrade_AppliesNumberedMigrations_AfterABackup_KeepsData_AndIsConcurrencySafe()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
@@ -65,7 +82,7 @@ namespace Jularr.Backend.Tests
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
 
             // Version 1 with data and nothing pending: no backup.
-            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, options, tools, migrations: []).StartAsync(CancellationToken.None);
             await InsertWorkAsync(cs);
             Assert.AreEqual(0, Directory.GetDirectories(backups).Length);
 
@@ -96,7 +113,7 @@ namespace Jularr.Backend.Tests
             var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_FailingMigration_RollsEverythingBack_KeepsTheBackup_AndRetries));
             var options = Backup(folder.Path, out var backups);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
-            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, options, tools, migrations: []).StartAsync(CancellationToken.None);
             await InsertWorkAsync(cs);
 
             var broken = new DatabaseBaseline(cs, options, tools, [Probe(2, AddColumnAndTable), Probe(3, "ALTER TABLE \"Works\" ADD COLUMN \"Broken\" int NOT NULL;")]);
@@ -120,7 +137,7 @@ namespace Jularr.Backend.Tests
             using var folder = new LibraryTests.TemporaryDirectory();
             var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_FailedBackup_AbortsBeforeAnyMigration));
             var options = Backup(folder.Path, out var backups);
-            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
             await InsertWorkAsync(cs);
 
             var failing = new DatabaseBaseline(cs, options, Tools(cs, FakeDump(folder.Path, false), null), [Probe(2, AddColumnAndTable)]);
@@ -138,7 +155,7 @@ namespace Jularr.Backend.Tests
             var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_ChangedChecksumOfAnAppliedMigration_RefusesToStart));
             var options = Backup(folder.Path, out var backups);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
-            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, options, tools, migrations: []).StartAsync(CancellationToken.None);
             await InsertWorkAsync(cs);
             await new DatabaseBaseline(cs, options, tools, [Probe(2, AddColumnAndTable)]).StartAsync(CancellationToken.None);
 
@@ -156,10 +173,10 @@ namespace Jularr.Backend.Tests
         {
             using var folder = new LibraryTests.TemporaryDirectory();
             var cs = TestPostgres.ResolveConnectionString(nameof(LegacyBaselineDatabase_WithoutVersionTable_IsMarkedVersionOne_WithoutABackup));
-            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
             await ExecuteAsync(cs, "UPDATE \"InstanceSettings\" SET \"Name\" = 'legacy'; DROP TABLE \"DatabaseSchemaVersions\";");
 
-            var legacy = new DatabaseBaseline(cs, new BackupOptions { Path = folder.Path });
+            var legacy = new DatabaseBaseline(cs, new BackupOptions { Path = folder.Path }, migrations: []);
             await legacy.StartAsync(CancellationToken.None);
             Assert.AreEqual("legacy", await ScalarAsync(cs, "SELECT \"Name\" FROM \"InstanceSettings\";"));
             Assert.AreEqual(1, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
@@ -188,7 +205,7 @@ namespace Jularr.Backend.Tests
             using var folder = new LibraryTests.TemporaryDirectory();
             var cs = TestPostgres.ResolveConnectionString(nameof(LegacyBaselineDatabase_WithAPendingMigration_BacksUpThenMarksVersionOneAndMigrates));
             var options = Backup(folder.Path, out var backups);
-            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
             await InsertWorkAsync(cs);
             await ExecuteAsync(cs, "DROP TABLE \"DatabaseSchemaVersions\";");
 
@@ -202,7 +219,7 @@ namespace Jularr.Backend.Tests
         public async Task DatabaseUpgrade_FailedUpdate_IsReturnedForTheMaintenancePage_AndACurrentDatabaseReturnsNull()
         {
             var cs = TestPostgres.ResolveConnectionString(nameof(DatabaseUpgrade_FailedUpdate_IsReturnedForTheMaintenancePage_AndACurrentDatabaseReturnsNull));
-            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
 
             // Without a backup tool the pending migration cannot start.
             using var failing = new ServiceCollection().AddLogging()
@@ -211,7 +228,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("backup", failure!.Migration);
             Assert.AreEqual(1, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
 
-            using var current = new ServiceCollection().AddLogging().AddSingleton(new DatabaseBaseline(cs)).BuildServiceProvider();
+            using var current = new ServiceCollection().AddLogging().AddSingleton(new DatabaseBaseline(cs, migrations: [])).BuildServiceProvider();
             Assert.IsNull(await DatabaseUpgrade.RunAsync(current));
         }
 

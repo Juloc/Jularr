@@ -46,7 +46,7 @@ namespace Jularr.Frontend.Pages.Admin.Transcoding
             // The last run with what it proposes; running or failed it says so.
             var facts = new List<(string, IUiComponent)>
             {
-                ("admin.transcoding.ranAt", benchmark.RanAt is { } ranAt ? new ValueText(ranAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)) : new Text("admin.transcoding.never"))
+                ("admin.transcoding.ranAt", benchmark.RanAt is { } ranAt ? new LocalTime(ranAt) : new Text("admin.transcoding.never"))
             };
             if (benchmark.RanAt is not null)
             {

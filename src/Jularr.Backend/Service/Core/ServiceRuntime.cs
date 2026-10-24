@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Infrastructure.Sql;
 using Npgsql;
 
@@ -9,7 +10,7 @@ namespace Jularr.Backend.Service.Core
         Task RequireModulesAsync(ModuleRequirement modules, LogicContext context, bool canMutate, CancellationToken cancellationToken);
         Task<ServiceCaller> RequireCallerAsync(ServiceArea area, CancellationToken cancellationToken);
         Task RequireAccessAsync(ServiceCaller caller, ServicePermission permission, CancellationToken cancellationToken);
-        Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken);
+        Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken, SqlAccessMode mode = SqlAccessMode.ReadWrite);
     }
 
     internal sealed class ServiceRuntime(NpgsqlDataSource database, IServiceGate gate, ServiceTimings timings)

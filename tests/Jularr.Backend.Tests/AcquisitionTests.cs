@@ -1548,7 +1548,7 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
             var seeded = await ReadProfilesAsync(host);
             var books = seeded.Single(profile => profile.MediaTypeId == MediaType.Book && profile.MediaSubtypeId == null && profile.IsDefault);
-            Assert.AreEqual(LanguageFallbackType.Original, books.LanguageFallback);
+            Assert.AreEqual(LanguageFallbackType.Any, books.LanguageFallback);
             Assert.AreEqual(0, books.LanguageOrder.Length);
 
             // The profile names the languages of the choice and the fallback.

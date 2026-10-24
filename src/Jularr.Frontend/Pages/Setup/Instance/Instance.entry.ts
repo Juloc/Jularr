@@ -12,6 +12,7 @@ function setup(panel: HTMLElement): void {
     const choices = panel.querySelector<HTMLElement>(".option-presets");
     if (choices) choices.hidden = false;
     const modules = () => Array.from(panel.querySelectorAll<HTMLElement>("[data-module]"));
+    const media = () => Array.from(panel.querySelectorAll<HTMLElement>("[data-media]"));
     const rowOf = (key: string) => panel.querySelector<HTMLElement>(`[data-module="${key}"]`);
     const timers = new WeakMap<Element, number>();
 
@@ -29,13 +30,19 @@ function setup(panel: HTMLElement): void {
         for (const group of Array.from(panel.querySelectorAll<HTMLElement>(".option-group"))) {
             const boxes = Array.from(group.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
             const count = group.querySelector<HTMLElement>("[data-option-count]");
-            if (count) count.textContent = (panel.dataset.setupCount ?? "{0}/{1}").replace("{0}", String(boxes.filter(box => box.checked).length)).replace("{1}", String(boxes.length));
+            const active = boxes.filter(box => box.checked).length;
+            if (count) count.textContent = (panel.dataset.setupCount ?? "{0}/{1}").replace("{0}", String(active)).replace("{1}", String(boxes.length));
+            if (group.closest(".option-groups--extras")) group.dataset.hasEnabled = String(active > 0);
         }
 
         const on = new Set(switchesOf(panel).filter(item => item.on).map(item => item.key));
         for (const button of Array.from(panel.querySelectorAll<HTMLElement>("[data-setup-preset]"))) {
             const set = presets[button.dataset.setupPreset ?? ""] ?? [];
-            button.setAttribute("aria-pressed", String(set.length === on.size && set.every(key => on.has(key))));
+            // "Complete" means every feature AND every media type/subtype,
+            // not merely every instance module.
+            const allMediaOn = media().every(row => boxOf(row)?.checked === true);
+            const matchesModules = set.length === on.size && set.every(key => on.has(key));
+            button.setAttribute("aria-pressed", String(matchesModules && (button.dataset.setupPreset !== "complete" || allMediaOn)));
         }
     }
 
@@ -84,6 +91,12 @@ function setup(panel: HTMLElement): void {
                 if (box) box.checked = selected.has(row.dataset.module ?? "");
             }
             for (const key of selected) cascade(key);
+            if (button.dataset.setupPreset === "complete") {
+                for (const row of media()) {
+                    const box = boxOf(row);
+                    if (box) box.checked = true;
+                }
+            }
             modules().forEach(item => reason(item, ""));
             refresh();
         });

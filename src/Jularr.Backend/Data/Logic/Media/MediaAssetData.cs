@@ -78,6 +78,26 @@ namespace Jularr.Backend.Data.Logic.Media
         public long? MediaAssetId { get; }
     }
 
+    // A further episode a file covers besides its primary unit.
+    internal sealed class MediaAssetCoverageData : BaseData
+    {
+        public MediaAssetCoverageData(long mediaAssetId, long workId, long workUnitId)
+        {
+            MediaAssetId = mediaAssetId;
+            WorkId = workId;
+            WorkUnitId = workUnitId;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitId))]
+        public long WorkUnitId { get; }
+    }
+
     internal sealed class WorkIdData : BaseData
     {
         public WorkIdData(long id)

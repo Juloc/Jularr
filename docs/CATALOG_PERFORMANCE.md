@@ -49,11 +49,11 @@ dotnet test tests/Jularr.Backend.Tests --configuration Release --filter 'FullyQu
 
 `JULARR_TEST_CATALOG_CASE=shelves` selects the batch alone; unset it for all cases. `JULARR_TEST_LIBRARY_ANALYZE=0` skips additional global statistics preparation, retaining the production completion owner's catalog statistics. The test attaches JSON responses and optional SQL plans to its TRX result directory, reports service/HTTP latency, and fails the configured service-P95 budget. The ordinary Library benchmark reuses the same inventory seed.
 
-## Cached-provider fallback, 24 October 2026
+## Cached-provider fallback before persistent-cache integration, 24 October 2026
 
-The follow-up also measures Discover without a completed local catalog. The same inventory contains only twenty ranked trending entries per source; the remaining catalog rows represent previously discovered titles. Local discovery is disabled and sync completion is not published. Trending uses the fresh database cache; Anime Top/New use the existing six-hour public metadata cache. Every outbound provider request throws in this mode, so a passing benchmark cannot silently measure a provider response.
+The follow-up also measures Discover without a completed local catalog. The same inventory contains only twenty ranked trending entries per source; the remaining catalog rows represent previously discovered titles. Local discovery is disabled and sync completion is not published. In the original measurement, Trending used the fresh database cache and Anime Top/New used the six-hour public metadata cache. The current fixture seeds Top/New through SaveExternalFeedAsync into the persistent feed tables from #1587. Every outbound provider request throws in this mode, so a passing benchmark cannot silently measure a provider response.
 
-`ReadDiscoverCatalogFeedV1` now checks the canonical profile categories and local-catalog readiness in one centrally authorized batch. Whole-catalog rows, when available, are read in that batch too. `MetadataCatalog` resolves known Works inside the fresh-trending batch and goes directly to the identity lookup for a warm Top/New cache entry. Provider calls remain outside database transactions. Ranking, six-hour expiry, provider failure cooldown, stale-trending fallback and profile rules retain their existing behavior. Cached metadata never stores a profile's access decision or the derived Work/owned-cover mapping.
+The original batching change made `ReadDiscoverCatalogFeedV1` check the canonical profile categories and local-catalog readiness in one centrally authorized batch. Whole-catalog rows, when available, are read in that batch too. `MetadataCatalog` resolves known Works inside the fresh-trending batch and goes directly to the identity lookup for a warm Top/New cache entry. Provider calls remain outside database transactions. These historical measurements retained the then-existing six-hour expiry and stale-read fallback. #1587 subsequently moved renewal to the System worker; reads no longer decide freshness. Cached metadata never stores a profile's access decision or the derived Work/owned-cover mapping.
 
 Release build and analyzed fixture statistics, 100 warm calls per case before and after, excluding two initial calls:
 
@@ -73,3 +73,20 @@ All eight JSON responses were byte-identical to the reference. Final HTTP P95 ra
 The local timing results vary: the first batching stage still failed Top at 114.2 ms P95, and the first run with the final batching failed New at 166.4 ms P95. The final diagnostic run above passed all eight budgets without further runtime changes. It still recorded two individual Film trending calls at 127.7/104.4 ms, with logged SQL totals of 23/33 ms respectively. Consequently this evidence supports lower query/transaction overhead and one passing warm P95 run; it does not establish a stable production or concurrent-load latency guarantee. Provider misses, stale refresh network time and cold statistics are outside this cached-mode result.
 
 To reproduce, add `$env:JULARR_TEST_CATALOG_CACHE_ONLY = '1'` to the command above and leave `JULARR_TEST_LIBRARY_ANALYZE` unset. Unset the cache-only variable to restore the whole-catalog benchmark. Slow measured samples log both service/HTTP time and total SQL time to distinguish query work from other elapsed time.
+
+### Integration with persisted feeds
+
+The batching implementation is already included in #1587. #1561 retains its additional access/owned-cover regression tests and the provider-blocked benchmark without restoring the retired memory-cache or read-time expiry path. Its fixture writes Top/New through the canonical feed writer. Three integration cases passed without skips, including the eight-case benchmark with 100 measured requests per case on the same 411-Work/110,000-catalog-entry isolated inventory.
+
+| Read | Service P95, ms | HTTP P95, ms |
+| --- | ---: | ---: |
+| Film details | 18.8 | 23.4 |
+| Series with files | 22.2 | 27.3 |
+| Series without files | 18.3 | 22.0 |
+| Film cached trending | 22.4 | 26.5 |
+| Anime cached trending | 16.8 | 19.8 |
+| Anime cached top | 16.8 | 20.1 |
+| Anime cached new | 18.1 | 22.2 |
+| Books cached trending | 17.4 | 21.8 |
+
+These are local sequential integration measurements, not production or concurrent-load acceptance. TRX: `cached-discover-persistent-integration.trx`.
