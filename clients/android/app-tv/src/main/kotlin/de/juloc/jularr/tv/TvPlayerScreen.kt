@@ -98,6 +98,7 @@ fun TvPlayerScreen(
     remoteCommand: PlaybackCommand? = null,
     companionVisible: Boolean = false,
     onCloseCompanion: () -> Unit = {},
+    onOpenCompanion: (() -> Unit)? = null,
     companionOverlay: (@Composable () -> Unit)? = null,
     onExit: () -> Unit,
     onSetTermState: (termId: String, state: String) -> Unit,
@@ -560,6 +561,7 @@ fun TvPlayerScreen(
                         }
                     },
                     onExit = onExit,
+                    onOpenCompanion = onOpenCompanion,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
