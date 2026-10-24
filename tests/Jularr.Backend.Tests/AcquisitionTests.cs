@@ -300,7 +300,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 7"));
-            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+            // A terminal import schedules durable cleanup for the next monitoring cycle.
+            await RunAsync<MonitorDownloadsV1>(host);
+            CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
 
             // Once finished it is no longer in the queue to be imported again.
             using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import/files");
@@ -373,7 +375,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("fre", await host.ScalarAsync("SELECT array_to_string(\"ChosenAudioLanguages\", ',') FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE 'Other Movie%'"));
             Assert.AreEqual("ger", await host.ScalarAsync("SELECT array_to_string(\"ChosenSubtitleLanguages\", ',') FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE 'Other Movie%'"));
             Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"ChosenSubtitleLanguages\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE 'Example Movie%'"));
-            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+            // A terminal import schedules durable cleanup for the next monitoring cycle.
+            await RunAsync<MonitorDownloadsV1>(host);
+            CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
         }
 
         // A download imported in parts keeps waiting with what was imported; it finishes when the person says so, and not before there is something imported.
@@ -412,8 +416,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, finished.Imported);
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
-            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
-            Assert.IsTrue(File.Exists(Path.Combine(downloads.Path, "movies", Feature, "third.mkv")), "A file nobody imported stays where it is.");
+            // A terminal import schedules durable cleanup for the next monitoring cycle.
+            await RunAsync<MonitorDownloadsV1>(host);
+            CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+            Assert.IsFalse(File.Exists(Path.Combine(downloads.Path, "movies", Feature, "third.mkv")), "Explicitly finishing the import permits cleanup of the remaining source folder.");
         }
 
         // A language a person chose stays through the scan that analyses the file; the streams only decide for files nobody chose for.
@@ -603,7 +609,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
         }
 
-        // After an import the job leaves SABnzbd with its files; the connection can keep it, and an unreachable client never fails an import that worked.
+        // After a successful import the terminal job and completed source are cleaned up by default; the connection may opt out.
         [TestMethod]
         public async Task CompletedSabImport_RemovesItsJobFromTheClient_UnlessTheConnectionKeepsIt()
         {
@@ -613,7 +619,7 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RemovesCompleted\" FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 2"));
             await ImportClearFilmAsync(host, downloads, usenet);
-            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+            CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
         }
 
         [TestMethod]
@@ -1253,7 +1259,7 @@ namespace Jularr.Backend.Tests
             usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/{{{Feature}}}"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
 
-            Assert.IsTrue(File.Exists(Path.Combine(completed, Feature + ".mkv")), "Jularr must not delete SABnzbd's completed source.");
+            Assert.IsFalse(File.Exists(Path.Combine(completed, Feature + ".mkv")), "After successful import, source cleanup is enabled by default.");
             Assert.AreEqual("existing", File.ReadAllText(Path.Combine(library, "Example Movie (2020) [WEBDL-1080p].mkv")));
             Assert.IsFalse(File.Exists(Path.Combine(library, "Example Movie (2020) [DVD].mkv")));
             Assert.AreEqual("earlier", File.ReadAllText(Path.Combine(storage.Path, "1", "Movies", ".jularr-recycle", "Example Movie (2020)", "Example Movie (2020) [DVD].mkv")));
