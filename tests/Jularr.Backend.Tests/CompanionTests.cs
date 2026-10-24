@@ -25,7 +25,7 @@ namespace Jularr.Backend.Tests
             var invitation = (await invite.Content.ReadFromJsonAsync<CompanionInvitationV1>())!;
             Assert.IsTrue(invitation.ExpiresAt > DateTime.UtcNow);
             Assert.IsTrue(invitation.ExpiresAt < DateTime.UtcNow.AddMinutes(6));
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"PlaybackCompanionInvitations\" WHERE \"TokenHash\" = decode('00', 'hex')"));
+            Assert.AreEqual(32, await host.ScalarAsync("SELECT octet_length(\"TokenHash\") FROM \"PlaybackCompanionInvitations\""));
 
             using var granted = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/companion/claims", new ClaimCompanionDataV1(invitation.Token));
             Assert.AreEqual(HttpStatusCode.OK, granted.StatusCode, await granted.Content.ReadAsStringAsync());
@@ -133,6 +133,56 @@ namespace Jularr.Backend.Tests
 
             using var second = await host.SendAsAppAsync(HttpMethod.Post, InvitePath(playbackId), tvToken);
             Assert.AreEqual(HttpStatusCode.NotFound, second.StatusCode);
+        }
+
+
+        [TestMethod]
+        public async Task ControllerProfileChange_InvalidatesClaimAndCommands()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            var (tvToken, playbackId) = await PrepareTvAsync(host, storage.Path);
+            var grant = await PairAsync(host, tvToken, playbackId);
+
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId")
+                SELECT 901, 41, 'Other', "UiLocaleId" FROM "Profiles" WHERE "Id" = 101;
+                INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 901);
+                UPDATE "AccountSessions"
+                SET "ActiveProfileId" = 901
+                WHERE "DevicePlatform" IS NULL AND "RevokedAt" IS NULL;
+                """);
+
+            using var denied = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/companion/" + grant.Id);
+            Assert.AreEqual(HttpStatusCode.NotFound, denied.StatusCode);
+            using var command = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/companion/" + grant.Id + "/commands",
+                new QueueCompanionCommandDataV1(Guid.NewGuid(), 0, "play", null));
+            Assert.AreEqual(HttpStatusCode.NotFound, command.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task RevokedGrant_ReclaimCannotRevivePendingCommands()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            var (tvToken, playbackId) = await PrepareTvAsync(host, storage.Path);
+            var grant = await PairAsync(host, tvToken, playbackId);
+            using var heartbeat = await host.SendAsAppAsync(HttpMethod.Put, OwnerPath(playbackId) + "/state", tvToken,
+                new CompanionReportStateDataV1(0, false, 0, 60_000));
+            Assert.AreEqual(HttpStatusCode.OK, heartbeat.StatusCode);
+
+            using var queued = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/companion/" + grant.Id + "/commands",
+                new QueueCompanionCommandDataV1(Guid.NewGuid(), 0, "play", null));
+            Assert.AreEqual(HttpStatusCode.OK, queued.StatusCode);
+
+            using var revoke = await host.SendAsync(HttpMethod.Delete, "/api/v1/playback/companion/" + grant.Id);
+            Assert.AreEqual(HttpStatusCode.OK, revoke.StatusCode);
+            var revived = await PairAsync(host, tvToken, playbackId);
+            Assert.AreEqual(grant.Id, revived.Id);
+
+            using var next = await host.SendAsAppAsync(HttpMethod.Post, OwnerPath(playbackId) + "/next", tvToken);
+            Assert.AreEqual(HttpStatusCode.OK, next.StatusCode);
+            Assert.IsNull((await next.Content.ReadFromJsonAsync<CompanionPendingCommandV1>())!.Id);
         }
 
         private static string OwnerPath(Guid id) => "/api/v1/playback/sessions/" + id + "/companion";

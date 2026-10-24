@@ -27,9 +27,9 @@ namespace Jularr.Frontend.Pages.User.Companion
                     ).Attribute("data-companion-claim", "").Class("companion__claim"),
                     new P(new Text("companion.inviteHint")).Class("companion__hint")
                 ).Class("companion__pair").Attribute("data-companion-pair", ""),
+                new P(new Text("companion.disconnected")).Attribute("data-companion-status", "").Attribute("role", "status").Attribute("aria-live", "polite"),
+                new P(new ValueText("")).Attribute("data-companion-feedback", "").Attribute("role", "alert"),
                 new Div(
-                    new P(new Text("companion.disconnected")).Attribute("data-companion-status", "").Attribute("role", "status").Attribute("aria-live", "polite"),
-                    new P(new ValueText("")).Attribute("data-companion-feedback", "").Attribute("role", "alert"),
                     new Div(
                         new Button(new Text("companion.play")).Attribute("data-companion-command", "play").Attribute("disabled", "disabled"),
                         new Button(new Text("companion.pause")).Attribute("data-companion-command", "pause").Attribute("disabled", "disabled"),
@@ -45,6 +45,7 @@ namespace Jularr.Frontend.Pages.User.Companion
             ).Class("companion").Attribute("data-companion", "")
                 .Attribute("data-csrf", csrf)
                 .Attribute("data-status-online", texts["companion.connected"])
+                .Attribute("data-status-disconnected", texts["companion.disconnected"])
                 .Attribute("data-status-offline", texts["companion.connectionLost"])
                 .Attribute("data-status-pending", texts["companion.pending"])
                 .Attribute("data-status-failed", texts["companion.failed"])

@@ -62,6 +62,7 @@ function setup(): void {
         const paired = grant !== null;
         pair.hidden = paired;
         controls.hidden = !paired;
+        if (!paired) status.textContent = message('statusDisconnected');
         const live = !!current?.reportedAt && Date.now() - Date.parse(current.reportedAt) < liveWithinMs;
         const enabled = paired && live && !pending;
 
@@ -190,6 +191,7 @@ function setup(): void {
         if (!token || grant) return;
         connect.disabled = true;
         feedback.textContent = '';
+        status.textContent = message('statusPending');
         try {
             const result = await api<CompanionGrant>('/api/v1/playback/companion/claims', 'POST', { token });
             tokenInput.value = '';
