@@ -41,6 +41,7 @@ namespace Jularr.Integrations.Logic.Browser
         private readonly BrowserOptions _options;
         private readonly SemaphoreSlim _gate = new(1, 1);
         private readonly string? _path;
+        private readonly BrowserPackages? _packages;
         private readonly string _profile;
         private readonly string _downloads;
         private readonly List<SourceBrowserEvent> _events = [];
@@ -54,17 +55,21 @@ namespace Jularr.Integrations.Logic.Browser
         private string? _lastError;
         private DateTime? _lastAttemptAt;
 
-        public SourceBrowser(BrowserOptions options)
+        public SourceBrowser(BrowserOptions options, BrowserPackages? packages = null)
         {
             _options = options;
+            _packages = packages;
             _path = ResolvePath(options.Path);
             _profile = Path.Combine(options.ProfilePath, "profile");
             _downloads = Path.Combine(options.ProfilePath, "downloads");
         }
 
-        public bool IsAvailable => _path is not null || !string.IsNullOrWhiteSpace(_options.RemoteAddress);
+        private string? BrowserPath => _path ?? (string.IsNullOrWhiteSpace(_options.Path) && string.IsNullOrWhiteSpace(_options.RemoteAddress)
+            ? BrowserPackages.InstalledExecutable(_options.ProfilePath) : null);
 
-        public SourceBrowserStatus Status => new(_path, _options.RemoteAddress, _profile, _client is not null, _version, _lastUrl, _lastOutcome, _lastError, _lastAttemptAt, Events.Count);
+        public bool IsAvailable => (_packages?.Enabled ?? true) && (BrowserPath is not null || !string.IsNullOrWhiteSpace(_options.RemoteAddress));
+
+        public SourceBrowserStatus Status => new(BrowserPath, _options.RemoteAddress, _profile, _client is not null, _version, _lastUrl, _lastOutcome, _lastError, _lastAttemptAt, Events.Count);
 
         public IReadOnlyList<SourceBrowserEvent> Events
         {
@@ -79,6 +84,7 @@ namespace Jularr.Integrations.Logic.Browser
 
         public async Task<SourceBrowserStatus> StartAsync(CancellationToken ct)
         {
+            if (!IsAvailable) throw new SourceBrowserException("The browser module is disabled or Chrome is not installed.");
             await _gate.WaitAsync(ct);
             try
             {
@@ -535,7 +541,13 @@ namespace Jularr.Integrations.Logic.Browser
 
             // A browser with a chosen port answers the source's check; one that picks its own does not.
             var port = _options.Port > 0 ? _options.Port : FreePort();
+            var executable = BrowserPath ?? throw new SourceBrowserException("Chrome is not installed.");
             var arguments = $"--remote-debugging-port={port} --user-data-dir=\"{_profile}\" --no-first-run --no-default-browser-check --window-size=1280,900 about:blank";
+            if (_packages is not null && executable == _packages.ExecutablePath)
+            {
+                // The optional managed package uses Linux headless mode and does not need a display server.
+                arguments += " --headless=new";
+            }
             if (_options.NoSandbox)
             {
                 arguments += " --no-sandbox";
@@ -544,7 +556,7 @@ namespace Jularr.Integrations.Logic.Browser
             // A browser that does not open its port may have met the remains of an earlier one; it is tried again.
             for (var attempt = 1; attempt <= 3; attempt++)
             {
-                _process = Process.Start(new ProcessStartInfo(_path!) { UseShellExecute = false, Arguments = arguments });
+                _process = Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false, Arguments = arguments });
 
                 // The browser needs a moment before its first page counts.
                 await Task.Delay(StartMilliseconds, ct);

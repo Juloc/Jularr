@@ -104,9 +104,10 @@ namespace Jularr.Integrations.Logic.Browser
             try
             {
                 Enabled = false;
-                if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
-                // The regular browser profile is only ours when no custom path/remote browser was configured.
-                if (string.IsNullOrWhiteSpace(options.Path) && string.IsNullOrWhiteSpace(options.RemoteAddress))
+                var installedByJularr = Directory.Exists(_root);
+                if (installedByJularr) Directory.Delete(_root, recursive: true);
+                // Do not erase an older manually configured browser's profile or unrelated files.
+                if (installedByJularr && string.IsNullOrWhiteSpace(options.Path) && string.IsNullOrWhiteSpace(options.RemoteAddress))
                 {
                     var profile = Path.Combine(options.ProfilePath, "profile");
                     var downloads = Path.Combine(options.ProfilePath, "downloads");
@@ -172,7 +173,7 @@ namespace Jularr.Integrations.Logic.Browser
                 var name = entry.FullName.Replace('\\', '/');
                 if (!name.StartsWith("chrome-" + Platform() + "/", StringComparison.Ordinal)
                     || name.Contains("..", StringComparison.Ordinal) || name.Contains(':', StringComparison.Ordinal)
-                    || name.StartsWith('/', StringComparison.Ordinal))
+                    || name.StartsWith('/'))
                     throw new InvalidDataException("Unsafe browser archive path.");
                 var kind = (entry.ExternalAttributes >> 16) & 0xF000;
                 if (kind is 0xA000 or 0x6000) throw new InvalidDataException("Browser archive contains a link or device.");
@@ -182,7 +183,7 @@ namespace Jularr.Integrations.Logic.Browser
                 var destination = Path.GetFullPath(Path.Combine(stage, name));
                 if (!destination.StartsWith(Path.GetFullPath(stage) + Path.DirectorySeparatorChar, StringComparison.Ordinal))
                     throw new InvalidDataException("Browser archive path escapes the managed directory.");
-                if (name.EndsWith('/', StringComparison.Ordinal))
+                if (name.EndsWith('/'))
                 {
                     Directory.CreateDirectory(destination);
                     continue;
