@@ -80,7 +80,7 @@ h3 { font-size: 13px; font-weight: 780; line-height: 1.35; }
     padding: 12px;
     background: var(--surface);
 }
-.skip-link:focus { top: 12px; }
+.skip-link:focus { top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); }
 // The exchangeable page area adds no box of its own; it stays invisible until a new page's styles apply.
 .app-content { display: contents; }
 .app-content--loading { visibility: hidden; }

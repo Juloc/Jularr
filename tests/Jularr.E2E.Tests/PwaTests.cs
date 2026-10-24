@@ -8,6 +8,38 @@ namespace Jularr.E2E.Tests
     public sealed class PwaTests
     {
         [TestMethod]
+        [Timeout(180_000)]
+        public async Task ExpiredSession_FromBoostedLink_SignsInAndRestoresDeepLink()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            await Owner.SetUpAndSignInAsync(page);
+            await page.GotoAsync("/Admin/Jobs");
+
+            var paused = page.GetByRole(AriaRole.Navigation, new() { Name = "Job states" }).GetByRole(AriaRole.Link, new() { Name = "Paused" });
+            var href = await paused.GetAttributeAsync("href");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(href));
+            var requested = new Uri(jularr.Address, href).PathAndQuery;
+
+            // The document is still running its old session when the browser loses the cookie.
+            await browser.Context.ClearCookiesAsync();
+            await paused.ClickAsync();
+            await page.WaitForURLAsync(url => url.Contains("/Account/Login?ReturnUrl=", StringComparison.Ordinal));
+
+            var query = new Uri(page.Url).Query.TrimStart('?');
+            var encodedReturn = query.Split('&').Single(part => part.StartsWith("ReturnUrl=", StringComparison.OrdinalIgnoreCase))["ReturnUrl=".Length..];
+            Assert.AreEqual(requested, Uri.UnescapeDataString(encodedReturn), "The PWA login must preserve the destination of the interrupted GET.");
+
+            await page.FillAsync("[name=Username]", Owner.Username);
+            await page.FillAsync("[name=Password]", Owner.Password);
+            await page.Locator("main form button[type=submit]").First.ClickAsync();
+            await page.WaitForURLAsync(url => new Uri(url).PathAndQuery == requested);
+            Assert.AreEqual(requested, new Uri(page.Url).PathAndQuery);
+            await Assertions.Expect(page.Locator("#app-content")).ToBeVisibleAsync();
+        }
+
+        [TestMethod]
         [Timeout(300_000)]
         public async Task WorkerRegistered_ManifestAndIconsServed_AndNavigationLoginSwapsLiveAndRangesStillWork()
         {

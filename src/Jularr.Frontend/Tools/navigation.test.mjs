@@ -8,9 +8,9 @@ const source = readFileSync(new URL('../Modules/Navigation/Navigation.ts', impor
 const script = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 const module = { exports: {} };
 runInNewContext(script, { exports: module.exports, module, URL });
-const { hasNewBuild, staysInApp } = module.exports;
+const { hasNewBuild, redirectedToSignIn, signInForExpiredPage, staysInApp } = module.exports;
 
-const current = { href: 'https://jularr.test/Details/1', origin: 'https://jularr.test', pathname: '/Details/1', search: '' };
+const current = { href: 'https://jularr.test/Details/1', origin: 'https://jularr.test', pathname: '/Details/1', search: '', hash: '' };
 const element = (attributes = {}, dataset = {}) => ({
     target: attributes.target ?? '', dataset,
     hasAttribute: name => name in attributes
@@ -41,4 +41,28 @@ test('htmx responses from a different frontend build require a full navigation',
     assert.equal(hasNewBuild('aaaa1111', '<div>partial response without document version</div>'), false);
     assert.equal(hasNewBuild(undefined, html('bbbb2222')), false);
     assert.equal(hasNewBuild('aaaa1111', undefined), false);
+});
+
+
+test('expired in-place navigation returns to the requested local GET after sign-in', () => {
+    assert.equal(signInForExpiredPage('GET', '/Details/17?season=3#episodes', current),
+        '/Account/Login?ReturnUrl=%2FDetails%2F17%3Fseason%3D3%23episodes');
+    assert.equal(signInForExpiredPage('GET', 'https://other.test/x', current),
+        '/Account/Login?ReturnUrl=%2FDetails%2F1');
+});
+
+test('expired POST never repeats a mutation on return from login', () => {
+    assert.equal(signInForExpiredPage('POST', '/Details/17?handler=Delete', current),
+        '/Account/Login?ReturnUrl=%2FDetails%2F1');
+    assert.equal(signInForExpiredPage('GET', '/Account/Login', current),
+        '/Account/Login?ReturnUrl=%2FDetails%2F1');
+});
+
+test('a followed authentication redirect must not render the login document in the app shell', () => {
+    assert.equal(redirectedToSignIn('https://jularr.test/Account/Login?ReturnUrl=%2FDetails%2F17', '/Details/17', current), true);
+    assert.equal(redirectedToSignIn('/Account/Login', '/Details/17', current), true);
+    assert.equal(redirectedToSignIn('https://evil.test/Account/Login', '/Details/17', current), false);
+    assert.equal(redirectedToSignIn('/Account/Login', '/Account/Login', current), false);
+    assert.equal(redirectedToSignIn('/Details/17', '/Details/17', current), false);
+    assert.equal(redirectedToSignIn(undefined, '/Details/17', current), false);
 });

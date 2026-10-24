@@ -22,3 +22,23 @@ export function staysInApp(element: NavigationElement, address: string, current:
     if (url.origin !== current.origin) return false;
     return !FullPagePrefixes.some(prefix => url.pathname.startsWith(prefix));
 }
+
+
+// Expired htmx sessions must navigate through the normal login/profile/PIN flow.
+export function signInForExpiredPage(method: string, address: string, current: Location): string {
+    const requested = new URL(address, current.href);
+    const fallback = current.pathname + current.search + current.hash;
+    const localGet = method.toUpperCase() === "GET" && requested.origin === current.origin && !requested.pathname.startsWith("/Account/");
+    const returnUrl = localGet ? requested.pathname + requested.search + requested.hash : fallback;
+    return "/Account/Login?ReturnUrl=" + encodeURIComponent(returnUrl);
+}
+
+
+// Browsers can follow an authentication redirect and turn the original 302 into a 200 login document.
+export function redirectedToSignIn(responseAddress: string | undefined, requestAddress: string, current: Location): boolean {
+    if (!responseAddress) return false;
+    const response = new URL(responseAddress, current.href);
+    const request = new URL(requestAddress, current.href);
+    return response.origin === current.origin && response.pathname.toLowerCase() === "/account/login"
+        && request.pathname.toLowerCase() !== "/account/login";
+}
