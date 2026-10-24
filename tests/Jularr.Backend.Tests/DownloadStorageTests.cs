@@ -179,6 +179,7 @@ namespace Jularr.Backend.Tests
             using var empty = await host.SendAsync(HttpMethod.Get, route);
             Assert.AreEqual(HttpStatusCode.OK, empty.StatusCode, await empty.Content.ReadAsStringAsync());
             var initial = (await empty.Content.ReadFromJsonAsync<DownloadStorageSettingsV1>())!;
+            Assert.IsFalse(initial.IsConfigured);
             Assert.IsNull(initial.IncompleteStorageMountId);
             Assert.IsNull(initial.FreeSpaceReserveBytes);
             Assert.IsNull(initial.MaxJobBytes);
@@ -192,6 +193,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, confirmed.StatusCode, await confirmed.Content.ReadAsStringAsync());
             using var reread = await host.SendAsync(HttpMethod.Get, route);
             var saved = (await reread.Content.ReadFromJsonAsync<DownloadStorageSettingsV1>())!;
+            Assert.IsTrue(saved.IsConfigured);
             Assert.AreEqual(mountId, saved.IncompleteStorageMountId);
             Assert.AreEqual("Complete", saved.CompletePath);
             Assert.AreEqual(0L, saved.FreeSpaceReserveBytes);
@@ -204,7 +206,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, removal.StatusCode, await removal.Content.ReadAsStringAsync());
             StringAssert.Contains(await removal.Content.ReadAsStringAsync(), "in_use");
             using var direct = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/downloads/2");
-            Assert.IsNull((await direct.Content.ReadFromJsonAsync<DownloadStorageSettingsV1>())!.IncompleteStorageMountId);
+            var directSettings = (await direct.Content.ReadFromJsonAsync<DownloadStorageSettingsV1>())!;
+            Assert.IsFalse(directSettings.IsConfigured);
+            Assert.IsNull(directSettings.IncompleteStorageMountId);
 
             using var stale = await host.SendAsync(HttpMethod.Post, route,
                 new SaveDownloadStorageDataV1(mountId, "Incomplete", mountId, "Complete", 0, null, null, 2, initial.Version, true));

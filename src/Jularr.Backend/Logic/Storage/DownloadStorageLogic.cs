@@ -8,6 +8,17 @@ namespace Jularr.Backend.Logic.Storage
 {
     internal static class DownloadStorageLogic
     {
+        // Configured means the Owner saved both native workspaces and a reserve.
+        // Runtime mount identity and free-space checks remain in DownloadStorage.
+        public static bool IsConfigured(DownloadStorageSettingsData settings) =>
+            settings.IncompleteStorageMountId is not null
+            && settings.CompleteStorageMountId is not null
+            && settings.IncompletePath is not null
+            && settings.CompletePath is not null
+            && settings.IncompleteFilesystemIdentity is not null
+            && settings.CompleteFilesystemIdentity is not null
+            && settings.FreeSpaceReserveBytes is not null;
+
         public static async Task RequireDownloadStorageSettingsAsync(this LogicContext ctx, DownloadStorageSettingsData data, CancellationToken ct)
         {
             var sql = new SqlStatement();

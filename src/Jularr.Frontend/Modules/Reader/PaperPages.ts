@@ -15,6 +15,8 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
     let book: ReturnType<typeof initializeBookRenderer> | undefined;
     let loading: Promise<void> | undefined;
     let failed = false;
+    // Recompute the chapter size only when a layout/content change happens, not on every page turn.
+    let oversized = false;
     // A place asked for before the first layout waits for it; the pages it is measured in do not exist yet.
     let measured = false;
     let waiting: (() => void) | undefined;
@@ -65,7 +67,6 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
             button.disabled = delta < 0 ? spread === 0 && !edge(-1) : spread + 1 >= Math.ceil(pages / columns) && !edge(1);
         });
         const wantsBook = settings.mode === 'paged' && reader.dataset.selecting !== 'true';
-        const oversized = content.textContent!.length > 100_000 || content.querySelectorAll('*').length > 5000;
         reader.querySelector<HTMLElement>('[data-role=animation-error]')!.hidden = !failed && !(wantsBook && oversized);
         const active = wantsBook && !failed && !oversized;
         if (book && !book.update({ current: spread, columns, minimum: edge(-1) ? -1 : 0,
@@ -133,6 +134,7 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
             const gap = parseFloat(getComputedStyle(content).columnGap) || 0;
             step = content.clientWidth + gap;
             pages = settings.mode === 'paged' ? paperPageCount(content, columns, gap, settings.direction === 'rtl') : 1;
+            oversized = (content.textContent?.length ?? 0) > 100_000 || content.querySelectorAll('*').length > 5000;
             content.toggleAttribute('data-pad', columns === 2 && pages % 2 !== 0);
             spread = Math.min(spread, Math.ceil(pages / columns) - 1);
             bookPages.update({ width: content.clientWidth, height: content.clientHeight, columns, gap, pages, rtl: settings.direction === 'rtl' });
