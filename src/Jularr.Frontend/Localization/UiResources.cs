@@ -2780,6 +2780,7 @@ namespace Jularr.Frontend.Localization
             new("import.edition.year", "Year"),
             new("import.edition.format", "Format"),
             new("import.edition.publisher", "Publisher"),
+            new("import.edition.isbn", "ISBN"),
             new("import.phase.matching", "Matching library works"),
             new("import.phase.isbn", "Resolving ISBN"),
             new("import.phase.searching", "Searching provider"),
