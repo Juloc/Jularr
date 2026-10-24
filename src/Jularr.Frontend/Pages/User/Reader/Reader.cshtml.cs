@@ -672,7 +672,12 @@ namespace Jularr.Frontend.Pages.User.Reader
 
             try
             {
-                _browserTranslationTargets = (await readLanguages.ExecuteAsync<TranslationLanguagesV1>(new TranslationLanguagesParametersV1(), ct)).Targets;
+                var available = await readLanguages.ExecuteAsync<TranslationLanguagesV1>(new TranslationLanguagesParametersV1(), ct);
+                // A target alone does not make a route: for example, the catalogue always
+                // lists English as a bridge even when no source model is available.
+                var source = (_document?.Language ?? _document?.OriginalLanguage)?.Split('-', '_')[0].ToLowerInvariant();
+                _browserTranslationTargets = source is null || available.Sources.Contains(source, StringComparer.Ordinal)
+                    ? available.Targets : [];
             }
             catch (ServiceUnavailableException)
             {
