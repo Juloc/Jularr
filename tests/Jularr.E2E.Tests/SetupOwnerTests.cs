@@ -85,7 +85,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(playback).Not.ToBeCheckedAsync();
                 var watchGroup = page.Locator(".option-groups--extras .option-group").Filter(new() { Has = page.Locator("[data-module=Trickplay]") });
                 await watchGroup.Locator("summary").ClickAsync();
-                await Assertions.Expect(watchGroup).ToHaveAttributeAsync("open", "open");
+                await Assertions.Expect(watchGroup).ToHaveJSPropertyAsync("open", true);
                 await page.Locator(".option-groups--extras [data-module=Trickplay] .toggle").ClickAsync();
                 await Assertions.Expect(playback).ToBeCheckedAsync();
                 await Assertions.Expect(watchGroup.Locator("[data-option-count]")).ToHaveTextAsync("1/3 on");
