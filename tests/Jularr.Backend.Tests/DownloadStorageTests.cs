@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Enums.Storage;
+using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Storage;
 using Jularr.Backend.Service.Core;
@@ -84,6 +86,45 @@ namespace Jularr.Backend.Tests
             return new DownloadStoragePaths(new DownloadStorageSettingsData(DownloadStorageArea.Direct, 1, "Incomplete", StorageFileSystem.DownloadFilesystemIdentity(incomplete),
                 1, "Complete", StorageFileSystem.DownloadFilesystemIdentity(complete), 0, jobLimit, workspaceLimit, 2, 1, Guid.NewGuid()),
                 Path.Combine(incomplete, "workspace"), Path.Combine(complete, "workspace"), new DownloadStorageReservations());
+        }
+
+        [TestMethod]
+        public async Task JobWorkspace_MediaAndJobIdAreStableAcrossDownloadAndImport()
+        {
+            using var folder = new TemporaryDirectory();
+            var paths = Paths(folder.Path);
+            var book = await paths.PrepareIncompleteAsync(41, CancellationToken.None, MediaType.Book);
+            Assert.IsTrue(book.EndsWith(Path.Combine("books", "j-41"), StringComparison.Ordinal));
+            File.WriteAllText(Path.Combine(book, "novel.epub"), "ebook");
+            var complete = await paths.CompleteAsync(41, book, null, CancellationToken.None, MediaType.Book);
+            Assert.IsTrue(complete.EndsWith(Path.Combine("books", "j-41"), StringComparison.Ordinal));
+            Assert.IsTrue(File.Exists(Path.Combine(complete, "novel.epub")));
+            Assert.IsFalse(Directory.Exists(book));
+
+            var anime = await paths.PrepareIncompleteAsync(42, CancellationToken.None, MediaType.Series, MediaSubtype.Anime);
+            Assert.IsTrue(anime.EndsWith(Path.Combine("anime", "j-42"), StringComparison.Ordinal));
+            Assert.AreEqual("tv", DownloadWorkspaceLayout.Category(MediaType.Series, null));
+            Assert.AreEqual("manga", DownloadWorkspaceLayout.Category(MediaType.Book, MediaSubtype.Manga));
+
+            paths.RemoveCompleted(41);
+            paths.RemoveCompleted(42);
+            Assert.IsFalse(Directory.Exists(complete));
+            Assert.IsFalse(Directory.Exists(anime));
+        }
+
+        [TestMethod]
+        public async Task JobWorkspace_LegacyNativeJobsRemainResolvableAndCleanable()
+        {
+            using var folder = new TemporaryDirectory();
+            var paths = Paths(folder.Path);
+            var legacy = Directory.CreateDirectory(Path.Combine(paths.IncompleteRoot, "123")).FullName;
+            var resumed = await paths.PrepareIncompleteAsync(123, CancellationToken.None, MediaType.Book);
+            Assert.AreEqual(legacy, resumed);
+            File.WriteAllText(Path.Combine(resumed, "book.epub"), "ebook");
+            var completed = await paths.CompleteAsync(123, resumed, null, CancellationToken.None, MediaType.Book);
+            Assert.IsTrue(File.Exists(Path.Combine(completed, "book.epub")));
+            paths.RemoveCompleted(123);
+            Assert.IsFalse(Directory.Exists(completed));
         }
 
         [TestMethod]

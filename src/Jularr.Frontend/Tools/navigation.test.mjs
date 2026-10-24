@@ -8,7 +8,7 @@ const source = readFileSync(new URL('../Modules/Navigation/Navigation.ts', impor
 const script = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 const module = { exports: {} };
 runInNewContext(script, { exports: module.exports, module, URL });
-const { staysInApp } = module.exports;
+const { hasNewBuild, staysInApp } = module.exports;
 
 const current = { href: 'https://jularr.test/Details/1', origin: 'https://jularr.test', pathname: '/Details/1', search: '' };
 const element = (attributes = {}, dataset = {}) => ({
@@ -31,4 +31,14 @@ test('other shells, files, origins and new windows load normally', () => {
     assert.equal(staysInApp(element({ target: '_blank' }), '/Library', current), false);
     assert.equal(staysInApp(element({ download: '' }), '/Library', current), false);
     assert.equal(staysInApp(element({}, { navigation: 'full' }), '/Library', current), false);
+});
+
+
+test('htmx responses from a different frontend build require a full navigation', () => {
+    const html = build => '<!DOCTYPE html><html lang="de" data-skin="clean" data-build="' + build + '"><body><div id="app-content"></div></body></html>';
+    assert.equal(hasNewBuild('aaaa1111', html('aaaa1111')), false);
+    assert.equal(hasNewBuild('aaaa1111', html('bbbb2222')), true);
+    assert.equal(hasNewBuild('aaaa1111', '<div>partial response without document version</div>'), false);
+    assert.equal(hasNewBuild(undefined, html('bbbb2222')), false);
+    assert.equal(hasNewBuild('aaaa1111', undefined), false);
 });

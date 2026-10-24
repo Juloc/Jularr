@@ -586,12 +586,28 @@ namespace Jularr.Backend.Tests
                     }
                 }
 
-                // Release migrations follow the baselines, as in a fresh installation.
+                // Integration fixtures use the same schema-version ledger as a fresh installation.
+                // A migrated database without this ledger is not a valid production state.
                 if (library)
                 {
-                    foreach (var migration in DatabaseBaseline.Migrations)
+                    using (var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Schema.sql")!)
+                    using (var reader = new StreamReader(schema))
+                    {
+                        await fixture.RunSqlAsync(await reader.ReadToEndAsync());
+                    }
+
+                    var migrations = DatabaseBaseline.Migrations;
+                    await fixture.RunSqlAsync($"""
+                        INSERT INTO "DatabaseSchemaVersions" ("Version", "Name", "Fingerprint")
+                        VALUES (1, 'baseline', '{DatabaseBaseline.Fingerprint(1, migrations)}');
+                        """);
+                    foreach (var migration in migrations)
                     {
                         await fixture.RunSqlAsync(migration.Statement);
+                        await fixture.RunSqlAsync($"""
+                            INSERT INTO "DatabaseSchemaVersions" ("Version", "Name", "Fingerprint")
+                            VALUES ({migration.Version}, '{migration.Name}', '{DatabaseBaseline.Fingerprint(migration.Version, migrations)}');
+                            """);
                     }
                 }
 
