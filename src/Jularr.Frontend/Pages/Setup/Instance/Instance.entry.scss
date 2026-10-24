@@ -10,4 +10,32 @@
 
     // The name keeps its field width; the groups and the button take the whole row.
     &__form > .ui-form > .ui-field { max-width: 360px; }
+
+    &__extras {
+        display: grid;
+        gap: 12px;
+        min-width: 0;
+        > h2 { margin: 6px 0 0; font-size: var(--text-body); font-weight: 800; }
+    }
+
+    // Give every advanced module a visible card, like the Admin module page.
+    // Group names remain for navigation, but nothing is collapsed by default.
+    .option-groups--extras {
+        grid-template-columns: minmax(0, 1fr);
+        .option-group__body {
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+            gap: 10px;
+            padding-top: 12px;
+        }
+        .option-group__body > .ui-form__row > .option-row {
+            min-height: 100%;
+            padding: 12px 13px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-inner);
+        }
+        .option-group__body > .ui-form__row + .ui-form__row > .option-row {
+            border-top: 1px solid var(--border);
+            padding-top: 12px;
+        }
+    }
 }
