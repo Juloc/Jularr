@@ -1,16 +1,18 @@
-# main CI gates
+# CI gates for main and dev
 
 The ordinary PR gate is deliberately bounded. The full test suite is retained,
 not deleted. Per-test timings are kept in the `timings-*` artifacts of every run
 and, as class totals, in [`tests/ci-durations.json`](../tests/ci-durations.json).
 
-| Workflow | PRs | After merge into `main` | Purpose |
+| Workflow | PRs | Push to `main` / `dev` | Purpose |
 | --- | --- | --- | --- |
-| `Backend / prepare` + `backend (n/2)` + `test` | Always reported (`test` is the required check); skips builds on docs-only PRs | No | Build once, smoke methods, then the affected module tests selected from PR changes in two balanced shards |
+| `Backend / prepare` + `backend (n/2)` + `test` | Required `test` stays; drafts, docs-only and frontend/E2E-only changes skip the backend build | No | Build once, smoke methods, and affected backend tests in two shards |
 | `Frontend / razor-and-ui-resources` | When frontend/backend UI files change | Yes, matching paths | Frontend typecheck, JS tests, localization, Razor build and publish verification |
 | `Browser Smoke / smoke` | Frontend, E2E tests or schema changed | No | Fresh owner setup and sign-in in real Chromium |
 | `Image / minimal-compose` | Docker/Compose/packaging or database schema changed | Yes, including source changes | Build the shipped container and start the supplied Compose stack |
-| `Backend Full` (`smoke`, `backend (n/4)`, `e2e (n/4)`, `gate`) | Only when explicitly opted in | Every push | Entire backend and browser suite, real FFmpeg, JPEG XL and backup-tool regression |
+| `Backend Full` (`smoke`, `backend (n/4)`, `e2e (n/4)`, `gate`) | Only as opted-in reusable `Backend / full-regression` job | Every push | Entire backend and browser suite, real FFmpeg, JPEG XL and backup-tool regression |
+
+PR checks are scoped to PRs targeting `main` or `dev`; ordinary feature-branch pushes do not start Actions. Draft PRs retain the lightweight `Backend / test` and authorship checks, while builds, browser smoke, image smoke and full regression wait until `ready_for_review`. Pure frontend/E2E changes no longer run the backend compilation; dedicated frontend/browser jobs cover those areas. `Backend Full` is a reusable job within `Backend` for opt-in PRs, so ordinary PRs create no separate skipped full workflow run.
 
 The `Release` workflow runs only for a `v*` tag (or by hand as a dry run) and is described in [RELEASE.md](RELEASE.md).
 
@@ -80,11 +82,8 @@ Investigate failures; do not mark a release validated from PR smoke tests
 alone. New tests are compiled by Fast CI, but not all executed until Full CI.
 
 For PR-specific integration validation, add the `ci/full` label to the PR,
-or put `[full-ci]` in its title. `Backend Full` will run the full graph on
-that PR. Removing the label/title marker returns later PR revisions to fast
-checks. The title marker works without creating a repository label. The
-`workflow_dispatch` entry is additionally available once the workflow is
-registered on the default branch. Keep focused test evidence in the PR.
+or put `[full-ci]` in its title. For ready PRs, `Backend / full-regression` invokes the reusable `Backend Full` graph. Removing the label/title marker returns later PR revisions to fast
+checks. The title marker works without creating a repository label. The standalone `Backend Full` workflow remains available on `main`/`dev` pushes or manual `workflow_dispatch`. Keep focused test evidence in the PR.
 
 ## Branch protection and status checks
 
