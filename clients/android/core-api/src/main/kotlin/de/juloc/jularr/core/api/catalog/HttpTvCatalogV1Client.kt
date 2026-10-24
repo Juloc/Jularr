@@ -153,6 +153,35 @@ class HttpTvCatalogV1Client(
         ).discoverCatalogEntry()
     }
 
+    override suspend fun requestLocales(): List<TvRequestLocaleV1> =
+        readArray(TvCatalogV1Routes.RequestLocales).objects {
+            TvRequestLocaleV1(getLong("id"), getString("locale"), getString("name"))
+        }
+
+    override suspend fun requestDiscoverTmdb(mediaTypeId: Int, tmdbId: Int, localeId: Long): Long {
+        require(localeId > 0)
+        return readObject(
+            TvCatalogV1Routes.discoverTmdbRequest(mediaTypeId, tmdbId),
+            "POST",
+            JSONObject().put("uiLocaleId", localeId),
+        ).getLong("id")
+    }
+
+    override suspend fun requestDiscoverCatalog(
+        mediaTypeId: Int, namespace: String, externalId: String, mediaSubtypeId: Int?, localeId: Long,
+    ): Long {
+        require(mediaTypeId > 0 && namespace.isNotBlank() && externalId.isNotBlank() && localeId > 0)
+        return readObject(
+            TvCatalogV1Routes.DiscoverCatalogRequest,
+            "POST",
+            JSONObject().put("mediaTypeId", mediaTypeId)
+                .put("namespace", namespace)
+                .put("externalId", externalId)
+                .put("uiLocaleId", localeId)
+                .apply { if (mediaSubtypeId != null) put("mediaSubtypeId", mediaSubtypeId) },
+        ).getLong("id")
+    }
+
     override suspend fun work(workId: Long): TvWorkDetailsV1 =
         readObject(TvCatalogV1Routes.work(workId)).workDetails()
 
