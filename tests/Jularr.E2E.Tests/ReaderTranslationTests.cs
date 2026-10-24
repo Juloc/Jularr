@@ -52,9 +52,10 @@ namespace Jularr.E2E.Tests
             var response = await page.GotoAsync("/Read/1");
             Assert.AreEqual(200, response!.Status);
             await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Chapter One");
-            await Assertions.Expect(page.Locator("[data-local-quality-toggle]")).ToBeVisibleAsync();
+            // The quality toggle lives inside the initially closed language panel.
             await page.Locator("[data-action=language]").ClickAsync();
             await Assertions.Expect(page.Locator("[data-language-choice=de]")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator("[data-local-quality-toggle]")).ToBeVisibleAsync();
 
             await page.Locator("[data-language-choice=de]").ClickAsync();
             await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Kapitel Eins", new() { Timeout = 60_000 });
