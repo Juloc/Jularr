@@ -7,6 +7,7 @@ using Jularr.Backend.Service.Core;
 using Jularr.Backend.Tests.Infrastructure;
 using Jularr.Frontend.Framework;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using static Jularr.Backend.Tests.DatabaseBaselineTests;
 
 namespace Jularr.Backend.Tests
@@ -55,6 +56,38 @@ namespace Jularr.Backend.Tests
             INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId") VALUES (41, 'migrate_owner', 'migrate@example.test', 'Migrate Owner', 1);
             INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (501, 1, 'Kept Film');
             """);
+
+        [TestMethod]
+        public async Task NyaaKeyless_Upgrade_PreservesConnectionsAndOtherKeyRequirements()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(NyaaKeyless_Upgrade_PreservesConnectionsAndOtherKeyRequirements));
+            var options = Backup(folder.Path, out var backups);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, options, tools, DatabaseBaseline.Migrations.Where(migration => migration.Version < 8).ToArray()).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs, """
+                INSERT INTO "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "ProtectedApiKey")
+                VALUES ('Kept SABnzbd', 2, 'https://sab.example.test', decode('0102', 'hex'));
+                """);
+            const string nyaa = """
+                INSERT INTO "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl")
+                VALUES ('Nyaa', 10, 'https://nyaa.si');
+                """;
+            var before = await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, nyaa));
+            Assert.AreEqual(PostgresErrorCodes.CheckViolation, before.SqlState);
+
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs, nyaa);
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+            Assert.AreEqual("0102", await ScalarAsync(cs, "SELECT encode(\"ProtectedApiKey\", 'hex') FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Kept SABnzbd'"));
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 10 AND \"ProtectedApiKey\" IS NULL"));
+            Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
+            var rejected = await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """
+                INSERT INTO "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl")
+                VALUES ('Missing SABnzbd key', 2, 'https://sab.example.test');
+                """));
+            Assert.AreEqual(PostgresErrorCodes.CheckViolation, rejected.SqlState);
+        }
 
         [TestMethod]
         public async Task ProductionCompanionMigration_UpgradesTheFrozenBaselineWithBackup()
@@ -126,7 +159,7 @@ namespace Jularr.Backend.Tests
             var options = Backup(folder.Path, out var backups);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
 
-            Assert.AreEqual(7, DatabaseBaseline.CurrentVersion, "All production migrations must have unique contiguous numbers.");
+            Assert.AreEqual(8, DatabaseBaseline.CurrentVersion, "All production migrations must have unique contiguous numbers.");
             await new DatabaseBaseline(cs, options, tools, migrations: [DatabaseBaseline.Migrations[0]]).StartAsync(CancellationToken.None);
             Assert.AreEqual("0002_external_work_feeds", await ScalarAsync(cs,
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 2"));

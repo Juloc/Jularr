@@ -50,16 +50,17 @@ namespace Jularr.Backend.Tests
             using var setUp = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/acquisition/sources/setup");
             Assert.AreEqual(HttpStatusCode.OK, setUp.StatusCode, await setUp.Content.ReadAsStringAsync());
             var result = (await setUp.Content.ReadFromJsonAsync<SourceSetupResultV1>())!;
-            CollectionAssert.AreEqual(new[] { "gutenberg" }, result.Added);
+            CollectionAssert.AreEquivalent(new[] { "gutenberg", "nyaa" }, result.Added);
             CollectionAssert.IsSubsetOf(new[] { "annasarchive", "standardebooks", "newznab" }, result.NeedsAccount);
             Assert.IsTrue((await ReadCatalogAsync(host)).Single(item => item.Key == "gutenberg").IsConfigured);
+            Assert.IsTrue((await ReadCatalogAsync(host)).Single(item => item.Key == "nyaa").IsConfigured);
             using var standard = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Standard Ebooks", AcquisitionConnectionType.Opds,
                 "https://standardebooks.org/feeds/opds", null, true, 50, [], null, null, null));
             Assert.AreEqual(HttpStatusCode.OK, standard.StatusCode, await standard.Content.ReadAsStringAsync());
             var catalog = await ReadCatalogAsync(host);
             Assert.IsTrue(catalog.Single(item => item.Key == "standardebooks").IsConfigured);
             Assert.IsFalse(catalog.Single(item => item.Key == "opds").IsConfigured);
-            Assert.AreEqual(3L, await host.ScalarAsync("SELECT \"AcquisitionConnectionTypeId\"::bigint FROM \"AcquisitionConnections\" ORDER BY \"Id\" LIMIT 1"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 3"));
             // Bulk setup must not silently activate download sources before a workspace is confirmed.
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT \"IsEnabled\"::int::bigint FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 3 LIMIT 1"));
 

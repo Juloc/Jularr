@@ -24,7 +24,15 @@ namespace Jularr.E2E.Tests
         [Timeout(300_000)]
         public async Task OwnerSeesEveryJob_PausesResumesAndRunsOne_AndChangesWhetherItWaits()
         {
-            await using var jularr = await JularrInstance.StartAsync();
+            using var folders = new Folders();
+            await using var fakes = await FakeServices.StartAsync(folders.Downloads);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
+                ["Providers:OpenLibrary"] = fakes.OpenLibrary.ToString(),
+                ["Providers:AniList"] = fakes.AniList.ToString()
+            });
             await using var browser = await BrowserSession.StartAsync(jularr);
             var page = browser.Page;
             try

@@ -951,6 +951,8 @@ namespace Jularr.Frontend.Localization
             new("acquisition.connection.type", "Type"),
             new("acquisition.connection.type.Newznab", "Newznab indexer"),
             new("acquisition.connection.type.Sabnzbd", "SABnzbd"),
+            new("acquisition.connection.type.Qbittorrent", "qBittorrent"),
+            new("acquisition.connection.type.Nyaa", "Nyaa"),
             new("acquisition.connection.baseUrl", "Address"),
             new("acquisition.connection.host", "Server"),
             new("acquisition.connection.port", "Port"),
