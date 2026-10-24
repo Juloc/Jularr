@@ -31,6 +31,7 @@ if (status) {
             // Keep the last known state; the manual refresh link still works.
         }
     }
+    void refresh();
     const timer = window.setInterval(() => { void refresh(); }, 3000);
     window.addEventListener('pagehide', () => window.clearInterval(timer), { once: true });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
