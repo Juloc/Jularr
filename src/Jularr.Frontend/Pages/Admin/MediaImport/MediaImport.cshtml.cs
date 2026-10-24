@@ -473,7 +473,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
 
         public async Task<IActionResult> OnPostApplyAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
         {
-            Read(file, json, action, defaults, choices);
+            Read(file, json, action, defaults, choices, apply: true);
             _result = await run.ExecuteAsync<MediaImportResultV1>(_input!, HttpContext.RequestAborted);
             PreparePage();
             return Page();
@@ -483,7 +483,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         public async Task<IActionResult> OnPostApplyStreamAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
         {
             if (!texts.CanImportMedia()) return Forbid();
-            Read(file, json, action, defaults, choices);
+            Read(file, json, action, defaults, choices, apply: true);
             BeginProgressStream();
 
             await WriteProgressAsync(new { kind = "started" });
@@ -528,11 +528,11 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             await Response.Body.FlushAsync(HttpContext.RequestAborted);
         }
 
-        private void Read(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
+        private void Read(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices, bool apply = false)
         {
             _input = new MediaImportDataV1(file is { Length: > 0 } ? new UploadedFile(file.FileName, file.Length, file.OpenReadStream) : null, json, action ?? MediaImportActionType.AddOnly,
                 new((defaults ?? []).Where(row => row.Key is not null).Select(row => new MediaImportDefaultV1(row.Key!, row.AcquisitionProfileId, row.LibraryRootId))),
-                new((choices ?? []).Where(row => row.Index is not null).Select(row => new MediaImportChoiceV1(row.Index!.Value, row.Include, row.Choice, row.Query, row.Action, row.AcquisitionProfileId, row.LibraryRootId))));
+                new((choices ?? []).Where(row => row.Index is not null).Select(row => new MediaImportChoiceV1(row.Index!.Value, apply ? row.Include ?? false : row.Include, row.Choice, row.Query, row.Action, row.AcquisitionProfileId, row.LibraryRootId))));
             _posted = _input.Choices.ToDictionary(choice => choice.Index);
         }
 
