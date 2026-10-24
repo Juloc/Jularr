@@ -234,6 +234,20 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Selection_StrictModeWithoutAnyRequestedLanguageNeverDownloadsAutomatically()
+        {
+            var profile = new QualityProfile("profile", "Strict", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true,
+                LanguageFallback = LanguageFallbackType.None
+            };
+            var result = ReleaseSelectionEngine.Select(profile, [Candidate("Héctor García - IKIGAI (EN) (epub)")]);
+
+            Assert.IsNull(result.Winner);
+            Assert.AreEqual(SelectionDecision.ManualReview, result.Ranked.Single().Decision);
+        }
+
+        [TestMethod]
         public void Selection_StrictModeRejectsUnknownLanguage()
         {
             var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.None),
