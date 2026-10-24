@@ -202,7 +202,9 @@ export function paperInkPose(profile: ReturnType<typeof paperProfile>, side: 'le
     const step = Math.max(0.5, width / 300);
     const left = Math.max(0, middle - step), right = Math.min(width, middle + step);
     const slope = right > left ? (yAt(right) - yAt(left)) / (right - left) : 0;
-    return { y: yAt(middle), angle: Math.atan(slope) * 180 / Math.PI };
+    // Excessive stack thickness must not turn short words upright.
+    const angle = Math.atan(slope) * 180 / Math.PI;
+    return { y: yAt(middle), angle: Math.max(-12, Math.min(12, angle)) };
 }
 
 export function paperOutline(profile: ReturnType<typeof paperProfile>): Point[] {
