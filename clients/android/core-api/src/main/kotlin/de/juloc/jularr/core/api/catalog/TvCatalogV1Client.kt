@@ -4,6 +4,8 @@ package de.juloc.jularr.core.api.catalog
  * Read-only catalog is intentionally separate from the parallel agent's AppApiClient and TV UI.
  * Caller provides the same DeviceTokenStore used by pairing, so profile/token rotation is shared.
  */
+data class TvRequestLocaleV1(val id: Long, val locale: String, val name: String)
+
 interface TvCatalogV1Client {
     suspend fun library(page: Int = 1, pageSize: Int = 48, query: String? = null, sortTypeId: Int? = null): TvPageV1<TvWorkCardV1>
     suspend fun libraryFiltered(
@@ -33,6 +35,9 @@ interface TvCatalogV1Client {
     /** Read provider item details without pretending a TMDB/external id is a local WorkId. */
     suspend fun discoverTmdbItem(mediaTypeId: Int, tmdbId: Int): TvDiscoverItemV1
     suspend fun discoverCatalogEntry(mediaTypeId: Int, namespace: String, externalId: String, mediaSubtypeId: Int? = null): TvDiscoverCatalogEntryV1
+    suspend fun requestLocales(): List<TvRequestLocaleV1>
+    suspend fun requestDiscoverTmdb(mediaTypeId: Int, tmdbId: Int, localeId: Long): Long
+    suspend fun requestDiscoverCatalog(mediaTypeId: Int, namespace: String, externalId: String, mediaSubtypeId: Int?, localeId: Long): Long
     suspend fun work(workId: Long): TvWorkDetailsV1
     suspend fun editions(workId: Long): List<TvWorkEditionV1>
     suspend fun credits(workId: Long): List<TvWorkCreditV1>
