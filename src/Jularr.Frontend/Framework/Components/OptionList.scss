@@ -69,8 +69,7 @@
 // A media type with the choices that belong to it; they show while the type is on.
 .option-type {
     &:first-child > .ui-form__row > .option-row--type { border-top: 0; }
-    // Keep dependent settings visible even while the parent media type is off:
-    // hidden controls made features appear to be missing from Setup entirely.
+    &:has(> .ui-form__row input[type="checkbox"]:not(:checked)) > .option-subs { display: none; }
     &:has(> .ui-form__row input[type="checkbox"]:not(:checked)) > .ui-form__row > .option-row--type > .option-row__text { opacity: .55; }
 }
 .option-subs {
