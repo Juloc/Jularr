@@ -30,7 +30,7 @@ The active **Android TV** client authenticates with device-pairing bearer tokens
 - Compose BOM 2026.06.01 (BOM 2026.08.00+ and core-ktx 1.19+ need compileSdk 37)
 - TV Material 1.1.0
 
-The repository CI ([`.github/workflows/android.yml`](../../.github/workflows/android.yml)) installs Gradle 9.8 directly and runs the unit tests and lint of every module in the default build. Release signing is intentionally not enabled yet; release APK signing remains a later #69 step using protected GitHub secrets.
+The repository CI ([`.github/workflows/android.yml`](../../.github/workflows/android.yml)) installs Gradle 9.8 directly and runs the unit tests and lint of every module in the default build. A dedicated [Android TV Release workflow](../../.github/workflows/android-tv-release.yml) runs **only when an official GitHub Release is published** for a version tag on `main`. It validates the exact tagged TV tree, then signs `Jularr-TV-<version>.apk` with protected secrets and uploads the APK and portable SHA-256 beside it. Configure the four repository secrets `ANDROID_TV_KEYSTORE_BASE64`, `ANDROID_TV_STORE_PASSWORD`, `ANDROID_TV_KEY_ALIAS`, `ANDROID_TV_KEY_PASSWORD` before release. Missing signing secrets cause the TV publishing job to fail, rather than upload an unsigned APK. Preserve the signing key across versions or Android will reject upgrades.
 
 ## Build
 
