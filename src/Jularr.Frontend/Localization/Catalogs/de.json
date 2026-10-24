@@ -8817,8 +8817,12 @@
    "Anfragen & Arr+"
   ],
   "setup.modules.personal": [
-   "Profiles & personal features",
-   "Profile & persönliche Funktionen"
+   "Personalization & organization",
+   "Personalisierung & Organisation"
+  ],
+  "setup.modules.accounts": [
+   "Accounts & devices",
+   "Konten & Geräte"
   ],
   "setup.modules.operations": [
    "Administration",
@@ -12245,8 +12249,8 @@
    "Spiele-Profil hinzufügen"
   ],
   "setup.preset.complete.line": [
-   "Library, player and reader, Discover, automatic search and import.",
-   "Bibliothek, Player und Reader, Discover, automatische Suche und Import."
+   "All modules and all media types, including optional features.",
+   "Alle Module und Medientypen einschalten, einschließlich optionaler Funktionen."
   ],
   "setup.preset.mediaServer.line": [
    "Play and read your own files, without download automation.",
@@ -12256,9 +12260,25 @@
    "Take requests and let Arr+ search, download and import, without player or reader.",
    "Anfragen annehmen, Arr+ sucht, lädt und importiert, ohne Player und Reader."
   ],
+  "setup.modules.watch": [
+   "Playback & anime",
+   "Wiedergabe & Anime"
+  ],
+  "setup.modules.reading": [
+   "Reading, books & manga",
+   "Reader, Bücher & Manga"
+  ],
+  "setup.modules.games": [
+   "Games",
+   "Spiele"
+  ],
   "setup.modules.discovery": [
    "Discover & catalogs",
    "Discover & Kataloge"
+  ],
+  "setup.modules.extra": [
+   "Additional modules — all options",
+   "Weitere Module – alle Optionen"
   ],
   "setup.group.active": [
    "{0}/{1} on",
