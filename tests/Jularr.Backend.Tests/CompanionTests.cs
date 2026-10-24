@@ -185,6 +185,35 @@ namespace Jularr.Backend.Tests
             Assert.IsNull((await next.Content.ReadFromJsonAsync<CompanionPendingCommandV1>())!.Id);
         }
 
+
+        [TestMethod]
+        public async Task QueuedCommand_FromLoggedOutController_IsNeverDispatched()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            var (tvToken, playbackId) = await PrepareTvAsync(host, storage.Path);
+            var grant = await PairAsync(host, tvToken, playbackId);
+
+            using var heartbeat = await host.SendAsAppAsync(HttpMethod.Put, OwnerPath(playbackId) + "/state", tvToken,
+                new CompanionReportStateDataV1(0, false, 0, 60_000));
+            Assert.AreEqual(HttpStatusCode.OK, heartbeat.StatusCode);
+
+            using var queued = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/companion/" + grant.Id + "/commands",
+                new QueueCompanionCommandDataV1(Guid.NewGuid(), 0, "play", null));
+            Assert.AreEqual(HttpStatusCode.OK, queued.StatusCode);
+
+            // Database-backed identity is checked a second time at TV dispatch, not only when the phone queued it.
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "AccountSessions"
+                SET "RevokedAt" = now()
+                WHERE "DevicePlatform" IS NULL AND "RevokedAt" IS NULL;
+                """);
+
+            using var next = await host.SendAsAppAsync(HttpMethod.Post, OwnerPath(playbackId) + "/next", tvToken);
+            Assert.AreEqual(HttpStatusCode.OK, next.StatusCode);
+            Assert.IsNull((await next.Content.ReadFromJsonAsync<CompanionPendingCommandV1>())!.Id);
+        }
+
         private static string OwnerPath(Guid id) => "/api/v1/playback/sessions/" + id + "/companion";
         private static string InvitePath(Guid id) => OwnerPath(id) + "/invitations";
 

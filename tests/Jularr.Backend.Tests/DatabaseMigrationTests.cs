@@ -57,6 +57,24 @@ namespace Jularr.Backend.Tests
             """);
 
         [TestMethod]
+        public async Task ProductionCompanionMigration_UpgradesTheFrozenBaselineWithBackup()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(ProductionCompanionMigration_UpgradesTheFrozenBaselineWithBackup));
+            var options = Backup(folder.Path, out var backups);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+
+            await new DatabaseBaseline(cs, options, tools, []).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual("Kept Film", await ScalarAsync(cs, "SELECT \"CanonicalTitle\" FROM \"Works\" WHERE \"Id\" = 501;"));
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM pg_tables WHERE tablename = 'PlaybackCompanionStates';"));
+            Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
+        }
+
+        [TestMethod]
         public async Task Upgrade_AppliesNumberedMigrations_AfterABackup_KeepsData_AndIsConcurrencySafe()
         {
             using var folder = new LibraryTests.TemporaryDirectory();

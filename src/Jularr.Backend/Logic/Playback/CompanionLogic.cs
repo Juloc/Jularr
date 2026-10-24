@@ -280,12 +280,23 @@ namespace Jularr.Backend.Logic.Playback
                     FROM
                         "PlaybackCompanionCommands" AS command
                         JOIN "PlaybackCompanionGrants" AS access ON access."Id" = command."ControllerGrantId"
+                        JOIN "AccountSessions" AS controller ON controller."Id" = access."ControllerSessionId"
+                        JOIN "PlaybackSessions" AS playback ON playback."Id" = command."PlaybackSessionId"
+                        JOIN "AccountSessions" AS tv ON tv."Id" = playback."OwnerSessionId"
+                        JOIN "Accounts" AS account ON account."Id" = controller."AccountId"
                     WHERE
                         command."PlaybackSessionId" = @Id
                         AND command."DeliveredAt" IS NULL
                         AND command."FinishedAt" IS NULL
                         AND command."ExpiresAt" > statement_timestamp()
                         AND access."RevokedAt" IS NULL
+                        AND access."ControllerSessionRevision" = controller."RotationRevision"
+                        AND controller."RevokedAt" IS NULL
+                        AND controller."ExpiresAt" > statement_timestamp()
+                        AND controller."ActiveProfileId" = playback."ProfileId"
+                        AND controller."AccountId" = tv."AccountId"
+                        AND controller."CredentialRevision" = account."CredentialRevision"
+                        AND account."IsEnabled"
                     ORDER BY
                         command."Revision"
                     LIMIT 1
