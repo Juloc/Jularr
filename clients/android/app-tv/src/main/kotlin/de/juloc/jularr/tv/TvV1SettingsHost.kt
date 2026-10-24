@@ -114,6 +114,15 @@ internal fun TvV1SettingsHost(
         }
     }
 
+    // Respect the existing per-device automatic-check toggle. Check once when
+    // Settings opens if the cached result is stale; never download or install
+    // without the user's explicit confirmation in the Android TV UI.
+    LaunchedEffect(checksEnabled) {
+        if (checksEnabled && UpdatePreferences.isCheckDue(preferences.lastCheckedAtMillis)) {
+            checkUpdates()
+        }
+    }
+
     fun download(info: UpdateCheckResult.UpdateAvailable) {
         scope.launch {
             updateState = TvUpdateState.Downloading(0L, info.apkAsset.sizeBytes)
