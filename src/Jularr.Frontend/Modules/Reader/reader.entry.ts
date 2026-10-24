@@ -79,40 +79,67 @@ function initializeText(reader: HTMLElement): void {
     // Existing translation and annotation services remain the only data owners.
     const translate = reader.dataset.translationUrl ? translator(reader, content, createTranslationWorker) : undefined;
     const quality = reader.querySelector<HTMLButtonElement>('[data-local-quality-toggle]');
-    if (quality && translate) {
-        void fetch('/api/v1/translation/local/availability', { credentials: 'same-origin' }).then(async response => {
-            if (!response.ok) return;
-            const available = await response.json() as { model: string | null };
-            if (available.model) {
-                reader.dataset.localModel = available.model;
-                quality.hidden = false;
-            }
-        }).catch(() => undefined);
+    const browserTargets = new Set((reader.dataset.browserTranslationTargets ?? '').split(',').filter(Boolean));
+    const localModel = reader.dataset.localModel;
+    if (quality && translate && localModel) {
+        quality.hidden = false;
+        const initialLanguage = reader.dataset.readingLanguage ?? 'original';
+        if (initialLanguage !== 'original' && !browserTargets.has(initialLanguage)) {
+            reader.dataset.translationEngine = 'gemma';
+            quality.setAttribute('aria-pressed', 'true');
+        }
         quality.addEventListener('click', () => {
-            if (!reader.dataset.localModel) return;
+            const readingLanguage = reader.dataset.readingLanguage ?? 'original';
             const gemma = reader.dataset.translationEngine !== 'gemma';
+            if (!gemma && readingLanguage !== 'original' && !browserTargets.has(readingLanguage)) return;
             reader.dataset.translationEngine = gemma ? 'gemma' : 'bergamot';
             quality.setAttribute('aria-pressed', String(gemma));
-            void translate(reader.dataset.readingLanguage === 'original' ? '' : reader.dataset.readingLanguage ?? '');
+            void translate(readingLanguage === 'original' ? '' : readingLanguage);
         });
     }
     let reading = reader.dataset.readingLanguage ?? 'original';
-    if (translate) void translate(reading === 'original' ? '' : reading);
-    reader.querySelectorAll<HTMLButtonElement>('[data-language-choice]').forEach(button => button.addEventListener('click', async () => {
-        reading = button.dataset.languageChoice!;
-        reader.dataset.readingLanguage = reading;
-        reader.querySelectorAll<HTMLButtonElement>('[data-language-choice]').forEach(choice => choice.setAttribute('aria-pressed', String(choice === button)));
+    const choices = Array.from(reader.querySelectorAll<HTMLButtonElement>('[data-language-choice]'));
+    let savingLanguage = false;
+    choices.forEach(button => button.addEventListener('click', async () => {
+        if (savingLanguage) return;
+        const next = button.dataset.languageChoice!;
+        if (next === reading) return;
+        savingLanguage = true;
+        choices.forEach(choice => choice.disabled = true);
+        if (quality) quality.disabled = true;
+        const panel = reader.querySelector<HTMLElement>('[data-panel=language]');
+        panel?.setAttribute('aria-busy', 'true');
+        const feedback = reader.querySelector<HTMLElement>('[data-role=translation-status]');
+        if (feedback) {
+            feedback.textContent = reader.dataset.languageSavingLabel ?? '';
+            feedback.hidden = false;
+        }
         try {
             const response = await fetch(reader.dataset.languageUrl!, {
                 method: 'PUT', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json', RequestVerificationToken: reader.dataset.antiforgery! },
-                body: JSON.stringify({ readingLanguage: reading })
+                body: JSON.stringify({ readingLanguage: next })
             });
             if (!response.ok) throw new Error('Language preference was not saved.');
-            if (translate) await translate(reading === 'original' ? '' : reading);
+            reading = next;
+            reader.dataset.readingLanguage = next;
+            if (localModel && next !== 'original' && !browserTargets.has(next)) {
+                reader.dataset.translationEngine = 'gemma';
+                quality?.setAttribute('aria-pressed', 'true');
+            }
+            choices.forEach(choice => choice.setAttribute('aria-pressed', String(choice === button)));
+            if (translate) void translate(next === 'original' ? '' : next);
+            else if (feedback) feedback.hidden = true;
         } catch {
-            const feedback = reader.querySelector<HTMLElement>('[data-role=translation-status]');
-            if (feedback) { feedback.textContent = reader.dataset.translationFailedLabel!; feedback.hidden = false; }
+            if (feedback) {
+                feedback.textContent = reader.dataset.translationFailedLabel ?? '';
+                feedback.hidden = false;
+            }
+        } finally {
+            savingLanguage = false;
+            choices.forEach(choice => choice.disabled = false);
+            if (quality) quality.disabled = false;
+            panel?.removeAttribute('aria-busy');
         }
     }));
 

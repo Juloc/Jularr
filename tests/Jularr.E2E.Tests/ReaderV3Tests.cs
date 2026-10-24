@@ -46,8 +46,8 @@ namespace Jularr.E2E.Tests
                 await language.ClickAsync();
                 var hint = page.Locator("[data-panel=language]");
                 await Assertions.Expect(hint).ToBeVisibleAsync();
-                await Assertions.Expect(hint.GetByRole(AriaRole.Link, new() { Name = "Open profile settings" })).ToHaveAttributeAsync("href", "/Settings");
-                await Assertions.Expect(hint).ToContainTextAsync("No reading language is set up yet.");
+                await Assertions.Expect(hint).ToContainTextAsync("No translation engine is available right now.");
+                Assert.AreEqual(0, await hint.GetByRole(AriaRole.Link).CountAsync(), "An unavailable engine is not a missing profile language.");
                 await Evidence.SaveAsync(page, "reader-v3-language-hint-1440");
                 await page.Keyboard.PressAsync("Escape");
 

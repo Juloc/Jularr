@@ -44,7 +44,9 @@ namespace Jularr.Backend.Tests
             // Every language with released models into English can be read from, every one out of it read in.
             using var languages = await host.SendAsync(HttpMethod.Get, "/api/v1/translation/languages");
             var offered = (await languages.Content.ReadFromJsonAsync<TranslationLanguagesV1>())!;
-            Assert.AreEqual(("de en", "de en ja"), (string.Join(" ", offered.Sources.Order()), string.Join(" ", offered.Targets.Order())));
+            Assert.AreEqual(HttpStatusCode.OK, languages.StatusCode, await languages.Content.ReadAsStringAsync());
+            Assert.AreEqual(("de en", "de en ja"), (string.Join(" ", offered.Sources.Order()), string.Join(" ", offered.Targets.Order())),
+                "Regional or script-tagged Mozilla models must not invalidate the Reader language contract.");
         }
 
         [TestMethod]
@@ -190,7 +192,10 @@ namespace Jularr.Backend.Tests
                 ("model.ende.intgemm.alphas.bin", "3.0a1", "model", "en", "de", null), ("vocab.ende.spm", "3.0a1", "vocab", "en", "de", null),
                 ("model.deen.intgemm.alphas.bin", "1.0", "model", "de", "en", null), ("lex.50.50.deen.s2t.bin", "1.0", "lex", "de", "en", null), ("vocab.deen.spm", "1.0", "vocab", "de", "en", null),
                 ("model.enja.intgemm.alphas.bin", "1.0", "model", "en", "ja", null), ("srcvocab.enja.spm", "1.0", "srcvocab", "en", "ja", null), ("trgvocab.enja.spm", "1.0", "trgvocab", "en", "ja", null),
-                ("model.enja.intgemm.alphas.bin", "2.0", "model", "en", "ja", "env.appinfo.OS == 'Android'"), ("vocab.enja.spm", "2.0", "vocab", "en", "ja", "env.appinfo.OS == 'Android'")
+                ("model.enja.intgemm.alphas.bin", "2.0", "model", "en", "ja", "env.appinfo.OS == 'Android'"), ("vocab.enja.spm", "2.0", "vocab", "en", "ja", "env.appinfo.OS == 'Android'"),
+                // Published regional and script language tags must not invalidate the short-code API response.
+                ("model.enpt.intgemm.alphas.bin", "1.0", "model", "en", "pt-BR", null), ("vocab.enpt.spm", "1.0", "vocab", "en", "pt-BR", null),
+                ("model.enzh.intgemm.alphas.bin", "1.0", "model", "en", "zh-Hans", null), ("vocab.enzh.spm", "1.0", "vocab", "en", "zh-Hans", null)
             ];
 
             private static string Content(string? fileType, string? from, string? to, string version) =>
