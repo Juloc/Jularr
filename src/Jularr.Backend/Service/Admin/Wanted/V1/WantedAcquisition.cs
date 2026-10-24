@@ -258,7 +258,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             // Route by transport first. A .torrent or magnet must never be handed to SABnzbd,
             // nor may an NZB be handed to qBittorrent simply because it has the highest priority.
-            var isTorrent = offer.Guid?.StartsWith("nyaa:", StringComparison.OrdinalIgnoreCase) == true
+            var isTorrent = offer.Transport == DownloadTransport.Torrent
                 || offer.DownloadUri?.Scheme.Equals("magnet", StringComparison.OrdinalIgnoreCase) == true
                 || offer.DownloadUri?.AbsolutePath.EndsWith(".torrent", StringComparison.OrdinalIgnoreCase) == true;
             var compatible = clients.Where(connection => isTorrent
