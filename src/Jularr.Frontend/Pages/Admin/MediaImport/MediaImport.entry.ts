@@ -55,14 +55,15 @@ function initializePreview(): void {
                 if (action === "2" || action === "3") monitored++;
                 if (action === "3") searched++;
             }
+            const summary = intent.querySelector<HTMLElement>("[data-import-summary]");
+            if (summary) {
+                summary.textContent = (intent.dataset.template ?? "{0} · {1} · {2}")
+                    .replace("{0}", String(selection.count))
+                    .replace("{1}", String(monitored))
+                    .replace("{2}", String(searched));
+            }
             const warning = intent.querySelector<HTMLElement>("[data-import-search-warning]");
-            if (warning) warning.remove();
-            intent.textContent = (intent.dataset.template ?? "{0} · {1} · {2}")
-                .replace("{0}", String(selection.count))
-                .replace("{1}", String(monitored))
-                .replace("{2}", String(searched));
-            // Keep a separate warning after the dynamic count; data stays on the template node.
-            if (warning) { warning.hidden = searched === 0; intent.append(warning); }
+            if (warning) warning.hidden = searched === 0;
         }
         if (apply) apply.disabled = selection.count === 0;
     };
