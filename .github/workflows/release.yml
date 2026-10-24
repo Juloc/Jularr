@@ -195,3 +195,121 @@ jobs:
           args=()
           [[ "${PRERELEASE}" == "false" ]] || args+=(--prerelease)
           gh release create "${TAG}" --verify-tag --title "Jularr ${VERSION}" --generate-notes "${args[@]}"
+
+  # Build and sign the TV package in this same trusted Release run. GitHub does
+  # not dispatch a second release event from the automatic GITHUB_TOKEN.
+  tv-verify:
+    needs: [guard, release]
+    if: needs.guard.outputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.guard.outputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify official release tag on main
+        env:
+          TAG: ${{ needs.guard.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] || exit 1
+          git fetch origin main
+          test "$(git rev-parse "refs/tags/$TAG^{commit}")" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor HEAD refs/remotes/origin/main
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: android-actions/setup-android@v4
+      - name: Install SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "9.8.0"
+      - name: Validate exact release tree before signing
+        working-directory: clients/android
+        run: >-
+          gradle --parallel --build-cache
+          :core-api:testDebugUnitTest
+          :core-model:testDebugUnitTest
+          :core-player:testDebugUnitTest
+          :core-session:testDebugUnitTest
+          :core-design:testDebugUnitTest
+          :core-update:testDebugUnitTest
+          :app-tv:testDebugUnitTest
+          :app-tv:lintDebug
+
+  tv-sign:
+    needs: [guard, tv-verify]
+    if: needs.guard.outputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.guard.outputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: android-actions/setup-android@v4
+      - name: Install SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "9.8.0"
+      - name: Load protected signing material
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_TV_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_TV_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_TV_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_TV_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for value in "$KEYSTORE_BASE64" "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD"; do
+            if [[ -z "$value" ]]; then
+              echo "::error::Android TV production signing secrets are incomplete."
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/jularr-tv-release.jks"
+          echo "JULARR_ANDROID_KEYSTORE=$RUNNER_TEMP/jularr-tv-release.jks" >> "$GITHUB_ENV"
+          echo "JULARR_ANDROID_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "JULARR_ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "JULARR_ANDROID_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+      - name: Build signed Android TV APK
+        working-directory: clients/android
+        env:
+          VERSION: ${{ needs.guard.outputs.tag }}
+        run: gradle --build-cache :app-tv:assembleRelease "-PjularrVersion=${VERSION#v}"
+      - name: Verify signature and generate portable SHA-256
+        shell: bash
+        env:
+          VERSION: ${{ needs.guard.outputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${VERSION#v}"
+          apk="clients/android/app-tv/build/outputs/apk/release/app-tv-release.apk"
+          test -s "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$apk"
+          mkdir -p dist
+          cp "$apk" "dist/Jularr-TV-$version.apk"
+          (cd dist && sha256sum "Jularr-TV-$version.apk" > "Jularr-TV-$version.apk.sha256")
+          (cd dist && sha256sum -c "Jularr-TV-$version.apk.sha256")
+      - name: Attach signed release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.guard.outputs.tag }}
+        run: gh release upload "$TAG" dist/*
+      - name: Remove signing file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/jularr-tv-release.jks"
