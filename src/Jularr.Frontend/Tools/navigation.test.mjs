@@ -10,7 +10,7 @@ const module = { exports: {} };
 runInNewContext(script, { exports: module.exports, module, URL });
 const { hasNewBuild, signInForExpiredPage, staysInApp } = module.exports;
 
-const current = { href: 'https://jularr.test/Details/1', origin: 'https://jularr.test', pathname: '/Details/1', search: '' };
+const current = { href: 'https://jularr.test/Details/1', origin: 'https://jularr.test', pathname: '/Details/1', search: '', hash: '' };
 const element = (attributes = {}, dataset = {}) => ({
     target: attributes.target ?? '', dataset,
     hasAttribute: name => name in attributes
