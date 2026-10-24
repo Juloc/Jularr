@@ -123,6 +123,9 @@ function registerPreviewStream(
         const previousButtonStates = submitButtons.map(control => control.disabled);
         for (const control of submitButtons) control.disabled = true;
         const source = new FormData(form);
+        const editable = Array.from(form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input:not([type=hidden]), select, textarea"));
+        const originalStates = editable.map(control => control.disabled);
+        for (const control of editable) control.disabled = true;
         ++runningImportRequests;
         form.setAttribute("aria-busy", "true");
         const panel = document.createElement("section");
@@ -231,6 +234,7 @@ function registerPreviewStream(
             --runningImportRequests;
             form.removeAttribute("aria-busy");
             form.dataset.importBusy = "false";
+            editable.forEach((control, index) => { control.disabled = originalStates[index]; });
             submitButtons.forEach((control, index) => { control.disabled = previousButtonStates[index]; });
             form.requestSubmit(button);
         }
@@ -297,6 +301,9 @@ function initializeLiveImport(): void {
         for (const button of controls) button.disabled = true;
 
         const source = new FormData(form);
+        const editable = Array.from(form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input:not([type=hidden]), select, textarea"));
+        const originalStates = editable.map(control => control.disabled);
+        for (const control of editable) control.disabled = true;
         ++runningImportRequests;
         const total = form.querySelectorAll('input[name$=".Index"]').length;
         const panel = document.createElement("section");
@@ -516,6 +523,7 @@ function initializeLiveImport(): void {
             for (const button of controls) if (button !== apply) button.disabled = false;
             apply.disabled = true;
         } finally {
+            editable.forEach((control, index) => { control.disabled = originalStates[index]; });
             --runningImportRequests;
             form.dataset.importBusy = "false";
             form.removeAttribute("aria-busy");
