@@ -1229,6 +1229,7 @@ namespace Jularr.Frontend.Localization
             new("app.byJularr", "by Jularr"),
             new("instance.module.Library", "Library"),
             new("instance.module.Requests", "Requests"),
+            new("instance.module.Browser", "Browser support (optional download and clean uninstall)"),
             new("instance.module.Acquisition", "Arr+"),
             new("requests.title", "My requests"),
             new("request.language", "Requested language"),

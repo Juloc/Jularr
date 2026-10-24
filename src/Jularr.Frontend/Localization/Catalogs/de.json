@@ -2936,6 +2936,10 @@
    "Requests",
    "Anfragen"
   ],
+  "instance.module.Browser": [
+   "Browser support",
+   "Browser-Unterstützung"
+  ],
   "instance.module.Acquisition": [
    "Arr+",
    "Arr+"
