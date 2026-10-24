@@ -10,6 +10,24 @@ namespace Jularr.Backend.Tests
     public sealed class SourceBrowserTests
     {
         [TestMethod]
+        public async Task ManagedBrowser_RemovesAbandonedStagingWithoutTouchingOtherFolders()
+        {
+            using var folder = new TemporaryDirectory();
+            var managed = Path.Combine(folder.Path, "managed", "staging");
+            var unrelated = Path.Combine(folder.Path, "library");
+            Directory.CreateDirectory(managed);
+            Directory.CreateDirectory(unrelated);
+            await File.WriteAllTextAsync(Path.Combine(managed, "stale.part"), "incomplete");
+            await File.WriteAllTextAsync(Path.Combine(unrelated, "keep.epub"), "keep");
+            var packages = new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path });
+
+            Assert.IsTrue(packages.HasManagedData);
+            await packages.RemoveAsync(CancellationToken.None);
+            Assert.IsFalse(packages.HasManagedData);
+            Assert.IsTrue(File.Exists(Path.Combine(unrelated, "keep.epub")));
+        }
+
+        [TestMethod]
         public async Task Browser_ReadsAPageBehindACheckAndFetchesItsFile()
         {
             var browser = Environment.GetEnvironmentVariable("JULARR_BROWSER");

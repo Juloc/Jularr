@@ -61,7 +61,8 @@ kopieren, Release und Datenbankpasswort setzen, `docker compose up -d`, dann `ht
 (auf dem `PATH` gefunden; ein gesetzter Pfad gewinnt, ein leerer schaltet das Programm ab), aller
 Zustand liegt unter `DataPath` (`/data` im Image: `keys`, `backups`, `trickplay`, `translation`, `ocr`),
 Bibliotheken unter `/media` (`Storage:LocalPaths`). Eine leere Datenbank erhält beim ersten Start
-alle frischen Baselines in einer Transaktion; eine bestehende wird nie verändert oder migriert.
+die Baselines mit den nummerierten Migrationen; eine ältere bestehende Version wird nur nach
+erfolgreichem Backup migriert.
 
 ### Browser für Quellen mit Browserprüfung
 

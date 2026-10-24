@@ -36,7 +36,7 @@ namespace Jularr.Backend.Service.System.Browser.V1
             var enabled = modules.Any(module => module.Key == "Browser" && module.IsEnabled);
             if (!enabled)
             {
-                if (_packages.State != "disabled" || _packages.Enabled)
+                if (_packages.State != "disabled" || _packages.Enabled || _packages.HasManagedData)
                 {
                     _packages.Enabled = false;
                     await _browser.StopAsync();
