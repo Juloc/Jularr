@@ -122,7 +122,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$TAG" dist/* --clobber=false
+        run: gh release upload "$TAG" dist/*
       - name: Remove signing file
         if: always()
         run: rm -f "$RUNNER_TEMP/jularr-tv-release.jks"
