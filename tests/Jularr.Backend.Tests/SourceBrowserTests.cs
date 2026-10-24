@@ -174,6 +174,27 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ManagedBrowser_DisabledExternalBrowserRemovesOnlyItsOwnedState()
+        {
+            using var folder = new TemporaryDirectory();
+            var home = Path.Combine(folder.Path, "browser");
+            Directory.CreateDirectory(Path.Combine(home, "profile"));
+            Directory.CreateDirectory(Path.Combine(home, "downloads"));
+            File.WriteAllText(Path.Combine(home, ".enabled"), "1");
+            File.WriteAllText(Path.Combine(home, "keep.txt"), "user-file");
+            using var source = new SourceBrowser(new BrowserOptions { ProfilePath = home, Path = "", IsManaged = true });
+            using var module = new ManagedBrowserModule(new BrowserOptions { ProfilePath = home, IsManaged = true }, source);
+
+            await module.ReconcileAsync(enabled: false, CancellationToken.None);
+
+            Assert.AreEqual("disabled", module.State);
+            Assert.IsFalse(File.Exists(Path.Combine(home, ".enabled")));
+            Assert.IsFalse(Directory.Exists(Path.Combine(home, "profile")));
+            Assert.IsFalse(Directory.Exists(Path.Combine(home, "downloads")));
+            Assert.AreEqual("user-file", File.ReadAllText(Path.Combine(home, "keep.txt")));
+        }
+
+        [TestMethod]
         public async Task Browser_WithoutABinaryAnswersNothing()
         {
             using var folder = new TemporaryDirectory();
