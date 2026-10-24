@@ -37,6 +37,11 @@ export function pagePrint(source: HTMLElement, page: number, width: number, heig
         const append = (element: HTMLElement, box: DOMRect, top = box.top) => {
             if (++runs > Limit) throw new Error('Page print exceeds its visible-run limit');
             Object.assign(element.style, { position: 'absolute', left: `${box.left - left}px`, top: `${top - bounds.top}px` });
+            // Reuse the original measured ink bounds when fitting a thick stack.
+            element.dataset.printLeft = String(box.left - left);
+            element.dataset.printTop = String(top - bounds.top);
+            element.dataset.printWidth = String(box.width);
+            element.dataset.printHeight = String(box.height);
             viewport.append(element);
         };
         // Static table/rule paint and native list markers are bounded to this page too.
