@@ -89,7 +89,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             int? minimumSizeMb, int? maximumSizeMb, long? version = null, MediaSubtype? mediaSubtypeId = null, string[]? qualityOrder = null,
             BaseDataList<QualityGroupV1>? qualityGroups = null, BaseDataList<CustomFormatScoreV1>? formatScores = null,
             int minimumFormatScore = 0, int cutoffFormatScore = 0, int minimumUpgradeFormatScore = 1, string[]? languageOrder = null,
-            LanguageFallbackType languageFallback = LanguageFallbackType.Original)
+            LanguageFallbackType languageFallback = LanguageFallbackType.Any)
         {
             Name = name;
             MediaTypeId = mediaTypeId;
@@ -180,7 +180,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             int? minimumSizeMb, int? maximumSizeMb, MediaSubtype? mediaSubtypeId, string[]? qualityOrder, BaseDataList<QualityGroupV1>? qualityGroups,
             BaseDataList<CustomFormatScoreV1>? formatScores, int minimumFormatScore, int cutoffFormatScore, int minimumUpgradeFormatScore,
             int wantedCount, long version, string[] monitoredTypes, string[] monitoredLanguages, int? minimumPages,
-            string[]? languageOrder = null, LanguageFallbackType languageFallback = LanguageFallbackType.Original)
+            string[]? languageOrder = null, LanguageFallbackType languageFallback = LanguageFallbackType.Any)
         {
             Id = id;
             Name = name;

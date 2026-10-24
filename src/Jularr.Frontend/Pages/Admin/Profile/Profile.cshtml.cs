@@ -40,7 +40,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         [BindProperty] public string? LanguageOrder { get; set; }
 
         // The fallback when no file carries an asked language.
-        [BindProperty] public LanguageFallbackType LanguageFallback { get; set; } = LanguageFallbackType.Original;
+        [BindProperty] public LanguageFallbackType LanguageFallback { get; set; } = LanguageFallbackType.Any;
         [BindProperty] public List<GroupRow> QualityGroups { get; set; } = [];
         [BindProperty] public List<ScoreRow> FormatScores { get; set; } = [];
         [BindProperty] public int MinimumFormatScore { get; set; }
@@ -162,7 +162,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             var rows = _formats.Select(format => new CustomFormatScoreV1(format.Id, input.FormatScores.FirstOrDefault(score => score.FormatId == format.Id)?.Score ?? 0)).ToList();
             rows.AddRange(input.FormatScores.Where(score => _formats.All(format => format.Id != score.FormatId)));
             return new(input.Name, input.MediaTypeId, input.IsDefault, input.AllowedQualities, input.UpgradeAllowed, input.UpgradeCutoffQuality, input.MinimumSizeMb, input.MaximumSizeMb, input.Version,
-                input.MediaSubtypeId, input.QualityOrder, input.QualityGroups, new(rows), input.MinimumFormatScore, input.CutoffFormatScore, input.MinimumUpgradeFormatScore);
+                input.MediaSubtypeId, input.QualityOrder, input.QualityGroups, new(rows), input.MinimumFormatScore, input.CutoffFormatScore, input.MinimumUpgradeFormatScore, input.LanguageOrder, input.LanguageFallback);
         }
 
         private IUiComponent Draft(string key, string command, string value) => new Button(new Text(key)).Attribute("type", "submit").Attribute("formaction", Address("Draft"))

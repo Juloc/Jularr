@@ -72,14 +72,14 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public void Selection_NoFallback_Leaves_TheOriginal_Without_Preference()
+        public void Selection_NoFallback_LeavesOtherLanguagesForManualReview()
         {
-            // Without a fallback the original language is not preferred; the other file wins the tie.
             var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.None, "IT"),
                 [Candidate("Héctor García - IKIGAI (ES) (epub)"), Candidate("Héctor García - IKIGAI (IT) (epub)")]);
 
-            Assert.IsNotNull(result.Winner);
-            Assert.AreEqual("Héctor García - IKIGAI (ES) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+            Assert.IsNull(result.Winner);
+            Assert.IsTrue(result.Ranked.All(evaluation => evaluation.Decision == SelectionDecision.ManualReview));
+            Assert.IsTrue(result.Ranked.All(evaluation => evaluation.Reasons.Any(reason => reason.Code == "LanguageNotAllowed")));
         }
 
         [TestMethod]
@@ -128,13 +128,133 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void Selection_TheSourceWithTheHigherPriority_Comes_First()
         {
-            // As in Readarr: the preferred source decides, the quality only among its own releases.
+            // Within the same language, the preferred source wins.
             var result = ReleaseSelectionEngine.Select(Profile(),
-                [Candidate("Héctor García - IKIGAI (EN) (epub)", false, 2, "Usenet"), Candidate("Héctor García - IKIGAI (DE) (epub)", false, 1, "Anna")]);
+                [Candidate("Héctor García - IKIGAI (DE) (epub)", false, 2, "Usenet"), Candidate("Héctor García - IKIGAI (DE) (epub)", false, 1, "Anna")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Anna", result.Winner.Candidate.Indexer);
+            Assert.AreEqual("IndexerPriority", result.WinnerReason!.Code);
+        }
+
+        [TestMethod]
+        public void Selection_RequestedLanguageBeatsHigherPriorityFallback()
+        {
+            var result = ReleaseSelectionEngine.Select(Profile(),
+                [Candidate("Héctor García - IKIGAI (EN) (epub)", false, 1, "Usenet"),
+                 Candidate("Héctor García - IKIGAI (DE) (epub)", false, 50, "Anna")]);
 
             Assert.IsNotNull(result.Winner);
             Assert.AreEqual("Héctor García - IKIGAI (DE) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
-            Assert.AreEqual("IndexerPriority", result.WinnerReason!.Code);
+        }
+
+        [TestMethod]
+        public void Selection_UnrequestedLanguageIsManualEvenWhenItIsTheOnlyResult()
+        {
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Original, "JA"),
+                [Candidate("Héctor García - IKIGAI (ES) (epub)")]);
+
+            Assert.IsNull(result.Winner);
+            Assert.AreEqual(SelectionDecision.ManualReview, result.Ranked.Single().Decision);
+            Assert.AreEqual("LanguageNotAllowed", result.Ranked.Single().Reasons.Last().Code);
+        }
+
+        [TestMethod]
+        public void Selection_UntaggedBookDoesNotGuessOriginalLanguage()
+        {
+            var candidate = Candidate("Héctor García - IKIGAI (epub)");
+            Assert.AreEqual(0, candidate.Languages.Count);
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Original, "EN"), [candidate]);
+
+            Assert.IsNull(result.Winner);
+            Assert.AreEqual(SelectionDecision.ManualReview, result.Ranked.Single().Decision);
+            Assert.AreEqual("LanguageUnknown", result.Ranked.Single().Reasons.Last().Code);
+        }
+
+        [TestMethod]
+        public void Selection_RequestedLanguageBeatsSourcePriorityAndExplainsWhy()
+        {
+            var result = ReleaseSelectionEngine.Select(Profile(),
+                [Candidate("Héctor García - IKIGAI (EN) (epub)", false, 1, "Usenet"),
+                 Candidate("Héctor García - IKIGAI (DE) (epub)", false, 50, "Anna")]);
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("PreferredLanguage", result.WinnerReason!.Code);
+        }
+
+        [TestMethod]
+        public void Selection_FlexibleFallbackAcceptsOtherKnownLanguages()
+        {
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Any, "JA"),
+                [Candidate("Héctor García - IKIGAI (ES) (epub)")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual(SelectionDecision.Eligible, result.Winner.Decision);
+        }
+
+        [TestMethod]
+        public void Selection_FlexibleFallbackPrefersOriginalBeforeOtherSources()
+        {
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Any, "JA"),
+                [Candidate("Héctor García - IKIGAI (ES) (epub)", false, 1, "Usenet"),
+                 Candidate("Héctor García - IKIGAI (JA) (epub)", false, 50, "Anna")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (JA) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+            Assert.AreEqual("PreferredLanguage", result.WinnerReason!.Code);
+        }
+
+        [TestMethod]
+        public void Selection_FlexibleFallbackRanksUnknownLast()
+        {
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Any, "JA"),
+                [Candidate("Héctor García - IKIGAI (epub)", false, 1, "Usenet"),
+                 Candidate("Héctor García - IKIGAI (ES) (epub)", false, 50, "Anna")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (ES) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+        }
+
+        [TestMethod]
+        public void Selection_FlexibleAnyLanguageFallbackPrefersQualityOverIndexerPriority()
+        {
+            var profile = new QualityProfile("profile", "Profile", ["EPUB", "PDF"], ["EPUB", "PDF"], false, null, null, null)
+            {
+                IsBook = true,
+                LanguageOrder = ["DE"],
+                OriginalLanguage = "JA",
+                LanguageFallback = LanguageFallbackType.Any
+            };
+            var result = ReleaseSelectionEngine.Select(profile,
+                [Candidate("Héctor García - IKIGAI (ES) (pdf)", false, 1, "Usenet"),
+                 Candidate("Héctor García - IKIGAI (FR) (epub)", false, 50, "Anna")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (FR) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+            Assert.AreEqual("HigherQuality", result.WinnerReason!.Code);
+        }
+
+        [TestMethod]
+        public void Selection_StrictModeWithoutAnyRequestedLanguageNeverDownloadsAutomatically()
+        {
+            var profile = new QualityProfile("profile", "Strict", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true,
+                LanguageFallback = LanguageFallbackType.None
+            };
+            var result = ReleaseSelectionEngine.Select(profile, [Candidate("Héctor García - IKIGAI (EN) (epub)")]);
+
+            Assert.IsNull(result.Winner);
+            Assert.AreEqual(SelectionDecision.ManualReview, result.Ranked.Single().Decision);
+        }
+
+        [TestMethod]
+        public void Selection_StrictModeRejectsUnknownLanguage()
+        {
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.None),
+                [Candidate("Héctor García - IKIGAI (epub)")]);
+
+            Assert.IsNull(result.Winner);
+            Assert.AreEqual("LanguageUnknown", result.Ranked.Single().Reasons.Last().Code);
         }
 
         [TestMethod]
