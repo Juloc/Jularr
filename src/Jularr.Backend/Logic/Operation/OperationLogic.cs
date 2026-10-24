@@ -180,7 +180,7 @@ namespace Jularr.Backend.Logic.Operation
                     "FinishedAt" = CASE WHEN @OperationStatusTypeId IN (3, 4) THEN now() END
                 WHERE
                     operation."Id" = @Id
-                    AND operation."OperationTypeId" IN (1, 3, 5)
+                    AND operation."OperationTypeId" IN (1, 3, 5, 6)
                     AND operation."OperationStatusTypeId" = 2;
                 """;
             sql.Parameters.Add(data);
@@ -301,7 +301,7 @@ namespace Jularr.Backend.Logic.Operation
                     "OperationStatusTypeId" = 1,
                     "StartedAt" = NULL
                 WHERE
-                    operation."OperationTypeId" IN (1, 3, 5)
+                    operation."OperationTypeId" IN (1, 3, 5, 6)
                     AND operation."OperationStatusTypeId" = 2;
                 """;
             return ctx.ExecuteAsyncForAffectedRows(sql, ct);
