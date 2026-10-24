@@ -111,7 +111,7 @@ onPage(import.meta.url, () => document.querySelectorAll<HTMLElement>('[data-fold
         }
         const url = new URL(currentUrl, location.href);
         const mountId = url.searchParams.get('storageMountId');
-        if (!mountId || !/^\\d+$/.test(mountId)) return;
+        if (!mountId || !/^\d+$/.test(mountId)) return;
         const relativePath = url.searchParams.get('path') ?? '';
         const token = picker.closest('form')?.querySelector<HTMLInputElement>('input[name="__RequestVerificationToken"]')?.value ?? '';
         content!.inert = true;
