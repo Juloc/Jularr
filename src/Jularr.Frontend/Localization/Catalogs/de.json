@@ -73,6 +73,7 @@
   "console.cleanup": ["Delete files","Dateien löschen"],
   "console.deleteConfirmTitle": ["Delete verified orphan folder?", "Verwaisten Ordner wirklich löschen?"],
   "console.deletePreview": ["The selected folder and its contents will be permanently removed. Files and total size:", "Der ausgewählte Ordner samt Inhalt wird dauerhaft gelöscht. Anzahl Dateien und Gesamtgröße:"],
+  "console.nextPage": ["Next page", "Nächste Seite"],
   "console.filesWarning": ["Only explicit SABnzbd orphans in the incomplete folder can be manually deleted. Unassigned files are read-only.","Manuell löschbar sind nur von SABnzbd gemeldete verwaiste Ordner im Incomplete-Verzeichnis. Unzugeordnete Dateien bleiben schreibgeschützt."],
   "progress.saveFailed": [
    "Progress could not be saved. Jularr will retry temporary failures.",
