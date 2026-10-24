@@ -1,5 +1,5 @@
 import htmx from "htmx.org";
-import { hasNewBuild, staysInApp } from "./Navigation";
+import { hasNewBuild, signInForExpiredPage, staysInApp } from "./Navigation";
 
 // The settle step temporarily copies every old attribute, including control values.
 // Focused inputs then keep that stale value. Native SCSS transitions need no such step.
@@ -27,9 +27,21 @@ document.addEventListener("htmx:before:init", event => {
     }
 });
 
+// Expired authentication is a normal full navigation, never an htmx region swap.
+// POST is not repeated: after signing in, return to the current GET page instead.
+document.addEventListener("htmx:after:request", event => {
+    const ctx = contextOf(event);
+    if (ctx.response?.raw.status !== 401) return;
+    location.assign(signInForExpiredPage(ctx.request.method, ctx.request.action, location));
+});
+
 // A response that is not an app page (sign-in after expiry, a redirect to another shell) is loaded as a page.
 document.addEventListener("htmx:before:swap", event => {
     const ctx = contextOf(event);
+    if (ctx.response?.raw.status === 401) {
+        event.preventDefault();
+        return;
+    }
     // Never swap HTML from a new release into the old document's CSS and JavaScript.
     // A mutation has already happened on POST, so navigate to the current GET page instead of repeating the action.
     if (hasNewBuild(document.documentElement.dataset.build, ctx.text)) {
