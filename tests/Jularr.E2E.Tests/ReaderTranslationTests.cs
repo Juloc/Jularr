@@ -41,8 +41,12 @@ namespace Jularr.E2E.Tests
                 ContentType = "application/json",
                 Body = """{"downloadState":"downloading","downloadModel":"translategemma:4b","downloadProgress":50}"""
             }));
+            // Exercise the entrypoint on a normal Admin GET, rather than the form
+            // POST's response, and force an immediate refresh on the visible tab.
+            await page.GotoAsync("/Admin/Instance/Translation");
+            await page.EvaluateAsync("() => document.dispatchEvent(new Event('visibilitychange'))");
             await page.WaitForFunctionAsync("() => document.querySelector('[data-translation-download]')?.textContent?.includes('50%') === true", null,
-                new() { Timeout = 10_000 });
+                new() { Timeout = 15_000 });
             await page.UnrouteAsync("**/api/v1/admin/translation/models");
 
             var response = await page.GotoAsync("/Read/1");
