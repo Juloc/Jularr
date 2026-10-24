@@ -113,3 +113,17 @@
     .download-console__section { padding: 12px; }
     .download-console__metric { padding: 12px; }
 }
+
+.native-storage-notice {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-small);
+    margin-block: 10px;
+}
+.native-storage-notice > span { min-width: 0; flex: 1 1 260px; }
+.native-storage-notice > a { flex: 0 0 auto; }
