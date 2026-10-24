@@ -86,7 +86,7 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
                     break;
                 case "update":
                 case "repair":
-                    if (!_packages.Enabled) throw new DataValidationException(nameof(Data.Action), "not_allowed");
+                    if (!_packages.Enabled && _packages.State != "failed") throw new DataValidationException(nameof(Data.Action), "not_allowed");
                     // The worker performs installation; stop Chrome before replacing its binary.
                     await _browser.StopAsync();
                     _packages.RequestRefresh(repair: Data.Action == "repair");
