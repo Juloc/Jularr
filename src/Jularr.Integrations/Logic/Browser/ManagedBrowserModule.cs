@@ -76,6 +76,14 @@ namespace Jularr.Integrations.Logic.Browser
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
+                // Failed startup must not leave a broken browser exposed as available.
+                if (enabled && !browser.Status.IsRunning)
+                {
+                    var marker = Path.Combine(_home, ".enabled");
+                    if (File.Exists(marker)) File.Delete(marker);
+                    StopRunner();
+                }
+
                 State = "error";
                 LastError = exception.Message;
             }
