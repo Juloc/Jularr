@@ -2,17 +2,17 @@
 
 > Later owner decisions in [BACKEND_NEXT](BACKEND_NEXT.md) take precedence: the first Owner is created in Setup without installation proof, Prowlarr/Sonarr/Radarr are one-time takeover sources only, Wake-on-LAN is an Owner setting, Games use the unified Arr+ and conversions use HLS with hls.js.
 
-Status: **historical feature and technical-dependency reference only, not an active implementation schedule.** This document does not authorize coding, parallel work, migration or database resets. Current decisions, GitHub issues and owner-approved specifications govern each implementation.
+Status: **historical** feature/technical dependency snapshot from 12 October 2026. Not current `main` implementation status, delivery schedule or authorization for coding/migration/database resets. Its old file counts, wizard length, branch paths and gaps are dated. See [documentation authority](DOCUMENTATION_POLICY.md), current code and approved issues/PRs.
 
 ## 0. Evidence and source hierarchy
 
-1. **Current implementation and binding architecture:** `clean-start`: `AGENTS.md`, `docs/CONVENTIONS.md`, `docs/FRONTEND_CONVENTIONS.md`, `docs/CODEMAP.md`, `docs/BACKEND_NEXT.md`, `docs/INSTANCE_SETUP.md`, `database/Account.sql`. Its current Backend has authentication/Profile/localization core, but **not** Work/Library/Scan/Playback/Arr+ runtime.
+1. **Implementation snapshot from 12 October 2026 (not current `main`):** `clean-start`: `AGENTS.md`, `docs/CONVENTIONS.md`, `docs/FRONTEND_CONVENTIONS.md`, `docs/CODEMAP.md`, `docs/BACKEND_NEXT.md`, `docs/INSTANCE_SETUP.md`, `database/Account.sql`. Its current Backend has authentication/Profile/localization core, but **not** Work/Library/Scan/Playback/Arr+ runtime.
 2. **Approved UX, subject to more recent decisions:** historical `dev` specs in `docs/mockups/**/SPEC.md`, especially setup, storage, admin acquisition settings/manual search/wanted, discover/home, login/profile, library, player and user settings.
 3. **Inventory/triage:** `docs/documentation-audit-20261011` (`docs/audit/2026-10-11/README.md`, `MD_INVENTORY.md`, `CONFLICTS.md`) inventories 146 MDs/74 screen specs/94 mockup images. **This is incomplete content triage, not approval of an older runtime design.** `backup/docs-specs-pre-audit-20261011` preserves pre-audit source.
 4. **Old behavior references only:** `dev/src/Jularr.Web` (1,806 old Web files). Inspect the narrow exact feature only; translate observable behavior, algorithms and tests to new contracts. **Do not copy old Pages, Stores, SQLite/JSON persistence, dependency injection or incompatible DTOs into the new host.**
 5. Functional contract issues: [#813](https://github.com/Juloc/Jularr/issues/813) core request-to-play parity, [#396](https://github.com/Juloc/Jularr/issues/396) unified acquisition, [#403](https://github.com/Juloc/Jularr/issues/403) playback, [#888](https://github.com/Juloc/Jularr/issues/888) demand-paced transcoding, [#857](https://github.com/Juloc/Jularr/issues/857) resource budgets, [#880](https://github.com/Juloc/Jularr/issues/880) *historical full database cutover tracker*, [#930](https://github.com/Juloc/Jularr/issues/930) UI, [#864](https://github.com/Juloc/Jularr/issues/864) Search Planner. The current clean-start baseline overrides historical draft table inventories and stale issue comments.
 
-**Current hard gap:** `clean-start` has 22 Backend Service source files, six Logic source files, 19 Razor PageModels, one Account SQL baseline, and no real Work/Library/Player/Arr+ Backend verticals. Do not call prepared empty pages complete. The older `dev` implementation was much larger but not directly compatible.
+**Gap recorded only on 12 October:** that `clean-start` snapshot had 22 Backend Service source files, six Logic source files and 19 Razor PageModels without the Work/Library/Player/Arr+ verticals. Those claims are obsolete for current `main`; the older `dev` implementation was not directly compatible.
 
 ## 1. Delivery policy and realistic target
 
@@ -58,7 +58,7 @@ Create a single small reviewed contract PR, **not** a weeks-long inventory. Defi
 
 The capability areas above are a reference inventory, not separate implementation lanes. Implement one owner-approved package at a time; keep SQL/DTO changes and reviews scoped, and never merge `dev` as a bulk import.
 
-## 5. Historical capability and verification checklist
+## 5. Historical capability and verification checklist (not current setup)
 
 ### Account bootstrap and setup
 Provision an **isolated PostgreSQL DB**, install approved fresh SQL, ensure `JULARR_DB`, local HTTPS and Vite production assets. Use current host/Backend auth; add exactly-once Owner installation proof, authorized Owner+Profile login, secure cookie, actual logout/profile switch. Read readiness (DB, schema, app-data permission, media mounts, disk). Minimal Setup must save real instance/module/locale/timezone state, one library root, one metadata provider, one indexer, one SABnzbd connection; run bounded connectivity tests. Surface partial errors; optional AI/migration/branding/backup sections remain legitimately skippable when unsupported, not fake completed.

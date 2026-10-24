@@ -1,12 +1,14 @@
-# Next backend slices
+# Historical backend slices
 
-Owner decisions and implementation order. Follow [conventions](CONVENTIONS.md);
+Status: **historical** architecture and progress reference, not the current implementation order or approval for new work. See [documentation authority](DOCUMENTATION_POLICY.md), current code and approved issues/PRs.
+
+Original recovery grouping. Follow [conventions](CONVENTIONS.md);
 current owners and actual implementation are in [CODEMAP](CODEMAP.md).
 The [original table snapshot](https://github.com/Juloc/Jularr/blob/docs/sql-cutoff-schema-json-20261011/docs/SQL_CUTOFF_ORIGINAL_TABLES.json)
 defines the agreed media structure, not the legacy code layout. Complete missing
 column definitions within those contracts; do not restart architecture planning.
 
-## Order and ownership
+## Historical slice grouping and ownership
 
 | Slice | Services / Logic | Persistence |
 | --- | --- | --- |
@@ -176,11 +178,9 @@ The owner requires the following coverage beyond the first connected pages:
 specification of extensions. These targets are not implemented capability claims.
 Latest decisions, fresh schema contracts and dependency approvals still apply. Previous implementation schedules are not development requirements; legacy parity alone does not authorize active-database migrations.
 
-## Remaining decisions and prerequisites
+## Dated decisions and progress notes
 
-The owner authorizes continued implementation of agreed topics in coherent
-packages: one bundled commit, own feature branch/PR, then clean-start integration
-after green checks. Collect unresolved questions while progressing independent
+These paragraphs record the earlier recovery plan, not blanket implementation authorization. Current approval, tests and PR rules follow AGENTS.md. Collect unresolved questions while progressing independent
 work; framework limitations and new dependencies require discussion, not workarounds.
 Instance settings, Library configuration, User capabilities and public name/language
 consumption are connected. Library gates actual Services through their existing

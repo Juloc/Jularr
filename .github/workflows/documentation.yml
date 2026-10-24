@@ -1,0 +1,38 @@
+name: Documentation
+
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'AGENTS.md'
+      - 'README.md'
+      - 'docs/**'
+      - 'src/Jularr.Frontend/CODEMAP.md'
+      - 'scripts/verify-documentation.mjs'
+      - '.github/workflows/documentation.yml'
+  push:
+    branches: [main, dev]
+    paths:
+      - 'AGENTS.md'
+      - 'README.md'
+      - 'docs/**'
+      - 'src/Jularr.Frontend/CODEMAP.md'
+      - 'scripts/verify-documentation.mjs'
+      - '.github/workflows/documentation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  links-and-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Verify documentation links and statuses
+        run: node scripts/verify-documentation.mjs
