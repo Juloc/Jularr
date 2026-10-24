@@ -160,7 +160,7 @@ namespace Jularr.Frontend.Pages.User.Reader
             var settings = Settings(false, _source?.HasPdf == true);
             // Without a configured language the panel says so and leads to where the profile sets it.
             var languages = _languages.Length == 0
-                ? new Div(new P(new Text("reader.language.none")), new A(new Text("reader.language.configure")).Class("button").Attribute("href", "/Settings")).Class("reader__panel")
+                ? new Div(new P(new Text("reader.language.none"))).Class("reader__panel")
                     .Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"])
                 : new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
                     .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false")),

@@ -11837,8 +11837,8 @@
    "Absatzabstand (%)"
   ],
   "reader.language.none": [
-   "No reading language is set up yet. Choose your languages in the profile settings.",
-   "Noch keine Lesesprache eingerichtet. Wähle deine Sprachen in den Profileinstellungen."
+   "No translation engine is available right now. You can still read this book in its original language.",
+   "Derzeit ist keine Übersetzungs-Engine verfügbar. Du kannst das Buch weiterhin in seiner Originalsprache lesen."
   ],
   "reader.language.configure": [
    "Open profile settings",
