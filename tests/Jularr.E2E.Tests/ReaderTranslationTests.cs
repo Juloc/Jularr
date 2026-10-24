@@ -27,6 +27,24 @@ namespace Jularr.E2E.Tests
             await ReadingPathTests.AddBookAsync(page, folders, "Translation Reader");
             await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
 
+            // Admin: model availability, benchmark and live status on the same
+            // authenticated V1 endpoint used by the management page.
+            var admin = await page.GotoAsync("/Admin/Instance/Translation");
+            Assert.AreEqual(200, admin!.Status);
+            await Assertions.Expect(page.Locator("form[data-translation-submit=benchmark]")).ToHaveCountAsync(1);
+            await page.Locator("form[data-translation-submit=benchmark] button[type=submit]").ClickAsync();
+            await Assertions.Expect(page.Locator("body")).ToContainTextAsync("id → de: Kapitel Eins", new() { Timeout = 60_000 });
+
+            await page.RouteAsync("**/api/v1/admin/translation/models", route => route.FulfillAsync(new()
+            {
+                Status = 200,
+                ContentType = "application/json",
+                Body = """{"downloadState":"downloading","downloadModel":"translategemma:4b","downloadProgress":50}"""
+            }));
+            await page.WaitForFunctionAsync("() => document.querySelector('[data-translation-download]')?.textContent?.includes('50%') === true", null,
+                new() { Timeout = 10_000 });
+            await page.UnrouteAsync("**/api/v1/admin/translation/models");
+
             var response = await page.GotoAsync("/Read/1");
             Assert.AreEqual(200, response!.Status);
             await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Chapter One");
