@@ -28,6 +28,7 @@ fun TvSetupScreen(
     discovering: Boolean = false,
     discovered: List<DiscoveredJularrServer> = emptyList(),
     onConnect: (String) -> Unit,
+    onDiscoverAgain: () -> Unit = {},
 ) {
     var origin by rememberSaveable(initialOrigin) { mutableStateOf(initialOrigin) }
     var localError by remember { mutableStateOf<String?>(null) }
@@ -71,6 +72,12 @@ fun TvSetupScreen(
                 text = stringResource(R.string.tv_setup_manual_heading),
                 style = MaterialTheme.typography.titleMedium,
             )
+        }
+
+        if (!discovering) {
+            Button(enabled = !busy, onClick = onDiscoverAgain) {
+                Text(stringResource(R.string.tv_setup_discover_again))
+            }
         }
 
         TvInput(
