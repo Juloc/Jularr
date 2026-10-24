@@ -181,6 +181,59 @@ export function printPlacement(profile: ReturnType<typeof paperProfile>, side: s
         shift: (side === 'left' ? 1 : -1) * profile.inset * pixelScale / 2 };
 }
 
+// Fit decorative printed runs to the curved paper silhouette without changing
+// canonical pagination, type size or the physical page shape.
+export interface PrintInkBounds { left: number; top: number; width: number; height: number }
+
+export function fitPrintedInk(profile: ReturnType<typeof paperProfile>, side: string, pageWidth: number,
+    printLeft: number, runs: readonly PrintInkBounds[]): number[] {
+    if (runs.length === 0 || pageWidth <= 0) return runs.map(() => 0);
+    const scale = pageWidth / 148, contour = paperOutline(profile).slice(0, 41);
+    const paperTop = -profile.lift * scale, paperHeight = (profile.height + profile.lift) * scale;
+    const inkOrigin = -profile.footerLift * scale;
+    const edge = (pixelX: number) => {
+        const x = Math.max(0, Math.min(1, pixelX / pageWidth));
+        for (let i = 1; i < contour.length; i++) {
+            if (x > contour[i].x && i < contour.length - 1) continue;
+            const a = contour[i - 1], b = contour[i];
+            const ratio = b.x > a.x ? Math.max(0, Math.min(1, (x - a.x) / (b.x - a.x))) : 0;
+            return paperTop + (a.y + (b.y - a.y) * ratio) * paperHeight;
+        }
+        return paperTop + contour[contour.length - 1].y * paperHeight;
+    };
+    const safety = 3;
+    const limits = runs.map(run => {
+        const left = printLeft + run.left, right = left + run.width;
+        const from = side === 'left' ? pageWidth - right : left;
+        const to = side === 'left' ? pageWidth - left : right;
+        const edges = [edge(from), edge(to)];
+        // Include any inner crown maximum, not just the rectangle's endpoints.
+        for (const point of contour) if (point.x * pageWidth > from && point.x * pageWidth < to)
+            edges.push(paperTop + point.y * paperHeight);
+        const upper = Math.max(...edges), lower = profile.height * scale + Math.min(...edges);
+        return { min: upper + safety - (inkOrigin + run.top),
+            max: lower - safety - (inkOrigin + run.top + run.height) };
+    });
+    const floor = Math.max(...limits.map(limit => limit.min));
+    const ceiling = Math.min(...limits.map(limit => limit.max));
+    if (floor <= ceiling) {
+        const shift = Math.max(floor, Math.min(0, ceiling));
+        return runs.map(() => shift);
+    }
+    // If the paper is too thick for one translation, progressively adjust
+    // line positions instead of scaling the glyphs or clipping first/last lines.
+    const first = Math.min(...runs.map(run => run.top));
+    const last = Math.max(...runs.map(run => run.top + run.height));
+    const extent = Math.max(1, last - first);
+    return runs.map((run, i) => {
+        const t = Math.max(0, Math.min(1, (run.top - first) / extent));
+        const ideal = floor + (ceiling - floor) * t;
+        return limits[i].min <= limits[i].max
+            ? Math.max(limits[i].min, Math.min(ideal, limits[i].max))
+            : 0; // A single oversized image cannot be fitted by translation.
+    });
+}
+
 export function paperOutline(profile: ReturnType<typeof paperProfile>): Point[] {
     const x = (value: number) => (value - profile.inset * (value / 148) ** 3) / 148;
     return [...profile.points.map(point => ({ x: x(point.x), y: (point.y + profile.lift) / (profile.height + profile.lift) })),
