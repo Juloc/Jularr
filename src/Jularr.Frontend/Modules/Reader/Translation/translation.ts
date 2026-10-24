@@ -88,6 +88,8 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         const route = `${source}/${target}`;
         if (worker && loaded === route) return worker;
         worker?.terminate();
+        worker = undefined;
+        loaded = undefined;
         const response = await fetch(reader.dataset.routeUrl! + route, { credentials: "same-origin" });
         if (!response.ok) throw new Error("No translation route.");
         const files = await response.json() as RouteFile[];
@@ -96,10 +98,15 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
             return { source: from, target: to, precision: step[0]?.precision ?? "int8shiftAlphaAll", files: Object.fromEntries(step.map(file => [file.fileType, file.url])) };
         });
         const started = createWorker();
-        await new Promise<void>((resolve, reject) => {
-            started.onmessage = event => event.data.type === "ready" ? resolve() : reject(new Error(event.data.message));
-            started.postMessage({ type: "load", engine: files.find(file => file.step === 0)!.url, models });
-        });
+        try {
+            await new Promise<void>((resolve, reject) => {
+                started.onmessage = event => event.data.type === "ready" ? resolve() : reject(new Error(event.data.message));
+                started.postMessage({ type: "load", engine: files.find(file => file.step === 0)!.url, models });
+            });
+        } catch (error) {
+            started.terminate();
+            throw error;
+        }
         worker = started;
         loaded = route;
         return started;
@@ -200,6 +207,9 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
             if (reader.dataset.translationEngine !== 'gemma' && reader.dataset.localModel && reader.dataset.localTranslationUrl
                 && current === target && generation === revision) {
                 try {
+                    // A failed browser batch may already have altered some text.
+                    // Local TranslateGemma must receive the original source, not that partial translation.
+                    restore();
                     reader.dataset.translationEngine = 'gemma';
                     reader.querySelector<HTMLButtonElement>('[data-local-quality-toggle]')?.setAttribute('aria-pressed', 'true');
                     await translateLocal(target, generation);
