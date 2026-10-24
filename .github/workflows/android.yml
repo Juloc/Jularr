@@ -75,3 +75,18 @@ jobs:
       - name: Compile unsigned TV release variant
         working-directory: clients/android
         run: gradle --build-cache :app-tv:assembleRelease -PjularrVersion=0.2.0
+      # A debug-signed preview may be sideloaded for physical TV smoke tests
+      # before a stable release. Its signing cert is NOT the protected release
+      # cert: uninstall a preview before installing an official Jularr-TV APK.
+      - name: Assemble installable TV preview
+        working-directory: clients/android
+        run: gradle --build-cache :app-tv:assembleDebug
+
+      - name: Upload installable TV preview APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: jularr-tv-preview-debug
+          path: clients/android/app-tv/build/outputs/apk/debug/app-tv-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
