@@ -10,7 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -32,6 +35,10 @@ internal fun TvV1CompanionOverlay(
     onDisconnect: () -> Unit,
     onClose: () -> Unit,
 ) {
+    val primaryFocus = remember { FocusRequester() }
+    LaunchedEffect(busy) {
+        if (!busy) runCatching { primaryFocus.requestFocus() }
+    }
     val bitmap = remember(url) {
         if (url == null) null else runCatching {
             val matrix = QRCodeWriter().encode(url, BarcodeFormat.QR_CODE, 280, 280)
@@ -61,7 +68,9 @@ internal fun TvV1CompanionOverlay(
         Text("Einladung gültig bis: $expiresAt", style = MaterialTheme.typography.bodySmall)
         if (busy) Text("Wird verbunden …")
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        Button(enabled = !busy, onClick = onRenew) { Text("Neuen QR-Code erzeugen") }
+        Button(enabled = !busy, onClick = onRenew, modifier = Modifier.focusRequester(primaryFocus)) {
+            Text("Neuen QR-Code erzeugen")
+        }
         Button(enabled = !busy, onClick = onDisconnect) { Text("Fernbedienung trennen") }
         Button(onClick = onClose) { Text("Schließen") }
     }
