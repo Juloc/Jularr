@@ -653,7 +653,7 @@ internal fun TvV1PlaybackHost(
             companionOverlay = if (companionVisible) {{
                 TvV1CompanionOverlay(
                     url = companionInvitation?.let { issued ->
-                        origin.trimEnd('/') + "/Companion#invite=" +
+                        origin.trimEnd('/') + "/companion-pair.html#invite=" +
                             URLEncoder.encode(issued.token, Charsets.UTF_8.name())
                     },
                     expiresAt = companionInvitation?.expiresAt ?: "",

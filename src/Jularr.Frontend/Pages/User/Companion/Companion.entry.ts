@@ -229,11 +229,17 @@ function setup(): void {
     });
 
     // The QR address carries its one-time secret only in a URL fragment, never a query or referrer.
-    const invite = new URLSearchParams(location.hash.slice(1)).get('invite');
+    // The public pairing landing preserves the fragment across the normal
+    // sign-in redirect, without sending it as a query or HTTP request.
+    const pendingKey = 'jularr.companion.pendingInvite.v1';
+    const pendingInvite = sessionStorage.getItem(pendingKey);
+    sessionStorage.removeItem(pendingKey);
+    const invite = new URLSearchParams(location.hash.slice(1)).get('invite') || pendingInvite;
     if (invite) {
+        if (grant) clearGrant();
         tokenInput.value = invite;
         history.replaceState(history.state, '', location.pathname + location.search);
-        if (!grant) void claimInvitation();
+        void claimInvitation();
     }
 
     render();

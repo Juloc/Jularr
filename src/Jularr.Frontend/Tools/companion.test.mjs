@@ -33,3 +33,23 @@ test('browser remote uses only authenticated V1 services and waits for TV acknow
     assert.match(source, /next\.lastCommandSucceeded === true/);
     assert.match(source, /history\.replaceState/);
 });
+
+test('a signed-out phone preserves only the invitation fragment across normal sign-in', () => {
+    const entrySource = readFileSync(new URL('../wwwroot/companion-pair.js', import.meta.url), 'utf8');
+    const pageSource = readFileSync(new URL('../wwwroot/companion-pair.html', import.meta.url), 'utf8');
+    const stored = new Map();
+    const events = [];
+    runInNewContext(entrySource, {
+        document: { getElementById: () => ({ textContent: '' }) },
+        location: { hash: '#invite=test-token', pathname: '/companion-pair.html', search: '' },
+        history: { state: null, replaceState: (_state, _unused, path) => events.push(['cleared', path]) },
+        window: { location: { replace: path => events.push(['redirect', path]) } },
+        sessionStorage: { setItem: (key, value) => stored.set(key, value) },
+        URLSearchParams,
+    });
+    assert.equal(stored.get('jularr.companion.pendingInvite.v1'), 'test-token');
+    assert.deepEqual(events, [['cleared', '/companion-pair.html'], ['redirect', '/Companion']]);
+    assert.match(pageSource, /companion-pair.js/);
+    assert.match(source, /sessionStorage.getItem\(pendingKey\)/);
+    assert.match(source, /sessionStorage.removeItem\(pendingKey\)/);
+});
