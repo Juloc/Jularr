@@ -62,10 +62,10 @@ namespace Jularr.Frontend.Pages.Admin.Translation
                     new P(new ValueText(model + " · " + sizeText + " GB · " + texts[state])),
                     installed && _models.Problem is null
                         ? new PostForm(Home + "?handler=Benchmark&model=" + Uri.EscapeDataString(model), csrf, [],
-                            new Button(new Text("translation.local.benchmark")).Submit())
+                            new Button(new Text("translation.local.benchmark")).Submit()).Attribute("data-translation-submit", "benchmark")
                         : canPull
                             ? new PostForm(Home + "?handler=Pull&model=" + Uri.EscapeDataString(model), csrf, [],
-                                new Button(new Text("translation.local.pull")).Submit())
+                                new Button(new Text("translation.local.pull")).Submit()).Attribute("data-translation-submit", "pull")
                             : new P(new Text("translation.local.pullBlocked"))
                 ).Class("feature-card"));
             }
