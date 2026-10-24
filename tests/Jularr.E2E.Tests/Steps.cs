@@ -161,7 +161,7 @@ namespace Jularr.E2E.Tests
         public static async Task AddUsenetAsync(IPage page, FakeServices fakes, string categories, bool searchesAutomatically = false)
         {
             await page.GotoAsync("/Admin/Acquisition");
-            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add indexer" }));
+            await FollowAsync(page, page.Locator("a[href*='Type=Newznab']"));
             await page.FillAsync("dialog#connection-editor form [name=Name]", "Indexer");
             await page.FillAsync("dialog#connection-editor form [name=BaseUrl]", new Uri(fakes.Address, "newznab/").ToString());
             await page.FillAsync("dialog#connection-editor form [name=ApiKey]", FakeServices.IndexerKey);
