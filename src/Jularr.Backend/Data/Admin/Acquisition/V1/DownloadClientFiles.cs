@@ -34,7 +34,11 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     {
         public DownloadClientFileV1(string name, string relativePath, bool isDirectory, long? sizeBytes, string assignment)
         {
-            Name = name; RelativePath = relativePath; IsDirectory = isDirectory; SizeBytes = sizeBytes; Assignment = assignment;
+            Name = name;
+            RelativePath = relativePath;
+            IsDirectory = isDirectory;
+            SizeBytes = sizeBytes;
+            Assignment = assignment;
         }
         [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.FileName))]
         public string Name { get; }
@@ -52,7 +56,11 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     {
         public DownloadClientBrowseResultV1(string area, string root, string relativePath, bool hasMore, BaseDataList<DownloadClientFileV1> entries)
         {
-            Area = area; Root = root; RelativePath = relativePath; HasMore = hasMore; Entries = entries;
+            Area = area;
+            Root = root;
+            RelativePath = relativePath;
+            HasMore = hasMore;
+            Entries = entries;
         }
         [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Folder))]
         public string Area { get; }
@@ -69,7 +77,11 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     {
         public DownloadClientDeletionPreviewV1(string area, string relativePath, int files, long bytes, string fingerprint)
         {
-            Area = area; RelativePath = relativePath; Files = files; Bytes = bytes; Fingerprint = fingerprint;
+            Area = area;
+            RelativePath = relativePath;
+            Files = files;
+            Bytes = bytes;
+            Fingerprint = fingerprint;
         }
         [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Folder))]
         public string Area { get; }

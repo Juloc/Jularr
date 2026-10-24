@@ -27,7 +27,10 @@ namespace Jularr.Backend.Service.Core
             var relative = ImportPlacementLogic.MapRemotePath(providerRemote, configuredRemote);
             if (relative is null && ImportPlacementLogic.MapRemotePath(configuredRemote, providerRemote) is not null)
                 relative = "";
-            if (relative is null) throw new DataValidationException(nameof(area), "invalid_transition");
+            if (relative is null)
+            {
+                throw new DataValidationException(nameof(area), "invalid_transition");
+            }
 
             var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(configuredLocal));
             if (string.Equals(root, Path.GetPathRoot(root), StringComparison.Ordinal) || !Directory.Exists(root))
@@ -46,9 +49,15 @@ namespace Jularr.Backend.Service.Core
             var relative = ImportPlacementLogic.MapRemotePath(providerRemote, configuredRemote);
             if (relative is null && ImportPlacementLogic.MapRemotePath(configuredRemote, providerRemote) is not null)
                 relative = "";
-            if (relative is null) throw new DataValidationException(nameof(configuredRemote), "invalid_path");
+            if (relative is null)
+            {
+                throw new DataValidationException(nameof(configuredRemote), "invalid_path");
+            }
 
-            try { return StoragePath.Combine(StoragePath.Check(localPath), StoragePath.Check(relative)); }
+            try
+            {
+                return StoragePath.Combine(StoragePath.Check(localPath), StoragePath.Check(relative));
+            }
             catch (Jularr.Integrations.Data.Nas.NasMountException)
             {
                 throw new DataValidationException(nameof(localPath), "invalid_path");
@@ -59,7 +68,10 @@ namespace Jularr.Backend.Service.Core
         {
             if (string.IsNullOrEmpty(path))
             {
-                if (allowRoot) return "";
+                if (allowRoot)
+                {
+                    return "";
+                }
                 throw new DataValidationException(nameof(path), "invalid_path");
             }
 
@@ -99,9 +111,15 @@ namespace Jularr.Backend.Service.Core
 
         internal static DownloadClientBrowseResultV1 Browse(string area, string root, string? relative, int page, SabnzbdConsoleSnapshot snapshot)
         {
-            if (page is < 1 or > 10000) throw new DataValidationException(nameof(page), "invalid_transition");
+            if (page is < 1 or > 10000)
+            {
+                throw new DataValidationException(nameof(page), "invalid_transition");
+            }
             var directory = SafePath(root, relative, allowRoot: true);
-            if (!Directory.Exists(directory)) throw new DataValidationException(nameof(relative), "invalid_transition");
+            if (!Directory.Exists(directory))
+            {
+                throw new DataValidationException(nameof(relative), "invalid_transition");
+            }
 
             var names = Directory.EnumerateFileSystemEntries(directory).Select(Path.GetFileName)
                 .Where(name => !string.IsNullOrWhiteSpace(name)).OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
@@ -135,7 +153,10 @@ namespace Jularr.Backend.Service.Core
             {
                 var next = stack.Pop();
                 var attrs = File.GetAttributes(next);
-                if ((attrs & FileAttributes.ReparsePoint) != 0) throw new DataValidationException(nameof(relative), "invalid_transition");
+                if ((attrs & FileAttributes.ReparsePoint) != 0)
+                {
+                    throw new DataValidationException(nameof(relative), "invalid_transition");
+                }
                 visited++;
                 facts.Append(Path.GetRelativePath(root, next)).Append('|').Append((int)attrs).Append('|');
                 if ((attrs & FileAttributes.Directory) != 0)
@@ -145,7 +166,10 @@ namespace Jularr.Backend.Service.Core
                 else
                 {
                     var file = new FileInfo(next);
-                    checked { bytes += file.Length; }
+                    checked
+                    {
+                        bytes += file.Length;
+                    }
                     facts.Append(file.Length).Append('|').Append(file.LastWriteTimeUtc.Ticks);
                     count++;
                 }
@@ -169,7 +193,10 @@ namespace Jularr.Backend.Service.Core
             var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
             if (!targetPath.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, comparison))
                 throw new DataValidationException(nameof(relative), "invalid_path");
-            if (!File.Exists(targetPath) && !Directory.Exists(targetPath)) return;
+            if (!File.Exists(targetPath) && !Directory.Exists(targetPath))
+            {
+                return;
+            }
             var target = SafePath(root, relative);
 
             var pending = new Stack<string>();
