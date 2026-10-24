@@ -36,6 +36,20 @@ namespace Jularr.Backend.Tests
         private const string Connections = "/api/v1/admin/acquisition/connections";
 
         [TestMethod]
+        public void DirectCatalogLanguage_UsesVerifiedIsoCodesOnly()
+        {
+            Assert.AreEqual("DE", DirectSources.TrustedLanguageCode("deu"));
+            Assert.AreEqual("DE", DirectSources.TrustedLanguageCode("ger"));
+            Assert.AreEqual("JA", DirectSources.TrustedLanguageCode("ja-JP"));
+            Assert.AreEqual("EN", DirectSources.TrustedLanguageCode("eng"));
+            Assert.IsNull(DirectSources.TrustedLanguageCode(null));
+            Assert.IsNull(DirectSources.TrustedLanguageCode(""));
+            Assert.IsNull(DirectSources.TrustedLanguageCode("pdf"));
+            Assert.IsNull(DirectSources.TrustedLanguageCode("unknown-language"));
+        }
+
+
+        [TestMethod]
         public async Task Catalog_SetUpAddsKeylessSourcesAndAsksForAccounts()
         {
             using var storage = new TemporaryDirectory();
@@ -430,6 +444,20 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("epub", record.Extension);
             Assert.AreEqual("en", record.Language);
             Assert.AreEqual(1258291L, record.SizeBytes);
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_FormatBadgesAreNotLanguageEvidence()
+        {
+            // The real result-row shape can put a [pdf] format badge before a language badge.
+            var sources = new FakeSources { RealRows = true, RowFacts = "PDF [pdf] · English [en] · 1.2MB" };
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
+            var record = (await client.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice", CancellationToken.None)).Single();
+            Assert.AreEqual("en", record.Language);
+
+            sources.RowFacts = "PDF [pdf] · 1.2MB";
+            record = (await client.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice", CancellationToken.None)).Single();
+            Assert.IsNull(record.Language, "A format badge alone must not be mistaken for a language.");
         }
 
         [TestMethod]
@@ -887,6 +915,7 @@ namespace Jularr.Backend.Tests
             public bool SlowGate { get; set; }
             public bool SlowWithoutFile { get; set; }
             public bool RealRows { get; set; }
+            public string RowFacts { get; set; } = "English [en] · EPUB · 1.2MB · 1813 · Book (fiction)";
             public string RowFileName { get; set; } = "lgli/Jane Austen - Pride and Prejudice (1813).epub";
 
             // The page of a search whose query contains the key.
@@ -1008,7 +1037,7 @@ namespace Jularr.Backend.Tests
                               <a href="/search?q=Jane Austen" class="custom-a text-sm"><span class="icon-[mdi--user-edit]"></span> Jane Austen</a>
                               <a href="/search?q=" class="custom-a text-sm"><span class="icon-[mdi--company]"></span> 1813</a>
                             </div>
-                            <div>English [en] Â· EPUB Â· 1.2MB Â· 1813 Â· ðŸ“• Book (fiction) Â· ðŸš€/lgli/zlib Â· Save Â· 24 Â· 1</div>
+                            <div>{RowFacts}</div>
                           </div>
                         </body></html>
                         """, "text/html");
