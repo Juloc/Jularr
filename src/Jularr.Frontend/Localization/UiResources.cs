@@ -1484,6 +1484,7 @@ namespace Jularr.Frontend.Localization
             new("media.availability.PartialOtherAudio", "{0} of {1} monitored episodes or units are available, but only in other audio languages."),
             new("media.availability.Requested", "Requested"),
             new("media.availability.tag.Available", "Available"),
+            new("media.availability.tag.Missing", "Unavailable"),
             new("media.availability.tag.ProfileAudio", "Available"),
             new("media.availability.tag.OtherAudio", "Other audio"),
             new("media.availability.tag.Partial", "{0}/{1}"),

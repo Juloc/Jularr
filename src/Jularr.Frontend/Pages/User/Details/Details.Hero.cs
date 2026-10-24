@@ -9,8 +9,7 @@ namespace Jularr.Frontend.Pages.User.Details
 {
     public sealed partial class DetailsModel
     {
-        // The hero: poster with its availability, the type, the facts with the catalog's rating, one line of the summary, then what the profile can do: the primary action by
-        // state, the choice of version, edition or platform, the trailer, the heart and the more menu; the progress sits bottom right.
+        // The hero: a plain poster, identity and longer summary at the top, with actions and progress aligned at the bottom.
         private IUiComponent Hero(WorkDetailsV1 work, Page page)
         {
             var kind = Kind(work);
@@ -24,11 +23,15 @@ namespace Jularr.Frontend.Pages.User.Details
             var facts = string.Join(" · ", new[] { work.ReleaseYear?.ToString(CultureInfo.InvariantCulture), work.RuntimeMinutes is { } minutes ? string.Format(CultureInfo.CurrentCulture, texts["details.minutes"], minutes) : null,
                 work.Genres, work.Studio, work.Platforms.Length > 0 ? string.Join(", ", work.Platforms) : null }.OfType<string>());
 
-            var chips = new List<IUiComponent> { Chip(new Text(MediaTypeLabel.Key(work.MediaTypeId, work.MediaSubtypeId)), UiTone.Accent, TypeIcon(kind, work)) };
+            var chips = new List<IUiComponent>
+            {
+                Chip(new Text(MediaTypeLabel.Key(work.MediaTypeId, work.MediaSubtypeId)), UiTone.Accent, TypeIcon(kind, work)),
+                new MediaAvailability(assets, work.AvailabilityStateId, work.AvailableUnits, work.MonitoredUnits).Badge(style: MediaAvailabilityBadgeStyle.Inline)
+            };
             if (work.ProgressStateId == ProgressStateType.Finished && FinishedKey(kind) is { } finished) chips.Add(Chip(new Text(finished), UiTone.Success, "check"));
 
             var hero = new MediaHero(work.CanonicalTitle, work.BackdropUrl, facts.Length == 0 ? null : facts, work.Overview)
-                .Poster(work.PosterUrl, new MediaAvailability(assets, work.AvailabilityStateId, work.AvailableUnits, work.MonitoredUnits).Badge(Address(), null, true), new Icon(TypeIcon(kind, work), assets, 48))
+                .Poster(work.PosterUrl, new Icon(TypeIcon(kind, work), assets, 48))
                 .Chips([.. chips])
                 .Actions([.. Actions(work, kind, variants, selected, playable, plex, page)]);
             if (work.Rating is { } rating)
