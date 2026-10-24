@@ -34,7 +34,7 @@ namespace Jularr.Backend.Logic.Media
                     RETURNING "Id"
                 ), inserted AS (
                     INSERT INTO "MediaImportJobs" ("OperationId", "PublicId", "RequestedByAccountId", "Payload", "TotalCount")
-                    SELECT "Id", @PublicId, @AccountId, @Payload::jsonb, @TotalCount FROM queued
+                    SELECT "Id", @PublicId, @AccountId, @Payload::jsonb, @TotalCount FROM queued WHERE true
                     ON CONFLICT ("OperationId") DO NOTHING
                     RETURNING "PublicId"
                 )
