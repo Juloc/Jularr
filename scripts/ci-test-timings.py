@@ -24,7 +24,7 @@ def main() -> int:
         for result in root.findall(".//{*}UnitTestResult"):
             tests.append(
                 (
-                    seconds(result.attrib["duration"]),
+                    seconds(result.attrib.get("duration", "00:00:00")),
                     result.attrib.get("testName", "(unnamed)"),
                     result.attrib.get("outcome", "Unknown"),
                     file.name,
