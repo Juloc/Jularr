@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.Player
 import java.io.File
 import androidx.annotation.OptIn
 import androidx.compose.runtime.Composable
@@ -24,6 +25,10 @@ import de.juloc.jularr.core.api.DeviceTokenStore
 import de.juloc.jularr.core.api.playback.HttpTvPlaybackV1Client
 import de.juloc.jularr.core.api.playback.TvPlaybackV1Client
 import de.juloc.jularr.core.api.playback.TvPlaybackV1Plan
+import de.juloc.jularr.core.api.playback.HttpTvCompanionV1Client
+import de.juloc.jularr.core.api.playback.TvCompanionV1Client
+import de.juloc.jularr.core.api.playback.TvCompanionInvitationV1
+import de.juloc.jularr.core.api.playback.TvCompanionStateV1
 import de.juloc.jularr.core.api.tvlegacy.HttpTvV1LegacyFeaturesClient
 import de.juloc.jularr.core.api.tvlegacy.TvV1LegacyFeaturesClient
 import de.juloc.jularr.core.api.tvlegacy.TvV1PlaybackAssetInfo
@@ -34,6 +39,7 @@ import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackMarker
 import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackPreferences
 import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackTrack
 import de.juloc.jularr.core.model.ClientTrickplayDescriptor
+import java.net.URLEncoder
 import java.math.BigDecimal
 import java.math.RoundingMode
 import de.juloc.jularr.core.player.JularrMedia3Player
@@ -70,6 +76,9 @@ internal fun TvV1PlaybackHost(
     val legacy: TvV1LegacyFeaturesClient = remember(origin, tokenStore) {
         HttpTvV1LegacyFeaturesClient(origin, tokenStore)
     }
+    val companion: TvCompanionV1Client = remember(origin, tokenStore) {
+        HttpTvCompanionV1Client(origin, tokenStore)
+    }
     val scope = rememberCoroutineScope()
     var plan by remember(mediaAssetId) { mutableStateOf<TvPlaybackV1Plan?>(null) }
     var loading by remember(mediaAssetId) { mutableStateOf(true) }
@@ -79,6 +88,11 @@ internal fun TvV1PlaybackHost(
     var finishing by remember(mediaAssetId) { mutableStateOf(false) }
     var positionMs by remember(mediaAssetId) { mutableStateOf(0L) }
     var durationMs by remember(mediaAssetId) { mutableStateOf<Long?>(null) }
+    var companionVisible by remember(mediaAssetId) { mutableStateOf(false) }
+    var companionEnabled by remember(mediaAssetId) { mutableStateOf(false) }
+    var companionBusy by remember(mediaAssetId) { mutableStateOf(false) }
+    var companionInvitation by remember(mediaAssetId) { mutableStateOf<TvCompanionInvitationV1?>(null) }
+    var companionError by remember(mediaAssetId) { mutableStateOf<String?>(null) }
     var markers by remember(mediaAssetId) { mutableStateOf<List<TvV1PlaybackMarker>>(emptyList()) }
     var chapters by remember(mediaAssetId) { mutableStateOf<List<TvV1PlaybackChapter>>(emptyList()) }
     var playbackPreferences by remember(mediaAssetId) { mutableStateOf<TvV1PlaybackPreferences?>(null) }
@@ -285,6 +299,144 @@ internal fun TvV1PlaybackHost(
         }
     }
 
+    fun openCompanion() {
+        val active = plan ?: return
+        if (finishing) return
+        companionVisible = true
+        if (companionInvitation != null || companionBusy) return
+        companionBusy = true
+        companionError = null
+        scope.launch {
+            try {
+                val issued = companion.createInvitation(active.playbackSessionId)
+                if (plan?.playbackSessionId == active.playbackSessionId && !finishing) {
+                    companionInvitation = issued
+                    companionEnabled = true
+                }
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (failure: AppApiException) {
+                if (failure.statusCode == 401) onUnauthorized()
+                else companionError = "Fernbedienung: ${failure.code} (HTTP ${failure.statusCode})"
+            } catch (failure: Exception) {
+                companionError = failure.message ?: "Die Fernbedienung konnte nicht gekoppelt werden."
+            } finally {
+                companionBusy = false
+            }
+        }
+    }
+
+    fun renewCompanion() {
+        if (companionBusy) return
+        companionInvitation = null
+        openCompanion()
+    }
+
+    fun disconnectCompanion() {
+        val active = plan ?: return
+        if (companionBusy) return
+        companionBusy = true
+        companionError = null
+        scope.launch {
+            try {
+                check(companion.revoke(active.playbackSessionId)) {
+                    "Der Server hat die Trennung nicht bestätigt."
+                }
+                if (plan?.playbackSessionId == active.playbackSessionId) {
+                    companionEnabled = false
+                    companionInvitation = null
+                    companionVisible = false
+                }
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (failure: AppApiException) {
+                if (failure.statusCode == 401) onUnauthorized()
+                else companionError = "Fernbedienung: ${failure.code} (HTTP ${failure.statusCode})"
+            } catch (failure: Exception) {
+                companionError = failure.message ?: "Die Verbindung konnte nicht getrennt werden."
+            } finally {
+                companionBusy = false
+            }
+        }
+    }
+
+    // The server owns grants/commands; the TV alone executes them on the real Media3 player.
+    // Each command is dispatched at most once and acknowledged only after the player action.
+    LaunchedEffect(plan?.playbackSessionId, companionEnabled, finishing) {
+        val active = plan ?: return@LaunchedEffect
+        if (!companionEnabled || finishing) return@LaunchedEffect
+        while (isActive && plan?.playbackSessionId == active.playbackSessionId && !finishing) {
+            try {
+                val state = companion.readState(active.playbackSessionId)
+                val command = companion.nextCommand(active.playbackSessionId)
+                if (command == null) {
+                    companion.reportState(
+                        active.playbackSessionId,
+                        TvCompanionStateV1(
+                            state.revision,
+                            player.player.isPlaying,
+                            player.player.currentPosition.coerceAtLeast(0),
+                            player.player.duration.takeIf { it > 0 } ?: active.durationMs,
+                        ),
+                    )
+                } else if (plan?.playbackSessionId == active.playbackSessionId && !finishing) {
+                    val succeeded = when (command.action) {
+                        "play" -> {
+                            if (player.player.playbackState == Player.STATE_ENDED) player.player.seekTo(0)
+                            player.player.play()
+                            repeat(12) {
+                                if (player.player.isPlaying) return@repeat
+                                delay(100L)
+                            }
+                            player.player.isPlaying
+                        }
+                        "pause" -> {
+                            player.player.pause()
+                            !player.player.isPlaying && !player.player.playWhenReady
+                        }
+                        "seek" -> {
+                            val target = command.positionMs
+                            val duration = player.player.duration.takeIf { it > 0 } ?: active.durationMs
+                            if (target == null || target < 0 || (duration != null && target > duration)) {
+                                false
+                            } else {
+                                player.player.seekTo(target)
+                                delay(250L)
+                                kotlin.math.abs(player.player.currentPosition - target) <= 1_500L
+                            }
+                        }
+                        else -> false
+                    }
+                    // If a response is lost, do not retry: the backend intentionally never
+                    // re-dispatches a delivered command to prevent delayed repeat actions.
+                    companion.acknowledge(
+                        active.playbackSessionId, command, succeeded,
+                        TvCompanionStateV1(
+                            command.revision,
+                            player.player.isPlaying,
+                            player.player.currentPosition.coerceAtLeast(0),
+                            player.player.duration.takeIf { it > 0 } ?: active.durationMs,
+                        ),
+                    )
+                }
+                companionError = null
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (failure: AppApiException) {
+                if (failure.statusCode == 401) {
+                    onUnauthorized()
+                    return@LaunchedEffect
+                }
+                // A temporary connection/server-side revision mismatch is recoverable.
+                // Never substitute a legacy cookie-based companion endpoint.
+                companionError = "Fernbedienung nicht erreichbar (HTTP ${failure.statusCode})."
+            } catch (failure: Exception) {
+                companionError = failure.message ?: "Fernbedienung vorübergehend nicht erreichbar."
+            }
+            delay(2_000L)
+        }
+    }
+
     fun selectAudioTrack(key: String): Boolean {
         val track = availableTracks.firstOrNull { it.key == key && it.isAudio && it.isSupported }
             ?: return false
@@ -480,6 +632,23 @@ internal fun TvV1PlaybackHost(
             },
             onRetryPlayback = { retry += 1 },
             onExit = { completePlayback(completed = false) },
+            onOpenCompanion = ::openCompanion,
+            companionVisible = companionVisible,
+            onCloseCompanion = { companionVisible = false },
+            companionOverlay = if (companionVisible) {{
+                TvV1CompanionOverlay(
+                    url = companionInvitation?.let { issued ->
+                        origin.trimEnd('/') + "/Companion#invite=" +
+                            URLEncoder.encode(issued.token, Charsets.UTF_8.name())
+                    },
+                    expiresAt = companionInvitation?.expiresAt ?: "",
+                    error = companionError,
+                    busy = companionBusy,
+                    onRenew = ::renewCompanion,
+                    onDisconnect = ::disconnectCompanion,
+                    onClose = { companionVisible = false },
+                )
+            }} else null,
             onSetTermState = { _, _ -> },
             onOpenOnPhone = { _, _ -> },
         )
