@@ -173,8 +173,12 @@ namespace Jularr.Backend.Service.Core
                 visited++;
                 // Fingerprints keep the same logical job name after atomic quarantine.
                 // This lets us detect changes to the folder before deleting its contents.
+                // A same-parent rename to a dot-prefixed quarantine may mark the
+                // directory itself as Hidden on Unix. This is not a payload change.
+                // Child attributes and contents remain part of the fingerprint.
+                var fingerprintAttributes = next == full ? FileAttributes.Directory : attrs;
                 facts.Append(next == full ? relative : Path.Combine(relative, Path.GetRelativePath(full, next)))
-                    .Append('|').Append((int)attrs).Append('|');
+                    .Append('|').Append((int)fingerprintAttributes).Append('|');
                 if ((attrs & FileAttributes.Directory) != 0)
                 {
                     foreach (var child in Directory.EnumerateFileSystemEntries(next).OrderByDescending(item => item, StringComparer.Ordinal)) stack.Push(child);

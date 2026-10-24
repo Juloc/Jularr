@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using Jularr.Backend.Data;
+using Jularr.Backend.Data.Common;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Storage;
 
