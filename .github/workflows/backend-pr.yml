@@ -5,6 +5,8 @@ name: Backend
 # test classes split in two balanced shards) -> test (the one required conclusion).
 on:
   pull_request:
+    branches: [main, dev]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, edited]
 
 permissions:
   contents: read
@@ -47,11 +49,17 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DRAFT: ${{ github.event.pull_request.draft }}
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$DRAFT" == "true" ]]; then
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
-          if grep -Eq '^(src/|tests/|database/|scripts/|[^/]+[.]sln$|NuGet[.]Config$|[.]github/(actions/|workflows/backend(-pr)?[.]yml$))|[.](props|targets)$' <<< "$files"; then
+          backend_files="$(printf '%s\n' "$files" | grep -Ev '^(src/Jularr.Frontend/|tests/Jularr.E2E.Tests/)' || true)"
+          if grep -Eq '^(src/|tests/Jularr.Backend.Tests/|database/|scripts/|[^/]+[.]sln$|NuGet[.]Config$|[.]github/(actions/|workflows/backend(-pr)?[.]yml$))|[.](props|targets)
             echo "backend=true" >> "$GITHUB_OUTPUT"
           else
             echo "backend=false" >> "$GITHUB_OUTPUT"
@@ -201,3 +209,160 @@ jobs:
             echo "::error::Backend PR check failed (prepare ${PREPARE}, shards ${SHARDS}). The failed job is named prepare or backend (shard)."
             exit 1
           fi
+ <<< "$backend_files"; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-dotnet@v6
+        if: steps.paths.outputs.backend == 'true'
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/cache@v6
+        if: steps.paths.outputs.backend == 'true'
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+      - uses: actions/setup-node@v7
+        if: steps.paths.outputs.backend == 'true'
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/Jularr.Frontend/package-lock.json
+      - name: Verify the CI scripts (test shards and selection)
+        if: steps.paths.outputs.backend == 'true'
+        run: |
+          python3 scripts/ci-shard-tests.py --self-test
+          python3 scripts/ci-select-backend-tests.py --self-test
+      - name: Compile assets required by Razor tests
+        if: steps.paths.outputs.backend == 'true'
+        working-directory: src/Jularr.Frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Compile the backend test project and its dependencies
+        if: steps.paths.outputs.backend == 'true'
+        run: dotnet build tests/Jularr.Backend.Tests --configuration Release
+      - name: Select the tests for the changed areas and run the smoke methods
+        id: select
+        if: steps.paths.outputs.backend == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          selection="$(python3 scripts/ci-select-backend-tests.py "$BASE_SHA" "$HEAD_SHA" --json)"
+          echo "classes=$(jq -r '.classes | join(",")' <<< "$selection")" >> "$GITHUB_OUTPUT"
+          methods="$(jq -r '.methods' <<< "$selection")"
+          if [[ -n "$methods" ]]; then
+            dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
+              --filter "$methods" --logger "trx;LogFileName=backend-pr-smoke.trx" \
+              --results-directory TestResults/ci/fast
+          fi
+      - uses: ./.github/actions/pack-build
+        if: steps.select.outputs.classes != ''
+      - name: Keep smoke test results
+        if: always() && steps.paths.outputs.backend == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-pr-smoke
+          path: TestResults/ci/fast/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # The selected test classes of the changed areas, packed by measured duration. Two shards,
+  # two test processes each; they start only when `prepare` (smoke) is green.
+  shards:
+    name: backend (${{ matrix.shard }})
+    needs: prepare
+    if: needs.prepare.outputs.classes != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { kind: backend, shard: 1/2 }
+          - { kind: backend, shard: 2/2 }
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: jularr_test
+          POSTGRES_PASSWORD: isolated-test-password
+          POSTGRES_DB: jularr_test_admin
+        ports:
+          - 15433:5432
+        options: >-
+          --health-cmd "pg_isready -U jularr_test -d jularr_test_admin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SHARD: ${{ matrix.shard }}
+      CLASSES: ${{ needs.prepare.outputs.classes }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/restore-build
+      # Backup integration requires pg_dump with the same major as PostgreSQL.
+      - uses: ./.github/actions/install-tools
+      - name: Run the selected test classes of this shard
+        shell: bash
+        run: |
+          set -uo pipefail
+          mapfile -t lanes < <(python3 scripts/ci-shard-tests.py plan --kind backend --shard "${SHARD}" --lanes 2 --classes "${CLASSES}")
+          pids=()
+          for index in "${!lanes[@]}"; do
+            [[ -n "${lanes[$index]}" ]] || continue
+            lane=$((index + 1))
+            (set -o pipefail
+             dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
+               --filter "${lanes[$index]}" --logger "trx;LogFileName=backend-pr-lane${lane}.trx" \
+               --results-directory TestResults/ci/fast 2>&1 | sed -u "s/^/[lane${lane}] /") &
+            pids+=($!)
+          done
+          failed=0
+          for pid in "${pids[@]}"; do wait "${pid}" || failed=1; done
+          if [[ "${failed}" -ne 0 ]]; then
+            echo "::error::Backend shard ${SHARD}: a test lane failed (lines are prefixed [lane1] / [lane2])."
+            exit 1
+          fi
+      - name: Keep test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-pr-shard-${{ strategy.job-index }}
+          path: TestResults/ci/fast/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # The stable required check `Backend / test`: one conclusion for prepare and all shards.
+  test:
+    needs: [prepare, shards]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require prepare and the shards
+        env:
+          PREPARE: ${{ needs.prepare.result }}
+          SHARDS: ${{ needs.shards.result }}
+        run: |
+          echo "prepare: ${PREPARE}, shards: ${SHARDS}"
+          if [[ "${PREPARE}" != "success" || ( "${SHARDS}" != "success" && "${SHARDS}" != "skipped" ) ]]; then
+            echo "::error::Backend PR check failed (prepare ${PREPARE}, shards ${SHARDS}). The failed job is named prepare or backend (shard)."
+            exit 1
+          fi
+
+  # Full regression runs only if requested; ordinary PRs do not get separate Full runs.
+  full-regression:
+    if: ${{ !github.event.pull_request.draft && (contains(github.event.pull_request.labels.*.name, 'ci/full') || contains(github.event.pull_request.title, '[full-ci]')) }}
+    uses: ./.github/workflows/backend.yml
+    permissions:
+      contents: read
