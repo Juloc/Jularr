@@ -82,8 +82,9 @@ export function initializeBookRenderer(reader: HTMLElement) {
         const print = printing(at, columns === 1 || side === 'left' ? 0 : 1);
         if (!print) return;
         const place = printPlacement(profile(at, side), side, width / 148);
-        const gap = columns === 2 && side === 'right' ? (parseFloat(getComputedStyle(adapter.group(at)!.source).columnGap) || 0) / 2 : 0;
-        const printOffset = gap + place.shift;
+        // pagePrint already uses the individual CSS-column origin. Adding half
+        // the column gap only on the right page misaligns its ink and folio.
+        const printOffset = place.shift;
         print.style.left = `${printOffset}px`;
         print.style.top = `${place.top}px`;
         // Ink follows the curved paper's print origin; the folio number must stay
