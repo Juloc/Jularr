@@ -32,8 +32,29 @@ namespace Jularr.Backend.Tests
                 var preview = DownloadClientFileSafety.Preview("incomplete", root, "old", Snapshot(orphans: ["old"]));
                 Assert.AreEqual(205, preview.Files);
                 Assert.AreEqual(4 * 205L, preview.Bytes);
-                DownloadClientFileSafety.Delete(root, "old");
+                DownloadClientFileSafety.DeleteConfirmed("incomplete", root, "old", preview.Fingerprint, Snapshot(orphans: ["old"]));
                 Assert.IsFalse(Directory.Exists(child));
+                Assert.IsFalse(Directory.EnumerateFileSystemEntries(root).Any());
+            }
+            finally { Directory.Delete(root, recursive: true); }
+        }
+
+        [TestMethod]
+        public void ManualOrphanDelete_RejectsChangedInventoryAndPreservesFolder()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "jularr-sab-race-" + Guid.NewGuid().ToString("N"));
+            var orphan = Directory.CreateDirectory(Path.Combine(root, "orphan")).FullName;
+            try
+            {
+                File.WriteAllText(Path.Combine(orphan, "file.part"), "initial");
+                var snapshot = Snapshot(orphans: ["orphan"]);
+                var fingerprint = DownloadClientFileSafety.Preview("incomplete", root, "orphan", snapshot).Fingerprint;
+                File.AppendAllText(Path.Combine(orphan, "file.part"), "more data");
+
+                Assert.ThrowsExactly<DataValidationException>(() =>
+                    DownloadClientFileSafety.DeleteConfirmed("incomplete", root, "orphan", fingerprint, snapshot));
+                Assert.IsTrue(File.Exists(Path.Combine(orphan, "file.part")));
+                Assert.AreEqual(1, Directory.EnumerateFileSystemEntries(root).Count());
             }
             finally { Directory.Delete(root, recursive: true); }
         }

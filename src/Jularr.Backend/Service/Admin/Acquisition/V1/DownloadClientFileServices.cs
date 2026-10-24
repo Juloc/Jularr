@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
@@ -176,13 +174,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             {
                 throw new DataValidationException(nameof(query.Area), "invalid_transition");
             }
-            var checkedPreview = DownloadClientFileSafety.Preview(query.Area, opened.Root, RequiredPath(query.RelativePath), opened.Snapshot);
-            if (!CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(checkedPreview.Fingerprint),
-                Encoding.ASCII.GetBytes(query.Fingerprint)))
-            {
-                throw new DataValidationException(nameof(query.Fingerprint), "invalid_transition");
-            }
-            DownloadClientFileSafety.Delete(opened.Root, RequiredPath(query.RelativePath));
+            DownloadClientFileSafety.DeleteConfirmed(query.Area, opened.Root, RequiredPath(query.RelativePath),
+                query.Fingerprint, opened.Snapshot);
         }
     }
 }

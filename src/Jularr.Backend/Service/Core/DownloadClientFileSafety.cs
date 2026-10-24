@@ -151,6 +151,11 @@ namespace Jularr.Backend.Service.Core
                 throw new DataValidationException(nameof(relative), "invalid_transition");
 
             var full = SafePath(root, relative);
+            return InspectTree(area, root, relative, full);
+        }
+
+        private static DownloadClientDeletionPreviewV1 InspectTree(string area, string root, string relative, string full)
+        {
             var stack = new Stack<string>();
             stack.Push(full);
             long bytes = 0;
@@ -166,7 +171,10 @@ namespace Jularr.Backend.Service.Core
                     throw new DataValidationException(nameof(relative), "invalid_transition");
                 }
                 visited++;
-                facts.Append(Path.GetRelativePath(root, next)).Append('|').Append((int)attrs).Append('|');
+                // Fingerprints keep the same logical job name after atomic quarantine.
+                // This lets us detect changes to the folder before deleting its contents.
+                facts.Append(next == full ? relative : Path.Combine(relative, Path.GetRelativePath(full, next)))
+                    .Append('|').Append((int)attrs).Append('|');
                 if ((attrs & FileAttributes.Directory) != 0)
                 {
                     foreach (var child in Directory.EnumerateFileSystemEntries(next).OrderByDescending(item => item, StringComparer.Ordinal)) stack.Push(child);
@@ -188,6 +196,48 @@ namespace Jularr.Backend.Service.Core
             var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(facts.ToString())));
             return new DownloadClientDeletionPreviewV1(area, relative, count, bytes, fingerprint);
         }
+
+        // Manual orphan deletion atomically detaches the directory from SABnzbd's
+        // incomplete root. A changed inventory is restored and never deleted.
+        // No active job, history entry or unverified filesystem root is eligible.
+        internal static void DeleteConfirmed(string area, string root, string relative, string fingerprint, SabnzbdConsoleSnapshot snapshot)
+        {
+            if (fingerprint.Length != 64 || fingerprint.Any(character => !Uri.IsHexDigit(character)))
+                throw new DataValidationException(nameof(fingerprint), "invalid_transition");
+
+            var preview = Preview(area, root, relative, snapshot);
+            if (!MatchesFingerprint(preview.Fingerprint, fingerprint))
+                throw new DataValidationException(nameof(fingerprint), "invalid_transition");
+
+            var original = SafePath(root, relative);
+            if (!Directory.Exists(original))
+                throw new DataValidationException(nameof(relative), "invalid_transition");
+
+            var quarantine = ".jularr-delete-" + Guid.NewGuid().ToString("N");
+            var quarantined = Path.Combine(root, quarantine);
+            Directory.Move(original, quarantined);
+            try
+            {
+                // A client may have written to the folder after the initial preview.
+                // Verify the moved, now detached tree before any destructive operation.
+                var staged = InspectTree(area, root, relative, quarantined);
+                if (!MatchesFingerprint(staged.Fingerprint, fingerprint))
+                    throw new DataValidationException(nameof(fingerprint), "invalid_transition");
+            }
+            catch
+            {
+                if (Directory.Exists(quarantined) && !Directory.Exists(original))
+                    Directory.Move(quarantined, original);
+                throw;
+            }
+
+            // On deletion failure leave the partial data in quarantine, never
+            // restore a partially deleted folder to the provider's live path.
+            Delete(root, quarantine);
+        }
+
+        private static bool MatchesFingerprint(string expected, string actual) =>
+            CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(actual));
 
         // Automatic post-import cleanup deletes only the specific provider-reported output,
         // never its mapped root or a sibling; symlinks and overly large trees are refused.

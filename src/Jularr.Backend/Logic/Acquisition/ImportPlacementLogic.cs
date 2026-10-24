@@ -13,8 +13,11 @@ namespace Jularr.Backend.Logic.Acquisition
         // Deleting a finished client's source is safe only if the import accounted for every file.
         public static bool AllSourceFilesSelected(IEnumerable<string> sourceFiles, IEnumerable<string> selectedFiles)
         {
+            var sources = sourceFiles.ToArray();
             var selected = selectedFiles.ToHashSet(StringComparer.Ordinal);
-            return sourceFiles.All(selected.Contains);
+            // An empty or incomplete inventory never authorizes deleting a client's source.
+            return sources.Length > 0 && selected.Count > 0
+                && sources.All(path => !string.IsNullOrWhiteSpace(path) && selected.Contains(path));
         }
 
         // Download bookkeeping that never belongs in a library.
