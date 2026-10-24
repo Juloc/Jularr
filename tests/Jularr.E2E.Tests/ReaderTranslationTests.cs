@@ -72,9 +72,25 @@ namespace Jularr.E2E.Tests
             await page.WaitForFunctionAsync("() => document.querySelector('.reader')?.dataset.translationState === 'ready'", null, new() { Timeout = 60_000 });
             Assert.AreEqual(firstCount, ollama.Generations, "Switching back must reuse the validated local cache.");
 
+            Assert.AreEqual("de", await jularr.ScalarAsync(
+                """SELECT "Language" FROM "ReadingPreferences" WHERE "WorkId" = (SELECT "WorkId" FROM "MediaAssets" WHERE "Id" = 1)"""),
+                "The language must remain persisted for the same book.");
             response = await page.GotoAsync("/Read/1?s=1");
             Assert.AreEqual(200, response!.Status);
-            await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Kapitel Eins", new() { Timeout = 60_000 });
+            var nextReader = page.Locator(".reader");
+            await Assertions.Expect(nextReader).ToHaveAttributeAsync("data-reading-language", "de");
+            await Assertions.Expect(nextReader).ToHaveAttributeAsync("data-local-model", "translategemma:4b");
+            try
+            {
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Kapitel Eins", new() { Timeout = 60_000 });
+            }
+            catch
+            {
+                var state = await nextReader.EvaluateAsync<string>("el => JSON.stringify({ language: el.dataset.language, chosen: el.dataset.readingLanguage, model: el.dataset.localModel, engine: el.dataset.translationEngine, translation: el.dataset.translationState, url: el.dataset.localTranslationUrl })");
+                Evidence.Log("[reader-translation] chapter 2: " + state + "; browser problems: " + string.Join(" | ", session.Problems));
+                await Evidence.SaveAsync(page, "reader-translation-chapter-2-failed");
+                throw;
+            }
             await page.WaitForFunctionAsync("() => document.querySelector('.reader')?.dataset.translationState === 'ready'", null, new() { Timeout = 120_000 });
             Assert.IsTrue(ollama.Generations > firstCount, "A second section must be translated too.");
             await page.SetViewportSizeAsync(390, 844);
