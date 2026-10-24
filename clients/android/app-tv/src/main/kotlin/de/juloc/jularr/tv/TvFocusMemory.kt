@@ -1,13 +1,12 @@
 package de.juloc.jularr.tv
 
 /**
- * Remembers which item was last focused on each TV screen (docs/ANDROID_CLIENTS.md §9,
- * #522: "remember the last focused item per screen"), keyed by [TvNavigation.screenKey].
+ * Stores the most recently focused item for each active TV screen.
+ * Kept across Compose screen recreation by the V1 catalog host, scoped to a server/session.
  *
- * This is deliberately a plain in-memory map rather than Compose `rememberSaveable` state:
- * screens are recreated as [de.juloc.jularr.tv.TvRoute] changes, so per-composable
- * remembered state does not survive navigating away and back. A single [TvFocusMemory]
- * instance is held for the lifetime of [TvAppHost] and threaded through every screen.
+ * The host and each screen agree on stable, explicit keys such as "home" and "search".
+ * This map does not itself move the Android D-pad focus; physical focus restoration needs
+ * separate Compose and device validation.
  */
 class TvFocusMemory {
     private val focusedItemIds = mutableMapOf<String, String>()
