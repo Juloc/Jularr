@@ -39,6 +39,21 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(readerHtml, "reader__footer");
             StringAssert.Contains(readerHtml, "data-role=" + (char)34 + "seek" + (char)34);
             StringAssert.Contains(readerHtml, "data-role=" + (char)34 + "turn-tools" + (char)34);
+            // The administration view must expose model management and the live status
+            // without changing the ordinary Reader's permissions.
+            using var adminPage = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation");
+            Assert.AreEqual(HttpStatusCode.OK, adminPage.StatusCode, await adminPage.Content.ReadAsStringAsync());
+            var adminHtml = await adminPage.Content.ReadAsStringAsync();
+            StringAssert.Contains(adminHtml, "data-translation-download");
+            StringAssert.Contains(adminHtml, "translategemma:4b");
+
+            ollama.Unavailable = true;
+            using var offlineAdmin = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation");
+            Assert.AreEqual(HttpStatusCode.OK, offlineAdmin.StatusCode, await offlineAdmin.Content.ReadAsStringAsync());
+            var offlineHtml = await offlineAdmin.Content.ReadAsStringAsync();
+            StringAssert.Contains(offlineHtml, "data-translation-download");
+            StringAssert.Contains(offlineHtml, "translategemma:4b", "Model choices must stay visible when Ollama is offline.");
+            ollama.Unavailable = false;
 
             // An empty Mozilla catalogue still reports English as a bridge; a German book
             // must not offer that as a usable browser route without a de->en model.
@@ -101,10 +116,12 @@ namespace Jularr.Backend.Tests
         private sealed class FakeOllama : HttpMessageHandler
         {
             public string Digest { get; set; } = new string('a', 64);
+            public bool Unavailable { get; set; }
             public int GenerationCount { get; private set; }
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
+                if (Unavailable) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
                 string body;
                 if (request.RequestUri!.AbsolutePath == "/api/tags")
                     body = JsonSerializer.Serialize(new { models = new[] { new { name = "translategemma:4b", digest = Digest } } });
