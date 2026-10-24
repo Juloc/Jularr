@@ -12,7 +12,7 @@ A true hardware acceptance run must confirm discovered address -> HTTP(S) connec
 
 ## TV APK signing and updates
 
-The `Android TV Release` workflow is triggered by a **published GitHub release only**. It rejects versions that do not match `vMAJOR.MINOR.PATCH[-prerelease]`, requires that the tagged commit belongs to `main`, and validates Android TV unit tests and lint for that *exact tagged tree* before the signing job is allowed to start.
+The existing `Release` workflow validates the official `vMAJOR.MINOR.PATCH[-prerelease]` tag on `main`, publishes the server image and GitHub Release, then validates the Android TV unit tests and lint on that exact tagged tree before a separate minimal signing job. Android signing is not triggered via a second `release:published` workflow because releases produced by GitHub's automatic `GITHUB_TOKEN` do not reliably emit a follow-on Actions event.
 
 Configure repository secrets before publishing:
 
