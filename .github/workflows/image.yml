@@ -12,6 +12,7 @@ on:
       - 'compose.yaml'
       - '.dockerignore'
       - 'database/**'
+      - 'deploy/browser/**'
       - '.github/workflows/image.yml'
   push:
     branches: [main, dev]
@@ -20,6 +21,7 @@ on:
       - 'compose.yaml'
       - '.dockerignore'
       - 'database/**'
+      - 'deploy/browser/**'
       - 'src/**'
       - '.github/workflows/image.yml'
 
