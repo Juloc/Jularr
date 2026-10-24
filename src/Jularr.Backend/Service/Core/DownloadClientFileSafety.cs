@@ -97,17 +97,6 @@ namespace Jularr.Backend.Service.Core
                 throw new DataValidationException("RelativePath", "invalid_transition");
         }
 
-        internal static string Assignment(string area, string relative, SabnzbdConsoleSnapshot snapshot)
-        {
-            if (snapshot.Queue.Count >= 200 || snapshot.History.Count >= 200) return "unchecked";
-            var top = relative.Replace('\\', '/').Split('/')[0];
-            var queue = snapshot.Queue.Any(job => string.Equals(job.Name, top, StringComparison.OrdinalIgnoreCase));
-            var history = snapshot.History.Any(job => string.Equals(Path.GetFileName(job.StoragePath?.TrimEnd('/', '\\')), top, StringComparison.OrdinalIgnoreCase));
-            if (queue) return "queue";
-            if (history) return "history";
-            return area == "incomplete" && snapshot.OrphanFolders.Contains(top, StringComparer.OrdinalIgnoreCase) ? "orphan" : "unassigned";
-        }
-
         internal static DownloadClientBrowseResultV1 Browse(string area, string root, string? relative, int page, SabnzbdConsoleSnapshot snapshot)
         {
             if (page is < 1 or > 10000) throw new DataValidationException(nameof(page), "invalid_transition");
@@ -124,14 +113,14 @@ namespace Jularr.Backend.Service.Core
                 var full = SafePath(root, sub);
                 var attr = File.GetAttributes(full);
                 var isDirectory = (attr & FileAttributes.Directory) != 0;
-                entries.Add(new DownloadClientFileV1(name!, sub, isDirectory, isDirectory ? null : new FileInfo(full).Length, Assignment(area, sub, snapshot)));
+                entries.Add(new DownloadClientFileV1(name!, sub, isDirectory, isDirectory ? null : new FileInfo(full).Length, DownloadFileOwnershipLogic.Assignment(area, sub, snapshot)));
             }
             return new DownloadClientBrowseResultV1(area, root, relative ?? "", names.Length > PageSize, new BaseDataList<DownloadClientFileV1>(entries));
         }
 
         internal static DownloadClientDeletionPreviewV1 Preview(string area, string root, string relative, SabnzbdConsoleSnapshot snapshot)
         {
-            if (Assignment(area, relative, snapshot) != "orphan"
+            if (DownloadFileOwnershipLogic.Assignment(area, relative, snapshot) != "orphan"
                 || area != "incomplete" || relative.Contains("/") || relative.Contains("\\"))
                 throw new DataValidationException(nameof(relative), "invalid_transition");
 
