@@ -1,0 +1,55 @@
+# Library read performance
+
+`LibraryPerformanceTests.Library_MixedInventory_ReportsWarmReadLatency` measures the real
+`ReadLibraryV1` service through the authenticated HTTP adapter, with 48 cards per page.
+It records the first request separately, skips two warm-up requests, then reports the
+median and p95 of both the service and TestServer HTTP calls. SQL plans and card JSON
+are attached to the TRX result. It uses the guarded, disposable `TestPostgres` databases.
+
+## Reproduce
+
+Use the dedicated PostgreSQL 18 test server on `127.0.0.1:15433` with user `jularr_test`
+and maintenance database `jularr_test_admin`; set `JULARR_TEST_DB` to its connection string.
+Build the test project in Release, then run:
+
+```powershell
+$env:JULARR_TEST_LIBRARY_PERFORMANCE = '1'
+$env:JULARR_TEST_LIBRARY_SAMPLES = '100'
+$env:JULARR_TEST_LIBRARY_ANALYZE = '0'
+$env:JULARR_TEST_LIBRARY_MAX_MS = '100'
+dotnet test tests/Jularr.Backend.Tests --configuration Release --filter FullyQualifiedName~LibraryPerformanceTests --logger 'trx;LogFileName=library-performance.trx'
+```
+
+The default synthetic inventory has 411 works (300 films, 111 series), 11,100 episodes,
+146 assigned files, 3,365 unmatched files, audio/subtitle tracks and per-profile progress.
+The application connection pool is enabled. `JULARR_TEST_LIBRARY_ANALYZE=0` deliberately
+includes the poor-statistics case after a bulk import. Omit it to analyze the seeded tables.
+`JULARR_TEST_LIBRARY_STRESS=1` instead seeds 2,120 works and 14,000 assigned files.
+The optional maximum is enforced for every service p95; ordinary CI skips this opt-in test.
+
+## Local comparison, 23 October 2026
+
+PostgreSQL 18 in Docker, .NET 10 Release, Intel Core i5-1145G7. Original source:
+`6eb427c2996d30b1ebbdbcd1a85717700c689e42`. Both runs used the default inventory above
+without explicit `ANALYZE`; before has 20 measured calls per case, after has 100.
+
+| Read | Before service p95 | After service p95 |
+| --- | ---: | ---: |
+| Recently added | 1,999.0 ms | 74.6 ms |
+| Title | 1,929.2 ms | 80.7 ms |
+| Year | 2,022.2 ms | 70.5 ms |
+| Progress | 2,413.7 ms | 74.9 ms |
+| Series filter | 2,278.1 ms | 96.7 ms |
+| Second page | 2,014.8 ms | 69.2 ms |
+| Title search | 2,393.9 ms | 96.4 ms |
+
+The seven card JSON snapshots are byte-identical before and after. The changes
+aggregate dates and languages together, share unit-progress counts between ordering and
+cards within one query, and keep profile/file lookups parameterized by their selected ids.
+The library disables PostgreSQL JIT only for its own transaction: poor cost estimates
+previously triggered hundreds of compilation functions for a short interactive read.
+Commit/rollback and pooled-connection tests verify that this setting cannot escape.
+
+These are local service measurements, not live acceptance on the Owner's i5-6500T.
+The HTTP p95 was 74.3–104.5 ms; internet latency, full HTML rendering, cover requests,
+production concurrency and real scan/download load need their own live verification.

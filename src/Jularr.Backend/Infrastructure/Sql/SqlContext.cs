@@ -14,6 +14,7 @@ namespace Jularr.Backend.Infrastructure.Sql
         private SqlAccessMode? _mode;
         private IsolationLevel? _pendingReadIsolation;
         private bool _finished;
+        private bool _jitDisabled;
         private int _shortBatchActive;
         private bool _disposed;
 
@@ -57,6 +58,7 @@ namespace Jularr.Backend.Infrastructure.Sql
                     _connection = connection;
                     _transaction = transaction;
                     _mode = mode;
+                    _jitDisabled = false;
                 }
                 catch
                 {
@@ -233,6 +235,14 @@ namespace Jularr.Backend.Infrastructure.Sql
             if (!allowMutation)
             {
                 SqlReadGuard.RequireReadStatement(sql.Statement);
+            }
+
+            // Short interactive reads avoid compilation; the setting ends with this transaction.
+            if (sql.DisableJit && !_jitDisabled)
+            {
+                await using var configure = new NpgsqlCommand("SET LOCAL jit = off", _connection!, _transaction);
+                await configure.ExecuteNonQueryAsync(cancellationToken);
+                _jitDisabled = true;
             }
 
             var command = new NpgsqlCommand(sql.Statement, _connection!, _transaction);

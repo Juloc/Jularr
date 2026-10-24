@@ -9,6 +9,35 @@ namespace Jularr.Backend.Tests
     public sealed class SqlContextTests
     {
         [TestMethod]
+        [DataRow(true)]
+        [DataRow(false)]
+        public async Task ReadOnly_JitOverride_EndsWithTransaction(bool commit)
+        {
+            var connectionString = TestPostgres.ResolveConnectionString($"Data Source=sql-jit-{Guid.NewGuid():N}");
+            var options = new NpgsqlConnectionStringBuilder(connectionString) { Pooling = true, MaxPoolSize = 1, NoResetOnClose = true };
+            await using var database = new NpgsqlDataSourceBuilder(options.ConnectionString).Build();
+            await using (var connection = await database.OpenConnectionAsync())
+            await using (var configure = new NpgsqlCommand("SET jit = on", connection))
+            {
+                await configure.ExecuteNonQueryAsync();
+            }
+
+            await using (var read = new SqlContext(database))
+            {
+                read.PrepareReadTransaction(System.Data.IsolationLevel.ReadCommitted);
+                Assert.AreEqual("off", await read.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('jit')", DisableJit = true }));
+                Assert.AreEqual("on", await read.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('transaction_read_only')" }));
+                Assert.AreEqual("off", await read.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('jit')", DisableJit = true }));
+                if (commit) await read.CommitAsync();
+            }
+
+            // Reuse the same physical connection without the pool resetting its settings.
+            await using var reused = await database.OpenConnectionAsync();
+            await using var verify = new NpgsqlCommand("SELECT current_setting('jit')", reused);
+            Assert.AreEqual("on", await verify.ExecuteScalarAsync());
+        }
+
+        [TestMethod]
         public async Task ReadOnly_RejectsSequenceMutation_AndDoesNotLeakToNextTransaction()
         {
             await using var database = CreateDataSource();
