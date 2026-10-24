@@ -1,5 +1,23 @@
 # Android TV original → clean-start /api/v1: parity and E2E acceptance
 
+## Current implementation update (2026-10-24)
+
+**This document's historical inventory below is a 2026-10-22 audit, not the current implementation status.** The active V1 Android-TV integration is [PR #1540](https://github.com/Juloc/Jularr/pull/1540). Phone Companion backend/Web [PR #1575](https://github.com/Juloc/Jularr/pull/1575) is included as a merge parent in the TV integration branch. All six GitHub workflows passed together on `55600a9e`; each newer commit requires its own passing CI. Nothing in these CI results proves physical TV playback or phone hardware.
+
+The active implementation now includes multiaccount origin-scoped V1 tokens, Home/Discover/Requests/Favoriten, Media3 player and actual asset IDs, film edition paging, server-side opt-in LAN discovery, QR handoff for signed-out phones and authenticated Companion owner/controller endpoints. The old cookie-based TV path was removed. The 18 original device test cases remain applicable; prior "missing" rows for these implementations are superseded by this update, while Learning, offline TV and chronology remain explicitly deferred.
+
+### TV-C1: Companion/phone release gate — physical test only
+
+Use a real Android/Google TV and a separate smartphone/browser, with a local test server and a real playable MediaAssetId:
+
+1. Start TV playback with a paired account/profile; open **Smartphone**, capture the short-lived QR and scan on a phone that is **signed out**. Complete normal sign-in. The fragment token must not become a URL query/referrer or be logged. The one-use invitation is claimed under the **same account and active profile**.
+2. Assert wrong account/profile, expired invitation, duplicate claim and a phone that lacks `profile.playback` **cannot** control the TV. Test one active controller and competing commands: revisions are ordered, duplicate IDs do not replay.
+3. Issue Play, Pause and seeks including initial, middle and near-end positions. Check the **real Media3 playback position**, streamed audio/video, phone's pending/acknowledged/rejected UI and timeout behavior with HLS buffering. Never infer playback success from HTTP acceptance alone.
+4. Disconnect/reconnect Wi-Fi, change the active profile, revoke phone or TV device credentials, end playback, switch assets/audio and relaunch the TV app. Old grants and invitations must not control the new owner session; no stale bearer, profile or session may leak.
+5. Press only the physical D-pad: open overlay, focus/scan/renew/disconnect/Back, then return to playback without trapping focus or closing the player unexpectedly. Test an expired QR and a revoked remote, including the retry path.
+
+Record device/phone OS, server and TV commit SHAs, app sign/version, relevant HTTP statuses **without tokens**, results/screenshots, and Pass/Fail/Blocked. This case is **not yet hardware-verified** and must pass before asserting end-to-end Companion parity.
+
 **Audit snapshot:** 2026-10-22, original `feat/android-tv-integrated-906-20261009`
 vs. PR #1468 `feat/android-tv-v1-ui-integration` at
 `075ab8f5876ddb769448d6177558a221889fa11a`.
