@@ -318,7 +318,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 7"));
             // A terminal import schedules durable cleanup for the next monitoring cycle.
             await RunAsync<MonitorDownloadsV1>(host);
-            CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+            CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:0" }, usenet.Commands);
+            Assert.IsFalse(Directory.Exists(completed), "The verified imported source must be removed before client history cleanup.");
 
             // Once finished it is no longer in the queue to be imported again.
             using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import/files");
@@ -393,7 +394,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"ChosenSubtitleLanguages\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE 'Example Movie%'"));
             // A terminal import schedules durable cleanup for the next monitoring cycle.
             await RunAsync<MonitorDownloadsV1>(host);
-            CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+            CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:0" }, usenet.Commands);
+            Assert.IsFalse(Directory.Exists(Path.Combine(downloads.Path, "movies", Feature)));
         }
 
         // A download imported in parts keeps waiting with what was imported; it finishes when the person says so, and not before there is something imported.
@@ -636,7 +638,8 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RemovesCompleted\" FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 2"));
             await ImportClearFilmAsync(host, downloads, usenet);
-            CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+            CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:0" }, usenet.Commands);
+            Assert.IsFalse(Directory.Exists(Path.Combine(downloads.Path, "movies", Feature)));
         }
 
         [TestMethod]
