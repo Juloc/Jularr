@@ -20,22 +20,15 @@ namespace Jularr.Backend.Tests
             ]}
             """;
 
-        // MediaImportDataV1 supports file upload; the API therefore uses form
-        // binding rather than JSON. Each row is explicitly selected by the owner.
-        private static Dictionary<string, string> Form(string json, MediaImportActionType action = MediaImportActionType.AddOnly)
+        // The REST API uses a JSON-only typed request, not the multipart Razor
+        // upload contract; every selected row has an explicit consent bit.
+        private static MediaImportJobRequestV1 Form(string json, MediaImportActionType action = MediaImportActionType.AddOnly)
         {
-            var fields = new Dictionary<string, string>
-            {
-                ["Json"] = json,
-                ["Action"] = ((byte)action).ToString(System.Globalization.CultureInfo.InvariantCulture)
-            };
-            var count = System.Text.Json.JsonDocument.Parse(json).RootElement.GetProperty("items").GetArrayLength();
-            for (var index = 0; index < count; index++)
-            {
-                fields[$"Choices[{index}].Index"] = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                fields[$"Choices[{index}].Include"] = "true";
-            }
-            return fields;
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+            var count = document.RootElement.GetProperty("items").GetArrayLength();
+            var choices = Enumerable.Range(0, count).Select(index =>
+                new MediaImportChoiceV1(index, true, null, null, null, null, null));
+            return new MediaImportJobRequestV1(json, action, choices: new(choices));
         }
 
         [TestMethod]
@@ -100,7 +93,7 @@ namespace Jularr.Backend.Tests
                 {"version":1,"items":[{"type":"movie","ids":{"tmdb":"603"},"title":"The Matrix"}]}
                 """;
             using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import",
-                Form(firstBook));
+                new Dictionary<string, string> { ["Json"] = firstBook, ["Action"] = "1" });
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode);
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
 
