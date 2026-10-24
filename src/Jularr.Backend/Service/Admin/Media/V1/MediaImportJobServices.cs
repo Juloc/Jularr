@@ -22,7 +22,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         internal QueueMediaImportJobV1(WorkSignals signals) => _signals = signals;
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<MediaImportLatestJobV1>()];
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<MediaImportJobCreatedV1>()];
         protected override ModuleRequirement GetInstanceModules(MediaImportParametersV1 parameters) => ModuleRequirement.All("Library", "Requests");
         protected override ServicePermission GetPermission(MediaImportParametersV1 parameters, Type resultType) => new("media.manual.update");
 
@@ -58,7 +58,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     [ServiceEndpoint("GET", "/api/v1/admin/media-import/jobs/latest")]
     public sealed class LatestMediaImportJobV1 : AdminService<MediaImportParametersV1>
     {
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<MediaImportJobCreatedV1>()];
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<MediaImportLatestJobV1>()];
         protected override ModuleRequirement GetInstanceModules(MediaImportParametersV1 parameters) => ModuleRequirement.All("Library", "Requests");
         protected override ServicePermission GetPermission(MediaImportParametersV1 parameters, Type resultType) => new("media.manual.update");
 
