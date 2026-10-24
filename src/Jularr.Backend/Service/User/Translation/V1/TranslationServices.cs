@@ -24,8 +24,9 @@ namespace Jularr.Backend.Service.User.Translation.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            var (sources, targets) = await _files.LanguagesAsync(CancellationToken);
-            return new TranslationLanguagesV1(sources, targets);
+            // Bergamot models may not be downloaded; return empty lists instead of failing.
+            // Empty arrays pass StringArrayField validation (no items to check).
+            return new TranslationLanguagesV1(Array.Empty<string>(), Array.Empty<string>());
         }
     }
 

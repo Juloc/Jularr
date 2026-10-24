@@ -660,6 +660,8 @@ namespace Jularr.Frontend.Pages.User.Reader
         }
 
         // Mozilla's list may be out of reach; then the book reads in its own language.
+        // When Bergamot has no models downloaded, targets only contains English (bridge).
+        // In that case still offer languages for the local TranslateGemma model.
         private async Task<string[]> LanguagesAsync(CancellationToken ct)
         {
             try
@@ -667,9 +669,20 @@ namespace Jularr.Frontend.Pages.User.Reader
                 var targets = (await readLanguages.ExecuteAsync<TranslationLanguagesV1>(new TranslationLanguagesParametersV1(), ct)).Targets;
                 var allowed = (await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(new ReadUiLocalesParametersV1(), ct))
                     .Select(locale => CultureInfo.GetCultureInfo(locale.Locale).TwoLetterISOLanguageName);
-                return [.. new[] { ProfileLanguage }.Concat(allowed).Distinct(StringComparer.Ordinal).Where(targets.Contains)];
+
+                var result = new[] { ProfileLanguage }.Concat(allowed).Distinct(StringComparer.Ordinal).Where(targets.Contains);
+
+                // If the profile language is not among Bergamot targets (e.g. no models downloaded),
+                // fall back to common languages for local TranslateGemma translation.
+                if (!result.Any())
+                {
+                    var fallback = new[] { ProfileLanguage, "en", "de", "ja", "id" }.Distinct(StringComparer.Ordinal);
+                    result = fallback.Intersect(allowed, StringComparer.Ordinal);
+                }
+
+                return [.. result];
             }
-            catch (ServiceUnavailableException)
+            catch (Exception)
             {
                 return [];
             }

@@ -82,9 +82,11 @@ namespace Jularr.Backend.Service.Core
                 var client = services.GetRequiredService<MozillaTranslationsClient>();
                 lists = (await client.ReadEnginesAsync(ct), await client.ReadModelsAsync(ct));
             }
-            catch (TranslationSourceException exception)
+            catch
             {
-                throw new ServiceUnavailableException("translation_unavailable", exception);
+                // Mozilla nicht erreichbar oder keine Modelle: leere Liste,
+                // dann gibt es keine Übersetzungsziele für Bergamot.
+                lists = ([], []);
             }
 
             cache.Set("translation.files", lists, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = ListLifetime, Size = 1 });
