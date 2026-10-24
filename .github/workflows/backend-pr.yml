@@ -50,10 +50,11 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           DRAFT: ${{ github.event.pull_request.draft }}
+          FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci/full') || contains(github.event.pull_request.title, '[full-ci]') }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$DRAFT" == "true" ]]; then
+          if [[ "$DRAFT" == "true" || "$FULL" == "true" ]]; then
             echo "backend=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -194,7 +195,7 @@ jobs:
 
   # The stable required check `Backend / test`: one conclusion for prepare and all shards.
   test:
-    needs: [prepare, shards]
+    needs: [prepare, shards, full-regression]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -203,14 +204,15 @@ jobs:
         env:
           PREPARE: ${{ needs.prepare.result }}
           SHARDS: ${{ needs.shards.result }}
+          FULL: ${{ needs.full-regression.result }}
         run: |
-          echo "prepare: ${PREPARE}, shards: ${SHARDS}"
-          if [[ "${PREPARE}" != "success" || ( "${SHARDS}" != "success" && "${SHARDS}" != "skipped" ) ]]; then
-            echo "::error::Backend PR check failed (prepare ${PREPARE}, shards ${SHARDS}). The failed job is named prepare or backend (shard)."
+          echo "prepare: ${PREPARE}, shards: ${SHARDS}, full: ${FULL}"
+          if [[ "${PREPARE}" != "success" || ( "${SHARDS}" != "success" && "${SHARDS}" != "skipped" ) || ( "${FULL}" != "success" && "${FULL}" != "skipped" ) ]]; then
+            echo "::error::Backend PR check failed (prepare ${PREPARE}, shards ${SHARDS}). The failed job is named prepare, backend (shard) or full-regression."
             exit 1
           fi
 
-  # Opted-in full validation uses this PR workflow instead of an empty separate run.
+  # An opted-in full run replaces (rather than duplicates) the fast backend build.
   full-regression:
     if: ${{ !github.event.pull_request.draft && (contains(github.event.pull_request.labels.*.name, 'ci/full') || contains(github.event.pull_request.title, '[full-ci]')) }}
     uses: ./.github/workflows/backend.yml
