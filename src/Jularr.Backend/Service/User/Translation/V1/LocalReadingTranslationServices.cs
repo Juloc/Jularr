@@ -65,7 +65,11 @@ namespace Jularr.Backend.Service.User.Translation.V1
             if (server is null) return new LocalTranslationAvailabilityV1(null);
             try
             {
-                var installed = await _models.InstalledAsync(server, CancellationToken);
+                // The inference client allows long-running generation, but discovering a
+                // model is metadata work and must not delay opening the Reader.
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken);
+                timeout.CancelAfter(TimeSpan.FromSeconds(3));
+                var installed = await _models.InstalledAsync(server, timeout.Token);
                 return new LocalTranslationAvailabilityV1(OllamaLocalModels.Candidates.FirstOrDefault(candidate => installed.Contains(candidate, StringComparer.Ordinal)));
             }
             catch (Exception e) when (e is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException)
