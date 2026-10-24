@@ -135,7 +135,7 @@ html:not([data-skin="original"]) body:has(.login-card) {
     gap: 9px;
     width: 100%;
     min-width: 0;
-    height: 42px;
+    min-height: 44px;
     padding: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius-tile);
@@ -250,6 +250,8 @@ html:not([data-skin="original"]) body:has(.login-card) {
     .login-card--register { padding-top: 25px; .auth-brand { margin-bottom: 20px; } .auth-brand-name { font-size: 24px; } }
     .auth-providers { gap: 7px; }
     .auth-provider { gap: 5px; font-size: 11px; }
+    // iOS otherwise zooms a 13px login field and hides nearby controls behind the keyboard.
+    .login-card .ui-field__control > input { font-size: 16px; scroll-margin-bottom: 24px; }
     // The tall request form leaves the two round buttons the page's own bottom.
     body:has(.login-card--register) { position: relative; }
     .auth-main:has(.login-card--register) { padding-bottom: calc(115px + env(safe-area-inset-bottom)); }
