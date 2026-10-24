@@ -31,6 +31,8 @@ namespace Jularr.Backend.Tests
 
             await baseline.StartAsync(CancellationToken.None);
             CollectionAssert.AreEquivalent(tables, await TablesAsync(connectionString));
+            Assert.AreEqual(1L, await ScalarAsync(connectionString, "SELECT count(*) FROM \"AcquisitionConnectionTypes\" WHERE \"Id\" = 9 AND \"Key\" = 'Qbittorrent';"));
+            Assert.AreEqual(1L, await ScalarAsync(connectionString, "SELECT count(*) FROM \"AcquisitionConnectionTypes\" WHERE \"Id\" = 10 AND \"Key\" = 'Nyaa';"));
             await using var check = new NpgsqlConnection(connectionString);
             await check.OpenAsync();
             await using var name = new NpgsqlCommand("SELECT \"Name\" FROM \"InstanceSettings\"", check);
