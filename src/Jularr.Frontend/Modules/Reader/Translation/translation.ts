@@ -44,7 +44,10 @@ interface RouteFile { step: number; fileType: string; url: string; precision: st
 
 export function translator(reader: HTMLElement, content: HTMLElement, createWorker: () => Worker) {
     const blocks = Array.from(content.querySelectorAll<HTMLElement>("[data-b]"));
-    const originals = new Map(blocks.map(block => [block, block.innerHTML]));
+    // Parent blocks are never translated. Replacing a parent's innerHTML would detach
+    // all nested [data-b] nodes, leaving the translator's block references stale.
+    const originals = new Map(blocks.filter(block => !block.querySelector('[data-b]'))
+        .map(block => [block, block.innerHTML]));
     const status = reader.querySelector<HTMLElement>("[data-role=translation-status]");
     const source = languageOf(reader.dataset.language, content.innerText.slice(0, 20_000));
     let current: Language | "" = "";
