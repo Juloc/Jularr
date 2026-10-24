@@ -12364,6 +12364,10 @@
    "Search, monitor, download and import titles; an alternative to Sonarr, Radarr, Readarr and Lidarr.",
    "Titel suchen, überwachen, herunterladen und importieren, als Alternative zu Sonarr, Radarr, Readarr und Lidarr."
   ],
+  "setup.module.help.Browser": [
+   "Install and manage an optional browser for supported acquisition sources. Turning the module off removes only Jularr-managed browser files.",
+   "Optionalen Browser für unterstützte Bezugsquellen installieren und verwalten. Beim Ausschalten werden nur von Jularr verwaltete Browserdateien entfernt."
+  ],
   "setup.module.help.Playback": [
    "Play films and series in the browser.",
    "Filme und Serien im Browser abspielen."
