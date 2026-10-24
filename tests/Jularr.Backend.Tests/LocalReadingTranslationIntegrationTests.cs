@@ -18,12 +18,13 @@ namespace Jularr.Backend.Tests
         {
             using var storage = new TemporaryDirectory();
             var ollama = new FakeOllama();
+            var mozilla = new UnavailableMozilla();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
                 settings: new Dictionary<string, string> { ["LocalTranslation:Endpoint"] = "http://ollama:11434" },
                 services: services =>
                 {
                     services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => ollama);
-                    services.AddHttpClient<MozillaTranslationsClient>().ConfigurePrimaryHttpMessageHandler(() => new UnavailableMozilla());
+                    services.AddHttpClient<MozillaTranslationsClient>().ConfigurePrimaryHttpMessageHandler(() => mozilla);
                 });
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
             var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
@@ -35,6 +36,15 @@ namespace Jularr.Backend.Tests
             var readerHtml = await reader.Content.ReadAsStringAsync();
             StringAssert.Contains(readerHtml, "data-language-choice=" + (char)34 + "de" + (char)34);
             StringAssert.Contains(readerHtml, "data-local-model=" + (char)34 + "translategemma:4b" + (char)34);
+
+            // An empty Mozilla catalogue still reports English as a bridge; a German book
+            // must not offer that as a usable browser route without a de->en model.
+            mozilla.EmptyCatalogue = true;
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'de' WHERE \"Id\" = " + document.DocumentId);
+            using var germanReader = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
+            Assert.AreEqual(HttpStatusCode.OK, germanReader.StatusCode, await germanReader.Content.ReadAsStringAsync());
+            StringAssert.Contains(await germanReader.Content.ReadAsStringAsync(), "data-browser-translation-targets=\"\"");
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en' WHERE \"Id\" = " + document.DocumentId);
 
             var baseUrl = "/api/v1/reading/documents/" + document.DocumentId + "/sections/0/local-translations/de/translategemma:4b";
             var request = baseUrl + "/blocks/0";
@@ -75,8 +85,12 @@ namespace Jularr.Backend.Tests
 
         private sealed class UnavailableMozilla : HttpMessageHandler
         {
+            public bool EmptyCatalogue { get; set; }
+
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-                Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+                Task.FromResult(EmptyCatalogue
+                    ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"data":[]}""") }
+                    : new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
         }
 
         private sealed class FakeOllama : HttpMessageHandler
