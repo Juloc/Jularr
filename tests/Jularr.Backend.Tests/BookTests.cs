@@ -45,8 +45,45 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(BookDocumentLanguages.ContradictsStrictProfile(strict, ["EN"]));
             Assert.IsFalse(BookDocumentLanguages.ContradictsStrictProfile(strict, ["DE", "EN"]));
             Assert.IsFalse(BookDocumentLanguages.ContradictsStrictProfile(strict, []));
+            Assert.AreEqual("import_book_language_unknown", BookDocumentLanguages.StrictEpubAttentionReason(strict, []));
+            Assert.AreEqual("import_book_language_mismatch", BookDocumentLanguages.StrictEpubAttentionReason(strict, ["EN"]));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(strict, ["DE"]));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(strict, ["DE", "EN"]));
+            var flexible = new QualityProfile("flexible", "Flexible", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true, LanguageOrder = ["DE"], LanguageFallback = LanguageFallbackType.Any
+            };
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(flexible, []));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(flexible, ["EN"]));
             using var unknown = new MemoryStream("not an epub"u8.ToArray());
             CollectionAssert.AreEqual(Array.Empty<string>(), BookDocumentLanguages.ReadEpub(unknown));
+        }
+
+        [TestMethod]
+        public void StrictEpubWithoutLanguageMetadata_RequiresManualReview()
+        {
+            using var stream = new MemoryStream(ReadingTests.BuildEpub("Unlabelled document"));
+            using (var archive = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Update, leaveOpen: true))
+            {
+                var opf = archive.GetEntry("OEBPS/content.opf")!;
+                string xml;
+                using (var reader = new StreamReader(opf.Open(), leaveOpen: false))
+                {
+                    xml = reader.ReadToEnd();
+                }
+                opf.Delete();
+                using var writer = new StreamWriter(archive.CreateEntry("OEBPS/content.opf").Open());
+                writer.Write(xml.Replace("<dc:language>en</dc:language>", "", StringComparison.Ordinal));
+            }
+
+            stream.Position = 0;
+            var actual = BookDocumentLanguages.ReadEpub(stream);
+            CollectionAssert.AreEqual(Array.Empty<string>(), actual);
+            var strict = new QualityProfile("strict", "Strict", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true, LanguageOrder = ["DE"], LanguageFallback = LanguageFallbackType.None
+            };
+            Assert.AreEqual("import_book_language_unknown", BookDocumentLanguages.StrictEpubAttentionReason(strict, actual));
         }
 
         private const string Connections = "/api/v1/admin/acquisition/connections";

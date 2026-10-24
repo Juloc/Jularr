@@ -58,17 +58,25 @@ namespace Jularr.Backend.Service.User.Translation.V1
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<LocalTranslationAvailabilityV1>()];
         protected override ModuleRequirement GetInstanceModules(LocalTranslationAvailabilityParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
-        protected override ServicePermission GetPermission(LocalTranslationAvailabilityParametersV1 parameters, Type resultType) => new("instance.settings.update");
+        protected override ServicePermission GetPermission(LocalTranslationAvailabilityParametersV1 parameters, Type resultType) => new("profile.media.read");
         protected override async Task<IServiceOutput> OnRead()
         {
             var server = OllamaLocalModels.Endpoint(_options.Endpoint);
             if (server is null) return new LocalTranslationAvailabilityV1(null);
             try
             {
-                var installed = await _models.InstalledAsync(server, CancellationToken);
+                // The inference client allows long-running generation, but discovering a
+                // model is metadata work and must not delay opening the Reader.
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken);
+                timeout.CancelAfter(TimeSpan.FromSeconds(3));
+                var installed = await _models.InstalledAsync(server, timeout.Token);
                 return new LocalTranslationAvailabilityV1(OllamaLocalModels.Candidates.FirstOrDefault(candidate => installed.Contains(candidate, StringComparer.Ordinal)));
             }
-            catch (Exception e) when (e is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException)
+            catch (OperationCanceledException) when (!CancellationToken.IsCancellationRequested)
+            {
+                return new LocalTranslationAvailabilityV1(null);
+            }
+            catch (Exception e) when (e is HttpRequestException or JsonException or InvalidDataException)
             {
                 return new LocalTranslationAvailabilityV1(null);
             }
@@ -148,7 +156,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<LocalReadingBlockV1>()];
         protected override ModuleRequirement GetInstanceModules(LocalReadingBlockParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
-        protected override ServicePermission GetPermission(LocalReadingBlockParametersV1 parameters, Type resultType) => new("instance.settings.update");
+        protected override ServicePermission GetPermission(LocalReadingBlockParametersV1 parameters, Type resultType) => new("profile.media.read");
 
         protected override async Task<IServiceOutput> OnExecute()
         {
