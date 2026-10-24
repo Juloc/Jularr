@@ -21,6 +21,7 @@ export function initializeDurableJobs(): void {
     const status = panel.querySelector<HTMLElement>("[data-import-job-state]");
     const progress = panel.querySelector<HTMLProgressElement>("[data-import-job-progress]");
     const rows = panel.querySelector<HTMLOListElement>("[data-import-job-rows]");
+    const reportButton = panel.querySelector<HTMLButtonElement>("[data-import-job-report]");
     if (!count || !status || !progress || !rows) return;
 
     let current: string | null = null;
@@ -28,6 +29,7 @@ export function initializeDurableJobs(): void {
     const existing = new Map<number, HTMLLIElement>();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let lastSequence = -1;
+    let lastSnapshot: JobState | null = null;
 
     const endpoint = (handler: string, jobId?: string): string => {
         const url = new URL("/Admin/Import", window.location.href);
@@ -39,6 +41,8 @@ export function initializeDurableJobs(): void {
     const render = (job: JobState): void => {
         if (current !== job.jobId) return;
         panel.hidden = false;
+        lastSnapshot = job;
+        if (reportButton) reportButton.hidden = job.state !== "Completed" && job.state !== "Failed";
         const state = job.state.toLowerCase();
         status.textContent = panel.dataset["job" + state[0].toUpperCase() + state.slice(1)]
             ?? job.state;
@@ -94,6 +98,8 @@ export function initializeDurableJobs(): void {
         if (timer !== undefined) clearTimeout(timer);
         requestGeneration++;
         current = id;
+        lastSnapshot = null;
+        if (reportButton) reportButton.hidden = true;
         lastSequence = -1;
         existing.clear();
         rows.replaceChildren();
@@ -101,6 +107,18 @@ export function initializeDurableJobs(): void {
         status.textContent = panel.dataset.jobQueued ?? "Queued";
         void poll(requestGeneration);
     };
+
+    reportButton?.addEventListener("click", () => {
+        if (!lastSnapshot) return;
+        const report = { version: 1, jobId: lastSnapshot.jobId, state: lastSnapshot.state, results: lastSnapshot.rows };
+        const file = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+        const uri = URL.createObjectURL(file);
+        const link = document.createElement("a");
+        link.href = uri;
+        link.download = "jularr-import-report.json";
+        link.click();
+        URL.revokeObjectURL(uri);
+    });
 
     form?.addEventListener("submit", async event => {
         const submitter = (event as SubmitEvent).submitter;
