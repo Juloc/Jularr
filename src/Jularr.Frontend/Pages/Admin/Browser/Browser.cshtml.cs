@@ -36,11 +36,12 @@ namespace Jularr.Frontend.Pages.Admin.Browser
                 var tone = browser.IsRunning ? UiTone.Success : browser.IsAvailable ? UiTone.Warning : UiTone.Neutral;
                 page.Content.Add(new Div(new StateChip(new Text(key), tone),
                     browser.LastError is { } error ? new P(new ValueText(error)) : new Span()));
-                if (!browser.IsAvailable)
+                if (!browser.IsRunning && (string.IsNullOrWhiteSpace(browser.RemoteAddress)
+                    || browser.RemoteAddress.StartsWith("http://127.0.0.1:", StringComparison.OrdinalIgnoreCase)))
                 {
                     page.Content.Add(new P(new Text("admin.browser.setupHint")));
                     page.Content.Add(new CodeSample("admin.browser.installSteps",
-                        "docker compose exec -u root jularr jularr-browser install\ndocker compose exec -d jularr jularr-browser run\n# Set JULARR_BROWSER_ADDRESS=http://127.0.0.1:9222 in .env, then redeploy",
+                        "# First set JULARR_BROWSER_ADDRESS=http://127.0.0.1:9222 in .env\ndocker compose up -d jularr\ndocker compose exec -u root jularr jularr-browser install\ndocker compose exec -d jularr jularr-browser run",
                         assets));
                 }
             }

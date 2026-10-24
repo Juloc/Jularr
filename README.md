@@ -69,15 +69,27 @@ Anna's Archive stellt seine Seiten hinter eine Prüfung, die nur ein Browser bes
 solche Seiten mit einem echten Chrome oder Chromium, den es **nicht** selbst mitbringt: das Image
 bleibt schlank, der Browser kommt später dazu.
 
-Im bestehenden Jularr-Container, einmal je Container (der Browser landet in der Schicht, sein Profil im Volume; kein Sidecar-Container):
+Der Browser wird im bestehenden Jularr-Container installiert, nicht in einem Sidecar.
+**Wichtig ist die Reihenfolge:** Zuerst `JULARR_BROWSER_ADDRESS=http://127.0.0.1:9222`
+in der `.env` setzen und die Konfiguration anwenden; **danach** Chrome installieren und starten.
 
 ```bash
-docker compose exec -u root jularr jularr-browser install   # Browser und Bibliotheken
-docker compose exec -d jularr jularr-browser run            # startet ihn auf Port 9222
+docker compose up -d jularr                             # Konfiguration vor der Installation anwenden
+docker compose exec -u root jularr jularr-browser install # Browser und Bibliotheken installieren
+docker compose exec -d jularr jularr-browser run          # auf internem Port 9222 starten
 ```
 
-Danach `JULARR_BROWSER_ADDRESS=http://127.0.0.1:9222` in der `.env` setzen und den
-Jularr-Service neu starten. Unter `/Admin/Browser` wird die Verbindung angezeigt.
+Nach diesen Schritten **kein** `docker compose up --force-recreate` ausführen:
+Der Browser ist derzeit nur in der beschreibbaren Containersicht installiert.
+`docker compose restart` erhält zwar die Installation, beendet aber den separat
+gestarteten Browserprozess; `jularr-browser run` muss danach erneut gestartet werden.
+Ein Redeploy/Update, das den Container neu erstellt, benötigt derzeit eine erneute
+Installation. Das Browserprofil bleibt im persistenten `/data/browser`-Volume.
+Der langfristige, ohne erneute Installation zuverlässige Installer ist in
+[#1550](https://github.com/Juloc/Jularr/issues/1550) erfasst.
+
+Unter `/Admin/Browser` erscheint der Verbindungsstatus. Er zeigt „verbunden“ erst
+nach erfolgreicher Browserverbindung, nicht unmittelbar nach dem Containerstart.
 Jularr verwendet den verbundenen Browser bei erkannten Quellprüfungen automatisch.
 Die Installation benötigt Container-Root; der als `app` laufende Webprozess darf
 keine Systempakete installieren. Deshalb zeigt die Adminseite die Befehle statt eines
