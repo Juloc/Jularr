@@ -30,7 +30,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
 
             if (_status is { } state)
             {
-                page.Content.Add(new P(new Text("admin.browser.moduleState"), new ValueText(": " + state.ManagedState)));
+                page.Content.Add(new P(new Text("admin.browser.moduleState"), new ValueText(": "), new Text("admin.browser.phase." + state.ManagedState)));
                 if (!string.IsNullOrWhiteSpace(state.ManagedError)) page.Content.Add(new P(new ValueText(state.ManagedError)));
             }
 

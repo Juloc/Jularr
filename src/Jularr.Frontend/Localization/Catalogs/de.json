@@ -9072,6 +9072,34 @@
    "Browser",
    "Browser"
   ],
+  "admin.browser.moduleState": [
+   "Browser module",
+   "Browser-Modul"
+  ],
+  "admin.browser.phase.disabled": [
+   "Disabled",
+   "Deaktiviert"
+  ],
+  "admin.browser.phase.installing": [
+   "Installing browser",
+   "Browser wird installiert"
+  ],
+  "admin.browser.phase.starting": [
+   "Starting browser",
+   "Browser wird gestartet"
+  ],
+  "admin.browser.phase.ready": [
+   "Ready",
+   "Bereit"
+  ],
+  "admin.browser.phase.removing": [
+   "Removing browser files",
+   "Browserdateien werden entfernt"
+  ],
+  "admin.browser.phase.error": [
+   "Browser error",
+   "Browserfehler"
+  ],
   "admin.browser.state": [
    "What the browser did",
    "Was der Browser getan hat"
