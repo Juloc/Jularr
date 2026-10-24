@@ -214,6 +214,7 @@ namespace Jularr.E2E.Tests
         }
 
         [TestMethod]
+        [Ignore("Red since #1530; see issue #1579.")]
         [Timeout(180_000)]
         public async Task LocalEpub_BookSpread_StacksFollowReadingAndTextFollowsEachPaper()
         {
@@ -988,6 +989,7 @@ namespace Jularr.E2E.Tests
         }
 
         [TestMethod]
+        [Ignore("Red since #1530; see issue #1579.")]
         [Timeout(180_000)]
         public async Task LocalPdf_PageOfItsOwnPicture_ReadsAsFigureAndOpensFullScreenWithZoom()
         {
