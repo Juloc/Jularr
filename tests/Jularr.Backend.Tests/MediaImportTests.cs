@@ -544,6 +544,7 @@ namespace Jularr.Backend.Tests
             var body = await response.Content.ReadAsStringAsync();
             StringAssert.Contains(body, "Paperback");
             StringAssert.Contains(body, "9780141439518");
+            StringAssert.Contains(response.Content.Headers.ContentType?.MediaType ?? "", "text/html");
             StringAssert.Contains(body, "Penguin");
             StringAssert.Contains(body, "eng");
             Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
