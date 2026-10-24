@@ -51,6 +51,22 @@ namespace Jularr.Backend.Tests
         private const string Connections = "/api/v1/admin/acquisition/connections";
         private const string Feature = "Example.Movie.2020.1080p.WEB-DL.H264-GRP";
         private const string Lower = "Example.Movie.2020.720p.WEB-DL.H264-GRP";
+        [TestMethod]
+        public void ReleaseMerge_PreservesTransportAndSourceEvidence()
+        {
+            var original = new ReleaseOffer("Volume 1", 10, "Novel source", 25, "guid", new Uri("https://source.example.test/file"),
+                null, 1_024, DateTimeOffset.UtcNow, ["title"]) { Transport = DownloadTransport.Torrent, IndexerFlags = ["validated"], IsPart = true };
+            var repeated = new ReleaseOffer("Volume 1", 10, "Novel source", 25, "guid", new Uri("https://source.example.test/file"),
+                null, 1_024, DateTimeOffset.UtcNow, ["alias"]) { IndexerFlags = ["translated"] };
+
+            var result = AcquisitionSelectionLogic.Merge(original, repeated);
+
+            Assert.AreEqual(DownloadTransport.Torrent, result.Transport);
+            CollectionAssert.AreEquivalent(new[] { "validated", "translated" }, result.IndexerFlags.ToArray());
+            Assert.IsTrue(result.IsPart);
+            CollectionAssert.AreEquivalent(new[] { "title", "alias" }, result.Stages.ToArray());
+        }
+
 
         [TestMethod]
         [DataRow(false, false)]
