@@ -38,20 +38,10 @@ namespace Jularr.Backend.Tests
             return fields;
         }
 
-        private static async Task InstallJobsAsync(AuthenticationTests.Host host)
-        {
-            using var migration = typeof(Jularr.Backend.Service.Core.ServiceApi).Assembly
-                .GetManifestResourceStream("Jularr.Database.Migrations.0002_media_import_jobs.sql")
-                ?? throw new InvalidOperationException("Media import job migration resource is missing.");
-            using var reader = new StreamReader(migration);
-            await host.Fixture.RunSqlAsync(await reader.ReadToEndAsync());
-        }
-
         [TestMethod]
         public async Task DurableJob_IsOwnedByServer_StreamsSavedResultsAndNeverAutoDownloadsAddOnly()
         {
             await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders());
-            await InstallJobsAsync(host);
             var data = Form(Books);
 
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import/jobs", data);
@@ -94,7 +84,6 @@ namespace Jularr.Backend.Tests
         public async Task DurableJob_ReclaimsInterruptedOperation_WithoutDuplicatingACommittedWork()
         {
             await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders());
-            await InstallJobsAsync(host);
             using var queued = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import/jobs",
                 Form(Books));
             Assert.AreEqual(HttpStatusCode.OK, queued.StatusCode);
@@ -137,7 +126,6 @@ namespace Jularr.Backend.Tests
         public async Task DurableJob_RevokedOwnerCannotImportTheNextWork()
         {
             await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders());
-            await InstallJobsAsync(host);
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import/jobs",
                 Form(Books, MediaImportActionType.MonitorAndSearch));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode);
