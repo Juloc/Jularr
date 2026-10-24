@@ -556,44 +556,12 @@ function initializeEditionComparison(): void {
                 url.searchParams.set("workId", workId);
                 const response = await fetch(url, { credentials: "same-origin" });
                 if (!response.ok) throw new Error("Edition lookup failed");
-                const payload = await response.json() as { items?: { title?: string; language?: string; format?: string; publisher?: string; year?: number; isbn?: string }[] };
-                const items = payload.items ?? [];
-                if (items.length === 0) {
-                    details.textContent = button.dataset.importEditionEmpty ?? "No edition details are available.";
-                    return;
-                }
-                details.textContent = "";
-                const table = document.createElement("table");
-                const head = document.createElement("thead");
-                const heading = document.createElement("tr");
-                const keys = ["title", "language", "year", "format", "publisher", "isbn"] as const;
-                const names = [
-                    button.dataset.importEditionTitle ?? "Edition",
-                    button.dataset.importEditionLanguage ?? "Language",
-                    button.dataset.importEditionYear ?? "Year",
-                    button.dataset.importEditionFormat ?? "Format",
-                    button.dataset.importEditionPublisher ?? "Publisher",
-                    "ISBN"
-                ];
-                names.forEach(name => {
-                    const th = document.createElement("th");
-                    th.textContent = name;
-                    heading.append(th);
-                });
-                head.append(heading);
-                table.append(head);
-                const body = document.createElement("tbody");
-                for (const edition of items) {
-                    const row = document.createElement("tr");
-                    for (const key of keys) {
-                        const cell = document.createElement("td");
-                        cell.textContent = String(edition[key] ?? "—");
-                        row.append(cell);
-                    }
-                    body.append(row);
-                }
-                table.append(body);
-                details.append(table);
+                const markup = await response.text();
+                // The endpoint renders an encoded, authorized HTML fragment using Table<T>.
+                // No provider-supplied data is interpreted as client-side HTML.
+                const fragment = new DOMParser().parseFromString(markup, "text/html");
+                details.replaceChildren(...Array.from(fragment.body.childNodes));
+
             } catch {
                 details.textContent = button.dataset.importEditionError ?? "Edition details could not be loaded.";
             } finally {
