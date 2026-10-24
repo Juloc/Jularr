@@ -16,10 +16,10 @@ The existing `Release` workflow validates the official `vMAJOR.MINOR.PATCH[-prer
 
 Configure repository secrets before publishing:
 
-- `ANDROID_TV_KEYSTORE_BASE64`: Base64 encoding of the stable Android signing keystore (do **not** commit it).
-- `ANDROID_TV_STORE_PASSWORD`: Keystore password.
-- `ANDROID_TV_KEY_ALIAS`: Signing key alias.
-- `ANDROID_TV_KEY_PASSWORD`: Key password.
+- `ANDROID_KEYSTORE_BASE64`: Base64 encoding of the stable Android signing keystore (do **not** commit it).
+- `ANDROID_KEYSTORE_PASSWORD`: Keystore password.
+- `ANDROID_KEY_ALIAS`: Signing key alias.
+- `ANDROID_KEY_PASSWORD`: Key password.
 
 The signing job outputs `Jularr-TV-<version>.apk` and `Jularr-TV-<version>.apk.sha256` as GitHub release assets, matching `core-update/UpdateAssetResolver`. It verifies the signature and checks the SHA-256 *from the dist directory*, so downloading the APK and checksum side-by-side works without a nested `dist/` directory.
 
