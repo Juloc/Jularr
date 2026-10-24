@@ -43,3 +43,62 @@ test('restoring a section leaves nested block identities intact', async () => {
     assert.equal(replacedParent, 0, 'Restoring a parent would detach the cached nested block.');
     assert.equal(leaf.innerHTML, 'Original text');
 });
+
+test('a failed browser batch restores original blocks before local fallback', async () => {
+    const blocks = Array.from({ length: 25 }, (_, index) => {
+        let markup = 'original-' + index;
+        return {
+            get innerHTML() { return markup; },
+            set innerHTML(next) { markup = next; },
+            get innerText() { return markup; },
+            set textContent(next) { markup = next; },
+            querySelector: () => null
+        };
+    });
+    let restoredBeforeFallback = false;
+    const fetchStub = async (url, options) => {
+        if (url === '/translated/de') return { ok: false };
+        if (url === '/route/en/de') return {
+            ok: true, json: async () => [
+                { step: 0, fileType: 'engine', url: '/engine', precision: null },
+                { step: 1, fileType: 'model', url: '/model', precision: null }
+            ]
+        };
+        if (url.startsWith('/local/de/translategemma%3A4b?')) {
+            restoredBeforeFallback = blocks[0].innerText === 'original-0';
+            return { ok: true, json: async () => ({ blocks: '[]' }) };
+        }
+        if (url.startsWith('/local/de/translategemma%3A4b/blocks/') && options?.method === 'POST') {
+            return { ok: true, json: async () => ({ text: 'local translation' }) };
+        }
+        throw new Error('Unexpected fetch: ' + url);
+    };
+    const localExports = {};
+    runInNewContext(script, { exports: localExports, fetch: fetchStub });
+    const fakeWorker = {
+        onmessage: null,
+        terminate() {},
+        postMessage(message) {
+            if (message.type === 'load') queueMicrotask(() => this.onmessage({ data: { type: 'ready' } }));
+            else if (message.type === 'translate') queueMicrotask(() => this.onmessage({
+                data: message.id === 0
+                    ? { type: 'translated', id: message.id, texts: Array(24).fill('browser partial') }
+                    : { type: 'error', id: message.id, message: 'worker failure' }
+            }));
+        }
+    };
+    const reader = {
+        dataset: {
+            language: 'en', translationEngine: 'bergamot', localModel: 'translategemma:4b',
+            localTranslationUrl: '/local/', translationUrl: '/translated/', routeUrl: '/route/',
+            translatingLabel: 'Translating'
+        },
+        querySelector: () => null
+    };
+    const content = { querySelectorAll: () => blocks, innerText: 'English original text' };
+    const choose = localExports.translator(reader, content, () => fakeWorker);
+    await choose('de');
+    assert.equal(restoredBeforeFallback, true);
+    assert.equal(reader.dataset.translationState, 'ready');
+    assert.equal(blocks[0].innerText, 'local translation');
+});
