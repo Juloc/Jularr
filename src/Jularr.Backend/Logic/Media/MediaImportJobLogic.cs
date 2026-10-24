@@ -22,16 +22,12 @@ namespace Jularr.Backend.Logic.Media
                         WHERE "OperationTypeId" = 6 AND "OperationStatusTypeId" IN (1, 2)
                     DO UPDATE SET "RequestedByAccountId" = EXCLUDED."RequestedByAccountId"
                     RETURNING "Id"
-                ), inserted AS (
-                    INSERT INTO "MediaImportJobs" ("OperationId", "PublicId", "RequestedByAccountId", "Payload", "TotalCount")
-                    SELECT "Id", @PublicId, @AccountId, @Payload::jsonb, @TotalCount FROM queued WHERE true
-                    ON CONFLICT ("OperationId") DO NOTHING
-                    RETURNING "PublicId"
                 )
-                SELECT coalesce(
-                    (SELECT "PublicId" FROM inserted),
-                    (SELECT job."PublicId" FROM "MediaImportJobs" AS job JOIN queued ON queued."Id" = job."OperationId")
-                ) AS "JobId";
+                INSERT INTO "MediaImportJobs" ("OperationId", "PublicId", "RequestedByAccountId", "Payload", "TotalCount")
+                SELECT "Id", @PublicId, @AccountId, @Payload::jsonb, @TotalCount FROM queued WHERE true
+                ON CONFLICT ("OperationId") DO UPDATE
+                    SET "OperationId" = EXCLUDED."OperationId"
+                RETURNING "PublicId" AS "JobId";
                 """;
             sql.Parameters.Add(data);
             return (await ctx.ReadRequiredAsync<MediaImportJobIdData>(sql, ct)).JobId;
