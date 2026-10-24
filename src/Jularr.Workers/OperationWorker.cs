@@ -26,6 +26,7 @@ namespace Jularr.Workers
                 await RecoverAsync(stoppingToken);
                 await Task.WhenAll(RunLaneAsync("operations", OperationType.LibraryScan, signals.Scans, stoppingToken),
                     RunLaneAsync("backupQueue", OperationType.Backup, signals.Backups, stoppingToken),
+                    RunLaneAsync("mediaImportQueue", OperationType.MediaImport, signals.Imports, stoppingToken),
                     RunLaneAsync("benchmarkQueue", OperationType.TranscodeBenchmark, signals.Benchmarks, stoppingToken));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -72,7 +73,11 @@ namespace Jularr.Workers
 
             try
             {
-                if (claimed.OperationTypeId == OperationType.Backup)
+                if (claimed.OperationTypeId == OperationType.MediaImport)
+                {
+                    await services.GetRequiredService<ExecuteMediaImportJobV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), default, ct);
+                }
+                else if (claimed.OperationTypeId == OperationType.Backup)
                 {
                     await services.GetRequiredService<ExecuteBackupV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), default, ct);
                 }
