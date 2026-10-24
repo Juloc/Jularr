@@ -46,8 +46,8 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 new H2(new Text("import.job.title")),
                 new Strong(new Text("import.job.queued")).Attribute("data-import-job-state", "").Attribute("role", "status"),
                 new Span(new ValueText("0 / 0")).Attribute("data-import-job-count", ""),
-                new HtmlElementPlaceholder("progress", "data-import-job-progress"),
-                new HtmlElementPlaceholder("ol", "data-import-job-rows"))
+                new Progress().Attribute("data-import-job-progress", "").Attribute("max", "1").Attribute("value", "0"),
+                new Ol().Attribute("data-import-job-rows", ""))
                 .Class("media-import__job-panel").Attribute("data-import-job-panel", "").Attribute("hidden", "hidden")
                 .TextAttribute("data-job-queued", "import.job.queued")
                 .TextAttribute("data-job-running", "import.job.running")
