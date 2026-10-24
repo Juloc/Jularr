@@ -24,7 +24,7 @@ import com.google.zxing.qrcode.QRCodeWriter
 /** The one-time invite is encoded only into a QR fragment; never shown in logs or a GET query. */
 @Composable
 internal fun TvV1CompanionOverlay(
-    url: String,
+    url: String?,
     expiresAt: String,
     error: String?,
     busy: Boolean,
@@ -33,7 +33,7 @@ internal fun TvV1CompanionOverlay(
     onClose: () -> Unit,
 ) {
     val bitmap = remember(url) {
-        runCatching {
+        if (url == null) null else runCatching {
             val matrix = QRCodeWriter().encode(url, BarcodeFormat.QR_CODE, 280, 280)
             Bitmap.createBitmap(matrix.width, matrix.height, Bitmap.Config.ARGB_8888).apply {
                 for (y in 0 until matrix.height) {
@@ -54,7 +54,7 @@ internal fun TvV1CompanionOverlay(
         Text("Smartphone-Fernbedienung", style = MaterialTheme.typography.headlineMedium)
         if (bitmap != null) {
             Image(bitmap = bitmap.asImageBitmap(), contentDescription = "QR-Code zur Kopplung", modifier = Modifier.size(280.dp))
-        } else {
+        } else if (!busy) {
             Text("QR-Code konnte nicht erstellt werden.")
         }
         Text("Öffne den QR-Code auf deinem Smartphone und bestätige die Anmeldung bei Jularr.")
