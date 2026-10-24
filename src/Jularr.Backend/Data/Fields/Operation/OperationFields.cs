@@ -7,6 +7,8 @@ namespace Jularr.Backend.Data.Fields.Operation
     public static class OperationFields
     {
         public static readonly LongField Id = new() { Minimum = 1 };
+        public static readonly LongArrayField Ids = new() { Minimum = 1, MaximumLength = 64 };
+        public static readonly BoolField IsMissing = new();
         public static readonly EnumField OperationTypeId = new(typeof(OperationType));
         public static readonly EnumField OperationStatusTypeId = new(typeof(OperationStatusType));
         public static readonly LongField ProcessedCount = new() { Minimum = 0 };
