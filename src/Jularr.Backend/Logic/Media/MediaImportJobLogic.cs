@@ -28,9 +28,10 @@ namespace Jularr.Backend.Logic.Media
                     ON CONFLICT ("OperationId") DO NOTHING
                     RETURNING "PublicId"
                 )
-                SELECT job."PublicId" AS "JobId"
-                FROM "MediaImportJobs" AS job
-                JOIN queued ON queued."Id" = job."OperationId";
+                SELECT coalesce(
+                    (SELECT "PublicId" FROM inserted),
+                    (SELECT job."PublicId" FROM "MediaImportJobs" AS job JOIN queued ON queued."Id" = job."OperationId")
+                ) AS "JobId";
                 """;
             sql.Parameters.Add(data);
             return (await ctx.ReadRequiredAsync<MediaImportJobIdData>(sql, ct)).JobId;
