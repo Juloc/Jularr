@@ -132,6 +132,13 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 if (work.MediaTypeId != MediaType.Game) actions.Add(new Button(Icon("pencil"), new Text("work.edit")).Attribute("data-dialog-open", "work-edit").Attribute("type", "button"));
             }
 
+            // A title nobody requested has no target yet: Monitor starts one, as in Radarr, and Refresh needs none.
+            if (_wanted is null && CanAcquire && texts.CanManageWanted() && work.MediaTypeId != MediaType.Game)
+            {
+                actions.Add(new Form<WorkParametersV1>(form => form.Content(new SwitchButton(false, "work.monitor.start", "work.monitored")), Address(Tab, "StartMonitor"), csrf, new WorkParametersV1(work.Id)));
+                actions.Add(new Form<WorkParametersV1>(form => form.Submit(Labeled("sync", "work.refresh")), Address(Tab, "Refresh"), csrf, new WorkParametersV1(work.Id)));
+            }
+
             // A manga volume from the administrator's own device.
             if (work.MediaSubtypeId == MediaSubtype.Manga && texts.CanUploadVolumes()) actions.Add(new A(Icon("document"), new Text("work.upload")).Class("button").Attribute("href", Home + "/Upload"));
             if (texts.CanManageMedia()) actions.Add(new Button(Icon("trash"), new Text("work.delete")).Attribute("data-dialog-open", "work-delete").Attribute("type", "button").Class("button work-delete"));

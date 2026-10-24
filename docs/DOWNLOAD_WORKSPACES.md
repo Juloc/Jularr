@@ -54,6 +54,15 @@ Database migrations are **0005** (SABnzbd/incomplete/cleanup), **0006**
 (torrent connection types) and **0007** (source-inventory fingerprint). Never
 edit the frozen baseline or previously applied migrations.
 
+## Deployment acceptance and follow-ups
+
+This PR merges the provider-neutral download/import core, not an automatic migration
+of existing external clients. A shared external Complete/Incomplete root and one
+provider-neutral Files UI remain tracked in [#1599](https://github.com/Juloc/Jularr/issues/1599).
+Real NAS, SABnzbd and qBittorrent hardware acceptance is tracked separately in
+[#1600](https://github.com/Juloc/Jularr/issues/1600). Do not automatically enable
+new destructive cleanup policies on unverified existing installations.
+
 ## Release gates
 
 - [ ] Fresh and existing database upgrades verified, backup/rollback tested
@@ -65,6 +74,6 @@ edit the frozen baseline or previously applied migrations.
       rollout plan and complete Files UI, including migration of old settings
 - [ ] Owner review of source cleanup, path safety, and container volume mapping
 
-Do not merge only on the basis of green synthetic CI. This integration PR
+Do not treat green synthetic CI or a code merge as production hardware validation. This integration PR
 overlaps #1533, #1534, #1548 and #1567; do not independently merge those
 overlapping implementations without reconciling their behavior.

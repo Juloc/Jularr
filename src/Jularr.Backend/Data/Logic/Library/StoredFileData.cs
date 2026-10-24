@@ -305,6 +305,18 @@ namespace Jularr.Backend.Data.Logic.Library
         public MediaSubtype? MediaSubtypeId { get; }
     }
 
+    // The library one of a Work's files lies in.
+    internal sealed class WorkLibraryRootData : BaseData
+    {
+        public WorkLibraryRootData(long libraryRootId)
+        {
+            LibraryRootId = libraryRootId;
+        }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id))]
+        public long LibraryRootId { get; }
+    }
+
     // The media type and subtype of the library a file lies in.
     internal sealed class StoredFileRootData : BaseData
     {
