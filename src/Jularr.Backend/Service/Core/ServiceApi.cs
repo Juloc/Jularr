@@ -386,6 +386,30 @@ namespace Jularr.Backend.Service.Core
                         Window = TimeSpan.FromMinutes(1),
                         QueueLimit = 0
                     }));
+                options.AddPolicy("companion-claim", http => RateLimitPartition.GetFixedWindowLimiter(
+                    DeviceTokenFailures.Key(http.Connection.RemoteIpAddress),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 10,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0
+                    }));
+                options.AddPolicy("companion-command", http => RateLimitPartition.GetFixedWindowLimiter(
+                    DeviceTokenFailures.Key(http.Connection.RemoteIpAddress),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 30,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0
+                    }));
+                options.AddPolicy("companion-read", http => RateLimitPartition.GetFixedWindowLimiter(
+                    DeviceTokenFailures.Key(http.Connection.RemoteIpAddress),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 120,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0
+                    }));
                 options.OnRejected = (context, token) => new ValueTask(
                     Results.Problem(statusCode: StatusCodes.Status429TooManyRequests, title: "rate_limit_exceeded",
                         extensions: new Dictionary<string, object?>
