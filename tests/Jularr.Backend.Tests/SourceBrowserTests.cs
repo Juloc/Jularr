@@ -153,6 +153,26 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Browser_ManagedModuleFlagGatesEvenConfiguredBrowser()
+        {
+            using var folder = new TemporaryDirectory();
+            var root = Path.Combine(folder.Path, "browser");
+            Directory.CreateDirectory(root);
+            using var browser = new SourceBrowser(new BrowserOptions
+            {
+                RemoteAddress = "http://127.0.0.1:9222",
+                ProfilePath = root,
+                IsManaged = true
+            });
+
+            Assert.IsFalse(browser.IsAvailable);
+            File.WriteAllText(Path.Combine(root, ".enabled"), "1");
+            Assert.IsTrue(browser.IsAvailable);
+            File.Delete(Path.Combine(root, ".enabled"));
+            Assert.IsFalse(browser.IsAvailable);
+        }
+
+        [TestMethod]
         public async Task Browser_WithoutABinaryAnswersNothing()
         {
             using var folder = new TemporaryDirectory();
