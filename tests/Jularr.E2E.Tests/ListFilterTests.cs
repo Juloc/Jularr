@@ -11,6 +11,32 @@ namespace Jularr.E2E.Tests
             INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES
                 (9201, 1, 'Old Film', 1999), (9202, 1, 'New Film', 2022), (9203, 2, 'New Series', 2023), (9204, 3, 'Old Book', 2001);
             INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works" WHERE "Id" BETWEEN 9201 AND 9204;
+            -- The Library defaults to locally available titles. A Wanted item alone
+            -- is intentionally not available; seed real inventory associations.
+            INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly")
+                VALUES ('E2E Filter Storage', 3, '/tmp/jularr-listfilter', FALSE);
+            INSERT INTO "LibraryRoots" ("Name", "MediaTypeId", "StorageMountId", "RelativePath")
+            SELECT kind."Name", kind."MediaTypeId", mount."Id", kind."Path"
+            FROM "StorageMounts" AS mount
+            CROSS JOIN (VALUES ('Filter Movies', 1, 'movies'), ('Filter Series', 2, 'series'), ('Filter Books', 3, 'books'))
+                AS kind("Name", "MediaTypeId", "Path")
+            WHERE mount."Name" = 'E2E Filter Storage';
+            INSERT INTO "WorkEditions" ("Id", "WorkId")
+                SELECT "Id", "Id" FROM "Works" WHERE "Id" BETWEEN 9201 AND 9204;
+            INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId")
+                SELECT "Id", "Id", "Id" FROM "Works" WHERE "Id" BETWEEN 9201 AND 9204;
+            INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId")
+                SELECT "Id", "Id", "Id", CASE WHEN "MediaTypeId" = 3 THEN 3 ELSE 1 END
+                FROM "Works" WHERE "Id" BETWEEN 9201 AND 9204;
+            INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt")
+            SELECT root."Id",
+                'fixtures/' || work."Id" || CASE WHEN work."MediaTypeId" = 3 THEN '.epub' ELSE '.mkv' END,
+                1024, now(), asset."Id", now()
+            FROM "Works" AS work
+            JOIN "MediaAssets" AS asset ON asset."WorkId" = work."Id"
+            JOIN "LibraryRoots" AS root ON root."MediaTypeId" = work."MediaTypeId"
+            JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId" AND mount."Name" = 'E2E Filter Storage'
+            WHERE work."Id" BETWEEN 9201 AND 9204;
             INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId") SELECT p."Id", w FROM "Profiles" AS p CROSS JOIN (VALUES (9201), (9202), (9204)) AS v (w);
             INSERT INTO "Collections" ("ProfileId", "Name") SELECT "Id", 'Weekend' FROM "Profiles";
             INSERT INTO "CollectionWorks" ("CollectionId", "WorkId", "Position") SELECT c."Id", 9202, 1 FROM "Collections" AS c;
