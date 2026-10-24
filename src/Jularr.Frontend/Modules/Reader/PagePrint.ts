@@ -159,6 +159,58 @@ export function pagePrint(source: HTMLElement, page: number, width: number, heig
                         offset = metricRange.getBoundingClientRect().top - ruler.getBoundingClientRect().top;
                         metrics.set(signature, offset);
                     }
+                    // A printed run keeps its original range and textContent for
+                    // search, speech and pagination. Native text fragments carry
+                    // precisely measured word positions for the curved paper face.
+                    // Never rasterize the letters into a canvas or texture.
+                    const raw = node.data.slice(start, end);
+                    const pieces: { start: number; end: number }[] = [];
+                    for (const match of raw.matchAll(/\S+\s*|\s+/gu)) {
+                        const startAt = match.index, value = match[0];
+                        const word = value.match(/^([^\s]+)(\s*)$/u);
+                        const bare = word?.[1].replace(/[.,!?;:]+$/u, '') ?? '';
+                        // The first and last Latin words need shorter sections:
+                        // the thick-book shoulder changes most steeply there.
+                        const boundary = startAt === 0 || startAt + value.length === raw.length;
+                        if (boundary && bare.length >= 6 && bare.length <= 24 &&
+                            /^[\p{Script=Latin}]+$/u.test(bare)) {
+                            for (let at = 0; at < bare.length; at += 3)
+                                pieces.push({ start: startAt + at, end: startAt + Math.min(bare.length, at + 3) });
+                            if (value.length > bare.length)
+                                pieces.push({ start: startAt + bare.length, end: startAt + value.length });
+                        } else pieces.push({ start: startAt, end: startAt + value.length });
+                    }
+                    if (pieces.length > 0 && pieces.length <= 32) {
+                        const fragments: HTMLElement[] = [];
+                        let displayStart = 0;
+                        for (const piece of pieces) {
+                            const original = raw.slice(piece.start, piece.end);
+                            let inkText = preserved ? original : original.replace(/\s+/g, ' ');
+                            if (piece.end === raw.length) {
+                                if (broken) inkText += '-';
+                                else if (inkText.endsWith('­')) inkText = inkText.slice(0, -1) + '-';
+                            }
+                            range.setStart(node, start + piece.start); range.setEnd(node, start + piece.end);
+                            const boxes = Array.from(range.getClientRects()).filter(part => Math.abs(flow(part) - key) < .5);
+                            const leftEdge = boxes.length ? Math.min(...boxes.map(part => part.left)) : box.left;
+                            const rightEdge = boxes.length ? Math.max(...boxes.map(part => part.right)) : leftEdge;
+                            const fragment = document.createElement('span');
+                            fragment.dataset.paperInk = '';
+                            fragment.dataset.paperX = String(leftEdge - left);
+                            fragment.dataset.paperWidth = String(rightEdge - leftEdge);
+                            fragment.dataset.paperStart = String(displayStart);
+                            displayStart += inkText.length;
+                            fragment.dataset.paperEnd = String(displayStart);
+                            Object.assign(fragment.style, { position: 'absolute', top: '0',
+                                left: `${leftEdge - box.left}px`, whiteSpace: 'pre', transformOrigin: 'center center' });
+                            fragment.textContent = inkText;
+                            fragments.push(fragment);
+                        }
+                        // Preserve every original character and the existing
+                        // soft/automatic hyphenation semantics.
+                        if (fragments.map(fragment => fragment.textContent).join('') === ink.textContent)
+                            ink.replaceChildren(...fragments);
+                    }
                     append(ink, box, box.top - offset);
                 }
             }
