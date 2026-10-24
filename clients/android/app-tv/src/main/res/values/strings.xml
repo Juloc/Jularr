@@ -19,6 +19,7 @@
 
     <!-- LAN discovery (#489) -->
     <string name="tv_setup_discovering">Searching your network for Jularr…</string>
+    <string name="tv_setup_discover_again">Search again</string>
     <string name="tv_setup_discovered_heading">Found on your network</string>
     <string name="tv_setup_discovered_connect">Connect</string>
     <string name="tv_setup_manual_heading">Or enter a server address</string>
