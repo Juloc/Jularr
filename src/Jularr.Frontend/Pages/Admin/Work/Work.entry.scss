@@ -303,6 +303,23 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
     &--off { background: light-dark(#eceaf1, #35313f); color: var(--muted); }
 }
 
+.work-status--dated {
+    display: inline-grid;
+    align-items: center;
+
+    .work-status__label,
+    .work-status__measure {
+        grid-area: 1 / 1;
+        white-space: nowrap;
+    }
+
+    .work-status__measure {
+        visibility: hidden;
+        pointer-events: none;
+        user-select: none;
+    }
+}
+
 .work-quality-block { display: inline-flex; align-items: center; gap: 6px; }
 
 .work-quality {

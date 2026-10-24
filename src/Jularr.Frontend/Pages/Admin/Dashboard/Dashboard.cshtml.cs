@@ -123,10 +123,10 @@ namespace Jularr.Frontend.Pages.Admin.Dashboard
                 HealthStateType.Unavailable => ("warn", UiTone.Warning),
                 _ => ("accent", UiTone.Accent)
             };
-            var checkedAt = service.CheckedAt is { } at
-                ? string.Format(CultureInfo.CurrentCulture, texts["dashboard.services.checked"], at.ToLocalTime().ToString("t", CultureInfo.CurrentCulture))
-                : texts["dashboard.services.never"];
-            var detail = new List<IUiComponent> { new Strong(new Truncated(service.Name ?? "")), new Span(new ValueText(texts["health.type." + service.HealthServiceTypeId] + " · " + checkedAt)).Class("dashboard-services__facts") };
+            IUiComponent checkedAt = service.CheckedAt is { } at
+                ? LocalTime.Format(texts["dashboard.services.checked"], at, "time")
+                : new ValueText(texts["dashboard.services.never"]);
+            var detail = new List<IUiComponent> { new Strong(new Truncated(service.Name ?? "")), new Span(new ValueText(texts["health.type." + service.HealthServiceTypeId] + " · "), checkedAt).Class("dashboard-services__facts") };
             if (ErrorText(service) is { } error) detail.Add(new Span(new Truncated(error)).Class("dashboard-services__facts dashboard-services__error"));
             return new Div(new Span(new Icon(ServiceIcon(service.HealthServiceTypeId), assets, 15)).Class("dashboard-services__icon dashboard-services__icon--" + tone), new Div([.. detail]).Class("dashboard-services__text"),
                 new StateChip(new Text("health.state." + service.HealthStateTypeId), chip)).Class("dashboard-services__row");

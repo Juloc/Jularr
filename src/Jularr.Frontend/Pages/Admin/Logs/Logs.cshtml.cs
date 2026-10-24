@@ -64,7 +64,7 @@ namespace Jularr.Frontend.Pages.Admin.Logs
                 LogSourceType.Job => (texts["jobs.job." + entry.Origin], ErrorText(entry.Message)),
                 _ => (entry.Origin, entry.Message)
             };
-            return new Div(new Span(new ValueText(entry.At.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("logs-list__when"), new StateChip(new Text("logs.level." + entry.Level), tone),
+            return new Div(new Span(new LocalTime(entry.At)).Class("logs-list__when"), new StateChip(new Text("logs.level." + entry.Level), tone),
                 new Div(new Truncated(message), new Div(new Truncated(origin)).Class("logs-list__origin")).Class("logs-list__message")).Class("logs-list__row");
         }
 

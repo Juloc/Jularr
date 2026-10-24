@@ -37,6 +37,14 @@
         [data-folder-status] { overflow-wrap: anywhere; }
     }
 
+    &__create {
+        display: flex;
+        gap: 8px;
+        margin: 12px 0;
+        input { min-width: 0; flex: 1 1 auto; }
+        button { flex: 0 0 auto; }
+    }
+
     &__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     &__heading h2 { margin: 0; }
     // Every name is one line cut with an ellipsis; its tooltip stays inside the row's width.

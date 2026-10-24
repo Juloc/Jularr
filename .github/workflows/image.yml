@@ -5,6 +5,8 @@ name: Image
 
 on:
   pull_request:
+    branches: [main, dev]
+    types: [opened, synchronize, reopened, converted_to_draft, ready_for_review]
     paths:
       - 'Dockerfile'
       - 'compose.yaml'
@@ -12,7 +14,7 @@ on:
       - 'database/**'
       - '.github/workflows/image.yml'
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'Dockerfile'
       - 'compose.yaml'
@@ -30,6 +32,7 @@ concurrency:
 
 jobs:
   minimal-compose:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

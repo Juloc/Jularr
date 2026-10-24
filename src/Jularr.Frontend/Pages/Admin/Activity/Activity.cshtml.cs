@@ -229,7 +229,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             var phase = Phase(item);
             var status = new Div(new StateChip(new Text(item.IsWaiting ? "activity.waiting" : "operation.status." + item.OperationStatusTypeId), UiTone.Neutral, Glyph(PhaseIcon(phase), 14))).Class("list-phase activity-status").Attribute("data-phase", phase);
             var reason = item.ReasonKey is { } key && LiveEntities.Reason(texts, item.OperationTypeId, key) is { Length: > 0 } text ? new Span(new Truncated(text)).Class("list-value list-value--fill") : Dim();
-            var created = new Span(new ValueText(item.CreatedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("list-value");
+            var created = new Span(new LocalTime(item.CreatedAt)).Class("list-value");
             var row = new ListRow([Identity(item), status, reason, item.SizeBytes is { } size ? new Span(new ValueText(ByteSize.Format(size))).Class("list-value") : Dim(), created, RowActions(item, csrf)],
                 [ListPanel.Fact("operation.created", created, Glyph("clock", 14))]);
             if (item.OperationStatusTypeId == OperationStatusType.Failed) row.Tinted(UiTone.Danger);
@@ -288,7 +288,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             if (item.ConnectionName is { } client) facts.Add(("activity.client", new ValueText(client)));
             if (item.IndexerName is { } indexer) facts.Add(("activity.indexer", new ValueText(indexer)));
             if (item.SizeBytes is { } size) facts.Add(("activity.size", new ValueText(ByteSize.Format(size))));
-            facts.Add(("operation.created", new ValueText(item.CreatedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))));
+            facts.Add(("operation.created", new LocalTime(item.CreatedAt)));
 
             var body = new List<IUiComponent> { Drawer.State("table.status", state), Drawer.Facts([.. facts]) };
             if (item.OperationTypeId == OperationType.Download && !(item.OperationStatusTypeId == OperationStatusType.Failed))

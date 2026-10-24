@@ -105,10 +105,11 @@ namespace Jularr.Backend.Data.User.Reading.V1
     public sealed class ReadingDocumentV1 : BaseResponse
     {
         public ReadingDocumentV1(long documentId, long workId, string title, ReadingFormatType readingFormatTypeId, int sectionCount, bool isCached, string? locator, decimal? progression,
-            bool isRightToLeft, string? language, string? readingLanguage = null, string? originalLanguage = null, string[]? translatedLanguages = null, bool isRecommended = true, int originalPages = 0)
+            bool isRightToLeft, string? language, string? readingLanguage = null, string? originalLanguage = null, string[]? translatedLanguages = null, bool isRecommended = true, int originalPages = 0, string? revision = null)
         {
             IsRecommended = isRecommended;
             OriginalPages = originalPages;
+            Revision = revision;
             TranslatedLanguages = translatedLanguages ?? [];
             ReadingLanguage = readingLanguage;
             OriginalLanguage = originalLanguage;
@@ -126,6 +127,9 @@ namespace Jularr.Backend.Data.User.Reading.V1
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
         public long DocumentId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Revision))]
+        public string? Revision { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }

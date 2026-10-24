@@ -105,7 +105,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             bool Enough(IReadOnlyList<ReleaseOffer> found)
             {
                 var all = found.Concat(offers.Values).ToArray();
-                return AcquisitionSelectionLogic.Select(profile, target, kind, scope, all, focusLanguage).Ranked.Any(evaluation => evaluation.IsSelectable);
+                return AcquisitionSelectionLogic.Select(profile, target, kind, scope, all, focusLanguage).Ranked.Any(evaluation =>
+                    evaluation.IsSelectable && (!profile.IsBook || profile.LanguageOrder.Length == 0
+                        || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages)));
             }
 
             var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
@@ -132,7 +134,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 // The direct sources answered at the same time; their releases belong to the choice.
                 await direct;
                 selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
-                if (selection.Ranked.Count(evaluation => evaluation.IsSelectable) >= budget.TargetUsable)
+                if (selection.Ranked.Count(evaluation => evaluation.IsSelectable
+                    && (!profile.IsBook || profile.LanguageOrder.Length == 0
+                        || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages))) >= budget.TargetUsable)
                 {
                     break;
                 }

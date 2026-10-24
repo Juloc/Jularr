@@ -19,11 +19,11 @@ namespace Jularr.Backend.Logic.Acquisition
         public static HashSet<string> Words(string value, IReadOnlySet<string> noise) =>
             Tokens(value).Select(word => word.ToLowerInvariant()).Where(word => !noise.Contains(word)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        // Untagged releases are English, or a book in the language it was written in.
+        // Callers may require an explicit language; the default is kept for manga.
         public static string[] ReadLanguages(string title, string untagged = "EN") =>
             Tokens(title).Select(token => Languages.GetValueOrDefault(token)).OfType<string>()
                 .Concat(CatalogLanguage().Matches(title).Select(match => match.Groups[1].Value.ToUpperInvariant()))
-                .Distinct().DefaultIfEmpty(untagged).ToArray();
+                .Distinct().DefaultIfEmpty(untagged).Where(language => !string.IsNullOrWhiteSpace(language)).ToArray();
 
         // Direct catalogs append their explicit language immediately before the ebook format; short title words are not language tags.
         [GeneratedRegex(@"\(([a-z]{2})(?:-[a-z]{2})?\)(?=\s*\((?:epub|pdf|azw3|mobi|cbz|cbr)\)\s*$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

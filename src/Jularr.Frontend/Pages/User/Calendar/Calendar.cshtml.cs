@@ -55,7 +55,9 @@ namespace Jularr.Frontend.Pages.User.Calendar
 
         private sealed record Query(CalendarView View, DateOnly? Date, IReadOnlyList<string> Types, CalendarStatus? Status, string? Search, int Shown, DateOnly? Day);
 
-        private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
+        private DateOnly? _today;
+
+        private DateOnly Today => _today ??= BrowserTimeZone.Today(HttpContext.Request);
 
         private static DateOnly? ParseDay(string? value) => DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day) ? day : null;
 

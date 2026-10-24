@@ -34,7 +34,7 @@ namespace Jularr.Backend.Service.User.Media.V1
             var accepts = CoverPaths.Accepts(_http.HttpContext?.Request.Headers.Accept.ToString());
             var found = await _covers.ReadExternalAsync(Parameters.U, Parameters.W, accepts, settings.FormatId, settings.MaximumMegabytes > 0, CancellationToken);
             Stream content = found.Path is { } path ? File.OpenRead(path) : new MemoryStream(found.Bytes!);
-            return new WorkCoverFileV1(content, found.ContentType, found.ETag, found.LastModified, false, TimeSpan.FromHours(1));
+            return new WorkCoverFileV1(content, found.ContentType, found.ETag, found.LastModified, false, TimeSpan.FromDays(7));
         }
     }
 

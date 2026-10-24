@@ -10,7 +10,7 @@ namespace Jularr.Integrations.Logic.OpenLibrary
     // Open Library: keyless book metadata and covers.
     internal sealed partial class OpenLibraryClient(HttpClient http)
     {
-        private const string Fields = "key,title,author_name,first_publish_year,cover_i,isbn,language";
+        private const string Fields = "key,title,author_name,first_publish_year,cover_i,isbn,language,format";
 
         public static string? CoverUrl(long? coverId) => coverId is > 0 ? "https://covers.openlibrary.org/b/id/" + coverId.Value.ToString(CultureInfo.InvariantCulture) + "-L.jpg" : null;
 
@@ -63,6 +63,43 @@ namespace Jularr.Integrations.Logic.OpenLibrary
 
             var year = ReadString(root, "first_publish_date") is { } date && YearText().Match(date) is { Success: true } match ? int.Parse(match.Value, CultureInfo.InvariantCulture) : (int?)null;
             return new OpenLibraryWork(workId, title, [.. authors.Select(author => author.Name)], year, description, cover > 0 ? cover : null) { People = authors };
+        }
+
+        // An ISBN identifies an edition, never a separate Work. Resolve its one canonical Work before importing it.
+        public async Task<OpenLibraryWork?> ReadWorkForIsbnAsync(string isbn, CancellationToken ct)
+        {
+            if (isbn.Length != 13 || !isbn.All(char.IsAsciiDigit))
+            {
+                throw new OpenLibraryException(OpenLibraryFailure.NotFound, "Invalid ISBN.");
+            }
+
+            JsonDocument document;
+            try
+            {
+                document = await GetAsync("isbn/" + isbn + ".json", ct);
+            }
+            catch (OpenLibraryException exception) when (exception.Failure == OpenLibraryFailure.NotFound)
+            {
+                return null;
+            }
+
+            using (document)
+            {
+                // A book ISBN may identify an Audio CD even when its parent Work also has print/ebook editions.
+                // Do not accept that audiobook edition as a match for an ordinary book import.
+                if (AudioOnlyEdition(document.RootElement)) return null;
+
+                if (!document.RootElement.TryGetProperty("works", out var works) || works.ValueKind != JsonValueKind.Array)
+                {
+                    return null;
+                }
+
+                var ids = works.EnumerateArray().Where(value => value.ValueKind == JsonValueKind.Object)
+                    .Select(value => ReadString(value, "key"))
+                    .Where(key => key is not null && WorkId().IsMatch(key.Split('/').Last()))
+                    .Select(key => key!.Split('/').Last()).Distinct(StringComparer.Ordinal).Take(2).ToArray();
+                return ids.Length == 1 ? await ReadWorkAsync(ids[0], ct) : null;
+            }
         }
 
         // The work's editions; one page is enough to know its languages and formats.
@@ -163,7 +200,8 @@ namespace Jularr.Integrations.Logic.OpenLibrary
             {
                 var key = ReadString(doc, "key");
                 var id = key is null ? null : key.Split('/').Last();
-                if (id is null || !WorkId().IsMatch(id) || ReadString(doc, "title") is not { } title)
+                if (id is null || !WorkId().IsMatch(id) || ReadString(doc, "title") is not { } title
+                    || AudioOnlySearchHit(doc, title))
                 {
                     continue;
                 }
@@ -177,6 +215,30 @@ namespace Jularr.Integrations.Logic.OpenLibrary
             return results;
         }
 
+        // Open Library is work-centric: one book can have both printed and audio editions.
+        // Only exclude explicitly audio-labelled works or records whose available formats
+        // are exclusively audio; unknown formats are kept rather than hiding real books.
+        private static bool AudioOnlySearchHit(JsonElement work, string title) =>
+            AudioEditionTitle().IsMatch(title) || AudioFormatsOnly(work, "format");
+
+        private static bool AudioOnlyEdition(JsonElement edition) =>
+            AudioEditionTitle().IsMatch(ReadString(edition, "title") ?? "")
+            || AudioFormatsOnly(edition, "physical_format")
+            || AudioFormatsOnly(edition, "format");
+
+        private static bool AudioFormatsOnly(JsonElement entry, string property)
+        {
+            if (!entry.TryGetProperty(property, out var values)) return false;
+            var formats = values.ValueKind switch
+            {
+                JsonValueKind.Array => values.EnumerateArray().Where(value => value.ValueKind == JsonValueKind.String)
+                    .Select(value => value.GetString()!).ToArray(),
+                JsonValueKind.String => [values.GetString()!],
+                _ => []
+            };
+            return formats.Length > 0 && formats.All(format => AudioFormat().IsMatch(format));
+        }
+
         private static string? ReadString(JsonElement element, string name) =>
             element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString())
                 ? value.GetString()!.Trim()
@@ -186,6 +248,13 @@ namespace Jularr.Integrations.Logic.OpenLibrary
             element.TryGetProperty(name, out var values) && values.ValueKind == JsonValueKind.Array
                 ? values.EnumerateArray().Where(value => value.ValueKind == JsonValueKind.String).Select(value => value.GetString()!.Trim()).Where(value => value.Length > 0).ToArray()
                 : [];
+
+        // Qualifiers, not arbitrary mentions: "The Audiobook Handbook" is a valid printed book.
+        [GeneratedRegex(@"(?:^audiobook[\s:-]+)|(?:[\(\[]\s*|\s*[-:–—]\s+)(?:(?:unabridged|abridged)\s+)?(?:audiobooks?|audio[ -]?books?|audio[ -]?cds?|hörbuch|hörbücher|hoerbuch|hoerbuecher)(?:\s+edition)?(?:\s*[\)\]]|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex AudioEditionTitle();
+
+        [GeneratedRegex(@"^\s*(?:(?:unabridged|abridged)\s+)?(?:audiobooks?|audio[ -]?books?|audio[ -]?cds?|audio[ -]?cassettes?|mp3[ -]?cds?|hörbuch|hörbücher|hoerbuch|hoerbuecher|spoken[ -]?word|audible[ -]?audio)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex AudioFormat();
 
         [GeneratedRegex("^OL[0-9]{1,12}W$")]
         private static partial Regex WorkId();
