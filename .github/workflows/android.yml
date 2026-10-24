@@ -71,3 +71,7 @@ jobs:
           :core-design:lintDebug
           :core-tts:lintDebug
           :core-update:lintDebug
+
+      - name: Compile unsigned TV release variant
+        working-directory: clients/android
+        run: gradle --build-cache :app-tv:assembleRelease -PjularrVersion=0.2.0
