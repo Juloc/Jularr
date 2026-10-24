@@ -236,6 +236,44 @@ namespace Jularr.Backend.Logic.Session
             }
         }
 
+        public static async Task<SessionAuthenticationData> ReadSessionProofAsync(this LogicContext ctx, SessionParameters parameters, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    account."Id" AS "AccountId",
+                    account."AccountRoleTypeId",
+                    profile."Id" AS "ProfileId",
+                    profile."OwnerAccountId" AS "ProfileOwnerAccountId",
+                    profile."UiLocaleId",
+                    session."DevicePlatform" IS NOT NULL AS "IsDevice",
+                    session."ExpiresAt"
+                FROM
+                    "AccountSessions" AS session
+                INNER JOIN
+                    "Accounts" AS account ON account."Id" = session."AccountId"
+                LEFT JOIN
+                    "AccountProfiles" AS accountProfile ON accountProfile."AccountId" = account."Id"
+                        AND accountProfile."ProfileId" = session."ActiveProfileId"
+                LEFT JOIN
+                    "Profiles" AS profile ON profile."Id" = accountProfile."ProfileId"
+                WHERE
+                    session."PublicId" = @SessionPublicId
+                    AND session."RotationRevision" = @SessionRevision
+                    AND session."TokenHash" = @SessionTokenHash
+                    AND session."RevokedAt" IS NULL
+                    AND session."ExpiresAt" > statement_timestamp()
+                    AND session."CredentialRevision" = account."CredentialRevision"
+                    AND account."IsEnabled" = TRUE
+                    AND (session."ActiveProfileId" IS NULL OR profile."Id" IS NOT NULL);
+                """;
+            sql.Parameters.Add(parameters);
+
+            return Effective(await ctx.ReadOptionalAsync<SessionAuthenticationData>(sql, ct)
+                ?? throw new UnauthorizedAccessException("The session is unavailable."));
+        }
+
         public static async Task<SessionAuthenticationData> ReadSessionAsync(this LogicContext ctx, SessionParameters parameters, CancellationToken ct)
         {
             // Account, session, then profile; foreign-key readers may proceed.
