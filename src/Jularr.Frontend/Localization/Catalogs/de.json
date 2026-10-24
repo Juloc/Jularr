@@ -10066,6 +10066,10 @@
    "Cover conversion",
    "Titelbilder umwandeln"
   ],
+  "jobs.job.metadataFill": [
+   "Missing metadata",
+   "Fehlende Metadaten"
+  ],
   "errors.playback_evicted": [
    "Playback ended because the server needed the capacity. Try again at a lower quality.",
    "Die Wiedergabe wurde beendet, weil der Server die Kapazität brauchte. Versuche es mit niedrigerer Qualität."
@@ -10497,6 +10501,10 @@
   "jobs.about.aniListMatching": [
    "Checks open AniList matches of anime titles.",
    "Prüft offene AniList-Zuordnungen von Anime-Titeln."
+  ],
+  "jobs.about.metadataFill": [
+   "Reads the description, cover and cast of titles that came without them, for example from a media server, a few at a time.",
+   "Lädt Beschreibung, Cover und Besetzung von Titeln, die ohne sie kamen, zum Beispiel aus einem Medienserver, einige auf einmal."
   ],
   "jobs.about.covers": [
    "Fetches and renews the covers of titles from their providers.",

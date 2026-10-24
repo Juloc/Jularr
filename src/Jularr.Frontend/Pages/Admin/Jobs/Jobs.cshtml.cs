@@ -38,6 +38,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             ["aniListMatching"] = ("layers", UiTone.Warning),
             ["aniListRelations"] = ("link", UiTone.Warning),
             ["aniListSync"] = ("sync", UiTone.Warning),
+            ["metadataFill"] = ("layers", UiTone.Accent),
             ["covers"] = ("grid", UiTone.Accent),
             ["coverBackfill"] = ("grid", UiTone.Accent),
             ["storage"] = ("drive", UiTone.Success),
