@@ -30,7 +30,9 @@ function setup(panel: HTMLElement): void {
         for (const group of Array.from(panel.querySelectorAll<HTMLElement>(".option-group"))) {
             const boxes = Array.from(group.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
             const count = group.querySelector<HTMLElement>("[data-option-count]");
-            if (count) count.textContent = (panel.dataset.setupCount ?? "{0}/{1}").replace("{0}", String(boxes.filter(box => box.checked).length)).replace("{1}", String(boxes.length));
+            const active = boxes.filter(box => box.checked).length;
+            if (count) count.textContent = (panel.dataset.setupCount ?? "{0}/{1}").replace("{0}", String(active)).replace("{1}", String(boxes.length));
+            if (group.closest(".option-groups--extras")) group.dataset.hasEnabled = String(active > 0);
         }
 
         const on = new Set(switchesOf(panel).filter(item => item.on).map(item => item.key));
