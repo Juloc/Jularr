@@ -1,7 +1,7 @@
 name: Backend Full
 
-# Full integration + browser regression after merges, manually, or on PRs
-# marked ci/full or [full-ci]. Ordinary PRs skip it.
+# Full regression after merges or manual runs. Opt-in PRs call this reusable
+# workflow through Backend, without a separate skipped PR run.
 #
 # Job graph (details in docs/CI.md):
 #   smoke  ->  shards (4 backend + 4 browser, run in parallel, fail-fast)  ->  gate
@@ -9,21 +9,9 @@ name: Backend Full
 # a shard only unpacks it. No job is meant to run longer than about 10 minutes.
 on:
   push:
-    branches: [main]
-  pull_request:
-    types: [opened, synchronize, reopened, labeled, edited]
-    paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'database/**'
-      - 'scripts/**'
-      - '*.sln'
-      - '**/*.props'
-      - '**/*.targets'
-      - 'NuGet.Config'
-      - '.github/workflows/backend.yml'
-      - '.github/actions/**'
+    branches: [main, dev]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -31,7 +19,7 @@ permissions:
 # Newer commits supersede older runs of the same branch or PR (a failing or obsolete run
 # stops using runners). A manual release verification run is never cancelled by this workflow.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: backend-full-${{ github.event_name == 'workflow_dispatch' && github.run_id || (github.event.pull_request.number || github.ref) }}
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 env:
@@ -42,7 +30,6 @@ jobs:
   # first-owner setup) and the frontend unit tests. Heavy shards start only when this is green.
   smoke:
     name: smoke
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci/full') || contains(github.event.pull_request.title, '[full-ci]')
     runs-on: ubuntu-latest
     timeout-minutes: 12
     services:
@@ -239,7 +226,7 @@ jobs:
   gate:
     name: gate
     needs: [smoke, shards]
-    if: ${{ !cancelled() && needs.smoke.result != 'skipped' }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
