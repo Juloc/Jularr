@@ -7,7 +7,7 @@ WHERE "OperationTypeId" = 6 AND "OperationStatusTypeId" IN (1, 2);
 CREATE TABLE "MediaImportJobs" (
     "OperationId" bigint PRIMARY KEY REFERENCES "Operations" ("Id") ON DELETE CASCADE,
     "PublicId" uuid NOT NULL UNIQUE DEFAULT gen_random_uuid(),
-    "RequestedByAccountId" bigint NOT NULL REFERENCES "Accounts" ("Id") ON DELETE RESTRICT,
+    "RequestedByAccountId" bigint NOT NULL REFERENCES "Accounts" ("Id") ON DELETE CASCADE,
     "Payload" jsonb NOT NULL,
     "TotalCount" integer NOT NULL CHECK ("TotalCount" BETWEEN 1 AND 2000),
     "Cursor" integer NOT NULL DEFAULT 0 CHECK ("Cursor" BETWEEN 0 AND 2000),
