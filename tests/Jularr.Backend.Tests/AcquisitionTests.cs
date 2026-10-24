@@ -2208,6 +2208,15 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "handler=Retry&amp;operationId=5");
             StringAssert.Contains(html, "href=\"/Admin/Activity?Filter=Errors&amp;operation=5\"");
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "navigation-tabs\"|navigation-tabs ").Count, "One row of filters only.");
+            StringAssert.Contains(html, "class=\"view-switch\"");
+            StringAssert.Contains(html, "href=\"/Admin/Activity?Filter=History\"");
+            StringAssert.Contains(html, "href=\"/Admin/Activity?files=true\"");
+            using var filesView = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?files=true");
+            var filesViewHtml = await filesView.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, filesView.StatusCode, filesViewHtml);
+            StringAssert.Contains(filesViewHtml, "class=\"view-switch\"");
+            Assert.AreEqual(0, System.Text.RegularExpressions.Regex.Matches(filesViewHtml, "navigation-tabs\"|navigation-tabs ").Count,
+                "Files reuses the same toolbar without queue-only filter chips.");
             Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(html, "<dialog[^>]* open=\"open\""), "Only the entry the address names is open.");
             using var panel = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Filter=Errors&operation=5");
             var panelHtml = await panel.Content.ReadAsStringAsync();
