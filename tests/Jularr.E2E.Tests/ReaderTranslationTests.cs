@@ -34,6 +34,7 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(page.Locator("form[data-translation-submit=benchmark]")).ToHaveCountAsync(1);
             await page.Locator("form[data-translation-submit=benchmark] button[type=submit]").ClickAsync();
             await Assertions.Expect(page.Locator("body")).ToContainTextAsync("id → de: Kapitel Eins", new() { Timeout = 60_000 });
+            var benchmarkGenerations = ollama.Generations;
 
             await page.RouteAsync("**/api/v1/admin/translation/models", route => route.FulfillAsync(new()
             {
@@ -59,17 +60,22 @@ namespace Jularr.E2E.Tests
 
             await page.Locator("[data-language-choice=de]").ClickAsync();
             await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Kapitel Eins", new() { Timeout = 60_000 });
-            Assert.IsTrue(ollama.Generations > 0, "The Reader must actually call local TranslateGemma.");
+            // Visible text is progressive; do not switch away after the first block and
+            // then mistake the remaining work for a cache miss.
+            await page.WaitForFunctionAsync("() => document.querySelector('.reader')?.dataset.translationState === 'ready'", null, new() { Timeout = 120_000 });
+            Assert.IsTrue(ollama.Generations > benchmarkGenerations, "The Reader must call local TranslateGemma separately from the Admin benchmark.");
             var firstCount = ollama.Generations;
             await page.Locator("[data-language-choice=original]").ClickAsync();
             await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Chapter One");
             await page.Locator("[data-language-choice=de]").ClickAsync();
             await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Kapitel Eins");
+            await page.WaitForFunctionAsync("() => document.querySelector('.reader')?.dataset.translationState === 'ready'", null, new() { Timeout = 60_000 });
             Assert.AreEqual(firstCount, ollama.Generations, "Switching back must reuse the validated local cache.");
 
             response = await page.GotoAsync("/Read/1?s=1");
             Assert.AreEqual(200, response!.Status);
             await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Kapitel Eins", new() { Timeout = 60_000 });
+            await page.WaitForFunctionAsync("() => document.querySelector('.reader')?.dataset.translationState === 'ready'", null, new() { Timeout = 120_000 });
             Assert.IsTrue(ollama.Generations > firstCount, "A second section must be translated too.");
             await page.SetViewportSizeAsync(390, 844);
             await Assertions.Expect(page.Locator(".reader__footer")).ToBeVisibleAsync();
