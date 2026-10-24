@@ -1,6 +1,7 @@
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
+using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Data.Sabnzbd;
 
@@ -9,8 +10,8 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class DownloadClientFileSafetyTests
     {
-        private static SabnzbdConsoleSnapshot Snapshot(IReadOnlyList<SabnzbdQueueJob>? queue = null, IReadOnlyList<SabnzbdHistoryJob>? history = null)
-            => new(queue ?? [], history ?? [], null, null, false, null, null, null, null, [], "/downloads/complete", "/downloads/incomplete");
+        private static SabnzbdConsoleSnapshot Snapshot(IReadOnlyList<SabnzbdQueueJob>? queue = null, IReadOnlyList<SabnzbdHistoryJob>? history = null, IReadOnlyList<string>? orphans = null)
+            => new(queue ?? [], history ?? [], null, null, false, null, null, null, null, orphans ?? [], "/downloads/complete", "/downloads/incomplete");
 
         [TestMethod]
         public void NestedFolder_ListsAllEntriesAcrossPages_AndDeletesOnlyConfirmedSelection()
@@ -28,7 +29,7 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual(5, second.Entries.Count);
                 Assert.IsFalse(second.HasMore);
 
-                var preview = DownloadClientFileSafety.Preview("complete", root, "old", Snapshot());
+                var preview = DownloadClientFileSafety.Preview("incomplete", root, "old", Snapshot(orphans: ["old"]));
                 Assert.AreEqual(205, preview.Files);
                 Assert.AreEqual(4 * 205L, preview.Bytes);
                 DownloadClientFileSafety.Delete(root, "old");
