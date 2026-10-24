@@ -65,7 +65,7 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
     {
         public DownloadStorageSettingsV1(DownloadStorageArea downloadStorageAreaId, long? incompleteStorageMountId, string? incompletePath, string? incompleteFilesystemIdentity,
             long? completeStorageMountId, string? completePath, string? completeFilesystemIdentity, long? freeSpaceReserveBytes, long? maxJobBytes, long? maxWorkspaceBytes,
-            int maxParallelJobs, long version)
+            int maxParallelJobs, long version, bool isConfigured)
         {
             DownloadStorageAreaId = downloadStorageAreaId;
             IncompleteStorageMountId = incompleteStorageMountId;
@@ -79,6 +79,7 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
             MaxWorkspaceBytes = maxWorkspaceBytes;
             MaxParallelJobs = maxParallelJobs;
             Version = version;
+            IsConfigured = isConfigured;
         }
 
         [DataField(typeof(DownloadStorageFields), nameof(DownloadStorageFields.DownloadStorageAreaId))]
@@ -116,5 +117,8 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Version))]
         public long Version { get; }
+
+        [DataField(typeof(DownloadStorageFields), nameof(DownloadStorageFields.IsConfigured))]
+        public bool IsConfigured { get; }
     }
 }
