@@ -8817,8 +8817,12 @@
    "Anfragen & Arr+"
   ],
   "setup.modules.personal": [
-   "Profiles & personal features",
-   "Profile & persönliche Funktionen"
+   "Personalization & organization",
+   "Personalisierung & Organisation"
+  ],
+  "setup.modules.accounts": [
+   "Accounts & devices",
+   "Konten & Geräte"
   ],
   "setup.modules.operations": [
    "Administration",
