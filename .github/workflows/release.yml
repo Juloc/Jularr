@@ -266,10 +266,10 @@ jobs:
           gradle-version: "9.8.0"
       - name: Load protected signing material
         env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_TV_KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.ANDROID_TV_STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_TV_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_TV_KEY_PASSWORD }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
