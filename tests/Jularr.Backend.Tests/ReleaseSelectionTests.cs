@@ -182,6 +182,49 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Selection_FlexibleFallbackAcceptsOtherKnownLanguages()
+        {
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Any, "JA"),
+                [Candidate("Héctor García - IKIGAI (ES) (epub)")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual(SelectionDecision.Eligible, result.Winner.Decision);
+        }
+
+        [TestMethod]
+        public void Selection_FlexibleFallbackPrefersOriginalBeforeOtherSources()
+        {
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Any, "JA"),
+                [Candidate("Héctor García - IKIGAI (ES) (epub)", false, 1, "Usenet"),
+                 Candidate("Héctor García - IKIGAI (JA) (epub)", false, 50, "Anna")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (JA) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+            Assert.AreEqual("PreferredLanguage", result.WinnerReason!.Code);
+        }
+
+        [TestMethod]
+        public void Selection_FlexibleFallbackRanksUnknownLast()
+        {
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Any, "JA"),
+                [Candidate("Héctor García - IKIGAI (epub)", false, 1, "Usenet"),
+                 Candidate("Héctor García - IKIGAI (ES) (epub)", false, 50, "Anna")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (ES) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+        }
+
+        [TestMethod]
+        public void Selection_StrictModeRejectsUnknownLanguage()
+        {
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.None),
+                [Candidate("Héctor García - IKIGAI (epub)")]);
+
+            Assert.IsNull(result.Winner);
+            Assert.AreEqual("LanguageUnknown", result.Ranked.Single().Reasons.Last().Code);
+        }
+
+        [TestMethod]
         public void Selection_WithinOneSource_TheQuality_Still_Decides()
         {
             var result = ReleaseSelectionEngine.Select(Profile(),
