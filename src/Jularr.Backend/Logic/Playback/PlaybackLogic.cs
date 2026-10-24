@@ -84,9 +84,23 @@ namespace Jularr.Backend.Logic.Playback
             sql.Statement =
                 """
                 INSERT INTO
-                    "PlaybackSessions" ("PublicId", "ProfileId", "MediaAssetId", "StoredFileId", "PlaybackModeTypeId", "PositionMs")
-                VALUES
-                    (@PublicId, @ProfileId, @MediaAssetId, @StoredFileId, @PlaybackModeTypeId, @PositionMs)
+                    "PlaybackSessions" ("PublicId", "ProfileId", "MediaAssetId", "StoredFileId", "PlaybackModeTypeId", "PositionMs", "OwnerSessionId", "OwnerSessionRevision")
+                SELECT
+                    @PublicId,
+                    @ProfileId,
+                    @MediaAssetId,
+                    @StoredFileId,
+                    @PlaybackModeTypeId,
+                    @PositionMs,
+                    owner."Id",
+                    @OwnerRevision
+                FROM
+                    "AccountSessions" AS owner
+                WHERE
+                    owner."PublicId" = @OwnerPublicId
+                    AND owner."RotationRevision" = @OwnerRevision
+                    AND owner."ActiveProfileId" = @ProfileId
+                    AND owner."RevokedAt" IS NULL
                 RETURNING
                     "PublicId";
                 """;

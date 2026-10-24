@@ -4,6 +4,78 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "companion.title": [
+   "Phone remote",
+   "Handy-Fernbedienung"
+  ],
+  "companion.description": [
+   "Control playback on your paired Jularr TV. You must be signed in with the same account and profile.",
+   "Steuere die Wiedergabe auf deinem verbundenen Jularr-TV. Du musst mit demselben Konto und Profil angemeldet sein."
+  ],
+  "companion.invite": [
+   "TV invitation",
+   "TV-Einladung"
+  ],
+  "companion.invitePlaceholder": [
+   "Paste the invitation from the TV",
+   "Einladung vom Fernseher einfügen"
+  ],
+  "companion.connect": [
+   "Connect",
+   "Verbinden"
+  ],
+  "companion.inviteHint": [
+   "Scan the TV QR code or paste its invitation. Invitations expire after five minutes.",
+   "Scanne den QR-Code am Fernseher oder füge die Einladung ein. Einladungen laufen nach fünf Minuten ab."
+  ],
+  "companion.disconnected": [
+   "Not connected to a TV",
+   "Nicht mit einem Fernseher verbunden"
+  ],
+  "companion.connected": [
+   "Connected to TV",
+   "Mit TV verbunden"
+  ],
+  "companion.connectionLost": [
+   "TV connection lost. Controls are disabled.",
+   "TV-Verbindung unterbrochen. Die Bedienung ist deaktiviert."
+  ],
+  "companion.pending": [
+   "Waiting for TV confirmation…",
+   "Warte auf Bestätigung vom Fernseher …"
+  ],
+  "companion.failed": [
+   "Command could not be confirmed.",
+   "Befehl konnte nicht bestätigt werden."
+  ],
+  "companion.rejected": [
+   "TV rejected the command.",
+   "Der Fernseher hat den Befehl abgelehnt."
+  ],
+  "companion.ended": [
+   "Session ended or access revoked. Pair again.",
+   "Sitzung beendet oder Zugriff entzogen. Bitte erneut koppeln."
+  ],
+  "companion.paired": [
+   "Paired with TV. Waiting for playback state…",
+   "Mit TV gekoppelt. Warte auf Wiedergabestatus …"
+  ],
+  "companion.play": [
+   "Play",
+   "Wiedergabe"
+  ],
+  "companion.pause": [
+   "Pause",
+   "Pause"
+  ],
+  "companion.disconnect": [
+   "Disconnect",
+   "Trennen"
+  ],
+  "companion.seek": [
+   "Position",
+   "Wiedergabeposition"
+  ],
   "progress.saveFailed": [
    "Progress could not be saved. Jularr will retry temporary failures.",
    "Der Fortschritt konnte nicht gespeichert werden. Jularr versucht es bei vorübergehenden Fehlern erneut."
