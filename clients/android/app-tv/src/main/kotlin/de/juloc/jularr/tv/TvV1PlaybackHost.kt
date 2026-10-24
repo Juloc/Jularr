@@ -148,6 +148,12 @@ internal fun TvV1PlaybackHost(
             val credential = checkNotNull(tokenStore.current) { "The device token is no longer valid." }
             val uri = Uri.parse(current.streamUrl)
             check(uri.scheme == "http" || uri.scheme == "https")
+            // Every playback session has its own invitation and command revision.
+            // A retry or audio-track change must not reuse a remote from the old session.
+            companionEnabled = false
+            companionVisible = false
+            companionInvitation = null
+            companionError = null
             plan = current
             positionMs = current.resumePositionMs
             durationMs = current.durationMs
