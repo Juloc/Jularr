@@ -12,9 +12,6 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 {
     // Stored as an immutable, server-validated snapshot. Once queued, editing
     // a preview cannot alter the choices of an already running job.
-    internal sealed record MediaImportJobPayload(string Json, MediaImportActionType Action,
-        MediaImportDefaultV1[] Defaults, MediaImportChoiceV1[] Choices);
-
     [ServiceEndpoint("POST", "/api/v1/admin/media-import/jobs")]
     public sealed class QueueMediaImportJobV1 : AdminService<MediaImportParametersV1, MediaImportDataV1>
     {
