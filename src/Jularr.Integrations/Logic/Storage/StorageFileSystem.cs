@@ -98,39 +98,76 @@ namespace Jularr.Integrations.Logic.Storage
             return false;
         }
 
-        // A separate Linux mount is not sufficient when it is RAM-backed or a container overlay.
-        public static bool IsDownloadWorkspaceMount(string path)
+        private sealed record LinuxMount(int Id, int ParentId, string Path, string EncodedPath, string Root, string Filesystem, string Source);
+
+        private static LinuxMount? ReadDownloadMount(string path, IEnumerable<string> mountInfo)
         {
-            if (!OperatingSystem.IsLinux())
+            var mounts = new Dictionary<int, LinuxMount>();
+            foreach (var line in mountInfo)
             {
-                return false;
-            }
-            var target = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-            foreach (var line in File.ReadLines("/proc/self/mountinfo"))
-            {
-                var fields = line.Split(' ');
+                var fields = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
                 var separator = Array.IndexOf(fields, "-");
-                if (fields.Length < 6 || separator < 0 || separator + 1 >= fields.Length)
+                if (fields.Length < 6 || separator < 6 || separator + 2 >= fields.Length
+                    || !int.TryParse(fields[0], out var id) || !int.TryParse(fields[1], out var parentId))
                 {
                     continue;
                 }
 
-                var mount = Regex.Replace(fields[4], @"\\([0-7]{3})",
-                    match => ((char)Convert.ToInt32(match.Groups[1].Value, 8)).ToString());
-                if (!string.Equals(target, mount, StringComparison.Ordinal))
+                var mountPath = Regex.Replace(fields[4], @"\\([0-7]{3})", match => ((char)Convert.ToInt32(match.Groups[1].Value, 8)).ToString());
+                if (path != mountPath && !path.StartsWith(mountPath == "/" ? "/" : mountPath + "/", StringComparison.Ordinal))
                 {
                     continue;
                 }
 
-                // A bind mount on an ext4 VM disk can still be non-NAS: this blocks only
-                // known unsafe pseudo filesystems. Physical storage identity needs a separate check.
-                return fields[separator + 1] is not ("overlay" or "tmpfs" or "ramfs" or "devtmpfs"
-                    or "proc" or "sysfs" or "cgroup" or "cgroup2" or "squashfs" or "autofs"
-                    or "mqueue" or "securityfs" or "debugfs" or "tracefs" or "fusectl"
-                    or "pstore" or "hugetlbfs" or "configfs");
+                if (!mounts.TryAdd(id, new LinuxMount(id, parentId, mountPath, fields[4], fields[3], fields[separator + 1], fields[separator + 2])))
+                {
+                    return null;
+                }
             }
 
-            return false;
+            // A mount stacked at the same path covers its parent, even when listed first.
+            var covered = mounts.Values.Where(mount => mount.Id != mount.ParentId
+                && mounts.TryGetValue(mount.ParentId, out var parent) && mount.Path == parent.Path).Select(mount => mount.ParentId).ToHashSet();
+            LinuxMount? selected = null;
+            foreach (var mount in mounts.Values)
+            {
+                if (covered.Contains(mount.Id))
+                {
+                    continue;
+                }
+                var current = mount;
+                var visited = new HashSet<int>();
+                var visible = true;
+                while (mounts.TryGetValue(current.ParentId, out var parent) && current.Id != parent.Id)
+                {
+                    // Submounts of a covered parent are hidden too; the overmount itself remains visible.
+                    if (!visited.Add(current.Id) || covered.Contains(parent.Id) && current.Path != parent.Path)
+                    {
+                        visible = false;
+                        break;
+                    }
+                    current = parent;
+                }
+
+                if (!visible)
+                {
+                    continue;
+                }
+                if (selected is null || mount.Path.Length > selected.Path.Length)
+                {
+                    selected = mount;
+                }
+                else if (mount.Path.Length == selected.Path.Length)
+                {
+                    return null;
+                }
+            }
+
+            // Never fall back to a parent disk when the visible mount is an automount placeholder or RAM/overlay.
+            return selected?.Filesystem is null or "overlay" or "tmpfs" or "ramfs" or "devtmpfs"
+                or "proc" or "sysfs" or "cgroup" or "cgroup2" or "squashfs" or "autofs"
+                or "mqueue" or "securityfs" or "debugfs" or "tracefs" or "fusectl"
+                or "pstore" or "hugetlbfs" or "configfs" ? null : selected;
         }
 
         // Stable across remounts, but different when a missing NAS reveals its local parent.
@@ -149,24 +186,15 @@ namespace Jularr.Integrations.Logic.Storage
                     System.Text.Encoding.UTF8.GetBytes(drive.Name + (includeDirectory ? "\n" + path : "")))) : null;
             }
 
-            string? identity = null;
-            var longest = -1;
-            foreach (var line in File.ReadLines("/proc/self/mountinfo"))
-            {
-                var fields = line.Split(' ');
-                var separator = Array.IndexOf(fields, "-");
-                if (fields.Length < 6 || separator < 0 || separator + 2 >= fields.Length) continue;
-                var mount = Regex.Replace(fields[4], @"\\([0-7]{3})", match => ((char)Convert.ToInt32(match.Groups[1].Value, 8)).ToString());
-                if (mount.Length <= longest || path != mount && !path.StartsWith(mount == "/" ? "/" : mount + "/", StringComparison.Ordinal)) continue;
-                longest = mount.Length;
-                identity = IsDownloadWorkspaceMount(mount)
-                    ? fields[separator + 1] + ":" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-                        System.Text.Encoding.UTF8.GetBytes(fields[separator + 2] + (includeMountPoint ? "\n" + fields[4] + "\n" + fields[3] : "")
-                            + (includeDirectory ? "\n" + fields[3] + "\n" + path : ""))))
-                    : null;
-            }
+            return DownloadFilesystemIdentity(path, File.ReadAllLines("/proc/self/mountinfo"), includeDirectory, includeMountPoint);
+        }
 
-            return identity;
+        internal static string? DownloadFilesystemIdentity(string path, IReadOnlyList<string> mountInfo, bool includeDirectory = true, bool includeMountPoint = false)
+        {
+            var mount = ReadDownloadMount(path, mountInfo);
+            return mount is null ? null : mount.Filesystem + ":" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(mount.Source + (includeMountPoint ? "\n" + mount.EncodedPath + "\n" + mount.Root : "")
+                    + (includeDirectory ? "\n" + mount.Root + "\n" + path : ""))));
         }
 
         // Disk reservations must inspect the filesystem holding the actual output,
