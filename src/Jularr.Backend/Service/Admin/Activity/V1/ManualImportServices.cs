@@ -13,6 +13,7 @@ using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Acquisition.V1;
+using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Storage;
 
@@ -453,7 +454,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             var result = await ManualImport.RunAsync(Context, _import, download.WantedItemId, source, reference.Directory, files, isReadOnly, Data.ImportTransferModeId, Data.Files, Auth.AccountId,
                 new ManualImportDownload(download.OperationId, handled, Data.FinishesDownload, download.AttentionProposal), CancellationToken);
             if (result.FinishedDownload && sourceScanComplete
-                && ImportPlacementLogic.AllSourceFilesSelected(allFiles, handled.Concat(result.Files.Where(file => file.ErrorKey is null).Select(file => file.Path))))
+                && ImportPlacementLogic.AllSourceFilesSelected(allFiles, handled.Concat(result.Files.Where(file => file.FailureKey is null).Select(file => file.Path))))
             {
                 await _import.RemoveFromClientAsync(Context, download.AcquisitionConnectionId, download.ExternalId, CancellationToken);
             }
