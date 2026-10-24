@@ -192,6 +192,20 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
             await translate(target, generation);
             if (current === target && generation === revision) reader.dataset.translationState = 'ready';
         } catch {
+            // A catalogue entry is not a guarantee that the browser can download or run
+            // its model. Keep the Reader usable and try the installed local provider.
+            if (reader.dataset.translationEngine !== 'gemma' && reader.dataset.localModel && reader.dataset.localTranslationUrl
+                && current === target && generation === revision) {
+                try {
+                    reader.dataset.translationEngine = 'gemma';
+                    reader.querySelector<HTMLButtonElement>('[data-local-quality-toggle]')?.setAttribute('aria-pressed', 'true');
+                    await translateLocal(target, generation);
+                    if (current === target && generation === revision) reader.dataset.translationState = 'ready';
+                    return;
+                } catch {
+                    // If both providers fail, keep the original document readable.
+                }
+            }
             if (current === target && generation === revision) { reader.dataset.translationState = 'failed'; restore(); say(reader.dataset.translationFailedLabel); }
         }
     };
