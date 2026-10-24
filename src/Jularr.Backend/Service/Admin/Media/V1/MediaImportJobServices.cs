@@ -29,7 +29,12 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var json = await MediaImportText.ReadAsync(Data, CancellationToken);
             var items = MediaImportParser.Parse(json);
             var choices = Data.Choices.ToArray();
-            if (choices.Any(choice => choice.Index < 0 || choice.Index >= items.Count)) throw new DataValidationException(nameof(Data.Choices), "out_of_range");
+            if (choices.Any(choice => choice.Index < 0 || choice.Index >= items.Count))
+                throw new DataValidationException(nameof(Data.Choices), "out_of_range");
+            // Durable imports never infer consent for unposted rows. The preview
+            // emits an Include value for every row, including disabled ones.
+            if (!choices.Any(choice => choice.Include == true))
+                throw new DataValidationException(nameof(Data.Choices), "required");
             var payload = new MediaImportJobPayload(MediaImportParser.Write(items), Data.Action, Data.Defaults.ToArray(), choices);
             var encoded = JsonSerializer.Serialize(payload);
 
