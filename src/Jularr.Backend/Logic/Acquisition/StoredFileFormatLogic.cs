@@ -77,7 +77,7 @@ namespace Jularr.Backend.Logic.Acquisition
             var rows = pending.Select(row =>
             {
                 var facts = JsonSerializer.Deserialize<StoredReleaseEvidence>(row.Evidence)!;
-                return new { row.StoredFileId, row.Evidence, Languages = ReleaseWords.ReadLanguages(facts.ReleaseName, facts.OriginalLanguage?.ToUpperInvariant() ?? "EN")
+                return new { row.StoredFileId, row.Evidence, Languages = ReleaseWords.ReadLanguages(facts.ReleaseName, "")
                     .Select(language => language.ToLowerInvariant()).ToArray() };
             }).ToArray();
             sql = new SqlStatement();
@@ -101,7 +101,7 @@ namespace Jularr.Backend.Logic.Acquisition
             return release is not null ? new ReleaseCandidate(release, facts.SizeBytes)
                 {
                     IndexerFlags = facts.IndexerFlags,
-                    Languages = facts.MediaTypeId == MediaType.Book ? ReleaseWords.ReadLanguages(facts.ReleaseName, facts.OriginalLanguage?.ToUpperInvariant() ?? "EN") : null
+                    Languages = facts.MediaTypeId == MediaType.Book ? ReleaseWords.ReadLanguages(facts.ReleaseName, "") : null
                 } : null;
         }
     }

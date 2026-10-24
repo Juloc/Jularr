@@ -17,11 +17,13 @@ namespace Jularr.Backend.Service.Core
         public async Task<DownloadStoragePaths> OpenAsync(LogicContext context, DownloadStorageArea area, CancellationToken ct)
         {
             var settings = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadDownloadStorageSettingsAsync(area, token), ct);
-            if (settings.IncompleteStorageMountId is not { } incompleteId || settings.CompleteStorageMountId is not { } completeId || settings.FreeSpaceReserveBytes is null)
+            if (!DownloadStorageLogic.IsConfigured(settings))
             {
                 throw new ServiceUnavailableException("acquisition_download_path_unconfigured");
             }
 
+            var incompleteId = settings.IncompleteStorageMountId!.Value;
+            var completeId = settings.CompleteStorageMountId!.Value;
             var (incomplete, complete) = await context.ExecuteBatchAsync(async (ctx, token) =>
                 (await ctx.ReadStorageMountAsync(incompleteId, token), await ctx.ReadStorageMountAsync(completeId, token)), ct);
             try

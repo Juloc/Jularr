@@ -60,7 +60,7 @@ namespace Jularr.Frontend.Pages.User.Notifications
                 : string.Format(CultureInfo.CurrentCulture, texts["notifications.message." + item.NotificationTypeId], title, texts["acquisition.outcome." + reason]);
             if (item.Occurrences > 1) text += " " + string.Format(CultureInfo.CurrentCulture, texts["notifications.times"], item.Occurrences);
             IUiComponent message = item.Link is { } link ? new A(new ValueText(text)).Attribute("href", link) : new Span(new ValueText(text));
-            return new Li(message, new Span(new ValueText(item.CreatedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("notifications__time"))
+            return new Li(message, new Span(new LocalTime(item.CreatedAt)).Class("notifications__time"))
                 .Class("notifications__item" + (item.IsRead ? "" : " notifications__item--unread")).Attribute("data-list-key", item.Id.ToString(CultureInfo.InvariantCulture));
         }
 

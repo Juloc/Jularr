@@ -9,6 +9,10 @@ export function initializeFigures(reader: HTMLElement, content: HTMLElement): vo
     if (!dialog) return;
     const stage = dialog.querySelector<HTMLElement>('.reader-figure__stage')!;
     const image = dialog.querySelector<HTMLImageElement>('.reader-figure__image')!;
+    const slider = dialog.querySelector<HTMLInputElement>('[data-figure-scale]')!;
+    const level = dialog.querySelector<HTMLElement>('[data-figure-level]')!;
+    const zoomIn = dialog.querySelector<HTMLButtonElement>('[data-figure-zoom=in]')!;
+    const zoomOut = dialog.querySelector<HTMLButtonElement>('[data-figure-zoom=out]')!;
     describeStandIns(reader, content);
     describePictures(reader, content);
 
@@ -16,6 +20,7 @@ export function initializeFigures(reader: HTMLElement, content: HTMLElement): vo
     const pointers = new Map<number, { x: number; y: number }>();
     let pinch = 0;
     let moved = false;
+    let previouslyFocused: HTMLElement | null = null;
 
     // How far the zoomed picture may move: its overhang beyond the stage on each side.
     const limit = (axis: 'width' | 'height') => Math.max(0, ((axis === 'width' ? image.clientWidth : image.clientHeight) * scale - (axis === 'width' ? stage.clientWidth : stage.clientHeight)) / 2);
@@ -26,6 +31,10 @@ export function initializeFigures(reader: HTMLElement, content: HTMLElement): vo
         stage.style.setProperty('--figure-x', `${x}px`);
         stage.style.setProperty('--figure-y', `${y}px`);
         stage.dataset.zoomed = String(scale > 1);
+        slider.value = String(Math.round(scale * 100));
+        level.textContent = `${Math.round(scale * 100)}%`;
+        zoomIn.disabled = scale >= MaximumScale;
+        zoomOut.disabled = scale <= 1;
     };
     const zoom = (next: number, centreX = 0, centreY = 0): void => {
         const target = Math.max(1, Math.min(MaximumScale, next));
@@ -42,20 +51,28 @@ export function initializeFigures(reader: HTMLElement, content: HTMLElement): vo
         return { x: event.clientX - box.left - box.width / 2, y: event.clientY - box.top - box.height / 2 };
     };
     const open = (source: HTMLImageElement): void => {
+        if (dialog.open) return;
+        previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         image.src = source.currentSrc || source.src;
         image.alt = source.alt || content.querySelector<HTMLImageElement>(`img[src="${CSS.escape(source.getAttribute('src') ?? '')}"]`)?.alt || '';
         scale = 1; x = 0; y = 0;
+        dialog.showModal();
         paint();
-        if (!dialog.open) dialog.showModal();
     };
+    // The image's actual fitted dimensions, not an entire viewport-sized object-fit box,
+    // determine both the close-on-background area and the pan limits.
+    image.addEventListener('load', paint);
+    window.addEventListener('resize', () => { if (dialog.open) paint(); });
 
     // Taps and clicks on pictures, in the text and on the paper of the book view.
     let down: { image: HTMLImageElement; x: number; y: number; at: number } | undefined;
     reader.addEventListener('pointerdown', event => {
+        if (dialog.open) { down = undefined; return; }
         const picture = zoomable(event.target) ?? printedPicture(reader, event);
         down = picture && event.button === 0 && reader.dataset.selecting !== 'true' ? { image: picture, x: event.clientX, y: event.clientY, at: performance.now() } : undefined;
     }, true);
     reader.addEventListener('pointerup', event => {
+        if (dialog.open) { down = undefined; return; }
         const start = down; down = undefined;
         if (!start || Math.hypot(event.clientX - start.x, event.clientY - start.y) > TapDistance || performance.now() - start.at > TapDuration || getSelection()?.toString()) return;
         open(start.image);
@@ -77,13 +94,21 @@ export function initializeFigures(reader: HTMLElement, content: HTMLElement): vo
 
     dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
     dialog.querySelector('[data-figure-close]')!.addEventListener('click', () => dialog.close());
+    slider.addEventListener('input', () => zoom(Number(slider.value) / 100));
     dialog.querySelectorAll<HTMLElement>('[data-figure-zoom]').forEach(button => button.addEventListener('click', () => {
         const mode = button.dataset.figureZoom;
         if (mode === 'fit') zoom(1);
         else zoom(scale * (mode === 'in' ? 1.5 : 1 / 1.5));
     }));
-    dialog.addEventListener('close', () => { image.removeAttribute('src'); pointers.clear(); });
+    dialog.addEventListener('close', () => {
+        image.removeAttribute('src');
+        pointers.clear(); scale = 1; x = y = 0; pinch = 0; moved = false; paint();
+        if (previouslyFocused?.isConnected) previouslyFocused.focus({ preventScroll: true });
+        previouslyFocused = null;
+    });
     dialog.addEventListener('keydown', event => {
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); dialog.close(); return; }
+        if (event.target === slider) return;
         if (event.key === '+' || event.key === '=') zoom(scale * 1.5);
         else if (event.key === '-') zoom(scale / 1.5);
         else if (event.key === '0') zoom(1);
@@ -107,6 +132,7 @@ export function initializeFigures(reader: HTMLElement, content: HTMLElement): vo
         if (scale > 1) zoom(1); else zoom(2.5, centre.x, centre.y);
     });
     stage.addEventListener('pointerdown', event => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
         stage.setPointerCapture(event.pointerId);
         pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         moved = false;
@@ -134,7 +160,7 @@ export function initializeFigures(reader: HTMLElement, content: HTMLElement): vo
     const release = (event: PointerEvent) => {
         pointers.delete(event.pointerId);
         pinch = pointers.size === 2 ? distance() : 0;
-        // A tap on the empty stage outside the picture closes the view.
+        // The fitted image has its own bounds; letterboxing is a reliable exit target.
         const box = image.getBoundingClientRect();
         const inside = event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
         if (pointers.size === 0 && !moved && !inside) dialog.close();

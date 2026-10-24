@@ -31,7 +31,7 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(WorkerJobs.Of(group).Count > 0, group.ToString());
             }
 
-            // Fifteen workers and the sampler. The queues and the downloads a restart interrupts start at once, every other job has its own offset;
+            // Fifteen workers and the sampler. Queues and interrupted downloads start at once; other workers have their own offset;
             // a provider of the provider sync has no schedule of its own.
             Assert.AreEqual(16, Enum.GetValues<WorkerGroupType>().Length);
             foreach (var key in new[] { "operations", "backupQueue", "benchmarkQueue", "downloads", "resources" })
@@ -44,7 +44,7 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(parts.All(job => job.Group == WorkerGroupType.Provider && job.Interval is null && !job.CanRunNow));
             var delayed = jobs.Where(job => job.StartDelay > TimeSpan.Zero).ToArray();
             Assert.AreEqual(jobs.Count - 5 - parts.Length, delayed.Length);
-            Assert.AreEqual(delayed.Length, delayed.Select(job => job.StartDelay).Distinct().Count(), "Every delayed job has its own offset.");
+            Assert.IsTrue(delayed.GroupBy(job => job.StartDelay).All(group => group.Select(job => job.Group).Distinct().Count() == 1), "Only jobs sharing a worker may share their start offset.");
             Assert.IsTrue(delayed.All(job => job.StartDelay < TimeSpan.FromMinutes(5)));
 
             // Heavy jobs wait while Jularr is used, downloads never do.
@@ -53,7 +53,7 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(WorkerJobs.Definition(key).PausesWhileUsedByDefault, key);
             }
 
-            foreach (var key in new[] { "downloads", "usenet", "operations", "backupQueue", "backup", "wantedSearch" })
+            foreach (var key in new[] { "downloads", "usenet", "operations", "backupQueue", "backup", "wantedSearch", "discoverFeeds" })
             {
                 Assert.IsFalse(WorkerJobs.Definition(key).CanPauseWhileUsed, key);
             }

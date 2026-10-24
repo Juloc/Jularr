@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Provider;
 using Jularr.Backend.Infrastructure.Sql;
@@ -22,7 +23,6 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     internal sealed class WorkMetadata
     {
         private readonly TmdbClient _tmdb;
-        private static readonly TimeSpan FeedLifetime = TimeSpan.FromMinutes(3);
 
         // A provider that just failed is not asked again for this long, so a page of shelves does not wait for it on every visit.
         private static readonly TimeSpan FailureLifetime = TimeSpan.FromSeconds(60);
@@ -57,7 +57,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     """;
                 var language = await ctx.ReadSql.ReadOptionalAsync<MetadataLanguageData>(sql, token);
                 return (await ctx.ReadProviderCredentialAsync(new ProviderParameters("tmdb"), token), language?.Locale ?? "en");
-            }, ct);
+            }, ct, mode: SqlAccessMode.ReadOnly);
 
             // Without an enabled key there is no metadata provider.
             if (credential is not { IsEnabled: true, ProtectedSecret: { } secret })
@@ -99,14 +99,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         public async Task<IReadOnlyList<TmdbSearchResult>> ReadFeedAsync(TmdbConnection connection, MediaType mediaType, DiscoverFeedType feed, int page, CancellationToken ct)
         {
-            // Ranked lists change slowly; a short shared cache spares the provider.
             var region = connection.Language.Split('-') is [_, { Length: 2 } country] ? country.ToUpperInvariant() : null;
-            var key = $"metadata.feed.{mediaType}.{feed}.{page}.{connection.Language}.{DateTime.UtcNow:yyyy-MM-dd}";
-            if (_cache.TryGetValue(key, out IReadOnlyList<TmdbSearchResult>? cached))
-            {
-                return cached!;
-            }
-
             var failedKey = "metadata.feed.failed." + connection.Language;
             if (_cache.TryGetValue(failedKey, out string? failure))
             {
@@ -115,9 +108,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
             try
             {
-                var results = await _tmdb.ReadFeedAsync(connection, Kind(mediaType), (TmdbFeed)feed, region, page, ct);
-                _cache.Set(key, results, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = FeedLifetime, Size = Math.Max(1, results.Count) });
-                return results;
+                return await _tmdb.ReadFeedAsync(connection, Kind(mediaType), (TmdbFeed)feed, region, page, ct);
             }
             catch (TmdbException exception)
             {
@@ -152,26 +143,51 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        // Similar titles change slowly; a shared cache of half a day spares the provider.
         public async Task<IReadOnlyList<TmdbSearchResult>> ReadRecommendationsAsync(TmdbConnection connection, MediaType mediaType, int tmdbId, CancellationToken ct)
         {
-            var key = $"metadata.recommendations.{mediaType}.{tmdbId.ToString(CultureInfo.InvariantCulture)}.{connection.Language}";
-            if (_cache.TryGetValue(key, out IReadOnlyList<TmdbSearchResult>? cached))
+            var failedKey = "metadata.feed.failed." + connection.Language;
+            if (_cache.TryGetValue(failedKey, out string? failure))
             {
-                return cached!;
+                throw new ServiceUnavailableException(failure!);
             }
 
             try
             {
-                var results = await _tmdb.ReadRecommendationsAsync(connection, Kind(mediaType), tmdbId, ct);
-                _cache.Set(key, results, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12), Size = Math.Max(1, results.Count) });
-                return results;
+                return await _tmdb.ReadRecommendationsAsync(connection, Kind(mediaType), tmdbId, ct);
             }
             catch (TmdbException exception)
             {
-                throw Translate(exception);
+                var translated = Translate(exception);
+                if (translated is ServiceUnavailableException unavailable) _cache.Set(failedKey, unavailable.Code, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = FailureLifetime, Size = 1 });
+                throw translated;
             }
         }
+
+        public async Task<IReadOnlyList<ExternalWorkData>> FetchExternalFeedAsync(LogicContext context, ExternalFeedData feed, CancellationToken ct)
+        {
+            var connection = await ConnectAsync(context, ct);
+            if (feed.Language is { } language)
+            {
+                connection = new TmdbConnection(connection.Credential, language);
+            }
+            IReadOnlyList<TmdbSearchResult> results;
+            try
+            {
+                results = feed.SourceValue is { } value
+                    ? await ReadRecommendationsAsync(connection, feed.MediaTypeId, int.Parse(value, CultureInfo.InvariantCulture), ct)
+                    : await ReadFeedAsync(connection, feed.MediaTypeId, feed.DiscoverFeedTypeId!.Value, feed.Page, ct);
+            }
+            catch (KeyNotFoundException) when (feed.SourceValue is not null)
+            {
+                results = [];
+            }
+            return [.. results.Select(result => ExternalWork(feed.Namespace, result))];
+        }
+
+        public static ExternalWorkData ExternalWork(string @namespace, TmdbSearchResult result) => new(@namespace, result.Id.ToString(CultureInfo.InvariantCulture),
+            TextLimit.Cut(result.Title, 500)!, TextLimit.Cut(result.OriginalTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(result.Overview, 4000), null,
+            TmdbClient.PosterUrl(result.PosterPath), TmdbClient.BackdropUrl(result.BackdropPath), DateTime.MinValue,
+            result.VoteAverage is > 0 and <= 10 ? Math.Round((decimal)result.VoteAverage.Value, 2) : null);
 
         public async Task<TmdbWork> ReadWorkAsync(TmdbConnection connection, MediaType mediaType, int tmdbId, CancellationToken ct)
         {
@@ -185,7 +201,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<long> ImportAsync(LogicContext context, TmdbConnection connection, MediaType mediaType, MediaSubtype? subtype, int tmdbId, CancellationToken ct)
+        // preferredTvdbId is the series' own TheTVDB id where a person or Sonarr named it (folder, nfo); TMDB's link to TheTVDB is sometimes stale
+        // and must not decide which TheTVDB series gives the structure or which id the Work stores.
+        public async Task<long> ImportAsync(LogicContext context, TmdbConnection connection, MediaType mediaType, MediaSubtype? subtype, int tmdbId, CancellationToken ct, int? preferredTvdbId = null)
         {
             // Read everything before the short write batch.
             TmdbWork work;
@@ -199,7 +217,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 // A series takes its seasons and episodes from TheTVDB only, like Sonarr; where TVDB cannot name them yet the Work is created without and the next scan asks again.
                 if (mediaType == MediaType.Series)
                 {
-                    tvdb = await _tvdb.TryReadStructureAsync(context, work.TvdbId, work.ImdbId, ct);
+                    tvdb = await _tvdb.TryReadStructureAsync(context, preferredTvdbId ?? work.TvdbId, work.ImdbId, ct);
                 }
 
                 if (tvdb is not null)
@@ -227,7 +245,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 identities.Add(new { Namespace = "imdb", Value = imdb });
             }
 
-            if ((work.TvdbId ?? tvdb?.TvdbId) is { } tvdbId)
+            if ((preferredTvdbId ?? work.TvdbId ?? tvdb?.TvdbId) is { } tvdbId)
             {
                 identities.Add(new { Namespace = "tvdb", Value = tvdbId.ToString(CultureInfo.InvariantCulture) });
             }

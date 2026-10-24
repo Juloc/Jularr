@@ -18,6 +18,7 @@ A tag with a suffix (`v0.3.0-rc.1`) is a prerelease.
 ## What the workflow does
 
 - **guard** fails the run unless the tag is `v<MAJOR>.<MINOR>.<PATCH>[-prerelease]`, the tagged commit is reachable from `origin/main` or `origin/main`, and the newest completed Frontend and Backend Full runs of that exact commit succeeded (a missing or red run is named in the error).
+  The owner can release past a red **Backend Full** in writing: the annotated tag message carries the line `Gate override by owner: <reason>`; the run then warns instead of failing, names the reason, and Frontend still has to be green.
 - **image** builds the tagged commit for `linux/amd64`, passes the version into the build (the Admin System page shows it) and pushes `ghcr.io/juloc/jularr:0.2.0`, `:0.2` and `:latest`. A prerelease gets only its exact version tag, so `latest` and the minor tag never move to it. An already published version is never overwritten. The image carries the OCI labels `source`, `revision` and `version`.
 - **release** creates the GitHub release with generated notes (a prerelease is marked as one). Re-run only this job if it failed after the image was pushed.
 

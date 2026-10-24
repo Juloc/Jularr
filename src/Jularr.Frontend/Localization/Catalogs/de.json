@@ -923,6 +923,10 @@
    "Save note",
    "Notiz speichern"
   ],
+  "reader.settings.saveFailed": [
+   "Reader settings were not saved to your profile. They still work on this device; change a setting to retry.",
+   "Leseeinstellungen wurden nicht in deinem Profil gespeichert. Sie gelten weiter auf diesem Gerät. Ändere eine Einstellung, um es erneut zu versuchen."
+  ],
   "reader.settings": [
    "Settings",
    "Einstellungen"
@@ -3683,6 +3687,10 @@
    "Available",
    "Verfügbar"
   ],
+  "media.availability.tag.Missing": [
+   "Unavailable",
+   "Nicht verfügbar"
+  ],
   "media.availability.tag.ProfileAudio": [
    "Available",
    "Verfügbar"
@@ -4706,6 +4714,14 @@
   "acquisition.reason.QualityNotAllowed": [
    "Quality not allowed",
    "Qualität nicht erlaubt"
+  ],
+  "acquisition.reason.LanguageNotAllowed": [
+   "Language not allowed by the request",
+   "Sprache der Datei ist nicht für diese Anfrage erlaubt"
+  ],
+  "acquisition.reason.LanguageUnknown": [
+   "File language is unknown; review manually",
+   "Sprache der Datei unbekannt; bitte manuell prüfen"
   ],
   "acquisition.reason.NotAnUpgrade": [
    "No upgrade of the present quality",
@@ -8828,8 +8844,12 @@
    "Anfragen & Arr+"
   ],
   "setup.modules.personal": [
-   "Profiles & personal features",
-   "Profile & persönliche Funktionen"
+   "Personalization & organization",
+   "Personalisierung & Organisation"
+  ],
+  "setup.modules.accounts": [
+   "Accounts & devices",
+   "Konten & Geräte"
   ],
   "setup.modules.operations": [
    "Administration",
@@ -9199,6 +9219,73 @@
    "Preview import",
    "Vorschau anzeigen"
   ],
+  "import.retryFailed": [
+   "Review failed titles only",
+   "Nur fehlgeschlagene Titel erneut prüfen"
+  ],
+  "import.downloadReport": [
+   "Download import report",
+   "Importbericht herunterladen"
+  ],
+  "import.phase.partial": [
+   "Import paused: some titles are still waiting",
+   "Import pausiert: Einige Titel warten noch"
+  ],
+  "import.intent.summary": [
+   "{0} selected · {1} to monitor · {2} to search",
+   "{0} ausgewählt · {1} überwachen · {2} automatisch suchen"
+  ],
+  "import.intent.searchWarning": [
+   "Automatic searching may start downloads. Select Add only to import without searching.",
+   "Automatische Suche kann Downloads starten. Mit Nur hinzufügen werden keine Suchen gestartet."
+  ],
+  "import.match.suggested": [
+   "Likely match",
+   "Wahrscheinlicher Treffer"
+  ],
+  "import.match.review": [
+   "Check edition",
+   "Ausgabe prüfen"
+  ],
+  "import.editions": ["Compare editions", "Ausgaben vergleichen"],
+  "import.edition.loading": ["Loading editions…", "Ausgaben laden…"],
+  "import.edition.choose": ["Select an Open Library book first", "Zuerst ein Open-Library-Buch wählen"],
+  "import.edition.empty": ["No edition details available", "Keine Ausgabendetails verfügbar"],
+  "import.edition.error": ["Edition details could not be loaded", "Ausgabendetails konnten nicht geladen werden"],
+  "import.edition.title": ["Edition", "Ausgabe"],
+  "import.edition.language": ["Language", "Sprache"],
+  "import.edition.year": ["Year", "Jahr"],
+  "import.edition.format": ["Format", "Format"],
+  "import.edition.publisher": ["Publisher", "Verlag"],
+  "import.edition.isbn": ["ISBN", "ISBN"],
+  "import.phase.matching": [
+   "Matching library works",
+   "Werke abgleichen"
+  ],
+  "import.phase.isbn": [
+   "Resolving ISBN",
+   "ISBN auflösen"
+  ],
+  "import.phase.searching": [
+   "Searching provider",
+   "Beim Anbieter suchen"
+  ],
+  "import.phase.candidates": [
+   "Candidates found",
+   "Treffer gefunden"
+  ],
+  "import.phase.no_match": [
+   "No candidates",
+   "Keine Treffer"
+  ],
+  "import.phase.waiting": [
+   "Waiting for next preview",
+   "Wartet auf weitere Suche"
+  ],
+  "import.phase.complete": [
+   "Preview ready",
+   "Vorschau bereit"
+  ],
   "import.refresh": [
    "Update preview",
    "Vorschau aktualisieren"
@@ -9506,6 +9593,10 @@
   "import.outcome.Failed": [
    "Failed",
    "Fehlgeschlagen"
+  ],
+  "import.interrupted": [
+   "Connection interrupted. Some titles may already be imported. Update the preview before importing again.",
+   "Verbindung unterbrochen. Einige Titel können bereits importiert sein. Vor einem erneuten Import zuerst die Vorschau aktualisieren."
   ],
   "admin.works.source.isbn": [
    "ISBN",
@@ -9843,6 +9934,10 @@
    "Catalog sync",
    "Katalog-Abgleich"
   ],
+  "jobs.job.discoverFeeds": [
+   "Discover cache",
+   "Entdecken-Cache"
+  ],
   "jobs.job.resources": [
    "Resource sampling",
    "Ressourcenmessung"
@@ -10131,6 +10226,10 @@
    "Figure",
    "Abbildung"
   ],
+  "reader.figure.zoomLevel": [
+   "Image zoom",
+   "Bildzoom"
+  ],
   "reader.figure.zoomIn": [
    "Zoom in",
    "Vergrößern"
@@ -10410,6 +10509,10 @@
   "jobs.about.catalog": [
    "Keeps the local Discover catalog up to date.",
    "Hält den lokalen Discover-Katalog aktuell."
+  ],
+  "jobs.about.discoverFeeds": [
+   "Prepares Discover lists and recommendations and refreshes stored results.",
+   "Bereitet Entdecken-Listen und Empfehlungen vor und aktualisiert gespeicherte Ergebnisse."
   ],
   "jobs.about.resources": [
    "Samples the load of the process for the System page.",
@@ -10984,8 +11087,12 @@
    "Englisch"
   ],
   "profile.languageFallback.None": [
-   "No fallback",
-   "Kein Rückfall"
+   "Strict: requested languages only",
+   "Strikt: nur gewünschte Sprachen"
+  ],
+  "profile.languageFallback.Any": [
+   "Flexible: requested, original, then any language",
+   "Flexibel: Wunsch-, Original-, dann jede Sprache"
   ],
   "hint.AcquisitionProfileFields.LanguageOrder.placeholder": [
    "de, en, ja",
@@ -12256,8 +12363,8 @@
    "Spiele-Profil hinzufügen"
   ],
   "setup.preset.complete.line": [
-   "Library, player and reader, Discover, automatic search and import.",
-   "Bibliothek, Player und Reader, Discover, automatische Suche und Import."
+   "All modules and all media types, including optional features.",
+   "Alle Module und Medientypen einschalten, einschließlich optionaler Funktionen."
   ],
   "setup.preset.mediaServer.line": [
    "Play and read your own files, without download automation.",
@@ -12267,9 +12374,25 @@
    "Take requests and let Arr+ search, download and import, without player or reader.",
    "Anfragen annehmen, Arr+ sucht, lädt und importiert, ohne Player und Reader."
   ],
+  "setup.modules.watch": [
+   "Playback & anime",
+   "Wiedergabe & Anime"
+  ],
+  "setup.modules.reading": [
+   "Reading, books & manga",
+   "Reader, Bücher & Manga"
+  ],
+  "setup.modules.games": [
+   "Games",
+   "Spiele"
+  ],
   "setup.modules.discovery": [
    "Discover & catalogs",
    "Discover & Kataloge"
+  ],
+  "setup.modules.extra": [
+   "Additional modules — all options",
+   "Weitere Module – alle Optionen"
   ],
   "setup.group.active": [
    "{0}/{1} on",
@@ -13059,6 +13182,10 @@
    "Pages {0}–{1} of {2}",
    "Seiten {0}–{1} von {2}"
   ],
+  "reader.chapterPagePosition": [
+   "Ch. {0}–{1}/{2}",
+   "Kap. {0}–{1}/{2}"
+  ],
   "reader.seek.pages": [
    "Page position",
    "Seitenposition"
@@ -13267,6 +13394,10 @@
    "Free space reserve",
    "Reserve an freiem Speicherplatz"
   ],
+  "downloadStorage.reserveHint": [
+   "Required for confirmation. Enter 0 if you do not want to keep a free-space reserve.",
+   "Für die Bestätigung erforderlich. Gib 0 ein, wenn keine Freiraumreserve eingehalten werden soll."
+  ],
   "downloadStorage.jobLimit": [
    "Optional download size limit",
    "Optionales Limit für die Download-Größe"
@@ -13307,9 +13438,29 @@
    "No storage connections are configured. Add a local path exposed through Compose or a mounted SMB/NFS share in Storage first.",
    "Es sind keine Speicherverbindungen eingerichtet. Füge zuerst unter Speicher einen über Compose bereitgestellten lokalen Pfad oder eine eingebundene SMB/NFS-Freigabe hinzu."
   ],
+  "sources.storage.directMissing": [
+   "Direct downloads need Incomplete and Complete folders plus a confirmed free-space reserve. Anna's Archive, Gutenberg and OPDS cannot download until this is configured.",
+   "Für direkte Downloads fehlen bestätigte Incomplete-/Complete-Ordner oder die Freiraumreserve. Anna’s Archive, Gutenberg und OPDS können bis zur Einrichtung nichts herunterladen."
+  ],
+  "sources.storage.usenetMissing": [
+   "Jularr's own Usenet downloader needs Incomplete and Complete folders plus a confirmed free-space reserve before it can download.",
+   "Der interne Usenet-Downloader benötigt bestätigte Incomplete-/Complete-Ordner und eine Freiraumreserve, bevor Downloads möglich sind."
+  ],
+  "sources.storage.configure": [
+   "Configure download storage",
+   "Download-Speicher konfigurieren"
+  ],
   "folderPicker.choose": [
    "Use this folder",
    "Diesen Ordner verwenden"
+  ],
+  "folderPicker.newFolder": [
+   "New folder name",
+   "Neuer Ordnername"
+  ],
+  "folderPicker.create": [
+   "Create folder",
+   "Ordner erstellen"
   ],
   "folderPicker.loading": [
    "Loading folders…",
