@@ -1159,6 +1159,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.connection.remotePath", "Path reported by the client"),
             new("acquisition.connection.localPath", "Same path for Jularr"),
             new("acquisition.connection.addIndexer", "Add indexer"),
+            new("acquisition.connection.addNyaa", "Add Nyaa indexer"),
             new("acquisition.connection.addClient", "Add download client"),
             new("acquisition.connection.addUsenet", "Add news server"),
             new("nav.group.media", "Media"),
