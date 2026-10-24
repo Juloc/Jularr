@@ -111,9 +111,9 @@ namespace Jularr.E2E.Tests
                 foreach (var filter in new[] { "All", "Active", "Waiting", "Import", "Errors" })
                 {
                     var address = filter == "All" ? "/Admin/Activity" : "/Admin/Activity?Filter=" + filter;
-                    await Assertions.Expect(filters.Locator("a[href='" + address + "']")).ToHaveCountAsync(1);
+                    await Assertions.Expect(filters.Locator(".navigation-tabs__divider ~ a[href='" + address + "']")).ToHaveCountAsync(1);
                 }
-                await Assertions.Expect(page.Locator(".list-toolbar").GetByRole(AriaRole.Link, new() { Name = "History", Exact = true }))
+                await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "History", Exact = true }).And(page.Locator(".view-switch__link")))
                     .ToHaveAttributeAsync("href", "/Admin/Activity?Filter=History");
                 await Steps.SubmitAsync(page, failed.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Retry" }) }));
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
