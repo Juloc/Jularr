@@ -18,6 +18,8 @@ namespace Jularr.Backend.Logic.Acquisition
             var ranked = evaluations
                 .OrderBy(evaluation => profile.IsBook && evaluation.Candidate.IsPart ? 1 : 0)
                 .ThenBy(evaluation => profile.IsBook ? LanguageTier(profile, evaluation.Candidate.Languages) : 0)
+                .ThenBy(evaluation => profile.IsBook && profile.LanguageFallback == LanguageFallbackType.Any
+                    && LanguageTier(profile, evaluation.Candidate.Languages) >= 2 ? evaluation.QualityRank : 0)
                 .ThenBy(evaluation => evaluation.Candidate.IndexerPriority)
                 .ThenBy(evaluation => evaluation.Candidate.IsPart ? 1 : 0)
                 .ThenBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible => 0, SelectionDecision.ManualReview => 1, _ => 2 })
@@ -148,6 +150,13 @@ namespace Jularr.Backend.Logic.Acquisition
             if (profile.IsBook && LanguageTier(profile, winner.Candidate.Languages) != LanguageTier(profile, runnerUp.Candidate.Languages))
             {
                 return new ReleaseReason("PreferredLanguage");
+            }
+
+            if (profile.IsBook && profile.LanguageFallback == LanguageFallbackType.Any
+                && LanguageTier(profile, winner.Candidate.Languages) >= 2 && LanguageTier(profile, runnerUp.Candidate.Languages) >= 2
+                && winner.QualityRank != runnerUp.QualityRank)
+            {
+                return new ReleaseReason("HigherQuality", winner.Score!.QualityKey);
             }
 
             if (winner.Candidate.IndexerPriority != runnerUp.Candidate.IndexerPriority)

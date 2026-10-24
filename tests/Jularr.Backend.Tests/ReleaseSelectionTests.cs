@@ -215,6 +215,25 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Selection_FlexibleAnyLanguageFallbackPrefersQualityOverIndexerPriority()
+        {
+            var profile = new QualityProfile("profile", "Profile", ["EPUB", "PDF"], ["EPUB", "PDF"], false, null, null, null)
+            {
+                IsBook = true,
+                LanguageOrder = ["DE"],
+                OriginalLanguage = "JA",
+                LanguageFallback = LanguageFallbackType.Any
+            };
+            var result = ReleaseSelectionEngine.Select(profile,
+                [Candidate("Héctor García - IKIGAI (ES) (pdf)", false, 1, "Usenet"),
+                 Candidate("Héctor García - IKIGAI (FR) (epub)", false, 50, "Anna")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (FR) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+            Assert.AreEqual("HigherQuality", result.WinnerReason!.Code);
+        }
+
+        [TestMethod]
         public void Selection_StrictModeRejectsUnknownLanguage()
         {
             var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.None),
