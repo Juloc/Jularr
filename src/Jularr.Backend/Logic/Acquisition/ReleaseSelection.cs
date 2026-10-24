@@ -15,13 +15,9 @@ namespace Jularr.Backend.Logic.Acquisition
 
             // A complete book outranks a partial one. For books the requested language then wins ahead of
             // source priority; other media retain source priority. Profile rules still decide eligibility.
-            var asked = evaluations.Where(evaluation => UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages)).ToArray();
-            var fallback = asked.Length > 0 ? [] : evaluations.Where(evaluation => UpgradePolicy.IsFallback(profile, evaluation.Candidate.Languages)).ToArray();
-
             var ranked = evaluations
                 .OrderBy(evaluation => profile.IsBook && evaluation.Candidate.IsPart ? 1 : 0)
-                .ThenBy(evaluation => profile.IsBook && profile.LanguageOrder.Length > 0
-                    ? asked.Contains(evaluation) ? 0 : fallback.Contains(evaluation) ? 1 : 2 : 0)
+                .ThenBy(evaluation => profile.IsBook ? LanguageTier(profile, evaluation.Candidate.Languages) : 0)
                 .ThenBy(evaluation => evaluation.Candidate.IndexerPriority)
                 .ThenBy(evaluation => evaluation.Candidate.IsPart ? 1 : 0)
                 .ThenBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible => 0, SelectionDecision.ManualReview => 1, _ => 2 })
@@ -40,6 +36,19 @@ namespace Jularr.Backend.Logic.Acquisition
             var winner = ranked.FirstOrDefault(evaluation => evaluation.IsSelectable);
             var runnerUp = winner is null ? null : ranked.SkipWhile(evaluation => !ReferenceEquals(evaluation, winner)).Skip(1).FirstOrDefault(evaluation => evaluation.IsSelectable);
             return new SelectionResult(ranked, winner, winner is null ? null : WinnerReason(profile, winner, runnerUp), OutcomeOf(ranked));
+        }
+
+        // Prefer requested, original, other known languages and finally unknown; source priority breaks ties.
+        private static int LanguageTier(QualityProfile profile, IReadOnlyList<string> languages)
+        {
+            if (profile.LanguageOrder.Length == 0 || UpgradePolicy.IsRequested(profile, languages)) return 0;
+            if (profile.LanguageFallback == LanguageFallbackType.Any)
+            {
+                if (UpgradePolicy.IsOriginal(profile, languages)) return 1;
+                return languages.Count > 0 ? 2 : 3;
+            }
+
+            return UpgradePolicy.IsFallback(profile, languages) ? 1 : 4;
         }
 
         // Closer to the preferred size wins a tie, as in Sonarr.
@@ -136,8 +145,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new ReleaseReason("OnlyCandidate");
             }
 
-            if (profile.IsBook && profile.LanguageOrder.Length > 0
-                && UpgradePolicy.IsRequested(profile, winner.Candidate.Languages) != UpgradePolicy.IsRequested(profile, runnerUp.Candidate.Languages))
+            if (profile.IsBook && LanguageTier(profile, winner.Candidate.Languages) != LanguageTier(profile, runnerUp.Candidate.Languages))
             {
                 return new ReleaseReason("PreferredLanguage");
             }

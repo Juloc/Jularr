@@ -10981,8 +10981,12 @@
    "Englisch"
   ],
   "profile.languageFallback.None": [
-   "No fallback",
-   "Kein Rückfall"
+   "Strict: requested languages only",
+   "Strikt: nur gewünschte Sprachen"
+  ],
+  "profile.languageFallback.Any": [
+   "Flexible: requested, original, then any language",
+   "Flexibel: Wunsch-, Original-, dann jede Sprache"
   ],
   "hint.AcquisitionProfileFields.LanguageOrder.placeholder": [
    "de, en, ja",
