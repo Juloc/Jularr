@@ -420,6 +420,21 @@ namespace Jularr.Backend.Logic.Playback
             {
                 throw new KeyNotFoundException("The companion is unavailable.");
             }
+
+            // A new invitation may reactivate this controller grant; never revive an earlier pending command.
+            var expire = new SqlStatement();
+            expire.Statement =
+                """
+                UPDATE
+                    "PlaybackCompanionCommands"
+                SET
+                    "ExpiresAt" = statement_timestamp()
+                WHERE
+                    "ControllerGrantId" = @CompanionId
+                    AND "FinishedAt" IS NULL;
+                """;
+            expire.Parameters.Add(controller);
+            await ctx.ExecuteAsyncForAffectedRows(expire, ct);
         }
 
         public static async Task RevokePlaybackCompanionsAsync(this LogicContext ctx, CompanionOwnerData owner, CancellationToken ct)
@@ -449,6 +464,20 @@ namespace Jularr.Backend.Logic.Playback
                 """;
             grant.Parameters.Add(playback);
             await ctx.ExecuteAsyncForAffectedRows(grant, ct);
+
+            var expire = new SqlStatement();
+            expire.Statement =
+                """
+                UPDATE
+                    "PlaybackCompanionCommands"
+                SET
+                    "ExpiresAt" = statement_timestamp()
+                WHERE
+                    "PlaybackSessionId" = @Id
+                    AND "FinishedAt" IS NULL;
+                """;
+            expire.Parameters.Add(playback);
+            await ctx.ExecuteAsyncForAffectedRows(expire, ct);
         }
 
         private static async Task<CompanionAccessRow> LockCompanionOwnerAsync(this LogicContext ctx, CompanionOwnerData owner, CancellationToken ct)

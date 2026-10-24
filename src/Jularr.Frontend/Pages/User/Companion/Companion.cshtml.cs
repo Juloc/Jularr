@@ -31,8 +31,8 @@ namespace Jularr.Frontend.Pages.User.Companion
                     new P(new Text("companion.disconnected")).Attribute("data-companion-status", "").Attribute("role", "status").Attribute("aria-live", "polite"),
                     new P(new ValueText("")).Attribute("data-companion-feedback", "").Attribute("role", "alert"),
                     new Div(
-                        new Button(new Text("companion.play")).Attribute("data-companion-command", "play").Disabled(),
-                        new Button(new Text("companion.pause")).Attribute("data-companion-command", "pause").Disabled(),
+                        new Button(new Text("companion.play")).Attribute("data-companion-command", "play").Attribute("disabled", "disabled"),
+                        new Button(new Text("companion.pause")).Attribute("data-companion-command", "pause").Attribute("disabled", "disabled"),
                         new Button(new Text("companion.disconnect")).Soft().Attribute("data-companion-disconnect", "")
                     ).Class("companion__actions"),
                     new Div(

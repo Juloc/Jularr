@@ -29,8 +29,9 @@ const ackWithinMs = 13000;
 onPage(import.meta.url, setup);
 
 function setup(): void {
-    const root = document.querySelector<HTMLElement>('[data-companion]');
-    if (!root) return;
+    const rootElement = document.querySelector<HTMLElement>('[data-companion]');
+    if (!rootElement) return;
+    const root: HTMLElement = rootElement;
 
     const pair = root.querySelector<HTMLElement>('[data-companion-pair]')!;
     const claim = root.querySelector<HTMLElement>('[data-companion-claim]')!;
