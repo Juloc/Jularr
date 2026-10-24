@@ -181,6 +181,30 @@ export function printPlacement(profile: ReturnType<typeof paperProfile>, side: s
         shift: (side === 'left' ? 1 : -1) * profile.inset * pixelScale / 2 };
 }
 
+// Keep the canonical typesetting flat; only the decorative native text ink
+// follows the static cross-section of a physical page. For the left page X is
+// mirrored, just like BookSolid's clip path. No bitmap or glyph scaling.
+export function paperInkPose(profile: ReturnType<typeof paperProfile>, side: 'left' | 'right',
+    width: number, x: number, spanWidth: number) {
+    const contour = paperOutline(profile).slice(0, 41);
+    const paperX = (screenX: number) => Math.max(0, Math.min(width, side === 'left' ? width - screenX : screenX));
+    const yAt = (screenX: number) => {
+        const u = paperX(screenX) / width;
+        let index = 1;
+        while (index < contour.length - 1 && contour[index].x < u) index++;
+        const a = contour[index - 1], b = contour[index];
+        const t = b.x > a.x ? Math.max(0, Math.min(1, (u - a.x) / (b.x - a.x))) : 0;
+        // Offset is relative to the original centre-height printPlacement.
+        return ((a.y + (b.y - a.y) * t) * (profile.height + profile.lift) -
+            profile.lift + profile.footerLift) * width / 148;
+    };
+    const middle = Math.max(0, Math.min(width, x + spanWidth / 2));
+    const step = Math.max(0.5, width / 300);
+    const left = Math.max(0, middle - step), right = Math.min(width, middle + step);
+    const slope = right > left ? (yAt(right) - yAt(left)) / (right - left) : 0;
+    return { y: yAt(middle), angle: Math.atan(slope) * 180 / Math.PI };
+}
+
 export function paperOutline(profile: ReturnType<typeof paperProfile>): Point[] {
     const x = (value: number) => (value - profile.inset * (value / 148) ** 3) / 148;
     return [...profile.points.map(point => ({ x: x(point.x), y: (point.y + profile.lift) / (profile.height + profile.lift) })),
