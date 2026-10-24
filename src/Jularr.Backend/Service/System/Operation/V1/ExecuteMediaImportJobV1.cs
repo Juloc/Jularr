@@ -75,8 +75,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 // A single-item list makes every restart and re-evaluation idempotent.
                 var json = MediaImportParser.Write([items[index]]);
                 var selected = stored.Choices.FirstOrDefault(choice => choice.Index == index);
-                var choices = selected is null ? Array.Empty<MediaImportChoiceV1>() :
-                    [new MediaImportChoiceV1(0, selected.Include, selected.Choice, selected.Query, selected.Action, selected.AcquisitionProfileId, selected.LibraryRootId)];
+                // Never interpret a missing or nullable choice as automatic inclusion.
+                var choices = new[]
+                {
+                    selected is null ? new MediaImportChoiceV1(0, false, null, null, null, null, null)
+                        : new MediaImportChoiceV1(0, selected.Include == true, selected.Choice, selected.Query,
+                            selected.Action, selected.AcquisitionProfileId, selected.LibraryRootId)
+                };
                 var data = new MediaImportDataV1(null, json, stored.Action, new(stored.Defaults), new(choices));
                 var plan = await _planner.PlanAsync(Context, MediaImportParser.Parse(json), data, 0, CancellationToken);
                 var row = plan.Rows.Single();
