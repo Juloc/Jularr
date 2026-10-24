@@ -4,9 +4,9 @@
 
 - Follow the current user request; explicit owner decisions override stale plans and legacy behavior.
 - Read [conventions](docs/CONVENTIONS.md) once per continuous session before implementation.
-- For Frontend work, also read [Frontend conventions](docs/FRONTEND_CONVENTIONS.md) and [Frontend CODEMAP](src/Jularr.Frontend/CODEMAP.md).
+- For Frontend work, read [Frontend conventions](docs/FRONTEND_CONVENTIONS.md), [Frontend CODEMAP](src/Jularr.Frontend/CODEMAP.md), and [UX decisions](docs/FRONTEND_UX.md) for changes to page behavior or appearance.
 - Use [CODEMAP](docs/CODEMAP.md) to find the relevant owner and focused tests. Read only the needed files and linked specifications; use targeted `rg` searches.
-- These local documents are authoritative. No Agent Hub, central Agent Control, claims ledger or mandatory external skills.
+- Follow [documentation authority](docs/DOCUMENTATION_POLICY.md) to distinguish current rules from historical plans. No Agent Hub, central Agent Control, claims ledger or mandatory external skills.
 - Do not scan all docs, issues, branches, worktrees or history, and do not delegate unless requested. For an explicitly requested inventory/audit, inspect the relevant wider scope read-only.
 
 ## Decision-first development
@@ -46,6 +46,6 @@
 
 ## Documentation
 
-- Keep this file a short entry point, conventions in one linked document and CODEMAPs as navigation only.
-- Update affected documentation with the implementation; do not duplicate rules or retain obsolete paths.
+- Keep this file a short entry point, conventions and UX decisions in their linked owners, and CODEMAPs as navigation only.
+- Update affected documentation with the implementation; do not duplicate rules or retain obsolete paths. Historical references must not assert current implementation status.
 - In handoffs, report the outcome, focused verification and open work briefly; no large planning documents unless requested.

@@ -93,5 +93,5 @@ use the same services through the shared API adapter.
 - `README.md` describes startup, current capabilities and integration gaps; it is not a second rules document.
 - `docs/CODEMAP.md` indexes current owners, entry points, persistence and focused tests. Read the relevant section first, then inspect only those paths.
 - Add a feature-local CODEMAP only when the root map is no longer sufficient, normally 30-60 lines. No map per folder, mirrored source tree or copied architecture prose.
-- Specifications or ADRs are only for necessary behavior/decisions that source and contracts do not express clearly; create them only when the task warrants it.
+- Specifications or ADRs are only for necessary behavior/decisions that source and contracts do not express clearly; create them only when the task warrants it. See the [documentation lifecycle](DOCUMENTATION_POLICY.md) for active versus historical scope.
 - Keep links and ownership paths current with each affected change. Do not reread unchanged conventions within the same session.

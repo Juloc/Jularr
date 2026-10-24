@@ -1,7 +1,7 @@
 # Frontend CODEMAP
 
 Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.md),
-[shared conventions](../../docs/CONVENTIONS.md). Backend owners: [CODEMAP](../../docs/CODEMAP.md).
+[shared conventions](../../docs/CONVENTIONS.md) and [shared UX decisions](../../docs/FRONTEND_UX.md). Backend owners: [CODEMAP](../../docs/CODEMAP.md).
 
 ## Host and framework
 
