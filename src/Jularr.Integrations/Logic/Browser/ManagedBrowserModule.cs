@@ -12,8 +12,8 @@ namespace Jularr.Integrations.Logic.Browser
 
         public string State { get; private set; } = "disabled";
         public string? LastError { get; private set; }
-        public bool IsInstalled => Directory.Exists(Path.Combine(_home, "runtime"))
-            && File.Exists(Path.Combine(_home, "runtime", ".version"));
+        public bool IsInstalled => File.Exists(Path.Combine(_home, "runtime", ".version"))
+            && File.ReadAllText(Path.Combine(_home, "runtime", ".version")).Trim() == "156.0.8078.47";
 
         public async Task ReconcileAsync(bool enabled, CancellationToken ct)
         {
@@ -62,7 +62,8 @@ namespace Jularr.Integrations.Logic.Browser
                     if (File.Exists(marker)) File.Delete(marker);
                     if (browser.Status.IsRunning) await browser.StopAsync();
                     StopRunner();
-                    if (options.InstallLocally && (IsInstalled || Directory.Exists(Path.Combine(_home, "profile"))))
+                    if (options.InstallLocally && (Directory.Exists(Path.Combine(_home, "runtime"))
+                        || Directory.Exists(Path.Combine(_home, "profile")) || Directory.Exists(Path.Combine(_home, "downloads"))))
                     {
                         State = "removing";
                         await ExecuteAsync("uninstall", ct);
