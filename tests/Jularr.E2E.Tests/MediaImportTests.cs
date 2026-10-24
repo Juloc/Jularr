@@ -172,9 +172,15 @@ namespace Jularr.E2E.Tests
 
                 // The person imports the chosen rows without leaving the page; actual per-row outcomes stream live.
                 await page.Locator("[data-import-apply]").ClickAsync();
-                await Assertions.Expect(page.Locator(".media-import__activity--done")).ToHaveCountAsync(1);
-                await Assertions.Expect(page.Locator(".media-import__activity-list li", new() { HasText = "Added, monitored" })).ToHaveCountAsync(4);
-                await Assertions.Expect(page.Locator(".media-import__activity progress")).ToHaveJSPropertyAsync("value", 6);
+                await Assertions.Expect(page.Locator("[data-import-job-state]")).ToHaveTextAsync("Import complete");
+                await Assertions.Expect(page.Locator("[data-import-job-rows] li", new() { HasText = "Added, monitored" })).ToHaveCountAsync(4);
+                await Assertions.Expect(page.Locator("[data-import-job-progress]")).ToHaveJSPropertyAsync("value", 6);
+                // The operation has a stable ID and reconnects from the server
+                // after leaving this page rather than depending on JS memory.
+                await page.GotoAsync("/Admin/Works");
+                await page.GotoAsync("/Admin/Import");
+                await Assertions.Expect(page.Locator("[data-import-job-state]")).ToHaveTextAsync("Import complete");
+                await Assertions.Expect(page.Locator("[data-import-job-progress]")).ToHaveJSPropertyAsync("value", 6);
                 await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Download import report" })).ToHaveCountAsync(1);
                 await Evidence.SaveAsync(page, "media-import-result");
                 await page.SetViewportSizeAsync(390, 844);
@@ -252,13 +258,13 @@ namespace Jularr.E2E.Tests
                 await page.Locator("[data-import-apply]").ClickAsync();
                 // Forty provider imports are bounded per server pass, but the browser
                 // continues the remaining two automatically, preserving their per-row actions.
-                await Assertions.Expect(page.Locator(".media-import__activity--done")).ToHaveCountAsync(1);
-                await Assertions.Expect(page.Locator(".media-import__activity progress")).ToHaveJSPropertyAsync("value", 42);
-                await Assertions.Expect(page.Locator(".media-import__activity-list li")).ToHaveCountAsync(42);
-                await Assertions.Expect(page.Locator(".media-import__activity form")).ToHaveCountAsync(0);
+                await Assertions.Expect(page.Locator("[data-import-job-state]")).ToHaveTextAsync("Import complete");
+                await Assertions.Expect(page.Locator("[data-import-job-progress]")).ToHaveJSPropertyAsync("value", 42);
+                await Assertions.Expect(page.Locator("[data-import-job-rows] li")).ToHaveCountAsync(42);
+                await Assertions.Expect(page.Locator("[data-import-job-panel] form")).ToHaveCountAsync(0);
                 await Evidence.SaveAsync(page, "media-import-auto-batches");
-                await Assertions.Expect(page.Locator(".media-import__activity-list li", new() { HasText = "Bulk Movie 30040" })).ToContainTextAsync("Added");
-                await Assertions.Expect(page.Locator(".media-import__activity-list li", new() { HasText = "Bulk Movie 30041" })).ToContainTextAsync("Added, monitored");
+                await Assertions.Expect(page.Locator("[data-import-job-rows] li", new() { HasText = "Bulk Movie 30040" })).ToContainTextAsync("Added");
+                await Assertions.Expect(page.Locator("[data-import-job-rows] li", new() { HasText = "Bulk Movie 30041" })).ToContainTextAsync("Added, monitored");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
