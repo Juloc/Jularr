@@ -45,6 +45,19 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Version_IsPublicNeverCached_AndMatchesFrontendBuild()
+        {
+            await using var app = await StartAsync();
+            using var response = await app.GetTestClient().GetAsync("/pwa/version");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            Assert.AreEqual("application/json", response.Content.Headers.ContentType?.MediaType);
+            Assert.AreEqual("no-store", response.Headers.CacheControl?.ToString());
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var build = app.Services.GetRequiredService<FrontendAssets>().BuildId;
+            Assert.AreEqual(build, document.RootElement.GetProperty("build").GetString());
+        }
+
+        [TestMethod]
         public async Task Worker_IsServedFromTheRootWithScope_NeverCached_AndPassesEveryRequestThrough()
         {
             await using var app = await StartAsync();
