@@ -20,6 +20,12 @@ object TvCatalogV1Routes {
     const val DiscoverCatalogFeed = "$base/discover/catalog/feed"
     const val DiscoverSuggestions = "$base/discover/suggestions"
     const val DiscoverCatalogEntry = "$base/discover/catalog/entry"
+    const val RequestLocales = "$base/localization/locales"
+    const val DiscoverCatalogRequest = "$base/discover/catalog/requests"
+
+    fun discoverTmdbRequest(mediaTypeId: Int, tmdbId: Int): String =
+        discoverTmdbItem(mediaTypeId, tmdbId) + "/requests"
+ 
 
     /** TMDB search result only; catalog results with other namespaces use catalog/entry. */
     fun discoverTmdbItem(mediaTypeId: Int, tmdbId: Int): String {
