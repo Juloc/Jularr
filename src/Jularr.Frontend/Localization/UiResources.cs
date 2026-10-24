@@ -506,6 +506,7 @@ namespace Jularr.Frontend.Localization
             new("reader.translation.localQuality", "TranslateGemma · local"),
             new("reader.language.none", "No translation engine is available right now. You can still read this book in its original language."),
             new("reader.language.configure", "Open profile settings"),
+            new("reader.language.saving", "Saving reading language…"),
             new("reader.translating", "Translating"),
             new("reader.translationFailed", "Translation is unavailable right now; the text stays in its language."),
             new("reader.search", "Search in this book"),
