@@ -9,12 +9,14 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class DownloadClientSelectionTests
     {
+        private static readonly DateTime Clock = new(2026, 10, 24, 9, 0, 0, DateTimeKind.Utc);
+
         [TestMethod]
         public void DownloaderSelection_PriorityBeforeMediaScope()
         {
             var general = Client(41, 1, []);
             var scoped = Client(42, 5, [(int)MediaType.Movie]);
-            Assert.AreEqual(general.Id, DownloadClientSelectionLogic.Select([scoped, general], MediaType.Movie, AcquisitionConnectionType.Sabnzbd)?.Id);
+            Assert.AreEqual(general.Id, DownloadClientSelectionLogic.Select([scoped, general], Clock, AcquisitionConnectionType.Sabnzbd)?.Id);
         }
 
         [TestMethod]
@@ -25,8 +27,8 @@ namespace Jularr.Backend.Tests
             var wrongMedia = Client(3, 1, [(int)MediaType.Book]);
             var correct = Client(4, 9, [(int)MediaType.Movie]);
             Assert.AreEqual(correct.Id, DownloadClientSelectionLogic.Select([disabled, wrongType, wrongMedia, correct],
-                MediaType.Movie, AcquisitionConnectionType.Sabnzbd)?.Id);
-            Assert.IsNull(DownloadClientSelectionLogic.Select([wrongMedia], MediaType.Movie, AcquisitionConnectionType.Sabnzbd));
+                MediaType.Movie, Clock, AcquisitionConnectionType.Sabnzbd)?.Id);
+            Assert.IsNull(DownloadClientSelectionLogic.Select([wrongMedia], MediaType.Movie, Clock, AcquisitionConnectionType.Sabnzbd));
         }
 
         [TestMethod]
@@ -34,7 +36,18 @@ namespace Jularr.Backend.Tests
         {
             var later = Client(7, 2, []);
             var earlier = Client(3, 2, []);
-            Assert.AreEqual(earlier.Id, DownloadClientSelectionLogic.Select([later, earlier], MediaType.Series, AcquisitionConnectionType.Sabnzbd)?.Id);
+            Assert.AreEqual(earlier.Id, DownloadClientSelectionLogic.Select([later, earlier], MediaType.Series, Clock, AcquisitionConnectionType.Sabnzbd)?.Id);
+        }
+
+        [TestMethod]
+        public void DownloaderSelection_BackoffExcludesUnavailableHighPriorityClient()
+        {
+            var recovering = Client(1, 1, [], retryAt: Clock.AddMinutes(10));
+            var ready = Client(2, 3, []);
+            Assert.AreEqual(ready.Id, DownloadClientSelectionLogic.Select([recovering, ready],
+                MediaType.Movie, Clock, AcquisitionConnectionType.Sabnzbd)?.Id);
+            Assert.AreEqual(recovering.Id, DownloadClientSelectionLogic.Select([recovering, ready],
+                MediaType.Movie, Clock.AddMinutes(11), AcquisitionConnectionType.Sabnzbd)?.Id);
         }
 
         [TestMethod]
@@ -64,11 +77,11 @@ namespace Jularr.Backend.Tests
         }
 
         private static AcquisitionConnectionData Client(long id, int priority, int[] mediaTypes, bool enabled = true,
-            AcquisitionConnectionType type = AcquisitionConnectionType.Sabnzbd) =>
+            AcquisitionConnectionType type = AcquisitionConnectionType.Sabnzbd, DateTime? retryAt = null) =>
             new(id: id, name: "Downloader", acquisitionConnectionTypeId: type, baseUrl: "http://localhost/", protectedApiKey: null,
                 isEnabled: enabled, priority: priority, categories: [], downloadCategory: null, remotePath: null, localPath: null,
                 capabilities: null, version: 1, username: null, maxConnections: null, protectedPassword: null, mediaTypeIds: mediaTypes,
-                searchesAutomatically: true, queryLimit: null, grabLimit: null, queryCount: 0, grabCount: 0, retryAt: null,
+                searchesAutomatically: true, queryLimit: null, grabLimit: null, queryCount: 0, grabCount: 0, retryAt: retryAt,
                 host: null, port: null, useSsl: null);
     }
 }

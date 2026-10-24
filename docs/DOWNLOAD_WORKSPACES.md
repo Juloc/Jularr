@@ -42,3 +42,5 @@ A manual import may queue source cleanup **only** when it finishes and a complet
 ## qBittorrent newly created jobs
 
 New torrents write to `<configured qBittorrent save root>/<media>/j-<operationId>/...` (e.g. `/downloads/complete/anime/j-18453`). The save root still belongs to qBittorrent, and Jularr maps the reported content path back through its configured client/host mount. This change does not migrate existing torrents or move anything during seeding. qBittorrent's own incomplete-file staging policy remains client-configured; do not claim that an external torrent is atomically moved from incomplete to complete by Jularr.
+
+Downloader availability is represented by the persisted probe/backoff `RetryAt`. Selection excludes clients still in backoff, then sorts the remaining compatible clients by priority. This avoids knowingly handing new jobs to a client temporarily marked unavailable; it is not a synchronous connection health probe. Invalid qBittorrent root paths are rejected before reserving a download operation.

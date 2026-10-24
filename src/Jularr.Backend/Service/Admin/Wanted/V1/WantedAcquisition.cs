@@ -263,7 +263,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var compatibleTypes = isTorrent
                 ? new[] { AcquisitionConnectionType.Qbittorrent }
                 : new[] { AcquisitionConnectionType.Sabnzbd, AcquisitionConnectionType.Usenet };
-            var client = DownloadClientSelectionLogic.Select(clients, target.MediaTypeId, compatibleTypes);
+            var client = DownloadClientSelectionLogic.Select(clients, target.MediaTypeId, _time.GetUtcNow().UtcDateTime, compatibleTypes);
             if (client is null)
             {
                 throw new ServiceUnavailableException("acquisition_no_download_client");
@@ -407,7 +407,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         private async Task RequireClientImportSourceAsync(LogicContext context, AcquisitionConnectionData client, CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(client.RemotePath) || client.DownloadStorageMountId is null && string.IsNullOrWhiteSpace(client.LocalPath))
+            if (string.IsNullOrWhiteSpace(client.RemotePath) || client.DownloadStorageMountId is null && string.IsNullOrWhiteSpace(client.LocalPath)
+                || client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent
+                    && client.RemotePath.TrimEnd('/', '\\').Length == 0)
             {
                 throw new ServiceUnavailableException("acquisition_import_path_unconfigured");
             }
