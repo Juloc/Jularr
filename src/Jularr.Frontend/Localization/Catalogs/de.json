@@ -12245,8 +12245,8 @@
    "Spiele-Profil hinzufügen"
   ],
   "setup.preset.complete.line": [
-   "Library, player and reader, Discover, automatic search and import.",
-   "Bibliothek, Player und Reader, Discover, automatische Suche und Import."
+   "All modules and all media types, including optional features.",
+   "Alle Module und Medientypen einschalten, einschließlich optionaler Funktionen."
   ],
   "setup.preset.mediaServer.line": [
    "Play and read your own files, without download automation.",
