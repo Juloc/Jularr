@@ -58,6 +58,14 @@ namespace Jularr.E2E.Tests
             Assert.AreEqual(day, await cell.GetAttributeAsync("data-calendar-day"));
             var cookieZone = await page.EvaluateAsync<string>("() => document.cookie.split('; ').find(c => c.startsWith('jularr_time_zone='))?.split('=')[1] ?? ''");
             Assert.AreEqual(expectedZone, cookieZone);
+
+            // HTMX keeps the document and page in place; correcting a stale cookie never reloads it.
+            await page.EvaluateAsync("() => { window.__timeZoneDocumentMarker = true; document.cookie = 'jularr_time_zone=UTC; Path=/'; }");
+            var link = page.Locator(".calendar__navigation a[href]").First;
+            await link.ClickAsync();
+            await Assertions.Expect(page.Locator(".calendar__grid")).ToBeVisibleAsync();
+            Assert.IsTrue(await page.EvaluateAsync<bool>("() => window.__timeZoneDocumentMarker === true"));
+            Assert.AreEqual(expectedZone, await page.EvaluateAsync<string>("() => document.cookie.split('; ').find(c => c.startsWith('jularr_time_zone='))?.split('=')[1] ?? ''"));
         }
     }
 }
