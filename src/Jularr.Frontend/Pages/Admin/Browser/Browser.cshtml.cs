@@ -16,7 +16,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
 {
     // Temporary: the browser of the instance, what it does and what an administrator can make it do.
     public sealed class BrowserModel(ReadBrowserStatusV1 status, RunBrowserActionV1 run, ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection,
-        TestAcquisitionConnectionV1 test, UpdateAcquisitionConnectionV1 update, ReadWantedV1 wanted, SearchWantedV1 search, IAntiforgery antiforgery, UiText texts) : JularrPage
+        TestAcquisitionConnectionV1 test, UpdateAcquisitionConnectionV1 update, ReadWantedV1 wanted, SearchWantedV1 search, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private BrowserStatusV1? _status;
         private PageResult<AcquisitionConnectionDetailsV1>? _connections;
@@ -26,7 +26,25 @@ namespace Jularr.Frontend.Pages.Admin.Browser
         {
             page.Title("admin.browser.title");
             page.Navigation("nav.admin");
+            page.Asset("Framework/Components/CodeSample.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+
+            // The host's browser is optional and never installs privileged packages through the web service.
+            if (_status is { } browser)
+            {
+                var key = browser.IsRunning ? "admin.browser.running" : browser.IsAvailable ? "admin.browser.configured" : "admin.browser.missing";
+                var tone = browser.IsRunning ? UiTone.Success : browser.IsAvailable ? UiTone.Warning : UiTone.Neutral;
+                page.Content.Add(new Div(new StateChip(new Text(key), tone),
+                    browser.LastError is { } error ? new P(new ValueText(error)) : new Span()));
+                if (!browser.IsRunning && (string.IsNullOrWhiteSpace(browser.RemoteAddress)
+                    || browser.RemoteAddress.StartsWith("http://127.0.0.1:", StringComparison.OrdinalIgnoreCase)))
+                {
+                    page.Content.Add(new P(new Text("admin.browser.setupHint")));
+                    page.Content.Add(new CodeSample("admin.browser.installSteps",
+                        "# First set JULARR_BROWSER_ADDRESS=http://127.0.0.1:9222 in .env\ndocker compose up -d jularr\ndocker compose exec -u root jularr jularr-browser install\ndocker compose exec -d jularr jularr-browser run",
+                        assets));
+                }
+            }
 
             // What the browser is and what it did last.
             page.Content.Add(new H2(new Text("admin.browser.state")));

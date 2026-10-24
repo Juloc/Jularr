@@ -44,10 +44,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             {
                 var state = await SourceCatalogState.ReadAsync(ctx.ReadSql, ct);
                 var direct = await ctx.ReadDownloadStorageSettingsAsync(DownloadStorageArea.Direct, ct);
-                var directReady = direct.IncompleteStorageMountId is not null && direct.CompleteStorageMountId is not null
-                    && direct.IncompletePath is not null && direct.CompletePath is not null
-                    && direct.IncompleteFilesystemIdentity is not null && direct.CompleteFilesystemIdentity is not null
-                    && direct.FreeSpaceReserveBytes is not null;
+                var directReady = DownloadStorageLogic.IsConfigured(direct);
                 var added = new List<string>();
                 var needsAccount = new List<string>();
                 foreach (var entry in SourceCatalog.Entries.Where(entry => !state.IsConfigured(entry)))

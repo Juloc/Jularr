@@ -25,6 +25,7 @@ namespace Jularr.Frontend.Pages.User.Notifications
         {
             page.Title("notifications.title");
             page.Asset("Pages/User/Notifications/Notifications.entry.scss");
+            page.Asset("Framework/Components/InfiniteList.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             if (_notifications is not { } notifications) return;
 
@@ -39,7 +40,7 @@ namespace Jularr.Frontend.Pages.User.Notifications
             }
 
             page.Content.Add(new Ul([.. notifications.Items.Select(Item)]).Class("notifications"));
-            page.Content.Add(new Span().Paged(notifications.Items.Count, notifications.PageSize));
+            page.Content.Add(new Span().Infinite(notifications.Items.Count, notifications.PageSize, PagedList.DefaultKey, ".notifications"));
 
             // One switch per kind of notice.
             var states = new[] { new SelectOption("False", texts["notifications.on"]), new SelectOption("True", texts["notifications.off"]) };
@@ -60,7 +61,7 @@ namespace Jularr.Frontend.Pages.User.Notifications
             if (item.Occurrences > 1) text += " " + string.Format(CultureInfo.CurrentCulture, texts["notifications.times"], item.Occurrences);
             IUiComponent message = item.Link is { } link ? new A(new ValueText(text)).Attribute("href", link) : new Span(new ValueText(text));
             return new Li(message, new Span(new LocalTime(item.CreatedAt)).Class("notifications__time"))
-                .Class("notifications__item" + (item.IsRead ? "" : " notifications__item--unread"));
+                .Class("notifications__item" + (item.IsRead ? "" : " notifications__item--unread")).Attribute("data-list-key", item.Id.ToString(CultureInfo.InvariantCulture));
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -73,7 +74,7 @@ namespace Jularr.Frontend.Pages.User.Notifications
         protected override async Task LoadDataAsync()
         {
             var token = HttpContext.RequestAborted;
-            _notifications = await read.ExecuteAsync<PageResult<NotificationV1>>(new ReadNotificationsParametersV1(Math.Max(1, PageNumber)), token);
+            _notifications = await read.ExecuteAsync<PageResult<NotificationV1>>(new ReadNotificationsParametersV1(Math.Max(1, PageNumber), 48), token);
             _settings = await readSettings.ExecuteAsync<BaseDataList<NotificationSettingV1>>(new NotificationsParametersV1(), token);
         }
 

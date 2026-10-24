@@ -8,7 +8,7 @@ const source = readFileSync(new URL("../Framework/Components/LocalTime.ts", impo
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
 const exports = {};
 runInNewContext(script, { exports, Intl, Date, Number });
-const { formatLocalTime, timeZoneCookieHeader, isDateSensitivePage, localTodayIso } = exports;
+const { formatLocalTime, timeZoneCookieHeader, releaseCountdown, localTodayIso } = exports;
 
 test("the same UTC instant is displayed in the viewer's zone", () => {
     const utc = "2026-10-23T18:26:00.000Z";
@@ -36,13 +36,13 @@ test("IANA timezone cookie persists the device zone and is stable across reloads
     assert.equal(timeZoneCookieHeader("", undefined, false), null);
 });
 
-test("calendar and work are the only pages requiring a refresh on date-boundary change", () => {
-    assert.equal(isDateSensitivePage("/Calendar"), true);
-    assert.equal(isDateSensitivePage("/calendar/"), true);
-    assert.equal(isDateSensitivePage("/Admin/Works/987"), true);
-    assert.equal(isDateSensitivePage("/Admin/Works/987?Tab=History"), false);
-    assert.equal(isDateSensitivePage("/Admin/Works"), false);
-    assert.equal(isDateSensitivePage("/Requests"), false);
+test("release countdown is based on civil days and changes only at the local midnight", () => {
+    assert.equal(releaseCountdown("2026-10-25", "2026-10-24", "Airs in {0} days", "Unaired"), "Airs in 1 days");
+    assert.equal(releaseCountdown("2026-10-25", "2026-10-23", "Airs in {0} days", "Unaired"), "Airs in 2 days");
+    assert.equal(releaseCountdown("2026-11-07", "2026-10-24", "Airs in {0} days", "Unaired"), "Airs in 14 days");
+    assert.equal(releaseCountdown("2026-11-08", "2026-10-24", "Airs in {0} days", "Unaired"), "Unaired");
+    assert.equal(releaseCountdown("2026-10-24", "2026-10-24", "Airs in {0} days", "Unaired"), "Unaired");
+    assert.equal(releaseCountdown("2026-10-23", "2026-10-24", "Airs in {0} days", "Unaired"), "Unaired");
 });
 
 test("device-local calendar day is not a formatted UTC instant", () => {

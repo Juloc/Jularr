@@ -7,6 +7,7 @@ using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
 namespace Jularr.Backend.Tests
@@ -195,6 +196,73 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, tooManyToMonitor.StatusCode);
             using var none = await host.SendAsync(HttpMethod.Post, Bulk + "monitoring", new UpdateWorksMonitoringDataV1([], true));
             Assert.AreEqual(HttpStatusCode.OK, none.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task Monitoring_ATitleWithoutTarget_GetsOneInTheLibraryOfItsFiles_AndTheSearchWakes()
+        {
+            await using var host = await CreateAsync(razor: true);
+            await SeedAsync(host);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (904, 904);
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (904, 904, 904);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (904, 904, 904, 1);
+                INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId") VALUES (904, 802, 'Delta (2021)/Delta.mkv', 2000000000, now(), now(), 904);
+                """);
+
+            // The hero of a title without a target offers Monitor and Refresh; one with a target keeps its own buttons.
+            using var before = await host.SendAsync(HttpMethod.Get, "/Admin/Works/904");
+            var html = await before.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, before.StatusCode, html);
+            StringAssert.Contains(html, "handler=StartMonitor");
+            StringAssert.Contains(html, "handler=Refresh");
+            using var target = await host.SendAsync(HttpMethod.Get, "/Admin/Works/901");
+            Assert.IsFalse((await target.Content.ReadAsStringAsync()).Contains("handler=StartMonitor", StringComparison.Ordinal));
+
+            var signal = host.Services.GetRequiredService<Jularr.Backend.Service.Core.AcquisitionSearchSignal>();
+            Assert.IsFalse(signal.TakeRequest());
+            using var started = await host.SendAsync(HttpMethod.Post, Works + "/904/monitoring");
+            Assert.AreEqual(HttpStatusCode.OK, started.StatusCode, await started.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" WHERE "WorkId" = 904 AND NOT "IsPaused" AND "LibraryRootId" = 802"""));
+            Assert.IsTrue(signal.TakeRequest());
+
+            // Again it changes nothing and wakes nothing; a game is monitored per platform and an unknown title is not found.
+            using var again = await host.SendAsync(HttpMethod.Post, Works + "/904/monitoring");
+            Assert.AreEqual(HttpStatusCode.OK, again.StatusCode);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" WHERE "WorkId" = 904"""));
+            Assert.IsFalse(signal.TakeRequest());
+            using var game = await host.SendAsync(HttpMethod.Post, Works + "/906/monitoring");
+            Assert.AreNotEqual(HttpStatusCode.OK, game.StatusCode);
+            using var unknown = await host.SendAsync(HttpMethod.Post, Works + "/999/monitoring");
+            Assert.AreEqual(HttpStatusCode.NotFound, unknown.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task Targets_EveryTitleWithFilesGetsAPausedOne_InTheLibraryOfItsFiles_AndNothingElse()
+        {
+            await using var host = await CreateAsync();
+            await SeedAsync(host);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (907, 1, 'Eta'), (908, 1, 'Theta');
+                INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (904, 904), (907, 907);
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (904, 904, 904), (907, 907, 907);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (904, 904, 904, 1), (907, 907, 907, 1);
+                INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "MissingSince") VALUES
+                    (904, 802, 'Delta (2021)/Delta.mkv', 2000000000, now(), now(), 904, NULL),
+                    (907, 802, 'Eta/Eta.mkv', 2000000000, now(), now(), 907, now());
+                """);
+
+            await using var scope = host.Services.CreateAsyncScope();
+            var job = scope.ServiceProvider.GetRequiredService<Jularr.Backend.Service.System.Media.V1.EnsureWantedTargetsV1>();
+            var result = await job.ExecuteAsync<UpdateResult>(new Jularr.Backend.Data.System.Media.V1.CoverParametersV1(), default);
+            Assert.IsFalse(result.Success, "One pass was enough.");
+
+            // Delta has files and gets a target; Eta's file is missing, Theta has none, Zeta is a game and Alpha already has its own.
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" WHERE "WorkId" = 904 AND "IsPaused" AND "LibraryRootId" = 802"""));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" WHERE "WorkId" IN (907, 908)"""));
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" WHERE "WorkId" = 906"""));
+            Assert.AreEqual(801L, await host.ScalarAsync("""SELECT "LibraryRootId" FROM "WantedItems" WHERE "WorkId" = 901"""));
+            Assert.IsFalse((bool)(await host.ScalarAsync("""SELECT "IsPaused" FROM "WantedItems" WHERE "WorkId" = 901"""))!);
         }
 
         [TestMethod]

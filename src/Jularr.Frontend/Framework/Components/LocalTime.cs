@@ -6,10 +6,13 @@ namespace Jularr.Frontend.Framework
     public sealed class LocalTime : HtmlElement
     {
         public LocalTime(DateTime instant, string display = "datetime")
-            : base("time", new ValueText(Fallback(instant, display)))
+            : base("time",
+                new Span(new ValueText(Fallback(instant, display))).Class("local-time__label"),
+                new Span(new ValueText(Fallback(instant, display))).Class("local-time__measure").Attribute("aria-hidden", "true"))
         {
             if (display is not ("datetime" or "date" or "time"))
                 throw new ArgumentOutOfRangeException(nameof(display));
+            Class("local-time");
             Attribute("datetime", Iso(instant));
             Attribute("data-local-time", display);
         }

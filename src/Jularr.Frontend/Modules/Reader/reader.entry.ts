@@ -13,6 +13,7 @@ import { initializeBookmarks } from './bookmarks';
 import { initializeOriginalPages } from './OriginalPages';
 import { initializeViewChoice } from './ViewChoice';
 import { initializeProgressBar } from './ProgressBar';
+import { initializeNotes } from './Notes';
 
 const reader = document.querySelector<HTMLElement>('.reader');
 if (reader) {
@@ -20,6 +21,7 @@ if (reader) {
     else if (reader.dataset.format === 'pages') initializeOriginalPages(reader);
     else if (reader.dataset.format === 'comic') initializeComicPages(reader);
     else if (reader.querySelector('[data-role=content]')) initializeText(reader);
+    initializeNotes(reader);
 }
 
 // The page of the PDF a block stands on: its own anchor, the nearest one before it, or where its section begins; none for a book that is no PDF.

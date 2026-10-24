@@ -147,7 +147,7 @@ namespace Jularr.Frontend.Framework
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
-            var art = MediaImage.Or(assets, posterUrl, title, 342, 513);
+            var art = MediaImage.Or(assets, posterUrl, title, 342, 513, sizes: "auto, 176px");
             var cover = new List<IUiComponent>
             {
                 new A(art).Class("media-card__art").Attribute("href", href).Attribute("aria-label", title)
@@ -187,7 +187,7 @@ namespace Jularr.Frontend.Framework
             if (info is not null) details.Add(info);
             details.Add(new Span().Class("media-card__tip").Attribute("role", "presentation").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"));
 
-            var card = new Div(surface, new Div([.. details]).Class("media-card__details")).Class(_isResume ? "media-card media-card--resume" : "media-card");
+            var card = new Div(surface, new Div([.. details]).Class("media-card__details")).Class(_isResume ? "media-card media-card--resume" : "media-card").Attribute("data-list-key", href);
             if (_hoverPreview is not null) card.Attribute("data-preview-src", _hoverPreview);
             card.WriteTo(writer, encoder, texts);
         }

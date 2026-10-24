@@ -1,0 +1,18 @@
+// The server's explicit UTC fallback stays in the grid as an invisible width baseline.
+// Browser-local formatting changes the label only, never the containing column size.
+.local-time {
+    display: inline-grid;
+    vertical-align: baseline;
+    font-variant-numeric: tabular-nums;
+
+    &__label,
+    &__measure {
+        grid-area: 1 / 1;
+    }
+
+    &__measure {
+        visibility: hidden;
+        pointer-events: none;
+        user-select: none;
+    }
+}

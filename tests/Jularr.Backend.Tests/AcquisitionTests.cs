@@ -51,6 +51,22 @@ namespace Jularr.Backend.Tests
         private const string Connections = "/api/v1/admin/acquisition/connections";
         private const string Feature = "Example.Movie.2020.1080p.WEB-DL.H264-GRP";
         private const string Lower = "Example.Movie.2020.720p.WEB-DL.H264-GRP";
+        [TestMethod]
+        public void ReleaseMerge_PreservesTransportAndSourceEvidence()
+        {
+            var original = new ReleaseOffer("Volume 1", 10, "Novel source", 25, "guid", new Uri("https://source.example.test/file"),
+                null, 1_024, DateTimeOffset.UtcNow, ["title"]) { Transport = DownloadTransport.Torrent, IndexerFlags = ["validated"], IsPart = true };
+            var repeated = new ReleaseOffer("Volume 1", 10, "Novel source", 25, "guid", new Uri("https://source.example.test/file"),
+                null, 1_024, DateTimeOffset.UtcNow, ["alias"]) { IndexerFlags = ["translated"] };
+
+            var result = AcquisitionSelectionLogic.Merge(original, repeated);
+
+            Assert.AreEqual(DownloadTransport.Torrent, result.Transport);
+            CollectionAssert.AreEquivalent(new[] { "validated", "translated" }, result.IndexerFlags.ToArray());
+            Assert.IsTrue(result.IsPart);
+            CollectionAssert.AreEquivalent(new[] { "title", "alias" }, result.Stages.ToArray());
+        }
+
 
         [TestMethod]
         [DataRow(false, false)]
@@ -300,7 +316,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 7"));
-            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+            // A terminal import schedules durable cleanup for the next monitoring cycle.
+            await RunAsync<MonitorDownloadsV1>(host);
+            CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:0" }, usenet.Commands);
+            Assert.IsFalse(Directory.Exists(completed), "The verified imported source must be removed before client history cleanup.");
 
             // Once finished it is no longer in the queue to be imported again.
             using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import/files");
@@ -373,7 +392,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("fre", await host.ScalarAsync("SELECT array_to_string(\"ChosenAudioLanguages\", ',') FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE 'Other Movie%'"));
             Assert.AreEqual("ger", await host.ScalarAsync("SELECT array_to_string(\"ChosenSubtitleLanguages\", ',') FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE 'Other Movie%'"));
             Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"ChosenSubtitleLanguages\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE 'Example Movie%'"));
-            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+            // A terminal import schedules durable cleanup for the next monitoring cycle.
+            await RunAsync<MonitorDownloadsV1>(host);
+            CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:0" }, usenet.Commands);
+            Assert.IsFalse(Directory.Exists(Path.Combine(downloads.Path, "movies", Feature)));
         }
 
         // A download imported in parts keeps waiting with what was imported; it finishes when the person says so, and not before there is something imported.
@@ -412,8 +434,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, finished.Imported);
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
-            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
-            Assert.IsTrue(File.Exists(Path.Combine(downloads.Path, "movies", Feature, "third.mkv")), "A file nobody imported stays where it is.");
+            // Explicitly finishing a partial import must not silently delete unselected payloads.
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual(0, usenet.Commands.Count);
+            Assert.IsTrue(File.Exists(Path.Combine(downloads.Path, "movies", Feature, "third.mkv")),
+                "The unselected third video stays available for a later manual decision.");
         }
 
         // A language a person chose stays through the scan that analyses the file; the streams only decide for files nobody chose for.
@@ -603,7 +628,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
         }
 
-        // After an import the job leaves SABnzbd with its files; the connection can keep it, and an unreachable client never fails an import that worked.
+        // After a successful import the terminal job and completed source are cleaned up by default; the connection may opt out.
         [TestMethod]
         public async Task CompletedSabImport_RemovesItsJobFromTheClient_UnlessTheConnectionKeepsIt()
         {
@@ -613,7 +638,8 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RemovesCompleted\" FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 2"));
             await ImportClearFilmAsync(host, downloads, usenet);
-            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+            CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:0" }, usenet.Commands);
+            Assert.IsFalse(Directory.Exists(Path.Combine(downloads.Path, "movies", Feature)));
         }
 
         [TestMethod]
@@ -1253,7 +1279,10 @@ namespace Jularr.Backend.Tests
             usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/{{{Feature}}}"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
 
-            Assert.IsTrue(File.Exists(Path.Combine(completed, Feature + ".mkv")), "Jularr must not delete SABnzbd's completed source.");
+            Assert.IsTrue(File.Exists(Path.Combine(completed, Feature + ".mkv")),
+                "A download with unselected sample files must retain its source directory."); 
+            Assert.IsTrue(File.Exists(Path.Combine(completed, "sample.mkv")),
+                "Non-imported videos are retained, not silently deleted.");
             Assert.AreEqual("existing", File.ReadAllText(Path.Combine(library, "Example Movie (2020) [WEBDL-1080p].mkv")));
             Assert.IsFalse(File.Exists(Path.Combine(library, "Example Movie (2020) [DVD].mkv")));
             Assert.AreEqual("earlier", File.ReadAllText(Path.Combine(storage.Path, "1", "Movies", ".jularr-recycle", "Example Movie (2020)", "Example Movie (2020) [DVD].mkv")));
@@ -1548,7 +1577,7 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
             var seeded = await ReadProfilesAsync(host);
             var books = seeded.Single(profile => profile.MediaTypeId == MediaType.Book && profile.MediaSubtypeId == null && profile.IsDefault);
-            Assert.AreEqual(LanguageFallbackType.Original, books.LanguageFallback);
+            Assert.AreEqual(LanguageFallbackType.Any, books.LanguageFallback);
             Assert.AreEqual(0, books.LanguageOrder.Length);
 
             // The profile names the languages of the choice and the fallback.
@@ -1701,9 +1730,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, result.CreatedCount);
             using var library = await host.SendAsync(HttpMethod.Get, "/api/v1/library");
             var items = (await library.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items;
-            Assert.AreEqual(3, items.Count);
-            Assert.IsTrue(items.All(item => item.MediaStateTypeId == MediaStateType.Available));
-            var movieId = items.Single(item => item.Title == "Example Movie").Id;
+            Assert.AreEqual(0, items.Count, "Plex identities alone are not local playable files.");
+            var movieId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\" WHERE \"CanonicalTitle\" = 'Example Movie'"))!;
             using var details = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + movieId);
             Assert.AreEqual("https://app.plex.tv/desktop/#!/server/plexmachine1/details?key=%2Flibrary%2Fmetadata%2F11",
                 (await details.Content.ReadFromJsonAsync<Jularr.Backend.Data.User.Media.V1.WorkDetailsV1>())!.PlexUrl);
@@ -2145,6 +2173,14 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(expected, await ListAsync(WantedViewType.CutoffUnmet));
             Assert.AreEqual(5, (await ListAsync(WantedViewType.All)).Length);
 
+            using var counted = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/summary");
+            Assert.AreEqual(HttpStatusCode.OK, counted.StatusCode);
+            var summary = (await counted.Content.ReadFromJsonAsync<WantedSummaryV1>())!;
+            Assert.AreEqual(5, summary.TotalCount);
+            Assert.AreEqual(1, summary.MissingCount);
+            Assert.AreEqual(expected.Length, summary.CutoffUnmetCount);
+            Assert.AreEqual(1, summary.PausedCount);
+
             // The page offers the lists and keeps the chosen one.
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?PageNumber=1&View=CutoffUnmet");
             var html = await page.Content.ReadAsStringAsync();
@@ -2154,6 +2190,50 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "href=\"/Admin/Wanted/702\"");
             StringAssert.Contains(html, "View=CutoffUnmet&amp;handler=Pause&amp;wantedItemId=702");
             Assert.IsFalse(html.Contains("Good Film"));
+        }
+
+        [TestMethod]
+        public async Task WantedViews_UnitAvailability_CountsOnlyMissingMonitoredReleasedUnits()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES
+                    (701, 2, NULL, 'Complete'), (702, 2, NULL, 'Missing episode'),
+                    (703, 2, NULL, 'Future episode'), (704, 2, NULL, 'Unmonitored episode'),
+                    (705, 2, NULL, 'Missing file'), (706, 3, 2, 'Unknown volume release');
+                INSERT INTO "WantedItems" ("Id", "WorkId", "WantedPriorityTypeId")
+                SELECT "Id", "Id", CASE WHEN "Id" = 702 THEN 2 ELSE 1 END FROM "Works" WHERE "Id" BETWEEN 701 AND 706;
+                INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT "Id", "Id" FROM "Works" WHERE "Id" BETWEEN 701 AND 706;
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "Id", "Id", "Id" FROM "Works" WHERE "Id" BETWEEN 701 AND 706;
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number", "ReleasedOn", "IsMonitored")
+                SELECT work."Id" * 10 + number, work."Id", CASE WHEN work."Id" = 706 THEN 3 ELSE 2 END, number,
+                    CASE WHEN work."Id" = 706 AND number = 2 THEN NULL
+                         WHEN work."Id" = 703 AND number = 2 THEN current_date + 1 ELSE current_date - 1 END,
+                    NOT (work."Id" = 704 AND number = 2)
+                FROM "Works" AS work CROSS JOIN generate_series(1, 2) AS number WHERE work."Id" BETWEEN 701 AND 706;
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId")
+                SELECT "Id", "WorkId", "WorkId", "Id", 1 FROM "WorkUnits" WHERE "WorkId" BETWEEN 701 AND 706;
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "MissingSince")
+                SELECT root."Id", 'unit-' || asset."Id" || '.mkv', 1, now(), now(), asset."Id",
+                    CASE WHEN asset."WorkId" = 705 THEN now() END
+                FROM "MediaAssets" AS asset CROSS JOIN (SELECT "Id" FROM "LibraryRoots" ORDER BY "Id" LIMIT 1) AS root
+                WHERE asset."WorkId" BETWEEN 701 AND 706 AND (asset."WorkUnitId" % 10 = 1 OR asset."WorkId" = 701);
+                """);
+
+            using var missing = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted?pageSize=50&wantedViewTypeId=1");
+            Assert.AreEqual(HttpStatusCode.OK, missing.StatusCode, await missing.Content.ReadAsStringAsync());
+            var page = (await missing.Content.ReadFromJsonAsync<PageResult<WantedDetailsV1>>())!;
+            CollectionAssert.AreEqual(new long[] { 702, 705, 706 }, page.Items.Select(item => item.WorkId).Order().ToArray());
+            using var counted = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/summary");
+            Assert.AreEqual(HttpStatusCode.OK, counted.StatusCode);
+            var summary = (await counted.Content.ReadFromJsonAsync<WantedSummaryV1>())!;
+            Assert.AreEqual(6, summary.TotalCount);
+            Assert.AreEqual(3, summary.MissingCount);
+            Assert.AreEqual(0, summary.CutoffUnmetCount);
+            Assert.AreEqual(1, summary.HighCount);
+            Assert.AreEqual(0, summary.PausedCount);
         }
 
         // The queue is one row of filters: running (paused ones too), waiting for a person, importing, failed unseen, and finished; the tiles count the same states.
@@ -2208,6 +2288,15 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "handler=Retry&amp;operationId=5");
             StringAssert.Contains(html, "href=\"/Admin/Activity?Filter=Errors&amp;operation=5\"");
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "navigation-tabs\"|navigation-tabs ").Count, "One row of filters only.");
+            StringAssert.Contains(html, "class=\"view-switch\"");
+            StringAssert.Contains(html, "href=\"/Admin/Activity?Filter=History\"");
+            StringAssert.Contains(html, "href=\"/Admin/Activity?files=true\"");
+            using var filesView = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?files=true");
+            var filesViewHtml = await filesView.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, filesView.StatusCode, filesViewHtml);
+            StringAssert.Contains(filesViewHtml, "class=\"view-switch\"");
+            Assert.AreEqual(0, System.Text.RegularExpressions.Regex.Matches(filesViewHtml, "navigation-tabs\"|navigation-tabs ").Count,
+                "Files reuses the same toolbar without queue-only filter chips.");
             Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(html, "<dialog[^>]* open=\"open\""), "Only the entry the address names is open.");
             using var panel = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Filter=Errors&operation=5");
             var panelHtml = await panel.Content.ReadAsStringAsync();
@@ -2514,24 +2603,23 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Sabnzbd_UsesMatchingMediaTypeCategoryBeforeGenericOrOtherMediaTypes()
+        public async Task Sabnzbd_UsesHighestPriorityCompatibleMediaClient()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
             var sab = new FakeUsenet();
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, sab, razor: true);
 
-            // A series-only connection has better numerical priority than movies.
-            // A movie-only connection has worse numerical priority than the generic
-            // connection, but is explicitly selected for Movie acquisitions.
+            // The series-only connection is ineligible for Movie acquisitions.
+            // The movie SAB connection has the best numerical priority among compatible clients.
             foreach (var data in new[]
             {
                 new SaveAcquisitionConnectionDataV1("Native news", AcquisitionConnectionType.Usenet, null,
-                    null, true, 1, [], null, null, null, maxConnections: 1, host: "news.example.test", useSsl: false),
+                    null, true, 10, [], null, null, null, maxConnections: 1, host: "news.example.test", useSsl: false),
                 new SaveAcquisitionConnectionDataV1("Series SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
                     FakeUsenet.ClientKey, true, 1, [], "tv", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Series]),
                 new SaveAcquisitionConnectionDataV1("Movie SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
-                    FakeUsenet.ClientKey, true, 50, [], "films", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Movie])
+                    FakeUsenet.ClientKey, true, 1, [], "films", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Movie])
             })
             {
                 using var added = await host.SendAsync(HttpMethod.Post, Connections, data);

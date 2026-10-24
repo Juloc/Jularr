@@ -78,7 +78,7 @@ namespace Jularr.Frontend.Pages.Admin.Sources
         {
             _sources = await read.ExecuteAsync<BaseDataList<SourceCatalogItemV1>>(new SourceCatalogParametersV1(), HttpContext.RequestAborted);
             var settings = await downloadStorage.ExecuteAsync<DownloadStorageSettingsV1>(new DownloadStorageParametersV1(DownloadStorageArea.Direct), HttpContext.RequestAborted);
-            _directStorageReady = NativeDownloadStorageNotice.IsConfigured(settings);
+            _directStorageReady = settings.IsConfigured;
         }
     }
 }

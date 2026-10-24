@@ -57,7 +57,7 @@ namespace Jularr.Backend.Service.User.Media.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             // Persisted metadata of a Work the profile may open.
-            var sql = new SqlStatement();
+            var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 $$"""
                 SELECT
@@ -469,7 +469,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                     "WatchlistEntries" AS entry
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"
                     JOIN "Works" AS work ON work."Id" = entry."WorkId"
-                    {{(needsProgress ? WorkCardProjection.ProgressJoin : "")}}
+                    {{(needsProgress ? WorkCardProjection.PageProgressJoin : "")}}
                 WHERE
                     entry."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"

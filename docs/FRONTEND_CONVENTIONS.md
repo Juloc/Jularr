@@ -226,6 +226,8 @@ adds none of its own colours, radii, shadows or font sizes. Design follows the o
   the list's empty state and leads back. The page number is read from the address (`?pageNumber=2`); the links keep every other query value. A page with several paged lists gives each its own key
   (`.Paged(key: "files")` pages `?files=2`, the others keep their page); the pager of the primary list (the first, or the one marked `primary: true`) sits in the floating dock, every other list draws the same small
   pager under itself. The service call takes the same page number and size and returns exactly its rows; never a total, never an extra row.
+- Owner's decision 23 Oct: User lists use infinite scroll. The Library uses `content.Infinite(rows, 48, "p", ".library-grid")` from the same paging model and `InfiniteList.entry.ts`: append bounded server-rendered pages, keep a native Load more link, expose failures with a retry, and restore filters, loaded pages and scroll position on Back. History keeps only pagination state, never HTML. Admin lists retain their dock pager.
+  The Library defaults to actual present files (no metadata-only, Plex-only or Wanted-only titles). Optional availability choices union Available files, My requests and Other requests; active requests of all profiles are shared for now, under the existing profile/media visibility rules. Genre, audio/subtitle language, progress and minimum-rating filters combine with media type/year; choices within a multi-select combine with OR, different filters with AND. A separate request-sharing model is deferred.
 - Related admin list pages are joined by **one** row of section chips whose group is defined once (an entry of `AdminMenu`; the quality rules are panes of one address), above the list in a `ListToolbar` that may carry the list's one scope menu on its right; a page without filters of its own (the acquisition lists) has no other chips. Owner's decision 22 Oct: indexers, download clients, subtitle providers, release profiles and tags are wide `FeatureCard`s whose settings are inputs (`form.Save()`, saved by the page's pill; a key is masked and never echoed); the switch, test and search are direct actions, and on the connection pages the figures and cards are one `Region`. A `Modal` that the address opens (`?new=`, `?Type=`, `?delete=true`) with the list's address as `returnTo` is only for adding (with `form.Cancel()` and `form.Submit(...)`), for confirming a removal and for tools (the test search); the custom format keeps its dialog because its conditions need the room. There is no delay, waiting or minimum-age option on any acquisition page.
 
 Everything that changes colour with the theme follows the switch with `transition: color var(--transition)` (or the colour it changes), the wordmark and the mark included; no element has a
@@ -337,6 +339,12 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
 - Apply the resolved request culture around downstream rendering in the host
   middleware. Setting culture inside an awaited initialization method alone does
   not establish the caller's rendering culture. Never localize IDs or wire values.
+
+## Time and calendar dates
+
+- Persist absolute timestamps as UTC. Render them through `LocalTime` so the browser applies its own IANA zone, locale and daylight-saving rules; no `DateTime.ToLocalTime()` in Razor.
+- `DateOnly` release dates are civil dates and **never** UTC-converted. For Calendar and Work, compute the request's `Today` once using `BrowserTimeZone` and the browser's advisory timezone cookie; the browser corrects visible day markers/countdowns in place before requesting additional pages.
+- Timezone changes and local midnight must not trigger `location.reload()`, full-page replacement, layout jumps or periodic global scans. Synchronize the cookie before htmx navigation and only update the relevant text/classes. Keep UTC and timezone tests in the Frontend, Backend and Chromium suites.
 
 ## Asset ownership, build and caching (MANDATORY)
 

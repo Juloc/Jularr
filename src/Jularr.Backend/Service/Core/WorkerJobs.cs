@@ -83,6 +83,10 @@ namespace Jularr.Backend.Service.Core
             new("aniListRelations", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(32), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             // Every profile's own AniList list and progress; waits while Jularr is used, as the other syncs do.
             new("aniListSync", WorkerGroupType.Media, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(45), canPauseWhileUsed: true),
+            // Titles that came without a description and cover (a media server's sync names only title, year and ids) get them from the catalog, a few at a time.
+            new("metadataFill", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(28), canPauseWhileUsed: true),
+            // Titles with files and no target (a media server's sync) get a paused target, so every title page has the same buttons.
+            new("wantedTargets", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(26), canPauseWhileUsed: true),
             new("covers", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(35), canPauseWhileUsed: true),
             // Brings stored covers into the Owner's format, a few at a time, and only while nobody uses Jularr.
             new("coverBackfill", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(55), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
@@ -97,6 +101,7 @@ namespace Jularr.Backend.Service.Core
             new("readingCopies", WorkerGroupType.Derivation, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(25), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
 
             // Each catalog decides for itself whether it waits while Jularr is used.
+            new("discoverFeeds", WorkerGroupType.Catalog, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(8)),
             new("catalog", WorkerGroupType.Catalog, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(8)),
             new("resources", WorkerGroupType.Sampler, TimeSpan.FromMinutes(1), TimeSpan.Zero, canRunNow: false),
 

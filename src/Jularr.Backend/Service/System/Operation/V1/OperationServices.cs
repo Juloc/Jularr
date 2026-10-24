@@ -258,13 +258,10 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 && await AssignCatalogFoldersAsync(root.Id, root.MediaTypeId, storage, directory);
 
             // Books, manga and light novels: a folder whose title names one Work (here or in the catalog) is that Work.
-            if (root.MediaTypeId == MediaType.Book)
-            {
-                await AssignBookFoldersAsync(root.Id, root.MediaSubtypeId);
-            }
+            var unfinishedBooks = root.MediaTypeId == MediaType.Book && await AssignBookFoldersAsync(root.Id, root.MediaSubtypeId);
 
             await Context.ExecuteBatchAsync((ctx, ct) => ctx.UpdateOperationAsync(new OperationProgressData(Parameters.OperationId, processed, OperationStatusType.Completed), ct), CancellationToken);
-            if (unfinished)
+            if (unfinished || unfinishedBooks)
             {
                 // Titles still waiting for their catalog entry are taken by the next scan, which starts once this one is completed.
                 await Context.ExecuteBatchAsync(async (ctx, ct) =>
@@ -929,14 +926,35 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
         }
 
-        // The title of a book folder names its Work: the one Work of that title and subtype here, else the one catalog entry whose title has exactly the folder's
-        // words (the author, when named in the path, settles several such entries). Volumes keep their numbers, a single book is the whole Work.
-        private async Task AssignBookFoldersAsync(long libraryRootId, MediaSubtype? subtype)
+        // The title of a book folder names its Work: a Work here whose title the folder's words contain (a download's release name carries it), else the
+        // most relevant catalog entry with that title or with its title and author inside the path. Volumes keep their numbers, a single book is the whole Work.
+        // Returns whether folders were left because the catalog failed or the time was up, so that the next scan takes them.
+        private async Task<bool> AssignBookFoldersAsync(long libraryRootId, MediaSubtype? subtype)
         {
             var folders = new Dictionary<string, long?>(StringComparer.Ordinal);
             var unresolved = new Dictionary<string, string>(StringComparer.Ordinal);
             var lookups = Stopwatch.StartNew();
             var catalogLookups = 0;
+            var catalogFailures = 0;
+            var deferred = false;
+            var known = await Context.ExecuteBatchAsync((ctx, ct) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT work."Id", work."CanonicalTitle" AS "Title"
+                    FROM "Works" AS work
+                    WHERE work."MediaTypeId" = 3 AND work."MediaSubtypeId" IS NOT DISTINCT FROM @MediaSubtypeId
+                    UNION
+                    SELECT name."WorkId", name."Title"
+                    FROM "WorkTitles" AS name
+                    JOIN "Works" AS work ON work."Id" = name."WorkId"
+                    WHERE work."MediaTypeId" = 3 AND work."MediaSubtypeId" IS NOT DISTINCT FROM @MediaSubtypeId;
+                    """;
+                sql.Parameters.Add(new BookSubtypeData(subtype));
+                return ctx.ReadSql.ReadListAsync<BookWorkTitleData>(sql, ct);
+            }, CancellationToken);
+            var knownWords = known.Select(work => (work.Id, Words: TitleMatcher.SignificantWords(work.Title))).Where(work => work.Words.Count > 0).ToArray();
             for (var afterId = 0L; ;)
             {
                 var files = await Context.ExecuteBatchAsync((ctx, ct) =>
@@ -961,7 +979,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         _logger.LogWarning("Library scan {LibraryRootId}: the folder {Folder} names no single Work here or in the catalog, for example {Example}", libraryRootId, folder, example);
                     }
 
-                    return;
+                    return deferred && catalogLookups > 0;
                 }
 
                 foreach (var file in files)
@@ -976,17 +994,22 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     var key = file.RelativePath.Contains('/') ? file.RelativePath.Split('/')[0] : parsed.Title;
                     if (!folders.TryGetValue(key, out var workId))
                     {
-                        var catalogAllowed = !_bookCatalogUnavailable && (catalogLookups == 0 || lookups.Elapsed < LookupBudget);
-                        var (found, usedCatalog) = await FindBookWorkAsync(parsed.Title, subtype, file.RelativePath, catalogAllowed);
+                        var catalogAllowed = catalogFailures < 3 && (catalogLookups == 0 || lookups.Elapsed < LookupBudget);
+                        var (found, usedCatalog, why, failed) = await FindBookWorkAsync(parsed.Title, subtype, file.RelativePath, knownWords, catalogAllowed);
                         workId = found;
                         if (usedCatalog)
                         {
                             catalogLookups++;
+                            catalogFailures = failed ? catalogFailures + 1 : 0;
+
+                            // Open Library answers a burst of questions with errors; one question a second is welcome.
+                            await Task.Delay(TimeSpan.FromSeconds(1), CancellationToken);
                         }
 
                         if (workId is null)
                         {
-                            unresolved[key] = file.RelativePath;
+                            unresolved[key] = file.RelativePath + " (" + why + ")";
+                            deferred |= failed || !catalogAllowed;
                         }
 
                         folders[key] = workId;
@@ -1010,81 +1033,97 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
         }
 
-        private async Task<(long? WorkId, bool UsedCatalog)> FindBookWorkAsync(string title, MediaSubtype? subtype, string relativePath, bool catalogAllowed)
+        private static readonly string[] ReleaseNoise =
+        [
+            "retail", "epub", "ebook", "pdf", "mobi", "azw3", "repack", "proper", "german", "english", "swedish", "danish", "french", "spanish", "italian", "dutch",
+            "manga", "digital", "vol", "volume"
+        ];
+
+        // The words of a path or title that name the book: release tags, years and a trailing "-GROUP" are noise.
+        private static HashSet<string> BookWords(string value)
         {
-            // The one Work of that title and subtype that is already here.
-            var local = await Context.ExecuteBatchAsync((ctx, ct) =>
+            var words = TitleMatcher.SignificantWords(global::System.Text.RegularExpressions.Regex.Replace(value, @"-[A-Za-z0-9]+$", string.Empty));
+            words.RemoveWhere(word => ReleaseNoise.Contains(word, StringComparer.OrdinalIgnoreCase) || word.Length == 4 && word.All(char.IsAsciiDigit));
+            return words;
+        }
+
+        private async Task<(long? WorkId, bool UsedCatalog, string? Why, bool Failed)> FindBookWorkAsync(string title, MediaSubtype? subtype, string relativePath,
+            IReadOnlyList<(long Id, HashSet<string> Words)> knownWords, bool catalogAllowed)
+        {
+            // A Work here: its title is exactly the folder's words, else (two words or more) lies inside the path's words, when only one Work does.
+            var dot = relativePath.LastIndexOf('.');
+            var pathWords = BookWords(dot > 0 ? relativePath[..dot] : relativePath);
+            var wanted = BookWords(title);
+            var exact = knownWords.Where(work => work.Words.SetEquals(wanted)).Select(work => work.Id).Distinct().ToArray();
+            if (exact.Length == 1)
             {
-                var sql = new SqlStatement();
-                sql.Statement =
-                    """
-                    SELECT work."Id"
-                    FROM "Works" AS work
-                    WHERE work."MediaTypeId" = 3
-                        AND work."MediaSubtypeId" IS NOT DISTINCT FROM @MediaSubtypeId
-                        AND (lower(work."CanonicalTitle") = lower(@CanonicalTitle)
-                            OR EXISTS (SELECT 1 FROM "WorkTitles" AS name WHERE name."WorkId" = work."Id" AND lower(name."Title") = lower(@CanonicalTitle)))
-                    ORDER BY work."Id"
-                    LIMIT 2;
-                    """;
-                sql.Parameters.Add(new BookFolderMatchData(subtype, title));
-                return ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
-            }, CancellationToken);
-            if (local.Count == 1)
-            {
-                return (local[0].Id, false);
+                return (exact[0], false, null, false);
             }
 
-            if (local.Count > 1 || !catalogAllowed)
+            if (exact.Length == 0)
             {
-                return (null, false);
+                var inside = knownWords.Where(work => work.Words.Count >= 2 && work.Words.IsSubsetOf(pathWords)).Select(work => work.Id).Distinct().ToArray();
+                if (inside.Length == 1)
+                {
+                    return (inside[0], false, null, false);
+                }
+            }
+            else
+            {
+                return (null, false, "several Works here have that title", false);
             }
 
+            if (!catalogAllowed)
+            {
+                return (null, false, "the catalog is not asked now", false);
+            }
+
+            // The catalog: the folder's name, and for "Author - Title" the title part alone.
+            var query = string.Join(' ', title.Split([' ', '.', '_'], StringSplitOptions.RemoveEmptyEntries));
             IReadOnlyList<MetadataSearchResultV1> results;
             try
             {
-                results = await _catalog.SearchAsync(Context, MediaType.Book, subtype, title, null, CancellationToken);
+                results = await _catalog.SearchAsync(Context, MediaType.Book, subtype, query, null, CancellationToken);
+                if (results.Count == 0 && query.Contains(" - ", StringComparison.Ordinal))
+                {
+                    results = await _catalog.SearchAsync(Context, MediaType.Book, subtype, query[(query.LastIndexOf(" - ", StringComparison.Ordinal) + 3)..], null, CancellationToken);
+                }
             }
-            catch (ServiceUnavailableException)
+            catch (ServiceUnavailableException exception)
             {
-                _bookCatalogUnavailable = true;
-                return (null, false);
-            }
-
-            // Entries with exactly the folder's words as their title; several of them are told apart by an author the path names.
-            var wanted = TitleMatcher.SignificantWords(title);
-            var same = results.Where(result => TitleMatcher.SignificantWords(result.Title).SetEquals(wanted)
-                    || result.OriginalTitle is { } original && TitleMatcher.SignificantWords(original).SetEquals(wanted))
-                .DistinctBy(result => (result.Namespace, result.ExternalId)).ToArray();
-            if (same.Length > 1)
-            {
-                var dot = relativePath.LastIndexOf('.');
-                var pathWords = TitleMatcher.SignificantWords(dot > 0 ? relativePath[..dot] : relativePath);
-                same = [.. same.Where(result => result.Author is { Length: > 0 } author && TitleMatcher.SignificantWords(author).IsSubsetOf(pathWords))];
+                return (null, true, "the catalog is unavailable: " + exception.Message, true);
             }
 
-            if (same.Length != 1)
+            // Best first: exactly the folder's words as title with its author in the path, then the first (most relevant) entry with exactly that title,
+            // then an entry whose title and author both lie inside the path's words.
+            bool AuthorInPath(MetadataSearchResultV1 result) => result.Author is { Length: > 0 } author && BookWords(author).IsSubsetOf(pathWords);
+            bool SameTitle(MetadataSearchResultV1 result) => BookWords(result.Title).SetEquals(wanted)
+                || result.OriginalTitle is { } original && BookWords(original).SetEquals(wanted);
+            bool TitleInPath(MetadataSearchResultV1 result) => BookWords(result.Title) is { Count: > 0 } words && words.IsSubsetOf(pathWords);
+            var chosen = results.FirstOrDefault(result => SameTitle(result) && AuthorInPath(result))
+                ?? results.FirstOrDefault(SameTitle)
+                ?? results.FirstOrDefault(result => TitleInPath(result) && AuthorInPath(result));
+            if (chosen is null)
             {
-                return (null, true);
+                return (null, true, results.Count + " catalog entries, none with that title", false);
             }
 
-            if (same[0].WorkId is { } known)
+            if (chosen.WorkId is { } existing)
             {
-                return (known, true);
+                return (existing, true, null, false);
             }
 
             try
             {
-                return (await _catalog.ImportAsync(Context, MediaType.Book, subtype, same[0].Namespace, same[0].ExternalId, CancellationToken), true);
+                return (await _catalog.ImportAsync(Context, MediaType.Book, subtype, chosen.Namespace, chosen.ExternalId, CancellationToken), true, null, false);
             }
             catch (Exception exception) when (exception is KeyNotFoundException or DataValidationException)
             {
-                return (null, true);
+                return (null, true, "the import of " + chosen.Namespace + " " + chosen.ExternalId + " failed: " + exception.GetType().Name, false);
             }
-            catch (ServiceUnavailableException)
+            catch (ServiceUnavailableException exception)
             {
-                _bookCatalogUnavailable = true;
-                return (null, true);
+                return (null, true, "the catalog is unavailable: " + exception.Message, true);
             }
         }
 

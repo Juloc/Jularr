@@ -69,12 +69,35 @@ Anna's Archive stellt seine Seiten hinter eine Prüfung, die nur ein Browser bes
 solche Seiten mit einem echten Chrome oder Chromium, den es **nicht** selbst mitbringt: das Image
 bleibt schlank, der Browser kommt später dazu.
 
-Im Container, einmal je Container (der Browser landet in der Schicht, sein Profil im Volume):
+Der Browser wird im bestehenden Jularr-Container installiert, nicht in einem Sidecar.
+**Wichtig ist die Reihenfolge:** Zuerst `JULARR_BROWSER_ADDRESS=http://127.0.0.1:9222`
+in der `.env` setzen und die Konfiguration anwenden; **danach** Chrome installieren und starten.
 
 ```bash
-docker compose exec -u root jularr jularr-browser install   # Browser und Bibliotheken
-docker compose exec -d jularr jularr-browser run            # startet ihn auf Port 9222
+docker compose up -d jularr                             # Konfiguration vor der Installation anwenden
+docker compose exec -u root jularr jularr-browser install # Browser und Bibliotheken installieren
+docker compose exec -d jularr jularr-browser run          # auf internem Port 9222 starten
 ```
+
+Nach diesen Schritten **kein** `docker compose up --force-recreate` ausführen:
+Der Browser ist derzeit nur in der beschreibbaren Containersicht installiert.
+`docker compose restart` erhält zwar die Installation, beendet aber den separat
+gestarteten Browserprozess; `jularr-browser run` muss danach erneut gestartet werden.
+Ein Redeploy/Update, das den Container neu erstellt, benötigt derzeit eine erneute
+Installation. Das Browserprofil bleibt im persistenten `/data/browser`-Volume.
+Der langfristige, ohne erneute Installation zuverlässige Installer ist in
+[#1550](https://github.com/Juloc/Jularr/issues/1550) erfasst.
+
+Unter `/Admin/Browser` erscheint der Verbindungsstatus. Er zeigt „verbunden“ erst
+nach erfolgreicher Browserverbindung, nicht unmittelbar nach dem Containerstart.
+Jularr verwendet den verbundenen Browser bei erkannten Quellprüfungen automatisch.
+Die Installation benötigt Container-Root; der als `app` laufende Webprozess darf
+keine Systempakete installieren. Deshalb zeigt die Adminseite die Befehle statt eines
+unsicheren Root-Installationsbuttons.
+
+Der Browser-Debugging-Port bleibt innerhalb des Containers; Compose veröffentlicht
+keinen zusätzlichen Browser-Port. Ein nach außen erreichbarer DevTools-Port wäre ein
+Sicherheitsrisiko.
 
 `Browser:RemoteAddress` (z. B. `http://127.0.0.1:9222`) lässt Jularr einen Browser benutzen, der
 schon läuft – auch einen auf einem anderen Rechner. `Browser:Path` startet einen eigenen Browser
@@ -431,6 +454,8 @@ Indexer verwaltet werden (OpenSubtitles.com, SubDL), und legt sie als `<Video>.<
 Ihre Verträge stehen in [BACKEND_NEXT](docs/BACKEND_NEXT.md).
 Razor-Integrationstests verwenden ausschließlich isoliertes PostgreSQL
 und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste.
+
+Bei Buch-Requests ist die Sprache eine Zulassungsregel: die gewünschten Sprachen werden vor Quellenpriorität ausgewählt; im flexiblen Standard die Originalsprache und danach jede andere Sprache folgen; der strikte Modus akzeptiert nur gewünschte Sprachen. Unbekannte oder nicht erlaubte Sprachen bleiben für die manuelle Prüfung sichtbar; fehlende Sprachangaben werden nicht als Originalsprache angenommen. Die Suche wertet weitere Titelvarianten aus, bevor sie auf eine Fallbacksprache zurückfällt.
 
 Arr+ betreibt Jularr vollständig selbst. Nativer Downloader und optionale externe
 Downloader wie SABnzbd verwenden dieselbe Pipeline. Der native Downloader nutzt

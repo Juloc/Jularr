@@ -10,6 +10,16 @@ namespace Jularr.Backend.Logic.Acquisition
 {
     internal static partial class ImportPlacementLogic
     {
+        // Deleting a finished client's source is safe only if the import accounted for every file.
+        public static bool AllSourceFilesSelected(IEnumerable<string> sourceFiles, IEnumerable<string> selectedFiles)
+        {
+            var sources = sourceFiles.ToArray();
+            var selected = selectedFiles.ToHashSet(StringComparer.Ordinal);
+            // An empty or incomplete inventory never authorizes deleting a client's source.
+            return sources.Length > 0 && selected.Count > 0
+                && sources.All(path => !string.IsNullOrWhiteSpace(path) && selected.Contains(path));
+        }
+
         // Download bookkeeping that never belongs in a library.
         private static readonly HashSet<string> ReleaseNoise = [".par2", ".sfv", ".nfo", ".srr", ".url", ".diz", ".nzb"];
 

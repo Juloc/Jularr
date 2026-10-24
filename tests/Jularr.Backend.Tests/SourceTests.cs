@@ -83,18 +83,11 @@ namespace Jularr.Backend.Tests
                 25, null, null, null, null));
             Assert.AreEqual(HttpStatusCode.OK, bare.StatusCode, await bare.Content.ReadAsStringAsync());
             StringAssert.Contains(html, "/Admin/Acquisition?Type=AnnasArchive");
-        }
 
-        [TestMethod]
-        public async Task AnnasArchive_ExistingMirrorIsAlreadyConfigured()
-        {
-            using var storage = new TemporaryDirectory();
-            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
-            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
-                "https://annas-archive.pk", null, true, 50, [], null, null, null));
-            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
-            var catalog = await ReadCatalogAsync(host);
-            Assert.IsTrue(catalog.Single(item => item.Key == "annasarchive").IsConfigured);
+            using var browserPage = await host.SendAsync(HttpMethod.Get, "/Admin/Browser");
+            var browserHtml = await browserPage.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, browserPage.StatusCode, browserHtml);
+            StringAssert.Contains(browserHtml, "docker compose exec -u root jularr jularr-browser install");
         }
 
         [TestMethod]
@@ -164,6 +157,18 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, sources.SignedHits);
             Assert.IsFalse(sources.AuthorizationSeenBy.Contains("cdn.example.test"));
             Assert.IsTrue(sources.AuthorizationSeenBy.Contains("opds.example.test"));
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_ExistingMirrorIsAlreadyConfigured()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas-archive.pk", null, true, 50, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var catalog = await ReadCatalogAsync(host);
+            Assert.IsTrue(catalog.Single(item => item.Key == "annasarchive").IsConfigured);
         }
 
         [TestMethod]

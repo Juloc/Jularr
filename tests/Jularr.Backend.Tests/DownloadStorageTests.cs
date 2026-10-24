@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Enums.Storage;
+using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Storage;
 using Jularr.Backend.Service.Core;
@@ -16,6 +18,67 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class DownloadStorageTests
     {
+        private static readonly string[] AutomountedNas =
+        [
+            "1897 732 0:80 / / rw,relatime - overlay overlay rw",
+            "1908 1897 8:2 /mnt /mnt rw,relatime master:1 - ext4 /dev/sda2 rw",
+            "1909 1908 0:41 / /mnt/arr_bay4_media rw,relatime master:20 - autofs systemd-1 rw",
+            "1911 1909 0:520 / /mnt/arr_bay4_media rw,relatime master:479 - cifs //nas/media rw"
+        ];
+
+        [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public void FilesystemIdentity_AutomountedNas_UsesVisibleCifsRegardlessOfLineOrder(bool reverse)
+        {
+            var mounts = reverse ? AutomountedNas.Reverse().ToArray() : AutomountedNas;
+            var identity = StorageFileSystem.DownloadFilesystemIdentity("/mnt/arr_bay4_media/downloads/incomplete", mounts);
+            Assert.IsNotNull(identity);
+            Assert.IsTrue(identity.StartsWith("cifs:", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
+        [DataRow(false, false)]
+        [DataRow(false, true)]
+        [DataRow(true, false)]
+        [DataRow(true, true)]
+        public void FilesystemIdentity_AutomountedNas_PreservesExistingFingerprintsAcrossRemounts(bool includeDirectory, bool includeMountPoint)
+        {
+            var mounted = AutomountedNas.Where(line => !line.StartsWith("1909 ", StringComparison.Ordinal)).ToArray();
+            var remounted = AutomountedNas.Select(line => line.Replace("1911 1909", "42 1909", StringComparison.Ordinal)).ToArray();
+            const string path = "/mnt/arr_bay4_media/downloads/complete";
+            var existing = StorageFileSystem.DownloadFilesystemIdentity(path, mounted, includeDirectory, includeMountPoint);
+            Assert.IsNotNull(existing);
+            Assert.AreEqual(existing, StorageFileSystem.DownloadFilesystemIdentity(path, AutomountedNas, includeDirectory, includeMountPoint));
+            Assert.AreEqual(existing, StorageFileSystem.DownloadFilesystemIdentity(path, remounted, includeDirectory, includeMountPoint));
+        }
+
+        [TestMethod]
+        public void FilesystemIdentity_UnmountedAutomount_DoesNotFallBackToTheVmDisk()
+        {
+            Assert.IsNull(StorageFileSystem.DownloadFilesystemIdentity("/mnt/arr_bay4_media/downloads/incomplete", AutomountedNas[..3]));
+        }
+
+        [TestMethod]
+        [DataRow("tmpfs")]
+        [DataRow("overlay")]
+        [DataRow("autofs")]
+        public void FilesystemIdentity_CoveredCifs_DoesNotAcceptTheHiddenNas(string filesystem)
+        {
+            string[] mounts = [.. AutomountedNas, $"1912 1911 0:521 / /mnt/arr_bay4_media rw - {filesystem} covered rw"];
+            Assert.IsNull(StorageFileSystem.DownloadFilesystemIdentity("/mnt/arr_bay4_media/downloads/incomplete", mounts));
+        }
+
+        [TestMethod]
+        public void FilesystemIdentity_ChildOfCoveredAutomount_IsNotVisibleThroughCifs()
+        {
+            string[] mounts = [.. AutomountedNas, "1912 1909 8:3 / /mnt/arr_bay4_media/downloads rw - ext4 /dev/old-disk rw"];
+            var path = "/mnt/arr_bay4_media/downloads/incomplete";
+            var visible = StorageFileSystem.DownloadFilesystemIdentity(path, AutomountedNas.Where(line => !line.StartsWith("1909 ", StringComparison.Ordinal)).ToArray());
+            Assert.IsNotNull(visible);
+            Assert.AreEqual(visible, StorageFileSystem.DownloadFilesystemIdentity(path, mounts));
+        }
+
         private static DownloadStoragePaths Paths(string root, long? jobLimit = null, long? workspaceLimit = null)
         {
             var incomplete = Directory.CreateDirectory(Path.Combine(root, "Incomplete")).FullName;
@@ -23,6 +86,45 @@ namespace Jularr.Backend.Tests
             return new DownloadStoragePaths(new DownloadStorageSettingsData(DownloadStorageArea.Direct, 1, "Incomplete", StorageFileSystem.DownloadFilesystemIdentity(incomplete),
                 1, "Complete", StorageFileSystem.DownloadFilesystemIdentity(complete), 0, jobLimit, workspaceLimit, 2, 1, Guid.NewGuid()),
                 Path.Combine(incomplete, "workspace"), Path.Combine(complete, "workspace"), new DownloadStorageReservations());
+        }
+
+        [TestMethod]
+        public async Task JobWorkspace_MediaAndJobIdAreStableAcrossDownloadAndImport()
+        {
+            using var folder = new TemporaryDirectory();
+            var paths = Paths(folder.Path);
+            var book = await paths.PrepareIncompleteAsync(41, CancellationToken.None, MediaType.Book);
+            Assert.IsTrue(book.EndsWith(Path.Combine("books", "j-41"), StringComparison.Ordinal));
+            File.WriteAllText(Path.Combine(book, "novel.epub"), "ebook");
+            var complete = await paths.CompleteAsync(41, book, null, CancellationToken.None, MediaType.Book);
+            Assert.IsTrue(complete.EndsWith(Path.Combine("books", "j-41"), StringComparison.Ordinal));
+            Assert.IsTrue(File.Exists(Path.Combine(complete, "novel.epub")));
+            Assert.IsFalse(Directory.Exists(book));
+
+            var anime = await paths.PrepareIncompleteAsync(42, CancellationToken.None, MediaType.Series, MediaSubtype.Anime);
+            Assert.IsTrue(anime.EndsWith(Path.Combine("anime", "j-42"), StringComparison.Ordinal));
+            Assert.AreEqual("tv", DownloadWorkspaceLayout.Category(MediaType.Series, null));
+            Assert.AreEqual("manga", DownloadWorkspaceLayout.Category(MediaType.Book, MediaSubtype.Manga));
+
+            paths.RemoveCompleted(41);
+            paths.RemoveCompleted(42);
+            Assert.IsFalse(Directory.Exists(complete));
+            Assert.IsFalse(Directory.Exists(anime));
+        }
+
+        [TestMethod]
+        public async Task JobWorkspace_LegacyNativeJobsRemainResolvableAndCleanable()
+        {
+            using var folder = new TemporaryDirectory();
+            var paths = Paths(folder.Path);
+            var legacy = Directory.CreateDirectory(Path.Combine(paths.IncompleteRoot, "123")).FullName;
+            var resumed = await paths.PrepareIncompleteAsync(123, CancellationToken.None, MediaType.Book);
+            Assert.AreEqual(legacy, resumed);
+            File.WriteAllText(Path.Combine(resumed, "book.epub"), "ebook");
+            var completed = await paths.CompleteAsync(123, resumed, null, CancellationToken.None, MediaType.Book);
+            Assert.IsTrue(File.Exists(Path.Combine(completed, "book.epub")));
+            paths.RemoveCompleted(123);
+            Assert.IsFalse(Directory.Exists(completed));
         }
 
         [TestMethod]
@@ -179,6 +281,7 @@ namespace Jularr.Backend.Tests
             using var empty = await host.SendAsync(HttpMethod.Get, route);
             Assert.AreEqual(HttpStatusCode.OK, empty.StatusCode, await empty.Content.ReadAsStringAsync());
             var initial = (await empty.Content.ReadFromJsonAsync<DownloadStorageSettingsV1>())!;
+            Assert.IsFalse(initial.IsConfigured);
             Assert.IsNull(initial.IncompleteStorageMountId);
             Assert.IsNull(initial.FreeSpaceReserveBytes);
             Assert.IsNull(initial.MaxJobBytes);
@@ -192,6 +295,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, confirmed.StatusCode, await confirmed.Content.ReadAsStringAsync());
             using var reread = await host.SendAsync(HttpMethod.Get, route);
             var saved = (await reread.Content.ReadFromJsonAsync<DownloadStorageSettingsV1>())!;
+            Assert.IsTrue(saved.IsConfigured);
             Assert.AreEqual(mountId, saved.IncompleteStorageMountId);
             Assert.AreEqual("Complete", saved.CompletePath);
             Assert.AreEqual(0L, saved.FreeSpaceReserveBytes);
@@ -204,7 +308,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, removal.StatusCode, await removal.Content.ReadAsStringAsync());
             StringAssert.Contains(await removal.Content.ReadAsStringAsync(), "in_use");
             using var direct = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/downloads/2");
-            Assert.IsNull((await direct.Content.ReadFromJsonAsync<DownloadStorageSettingsV1>())!.IncompleteStorageMountId);
+            var directSettings = (await direct.Content.ReadFromJsonAsync<DownloadStorageSettingsV1>())!;
+            Assert.IsFalse(directSettings.IsConfigured);
+            Assert.IsNull(directSettings.IncompleteStorageMountId);
 
             using var stale = await host.SendAsync(HttpMethod.Post, route,
                 new SaveDownloadStorageDataV1(mountId, "Incomplete", mountId, "Complete", 0, null, null, 2, initial.Version, true));
