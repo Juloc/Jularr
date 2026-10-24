@@ -578,27 +578,24 @@ namespace Jularr.Frontend.Pages.User.Reader
         // The book's highlights in reading order; each leads to its passage and can go without the script.
         private IUiComponent Notes(int index)
         {
+            var div = new Div(Bookmarks(false), NoteEntries(index)).Class("reader__panel").Attribute("data-panel", "notes").Attribute("aria-label", texts["reader.notes"]);
+            return NotesPage > 1 ? div : div.Attribute("hidden", "hidden");
+        }
+
+        private IUiComponent NoteEntries(int index)
+        {
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            var panel = new List<IUiComponent> { Bookmarks(false) };
-            if (_notes is not { Items.Count: > 0 } notes)
-            {
-                // A later empty page leads back.
-                panel.Add(new P(new Text("reader.notesEmpty")).Paged(0, key: "n"));
-            }
-            else
-            {
-                panel.Add(new Ul([.. notes.Items.Select(note => new Li([
+            var notes = _notes?.Items ?? [];
+            var entries = new Ul([.. notes.Select(note => new Li([
                     new A(new ValueText(note.Quote)).Class("reader__note-quote").Attribute("data-color", note.HighlightColorTypeId.ToString())
                         .Attribute("href", "?s=" + note.SectionIndex.ToString(CultureInfo.InvariantCulture) + "&b=" + note.StartBlock.ToString(CultureInfo.InvariantCulture)),
                     .. note.Note is { } text ? new IUiComponent[] { new P(new ValueText(text)).Class("reader__note-text") } : [],
                     new Form<ReadingAnnotationParametersV1>(form => form.Submit("reader.deleteNote"),
                         "/Read/" + Id.ToString(CultureInfo.InvariantCulture) + "?handler=DeleteNote&s=" + index.ToString(CultureInfo.InvariantCulture) + "&noteId=" + note.Id.ToString(CultureInfo.InvariantCulture), csrf,
-                        new ReadingAnnotationParametersV1(Id, note.Id))]).Class("reader__note"))]).Class("reader__notes"));
-                panel.Add(new Span().Paged(notes.Items.Count, notes.PageSize, "n"));
-            }
-
-            var div = new Div([.. panel]).Class("reader__panel").Attribute("data-panel", "notes").Attribute("aria-label", texts["reader.notes"]);
-            return NotesPage > 1 ? div : div.Attribute("hidden", "hidden");
+                        new ReadingAnnotationParametersV1(Id, note.Id))]).Class("reader__note").Attribute("data-list-key", note.Id.ToString(CultureInfo.InvariantCulture)))]).Class("reader__notes");
+            return new Div(entries,
+                notes.Count == 0 ? new P(new Text("reader.notesEmpty")) : new Span(),
+                new Span().Infinite(notes.Count, 48, "n", ".reader__notes"));
         }
 
         // The profile's places in the book in reading order; the script adds and removes them.
@@ -659,6 +656,17 @@ namespace Jularr.Frontend.Pages.User.Reader
         }
 
         private static string PagePath(int index) => ":page/" + index.ToString("D5", CultureInfo.InvariantCulture);
+
+        // A list read checks the same source visibility without reopening or preparing the book.
+        public async Task<IActionResult> OnGetNotesAsync()
+        {
+            var ct = HttpContext.RequestAborted;
+            await readSource.ExecuteAsync<ReadingSourceV1>(new ReadingAssetParametersV1(Id), ct);
+            _notes = await readNotes.ExecuteAsync<PageResult<ReadingAnnotationV1>>(new ReadingAnnotationsParametersV1(Id, Math.Max(1, NotesPage), 48), ct);
+            PagingScope.Begin(Request, assets);
+            try { return Partial("_UiComponent", NoteEntries(SectionIndex ?? 0)); }
+            finally { PagingScope.End(); }
+        }
 
         public async Task<IActionResult> OnGetAsync()
         {
@@ -758,7 +766,7 @@ namespace Jularr.Frontend.Pages.User.Reader
             _offsets = await readOffsets.ExecuteAsync<BaseDataList<ReadingSectionOffsetV1>>(new ReadingDocumentParametersV1(_document.DocumentId), ct);
             _readerSettings = await readSettings.ExecuteAsync<ReaderSettingsV1>(new ReaderSettingsParametersV1(), ct);
             _marks = await readMarks.ExecuteAsync<BaseDataList<ReadingAnnotationV1>>(new ReadingSectionAnnotationsParametersV1(Id, index), ct);
-            _notes = await readNotes.ExecuteAsync<PageResult<ReadingAnnotationV1>>(new ReadingAnnotationsParametersV1(Id, Math.Max(1, NotesPage)), ct);
+            _notes = await readNotes.ExecuteAsync<PageResult<ReadingAnnotationV1>>(new ReadingAnnotationsParametersV1(Id, Math.Max(1, NotesPage), 48), ct);
             if (Query is { Length: > 0 })
             {
                 _hits = await search.ExecuteAsync<BaseDataList<ReadingSearchHitV1>>(new ReadingSearchParametersV1(_document.DocumentId, Query), ct);
