@@ -25,10 +25,14 @@ export function timeZoneCookieHeader(cookies: string, zone: string | undefined, 
     return `${BROWSER_TIME_ZONE_COOKIE}=${zone}; Path=/; Max-Age=31536000; SameSite=Lax${isHttps ? "; Secure" : ""}`;
 }
 
-export function isDateSensitivePage(pathname: string): boolean {
-    return /^\/calendar\/?$/i.test(pathname) || /^\/admin\/works\/\d+\/?$/i.test(pathname);
-}
-
 export function localTodayIso(date: Date): string {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+// Release dates are civil dates: use UTC only for day-number arithmetic, never for display conversion.
+export function releaseCountdown(releasedOn: string, today: string, template: string, fallback: string): string {
+    const valid = /^\d{4}-\d{2}-\d{2}$/;
+    if (!valid.test(releasedOn) || !valid.test(today)) return fallback;
+    const days = Math.round((Date.parse(releasedOn + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86_400_000);
+    return days >= 1 && days <= 14 ? template.replace("{0}", String(days)) : fallback;
 }

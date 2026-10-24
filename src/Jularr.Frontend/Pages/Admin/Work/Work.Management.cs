@@ -15,6 +15,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
     public sealed partial class WorkModel
     {
         // Columns of the unit table in their default order; the ones after "quality" start hidden.
+        private DateOnly? _today;
+
+        private DateOnly Today => _today ??= BrowserTimeZone.Today(HttpContext.Request);
+
         private static readonly string[] UnitColumns = ["monitored", "number", "title", "aired", "languages", "group", "size", "status", "quality", "languagesIso", "languagesNames", "path", "codec", "range"];
         private static readonly string[] VolumeColumns = ["monitored", "number", "title", "released", "format", "pages", "group", "size", "status", "quality", "path"];
         private static readonly string[] EditionColumns = ["title", "format", "group", "size", "quality", "path"];
@@ -267,7 +271,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         {
             var columns = ColumnsOf(work);
             var isVolume = work.MediaTypeId == MediaType.Book;
-            var today = BrowserTimeZone.Today(HttpContext.Request);
+            var today = Today;
             var rows = new List<IUiComponent>();
             var strips = new List<IUiComponent>();
             foreach (var episode in episodes)
@@ -557,7 +561,18 @@ namespace Jularr.Frontend.Pages.Admin.Work
             {
                 if (unit.ReleasedOn is null) return new Span(new Text("work.status.tba")).Class("work-status work-status--off");
                 var days = unit.ReleasedOn.Value.DayNumber - today.DayNumber;
-                if (days is >= 1 and <= 14) return new Span(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.status.airsIn"], days))).Class("work-status work-status--off");
+                var label = days is >= 1 and <= 14 ? string.Format(CultureInfo.CurrentCulture, texts["work.status.airsIn"], days) : texts["work.status.Unaired"];
+                // Reserve the longest translated countdown and fallback once. A date change updates
+                // only the text overlay, never the pill width or the table's column sizing.
+                var maximum = string.Format(CultureInfo.CurrentCulture, texts["work.status.airsIn"], 88);
+                return new Span(
+                    new Span(new ValueText(label)).Class("work-status__label"),
+                    new Span(new ValueText(maximum)).Class("work-status__measure").Attribute("aria-hidden", "true"),
+                    new Span(new ValueText(texts["work.status.Unaired"])).Class("work-status__measure").Attribute("aria-hidden", "true"))
+                    .Class("work-status work-status--off work-status--dated")
+                    .Attribute("data-work-released-on", unit.ReleasedOn.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
+                    .Attribute("data-work-airs-in", texts["work.status.airsIn"])
+                    .Attribute("data-work-unaired", texts["work.status.Unaired"]);
             }
 
             return new Span(new Text(key)).Class("work-status work-status--" + tone);
