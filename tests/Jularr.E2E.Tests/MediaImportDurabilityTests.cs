@@ -96,7 +96,7 @@ namespace Jularr.E2E.Tests
                     Assert.Fail("The resumed import failed: " + status.GetProperty("error").ToString());
                 if (status.GetProperty("state").GetString() == "Completed")
                 {
-                    Assert.AreEqual(count, status.GetProperty("processed").GetInt64());
+                    Assert.AreEqual((long)count, status.GetProperty("processed").GetInt64());
                     Assert.AreEqual(count, status.GetProperty("rows").GetArrayLength());
                     completed = true;
                     break;
