@@ -18,24 +18,50 @@
         &-heading { margin: 6px 0 0; font-size: var(--text-body); }
     }
 
-    // Give every advanced module a visible card, like the Admin module page.
-    // Group names remain for navigation, but nothing is collapsed by default.
+    // Seven compact, closed-by-default topic sections keep the first setup
+    // view short. Native details/summary handles mouse, keyboard and touch.
     .option-groups--extras {
         grid-template-columns: minmax(0, 1fr);
+
+        .option-group[data-has-enabled="true"] > .option-group__head [data-option-count] {
+            border-color: var(--accent-edge);
+            background: var(--accent-soft);
+            color: var(--accent-text);
+        }
+
         .option-group__body {
             grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
             gap: 10px;
             padding-top: 12px;
         }
+
         .option-group__body > .ui-form__row > .option-row {
             min-height: 100%;
             padding: 12px 13px;
             border: 1px solid var(--border);
             border-radius: var(--radius-inner);
+
+            // Enabled cards have a subtle accent tint without changing size.
+            &:has(input[type="checkbox"]:checked) {
+                border-color: var(--accent-edge);
+                background: var(--accent-soft);
+            }
         }
         .option-group__body > .ui-form__row + .ui-form__row > .option-row {
             border-top: 1px solid var(--border);
             padding-top: 12px;
+        }
+
+        // Names and explanations are real wrapping text, not hover-only tips.
+        // No cropped descriptions, including on touch devices.
+        .option-row__text .truncated__text {
+            overflow: visible;
+            overflow-wrap: anywhere;
+            text-overflow: clip;
+            white-space: normal;
+        }
+        .option-row__text .truncated--clipped:is(:hover, :focus, :focus-within) > .truncated__tip {
+            display: none;
         }
     }
 }
