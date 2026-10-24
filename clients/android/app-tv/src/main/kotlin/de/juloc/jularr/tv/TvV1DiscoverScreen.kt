@@ -203,7 +203,7 @@ internal fun TvV1DiscoverScreen(
                     Text("In der Bibliothek öffnen")
                 }
             } else {
-                Text("Dieser Titel ist noch kein lokales Jularr-Work. Es wird keine ID erfunden.")
+                Text("Dieser Titel ist noch nicht in deiner Bibliothek verfügbar.")
             }
             Button(onClick = ::closeDetails) { Text("Zurück") }
         }
