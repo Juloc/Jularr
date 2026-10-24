@@ -6,7 +6,7 @@ import ts from 'typescript';
 
 const source = readFileSync(resolve(import.meta.dirname, '../Modules/Reader/BookGeometry.ts'), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
-const { foldPaper, curlPaper, paperSegments, paperShadow, bookDimensions, paperColour, paperProfile, paperOutline, printPlacement, simplifyOutline, shadowPenumbra } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
+const { foldPaper, curlPaper, paperSegments, paperShadow, bookDimensions, paperColour, paperProfile, paperOutline, printPlacement, paperInkPose, simplifyOutline, shadowPenumbra } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
 const area = polygon => Math.abs(polygon.reduce((sum, a, i) => {
     const b = polygon[(i + 1) % polygon.length];
     return sum + a.x * b.y - a.y * b.x;
@@ -292,4 +292,36 @@ test('vertical peels remain responsive and the rounded fold retains every bound 
     const soft = curlPaper(width, height, fold, 24, 14, 16);
     const round = curlPaper(width, height, fold, 24, 14, 16, undefined, 1, false);
     assert.ok(soft.rise < round.rise * .85, 'The held-paper shoulder is flatter than a semicircular roller.');
+});
+
+test('curved native ink follows the paper crown without changing line lengths or page totals', () => {
+    const width = 620, glyphWidth = 19;
+    for (const count of [320, 1000, 1500, 2500, 4000]) {
+        for (const read of [1, count / 2, count]) {
+            const dimensions = bookDimensions(count, 100, read, 22);
+            const originalLeaves = dimensions.leaves, originalTotal = dimensions.totalMm;
+            for (const side of ['left', 'right']) {
+                const depth = side === 'left' ? dimensions.leftMm : dimensions.rightMm;
+                const profile = paperProfile(depth, dimensions.centreMm, 24, 14);
+                const contour = paperOutline(profile).slice(0, 41);
+                for (const x of [22, 46, 83, 150, 310, 440, 530]) {
+                    const pose = paperInkPose(profile, side, width, x, glyphWidth);
+                    assert.ok(Number.isFinite(pose.y) && Number.isFinite(pose.angle));
+                    assert.ok(Math.abs(pose.angle) < 35, 'Native glyphs should only rotate with the shallow paper slope.');
+                    const screenX = x + glyphWidth / 2;
+                    const u = (side === 'left' ? width - screenX : screenX) / width;
+                    let i = 1;
+                    while (i < contour.length - 1 && contour[i].x < u) i++;
+                    const a = contour[i - 1], b = contour[i];
+                    const t = Math.max(0, Math.min(1, (u - a.x) / (b.x - a.x)));
+                    const edge = ((a.y + (b.y - a.y) * t) * (profile.height + profile.lift) - profile.lift) * width / 148;
+                    const inkTop = (24 - profile.footerLift * width / 148) + pose.y;
+                    assert.ok(Math.abs(inkTop - edge - 24) < .000001,
+                        `A printed glyph must retain its 24px top inset: ${count}/${read}/${side}/${x}`);
+                }
+            }
+            assert.equal(bookDimensions(count, 100, read, 22).leaves, originalLeaves);
+            assert.equal(bookDimensions(count, 100, read, 22).totalMm, originalTotal);
+        }
+    }
 });
