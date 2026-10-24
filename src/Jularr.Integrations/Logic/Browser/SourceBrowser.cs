@@ -64,7 +64,7 @@ namespace Jularr.Integrations.Logic.Browser
             _downloads = Path.Combine(options.ProfilePath, "downloads");
         }
 
-        private string? BrowserPath => _path ?? (string.IsNullOrWhiteSpace(_options.Path) && string.IsNullOrWhiteSpace(_options.RemoteAddress)
+        private string? BrowserPath => _path ?? (_options.Path is null && string.IsNullOrWhiteSpace(_options.RemoteAddress)
             ? BrowserPackages.InstalledExecutable(_options.ProfilePath) : null);
 
         public bool IsAvailable => (_packages?.Enabled ?? true) && (BrowserPath is not null || !string.IsNullOrWhiteSpace(_options.RemoteAddress));

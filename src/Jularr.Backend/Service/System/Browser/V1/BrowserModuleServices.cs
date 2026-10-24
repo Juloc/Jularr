@@ -46,7 +46,7 @@ namespace Jularr.Backend.Service.System.Browser.V1
                 return new UpdateResult(false);
             }
 
-            if (string.IsNullOrWhiteSpace(_options.Path) && string.IsNullOrWhiteSpace(_options.RemoteAddress))
+            if (_options.Path is null && string.IsNullOrWhiteSpace(_options.RemoteAddress))
             {
                 await _packages.InstallAsync(CancellationToken);
             }
