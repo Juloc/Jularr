@@ -822,9 +822,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            // Staging is kept only while the import waits for the Owner.
-            var finished = await Context.ExecuteBatchAsync((ctx, ct) => ctx.IsDownloadImportedAsync(new DownloadOperationParameters(download.OperationId), ct), CancellationToken);
-            if (finished)
+            // A terminal import failure is not kept in staging; reviewable downloads stay untouched.
+            var terminal = await Context.ExecuteBatchAsync((ctx, ct) => ctx.IsDownloadTerminalAsync(new DownloadOperationParameters(download.OperationId), ct), CancellationToken);
+            if (terminal)
             {
                 paths.RemoveCompleted(download.OperationId);
             }
