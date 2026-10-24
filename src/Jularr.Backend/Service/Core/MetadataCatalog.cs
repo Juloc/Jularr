@@ -219,16 +219,23 @@ namespace Jularr.Backend.Service.Core
 
             // Trending comes from the catalog while it is fresh, and from there too while the provider cannot answer.
             var list = new ExternalWorkListData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype);
-            var keeps = await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverTitlesAsync(token), ct);
-            var isTrending = keeps && feed == DiscoverFeedType.Trending;
-            var known = isTrending ? await context.ExecuteBatchAsync((ctx, token) => ctx.ReadTrendingExternalWorksAsync(list, token), ct) : [];
-            if (ExternalWorkLogic.IsFresh(known, time.GetUtcNow()))
+            var key = $"metadata.catalog.{mediaType}.{subtype}.{feed}.{DateTime.UtcNow:yyyy-MM-dd}";
+            if (feed != DiscoverFeedType.Trending && cache.TryGetValue(key, out List<MetadataSearchResultV1>? cached) && cached is not null)
+                return await MarkKnownAsync(context, cached, ct);
+
+            var local = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
-                return await MarkKnownAsync(context, [.. known.Select(Catalog)], ct);
-            }
+                var keepLocal = await ctx.KeepsDiscoverTitlesAsync(token);
+                var entries = keepLocal && feed == DiscoverFeedType.Trending ? await ctx.ReadTrendingExternalWorksAsync(list, token) : [];
+                var marked = ExternalWorkLogic.IsFresh(entries, time.GetUtcNow()) ? await MarkKnownInBatchAsync(ctx, [.. entries.Select(Catalog)], token) : null;
+                return (Keeps: keepLocal, Known: entries, Fresh: marked);
+            }, ct);
+            var keeps = local.Keeps;
+            var isTrending = keeps && feed == DiscoverFeedType.Trending;
+            var known = local.Known;
+            if (local.Fresh is { } fresh) return fresh;
 
             // The other ranked lists change slowly too; a shared cache of six hours spares the provider.
-            var key = $"metadata.catalog.{mediaType}.{subtype}.{feed}.{DateTime.UtcNow:yyyy-MM-dd}";
             if (isTrending || !cache.TryGetValue(key, out List<MetadataSearchResultV1>? results))
             {
                 // A provider answers one list at a time, and one that just failed is not asked again for a minute: the lists queued behind
@@ -305,49 +312,49 @@ namespace Jularr.Backend.Service.Core
             TextLimit.Cut(result.Description, 4000), null, TextLimit.Cut(string.Join(", ", result.Authors), 4000), result.CoverUrl);
 
         // Results that already are Works carry their id.
-        private async Task<IReadOnlyList<MetadataSearchResultV1>> MarkKnownAsync(LogicContext context, IReadOnlyList<MetadataSearchResultV1> results, CancellationToken ct)
+        private Task<IReadOnlyList<MetadataSearchResultV1>> MarkKnownAsync(LogicContext context, IReadOnlyList<MetadataSearchResultV1> results, CancellationToken ct) =>
+            context.ExecuteBatchAsync((ctx, token) => MarkKnownInBatchAsync(ctx, results, token), ct);
+
+        private async Task<IReadOnlyList<MetadataSearchResultV1>> MarkKnownInBatchAsync(LogicContext context, IReadOnlyList<MetadataSearchResultV1> results, CancellationToken ct)
         {
-            var known = await context.ExecuteBatchAsync((ctx, token) =>
-            {
-                var sql = new SqlStatement();
-                sql.Statement =
-                    """
-                    SELECT
-                        identity."Namespace",
-                        identity."Value",
-                        identity."WorkId",
-                        (
-                            SELECT
-                                fact."Value"
-                            FROM
-                                "WorkMetadataFacts" AS fact
-                            WHERE
-                                fact."WorkId" = identity."WorkId"
-                                AND fact."FactKey" = 'Poster'
-                                AND fact."Value" LIKE '/api/v1/covers/%'
-                            ORDER BY
-                                fact."IsManual" DESC
-                            LIMIT 1
-                        ) AS "PosterUrl"
-                    FROM
-                        "WorkExternalIdentities" AS identity
-                        JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = identity."Namespace" AND item."Value" = identity."Value"
-                    UNION
-                    SELECT
-                        identity."Namespace",
-                        identity."Value",
-                        unit."WorkId",
-                        NULL::text
-                    FROM
-                        "WorkUnitExternalIdentities" AS identity
-                        JOIN "WorkUnits" AS unit ON unit."Id" = identity."WorkUnitId"
-                        JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = identity."Namespace" AND item."Value" = identity."Value";
-                    """;
-                sql.Parameters.Add(new WorkIdentityLookupData(JsonSerializer.Serialize(results.Select(result => new { result.Namespace, Value = result.ExternalId })
-                    .Concat(results.Select(result => (Result: result, Series: AnimeSeries(result))).Where(item => item.Series is not null)
-                        .Select(item => new { Namespace = WorkMetadata.Namespace(MediaType.Series), Value = item.Series!.Value.ToString(CultureInfo.InvariantCulture) })))));
-                return ctx.ReadSql.ReadListAsync<WorkIdentityPosterData>(sql, token);
-            }, ct);
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    identity."Namespace",
+                    identity."Value",
+                    identity."WorkId",
+                    (
+                        SELECT
+                            fact."Value"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = identity."WorkId"
+                            AND fact."FactKey" = 'Poster'
+                            AND fact."Value" LIKE '/api/v1/covers/%'
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ) AS "PosterUrl"
+                FROM
+                    "WorkExternalIdentities" AS identity
+                    JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = identity."Namespace" AND item."Value" = identity."Value"
+                UNION
+                SELECT
+                    identity."Namespace",
+                    identity."Value",
+                    unit."WorkId",
+                    NULL::text
+                FROM
+                    "WorkUnitExternalIdentities" AS identity
+                    JOIN "WorkUnits" AS unit ON unit."Id" = identity."WorkUnitId"
+                    JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = identity."Namespace" AND item."Value" = identity."Value";
+                """;
+            sql.Parameters.Add(new WorkIdentityLookupData(JsonSerializer.Serialize(results.Select(result => new { result.Namespace, Value = result.ExternalId })
+                .Concat(results.Select(result => (Result: result, Series: AnimeSeries(result))).Where(item => item.Series is not null)
+                    .Select(item => new { Namespace = WorkMetadata.Namespace(MediaType.Series), Value = item.Series!.Value.ToString(CultureInfo.InvariantCulture) })))));
+            var known = await context.ReadSql.ReadListAsync<WorkIdentityPosterData>(sql, ct);
             var works = known.DistinctBy(identity => (identity.Namespace, identity.Value)).ToDictionary(identity => (identity.Namespace, identity.Value), identity => identity.WorkId);
             var posters = known.Where(identity => identity.PosterUrl is not null).GroupBy(identity => (identity.Namespace, identity.Value)).ToDictionary(group => group.Key, group => group.First().PosterUrl);
             return [.. results.Select(result => new MetadataSearchResultV1(result.Namespace, result.ExternalId, result.Title, result.OriginalTitle,

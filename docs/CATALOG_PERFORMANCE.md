@@ -48,3 +48,28 @@ dotnet test tests/Jularr.Backend.Tests --configuration Release --filter 'FullyQu
 ```
 
 `JULARR_TEST_CATALOG_CASE=shelves` selects the batch alone; unset it for all cases. `JULARR_TEST_LIBRARY_ANALYZE=0` skips additional global statistics preparation, retaining the production completion owner's catalog statistics. The test attaches JSON responses and optional SQL plans to its TRX result directory, reports service/HTTP latency, and fails the configured service-P95 budget. The ordinary Library benchmark reuses the same inventory seed.
+
+## Cached-provider fallback, 24 October 2026
+
+The follow-up also measures Discover without a completed local catalog. The same inventory contains only twenty ranked trending entries per source; the remaining catalog rows represent previously discovered titles. Local discovery is disabled and sync completion is not published. Trending uses the fresh database cache; Anime Top/New use the existing six-hour public metadata cache. Every outbound provider request throws in this mode, so a passing benchmark cannot silently measure a provider response.
+
+`ReadDiscoverCatalogFeedV1` now checks the canonical profile categories and local-catalog readiness in one centrally authorized batch. Whole-catalog rows, when available, are read in that batch too. `MetadataCatalog` resolves known Works inside the fresh-trending batch and goes directly to the identity lookup for a warm Top/New cache entry. Provider calls remain outside database transactions. Ranking, six-hour expiry, provider failure cooldown, stale-trending fallback and profile rules retain their existing behavior. Cached metadata never stores a profile's access decision or the derived Work/owned-cover mapping.
+
+Release build and analyzed fixture statistics, 100 warm calls per case before and after, excluding two initial calls:
+
+| Authenticated read | Before service P95, ms | After service P95, ms | SQL commands before → after |
+| --- | ---: | ---: | ---: |
+| Film details | 16.4 | 21.4 | 6 → 6 |
+| Series with files | 12.7 | 16.3 | 6 → 6 |
+| Series without files | 13.7 | 17.4 | 6 → 6 |
+| Film cached trending | 66.6 | 91.0 | 19 → 19 |
+| Anime cached trending | 124.9 | 36.3 | 22 → 14 |
+| Anime cached top | 93.4 | 25.0 | 19 → 12 |
+| Anime cached new | 81.1 | 66.1 | 19 → 12 |
+| Books cached trending | 47.9 | 61.0 | 19 → 13 |
+
+All eight JSON responses were byte-identical to the reference. Final HTTP P95 ranged from 21.2 to 94.4 ms. Ten focused Discover integration tests passed, including new coverage for a Work imported after warming Top/New, its current owned cover, blocked Anime access despite a warm cache, and stale Anime trending during provider failure/cooldown. A separate thirteen-case whole-catalog smoke run with SQL-plan artifacts also passed; it is a regression check, not another 100-sample performance result.
+
+The local timing results vary: the first batching stage still failed Top at 114.2 ms P95, and the first run with the final batching failed New at 166.4 ms P95. The final diagnostic run above passed all eight budgets without further runtime changes. It still recorded two individual Film trending calls at 127.7/104.4 ms, with logged SQL totals of 23/33 ms respectively. Consequently this evidence supports lower query/transaction overhead and one passing warm P95 run; it does not establish a stable production or concurrent-load latency guarantee. Provider misses, stale refresh network time and cold statistics are outside this cached-mode result.
+
+To reproduce, add `$env:JULARR_TEST_CATALOG_CACHE_ONLY = '1'` to the command above and leave `JULARR_TEST_LIBRARY_ANALYZE` unset. Unset the cache-only variable to restore the whole-catalog benchmark. Slow measured samples log both service/HTTP time and total SQL time to distinguish query work from other elapsed time.

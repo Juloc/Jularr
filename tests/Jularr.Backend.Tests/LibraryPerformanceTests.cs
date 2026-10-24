@@ -18,6 +18,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Http;
+using Jularr.Backend.Data.Admin.Media.V1;
 using Npgsql;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
@@ -146,10 +149,13 @@ namespace Jularr.Backend.Tests
             if (Environment.GetEnvironmentVariable("JULARR_TEST_CATALOG_PERFORMANCE") != "1")
                 Assert.Inconclusive("Opt in with JULARR_TEST_CATALOG_PERFORMANCE=1 on the isolated test server.");
 
+            var cachedOnly = Environment.GetEnvironmentVariable("JULARR_TEST_CATALOG_CACHE_ONLY") == "1";
             var commands = new CommandLog();
             using var logs = LoggerFactory.Create(logging => logging.SetMinimumLevel(LogLevel.Information).AddProvider(commands));
             await using var host = await Host.CreateAsync(media: true, services: services =>
             {
+                if (cachedOnly) services.ConfigureAll<HttpClientFactoryOptions>(options =>
+                    options.HttpMessageHandlerBuilderActions.Add(builder => builder.PrimaryHandler = new NoProviderHandler()));
                 services.Replace(ServiceDescriptor.Singleton(provider =>
                 {
                     var configuration = provider.GetRequiredService<IConfiguration>();
@@ -161,19 +167,19 @@ namespace Jularr.Backend.Tests
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
             await SeedInventoryAsync(host, 300, 411, false);
-            await host.Fixture.RunSqlAsync("""
+            await host.Fixture.RunSqlAsync($"""
                 INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('DiscoverCache', TRUE), ('LocalDiscovery', TRUE)
                     ON CONFLICT ("Key") DO UPDATE SET "IsEnabled" = TRUE;
                 INSERT INTO "ExternalWorkSyncs" ("Namespace", "RequestsPerMinute") VALUES ('openlibrary', 20);
                 INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear", "ReleasedOn", "ImageUrl", "Rating", "Votes", "TrendingRank", "Popularity")
                 SELECT 'tmdb_movie', n::text, 1, 'Catalog ' || lpad(n::text, 5, '0'), 2026,
                     current_date + (n % 100) - 50, 'https://image.tmdb.org/t/p/w500/' || n || '.jpg',
-                    (n % 100) / 10.0, 1000 + (n % 10000), n, n % 1000
+                    (n % 100) / 10.0, 1000 + (n % 10000), {(cachedOnly ? "CASE WHEN n <= 20 THEN n END" : "n")}, n % 1000
                 FROM generate_series(1, 50000) n;
                 INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "MediaSubtypeId", "Title", "ReleaseYear", "ReleasedOn", "ImageUrl", "Rating", "Votes", "TrendingRank", "Popularity")
                 SELECT 'anilist', "Value", 2, 1, "Title", "ReleaseYear", "ReleasedOn", "ImageUrl", "Rating", "Votes", "TrendingRank", "Popularity" FROM "ExternalWorks" WHERE "Namespace" = 'tmdb_movie';
                 INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "ImageUrl", "TrendingRank")
-                SELECT 'openlibrary', n::text, 3, 'Book ' || n, 'https://covers.openlibrary.org/b/id/' || n || '.jpg', n FROM generate_series(1, 10000) n;
+                SELECT 'openlibrary', n::text, 3, 'Book ' || n, 'https://covers.openlibrary.org/b/id/' || n || '.jpg', {(cachedOnly ? "CASE WHEN n <= 20 THEN n END" : "n")} FROM generate_series(1, 10000) n;
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
                 SELECT "Id", 'tmdb_movie', "Id"::text FROM "Works" WHERE "MediaTypeId" = 1;
                 UPDATE "Works" SET "MediaSubtypeId" = 1 WHERE "MediaTypeId" = 2;
@@ -181,14 +187,27 @@ namespace Jularr.Backend.Tests
                 UPDATE "StoredFiles" f SET "MissingSince" = NULL FROM "MediaAssets" a WHERE a."Id" = f."MediaAssetId" AND a."WorkId" = 1;
                 """);
             // Publish the catalog through its canonical completion owner, including its one-time statistics preparation.
-            await using (var completion = new SqlContext(host.Services.GetRequiredService<SqlDatabase>().DataSource))
+            if (!cachedOnly)
             {
+                await using var completion = new SqlContext(host.Services.GetRequiredService<SqlDatabase>().DataSource);
                 await completion.BeginAsync(SqlAccessMode.ReadWrite);
                 var context = new LogicContext(completion);
                 foreach (var source in new[] { "tmdb_movie", "anilist", "openlibrary" }) await context.CompleteExternalWorkSyncAsync(source, default);
                 await completion.CommitAsync();
             }
             if (Environment.GetEnvironmentVariable("JULARR_TEST_LIBRARY_ANALYZE") != "0") await host.Fixture.RunSqlAsync("ANALYZE");
+            if (cachedOnly)
+            {
+                await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'LocalDiscovery'");
+                var cache = host.Services.GetRequiredService<IMemoryCache>();
+                foreach (var feed in new[] { DiscoverFeedType.Top, DiscoverFeedType.New })
+                {
+                    var results = Enumerable.Range(1, 20).Select(n => new MetadataSearchResultV1("anilist", n.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        "Catalog " + n.ToString("D5", System.Globalization.CultureInfo.InvariantCulture), null, 2026, null, null, null, "https://image.tmdb.org/t/p/w500/" + n + ".jpg")).ToList();
+                    cache.Set($"metadata.catalog.{MediaType.Series}.{MediaSubtype.Anime}.{feed}.{DateTime.UtcNow:yyyy-MM-dd}", results,
+                        new MemoryCacheEntryOptions { Size = results.Count, AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(6) });
+                }
+            }
             var samples = int.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_LIBRARY_SAMPLES"), out var count) ? count : 30;
             var budget = double.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_LIBRARY_MAX_MS"), System.Globalization.CultureInfo.InvariantCulture, out var maximum) ? maximum : double.PositiveInfinity;
             var cases = new List<(string Name, string Service, string Path, object? Input)>
@@ -199,12 +218,15 @@ namespace Jularr.Backend.Tests
             };
             foreach (var feed in Enum.GetValues<DiscoverFeedType>())
             {
-                cases.Add(("feed-" + feed, "User/ReadDiscoverFeedV1", "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, feed)));
+                if (!cachedOnly || feed == DiscoverFeedType.Trending) cases.Add(("feed-" + feed, "User/ReadDiscoverFeedV1", "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, feed)));
                 if (feed != DiscoverFeedType.Upcoming) cases.Add(("catalog-" + feed, "User/ReadDiscoverCatalogFeedV1", "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, feed, MediaSubtype.Anime)));
             }
             cases.Add(("catalog-books", "User/ReadDiscoverCatalogFeedV1", "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Book, DiscoverFeedType.Trending)));
-            cases.Add(("feed-page2", "User/ReadDiscoverFeedV1", "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending, 2)));
-            cases.Add(("shelves", "User/ReadDiscoverShelvesV1", "/api/v1/discover/shelves", new ReadDiscoverShelvesDataV1()));
+            if (!cachedOnly)
+            {
+                cases.Add(("feed-page2", "User/ReadDiscoverFeedV1", "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending, 2)));
+                cases.Add(("shelves", "User/ReadDiscoverShelvesV1", "/api/v1/discover/shelves", new ReadDiscoverShelvesDataV1()));
+            }
             if (Environment.GetEnvironmentVariable("JULARR_TEST_CATALOG_CASE") is { } selected) cases.RemoveAll(item => item.Name != selected);
             Assert.IsNotEmpty(cases);
             var failures = new List<string>();
@@ -225,6 +247,8 @@ namespace Jularr.Backend.Tests
                     var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
                     var service = timings.Read(100).Single(row => row.Service == item.Service).TotalMilliseconds - before;
                     if (iteration >= 2) { durations.Add(service); httpDurations.Add(elapsed); }
+                    if (iteration >= 2 && service >= 100)
+                        TestContext.WriteLine($"{item.Name} sample {iteration - 1}: service {service:F1} ms, HTTP {elapsed:F1} ms, {commands.Executions.Count} SQL commands totaling {commands.Executions.Sum(command => command.Milliseconds):F1} ms");
                     if (iteration == 0)
                     {
                         TestContext.WriteLine($"{item.Name}: {commands.Executions.Count} SQL commands, {commands.Executions.Sum(command => command.Milliseconds):F1} ms SQL total");
@@ -237,7 +261,7 @@ namespace Jularr.Backend.Tests
                         if (item.Input is ReadDiscoverShelvesDataV1)
                             Assert.AreEqual(160, json.RootElement.EnumerateArray().Sum(shelf => shelf.GetProperty("items").GetArrayLength() + shelf.GetProperty("catalogItems").GetArrayLength()));
                         else if (item.Input is not null) Assert.AreEqual(20, json.RootElement.GetArrayLength());
-                        if (item.Name is "feed-Trending" or "catalog-Top" or "catalog-books" && Environment.GetEnvironmentVariable("JULARR_TEST_CATALOG_PLANS") == "1")
+                        if (!cachedOnly && (item.Name is "feed-Trending" or "catalog-Top" or "catalog-books") && Environment.GetEnvironmentVariable("JULARR_TEST_CATALOG_PLANS") == "1")
                         {
                             var catalog = item.Input as ReadDiscoverCatalogFeedDataV1;
                             var shelf = new ExternalWorkShelfData(0, catalog?.MediaTypeId == MediaType.Book ? "openlibrary" : catalog is not null ? "anilist" : "tmdb_movie",
@@ -334,6 +358,12 @@ namespace Jularr.Backend.Tests
                 FROM "WorkUnits" WHERE "WorkUnitTypeId" = 2;
                 INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works";
                 """);
+        }
+
+        private sealed class NoProviderHandler : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+                throw new InvalidOperationException("The warm-cache benchmark attempted a provider request.");
         }
 
         private sealed class CommandLog : ILoggerProvider, ILogger

@@ -545,16 +545,17 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
             var scope = DiscoverScopes.All.FirstOrDefault(scope => scope.MediaTypeId == Data.MediaTypeId && scope.MediaSubtypeId == Data.MediaSubtypeId);
-            if (scope is not null && scope.Feeds.Contains(Data.DiscoverFeedTypeId)
-                && (await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWholeExternalWorkCatalogsAsync(ct), CancellationToken)).Contains(DiscoverQueries.Namespace(scope)))
+            var local = await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
+                await DiscoverQueries.RequireCatalogTypeInBatchAsync(ctx, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, ct);
+                if (scope is null || !scope.Feeds.Contains(Data.DiscoverFeedTypeId)
+                    || !(await ctx.ReadWholeExternalWorkCatalogsAsync(ct)).Contains(DiscoverQueries.Namespace(scope))) return null;
                 var shelf = new ExternalWorkShelfData(0, DiscoverQueries.Namespace(scope), Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId);
-                var rows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkShelvesAsync(new ExternalWorkShelfQueryData([shelf], Auth.ProfileId!.Value,
-                    DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime)), ct), CancellationToken);
-                return new BaseDataList<DiscoverCatalogItemV1>([.. rows.Select(DiscoverQueries.CatalogItem)]);
-            }
+                return await ctx.ReadExternalWorkShelvesAsync(new ExternalWorkShelfQueryData([shelf], Auth.ProfileId!.Value,
+                    DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime)), ct);
+            }, CancellationToken);
+            if (local is not null) return new BaseDataList<DiscoverCatalogItemV1>([.. local.Select(DiscoverQueries.CatalogItem)]);
 
             var results = await _catalog.ReadFeedAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId, CancellationToken);
             return new BaseDataList<DiscoverCatalogItemV1>([.. results.Select(DiscoverQueries.CatalogItem)]);
@@ -645,7 +646,14 @@ namespace Jularr.Backend.Service.User.Discover.V1
             new(result.Namespace, result.ExternalId, result.Title, result.ReleaseYear, result.Author, result.WorkId, result.PosterUrl, null, null);
 
         // Films and series are discovered through TMDB; anime series and the other types through their catalogs.
-        public static async Task RequireCatalogTypeAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, long profileId, CancellationToken ct)
+        public static Task RequireCatalogTypeAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, long profileId, CancellationToken ct) =>
+            context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                await RequireCatalogTypeInBatchAsync(ctx, mediaType, subtype, profileId, token);
+                return true;
+            }, ct);
+
+        public static async Task RequireCatalogTypeInBatchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, long profileId, CancellationToken ct)
         {
             var anime = mediaType == MediaType.Series && subtype == MediaSubtype.Anime;
             if (!DiscoverScopes.IsCatalog(mediaType, subtype))
@@ -653,8 +661,9 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 throw new DataValidationException("MediaTypeId", "unknown_catalog_value");
             }
 
-            await RequireTypeAsync(context, mediaType, profileId, ct);
-            if (anime && (await context.ExecuteBatchAsync((ctx, token) =>
+            if (!(await ReadTypesInBatchAsync(context, profileId, ct)).Usable.Contains(mediaType))
+                throw new KeyNotFoundException("The media type is not available.");
+            if (anime)
             {
                 var sql = new SqlStatement();
                 sql.Statement =
@@ -670,33 +679,31 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         AND category."MediaSubtypeId" = 1;
                     """;
                 sql.Parameters.Add(new ProfileParameters(profileId));
-                return ctx.ReadSql.ReadListAsync<ProfileMediaV1>(sql, token);
-            }, ct)).Count == 0)
-            {
-                throw new KeyNotFoundException("The media type is not available.");
+                if ((await context.ReadSql.ReadListAsync<ProfileMediaV1>(sql, ct)).Count == 0)
+                    throw new KeyNotFoundException("The media type is not available.");
             }
         }
 
-        public static async Task<(IReadOnlySet<MediaType> Usable, IReadOnlySet<MediaType> Listed)> ReadTypesAsync(LogicContext context, long profileId, CancellationToken ct)
+        public static Task<(IReadOnlySet<MediaType> Usable, IReadOnlySet<MediaType> Listed)> ReadTypesAsync(LogicContext context, long profileId, CancellationToken ct) =>
+            context.ExecuteBatchAsync((ctx, token) => ReadTypesInBatchAsync(ctx, profileId, token), ct);
+
+        private static async Task<(IReadOnlySet<MediaType> Usable, IReadOnlySet<MediaType> Listed)> ReadTypesInBatchAsync(LogicContext context, long profileId, CancellationToken ct)
         {
-            var categories = await context.ExecuteBatchAsync((ctx, token) =>
-            {
-                var sql = new SqlStatement();
-                sql.Statement =
-                    """
-                    SELECT
-                        category."Key",
-                        category."MediaSubtypeId" IS NOT NULL AS "IsSubtype",
-                        category."IsHidden"
-                    FROM
-                        "ProfileMediaCategories" AS category
-                    WHERE
-                        category."ProfileId" = @ProfileId
-                        AND category."MediaSubtypeId" IS NULL;
-                    """;
-                sql.Parameters.Add(new ProfileParameters(profileId));
-                return ctx.ReadSql.ReadListAsync<ProfileMediaV1>(sql, token);
-            }, ct);
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    category."Key",
+                    category."MediaSubtypeId" IS NOT NULL AS "IsSubtype",
+                    category."IsHidden"
+                FROM
+                    "ProfileMediaCategories" AS category
+                WHERE
+                    category."ProfileId" = @ProfileId
+                    AND category."MediaSubtypeId" IS NULL;
+                """;
+            sql.Parameters.Add(new ProfileParameters(profileId));
+            var categories = await context.ReadSql.ReadListAsync<ProfileMediaV1>(sql, ct);
             return (categories.Select(category => Enum.Parse<MediaType>(category.Key)).ToHashSet(),
                 categories.Where(category => !category.IsHidden).Select(category => Enum.Parse<MediaType>(category.Key)).ToHashSet());
         }
