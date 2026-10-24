@@ -1447,6 +1447,16 @@ namespace Jularr.Backend.Tests
             }, plan.Select(rename => rename.TargetPath).ToArray());
         }
 
+        // A catalog that knows no book.
+        private sealed class EmptyBookCatalog : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+                Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(request.RequestUri!.Host == "openlibrary.org" ? """{"docs":[]}""" : """{"data":{"Page":{"media":[]}}}""", System.Text.Encoding.UTF8, "application/json")
+                });
+        }
+
         internal static async Task ScanAsync(Host host, long rootId)
         {
             using var queued = await host.SendAsync(HttpMethod.Post, Roots + "/" + rootId + "/scans");
@@ -1479,7 +1489,13 @@ namespace Jularr.Backend.Tests
                 ["Storage:LocalPaths:0"] = "/media/library",
                 ["Storage:LocalPaths:1"] = mountRoot
             };
-            var host = await Host.CreateAsync(razor: razor, library: true, settings: configuration, services: services);
+            // A scan of a book library asks the book catalogs; a test never reaches the real ones (its own handler, registered later, wins).
+            var host = await Host.CreateAsync(razor: razor, library: true, settings: configuration, services: collection =>
+            {
+                collection.AddHttpClient<Jularr.Integrations.Logic.OpenLibrary.OpenLibraryClient>().ConfigurePrimaryHttpMessageHandler(() => new EmptyBookCatalog());
+                collection.AddHttpClient<Jularr.Integrations.Logic.AniList.AniListClient>().ConfigurePrimaryHttpMessageHandler(() => new EmptyBookCatalog());
+                services?.Invoke(collection);
+            });
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode, await login.Content.ReadAsStringAsync());
