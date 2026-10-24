@@ -63,6 +63,48 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task DurableJob_ReclaimsInterruptedOperation_WithoutDuplicatingACommittedWork()
+        {
+            await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders());
+            using var queued = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import/jobs",
+                new MediaImportDataV1(null, Books, MediaImportActionType.AddOnly));
+            Assert.AreEqual(HttpStatusCode.OK, queued.StatusCode);
+            var job = (await queued.Content.ReadFromJsonAsync<MediaImportJobCreatedV1>())!;
+
+            await using var scope = host.Services.CreateAsyncScope();
+            var claimant = scope.ServiceProvider.GetRequiredService<ClaimOperationV1>();
+            var first = await claimant.ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(OperationType.MediaImport), default);
+            Assert.IsNotNull(first.OperationId);
+
+            // The provider import committed but the journal did not: precisely the
+            // crash window that cannot be made atomic with external provider I/O.
+            const string firstBook = """
+                {"version":1,"items":[{"type":"movie","ids":{"tmdb":"603"},"title":"The Matrix"}]}
+                """;
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import",
+                new MediaImportDataV1(null, firstBook, MediaImportActionType.AddOnly));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+
+            // Simulates the startup recovery pass of OperationWorker after a restart.
+            var recovered = await scope.ServiceProvider.GetRequiredService<RequeueOperationsV1>()
+                .ExecuteAsync<UpdateResult>(new OperationQueueParametersV1(), default);
+            Assert.IsTrue(recovered.Success);
+            var second = await claimant.ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(OperationType.MediaImport), default);
+            Assert.AreEqual(first.OperationId, second.OperationId);
+            await scope.ServiceProvider.GetRequiredService<ExecuteMediaImportJobV1>()
+                .ExecuteAsync<UpdateResult>(new OperationParametersV1(second.OperationId!.Value), default);
+
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" """));
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/media-import/jobs/" + job.JobId);
+            var status = (await read.Content.ReadFromJsonAsync<MediaImportJobStatusV1>())!;
+            Assert.AreEqual(OperationStatusType.Completed, status.StatusTypeId);
+            Assert.AreEqual(2L, status.Sequence);
+            Assert.AreEqual(2, status.Rows.Count);
+        }
+
+        [TestMethod]
         public async Task DurableJob_RevokedOwnerCannotImportTheNextWork()
         {
             await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders());
