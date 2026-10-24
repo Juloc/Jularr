@@ -7327,6 +7327,10 @@
    "The storage is not reachable. Check that the NAS is on and the share is mounted.",
    "Der Speicher ist nicht erreichbar. Prüfe, ob das NAS an ist und die Freigabe eingebunden ist."
   ],
+  "errors.download_storage_mount_required": [
+   "Choose writable folders on storage mounted inside Jularr. A direct SMB library connection alone cannot run the native downloader and unpack tools.",
+   "Wähle beschreibbare Ordner auf einem in Jularr eingebundenen Dateisystem. Eine direkte SMB-Bibliotheksverbindung allein reicht für den eigenen Downloader und die Entpackprogramme nicht aus."
+  ],
   "errors.import_storage_full": [
    "The library has too little free space or its space could not be checked.",
    "In der Bibliothek ist zu wenig Platz frei oder er ließ sich nicht prüfen."
