@@ -9,6 +9,8 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         AnnasArchive = 5,
         Usenet = 6,
         OpenSubtitles = 7,
-        SubDl = 8
+        SubDl = 8,
+        Qbittorrent = 9,
+        Nyaa = 10
     }
 }

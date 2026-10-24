@@ -7,13 +7,17 @@ namespace Jularr.Backend.Data.Logic.Operation
 {
     internal sealed class ActivityFilterData : BaseData
     {
-        public ActivityFilterData(ActivityFilterType activityFilterTypeId)
+        public ActivityFilterData(ActivityFilterType activityFilterTypeId, bool torrentOnly = false)
         {
             ActivityFilterTypeId = activityFilterTypeId;
+            TorrentOnly = torrentOnly;
         }
 
         [DataField(typeof(OperationFields), nameof(OperationFields.ActivityFilterTypeId))]
         public ActivityFilterType ActivityFilterTypeId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.TorrentOnly))]
+        public bool TorrentOnly { get; }
     }
 
     internal sealed class OperationActionData : BaseData

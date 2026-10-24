@@ -31,7 +31,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
     // One page per title: films and series are managed here, with their seasons, files, searches and history; other types still show their metadata.
     public sealed partial class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, UpdateWorkFranchiseV1 updateFranchise, RefreshWorkMetadataV1 refresh, ReadWorkUnitGroupsV1 readGroups, CreateWorkUnitGroupV1 createGroup,
-        DeleteWorkUnitGroupV1 deleteGroup, SearchMetadataV1 search, RematchWorkV1 rematch, ReadWorkManagementV1 readManagement, ReadWantedItemV1 readWanted, UpdateWantedV1 updateWanted, UpdateWantedUnitV1 updateUnit,
+        DeleteWorkUnitGroupV1 deleteGroup, SearchMetadataV1 search, RematchWorkV1 rematch, ReadWorkManagementV1 readManagement, ReadWantedItemV1 readWanted, UpdateWantedV1 updateWanted, StartWorkMonitoringV1 startMonitoring, UpdateWantedUnitV1 updateUnit,
         SearchWantedAutomaticallyV1 automatic, ReadWantedReleasesV1 readReleases, MarkWantedReleaseV1 markRelease, ReadActivityEventsV1 readEvents, ReadAcquisitionProfilesV1 profiles, ReadWantedLibrariesV1 libraries,
         ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, DeleteLibraryFilesV1 deleteFiles, DeleteDocumentTranslationV1 deleteTranslation, DeleteWorkV1 deleteWork, UpdateWorkEditionV1 updateEdition, UpdateLibraryFileFactsV1 updateFacts, ReadLibraryRenamesV1 readRenames, ApplyLibraryRenamesV1 applyRenames, FrontendAssets assets,
         IAntiforgery antiforgery, UiText texts) : JularrPage
@@ -165,6 +165,14 @@ namespace Jularr.Frontend.Pages.Admin.Work
             await updateWanted.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(current.Id),
                 new UpdateWantedDataV1(isPaused, current.Version, current.AcquisitionProfileId, current.LibraryRootId), HttpContext.RequestAborted);
             Hint(isPaused ? "work.hint.monitorOff" : "work.hint.monitorOn");
+            return LocalRedirect(Address(Tab));
+        }
+
+        // A title nobody requested starts being monitored: it gets its target and the search takes it up.
+        public async Task<IActionResult> OnPostStartMonitorAsync()
+        {
+            await startMonitoring.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), default, HttpContext.RequestAborted);
+            Hint("work.hint.monitorOn");
             return LocalRedirect(Address(Tab));
         }
 

@@ -129,7 +129,7 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(Enumerable.Range(2, DatabaseBaseline.Migrations.Count).ToArray(),
                 DatabaseBaseline.Migrations.Select(migration => migration.Version).ToArray(),
                 "Every production migration must have a unique contiguous version.");
-            Assert.IsTrue(DatabaseBaseline.CurrentVersion >= 5, "Both companion and media-import schema migrations must be installed.");
+            Assert.IsTrue(DatabaseBaseline.CurrentVersion >= 8, "Every released migration plus media-import schema must be installed.");
             await new DatabaseBaseline(cs, options, tools, migrations: [DatabaseBaseline.Migrations[0]]).StartAsync(CancellationToken.None);
             Assert.AreEqual("0002_external_work_feeds", await ScalarAsync(cs,
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 2"));
@@ -142,8 +142,14 @@ namespace Jularr.Backend.Tests
                 "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
             Assert.AreEqual("0004_playback_companion", await ScalarAsync(cs,
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 4"));
-            Assert.AreEqual("0005_media_import_jobs", await ScalarAsync(cs,
+            Assert.AreEqual("0005_sabnzbd_incomplete_paths", await ScalarAsync(cs,
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 5"));
+            Assert.AreEqual("0006_torrent_sources", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 6"));
+            Assert.AreEqual("0007_download_cleanup_source_inventory", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 7"));
+            Assert.AreEqual("0008_media_import_jobs", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 8"));
             Assert.AreEqual(2L, await ScalarAsync(cs,
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('MediaImportJobs','MediaImportJobRows')"));
             Assert.AreEqual(1L, await ScalarAsync(cs,

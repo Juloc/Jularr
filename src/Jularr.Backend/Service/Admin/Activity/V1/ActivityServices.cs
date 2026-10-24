@@ -46,7 +46,11 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     operation."DownloadStateTypeId",
                     operation."AttentionUrl" AS "ManualUrl",
                     operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" = 2 AND operation."AttentionKey" IS NULL
-                        AND coalesce(connection."AcquisitionConnectionTypeId" IN (2, 3, 4, 5, 6), FALSE) AS "CanPause",
+                        AND coalesce(connection."AcquisitionConnectionTypeId" IN (2, 3, 4, 5, 6, 9), FALSE) AS "CanPause",
+                    coalesce(connection."AcquisitionConnectionTypeId" = 9 AND operation."OperationStatusTypeId" IN (1, 2)
+                        OR connection."AcquisitionConnectionTypeId" = 2 AND operation."OperationTypeId" = 2
+                            AND operation."ExternalId" IS NOT NULL, FALSE) AS "CanBrowseFiles",
+                    CASE WHEN connection."AcquisitionConnectionTypeId" = 2 THEN connection."Id" END AS "SabnzbdConnectionId",
                     operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL
                         AND operation."AttentionUrl" IS NULL AS "CanRetryImport",
                     operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL AS "IsWaiting",
@@ -61,8 +65,12 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     LEFT JOIN "WantedItems" AS wanted ON wanted."Id" = release."WantedItemId"
                     LEFT JOIN "Works" AS work ON work."Id" = wanted."WorkId"
                 WHERE
-                    @ActivityFilterTypeId = 1 AND state."ActivityFilterTypeId" <> 3
-                    OR state."ActivityFilterTypeId" = @ActivityFilterTypeId
+                    (
+                        @ActivityFilterTypeId = 1 AND state."ActivityFilterTypeId" <> 3
+                        OR state."ActivityFilterTypeId" = @ActivityFilterTypeId
+                    )
+                    -- The Files view includes all supported external download clients.
+                    AND (NOT @TorrentOnly OR connection."AcquisitionConnectionTypeId" IN (2, 9))
                 ORDER BY
                     -- What needs a person comes first, then what runs, each newest first.
                     @ActivityFilterTypeId <> 3 AND state."ActivityFilterTypeId" IN (4, 6) DESC,
@@ -71,7 +79,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
-            sql.Parameters.Add(new ActivityFilterData(Parameters.ActivityFilterTypeId));
+            sql.Parameters.Add(new ActivityFilterData(Parameters.ActivityFilterTypeId, Parameters.TorrentOnly));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<ActivityItemV1>(sql, CancellationToken);
         }

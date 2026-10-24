@@ -14,10 +14,12 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 {
     // The queue on the list kit: four live figures, one row of filter chips with their counts, the downloads and jobs as rows with what a person can do with each, and a drawer of details per row.
     public sealed class ActivityModel(ReadActivityV1 read, ReadActivitySummaryV1 summary, RetryActivityV1 retry, DismissActivityV1 dismiss, SaveActivitySourceLinkV1 sourceLink, RemoveActivityDownloadV1 remove,
-        PauseActivityDownloadV1 pause, RetryActivityImportV1 retryImport, PauseActivityQueueV1 pauseQueue, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
+        PauseActivityDownloadV1 pause, RetryActivityImportV1 retryImport, PauseActivityQueueV1 pauseQueue, ReadTorrentFilesV1 torrentFiles, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private PageResult<ActivityItemV1>? _items;
         private ActivitySummaryV1? _summary;
+        private BaseDataList<TorrentFileV1>? _openedTorrentFiles;
+        private bool _torrentFileLookupFailed;
 
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
@@ -29,7 +31,10 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         [BindProperty(SupportsGet = true, Name = "operation")]
         public long? OpenOperationId { get; set; }
 
-        private bool IsHistory => Filter == ActivityFilterType.History;
+        [BindProperty(SupportsGet = true, Name = "files")]
+        public bool ShowFiles { get; set; }
+
+        private bool IsHistory => !ShowFiles && Filter == ActivityFilterType.History;
 
         protected override void Define(Page page)
         {
@@ -44,17 +49,19 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
             // The row of the entry's pages with the queue's own filters, then the figures.
             page.NoPageRow();
-            page.Content.Add(new ListToolbar(Chips(_summary)));
+            page.Content.Add(new ListToolbar(IsHistory ? new Span(new Text("activity.view.history")) :
+                ShowFiles ? new Span(new Text("activity.files")) : Chips(_summary), Modes()));
             if (_summary is { } numbers) page.Content.Add(Kpis(numbers));
 
             if (_items is { } items)
             {
-                var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text(IsHistory ? "activity.empty.History" : "activity.empty.Queue")));
+                IReadOnlyList<ActivityItemV1> visible = items.Items;
+                var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text(ShowFiles ? "activity.files.noJobs" : IsHistory ? "activity.empty.History" : "activity.empty.Queue")));
                 var columns = IsHistory
                     ? new List<ListColumn> { new("activity.item", ListRole.Main), new("table.status", ListRole.Status), new("activity.reason", ListRole.Data, 1), new("activity.size", ListRole.Data, 2), new("operation.created"), new("common.actions", ListRole.Actions) }
                     : [new("activity.item", ListRole.Main), new("table.status", ListRole.Status), new("activity.source", ListRole.Data, 2), new("activity.transfer", ListRole.Data, 1), new("common.actions", ListRole.Actions)];
-                page.Content.Add(new ListPanel("activity.list", columns, [.. items.Items.Select(item => IsHistory ? HistoryRow(item, csrf) : QueueRow(item, csrf))], empty).Modifier(IsHistory ? "activity-list activity-history" : "activity-list activity-queue").Paged());
-                page.Content.AddRange(items.Items.Select(item => DrawerOf(item, csrf)));
+                page.Content.Add(new ListPanel("activity.list", columns, [.. visible.Select(item => IsHistory ? HistoryRow(item, csrf) : QueueRow(item, csrf))], empty).Modifier(IsHistory ? "activity-list activity-history" : "activity-list activity-queue").Paged());
+                page.Content.AddRange(visible.Select(item => DrawerOf(item, csrf)));
             }
 
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -70,6 +77,14 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
         private static IUiComponent Live(string name, string text) => new Span(new ValueText(text)).Attribute("data-live", LiveKeys.Queue).Attribute("data-live-text", name);
 
+        // Three views share one reusable toolbar and the list kit's compact view switch.
+        private ViewSwitch Modes() => new("activity.views",
+        [
+            new ViewChoice("activity.view.queue", Address(filter: ActivityFilterType.All), Glyph("download", 16), !ShowFiles && !IsHistory),
+            new ViewChoice("activity.view.history", Address(filter: ActivityFilterType.History), Glyph("history", 16), IsHistory),
+            new ViewChoice("activity.files", Address(filter: ActivityFilterType.All, files: true), Glyph("folder", 16), ShowFiles)
+        ]);
+
         // One chip per part of the queue with how many entries it holds.
         private NavigationTabs Chips(ActivitySummaryV1? numbers)
         {
@@ -77,7 +92,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             var filters = new (ActivityFilterType Filter, int Count)[]
             {
                 (ActivityFilterType.All, numbers.AllCount), (ActivityFilterType.Active, numbers.ActiveCount), (ActivityFilterType.Waiting, numbers.WaitingCount),
-                (ActivityFilterType.Import, numbers.UnpackingCount), (ActivityFilterType.Errors, numbers.ErrorCount), (ActivityFilterType.History, numbers.HistoryCount)
+                (ActivityFilterType.Import, numbers.UnpackingCount), (ActivityFilterType.Errors, numbers.ErrorCount)
             };
             return AdminMenu.Row(texts, Request, [.. filters.Select(entry => new NavigationTab("activity.filter." + entry.Filter, Address(filter: entry.Filter), entry.Filter == Filter, Count: entry.Count, Icon: Glyph(FilterIcon(entry.Filter), 14)))], ariaLabelKey: "activity.filters");
         }
@@ -106,7 +121,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         private ActionDock Dock(string? csrf)
         {
             var actions = new List<IUiComponent>();
-            if (!IsHistory && _items is { Items.Count: > 0 })
+            if (!IsHistory && !ShowFiles && _items is { Items.Count: > 0 })
             {
                 actions.Add(QueueButton("PauseAll", "pause", "activity.pauseAll", csrf));
                 actions.Add(QueueButton("ResumeAll", "play", "activity.resumeAll", csrf));
@@ -260,6 +275,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 if (item.CanRetryImport) actions.Add(IconAction(item, "RetryImport", "sync", "activity.retryImport", csrf));
                 if (item.CanImportManually) actions.Add(IconLink("folder", "activity.importManually", "/Admin/ManualImport?operationId=" + item.Id.ToString(CultureInfo.InvariantCulture)));
                 if (item.CanPause) actions.Add(item.DownloadStateTypeId == DownloadStateType.Paused ? IconAction(item, "Resume", "play", "activity.resume", csrf) : IconAction(item, "Pause", "pause", "activity.pause", csrf));
+                if (item.CanBrowseFiles) actions.Add(IconLink("folder", "activity.files.view", Address(operation: item.Id) + "&files=true"));
             }
 
             actions.Add(Drawer.Opener(new A(Glyph("dots", 18)).Class("button button--icon").Attribute("href", Address(operation: item.Id)).TextAttribute("aria-label", "activity.details").TextAttribute("title", "activity.details"), DrawerId(item)));
@@ -300,6 +316,35 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             {
                 if (item.ManualUrl is { } manual) body.Add(Drawer.Block("activity.source.check", ManualLink(item, manual, csrf)));
                 body.Add(new Div(Confirmed(item, "Remove", "activity.remove", "activity.removeConfirm", csrf), Confirmed(item, "RemoveAndBlock", "activity.removeAndBlock", "activity.removeAndBlockConfirm", csrf)).Class("activity-confirms"));
+            }
+
+            if (item.CanBrowseFiles)
+            {
+                if (item.SabnzbdConnectionId is { } sabnzbdConnectionId)
+                {
+                    body.Add(Drawer.Block("activity.files",
+                        new A(Glyph("folder", 16), new Text("console.files")).Class("button button--soft")
+                            .Attribute("href", "/Admin/Acquisition/Downloads?PageNumber=1&AcquisitionConnectionId="
+                                + sabnzbdConnectionId.ToString(CultureInfo.InvariantCulture) + "&Pane=files")));
+                }
+                else if (OpenOperationId == item.Id && ShowFiles)
+                {
+                    IUiComponent files = _torrentFileLookupFailed
+                        ? new P(new Text("activity.files.unavailable"))
+                        : _openedTorrentFiles is { Count: > 0 } available
+                            ? new Div([.. available.Select(file =>
+                                new Div(new Truncated(file.Name),
+                                    new Span(new ValueText(ByteSize.Format(file.SizeBytes) + " · "
+                                        + file.ProgressPercent.ToString(CultureInfo.InvariantCulture) + "%"))
+                                        .Class("list-value")).Class("activity-file-row"))])
+                            : new P(new Text("activity.files.empty"));
+                    body.Add(Drawer.Block("activity.files", files));
+                }
+                else
+                {
+                    body.Add(new A(new Text("activity.files.view")).Class("button button--soft")
+                        .Attribute("href", Address(operation: item.Id) + "&files=true"));
+                }
             }
 
             var title = item.WorkTitle ?? (item.OperationTypeId == OperationType.Job ? texts["jobs.job." + item.Title] : item.Title);
@@ -417,17 +462,31 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
         protected override async Task LoadDataAsync()
         {
-            _items = await read.ExecuteAsync<PageResult<ActivityItemV1>>(new ReadActivityParametersV1(Filter, Math.Max(1, PageNumber)), HttpContext.RequestAborted);
+            _items = await read.ExecuteAsync<PageResult<ActivityItemV1>>(new ReadActivityParametersV1(Filter, Math.Max(1, PageNumber), torrentOnly: ShowFiles), HttpContext.RequestAborted);
             _summary = await summary.ExecuteAsync<ActivitySummaryV1>(new ReadActivitySummaryParametersV1(), HttpContext.RequestAborted);
+            if (ShowFiles && OpenOperationId is { } id
+                && _items.Items.Any(item => item.Id == id && item.CanBrowseFiles && item.SabnzbdConnectionId is null))
+            {
+                try
+                {
+                    _openedTorrentFiles = await torrentFiles.ExecuteAsync<BaseDataList<TorrentFileV1>>(
+                        new ActivityOperationParametersV1(id), HttpContext.RequestAborted);
+                }
+                catch (ServiceUnavailableException)
+                {
+                    _torrentFileLookupFailed = true;
+                }
+            }
         }
 
         // The page's own address with what was chosen; defaults stay out of it.
-        private string Address(int? pageNumber = null, ActivityFilterType? filter = null, string? handler = null, long? operation = null)
+        private string Address(int? pageNumber = null, ActivityFilterType? filter = null, string? handler = null, long? operation = null, bool? files = null)
         {
             var query = new List<string>();
             if ((filter ?? Filter) != ActivityFilterType.All) query.Add("Filter=" + (filter ?? Filter));
             var number = pageNumber ?? (filter is null ? Math.Max(1, PageNumber) : 1);
             if (number > 1) query.Add("PageNumber=" + number.ToString(CultureInfo.InvariantCulture));
+            if (files ?? (filter is null && ShowFiles)) query.Add("files=true");
             if (handler is not null) query.Add("handler=" + handler);
             if (operation is { } open) query.Add("operation=" + open.ToString(CultureInfo.InvariantCulture));
             return "/Admin/Activity" + (query.Count > 0 ? "?" + string.Join("&", query) : "");

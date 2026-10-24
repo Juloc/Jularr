@@ -58,7 +58,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, DateTime? checkedAt, string? errorKey, long version, string? username = null,
             int? maxConnections = null, int[]? mediaTypeIds = null, bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, int queryCount = 0, int grabCount = 0,
             DateTime? retryAt = null, bool isBackedOff = false, AcquisitionConnectionRole acquisitionConnectionRoleId = AcquisitionConnectionRole.Search, string? host = null,
-            int? port = null, bool? useSsl = null, long? downloadStorageMountId = null, bool removesCompleted = true)
+            int? port = null, bool? useSsl = null, long? downloadStorageMountId = null, bool removesCompleted = true, string? incompleteRemotePath = null, string? incompleteLocalPath = null, bool removesFailed = true)
         {
             DownloadStorageMountId = downloadStorageMountId;
             Host = host;
@@ -85,8 +85,11 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             Categories = categories;
             DownloadCategory = downloadCategory;
             RemovesCompleted = removesCompleted;
+            RemovesFailed = removesFailed;
             RemotePath = remotePath;
             LocalPath = localPath;
+            IncompleteRemotePath = incompleteRemotePath;
+            IncompleteLocalPath = incompleteLocalPath;
             CheckedAt = checkedAt;
             ErrorKey = errorKey;
             Version = version;
@@ -137,11 +140,20 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RemovesCompleted))]
         public bool RemovesCompleted { get; }
 
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RemovesFailed))]
+        public bool RemovesFailed { get; }
+
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RemotePath))]
         public string? RemotePath { get; }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.LocalPath))]
         public string? LocalPath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteRemotePath))]
+        public string? IncompleteRemotePath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteLocalPath))]
+        public string? IncompleteLocalPath { get; }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadStorageMountId))]
         public long? DownloadStorageMountId { get; }
@@ -192,7 +204,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     {
         public SaveAcquisitionConnectionDataV1(string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, string? apiKey, bool isEnabled, int priority, int[]? categories,
             string? downloadCategory, string? remotePath, string? localPath, string? username = null, int? maxConnections = null, string? password = null, int[]? mediaTypeIds = null,
-            bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, string? host = null, int? port = null, bool? useSsl = null, long? downloadStorageMountId = null, bool removesCompleted = true)
+            bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, string? host = null, int? port = null, bool? useSsl = null, long? downloadStorageMountId = null, bool removesCompleted = true, string? incompleteRemotePath = null, string? incompleteLocalPath = null, bool removesFailed = true)
         {
             DownloadStorageMountId = downloadStorageMountId;
             Host = host;
@@ -214,8 +226,11 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             Categories = categories ?? [];
             DownloadCategory = downloadCategory;
             RemovesCompleted = removesCompleted;
+            RemovesFailed = removesFailed;
             RemotePath = remotePath;
             LocalPath = localPath;
+            IncompleteRemotePath = incompleteRemotePath;
+            IncompleteLocalPath = incompleteLocalPath;
         }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Name))]
@@ -256,11 +271,20 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RemovesCompleted))]
         public bool RemovesCompleted { get; }
 
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RemovesFailed))]
+        public bool RemovesFailed { get; }
+
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RemotePath))]
         public string? RemotePath { get; }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.LocalPath))]
         public string? LocalPath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteRemotePath))]
+        public string? IncompleteRemotePath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteLocalPath))]
+        public string? IncompleteLocalPath { get; }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadStorageMountId))]
         public long? DownloadStorageMountId { get; }
@@ -270,8 +294,11 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             base.Validate();
 
             // Download settings belong to download clients; mappings are complete pairs.
+            if ((IncompleteRemotePath is null) != (IncompleteLocalPath is null))
+                throw new DataValidationException(nameof(IncompleteLocalPath), "required");
+
             if (AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd
-                && (DownloadCategory is not null || RemotePath is not null || LocalPath is not null || DownloadStorageMountId is not null))
+                && (DownloadCategory is not null || RemotePath is not null || LocalPath is not null || DownloadStorageMountId is not null || IncompleteRemotePath is not null || IncompleteLocalPath is not null))
             {
                 throw new DataValidationException(nameof(DownloadCategory), "invalid_transition");
             }
