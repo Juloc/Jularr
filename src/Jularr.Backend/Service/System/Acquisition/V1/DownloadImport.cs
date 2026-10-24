@@ -114,7 +114,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             // A trustworthy EPUB language tag can contradict a strictly configured source
             // release. Hold the original file for the Owner instead of importing the wrong language.
-            // PDFs/EPUBs without declared language are not guessed or silently relabelled.
+            // EPUBs without verifiable language metadata wait for manual review under strict profiles.
+            // PDFs have no reliable language reader here; selection still requires release language evidence.
             if (acquisitionProfile is { IsBook: true, LanguageFallback: LanguageFallbackType.None, LanguageOrder.Length: > 0 })
             {
                 try
@@ -122,9 +123,10 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     foreach (var placement in placements.Where(placement => placement.Extension.Equals(".epub", StringComparison.OrdinalIgnoreCase)))
                     {
                         await using var book = await source.OpenReadAsync(StoragePath.Combine(sourceDirectory, placement.SourcePath), ct);
-                        if (BookDocumentLanguages.ContradictsStrictProfile(acquisitionProfile, BookDocumentLanguages.ReadEpub(book)))
+                        var languageIssue = BookDocumentLanguages.StrictEpubAttentionReason(acquisitionProfile, BookDocumentLanguages.ReadEpub(book));
+                        if (languageIssue is not null)
                         {
-                            await AttentionAsync(context, download.OperationId, "import_book_language_mismatch", null, ct);
+                            await AttentionAsync(context, download.OperationId, languageIssue, null, ct);
                             return;
                         }
                     }

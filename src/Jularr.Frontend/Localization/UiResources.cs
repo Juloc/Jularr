@@ -1792,6 +1792,8 @@ namespace Jularr.Frontend.Localization
             new("acquisition.outcome.import_path_unmapped", "Download folder is not mapped to storage"),
             new("acquisition.outcome.import_no_library", "No library path for this media type"),
             new("acquisition.outcome.import_source_unavailable", "Download folder is unreachable"),
+            new("acquisition.outcome.import_book_language_unknown", "EPUB language could not be verified. The strict profile requires manual review; the download was kept."),
+            new("acquisition.outcome.import_book_language_mismatch", "EPUB language differs from the mandatory profile language. The download was kept for review."),
             new("acquisition.outcome.import_storage_unavailable", "Storage became unavailable while importing"),
             new("acquisition.outcome.import_assignment_failed", "The copied files could not be fully assigned to the library. Download files were kept for recovery."),
             new("acquisition.outcome.import_target_conflict", "All available import filenames are occupied. The existing library files were not overwritten."),

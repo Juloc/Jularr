@@ -37,6 +37,8 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.import_storage_unavailable", "The storage became unavailable while importing."),
             new("errors.import_library_unavailable", "The library storage is not reachable."),
             new("errors.import_source_unavailable", "The folder cannot be read."),
+            new("errors.import_book_language_unknown", "The EPUB does not declare a verifiable language. Review it manually."),
+            new("errors.import_book_language_mismatch", "The EPUB declares a language not permitted by the strict profile. Review it manually."),
             new("errors.import_assignment_failed", "The files could not be fully assigned to the library."),
             new("errors.storage_waking", "The storage device is waking up. Please try again shortly."),
             new("errors.playback_conversion_unavailable", "This file cannot be played directly, and conversion is not available yet."),
