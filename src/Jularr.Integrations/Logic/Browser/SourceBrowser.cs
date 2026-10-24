@@ -42,6 +42,7 @@ namespace Jularr.Integrations.Logic.Browser
         private readonly SemaphoreSlim _gate = new(1, 1);
         private readonly string? _path;
         private readonly BrowserPackages? _packages;
+        private BrowserEgressProxy? _egress;
         private readonly string _profile;
         private readonly string _downloads;
         private readonly List<SourceBrowserEvent> _events = [];
@@ -99,6 +100,12 @@ namespace Jularr.Integrations.Logic.Browser
 
         public async Task StopAsync()
         {
+            // Stop an earlier process after a host restart too, not just one started by this object.
+            // Never shut down an external browser selected by RemoteAddress.
+            if (string.IsNullOrWhiteSpace(_options.RemoteAddress))
+            {
+                await CloseRunningBrowserAsync(CancellationToken.None);
+            }
             await CloseAsync();
             Note("stopped", "the browser is stopped");
         }
@@ -427,6 +434,8 @@ namespace Jularr.Integrations.Logic.Browser
 
         public void Dispose()
         {
+            _egress?.Dispose();
+            _egress = null;
             var client = _client;
             _client = null;
             if (client is not null)
@@ -451,6 +460,8 @@ namespace Jularr.Integrations.Logic.Browser
 
         private async Task CloseAsync()
         {
+            _egress?.Dispose();
+            _egress = null;
             var client = _client;
             _client = null;
             _refused = false;
@@ -520,8 +531,14 @@ namespace Jularr.Integrations.Logic.Browser
 
             Directory.CreateDirectory(_profile);
 
-            // A browser that still runs with this profile is used as it is; it has passed the source's check already.
-            if (await UseRunningBrowserAsync(ct))
+            // A previous run cannot retain its loopback proxy after the host exits.
+            // Close and restart it with a new public-only tunnel. Local test fixtures
+            // deliberately keep their existing browser and do not enable interception.
+            if (!_options.AllowPrivateAddressesForTests)
+            {
+                await CloseRunningBrowserAsync(ct);
+            }
+            else if (await UseRunningBrowserAsync(ct))
             {
                 return;
             }
@@ -543,6 +560,12 @@ namespace Jularr.Integrations.Logic.Browser
             var port = _options.Port > 0 ? _options.Port : FreePort();
             var executable = BrowserPath ?? throw new SourceBrowserException("Chrome is not installed.");
             var arguments = $"--remote-debugging-port={port} --user-data-dir=\"{_profile}\" --no-first-run --no-default-browser-check --window-size=1280,900 about:blank";
+            if (!_options.AllowPrivateAddressesForTests)
+            {
+                _egress = new BrowserEgressProxy();
+                _egress.Start();
+                arguments += $" --proxy-server=http://127.0.0.1:{_egress.Port} --proxy-bypass-list=\"<-loopback>\" --disable-quic --force-webrtc-ip-handling-policy=disable_non_proxied_udp";
+            }
             if (_packages is not null && executable == _packages.ExecutablePath)
             {
                 // The optional managed package uses Linux headless mode and does not need a display server.
@@ -581,6 +604,8 @@ namespace Jularr.Integrations.Logic.Browser
                 }
             }
 
+            _egress?.Dispose();
+            _egress = null;
             throw new SourceBrowserException("The browser did not open its debugging port.");
         }
 
