@@ -38,7 +38,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 .ToArray();
 
             var winner = ranked.FirstOrDefault(evaluation => evaluation.IsSelectable);
-            var runnerUp = winner is null ? null : ranked.Skip(1).FirstOrDefault(evaluation => evaluation.IsSelectable);
+            var runnerUp = winner is null ? null : ranked.SkipWhile(evaluation => !ReferenceEquals(evaluation, winner)).Skip(1).FirstOrDefault(evaluation => evaluation.IsSelectable);
             return new SelectionResult(ranked, winner, winner is null ? null : WinnerReason(profile, winner, runnerUp), OutcomeOf(ranked));
         }
 
@@ -88,7 +88,7 @@ namespace Jularr.Backend.Logic.Acquisition
             if (profile.IsBook && profile.LanguageOrder.Length > 0
                 && !UpgradePolicy.IsRequested(profile, candidate.Languages) && !UpgradePolicy.IsFallback(profile, candidate.Languages))
             {
-                reasons.Add(new SelectionReason(SelectionReasonKind.Profile, "LanguageNotAllowed"));
+                reasons.Add(new SelectionReason(SelectionReasonKind.Profile, candidate.Languages.Count == 0 ? "LanguageUnknown" : "LanguageNotAllowed"));
                 return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
             }
 
@@ -133,6 +133,12 @@ namespace Jularr.Backend.Logic.Acquisition
             if (runnerUp is null)
             {
                 return new ReleaseReason("OnlyCandidate");
+            }
+
+            if (profile.IsBook && profile.LanguageOrder.Length > 0
+                && UpgradePolicy.IsRequested(profile, winner.Candidate.Languages) != UpgradePolicy.IsRequested(profile, runnerUp.Candidate.Languages))
+            {
+                return new ReleaseReason("PreferredLanguage");
             }
 
             if (winner.Candidate.IndexerPriority != runnerUp.Candidate.IndexerPriority)

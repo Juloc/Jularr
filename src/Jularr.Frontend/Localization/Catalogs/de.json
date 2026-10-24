@@ -4696,6 +4696,14 @@
    "Quality not allowed",
    "Qualität nicht erlaubt"
   ],
+  "acquisition.reason.LanguageNotAllowed": [
+   "Language not allowed by the request",
+   "Sprache der Datei ist nicht für diese Anfrage erlaubt"
+  ],
+  "acquisition.reason.LanguageUnknown": [
+   "File language is unknown; review manually",
+   "Sprache der Datei unbekannt; bitte manuell prüfen"
+  ],
   "acquisition.reason.NotAnUpgrade": [
    "No upgrade of the present quality",
    "Kein Upgrade der vorhandenen Qualität"

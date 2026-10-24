@@ -160,6 +160,28 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Selection_UntaggedBookDoesNotGuessOriginalLanguage()
+        {
+            var candidate = Candidate("Héctor García - IKIGAI (epub)");
+            Assert.AreEqual(0, candidate.Languages.Count);
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Original, "EN"), [candidate]);
+
+            Assert.IsNull(result.Winner);
+            Assert.AreEqual(SelectionDecision.ManualReview, result.Ranked.Single().Decision);
+            Assert.AreEqual("LanguageUnknown", result.Ranked.Single().Reasons.Last().Code);
+        }
+
+        [TestMethod]
+        public void Selection_RequestedLanguageBeatsSourcePriorityAndExplainsWhy()
+        {
+            var result = ReleaseSelectionEngine.Select(Profile(),
+                [Candidate("Héctor García - IKIGAI (EN) (epub)", false, 1, "Usenet"),
+                 Candidate("Héctor García - IKIGAI (DE) (epub)", false, 50, "Anna")]);
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("PreferredLanguage", result.WinnerReason!.Code);
+        }
+
+        [TestMethod]
         public void Selection_WithinOneSource_TheQuality_Still_Decides()
         {
             var result = ReleaseSelectionEngine.Select(Profile(),

@@ -432,7 +432,7 @@ Ihre Verträge stehen in [BACKEND_NEXT](docs/BACKEND_NEXT.md).
 Razor-Integrationstests verwenden ausschließlich isoliertes PostgreSQL
 und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste.
 
-Bei Buch-Requests ist die Sprache eine Zulassungsregel: die gewünschten Sprachen werden vor Quellenpriorität ausgewählt; nur die explizite Profil-Fallbacksprache darf automatisch folgen. Andere Sprachen bleiben als manuell prüfbare Treffer sichtbar. Die Suche wertet weitere Titelvarianten aus, bevor sie auf eine Fallbacksprache zurückfällt.
+Bei Buch-Requests ist die Sprache eine Zulassungsregel: die gewünschten Sprachen werden vor Quellenpriorität ausgewählt; nur die explizite Profil-Fallbacksprache darf automatisch folgen. Unbekannte oder nicht erlaubte Sprachen bleiben für die manuelle Prüfung sichtbar; fehlende Sprachangaben werden nicht als Originalsprache angenommen. Die Suche wertet weitere Titelvarianten aus, bevor sie auf eine Fallbacksprache zurückfällt.
 
 Arr+ betreibt Jularr vollständig selbst. Nativer Downloader und optionale externe
 Downloader wie SABnzbd verwenden dieselbe Pipeline. Der native Downloader nutzt
