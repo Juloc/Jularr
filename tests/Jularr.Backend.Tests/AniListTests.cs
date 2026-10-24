@@ -9,6 +9,7 @@ using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.System.Media.V1;
+using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.AniList;
 using Jularr.Integrations.Logic.AniList;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,7 +52,11 @@ namespace Jularr.Backend.Tests
         {
             using var storage = new LibraryTests.TemporaryDirectory();
             var aniList = new FakeAniList();
-            await using var host = await LibraryTests.CreateHostAsync(storage.Path, services: services => services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList));
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, services: services =>
+            {
+                services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList);
+                services.AddHttpClient<AniBridgeMappings>().ConfigurePrimaryHttpMessageHandler(() => new FakeAniBridge());
+            });
 
             // An anime series with two seasons, a second one with two candidates and a Manga without any.
             await host.Fixture.RunSqlAsync("""
@@ -60,6 +65,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") SELECT 20, 300, 2, n FROM generate_series(1, 12) AS n;
                 INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") SELECT 10, 100, 2, n FROM generate_series(1, 12) AS n;
                 INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") SELECT 10, 200, 2, n FROM generate_series(1, 24) AS n;
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (20, 'tvdb', '88');
                 """);
             await RunAsync(host);
 
@@ -73,6 +79,14 @@ namespace Jularr.Backend.Tests
             var catalog = await details.Content.ReadFromJsonAsync<DiscoverCatalogEntryV1>();
             Assert.AreEqual(10L, catalog?.WorkId);
             Assert.AreEqual(2, catalog?.SeasonNumber);
+
+            // AniBridge resolves a TVDB identity even when title matching is still awaiting manual review.
+            using var bridged = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/entry",
+                new ReadDiscoverCatalogEntryDataV1(Data.Enums.Media.MediaType.Series, "anilist", "7", Data.Enums.Media.MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, bridged.StatusCode, await bridged.Content.ReadAsStringAsync());
+            var bridgedEntry = await bridged.Content.ReadFromJsonAsync<DiscoverCatalogEntryV1>();
+            Assert.AreEqual(20L, bridgedEntry?.WorkId);
+            Assert.AreEqual(1, bridgedEntry?.SeasonNumber);
 
             // The person picks one candidate; the mapping is manual. Neither a missing entry nor a decided Work is accepted.
             using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/matches");
@@ -96,6 +110,20 @@ namespace Jularr.Backend.Tests
         {
             await using var scope = host.Services.CreateAsyncScope();
             await scope.ServiceProvider.GetRequiredService<MatchAniListV1>().ExecuteAsync<UpdateResult>(new MediaMatchParametersV1(), default);
+        }
+
+        private sealed class FakeAniBridge : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+                Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""
+                        {
+                            "$meta":{"schema_version":"3.0.3"},
+                            "anilist:7":{"tvdb_show:88:s1":{"1-12":"1-12"}}
+                        }
+                        """, Encoding.UTF8, "application/json")
+                });
         }
 
         private sealed class FakeAniList : HttpMessageHandler

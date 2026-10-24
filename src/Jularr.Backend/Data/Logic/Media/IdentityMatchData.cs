@@ -79,7 +79,7 @@ namespace Jularr.Backend.Data.Logic.Media
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value), false)]
         public string? TmdbMovieId { get; }
 
-        [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.SeasonNumber), false)]
+        [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.CatalogSeasonNumber), false)]
         public int? SeasonNumber { get; }
     }
 
@@ -94,7 +94,7 @@ namespace Jularr.Backend.Data.Logic.Media
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }
 
-        [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.SeasonNumber), false)]
+        [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.CatalogSeasonNumber), false)]
         public int? SeasonNumber { get; }
     }
 

@@ -292,7 +292,7 @@ namespace Jularr.Backend.Data.User.Discover.V1
         public string? Author { get; init; }
 
         // The verified TVDB season opened when this is an AniList anime entry.
-        [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.SeasonNumber), false)]
+        [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.CatalogSeasonNumber), false)]
         public int? SeasonNumber { get; init; }
     }
 
