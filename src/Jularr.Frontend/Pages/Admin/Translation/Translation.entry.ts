@@ -1,3 +1,5 @@
+export {};
+
 // Admin-only model status polling. A GET never starts inference or a download.
 const status = document.querySelector<HTMLElement>('[data-translation-download]');
 if (status) {
