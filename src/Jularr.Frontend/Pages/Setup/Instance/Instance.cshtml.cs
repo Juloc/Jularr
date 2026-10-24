@@ -31,7 +31,8 @@ namespace Jularr.Frontend.Pages.Setup.Instance
             ("setup.modules.reading", "book", ["Translation", "Ocr", "SmartPdf", "Uploads"]),
             ("setup.modules.games", "gamepad", ["Emulation"]),
             ("setup.modules.discovery", "search", ["DiscoverCache", "LocalDiscovery", "Franchises"]),
-            ("setup.modules.personal", "users", ["Notifications", "Collections", "Calendar", "Statistics", "UnitGroups", "HomeLayout", "Profiles", "ProgressSync", "Devices", "Registration"]),
+            ("setup.modules.personal", "bookmark", ["Notifications", "Collections", "Calendar", "Statistics", "UnitGroups", "HomeLayout"]),
+            ("setup.modules.accounts", "users", ["Profiles", "ProgressSync", "Devices", "Registration"]),
             ("setup.modules.operations", "settings", ["Diagnostics"])
         ];
 
@@ -144,7 +145,8 @@ namespace Jularr.Frontend.Pages.Setup.Instance
                     foreach (var (title, icon, groupKeys) in extraGroups)
                     {
                         if (groupKeys.Length == 0) continue;
-                        all.Wrap(group => new OptionGroup(new Icon(icon, assets, 16), texts[title], Count(groupKeys, []), true, assets, [.. group]), inside =>
+                        all.Wrap(group => new OptionGroup(new Icon(icon, assets, 16), texts[title], Count(groupKeys, []), false, assets, [.. group])
+                            .Attribute("data-has-enabled", groupKeys.Any(key => enabled.GetValueOrDefault(key)) ? "true" : "false"), inside =>
                         {
                             foreach (var key in groupKeys) ModuleRow(inside, key, row => row.Card());
                         });
