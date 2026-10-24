@@ -84,7 +84,8 @@ namespace Jularr.Backend.Tests
             using var browserPage = await host.SendAsync(HttpMethod.Get, "/Admin/Browser");
             var browserHtml = await browserPage.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, browserPage.StatusCode, browserHtml);
-            StringAssert.Contains(browserHtml, "docker compose exec -u root jularr jularr-browser install");
+            StringAssert.Contains(browserHtml, "/Admin/Instance/Modules");
+            StringAssert.Contains(browserHtml, "Browser package");
         }
 
         [TestMethod]

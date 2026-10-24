@@ -9076,6 +9076,38 @@
    "Install Chrome inside this Jularr container. Package installation requires container root and cannot run from the web interface. No additional container is needed.",
    "Chrome wird im bestehenden Jularr-Container installiert. Die Installation benötigt Root-Rechte im Container und kann nicht über die Weboberfläche ausgeführt werden. Ein zusätzlicher Container ist nicht nötig."
   ],
+  "admin.browser.installation": [
+   "Browser package",
+   "Browser-Paket"
+  ],
+  "admin.browser.installation.disabled": [
+   "Disabled / not installed",
+   "Deaktiviert / nicht installiert"
+  ],
+  "admin.browser.installation.downloading": [
+   "Downloading",
+   "Download läuft"
+  ],
+  "admin.browser.installation.extracting": [
+   "Installing",
+   "Wird installiert"
+  ],
+  "admin.browser.installation.installed": [
+   "Installed",
+   "Installiert"
+  ],
+  "admin.browser.installation.failed": [
+   "Installation failed",
+   "Installation fehlgeschlagen"
+  ],
+  "admin.browser.moduleHint": [
+   "Browser installation and removal follow the optional Browser module switch.",
+   "Installation und Bereinigung erfolgen über den Schalter des optionalen Browser-Moduls."
+  ],
+  "admin.browser.moduleLink": [
+   "Open module settings",
+   "Moduleinstellungen öffnen"
+  ],
   "admin.browser.installSteps": [
    "Show installation commands",
    "Installationsbefehle anzeigen"
