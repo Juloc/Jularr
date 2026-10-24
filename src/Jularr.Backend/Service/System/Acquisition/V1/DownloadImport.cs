@@ -110,8 +110,34 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
+            var acquisitionProfile = target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target);
+
+            // A trustworthy EPUB language tag can contradict a strictly configured source
+            // release. Hold the original file for the Owner instead of importing the wrong language.
+            // PDFs/EPUBs without declared language are not guessed or silently relabelled.
+            if (acquisitionProfile is { IsBook: true, LanguageFallback: LanguageFallbackType.None, LanguageOrder.Length: > 0 })
+            {
+                try
+                {
+                    foreach (var placement in placements.Where(placement => placement.Extension.Equals(".epub", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        await using var book = await source.OpenReadAsync(StoragePath.Combine(sourceDirectory, placement.SourcePath), ct);
+                        if (BookDocumentLanguages.ContradictsStrictProfile(acquisitionProfile, BookDocumentLanguages.ReadEpub(book)))
+                        {
+                            await AttentionAsync(context, download.OperationId, "import_book_language_mismatch", null, ct);
+                            return;
+                        }
+                    }
+                }
+                catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+                {
+                    await AttentionAsync(context, download.OperationId, "import_source_unavailable", null, ct);
+                    return;
+                }
+            }
+
             var commit = await CommitAsync(context, new ImportCommitRequest(root, download.WorkId, download.GamePlatformId, placements, source, sourceDirectory, files, _ => facts,
-                ImportTransferMode.Link, download.OperationId, null, download.MediaTypeId, target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target)), ct);
+                ImportTransferMode.Link, download.OperationId, null, download.MediaTypeId, acquisitionProfile), ct);
             if (commit.FailureKey is { } failure)
             {
                 await AttentionAsync(context, download.OperationId, failure, null, ct);
