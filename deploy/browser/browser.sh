@@ -55,7 +55,7 @@ run_browser() {
   fi
   mkdir -p "$home/profile" "$home/cache" "$home/config" "$home/tmp"
   XDG_CACHE_HOME="$home/cache" XDG_CONFIG_HOME="$home/config" TMPDIR="$home/tmp" DISPLAY="$display" "$chrome" --remote-debugging-port="$port" --remote-debugging-address=127.0.0.1 \
-    --user-data-dir="$home/profile" --no-first-run --no-default-browser-check --no-sandbox \
+    --user-data-dir="$home/profile" --no-first-run --no-default-browser-check --no-sandbox --disable-dev-shm-usage \
     --enable-unsafe-swiftshader --use-angle=swiftshader --window-size=1280,900 about:blank &
   browser=$!
   trap 'kill "$browser" 2>/dev/null || true; if [ -n "$xvfb" ]; then kill "$xvfb" 2>/dev/null || true; fi' EXIT HUP INT TERM
