@@ -588,6 +588,31 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ImportPage_ApplyOnlyProcessesRowsExplicitlyIncludedInThePreview()
+        {
+            await using var host = await CreateHostAsync(new FakeProviders());
+            const string list = """
+                {"version":1,"items":[{"type":"movie","ids":{"tmdb":"603"},"title":"The Matrix"}]}
+                """;
+
+            var created = await RunAsync(host, list, MediaImportActionType.AddOnly);
+            Assert.AreEqual(MediaImportOutcomeType.Added, created.Rows.Single().OutcomeTypeId);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Import");
+            var token = LibraryTests.Token(await page.Content.ReadAsStringAsync());
+            using var response = await host.SendAsync(HttpMethod.Post, "/Admin/Import?handler=ApplyStream", new FormUrlEncodedContent(
+            [
+                KeyValuePair.Create("__RequestVerificationToken", token),
+                KeyValuePair.Create("Json", list),
+                KeyValuePair.Create("Action", "3"),
+                KeyValuePair.Create("Choices[0].Index", "0")
+                // No Include field: the original AddOnly preview never offered this Work for monitoring.
+            ]));
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            StringAssert.Contains(await response.Content.ReadAsStringAsync(), "\"status\":\"Skipped\"");
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" """));
+        }
+
+        [TestMethod]
         public async Task ImportPage_ANormalUser_IsRefused()
         {
             await using var host = await CreateHostAsync(new FakeProviders());
