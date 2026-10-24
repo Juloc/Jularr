@@ -1,5 +1,5 @@
 import htmx from "htmx.org";
-import { hasNewBuild, signInForExpiredPage, staysInApp } from "./Navigation";
+import { hasNewBuild, redirectedToSignIn, signInForExpiredPage, staysInApp } from "./Navigation";
 
 // The settle step temporarily copies every old attribute, including control values.
 // Focused inputs then keep that stale value. Native SCSS transitions need no such step.
@@ -41,6 +41,12 @@ document.addEventListener("htmx:before:swap", event => {
     const ctx = contextOf(event);
     if (ctx.response?.raw.status === 401) {
         event.preventDefault();
+        return;
+    }
+    // A browser that followed the redirect has a successful HTTP response, but it is still the login shell.
+    if (redirectedToSignIn(ctx.response?.raw.url, ctx.request.action, location)) {
+        event.preventDefault();
+        location.replace(signInForExpiredPage(ctx.request.method, ctx.request.action, location));
         return;
     }
     // Never swap HTML from a new release into the old document's CSS and JavaScript.
