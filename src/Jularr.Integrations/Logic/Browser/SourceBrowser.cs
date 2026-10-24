@@ -20,6 +20,7 @@ namespace Jularr.Integrations.Logic.Browser
         public int DownloadTimeoutSeconds { get; set; } = 600;
         public bool NoSandbox { get; set; }
         internal bool IsManaged { get; set; }
+        internal bool InstallLocally { get; set; }
 
         // Local HTTP test fixtures need access that production source navigation must not have.
         internal bool AllowPrivateAddressesForTests { get; set; }
