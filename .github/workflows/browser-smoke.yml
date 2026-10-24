@@ -5,7 +5,7 @@ name: Browser Smoke
 on:
   pull_request:
     branches: [main, dev]
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, converted_to_draft, ready_for_review]
     paths:
       - 'src/Jularr.Frontend/**'
       - 'tests/Jularr.E2E.Tests/**'
