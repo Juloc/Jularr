@@ -29,8 +29,14 @@ services:
       # Optional existing private Ollama runtime; no model weights or runtime in the Jularr image.
       LocalTranslation__Endpoint: ${JULARR_OLLAMA_ENDPOINT:-}
       LocalTranslation__OperatorVerifiedFreeBytes: ${JULARR_OLLAMA_VERIFIED_FREE_BYTES:-0}
+      # Opt-in LAN discovery only; publish the actual externally reachable web port.
+      DeviceDiscovery__Enabled: ${JULARR_TV_DISCOVERY:-false}
+      DeviceDiscovery__WebPort: ${JULARR_TV_WEB_PORT:-8097}
+      DeviceDiscovery__Name: ${JULARR_TV_NAME:-Jularr}
     ports:
       - "8097:8080"
+      # UDP port 37812; required only when JULARR_TV_DISCOVERY=true.
+      - "37812:37812/udp"
       # The browser of the container, if it runs one (see deploy/browser/browser.sh).
       - "127.0.0.1:9223:9223"
     volumes:
