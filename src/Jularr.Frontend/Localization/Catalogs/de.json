@@ -12260,6 +12260,10 @@
    "Discover & catalogs",
    "Discover & Kataloge"
   ],
+  "setup.modules.extra": [
+   "Additional modules — all options",
+   "Weitere Module – alle Optionen"
+  ],
   "setup.group.active": [
    "{0}/{1} on",
    "{0}/{1} aktiv"
