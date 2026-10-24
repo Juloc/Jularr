@@ -52,10 +52,34 @@ namespace Jularr.E2E.Tests
                 END $$;
                 """);
 
-            // The Overview: the hero with the availability on the poster and the progress at its foot, one row of tabs, and a short run of each block with its link.
+            // The Overview: a plain cover, a standalone availability chip, and actions aligned with progress.
             await page.GotoAsync("/Details/7001");
             var hero = page.Locator(".media-hero--poster");
-            await Assertions.Expect(hero.Locator(".media-hero__poster .media-availability-badge")).ToBeVisibleAsync();
+            await Assertions.Expect(hero.Locator(".media-hero__poster .media-availability-badge")).ToHaveCountAsync(0);
+            await Assertions.Expect(hero.Locator(".media-hero__chips .media-availability-chip")).ToBeVisibleAsync();
+
+            await page.SetViewportSizeAsync(new ViewportSize { Width = 1440, Height = 900 });
+            var posterBox = await hero.Locator(".media-hero__poster").BoundingBoxAsync();
+            var contentBox = await hero.Locator(".media-hero__content").BoundingBoxAsync();
+            var actionsBox = await hero.Locator(".media-hero__actions").BoundingBoxAsync();
+            var progressBox = await hero.Locator(".media-hero__progress").BoundingBoxAsync();
+            Assert.IsNotNull(posterBox);
+            Assert.IsNotNull(contentBox);
+            Assert.IsNotNull(actionsBox);
+            Assert.IsNotNull(progressBox);
+            Assert.IsTrue(Math.Abs(contentBox.Y - posterBox.Y) <= 2, "The desktop poster must start at the top of the content.");
+            Assert.IsTrue(Math.Abs(contentBox.Y + contentBox.Height - (posterBox.Y + posterBox.Height)) <= 2, "The poster must reach the bottom of the content.");
+            Assert.IsTrue(Math.Abs(actionsBox.Y + actionsBox.Height - (progressBox.Y + progressBox.Height)) <= 18, "Actions and progress must share a bottom row.");
+
+            await page.SetViewportSizeAsync(new ViewportSize { Width = 390, Height = 844 });
+            await Assertions.Expect(hero.Locator(".media-hero__poster")).ToBeHiddenAsync();
+            await Assertions.Expect(hero.Locator(".media-hero__chips .media-availability-chip")).ToBeVisibleAsync();
+            var mobileActions = await hero.Locator(".media-hero__actions").BoundingBoxAsync();
+            var mobileProgress = await hero.Locator(".media-hero__progress").BoundingBoxAsync();
+            Assert.IsNotNull(mobileActions);
+            Assert.IsNotNull(mobileProgress);
+            Assert.IsTrue(mobileProgress.Y >= mobileActions.Y + mobileActions.Height, "Mobile progress must follow the actions.");
+            await page.SetViewportSizeAsync(new ViewportSize { Width = 1440, Height = 900 });
             await Assertions.Expect(hero.Locator(".media-hero__progress-bar")).ToHaveAttributeAsync("value", new Regex("^(1[0-9]|2[0-9])$"));
             await Assertions.Expect(hero.Locator(".media-hero__title")).ToHaveTextAsync("Tabbed Show");
             await Assertions.Expect(page.Locator(".navigation-tabs")).ToHaveCountAsync(1);

@@ -12,8 +12,10 @@ namespace Jularr.Frontend.Framework
         private int MonitoredUnits { get; } = monitoredUnits;
         private bool IsPartial => State is MediaAvailabilityState.Partial or MediaAvailabilityState.PartialOtherAudio;
 
-        // Expanded shows the status capsule at rest, as on a title's own poster; on a card it opens on hover and focus.
+        // Card badges expand on hover; details use an always-expanded chip in the tag row.
         public IUiComponent Badge(string href, string? previewId = null, bool expanded = false) => new AvailabilityBadge(this, href, previewId, expanded);
+
+        public IUiComponent HeroChip() => new AvailabilityHeroChip(this);
 
         internal string GetLabel(UiText texts)
         {
@@ -72,6 +74,18 @@ namespace Jularr.Frontend.Framework
                     .Attribute("href", href).Attribute("aria-label", label);
                 if (previewId is not null) link.Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog").Attribute("data-navigation", "full");
                 link.WriteTo(writer, encoder, texts);
+            }
+        }
+
+        private sealed class AvailabilityHeroChip(MediaAvailability symbol) : IUiComponent
+        {
+            public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
+            {
+                var label = texts["media.availability.tag." + symbol.State];
+                if (symbol.IsPartial) label = string.Format(CultureInfo.CurrentCulture, label, symbol.AvailableUnits, symbol.MonitoredUnits);
+                new Span(new CompactSymbol(symbol), new Span(new ValueText(label)).Class("state-chip__label"))
+                    .Class("state-chip state-chip--icon media-availability-chip")
+                    .Attribute("role", "img").Attribute("aria-label", symbol.GetLabel(texts)).WriteTo(writer, encoder, texts);
             }
         }
 

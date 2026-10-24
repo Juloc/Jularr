@@ -1,4 +1,5 @@
 @use "MediaImage";
+@use "MediaAvailability";
 
 .media-hero {
     position: relative;
@@ -52,12 +53,11 @@
     &--placeholder &__body { background: var(--surface-hover); color: var(--text); }
 }
 
-// A title's own hero (the board's proposal): backdrop under two dark gradients, the poster with its tag, then chips, one line of facts with the rating,
-// one summary line that opens on a click and the actions; the profile's progress sits bottom right, a small control top right. The texts are white on the
-// dark artwork in every theme, the way the mockup has them.
+// A detail hero with a plain cover, top-anchored information and an aligned actions/progress footer.
 .media-hero--poster {
     isolation: isolate;
     overflow: visible;
+    min-height: 0;
     margin-bottom: 18px;
     border-radius: var(--radius-dialog);
     background: transparent;
@@ -87,19 +87,26 @@
         position: relative;
         display: grid;
         grid-template-columns: 168px minmax(0, 1fr);
-        align-items: start;
+        align-items: stretch;
         gap: 24px;
         padding: 26px 28px;
     }
 
-    // The profile's progress bar needs its own room at the foot.
-    &.media-hero--progress .media-hero__layout { padding-bottom: 70px; }
+    .media-hero__content {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        min-width: 0;
+        min-height: 285px;
+    }
 
     .media-hero__title { margin: 0; font-size: 34px; font-weight: 850; letter-spacing: -1.3px; line-height: 1.1; overflow-wrap: anywhere; }
 
     .media-hero__poster {
         position: relative;
-        aspect-ratio: 2 / 3;
+        align-self: stretch;
+        height: 100%;
+        min-height: 0;
         overflow: hidden;
         border: 1px solid rgb(255 255 255 / 18%);
         border-radius: 14px;
@@ -123,6 +130,7 @@
     .media-hero__body {
         display: flex;
         flex-direction: column;
+        justify-content: flex-start;
         gap: 9px;
         min-width: 0;
         max-width: none;
@@ -136,6 +144,9 @@
     // Chips are translucent white over the artwork; the green one keeps its mint.
     .media-hero__chips .state-chip { padding: 5px 10px; background: rgb(255 255 255 / 14%); color: #fff; }
     .media-hero__chips .state-chip--success { background: rgb(120 230 190 / 20%); color: #b9f5df; }
+    .media-hero__chips .media-availability-chip { background: rgb(255 255 255 / 14%); color: #fff; }
+    .media-hero__chips .media-availability-chip .media-availability { color: #fff; }
+    .media-hero__chips .media-availability-chip .media-availability__track { color: rgb(255 255 255 / 45%); }
 
     .media-hero__meta {
         display: flex;
@@ -163,25 +174,45 @@
     }
 
     .media-hero__overview {
-        max-width: 760px;
+        max-width: none;
         margin: 0;
         color: #e9e4f7;
         font-size: 13px;
         line-height: 1.5;
         cursor: pointer;
+
+        .truncated__text {
+            display: -webkit-box;
+            overflow: hidden;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 5;
+            white-space: normal;
+        }
+        .truncated__tip { display: none; }
+        &:focus-visible { outline: 2px solid #fff; outline-offset: 3px; border-radius: 3px; }
     }
 
-    // The summary opens on a click and closes on the next.
-    .media-hero__overview--open .truncated__text { overflow: visible; white-space: normal; }
-    .media-hero__overview--open .truncated__tip { display: none; }
+    .media-hero__overview--open .truncated__text { display: block; overflow: visible; -webkit-line-clamp: unset; }
+
+    .media-hero__footer {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: end;
+        gap: 12px 20px;
+        min-width: 0;
+        margin-top: auto;
+    }
+    .media-hero__footer--progress { grid-template-columns: minmax(0, 1fr) minmax(180px, 300px); }
 
     .media-hero__actions {
         position: relative;
         z-index: 2;
         flex-wrap: wrap;
         align-items: center;
+        align-content: end;
         gap: 8px;
-        margin-top: 4px;
+        min-width: 0;
+        margin-top: 0;
     }
 
     // Controls of the actions are translucent white too.
@@ -210,12 +241,13 @@
 
     .media-hero__corner { position: absolute; top: 18px; right: 20px; z-index: 2; display: flex; align-items: center; gap: 8px; }
 
-    // The profile's progress: a word and a figure over a thin bar, bottom right.
+    // Progress shares the footer's bottom edge with the action group.
     .media-hero__progress {
-        position: absolute;
-        right: 22px;
-        bottom: 18px;
-        width: min(300px, 42%);
+        position: relative;
+        width: 100%;
+        max-width: 300px;
+        min-width: 0;
+        margin-left: auto;
         color: #fff;
     }
 
@@ -247,13 +279,17 @@
     }
 
     @media (max-width: 1180px) {
-        .media-hero__layout { grid-template-columns: 130px minmax(0, 1fr); padding-bottom: 90px; }
-        .media-hero__progress { right: 22px; left: 22px; width: auto; }
+        .media-hero__layout { grid-template-columns: 130px minmax(0, 1fr); }
+        .media-hero__footer--progress { grid-template-columns: minmax(0, 1fr) minmax(160px, 230px); }
     }
 
     @media (max-width: 700px) {
-        .media-hero__layout { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 22px 18px 100px; }
-        .media-hero__poster { width: 120px; }
+        .media-hero__layout { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 22px 18px 26px; }
+        .media-hero__poster { display: none; }
+        .media-hero__content { min-height: 0; }
+        .media-hero__title { font-size: 29px; }
+        .media-hero__footer, .media-hero__footer--progress { display: flex; flex-direction: column; align-items: stretch; }
+        .media-hero__progress { max-width: none; margin-left: 0; }
     }
 }
 
