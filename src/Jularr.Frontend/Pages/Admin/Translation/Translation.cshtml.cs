@@ -21,28 +21,31 @@ namespace Jularr.Frontend.Pages.Admin.Translation
         {
             page.Title("translation.local.title");
             page.Navigation("nav.admin");
+            page.Asset("Pages/Admin/Translation/Translation.entry.ts");
             page.Content.Add(new P(new Text("translation.local.description")));
             page.Content.Add(new A(new Text("translation.local.back")).Attribute("href", "/Admin/Instance"));
             if (_models is null) return;
             if (!_models.Configured)
-            {
                 page.Content.Add(new P(new Text("translation.local.configure")).Attribute("role", "status"));
-                return;
-            }
-
-            if (_models.Problem is not null)
-            {
+            else if (_models.Problem is not null)
                 page.Content.Add(new P(new Text("translation.local.offline")).Attribute("role", "alert"));
-                return;
-            }
 
-            page.Content.Add(new P(new Text("translation.local.capacity")));
-            if (_models.DownloadState is not "idle")
-            {
-                page.Content.Add(new P(new ValueText(texts["translation.local.state." + _models.DownloadState] + ": "
-                    + _models.DownloadModel + " (" + _models.DownloadProgress.ToString(CultureInfo.InvariantCulture) + "%)"))
-                    .Attribute("role", "status"));
-            }
+            page.Content.Add(new P(new ValueText(texts["translation.local.capacity"] + " "
+                + Math.Round(_models.VerifiedFreeBytes / 1e9, 1).ToString("0.0", CultureInfo.InvariantCulture) + " GB")));
+            // The queue belongs to Jularr and remains visible even when Ollama is offline.
+            // Polling updates only this status; a finished download reloads the model actions.
+            var download = new P(new ValueText(_models.DownloadState is "idle" ? ""
+                : texts["translation.local.state." + _models.DownloadState] + ": " + _models.DownloadModel
+                    + " (" + _models.DownloadProgress.ToString(CultureInfo.InvariantCulture) + "%)"))
+                .Attribute("data-translation-download", "")
+                .Attribute("data-models-url", "/api/v1/admin/translation/models")
+                .Attribute("data-download-state", _models.DownloadState)
+                .Attribute("role", "status")
+                .Attribute("aria-live", "polite");
+            foreach (var state in new[] { "queued", "downloading", "installed", "failed", "interrupted" })
+                download.Attribute("data-state-" + state, texts["translation.local.state." + state]);
+            if (_models.DownloadState is "idle") download.Attribute("hidden", "hidden");
+            page.Content.Add(download);
 
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             foreach (var model in _models.Approved)
@@ -52,11 +55,12 @@ namespace Jularr.Frontend.Pages.Admin.Translation
                 var size = model switch { "translategemma:4b" => 3_300_000_000L, "translategemma:12b" => 8_100_000_000L, _ => 17_000_000_000L };
                 var sizeText = Math.Round(size / 1e9, 1).ToString("0.0", CultureInfo.InvariantCulture);
                 var state = installed ? running ? "translation.local.loaded" : "translation.local.installed" : "translation.local.notInstalled";
-                var canPull = !installed && _models.VerifiedFreeBytes >= size + 2_000_000_000L && _models.DownloadState is not ("queued" or "downloading");
+                var canPull = _models.Configured && _models.Problem is null && !installed
+                    && _models.VerifiedFreeBytes >= size + 2_000_000_000L && _models.DownloadState is not ("queued" or "downloading");
 
                 page.Content.Add(new Div(
                     new P(new ValueText(model + " · " + sizeText + " GB · " + texts[state])),
-                    installed
+                    installed && _models.Problem is null
                         ? new PostForm(Home + "?handler=Benchmark&model=" + Uri.EscapeDataString(model), csrf, [],
                             new Button(new Text("translation.local.benchmark")).Submit())
                         : canPull

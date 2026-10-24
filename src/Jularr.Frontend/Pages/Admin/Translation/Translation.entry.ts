@@ -1,0 +1,35 @@
+// Admin-only model status polling. A GET never starts inference or a download.
+const status = document.querySelector<HTMLElement>('[data-translation-download]');
+if (status) {
+    const endpoint = status.dataset.modelsUrl!;
+    let previousState = status.dataset.downloadState ?? 'idle';
+    const active = (state: string) => state === 'queued' || state === 'downloading';
+
+    async function refresh(): Promise<void> {
+        if (document.hidden || !status?.isConnected) return;
+        try {
+            const response = await fetch(endpoint, { credentials: 'same-origin', cache: 'no-store' });
+            if (!response.ok) return;
+            const data = await response.json() as {
+                downloadState: string; downloadModel: string; downloadProgress: number;
+            };
+            const state = data.downloadState;
+            if (!['idle', 'queued', 'downloading', 'installed', 'failed', 'interrupted'].includes(state)) return;
+            status.hidden = state === 'idle';
+            const label = status.getAttribute('data-state-' + state) ?? state;
+            status.textContent = state === 'idle' ? '' : `${label}: ${data.downloadModel} (${data.downloadProgress}%)`;
+            status.dataset.downloadState = state;
+            if (active(previousState) && !active(state)) {
+                // Reload server-rendered model cards, their buttons and the offline message.
+                location.reload();
+                return;
+            }
+            previousState = state;
+        } catch {
+            // Keep the last known state; the manual refresh link still works.
+        }
+    }
+    const timer = window.setInterval(() => { void refresh(); }, 3000);
+    window.addEventListener('pagehide', () => window.clearInterval(timer), { once: true });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
+}
