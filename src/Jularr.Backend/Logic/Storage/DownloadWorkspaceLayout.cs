@@ -6,7 +6,7 @@ namespace Jularr.Backend.Logic.Storage
     // Stable operation-owned paths, independent of source provider and download protocol.
     internal static class DownloadWorkspaceLayout
     {
-        private static readonly string[] Categories = ["movies", "tv", "books", "anime", "manga", "lightnovels", "music", "games"];
+        private static readonly string[] Categories = ["movie", "tv", "books", "anime", "manga", "lightnovel", "music", "games"];
 
         public static string Category(MediaType mediaType, MediaSubtype? subtype)
         {
@@ -15,10 +15,10 @@ namespace Jularr.Backend.Logic.Storage
             {
                 MediaSubtype.Anime => "anime",
                 MediaSubtype.Manga => "manga",
-                MediaSubtype.LightNovel => "lightnovels",
+                MediaSubtype.LightNovel => "lightnovel",
                 _ => mediaType switch
                 {
-                    MediaType.Movie => "movies",
+                    MediaType.Movie => "movie",
                     MediaType.Series => "tv",
                     MediaType.Book => "books",
                     MediaType.Music => "music",

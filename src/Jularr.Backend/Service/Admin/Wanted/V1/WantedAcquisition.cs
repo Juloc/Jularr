@@ -220,11 +220,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 return;
             }
 
-            // The same SABnzbd endpoint can have separate connections/categories per media type.
-            // Prefer a matching explicit scope, then the existing priority order; an unscoped
-            // connection remains the fallback for existing installations.
-            var client = clients.Where(connection => connection.MediaTypeIds.Contains((int)target.MediaTypeId))
-                .FirstOrDefault() ?? clients.FirstOrDefault(connection => connection.MediaTypeIds.Length == 0);
+            // Compatibility and media coverage are filtered before priority.
+            var client = DownloadClientSelectionLogic.Select(clients, target.MediaTypeId, AcquisitionConnectionType.Sabnzbd, AcquisitionConnectionType.Usenet);
             if (client is null)
             {
                 throw new ServiceUnavailableException("acquisition_no_download_client");

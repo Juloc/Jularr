@@ -20,3 +20,7 @@ This PR builds on #1566 and updates the **native Usenet and Direct downloader** 
 - #1533 and #1534 both add `0002` migrations and must be reconciled for an ordered schema chain before merging.
 
 A real NAS/SABnzbd/qBittorrent integration test and shared-root configuration remain separate release gates.
+
+## Downloader selection and overlap
+
+Compatible transport and supported media types are filtered **before** ascending priority and stable connection-ID tie breaking. This contract is centralized in `DownloadClientSelectionLogic`; the previous special preference for media-scoped connections is removed. This incorporates priority-selection work from #1567 without introducing a second download-folder layout. #1567 is an overlapping open PR and must **not** be merged independently in its current form.
