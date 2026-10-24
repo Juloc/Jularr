@@ -3111,6 +3111,10 @@
    "Requests",
    "Anfragen"
   ],
+  "instance.module.Browser": [
+   "Browser support",
+   "Browser-Unterstützung"
+  ],
   "instance.module.Acquisition": [
    "Arr+",
    "Arr+"
@@ -9275,6 +9279,38 @@
    "Install Chrome inside this Jularr container. Package installation requires container root and cannot run from the web interface. No additional container is needed.",
    "Chrome wird im bestehenden Jularr-Container installiert. Die Installation benötigt Root-Rechte im Container und kann nicht über die Weboberfläche ausgeführt werden. Ein zusätzlicher Container ist nicht nötig."
   ],
+  "admin.browser.installation": [
+   "Browser package",
+   "Browser-Paket"
+  ],
+  "admin.browser.installation.disabled": [
+   "Disabled / not installed",
+   "Deaktiviert / nicht installiert"
+  ],
+  "admin.browser.installation.downloading": [
+   "Downloading",
+   "Download läuft"
+  ],
+  "admin.browser.installation.extracting": [
+   "Installing",
+   "Wird installiert"
+  ],
+  "admin.browser.installation.installed": [
+   "Installed",
+   "Installiert"
+  ],
+  "admin.browser.installation.failed": [
+   "Installation failed",
+   "Installation fehlgeschlagen"
+  ],
+  "admin.browser.moduleHint": [
+   "Browser installation and removal follow the optional Browser module switch.",
+   "Installation und Bereinigung erfolgen über den Schalter des optionalen Browser-Moduls."
+  ],
+  "admin.browser.moduleLink": [
+   "Open module settings",
+   "Moduleinstellungen öffnen"
+  ],
   "admin.browser.installSteps": [
    "Show installation commands",
    "Installationsbefehle anzeigen"
@@ -12649,6 +12685,10 @@
   "setup.module.help.Acquisition": [
    "Search, monitor, download and import titles; an alternative to Sonarr, Radarr, Readarr and Lidarr.",
    "Titel suchen, überwachen, herunterladen und importieren, als Alternative zu Sonarr, Radarr, Readarr und Lidarr."
+  ],
+  "setup.module.help.Browser": [
+   "Install and manage an optional browser for supported acquisition sources. Turning the module off removes only Jularr-managed browser files.",
+   "Optionalen Browser für unterstützte Bezugsquellen installieren und verwalten. Beim Ausschalten werden nur von Jularr verwaltete Browserdateien entfernt."
   ],
   "setup.module.help.Playback": [
    "Play films and series in the browser.",

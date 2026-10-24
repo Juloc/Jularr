@@ -39,6 +39,16 @@ namespace Jularr.Backend.Tests
 
 
         [TestMethod]
+        public async Task BrowserModule_IsOffByDefaultAndDependsOnAcquisition()
+        {
+            var cs = TestPostgres.ResolveConnectionString(nameof(BrowserModule_IsOffByDefaultAndDependsOnAcquisition));
+            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            Assert.AreEqual(false, await ScalarAsync(cs, "SELECT \"IsEnabled\" FROM \"InstanceModules\" WHERE \"Key\" = 'Browser';"));
+            Assert.AreEqual(1L, await ScalarAsync(cs,
+                "SELECT count(*) FROM \"InstanceModuleDependencies\" WHERE \"ModuleKey\" = 'Browser' AND \"RequiredKey\" = 'Acquisition';"));
+        }
+
+        [TestMethod]
         public async Task ExternalWorks_FreshInstallCreatesTheProviderCatalog()
         {
             var cs = TestPostgres.ResolveConnectionString(nameof(ExternalWorks_FreshInstallCreatesTheProviderCatalog));
