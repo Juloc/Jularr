@@ -39,6 +39,16 @@ namespace Jularr.Backend.Tests
 
 
         [TestMethod]
+        public async Task BrowserModule_IsOffByDefaultAndDependsOnAcquisition()
+        {
+            var cs = TestPostgres.ResolveConnectionString(nameof(BrowserModule_IsOffByDefaultAndDependsOnAcquisition));
+            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            Assert.AreEqual(false, await ScalarAsync(cs, "SELECT \"IsEnabled\" FROM \"InstanceModules\" WHERE \"Key\" = 'Browser';"));
+            Assert.AreEqual(1L, await ScalarAsync(cs,
+                "SELECT count(*) FROM \"InstanceModuleDependencies\" WHERE \"ModuleKey\" = 'Browser' AND \"RequiredKey\" = 'Acquisition';"));
+        }
+
+        [TestMethod]
         public async Task ExternalWorks_FreshInstallCreatesTheProviderCatalog()
         {
             var cs = TestPostgres.ResolveConnectionString(nameof(ExternalWorks_FreshInstallCreatesTheProviderCatalog));
@@ -140,7 +150,7 @@ namespace Jularr.Backend.Tests
             var broken = new DatabaseBaseline(cs, migrations:
                 [.. DatabaseBaseline.Migrations, Probe(DatabaseBaseline.CurrentVersion + 1, "CREATE TABLE \"UpgradeProbe\" (\"Id\" bigint);"), Probe(DatabaseBaseline.CurrentVersion + 2, "SELECT 1 / 0;")]);
             var failed = await Assert.ThrowsExactlyAsync<DatabaseUpgradeException>(() => broken.StartAsync(CancellationToken.None));
-            Assert.AreEqual("0003_probe", failed.Migration);
+            Assert.AreEqual((DatabaseBaseline.CurrentVersion + 2).ToString("0000", System.Globalization.CultureInfo.InvariantCulture) + "_probe", failed.Migration);
             Assert.AreEqual(0, (await TablesAsync(cs)).Length);
             await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
