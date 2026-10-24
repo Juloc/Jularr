@@ -117,6 +117,7 @@ namespace Jularr.E2E.Tests
 
             // Tabs without content are not there at all.
             await page.GotoAsync("/Details/7002");
+            await Assertions.Expect(page.Locator(".media-hero__chips .media-availability-badge--inline")).ToContainTextAsync("Unavailable");
             await Assertions.Expect(page.Locator(".details-tabs .navigation-tabs__link")).ToHaveTextAsync(new[] { new Regex("Overview"), new Regex("Details") });
         }
     }

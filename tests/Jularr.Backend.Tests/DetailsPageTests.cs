@@ -20,6 +20,7 @@ namespace Jularr.Backend.Tests
             var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Books", MediaType.Book);
             await host.Fixture.RunSqlAsync($"""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "OriginalLanguage") VALUES (10, 3, 'The Book', 2020, 'en');
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (10, 'Poster', 'https://example.test/poster.webp', TRUE);
                 INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "OriginalTitle", "Rating", "Votes") VALUES ('openlibrary', 'OL1W', 3, 'The Book', 'Das Buch', 8.2, 50);
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (10, 'openlibrary', 'OL1W');
                 INSERT INTO "WorkEditions" ("Id", "WorkId", "Name", "LanguageCode", "EditionFormatId", "Publisher") VALUES (1, 10, 'English EPUB', 'en', 2, 'Press'), (2, 10, 'Deutsch EPUB', 'de', 2, NULL);
@@ -54,6 +55,10 @@ namespace Jularr.Backend.Tests
             // The page: the rating in the hero, the tabs of what exists (no People, none of Related or Similar), each tab at its own address.
             var overview = await GetAsync(host, "/Details/10");
             StringAssert.Contains(overview, "media-hero__rating");
+            StringAssert.Contains(overview, "<picture>");
+            StringAssert.Contains(overview, "media=\"(max-width: 700px)\"");
+            StringAssert.Contains(overview, "srcset=\"data:image/gif;base64,");
+            StringAssert.Contains(overview, "media-availability-badge--inline");
             StringAssert.Contains(overview, "Open Library");
             StringAssert.Contains(overview, "href=\"/Details/10?tab=volumes\"");
             StringAssert.Contains(overview, "href=\"/Details/10?tab=editions\"");
