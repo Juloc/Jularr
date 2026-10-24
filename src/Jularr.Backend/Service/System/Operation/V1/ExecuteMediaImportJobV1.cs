@@ -71,6 +71,12 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 CancellationToken.ThrowIfCancellationRequested();
                 await CheckOwnerAsync();
 
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.MarkImportJobStageAsync(new MediaImportJobStageData(job.OperationId, index, "Matching"), ct);
+                    return true;
+                }, CancellationToken);
+
                 // This is the same canonical planner/processor as the old HTTP import.
                 // A single-item list makes every restart and re-evaluation idempotent.
                 var json = MediaImportParser.Write([items[index]]);
@@ -85,6 +91,12 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 var data = new MediaImportDataV1(null, json, stored.Action, new(stored.Defaults), new(choices));
                 var plan = await _planner.PlanAsync(Context, MediaImportParser.Parse(json), data, 0, CancellationToken);
                 var row = plan.Rows.Single();
+
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.MarkImportJobStageAsync(new MediaImportJobStageData(job.OperationId, index, "Importing"), ct);
+                    return true;
+                }, CancellationToken);
 
                 // A temporarily unavailable provider is tried a bounded number of times.
                 // An unresolved row remains explicitly visible in the outcome journal.
