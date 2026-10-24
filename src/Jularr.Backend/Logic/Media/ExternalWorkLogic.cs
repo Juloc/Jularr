@@ -179,7 +179,7 @@ namespace Jularr.Backend.Logic.Media
         public static async Task<IReadOnlyList<ExternalWorkShelfItemData>> ReadExternalWorkShelvesAsync(this LogicContext ctx, ExternalWorkShelfQueryData data, CancellationToken ct)
         {
             // Feed numbers as DiscoverFeedType: 1 trending, 2 top, 3 new, 4 upcoming; only the shelf's own list is read, in the order of its index.
-            var sql = new SqlStatement();
+            var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 """
                 SELECT
@@ -255,11 +255,8 @@ namespace Jularr.Backend.Logic.Media
                                 LIMIT 1
                             ) AS "PlexUrl"
                         FROM
-                            "ProfileWorks" AS visible
-                            LEFT JOIN "ProfileWorkStates" AS state ON state."ProfileId" = visible."ProfileId" AND state."WorkId" = visible."WorkId"
-                        WHERE
-                            visible."ProfileId" = @ProfileId
-                            AND visible."WorkId" IN (
+                            (
+                                -- Resolve the indexed identities before checking profile visibility.
                                 SELECT
                                     identity."WorkId"
                                 FROM
@@ -267,7 +264,7 @@ namespace Jularr.Backend.Logic.Media
                                 WHERE
                                     identity."Namespace" = work."Namespace"
                                     AND identity."Value" = work."Value"
-                                UNION ALL
+                                UNION
                                 SELECT
                                     unit."WorkId"
                                 FROM
@@ -276,7 +273,27 @@ namespace Jularr.Backend.Logic.Media
                                 WHERE
                                     identity."Namespace" = work."Namespace"
                                     AND identity."Value" = work."Value"
-                            )
+                            ) AS matched
+                            CROSS JOIN LATERAL (
+                                SELECT
+                                    scoped."WorkId"
+                                FROM
+                                    "ProfileWorks" AS scoped
+                                WHERE
+                                    scoped."ProfileId" = @ProfileId
+                                    AND scoped."WorkId" = matched."WorkId"
+                                OFFSET 0
+                            ) AS visible
+                            LEFT JOIN LATERAL (
+                                SELECT
+                                    scoped."MediaStateTypeId"
+                                FROM
+                                    "ProfileWorkStates" AS scoped
+                                WHERE
+                                    scoped."ProfileId" = @ProfileId
+                                    AND scoped."WorkId" = visible."WorkId"
+                                OFFSET 0
+                            ) AS state ON TRUE
                         LIMIT 1
                     ) AS known ON TRUE
                 ORDER BY
@@ -529,7 +546,10 @@ namespace Jularr.Backend.Logic.Media
                     AND sync."CompletedAt" IS NULL;
                 """;
             sql.Parameters.Add(new ExternalWorkSyncProgressData(@namespace, null, null, null));
-            return await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            var changed = await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            // Build planner statistics once, before this transaction exposes a newly completed catalog.
+            if (changed > 0) await ctx.ExecuteAsyncForAffectedRows(new SqlStatement { Statement = "ANALYZE \"ExternalWorks\"" }, ct);
+            return changed;
         }
 
         // The Owner's choices replace the old ones and their windows, if nobody changed them in between.
