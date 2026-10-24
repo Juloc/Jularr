@@ -485,20 +485,24 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var whole = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWholeExternalWorkCatalogsAsync(ct), CancellationToken, mode: SqlAccessMode.ReadOnly);
-            if (whole.Count == 0) return new BaseDataList<DiscoverShelfV1>([]);
+            // One local read batch retains the central access check without repeating it for each part.
+            return await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                var whole = await ctx.ReadWholeExternalWorkCatalogsAsync(ct);
+                if (whole.Count == 0) return new BaseDataList<DiscoverShelfV1>([]);
 
-            var scopes = await Context.ExecuteBatchAsync((ctx, ct) => DiscoverQueries.ReadScopesAsync(ctx, Auth.ProfileId!.Value, ct), CancellationToken, mode: SqlAccessMode.ReadOnly);
-            var shelves = scopes.Where(scope => (Data.ScopeSlug is null || scope.Slug == Data.ScopeSlug) && whole.Contains(DiscoverScopes.Namespace(scope)))
-                .SelectMany(scope => scope.Feeds.Select(feed => (Scope: scope, Feed: feed))).ToArray();
-            if (shelves.Length == 0) return new BaseDataList<DiscoverShelfV1>([]);
+                var scopes = await DiscoverQueries.ReadScopesAsync(ctx, Auth.ProfileId!.Value, ct);
+                var shelves = scopes.Where(scope => (Data.ScopeSlug is null || scope.Slug == Data.ScopeSlug) && whole.Contains(DiscoverScopes.Namespace(scope)))
+                    .SelectMany(scope => scope.Feeds.Select(feed => (Scope: scope, Feed: feed))).ToArray();
+                if (shelves.Length == 0) return new BaseDataList<DiscoverShelfV1>([]);
 
-            var query = new ExternalWorkShelfQueryData([.. shelves.Select((shelf, index) => new ExternalWorkShelfData(index, DiscoverScopes.Namespace(shelf.Scope), shelf.Scope.MediaTypeId,
-                shelf.Scope.MediaSubtypeId, shelf.Feed))], Auth.ProfileId!.Value, DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime));
-            var rows = (await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkShelvesAsync(query, ct), CancellationToken, mode: SqlAccessMode.ReadOnly)).ToLookup(row => row.Shelf);
-            return new BaseDataList<DiscoverShelfV1>([.. shelves.Select((shelf, index) => shelf.Scope.IsCatalog
-                ? new DiscoverShelfV1(shelf.Scope.Slug, shelf.Feed, [], [.. rows[index].Select(DiscoverQueries.CatalogItem)])
-                : new DiscoverShelfV1(shelf.Scope.Slug, shelf.Feed, [.. rows[index].Select(row => DiscoverQueries.ToItem(shelf.Scope.MediaTypeId, row))], []))]);
+                var query = new ExternalWorkShelfQueryData([.. shelves.Select((shelf, index) => new ExternalWorkShelfData(index, DiscoverScopes.Namespace(shelf.Scope), shelf.Scope.MediaTypeId,
+                    shelf.Scope.MediaSubtypeId, shelf.Feed))], Auth.ProfileId!.Value, DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime));
+                var rows = (await ctx.ReadExternalWorkShelvesAsync(query, ct)).ToLookup(row => row.Shelf);
+                return new BaseDataList<DiscoverShelfV1>([.. shelves.Select((shelf, index) => shelf.Scope.IsCatalog
+                    ? new DiscoverShelfV1(shelf.Scope.Slug, shelf.Feed, [], [.. rows[index].Select(DiscoverQueries.CatalogItem)])
+                    : new DiscoverShelfV1(shelf.Scope.Slug, shelf.Feed, [.. rows[index].Select(row => DiscoverQueries.ToItem(shelf.Scope.MediaTypeId, row))], []))]);
+            }, CancellationToken, mode: SqlAccessMode.ReadOnly);
         }
     }
 

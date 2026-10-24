@@ -171,6 +171,7 @@ Behavior and integration tests are in [Jularr.Backend.Tests](../tests/Jularr.Bac
 ## Performance measurements
 
 - [Library read benchmark](LIBRARY_PERFORMANCE.md): opt-in `LibraryPerformanceTests`, authenticated service/HTTP p95, SQL plans and card snapshots on isolated PostgreSQL.
+- [Discover read benchmark](CATALOG_PERFORMANCE.md): the shared local shelf lookup, authenticated feed/batch/detail controls, identity and visibility preservation, SQL plans and before/after snapshots.
 
 ## Not integrated
 
