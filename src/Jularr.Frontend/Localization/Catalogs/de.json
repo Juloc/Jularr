@@ -2940,6 +2940,10 @@
    "Requests",
    "Anfragen"
   ],
+  "instance.module.Browser": [
+   "Source browser",
+   "Quellenbrowser"
+  ],
   "instance.module.Acquisition": [
    "Arr+",
    "Arr+"
@@ -8828,6 +8832,10 @@
    "Accounts & devices",
    "Konten & Geräte"
   ],
+  "setup.modules.acquisition": [
+   "Downloads & sources",
+   "Downloads & Quellen"
+  ],
   "setup.modules.operations": [
    "Administration",
    "Verwaltung"
@@ -12331,6 +12339,10 @@
   "setup.module.help.Requests": [
    "People can ask for missing media; without Arr+ a request stays a request.",
    "Nutzer können fehlende Medien anfragen; ohne Arr+ bleibt es bei der Anfrage."
+  ],
+  "setup.module.help.Browser": [
+   "Automatically install or remove the browser used when book sources require one.",
+   "Installiert oder entfernt den Browser automatisch, wenn Buchquellen ihn benötigen."
   ],
   "setup.module.help.Acquisition": [
    "Search, monitor, download and import titles; an alternative to Sonarr, Radarr, Readarr and Lidarr.",
