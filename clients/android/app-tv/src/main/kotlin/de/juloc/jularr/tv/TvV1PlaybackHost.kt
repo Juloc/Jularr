@@ -380,33 +380,42 @@ internal fun TvV1PlaybackHost(
                         ),
                     )
                 } else if (plan?.playbackSessionId == active.playbackSessionId && !finishing) {
-                    val succeeded = when (command.action) {
-                        "play" -> {
-                            if (player.player.playbackState == Player.STATE_ENDED) player.player.seekTo(0)
-                            player.player.play()
-                            repeat(12) {
-                                if (player.player.isPlaying) return@repeat
-                                delay(100L)
+                    val succeeded = try {
+                        when (command.action) {
+                            "play" -> {
+                                if (player.player.playbackState == Player.STATE_ENDED) player.player.seekTo(0)
+                                player.player.play()
+                                var attempts = 0
+                                while (!player.player.isPlaying && attempts < 12 && isActive && !finishing) {
+                                    delay(100L)
+                                    attempts++
+                                }
+                                player.player.isPlaying
                             }
-                            player.player.isPlaying
-                        }
-                        "pause" -> {
-                            player.player.pause()
-                            !player.player.isPlaying && !player.player.playWhenReady
-                        }
-                        "seek" -> {
-                            val target = command.positionMs
-                            val duration = player.player.duration.takeIf { it > 0 } ?: active.durationMs
-                            if (target == null || target < 0 || (duration != null && target > duration)) {
-                                false
-                            } else {
-                                player.player.seekTo(target)
-                                delay(250L)
-                                kotlin.math.abs(player.player.currentPosition - target) <= 1_500L
+                            "pause" -> {
+                                player.player.pause()
+                                !player.player.isPlaying && !player.player.playWhenReady
                             }
+                            "seek" -> {
+                                val target = command.positionMs
+                                val duration = player.player.duration.takeIf { it > 0 } ?: active.durationMs
+                                if (target == null || target < 0 || (duration != null && target > duration)) {
+                                    false
+                                } else {
+                                    player.player.seekTo(target)
+                                    delay(250L)
+                                    kotlin.math.abs(player.player.currentPosition - target) <= 1_500L
+                                }
+                            }
+                            else -> false
                         }
-                        else -> false
+                    } catch (cancel: CancellationException) {
+                        throw cancel
+                    } catch (_: Exception) {
+                        // Report execution failure instead of leaving a command indefinitely pending.
+                        false
                     }
+                    if (plan?.playbackSessionId != active.playbackSessionId || finishing) return@LaunchedEffect
                     // If a response is lost, do not retry: the backend intentionally never
                     // re-dispatches a delivered command to prevent delayed repeat actions.
                     companion.acknowledge(
