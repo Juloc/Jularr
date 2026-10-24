@@ -40,10 +40,11 @@ namespace Jularr.Backend.Data.Admin.Library.V1
     {
         public LibraryFileDetailsV1(long id, long libraryRootId, string libraryRootName, MediaType mediaTypeId, string relativePath, long sizeBytes, DateTime? missingSince,
             long? mediaAssetId, long? workId, string? workTitle, string suggestedTitle, long? suggestedWorkId, WorkUnitType? suggestedWorkUnitTypeId, decimal? suggestedUnitNumber,
-            decimal? suggestedParentUnitNumber, bool hasOtherVersions, bool isProtected)
+            decimal? suggestedParentUnitNumber, bool hasOtherVersions, bool isProtected, MediaSubtype? mediaSubtypeId = null)
         {
             HasOtherVersions = hasOtherVersions;
             IsProtected = isProtected;
+            MediaSubtypeId = mediaSubtypeId;
             Id = id;
             LibraryRootId = libraryRootId;
             LibraryRootName = libraryRootName;
@@ -72,6 +73,9 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaSubtypeId), false)]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
         public string RelativePath { get; }
@@ -145,6 +149,35 @@ namespace Jularr.Backend.Data.Admin.Library.V1
         // A game's platform; without one its platform folder names it.
         [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id), false)]
         public long? GamePlatformId { get; }
+
+    }
+
+    // A file becomes the catalog entry it is identified with (provider namespace and id) and joins that Work.
+    public sealed class IdentifyLibraryFileDataV1 : BaseData
+    {
+        public IdentifyLibraryFileDataV1(string @namespace, string externalId, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber)
+        {
+            Namespace = @namespace;
+            ExternalId = externalId;
+            WorkUnitTypeId = workUnitTypeId;
+            UnitNumber = unitNumber;
+            ParentUnitNumber = parentUnitNumber;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
+        public string ExternalId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitTypeId), false)]
+        public WorkUnitType? WorkUnitTypeId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
+        public decimal? UnitNumber { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
+        public decimal? ParentUnitNumber { get; }
     }
 
     public sealed class AssignLibraryFileResultV1 : BaseResponse
