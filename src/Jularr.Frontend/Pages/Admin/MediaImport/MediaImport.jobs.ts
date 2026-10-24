@@ -11,6 +11,20 @@ type JobState = {
     rows: JobRow[];
 };
 
+// Only the short enqueue request needs navigation protection. After the job ID
+// is returned, the browser may navigate away without interrupting the worker.
+let pendingEnqueues = 0;
+window.addEventListener("beforeunload", event => {
+    if (pendingEnqueues === 0) return;
+    event.preventDefault();
+    event.returnValue = "";
+});
+document.addEventListener("htmx:config:request", event => {
+    if (pendingEnqueues === 0) return;
+    const ctx = (event as CustomEvent<{ ctx?: { target?: Element; request?: { method?: string } } }>).detail?.ctx;
+    if (ctx?.target?.id === "app-content" && ctx.request?.method === "GET") event.preventDefault();
+});
+
 export function initializeDurableJobs(): void {
     const panel = document.querySelector<HTMLElement>("[data-import-job-panel]");
     if (!panel || panel.dataset.ready !== undefined) return;
@@ -131,6 +145,7 @@ export function initializeDurableJobs(): void {
         form.dataset.importBusy = "true";
         form.setAttribute("aria-busy", "true");
         apply.disabled = true;
+        ++pendingEnqueues;
         status.textContent = panel.dataset.jobQueued ?? "Queued";
         panel.hidden = false;
         try {
@@ -145,6 +160,8 @@ export function initializeDurableJobs(): void {
             form.removeAttribute("aria-busy");
             apply.disabled = false;
             status.textContent = panel.dataset.jobStartFailed ?? "Could not start the import.";
+        } finally {
+            --pendingEnqueues;
         }
     });
 
