@@ -13,7 +13,7 @@ namespace Jularr.E2E.Tests
         public async Task InstalledTranslateGemma_TranslatesTwoSections_CachesAndRestoresOriginal()
         {
             using var folders = new Folders("Books");
-            Steps.WriteEpub(Path.Combine(folders.Library, "Books", "translation-reader.epub"), "Translation Reader", "Local fixture");
+            Steps.WriteEpub(Path.Combine(folders.Library, "Books", "translation-reader.epub"), "Translation Reader", "Local fixture", paragraphsPerChapter: 8);
             await using var ollama = FakeOllama.Start();
             await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
             {
