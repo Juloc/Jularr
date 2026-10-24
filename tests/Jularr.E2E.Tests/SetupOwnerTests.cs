@@ -73,7 +73,7 @@ namespace Jularr.E2E.Tests
 
                 // Three starting sets; the choices of a media type sit under it, and a switch that needs another one turns it on or says why it stays.
                 await Assertions.Expect(page.Locator(".option-preset")).ToHaveCountAsync(3);
-                await Assertions.Expect(page.Locator(".option-group")).ToHaveCountAsync(7);
+                await Assertions.Expect(page.Locator(".option-group")).ToHaveCountAsync(10);
                 var library = page.Locator(".option-row[data-module=Library]");
                 await library.Locator(".toggle").ClickAsync();
                 await Assertions.Expect(library.Locator("input[type=checkbox]")).ToBeCheckedAsync();
@@ -81,13 +81,22 @@ namespace Jularr.E2E.Tests
                 var playback = page.Locator(".option-row[data-module=Playback] input[type=checkbox]");
                 await page.Locator(".option-row[data-module=Playback] .toggle").ClickAsync();
                 await Assertions.Expect(playback).Not.ToBeCheckedAsync();
-                await page.Locator(".option-type .option-row[data-module=Trickplay] .toggle").ClickAsync();
+                await page.Locator(".option-groups--extras [data-module=Trickplay] .toggle").ClickAsync();
                 await Assertions.Expect(playback).ToBeCheckedAsync();
 
                 // Every Admin module exists once in Setup, and the advanced groups
                 // at the bottom are already expanded rather than silently hidden.
                 await Assertions.Expect(page.Locator("[data-module]")).ToHaveCountAsync(27);
-                await Assertions.Expect(page.Locator(".option-groups--extras .option-group")).ToHaveCountAsync(3);
+                await Assertions.Expect(page.Locator(".option-groups--extras .option-group")).ToHaveCountAsync(6);
+                await Assertions.Expect(page.Locator(".option-grid [data-module]")).ToHaveCountAsync(5);
+                await Assertions.Expect(page.Locator(".option-groups--extras [data-module]")).ToHaveCountAsync(22);
+                await Assertions.Expect(page.Locator(".option-type [data-module]")).ToHaveCountAsync(0);
+                await Assertions.Expect(page.Locator(".option-groups--extras .option-group").Filter(new() { HasText = "Playback & anime" })
+                    .Locator("[data-module=Trickplay]")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".option-groups--extras .option-group").Filter(new() { HasText = "Reading, books & manga" })
+                    .Locator("[data-module=Ocr]")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".option-groups--extras .option-group").Filter(new() { HasText = "Games" })
+                    .Locator("[data-module=Emulation]")).ToHaveCountAsync(1);
                 await Assertions.Expect(page.Locator(".option-groups--extras .option-group:not([open])")).ToHaveCountAsync(0);
                 await Assertions.Expect(page.Locator(".option-groups--extras [data-module=Profiles]")).ToBeVisibleAsync();
                 await Assertions.Expect(page.Locator(".option-groups--extras [data-module=Diagnostics]")).ToBeVisibleAsync();
