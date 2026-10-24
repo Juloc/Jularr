@@ -27,3 +27,19 @@ test('English is a step of its own; other pairs go through it', () => {
     assert.equal(steps('id', 'en'), '[["id","en"]]');
     assert.equal(steps('de', 'ja'), '[["de","en"],["en","ja"]]');
 });
+
+test('restoring a section leaves nested block identities intact', async () => {
+    let replacedParent = 0;
+    const leaf = { innerHTML: 'Original text', innerText: 'Original text', querySelector: () => null };
+    const parent = {
+        get innerHTML() { return '<p data-b="1">Original text</p>'; },
+        set innerHTML(_) { replacedParent++; },
+        querySelector: () => leaf
+    };
+    const content = { querySelectorAll: () => [parent, leaf], innerText: 'Original text' };
+    const reader = { dataset: { language: 'en' }, querySelector: () => null };
+    const choose = exports.translator(reader, content, () => { throw new Error('No worker is needed'); });
+    await choose('');
+    assert.equal(replacedParent, 0, 'Restoring a parent would detach the cached nested block.');
+    assert.equal(leaf.innerHTML, 'Original text');
+});
