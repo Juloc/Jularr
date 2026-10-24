@@ -32,7 +32,8 @@ document.addEventListener("htmx:before:init", event => {
 document.addEventListener("htmx:after:request", event => {
     const ctx = contextOf(event);
     if (ctx.response?.raw.status !== 401) return;
-    location.assign(signInForExpiredPage(ctx.request.method, ctx.request.action, location));
+    // Replace the invalid session entry, or Android/iOS Back would return to a 401 loop.
+    location.replace(signInForExpiredPage(ctx.request.method, ctx.request.action, location));
 });
 
 // A response that is not an app page (sign-in after expiry, a redirect to another shell) is loaded as a page.
