@@ -59,6 +59,7 @@ namespace Jularr.Backend.Tests
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
             await SeedInventoryAsync(host, movies, works, stress);
+            await host.Fixture.RunSqlAsync("""INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") SELECT "Id", 'Genres', 'Drama', TRUE FROM "Works";""");
             if (Environment.GetEnvironmentVariable("JULARR_TEST_LIBRARY_ANALYZE") != "0")
             {
                 await host.Fixture.RunSqlAsync("ANALYZE");
@@ -67,8 +68,9 @@ namespace Jularr.Backend.Tests
             var samples = int.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_LIBRARY_SAMPLES"), out var configuredSamples) ? configuredSamples : 30;
             var budget = double.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_LIBRARY_MAX_MS"), System.Globalization.CultureInfo.InvariantCulture, out var maximum) ? maximum : double.PositiveInfinity;
             var overBudget = new List<string>();
+            var availableWorks = (long)(await host.ScalarAsync("""SELECT count(DISTINCT asset."WorkId") FROM "MediaAssets" AS asset JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" WHERE file."MissingSince" IS NULL AND NOT file."IsSubtitle";"""))!;
             TestContext.WriteLine($"Inventory: {works} works, {(works - movies) * 100} episodes, pool enabled; samples {samples}.");
-            foreach (var filter in new[] { "", "librarySortTypeId=2", "librarySortTypeId=3", "librarySortTypeId=4", "mediaTypeIds=2", "page=2", "query=" + Uri.EscapeDataString(query) })
+            foreach (var filter in new[] { "", "librarySortTypeId=2", "librarySortTypeId=3", "librarySortTypeId=4", "mediaTypeIds=2", "page=2", "genres=Drama&audioLanguages=en&subtitleLanguages=de", "progressStateId=InProgress", "query=" + Uri.EscapeDataString(query) })
             {
                 var durations = new List<double>();
                 var httpDurations = new List<double>();
@@ -84,7 +86,8 @@ namespace Jularr.Backend.Tests
                     Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
                     var page = await response.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>();
                     Assert.IsNotNull(page);
-                    Assert.AreEqual(48, page.Items.Count);
+                    var expected = stress ? 48 : filter switch { "mediaTypeIds=2" or "progressStateId=InProgress" => 10, "page=2" => Math.Max((int)availableWorks - 48, 0), _ when filter.StartsWith("query=", StringComparison.Ordinal) => 10, _ => 48 };
+                    Assert.AreEqual(expected, page.Items.Count, filter);
                     var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
                     var service = timings.Read(100).Single(item => item.Service == "User/ReadLibraryV1").TotalMilliseconds - before;
                     if (iteration >= 2)
@@ -111,11 +114,16 @@ namespace Jularr.Backend.Tests
                             }
                             await using var explain = new NpgsqlCommand("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + values["CommandText"], connection, transaction);
                             explain.Parameters.AddWithValue(101L);
+                            explain.Parameters.AddWithValue(new short[] { 1 });
                             explain.Parameters.AddWithValue(filter == "mediaTypeIds=2" ? new short[] { 2 } : Array.Empty<short>());
                             explain.Parameters.AddWithValue(Array.Empty<short>());
                             explain.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer, Value = DBNull.Value });
                             explain.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer, Value = DBNull.Value });
                             explain.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Text, Value = filter.StartsWith("query=", StringComparison.Ordinal) ? query : DBNull.Value });
+                            if (filter.Contains("progressStateId", StringComparison.Ordinal)) explain.Parameters.AddWithValue((short)2);
+                            if (filter.Contains("genres=", StringComparison.Ordinal)) explain.Parameters.AddWithValue(new[] { "Drama" });
+                            if (filter.Contains("audioLanguages=", StringComparison.Ordinal)) explain.Parameters.AddWithValue(new[] { "en" });
+                            if (filter.Contains("subtitleLanguages=", StringComparison.Ordinal)) explain.Parameters.AddWithValue(new[] { "de" });
                             explain.Parameters.AddWithValue(48);
                             explain.Parameters.AddWithValue(filter == "page=2" ? 48 : 0);
                             var plan = (string)(await explain.ExecuteScalarAsync())!;
@@ -138,6 +146,22 @@ namespace Jularr.Backend.Tests
                 if (p95 >= budget) overBudget.Add($"{filter}: {p95:F1} ms");
             }
 
+            var optionDurations = new List<double>();
+            for (var iteration = 0; iteration < samples + 2; iteration++)
+            {
+                var started = Stopwatch.GetTimestamp();
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/library/filter-options");
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                var options = (await response.Content.ReadFromJsonAsync<LibraryFilterOptionsV1>())!;
+                CollectionAssert.AreEqual(new[] { "Drama" }, options.Genres);
+                CollectionAssert.AreEqual(new[] { "en" }, options.AudioLanguages);
+                CollectionAssert.AreEqual(new[] { "de" }, options.SubtitleLanguages);
+                if (iteration >= 2) optionDurations.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            }
+            optionDurations.Sort();
+            var optionsP95 = optionDurations[(int)Math.Ceiling(optionDurations.Count * .95) - 1];
+            TestContext.WriteLine($"Filter options: warm HTTP p95 {optionsP95:F1} ms");
+            if (optionsP95 >= budget) overBudget.Add($"filter options HTTP: {optionsP95:F1} ms");
             Assert.IsEmpty(overBudget, "Service p95 exceeded the configured budget: " + string.Join("; ", overBudget));
         }
 

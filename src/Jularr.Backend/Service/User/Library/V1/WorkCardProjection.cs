@@ -7,15 +7,8 @@ namespace Jularr.Backend.Service.User.Library.V1
     // A query aliases "visible" (the profile's Work) and "work" (the Work itself).
     internal static class WorkCardProjection
     {
-        // The columns every card carries.
-        public const string Columns =
+        public const string Rating =
             """
-            work."Id",
-            work."MediaTypeId",
-            visible."MediaSubtypeId",
-            visible."Title" AS "Title",
-            work."ReleaseYear"::integer AS "ReleaseYear",
-            (
                 -- The rating of the catalog entry the title came from; the best known one when several exist.
                 SELECT
                     catalogEntry."Rating"
@@ -28,7 +21,17 @@ namespace Jularr.Backend.Service.User.Library.V1
                 ORDER BY
                     catalogEntry."Votes" DESC NULLS LAST
                 LIMIT 1
-            ) AS "Rating",
+            """;
+
+        // The columns every card carries.
+        public const string Columns =
+            $$"""
+            work."Id",
+            work."MediaTypeId",
+            visible."MediaSubtypeId",
+            visible."Title" AS "Title",
+            work."ReleaseYear"::integer AS "ReleaseYear",
+            ({{Rating}}) AS "Rating",
             (
                 SELECT
                     fact."Value"
