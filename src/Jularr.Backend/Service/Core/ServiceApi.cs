@@ -239,6 +239,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<SubtitleFiles>();
             services.TryAddTransient<DownloadImport>();
             services.TryAddSingleton<UsenetDownloader>();
+            services.TryAddSingleton<DirectDownloadCleanup>();
             services.TryAddSingleton<ArchiveTools>();
             services.TryAddSingleton<PostgresBackupTools>();
             services.TryAddTransient<UsenetJob>();
