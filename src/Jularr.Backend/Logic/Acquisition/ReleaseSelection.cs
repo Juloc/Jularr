@@ -43,7 +43,7 @@ namespace Jularr.Backend.Logic.Acquisition
         // Prefer requested, original, other known languages and finally unknown; source priority breaks ties.
         private static int LanguageTier(QualityProfile profile, IReadOnlyList<string> languages)
         {
-            if (profile.LanguageOrder.Length == 0 || UpgradePolicy.IsRequested(profile, languages)) return 0;
+            if (UpgradePolicy.IsRequested(profile, languages)) return 0;
             if (profile.LanguageFallback == LanguageFallbackType.Any)
             {
                 if (UpgradePolicy.IsOriginal(profile, languages)) return 1;
