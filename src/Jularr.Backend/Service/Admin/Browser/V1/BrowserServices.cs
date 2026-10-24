@@ -84,6 +84,13 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
                 case "reset":
                     await _browser.ResetAsync();
                     break;
+                case "update":
+                case "repair":
+                    if (!_packages.Enabled) throw new DataValidationException(nameof(Data.Action), "not_allowed");
+                    // The worker performs installation; stop Chrome before replacing its binary.
+                    await _browser.StopAsync();
+                    _packages.RequestRefresh(repair: Data.Action == "repair");
+                    break;
                 case "read":
                     if (!Uri.TryCreate(Data.Url, UriKind.Absolute, out var url))
                     {
