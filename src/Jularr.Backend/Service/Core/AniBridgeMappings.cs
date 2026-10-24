@@ -13,12 +13,12 @@ namespace Jularr.Backend.Service.Core
 
         internal sealed record Link(int? TvdbSeriesId, int? TvdbSeasonNumber, int? TmdbSeriesId, int? TmdbMovieId);
 
-        private sealed record Snapshot(DateTimeOffset FetchedAt, IReadOnlyDictionary<int, Link> Links);
+        private sealed record Snapshot(DateTimeOffset RefreshAfter, IReadOnlyDictionary<int, Link> Links);
 
         public async Task<Link?> ReadAsync(int aniListId, CancellationToken ct)
         {
             cache.TryGetValue(CacheKey, out Snapshot? snapshot);
-            if (snapshot is not null && snapshot.FetchedAt > DateTimeOffset.UtcNow.AddDays(-1))
+            if (snapshot is not null && snapshot.RefreshAfter > DateTimeOffset.UtcNow)
             {
                 return snapshot.Links.GetValueOrDefault(aniListId);
             }
@@ -27,7 +27,7 @@ namespace Jularr.Backend.Service.Core
             try
             {
                 cache.TryGetValue(CacheKey, out snapshot);
-                if (snapshot is null || snapshot.FetchedAt <= DateTimeOffset.UtcNow.AddDays(-1))
+                if (snapshot is null || snapshot.RefreshAfter <= DateTimeOffset.UtcNow)
                 {
                     try
                     {
@@ -35,17 +35,17 @@ namespace Jularr.Backend.Service.Core
                         response.EnsureSuccessStatusCode();
                         await using var stream = await response.Content.ReadAsStreamAsync(ct);
                         using var document = await JsonDocument.ParseAsync(stream, new JsonDocumentOptions { MaxDepth = 32 }, ct);
-                        snapshot = new Snapshot(DateTimeOffset.UtcNow, Parse(document.RootElement));
+                        snapshot = new Snapshot(DateTimeOffset.UtcNow.AddDays(1), Parse(document.RootElement));
                         cache.Set(CacheKey, snapshot, new MemoryCacheEntryOptions { Size = 100 });
                     }
-                    catch (Exception exception) when (exception is HttpRequestException or JsonException or IOException or TaskCanceledException && !ct.IsCancellationRequested)
+                    catch (Exception exception) when (!ct.IsCancellationRequested
+                        && exception is HttpRequestException or JsonException or IOException or TaskCanceledException or InvalidOperationException)
                     {
-                        // An unreachable or invalid release never destroys the last usable mapping.
-                        if (snapshot is null)
-                        {
-                            snapshot = new Snapshot(DateTimeOffset.UtcNow.AddHours(-23), new Dictionary<int, Link>());
-                            cache.Set(CacheKey, snapshot, new MemoryCacheEntryOptions { Size = 1 });
-                        }
+                        // Retain the previous mappings and retry later instead of blocking every Discover request.
+                        snapshot = snapshot is null
+                            ? new Snapshot(DateTimeOffset.UtcNow.AddHours(1), new Dictionary<int, Link>())
+                            : snapshot with { RefreshAfter = DateTimeOffset.UtcNow.AddHours(1) };
+                        cache.Set(CacheKey, snapshot, new MemoryCacheEntryOptions { Size = 100 });
                     }
                 }
 

@@ -439,7 +439,8 @@ namespace Jularr.Backend.Service.Core
                 var media = await ReadAnimeEntryAsync(int.TryParse(externalId, NumberStyles.None, CultureInfo.InvariantCulture, out var aniListId) ? aniListId
                     : throw new KeyNotFoundException("Invalid AniList id."), ct);
                 var connection = await metadata.ConnectAsync(context, ct);
-                return ((await bridge.ReadAsync(aniListId, ct))?.TmdbSeriesId ?? await FindAnimeSeriesAsync(connection, media, ct)) is { } tmdbId
+                // A later AniList cour can map to a different TMDB show; importing must keep the canonical first-season series.
+                return await FindAnimeSeriesAsync(connection, media, ct) is { } tmdbId
                     ? await metadata.ImportAsync(context, connection, MediaType.Series, MediaSubtype.Anime, tmdbId, ct)
                     : throw new KeyNotFoundException("TMDB does not know this anime.");
             }
