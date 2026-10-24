@@ -76,10 +76,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         public int PageNumber { get; set; } = 1;
 
         [BindProperty(SupportsGet = true)]
-        public string Pane { get; set; } = "downloads";
+        public string? Pane { get; set; } = "downloads";
 
         [BindProperty(SupportsGet = true)]
-        public string Area { get; set; } = "complete";
+        public string? Area { get; set; } = "complete";
 
         [BindProperty(SupportsGet = true)]
         public string? FolderPath { get; set; }
@@ -432,7 +432,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     try
                     {
                         _fileBrowser = await browseFiles.ExecuteAsync<DownloadClientBrowseResultV1>(new AcquisitionConnectionParametersV1(client.Id),
-                            new DownloadClientFolderRequestV1(Area, FolderPath, FilePage), HttpContext.RequestAborted);
+                            new DownloadClientFolderRequestV1(Area ?? "complete", FolderPath, FilePage), HttpContext.RequestAborted);
                     }
                     catch (DataValidationException) { _fileBrowser = null; }
                     if (DeleteArea is { } deleteArea && DeletePath is { } deletePath)
