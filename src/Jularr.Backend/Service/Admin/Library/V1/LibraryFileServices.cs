@@ -37,6 +37,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                     file."LibraryRootId",
                     root."Name" AS "LibraryRootName",
                     root."MediaTypeId",
+                    root."MediaSubtypeId",
                     file."RelativePath",
                     file."SizeBytes",
                     file."MissingSince",
@@ -105,7 +106,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                 var title = Limit(path.Title);
                 var match = matches.FirstOrDefault(item => item.MediaTypeId == row.MediaTypeId && item.Title == title.ToLowerInvariant());
                 return new LibraryFileDetailsV1(row.Id, row.LibraryRootId, row.LibraryRootName, row.MediaTypeId, row.RelativePath, row.SizeBytes, row.MissingSince, row.MediaAssetId,
-                    row.WorkId, row.WorkTitle, title, match?.WorkId, path.WorkUnitTypeId, path.UnitNumber, path.ParentUnitNumber, row.HasOtherVersions, row.IsProtected);
+                    row.WorkId, row.WorkTitle, title, match?.WorkId, path.WorkUnitTypeId, path.UnitNumber, path.ParentUnitNumber, row.HasOtherVersions, row.IsProtected, row.MediaSubtypeId);
             }).ToArray();
             return new PageResult<LibraryFileDetailsV1>(items, Page);
         }
@@ -127,6 +128,56 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                 true);
             var asset = await Context.AssignStoredFileAsync(data, CancellationToken);
             await Context.RecordActivityAsync(new ActivityEventData(ActivityEventType.ManualImport, storedFileId: Parameters.StoredFileId, accountId: Auth.AccountId), CancellationToken);
+            return new AssignLibraryFileResultV1(asset.Id);
+        }
+    }
+
+    // The catalog entry is read from its provider first; the file then joins the Work it becomes.
+    [ServiceEndpoint("POST", "/api/v1/admin/library/files/{storedFileId:long}/identification")]
+    public sealed class IdentifyLibraryFileV1 : AdminService<StoredFileParametersV1, IdentifyLibraryFileDataV1>
+    {
+        private readonly MetadataCatalog _catalog;
+
+        internal IdentifyLibraryFileV1(MetadataCatalog catalog)
+        {
+            _catalog = catalog;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AssignLibraryFileResultV1>()];
+        protected override ModuleRequirement GetInstanceModules(StoredFileParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(StoredFileParametersV1 parameters, Type resultType) => new("media.manual.update");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // The library of the file names the catalog.
+            var root = await Context.ExecuteBatchAsync((ctx, ct) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        root."MediaTypeId",
+                        root."MediaSubtypeId"
+                    FROM
+                        "StoredFiles" AS file
+                        JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                    WHERE
+                        file."Id" = @StoredFileId;
+                    """;
+                sql.Parameters.Add(new StoredFileParameters(Parameters.StoredFileId));
+                return ctx.ReadSql.ReadRequiredAsync<StoredFileRootData>(sql, ct);
+            }, CancellationToken);
+            var workId = await _catalog.ImportAsync(Context, root.MediaTypeId, root.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
+
+            // The file joins the Work.
+            var data = new StoredFileAssignmentData(Parameters.StoredFileId, workId, null, Data.WorkUnitTypeId, Data.UnitNumber, Data.ParentUnitNumber, null, true);
+            var asset = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                var assigned = await ctx.AssignStoredFileAsync(data, ct);
+                await ctx.RecordActivityAsync(new ActivityEventData(ActivityEventType.ManualImport, storedFileId: Parameters.StoredFileId, accountId: Auth.AccountId), ct);
+                return assigned;
+            }, CancellationToken);
             return new AssignLibraryFileResultV1(asset.Id);
         }
     }

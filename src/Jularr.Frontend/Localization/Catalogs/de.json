@@ -6520,6 +6520,14 @@
    "Identify as existing work",
    "Einem vorhandenen Werk zuordnen"
   ],
+  "library.findWork": [
+   "Find the work",
+   "Werk suchen"
+  ],
+  "library.useMatch": [
+   "Use this entry",
+   "Diesen Eintrag verwenden"
+  ],
   "library.unassign": [
    "Remove identification",
    "Zuordnung entfernen"

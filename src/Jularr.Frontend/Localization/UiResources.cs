@@ -2557,6 +2557,8 @@ namespace Jularr.Frontend.Localization
             new("library.parentNumber.LightNovel", "Volume"),
             new("library.createAndAssign", "Create work and identify"),
             new("library.assignExisting", "Identify as existing work"),
+            new("library.findWork", "Find the work"),
+            new("library.useMatch", "Use this entry"),
             new("library.unassign", "Remove identification"),
             new("operation.type.LibraryScan", "Library scan"),
             new("operation.type.Download", "Download"),
