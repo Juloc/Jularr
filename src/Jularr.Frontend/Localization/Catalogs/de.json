@@ -4,6 +4,17 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "library.filter.availability": ["Show titles", "Titel anzeigen"],
+  "library.availability.Available": ["Available files", "Vorhandene Dateien"],
+  "library.availability.MyRequests": ["My requests", "Eigene Anfragen"],
+  "library.availability.OtherRequests": ["Other requests", "Anfragen anderer"],
+  "library.filter.genres": ["Genres", "Genres"],
+  "library.filter.audio": ["Audio language", "Audiosprache"],
+  "library.filter.subtitles": ["Subtitle language", "Untertitelsprache"],
+  "library.filter.rating": ["Minimum rating", "Mindestbewertung"],
+  "list.loadMore": ["Load more", "Weitere laden"],
+  "list.loading": ["Loading more titles…", "Weitere Titel werden geladen…"],
+  "list.retry": ["Could not load more titles. Try again.", "Weitere Titel konnten nicht geladen werden. Erneut versuchen."],
   "progress.saveFailed": [
    "Progress could not be saved. Jularr will retry temporary failures.",
    "Der Fortschritt konnte nicht gespeichert werden. Jularr versucht es bei vorübergehenden Fehlern erneut."

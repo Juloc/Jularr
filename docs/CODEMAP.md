@@ -173,6 +173,7 @@ Behavior and integration tests are in [Jularr.Backend.Tests](../tests/Jularr.Bac
 ## Performance measurements
 
 - [Library read benchmark](LIBRARY_PERFORMANCE.md): opt-in `LibraryPerformanceTests`, authenticated service/HTTP p95, SQL plans and card snapshots on isolated PostgreSQL.
+- Library visibility and filter options: [LibraryServices.cs](../src/Jularr.Backend/Service/User/Library/V1/LibraryServices.cs), shared read boundary for actual files and own/other active requests, real track languages, manual-first genres and the card's canonical rating/progress. Contracts: [Library.cs](../src/Jularr.Backend/Data/User/Library/V1/Library.cs); focused tests `MediaTests.Library_*`, `LibraryFiltersTests`.
 - [Discover read benchmark](CATALOG_PERFORMANCE.md): the shared local shelf lookup, authenticated feed/batch/detail controls, identity and visibility preservation, SQL plans and before/after snapshots.
 
 ## Not integrated

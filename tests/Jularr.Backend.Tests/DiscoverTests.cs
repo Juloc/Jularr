@@ -73,11 +73,13 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, results.Count(result => result.TmdbId == 603));
             Assert.IsTrue(results.Any(result => result.MediaTypeId == MediaType.Series && result.Title == "The Matrix Show"));
 
-            // Approval makes it part of the library; the Owner's own request is approved at once.
+            // A request without a file stays out of the default library and appears through My requests.
             await host.Fixture.RunSqlAsync("INSERT INTO \"WantedItems\" (\"WorkId\") SELECT \"Id\" FROM \"Works\" ON CONFLICT (\"WorkId\", \"GamePlatformId\") DO NOTHING");
             using var library = await host.SendAsync(HttpMethod.Get, "/api/v1/library?query=matr");
             Assert.AreEqual(HttpStatusCode.OK, library.StatusCode, await library.Content.ReadAsStringAsync());
-            var entry = (await library.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items.Single();
+            Assert.AreEqual(0, (await library.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items.Count);
+            using var ownRequests = await host.SendAsync(HttpMethod.Get, "/api/v1/library?query=matr&availabilityTypeIds=MyRequests");
+            var entry = (await ownRequests.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items.Single();
             Assert.AreEqual(MediaStateType.Requested, entry.MediaStateTypeId);
             Assert.AreEqual("https://image.tmdb.org/t/p/w500/poster.jpg", entry.PosterUrl);
         }
@@ -575,8 +577,8 @@ namespace Jularr.Backend.Tests
             using var library = await host.SendAsync(HttpMethod.Get, "/Library?type=movies");
             Assert.AreEqual(HttpStatusCode.OK, library.StatusCode);
             using var empty = await host.SendAsync(HttpMethod.Get, "/Library?type=movies&p=2");
-            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "action-dock__paging");
-            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "Page 2");
+            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "data-infinite-list=\".library-grid\"");
+            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "data-infinite-page=\"2\"");
             StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "href=\"/Library?type=movies\"");
             using var invalid = await host.SendAsync(HttpMethod.Get, "/Library?p=2147483647");
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);

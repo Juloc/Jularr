@@ -44,7 +44,7 @@ namespace Jularr.Backend.Tests
                     ({root}, 'missing-version.mkv', 100, now(), now(), 21, '2026-01-03', now());
                 """);
 
-            CollectionAssert.AreEqual(new long[] { 10, 20, 30 }, await LibraryAsync(host, ""));
+            CollectionAssert.AreEqual(new long[] { 10, 20 }, await LibraryAsync(host, ""));
             var film = await ReadCardAsync(host, "/api/v1/library", 20);
             Assert.AreEqual(1, film.AvailableUnits);
             Assert.AreEqual(1, film.MonitoredUnits);
@@ -54,7 +54,7 @@ namespace Jularr.Backend.Tests
 
             // A returned file changes the order immediately, with no stale result cache.
             await host.Fixture.RunSqlAsync("""UPDATE "StoredFiles" SET "MissingSince" = NULL WHERE "MediaAssetId" = 21""");
-            CollectionAssert.AreEqual(new long[] { 20, 10, 30 }, await LibraryAsync(host, ""));
+            CollectionAssert.AreEqual(new long[] { 20, 10 }, await LibraryAsync(host, ""));
             Assert.AreEqual(1, (await ReadCardAsync(host, "/api/v1/library", 20)).AvailableUnits);
         }
 
@@ -128,6 +128,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (10, 2, NULL, 'Series'), (20, 2, 1, 'Anime'), (30, 3, NULL, 'Book'), (40, 1, 1, 'Anime Movie'), (50, 3, 2, 'Manga');
                 INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works";
                 """);
+            await AddLibraryFilesAsync(host);
             using var library = await host.SendAsync(HttpMethod.Get, "/api/v1/library?" + filter);
             var page = (await library.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Library.V1.LibraryItemV1>>())!;
             CollectionAssert.AreEquivalent(expected, page.Items.Select(item => item.Id).ToArray());
@@ -145,6 +146,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId") VALUES (101, 30);
                 INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "ProgressPositionTypeId", "PositionMs", "DurationMs") VALUES (101, 20, 1, 750, 1000), (101, 10, 1, 250, 1000);
                 """);
+            await AddLibraryFilesAsync(host);
 
             // Several types and subtypes at once, a release year range and every order narrow the list.
             CollectionAssert.AreEquivalent(new long[] { 10, 20, 30, 60 }, await LibraryAsync(host, "mediaTypeIds=1&mediaTypeIds=3"));
@@ -177,6 +179,7 @@ namespace Jularr.Backend.Tests
             var media = (await listed.Content.ReadFromJsonAsync<BaseDataList<InstanceMediaDetailsV1>>())!;
             CollectionAssert.AreEqual(new[] { "Movie", "Series", "Anime", "Book", "Manga", "LightNovel", "Music", "Game" }, media.Select(item => item.Key).ToArray());
             Assert.IsTrue(media.All(item => item.IsEnabled && !item.HasLibrary));
+            await AddLibraryFilesAsync(host);
 
             // Anime off: its Works return to their parent lists.
             await SwitchAsync(host, "Anime", false, 1);
@@ -206,6 +209,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (10, 2, NULL, 'Series'), (20, 2, 1, 'Anime'), (30, 3, NULL, 'Book');
                 INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works";
                 """);
+            await AddLibraryFilesAsync(host);
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             var profileId = (await state.Content.ReadFromJsonAsync<AuthenticationResultV1>())!.ProfileId!.Value;
 
@@ -246,6 +250,82 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEquivalent(new long[] { 10, 20 }, await LibraryAsync(host, ""));
         }
 
+        [TestMethod]
+        public async Task Library_Availability_DefaultsToFilesAndUnionsActiveRequestsWithoutDuplicates()
+        {
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle")
+                SELECT n, 1, 'Title ' || n FROM generate_series(10, 19) AS n;
+                INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works";
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (17, 'plex', 'only-on-plex');
+                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId")
+                VALUES (10, 101, 41, 1, 1), (13, 101, 41, 1, 1), (13, 202, 41, 1, 1), (14, 202, 41, 1, 1), (16, 101, 41, 1, 9);
+                """);
+            await AddLibraryFilesAsync(host);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "StoredFiles" SET "MissingSince" = now() WHERE "MediaAssetId" >= 12;
+                UPDATE "StoredFiles" SET "RelativePath" = 'subtitle.srt' WHERE "MediaAssetId" = 11;
+                """);
+            CollectionAssert.AreEqual(new long[] { 10 }, await LibraryAsync(host, ""));
+            CollectionAssert.AreEquivalent(new long[] { 10, 13 }, await LibraryAsync(host, "availabilityTypeIds=MyRequests"));
+            CollectionAssert.AreEquivalent(new long[] { 13, 14 }, await LibraryAsync(host, "availabilityTypeIds=OtherRequests"));
+            CollectionAssert.AreEquivalent(new long[] { 10, 13, 14 }, await LibraryAsync(host, "availabilityTypeIds=Available&availabilityTypeIds=MyRequests&availabilityTypeIds=OtherRequests"));
+            await host.Fixture.RunSqlAsync("INSERT INTO \"ProfileMediaRules\" (\"ProfileId\", \"MediaTypeId\", \"IsHidden\") VALUES (101, 1, TRUE)");
+            CollectionAssert.AreEqual(Array.Empty<long>(), await LibraryAsync(host, "availabilityTypeIds=OtherRequests"));
+            using var options = await host.SendAsync(HttpMethod.Get, "/api/v1/library/filter-options?availabilityTypeIds=OtherRequests");
+            Assert.AreEqual(HttpStatusCode.OK, options.StatusCode, await options.Content.ReadAsStringAsync());
+            Assert.AreEqual(0, (await options.Content.ReadFromJsonAsync<LibraryFilterOptionsV1>())!.Genres.Length);
+        }
+
+        [TestMethod]
+        public async Task Library_Facets_UsePresentTracksManualGenresProgressAndCanonicalRating()
+        {
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (10, 1, 'A'), (20, 1, 'B'), (30, 1, 'C');
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual")
+                VALUES (10, 'Genres', 'Drama, Science Fiction', TRUE), (20, 'Genres', 'Comedy', TRUE), (30, 'Genres', 'Hidden', TRUE);
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual", "ProviderId")
+                SELECT 10, 'Genres', 'Stale provider genre', FALSE, "Id" FROM "Providers" WHERE "Key" = 'tmdb' LIMIT 1;
+                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "Rating", "Votes")
+                VALUES ('tmdb_movie', '10', 1, 'A', 8.5, 100), ('tmdb_movie', '20', 1, 'B', 9, 100), ('tvdb', '10', 1, 'A alt', 4, 2);
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (10, 'tmdb_movie', '10'), (20, 'tmdb_movie', '20'), (10, 'tvdb', '10');
+                INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "ProgressPositionTypeId", "PositionMs", "DurationMs", "IsCompleted", "CompletedAt")
+                VALUES (101, 10, 1, 500, 1000, FALSE, NULL), (101, 20, 1, 1000, 1000, TRUE, now());
+                """);
+            await AddLibraryFilesAsync(host);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "MediaTracks" ("StoredFileId", "StreamIndex", "MediaTrackTypeId", "Language", "IsDefault", "IsForced")
+                SELECT "Id", 1, 2, CASE WHEN "MediaAssetId" = 10 THEN 'eng' ELSE 'jpn' END, TRUE, FALSE FROM "StoredFiles";
+                INSERT INTO "MediaTracks" ("StoredFileId", "StreamIndex", "MediaTrackTypeId", "Language", "IsDefault", "IsForced")
+                SELECT "Id", 2, 3, 'deu', FALSE, FALSE FROM "StoredFiles" WHERE "MediaAssetId" = 10;
+                UPDATE "StoredFiles" SET "MissingSince" = now() WHERE "MediaAssetId" = 30;
+                """);
+            CollectionAssert.AreEqual(new long[] { 10 }, await LibraryAsync(host, "genres=Drama&audioLanguages=eng&subtitleLanguages=deu&progressStateId=InProgress&minimumRating=8"));
+            CollectionAssert.AreEqual(Array.Empty<long>(), await LibraryAsync(host, "genres=Drama&minimumRating=9"));
+            CollectionAssert.AreEqual(new long[] { 20 }, await LibraryAsync(host, "progressStateId=Finished"));
+            CollectionAssert.AreEqual(Array.Empty<long>(), await LibraryAsync(host, "progressStateId=NotStarted"));
+            CollectionAssert.AreEquivalent(new long[] { 10, 20 }, await LibraryAsync(host, "genres=Drama&genres=Comedy"));
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/library/filter-options?genres=Comedy");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            var options = (await response.Content.ReadFromJsonAsync<LibraryFilterOptionsV1>())!;
+            CollectionAssert.AreEqual(new[] { "Comedy", "Drama", "Science Fiction" }, options.Genres);
+            CollectionAssert.AreEqual(new[] { "eng", "jpn" }, options.AudioLanguages);
+            CollectionAssert.AreEqual(new[] { "deu" }, options.SubtitleLanguages);
+        }
+        private static async Task AddLibraryFilesAsync(Host host)
+        {
+            var mount = await LibraryTests.CreateMountAsync(host);
+            var root = await LibraryTests.CreateRootAsync(host, mount, "Library", MediaType.Movie);
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkEditions" ("WorkId") SELECT "Id" FROM "Works";
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "WorkId", "WorkId", "Id" FROM "WorkEditions";
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT "Id", "Id", "Id", 1 FROM "Works";
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
+                SELECT {root}, "Id" || '.mkv', 100, now(), now(), "Id" FROM "MediaAssets";
+                """);
+        }
         private static async Task SwitchAsync(Host host, string key, bool isEnabled, long version)
         {
             using var switched = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/media", new UpdateInstanceMediaDataV1(key, isEnabled, version));
