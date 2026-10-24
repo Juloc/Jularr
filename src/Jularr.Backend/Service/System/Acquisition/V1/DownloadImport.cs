@@ -395,6 +395,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         return true;
                     }, ct);
                 }
+                catch (DataValidationException)
+                {
+                    // The provider directory or its inventory changed. Preserve source data
+                    // and leave the durable cleanup available for explicit reconciliation.
+                    await RescheduleAsync(task.Id, "cleanup_source_unverified");
+                }
                 catch (Exception exception) when (exception is HttpRequestException or SabnzbdException or JsonException
                     or IOException or UnauthorizedAccessException or NasMountException
                     || exception is TaskCanceledException && !ct.IsCancellationRequested)

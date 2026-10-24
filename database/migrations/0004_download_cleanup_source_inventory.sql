@@ -3,3 +3,8 @@
 -- to remove completed source directories; failed-job cleanup is unchanged.
 ALTER TABLE "DownloadClientCleanups"
     ADD COLUMN "SourceFingerprint" char(64) NULL;
+
+ALTER TABLE "DownloadClientCleanups"
+    ADD CONSTRAINT "DownloadClientCleanups_SourceFingerprintValid"
+    CHECK ("SourceFingerprint" IS NULL OR "SourceFingerprint" ~ '^[0-9A-F]{64}
+);

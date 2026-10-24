@@ -1,46 +1,70 @@
-# Download workspaces
+# Download workspaces and release validation
 
-A download belongs to a Jularr operation ID, not a downloader-specific folder. New native jobs use the same category plus ID under incomplete and complete storage:
+New Jularr-owned native downloads use `incomplete/<media>/j-<operationId>` and
+`complete/<media>/j-<operationId>` beneath their configured, protected workspace.
+Existing numeric job folders remain readable. Existing jobs are never migrated
+in place. Categories include movie, tv, books, anime, manga, lightnovel, music,
+and games.
 
-```text
-incomplete/books/j-41/...
-complete/books/j-41/...
-incomplete/anime/j-42/...
-```
+New qBittorrent torrents use `<client save root>/<media>/j-<operationId>`
+as the client-visible save path, and Jularr maps the reported content path back
+to the storage mount. The qBittorrent client still owns incomplete staging and
+seeding: Jularr does not move or delete seeded payloads after import.
 
-The same category rule covers movies, TV, books, anime, manga, light novels, music and games. Completed files still enter the existing generic library importer. New jobs do not acquire SABnzbd-, qBittorrent-, HTTP- or browser-specific directory layers.
+SABnzbd retains its own category, complete, and incomplete folder settings.
+Jularr discovers configured complete folders and maps them explicitly. A
+shared externally configured root for SABnzbd and qBittorrent is **not** yet
+automatically provisioned or migrated. Existing mappings and downloads must
+not be changed without verified mounting and provider tests.
 
-## Scope and migration safety
+## Selection and UI
 
-This PR builds on #1566 and updates the **native Usenet and Direct downloader** paths only. The existing settings currently keep separate protected native `.jularr-<workspaceId>` prefixes; moving to one configurable shared root must happen after coordination with the SABnzbd and qBittorrent integrations. Old numeric job folders remain readable/cleanable, and no active directories are moved. Only bounded operation-owned workspace paths are eligible for native deletion. Seeded torrent files and external-client paths are not altered.
+`DownloadClientSelectionLogic` chooses compatible enabled downloaders by
+transport and media type, excludes connections in retry backoff, and orders by
+priority and stable connection ID. New torrent save roots are validated before
+job reservation. Native and external downloads share the import owner and
+Activity queue/history. The Activity **Files** view includes qBittorrent and
+SABnzbd download jobs: torrent files are shown inline, while SABnzbd entries
+link to its guarded queue/history/files browser. The two provider file
+browsers have not yet been fully consolidated into a single component.
 
-- #1534 owns SABnzbd queue/history/files and safely confirmed deletion; retain its protections.
-- #1533 owns qBittorrent/Nyaa; connect its adapter to this job identity before shared folder rollout.
-- #1548 owns failure cleanup; it must keep calling the canonical workspace cleanup.
-- #1533 and #1534 both add `0002` migrations and must be reconciled for an ordered schema chain before merging.
+## Source cleanup safety
 
-A real NAS/SABnzbd/qBittorrent integration test and shared-root configuration remain separate release gates.
+A source folder is eligible for automatic SABnzbd post-import deletion only if:
 
-## Downloader selection and overlap
+1. Its source scan completed and included at least one actual file.
+2. Every listed file, including sidecars and previously handled manual
+   imports, was accounted for in the import.
+3. A SHA-256 fingerprint of the complete source inventory (relative paths,
+   byte lengths, modification timestamps) was committed with the cleanup row.
+4. The provider reports a completed history entry, not an active queue job.
+5. The source is still under the explicitly mapped local path, is writable,
+   and has the same fingerprint immediately before deletion.
+6. The source directory is atomically renamed to an isolated sibling; the
+   fingerprint and symlink/size protections are rechecked before deleting it.
 
-Compatible transport and supported media types are filtered **before** ascending priority and stable connection-ID tie breaking. This contract is centralized in `DownloadClientSelectionLogic`; the previous special preference for media-scoped connections is removed. This incorporates priority-selection work from #1567 without introducing a second download-folder layout. #1567 is an overlapping open PR and must **not** be merged independently in its current form.
+A missing or changed fingerprint blocks automatic deletion and preserves the
+file tree. Existing unverified cleanup rows are deliberately not authorized
+to remove imported directories. Failed download job cleanup retains the
+existing, separate policy. Manual orphan cleanup also uses an atomic
+quarantine and a confirmed folder fingerprint; it refuses active or known
+history jobs. A failed deletion is not restored as a partially deleted job.
 
-## Consolidated integration branch
+Database migrations are **0002** (SABnzbd/incomplete/cleanup), **0003**
+(torrent connection types) and **0004** (source-inventory fingerprint). Never
+edit the frozen baseline or previously applied migrations.
 
-The consolidated draft #1572 brings together #1533 (qBittorrent/Nyaa), #1534 (SABnzbd console and persistent cleanup), #1548 (terminal direct staging cleanup) and the downloader selection from #1567. The database upgrades are ordered as SABnzbd version 2 then torrent connection types version 3. This does **not** migrate previously created jobs or client-owned paths.
+## Release gates
 
-**Current transport boundaries:** native Usenet/Direct use the media-scoped Jularr job directories; qBittorrent and SABnzbd still receive their own configured save/location mappings. All paths eventually arrive at the existing import owner. Do not infer that the external client payloads already have the new folder structure, and do not delete live torrent payloads or leftovers from partially imported SABnzbd jobs.
+- [ ] Fresh and existing database upgrades verified, backup/rollback tested
+- [ ] Backend tests (including all shards), frontend, browser E2E, Docker image
+- [ ] Real SABnzbd completed/failed/partially imported jobs and orphan cleanup
+- [ ] Real qBittorrent seeding/restart/pause/delete behavior, existing torrents
+- [ ] Real NAS offline, remount, shared mount mappings, read-only and low-space
+- [ ] Final shared external incomplete/complete layout with a non-destructive
+      rollout plan and complete Files UI, including migration of old settings
+- [ ] Owner review of source cleanup, path safety, and container volume mapping
 
-**Release prerequisites:** frontend/backend build and tests on the integration head, both numbered migrations on a fresh and upgraded isolated database, real external client + NAS/remount checks, explicit policy for leftover files and seeding, plus the final unified Files experience. Nothing here authorizes an automatic merge.
-
-## Partial import protection
-
-Automatic SABnzbd source deletion requires every enumerated source file to have been included in the import plan. Finishing a manual import never schedules deletion of unselected source files. Recovery backfills failed-job cleanups only: it cannot infer that a completed import had no leftovers, and never retroactively deletes completed sources.
-
-A manual import may queue source cleanup **only** when it finishes and a complete inventory of the source folder confirms that every file was imported (including imports to other titles and earlier manually handled files). Explicitly finishing a partial import does not authorize deletion of leftovers. A failed source-folder scan disables automatic cleanup but does not block an otherwise valid manual import.
-
-## qBittorrent newly created jobs
-
-New torrents write to `<configured qBittorrent save root>/<media>/j-<operationId>/...` (e.g. `/downloads/complete/anime/j-18453`). The save root still belongs to qBittorrent, and Jularr maps the reported content path back through its configured client/host mount. This change does not migrate existing torrents or move anything during seeding. qBittorrent's own incomplete-file staging policy remains client-configured; do not claim that an external torrent is atomically moved from incomplete to complete by Jularr.
-
-Downloader availability is represented by the persisted probe/backoff `RetryAt`. Selection excludes clients still in backoff, then sorts the remaining compatible clients by priority. This avoids knowingly handing new jobs to a client temporarily marked unavailable; it is not a synchronous connection health probe. Invalid qBittorrent root paths are rejected before reserving a download operation.
+Do not merge only on the basis of green synthetic CI. This integration PR
+overlaps #1533, #1534, #1548 and #1567; do not independently merge those
+overlapping implementations without reconciling their behavior.
