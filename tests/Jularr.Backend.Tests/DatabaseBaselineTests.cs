@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Tests.Infrastructure;
 using Jularr.Integrations.Data.Database;
@@ -140,7 +141,7 @@ namespace Jularr.Backend.Tests
             var broken = new DatabaseBaseline(cs, migrations:
                 [.. DatabaseBaseline.Migrations, Probe(DatabaseBaseline.CurrentVersion + 1, "CREATE TABLE \"UpgradeProbe\" (\"Id\" bigint);"), Probe(DatabaseBaseline.CurrentVersion + 2, "SELECT 1 / 0;")]);
             var failed = await Assert.ThrowsExactlyAsync<DatabaseUpgradeException>(() => broken.StartAsync(CancellationToken.None));
-            Assert.AreEqual("0003_probe", failed.Migration);
+            Assert.AreEqual((DatabaseBaseline.CurrentVersion + 2).ToString("0000", CultureInfo.InvariantCulture) + "_probe", failed.Migration);
             Assert.AreEqual(0, (await TablesAsync(cs)).Length);
             await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
@@ -201,7 +202,7 @@ namespace Jularr.Backend.Tests
             DatabaseMigration[] migrations = [.. DatabaseBaseline.Migrations, Probe(DatabaseBaseline.CurrentVersion + 1, "ALTER TABLE \"InstanceSettings\" ADD COLUMN \"UpgradeProbe\" text NOT NULL DEFAULT 'N+1';")];
             var broken = new DatabaseBaseline(cs, options, tools, [.. migrations, Probe(DatabaseBaseline.CurrentVersion + 2, "SELECT 1 / 0;")]);
             var failedUpgrade = await Assert.ThrowsExactlyAsync<DatabaseUpgradeException>(() => broken.StartAsync(CancellationToken.None));
-            Assert.IsInstanceOfType<PostgresException>(failedUpgrade.InnerException);
+            Assert.IsInstanceOfType<PostgresException>(failedUpgrade.InnerException, failedUpgrade.InnerException?.ToString());
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
             Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'InstanceSettings' AND column_name = 'UpgradeProbe';"));
             Assert.AreEqual(before, await ReleaseDataAsync(cs));

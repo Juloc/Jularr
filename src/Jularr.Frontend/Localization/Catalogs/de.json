@@ -9911,6 +9911,10 @@
    "Catalog sync",
    "Katalog-Abgleich"
   ],
+  "jobs.job.discoverFeeds": [
+   "Discover cache",
+   "Entdecken-Cache"
+  ],
   "jobs.job.resources": [
    "Resource sampling",
    "Ressourcenmessung"
@@ -10482,6 +10486,10 @@
   "jobs.about.catalog": [
    "Keeps the local Discover catalog up to date.",
    "Hält den lokalen Discover-Katalog aktuell."
+  ],
+  "jobs.about.discoverFeeds": [
+   "Prepares Discover lists and recommendations and refreshes stored results.",
+   "Bereitet Entdecken-Listen und Empfehlungen vor und aktualisiert gespeicherte Ergebnisse."
   ],
   "jobs.about.resources": [
    "Samples the load of the process for the System page.",
