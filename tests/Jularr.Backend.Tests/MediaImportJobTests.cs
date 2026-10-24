@@ -20,11 +20,39 @@ namespace Jularr.Backend.Tests
             ]}
             """;
 
+        // MediaImportDataV1 supports file upload; the API therefore uses form
+        // binding rather than JSON. Each row is explicitly selected by the owner.
+        private static Dictionary<string, string> Form(string json, MediaImportActionType action = MediaImportActionType.AddOnly)
+        {
+            var fields = new Dictionary<string, string>
+            {
+                ["Json"] = json,
+                ["Action"] = ((byte)action).ToString(System.Globalization.CultureInfo.InvariantCulture)
+            };
+            var count = System.Text.Json.JsonDocument.Parse(json).RootElement.GetProperty("items").GetArrayLength();
+            for (var index = 0; index < count; index++)
+            {
+                fields[$"Choices[{index}].Index"] = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                fields[$"Choices[{index}].Include"] = "true";
+            }
+            return fields;
+        }
+
+        private static async Task InstallJobsAsync(AuthenticationTests.Host host)
+        {
+            using var migration = typeof(Jularr.Backend.Service.Core.ServiceApi).Assembly
+                .GetManifestResourceStream("Jularr.Database.Migrations.0002_media_import_jobs.sql")
+                ?? throw new InvalidOperationException("Media import job migration resource is missing.");
+            using var reader = new StreamReader(migration);
+            await host.Fixture.RunSqlAsync(await reader.ReadToEndAsync());
+        }
+
         [TestMethod]
         public async Task DurableJob_IsOwnedByServer_StreamsSavedResultsAndNeverAutoDownloadsAddOnly()
         {
             await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders());
-            var data = new MediaImportDataV1(null, Books, MediaImportActionType.AddOnly);
+            await InstallJobsAsync(host);
+            var data = Form(Books);
 
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import/jobs", data);
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
@@ -59,15 +87,16 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" """));
 
             using var latest = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/media-import/jobs/latest");
-            Assert.AreEqual(job.JobId, (await latest.Content.ReadFromJsonAsync<MediaImportJobCreatedV1>())!.JobId);
+            Assert.AreEqual(job.JobId, (await latest.Content.ReadFromJsonAsync<MediaImportLatestJobV1>())!.JobId);
         }
 
         [TestMethod]
         public async Task DurableJob_ReclaimsInterruptedOperation_WithoutDuplicatingACommittedWork()
         {
             await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders());
+            await InstallJobsAsync(host);
             using var queued = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import/jobs",
-                new MediaImportDataV1(null, Books, MediaImportActionType.AddOnly));
+                Form(Books));
             Assert.AreEqual(HttpStatusCode.OK, queued.StatusCode);
             var job = (await queued.Content.ReadFromJsonAsync<MediaImportJobCreatedV1>())!;
 
@@ -82,7 +111,7 @@ namespace Jularr.Backend.Tests
                 {"version":1,"items":[{"type":"movie","ids":{"tmdb":"603"},"title":"The Matrix"}]}
                 """;
             using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import",
-                new MediaImportDataV1(null, firstBook, MediaImportActionType.AddOnly));
+                Form(firstBook));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode);
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
 
@@ -108,8 +137,9 @@ namespace Jularr.Backend.Tests
         public async Task DurableJob_RevokedOwnerCannotImportTheNextWork()
         {
             await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders());
+            await InstallJobsAsync(host);
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import/jobs",
-                new MediaImportDataV1(null, Books, MediaImportActionType.MonitorAndSearch));
+                Form(Books, MediaImportActionType.MonitorAndSearch));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode);
 
             // The worker is system-authorized, but the account that queued the
