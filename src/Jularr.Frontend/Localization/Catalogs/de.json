@@ -12256,6 +12256,18 @@
    "Take requests and let Arr+ search, download and import, without player or reader.",
    "Anfragen annehmen, Arr+ sucht, lädt und importiert, ohne Player und Reader."
   ],
+  "setup.modules.watch": [
+   "Playback & anime",
+   "Wiedergabe & Anime"
+  ],
+  "setup.modules.reading": [
+   "Reading, books & manga",
+   "Reader, Bücher & Manga"
+  ],
+  "setup.modules.games": [
+   "Games",
+   "Spiele"
+  ],
   "setup.modules.discovery": [
    "Discover & catalogs",
    "Discover & Kataloge"
