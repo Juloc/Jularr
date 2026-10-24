@@ -70,7 +70,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(OperationStatusType.Completed, status.StatusTypeId);
             Assert.AreEqual(2, status.TotalCount);
             Assert.AreEqual(2L, status.ProcessedCount);
-            Assert.AreEqual(2L, status.Sequence);
+            Assert.IsTrue(status.Sequence >= 2L, "The sequence includes live stage transitions, not only completed titles.");
             Assert.AreEqual(2, status.Rows.Count);
             Assert.IsTrue(status.Rows.All(item => item.OutcomeTypeId == MediaImportOutcomeType.Added));
             Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
@@ -118,7 +118,7 @@ namespace Jularr.Backend.Tests
             using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/media-import/jobs/" + job.JobId);
             var status = (await read.Content.ReadFromJsonAsync<MediaImportJobStatusV1>())!;
             Assert.AreEqual(OperationStatusType.Completed, status.StatusTypeId);
-            Assert.AreEqual(2L, status.Sequence);
+            Assert.IsTrue(status.Sequence >= 2L, "The sequence includes live stage transitions, not only completed titles.");
             Assert.AreEqual(2, status.Rows.Count);
         }
 
