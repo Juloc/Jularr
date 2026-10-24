@@ -25,15 +25,17 @@ namespace Jularr.Integrations.Logic.Browser
         public long DownloadedBytes => Interlocked.Read(ref _downloaded);
         public long TotalBytes => Interlocked.Read(ref _total);
         public string ExecutablePath => Path.Combine(_root, "current", "chrome-" + Platform(), "chrome");
-        public bool IsInstalled => File.Exists(ExecutablePath) && File.Exists(Path.Combine(_root, "current", ".jularr-version"));
+        public bool IsInstalled => File.Exists(ExecutablePath) && VersionMatches(Path.Combine(_root, "current", ".jularr-version"));
         public bool HasManagedData => Directory.Exists(_root);
 
         public static string? InstalledExecutable(string profilePath)
         {
             var root = Path.Combine(profilePath, "managed", "current");
             var path = Path.Combine(root, "chrome-" + Platform(), "chrome");
-            return File.Exists(path) && File.Exists(Path.Combine(root, ".jularr-version")) ? path : null;
+            return File.Exists(path) && VersionMatches(Path.Combine(root, ".jularr-version")) ? path : null;
         }
+
+        private static bool VersionMatches(string path) => File.Exists(path) && File.ReadAllText(path).Trim() == Version;
 
         public async Task InstallAsync(CancellationToken ct)
         {
