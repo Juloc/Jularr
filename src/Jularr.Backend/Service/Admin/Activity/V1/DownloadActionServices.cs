@@ -123,10 +123,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             {
                 var area = download.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? DownloadStorageArea.Usenet : DownloadStorageArea.Direct;
                 var paths = await _downloads.OpenAsync(Context, area, CancellationToken);
-                foreach (var folder in new[] { paths.Incomplete(download.OperationId), paths.Complete(download.OperationId) })
-                {
-                    if (Directory.Exists(folder)) Directory.Delete(folder, true);
-                }
+                paths.RemoveCompleted(download.OperationId);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ServiceUnavailableException)
             {

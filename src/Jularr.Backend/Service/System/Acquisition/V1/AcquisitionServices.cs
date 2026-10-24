@@ -352,19 +352,19 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             using var lease = paths.TryStartJob(download.OperationId);
             if (lease is null) return new UpdateResult(false);
-            var waiting = Path.Combine(paths.Incomplete(download.OperationId), WaitingName);
+            var waiting = Path.Combine(paths.Incomplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId), WaitingName);
             if (File.Exists(waiting) && _time.GetUtcNow().UtcDateTime - File.GetLastWriteTimeUtc(waiting) < WaitingRest) return new UpdateResult(false);
             return new UpdateResult(await RunAsync(download, connection, paths));
         }
 
         private async Task<bool> RunAsync(DownloadData download, AcquisitionConnectionData connection, DownloadStoragePaths paths)
         {
-            var staging = paths.Incomplete(download.OperationId);
+            var staging = paths.Incomplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId);
             UsenetPassResult pass;
             try
             {
-                pass = paths.IsComplete(download.OperationId)
-                    ? new UsenetPassResult(UsenetPassState.Completed, 100, 0, 0, outputPath: paths.Complete(download.OperationId))
+                pass = paths.IsComplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId)
+                    ? new UsenetPassResult(UsenetPassState.Completed, 100, 0, 0, outputPath: paths.Complete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId))
                     : await _jobs.RunAsync(connection, staging, _time.GetUtcNow() + PassLength, CancellationToken, paths, download.OperationId);
             }
             catch (UsenetException exception) when (exception.Failure == UsenetFailure.Unauthorized)
@@ -415,7 +415,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     try
                     {
                         var extensions = LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId);
-                        var complete = await paths.CompleteAsync(download.OperationId, pass.OutputPath!, extensions, CancellationToken);
+                        var complete = await paths.CompleteAsync(download.OperationId, pass.OutputPath!, extensions, CancellationToken, download.MediaTypeId, download.MediaSubtypeId);
                         var state = new StorageScanState();
                         var files = StorageFileSystem.EnumerateFiles(complete, extensions, state, CancellationToken).ToArray();
                         await _import.PlaceAsync(Context, download, new LocalStorageFiles(complete), new ImportSourceRef(null, complete, ""), files, state.IsComplete, CancellationToken);
@@ -754,14 +754,14 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         // Jularr downloads direct-source books itself into staging, then imports them like any other job.
         private async Task DownloadDirectAsync(DownloadData download, AcquisitionConnectionData connection, DownloadStoragePaths paths)
         {
-            var staging = paths.Incomplete(download.OperationId);
+            var staging = paths.Incomplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId);
             var name = "book." + DirectSources.Format(download.ExternalId ?? "");
             var path = Path.Combine(staging, name);
-            if (!paths.IsComplete(download.OperationId) && !File.Exists(path))
+            if (!paths.IsComplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId) && !File.Exists(path))
             {
                 try
                 {
-                    await paths.PrepareIncompleteAsync(download.OperationId, CancellationToken);
+                    await paths.PrepareIncompleteAsync(download.OperationId, CancellationToken, download.MediaTypeId, download.MediaSubtypeId);
                     File.Delete(path + ".part");
                     await _direct.DownloadAsync(connection, download, path + ".part", paths, CancellationToken);
                     // A file of an earlier attempt is replaced; it never stays beside the new one.
@@ -807,7 +807,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             try
             {
-                var complete = await paths.CompleteAsync(download.OperationId, staging, LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId), CancellationToken);
+                var complete = await paths.CompleteAsync(download.OperationId, staging, LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId), CancellationToken, download.MediaTypeId, download.MediaSubtypeId);
                 var file = new FileInfo(Path.Combine(complete, name));
                 await _import.PlaceAsync(Context, download, new LocalStorageFiles(complete), new ImportSourceRef(null, complete, ""), [new StorageFile(name, file.Length, file.LastWriteTimeUtc)], true, CancellationToken);
             }
