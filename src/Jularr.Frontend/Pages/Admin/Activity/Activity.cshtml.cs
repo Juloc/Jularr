@@ -142,6 +142,11 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 title = new A(new Text("jobs.job." + item.Title)).Class("list-identity__title").Attribute("href", "/Admin/Jobs");
                 subline = new Text("operation.type.Job");
             }
+            else if (item.OperationTypeId == OperationType.MediaImport)
+            {
+                title = new A(new Text("operation.type.MediaImport")).Class("list-identity__title").Attribute("href", "/Admin/Import");
+                subline = new Text("operation.type.MediaImport");
+            }
             else if (item.WorkId is { } workId)
             {
                 title = new A(new Truncated(item.WorkTitle ?? "")).Class("list-identity__title").Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture));

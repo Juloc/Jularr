@@ -14,7 +14,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
 {
     // A list of titles added at once: the file, what each entry is and would do, and what became of each.
     [RequestFormLimits(ValueCountLimit = 20_000, ValueLengthLimit = 4_194_304)]
-    public sealed class MediaImportModel(PreviewMediaImportV1 preview, RunMediaImportV1 run, ReadMediaImportEditionsV1 editions, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
+    public sealed class MediaImportModel(PreviewMediaImportV1 preview, RunMediaImportV1 run, QueueMediaImportJobV1 queueJob, ReadMediaImportJobV1 readJob, LatestMediaImportJobV1 latestJob, ReadMediaImportEditionsV1 editions, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private const string Address = "/Admin/Import";
         private MediaImportDataV1? _input;
@@ -40,6 +40,23 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 Upload(content, csrf);
             }
 
+            // Persisted progress is visible after reopening the page, with or without
+            // its original preview. The worker never depends on this component.
+            content.Add(new Div(
+                new H2(new Text("import.job.title")),
+                new Strong(new Text("import.job.queued")).Attribute("data-import-job-state", "").Attribute("role", "status"),
+                new Span(new ValueText("0 / 0")).Attribute("data-import-job-count", ""),
+                new Progress().Attribute("data-import-job-progress", "").Attribute("max", "1").Attribute("value", "0"),
+                new Ol().Attribute("data-import-job-rows", ""),
+                new Button(new Text("import.downloadReport")).Attribute("type", "button")
+                    .Attribute("data-import-job-report", "").Attribute("hidden", "hidden"))
+                .Class("media-import__job-panel").Attribute("data-import-job-panel", "").Attribute("hidden", "hidden")
+                .TextAttribute("data-job-queued", "import.job.queued")
+                .TextAttribute("data-job-running", "import.job.running")
+                .TextAttribute("data-job-completed", "import.job.completed")
+                .TextAttribute("data-job-failed", "import.job.failed")
+                .TextAttribute("data-job-disconnected", "import.job.disconnected")
+                .TextAttribute("data-job-start-failed", "import.job.startFailed"));
             page.Content.Add(new Div([.. content]).Class("media-import"));
         }
 
@@ -469,6 +486,47 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             }
 
             return new EmptyResult();
+        }
+
+        // Queueing only persists an immutable snapshot; actual mutations are
+        // performed by OperationWorker, independently of this HTTP request.
+        public async Task<IActionResult> OnPostStartJobAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
+        {
+            if (!texts.CanImportMedia()) return Forbid();
+            Read(file, json, action, defaults, choices, apply: true);
+            var result = await queueJob.ExecuteAsync<MediaImportJobCreatedV1>(_input!, HttpContext.RequestAborted);
+            return new JsonResult(new { jobId = result.JobId });
+        }
+
+        public async Task<IActionResult> OnGetJobAsync(Guid? jobId)
+        {
+            if (!texts.CanImportMedia()) return Forbid();
+            if (jobId is not { } id || id == Guid.Empty) return BadRequest();
+            var status = await readJob.ExecuteAsync<MediaImportJobStatusV1>(new MediaImportJobParametersV1(id), HttpContext.RequestAborted);
+            return new JsonResult(new
+            {
+                jobId = status.JobId,
+                state = status.StatusTypeId.ToString(),
+                total = status.TotalCount,
+                processed = status.ProcessedCount,
+                sequence = status.Sequence,
+                error = status.ErrorKey,
+                rows = status.Rows.Select(row => new
+                {
+                    index = row.Index,
+                    title = row.Title,
+                    outcome = row.OutcomeTypeId is { } outcome ? texts["import.outcome." + outcome] : null,
+                    stage = texts["import.job.stage." + row.Stage],
+                    workId = row.WorkId
+                })
+            });
+        }
+
+        public async Task<IActionResult> OnGetLatestJobAsync()
+        {
+            if (!texts.CanImportMedia()) return Forbid();
+            var latest = await latestJob.ExecuteAsync<MediaImportLatestJobV1>(cancellationToken: HttpContext.RequestAborted);
+            return new JsonResult(new { jobId = latest.JobId });
         }
 
         public async Task<IActionResult> OnPostApplyAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)

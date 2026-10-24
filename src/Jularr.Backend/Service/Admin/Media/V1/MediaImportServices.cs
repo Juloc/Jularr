@@ -78,20 +78,18 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         // Each new title reads its provider; a run takes as many as a request can bear and leaves the rest for the next one.
         private const int NewTitlesPerRun = 40;
         private readonly MediaImportPlanner _planner;
-        private readonly MetadataCatalog _catalog;
+        private readonly MediaImportProcessor _processor;
         private readonly AcquisitionSearchSignal _searchSignal;
-        private readonly ILogger<RunMediaImportV1> _logger;
         private bool _searches;
 
         // Optional request-scoped progress sink for the interactive import page; the normal API stays unchanged.
         public Func<MediaImportResultRowV1, Task>? OnRowProcessedAsync { get; set; }
 
-        internal RunMediaImportV1(MediaImportPlanner planner, MetadataCatalog catalog, AcquisitionSearchSignal searchSignal, ILogger<RunMediaImportV1> logger)
+        internal RunMediaImportV1(MediaImportPlanner planner, MediaImportProcessor processor, AcquisitionSearchSignal searchSignal)
         {
             _planner = planner;
-            _catalog = catalog;
+            _processor = processor;
             _searchSignal = searchSignal;
-            _logger = logger;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -110,89 +108,28 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var added = 0;
             foreach (var row in plan.Rows)
             {
-                try
+                MediaImportResultRowV1 result;
+                if (row.IsIncluded && row.WorkId is null && row.Import is { } import
+                    && (added >= NewTitlesPerRun || unavailable.Contains(import.Namespace)))
                 {
-                    var title = row.MatchTitle ?? row.Item.Title;
-                    MediaImportResultRowV1 Result(MediaImportOutcomeType outcome, long? id = null, bool searches = false) => new(row.Item.Index, title, outcome, searches, id ?? row.WorkId);
-                    if (row.Status == MediaImportStatusType.Invalid && row.Problem == "excluded")
-                    {
-                        results.Add(Result(MediaImportOutcomeType.Excluded));
-                        continue;
-                    }
-
-                    if (!row.IsIncluded)
-                    {
-                        results.Add(Result(MediaImportOutcomeType.Skipped));
-                        continue;
-                    }
-
-                    // A title that is not in the library is read from its provider first.
-                    var workId = row.WorkId;
-                    var created = false;
-                    if (workId is null)
-                    {
-                        var import = row.Import!;
-                        if (added >= NewTitlesPerRun || unavailable.Contains(import.Namespace))
-                        {
-                            results.Add(Result(MediaImportOutcomeType.Deferred));
-                            remaining.Add(row.Item with { Ids = [import] });
-                            continue;
-                        }
-
-                        try
-                        {
-                            workId = await _catalog.ImportAsync(Context, row.Item.Type!.Value, row.Item.Subtype, import.Namespace, import.Value, CancellationToken);
-                            created = true;
-                            added++;
-                        }
-                        catch (KeyNotFoundException)
-                        {
-                            results.Add(Result(MediaImportOutcomeType.NotFound));
-                            continue;
-                        }
-                        catch (ServiceUnavailableException)
-                        {
-                            unavailable.Add(import.Namespace);
-                            results.Add(Result(MediaImportOutcomeType.Unavailable));
-                            remaining.Add(row.Item with { Ids = [import] });
-                            continue;
-                        }
-                        catch (Exception exception) when (exception is not OperationCanceledException)
-                        {
-                            _logger.LogWarning(exception, "The import of {Namespace} {Value} failed.", import.Namespace, import.Value);
-                            results.Add(Result(MediaImportOutcomeType.Failed));
-                            continue;
-                        }
-                    }
-
-                    // Monitoring gives the title a target; one that exists stays as it is.
-                    var monitored = false;
-                    if (row.Action != MediaImportActionType.AddOnly && row.CanMonitor)
-                    {
-                        try
-                        {
-                            var id = workId.Value;
-                            monitored = await Context.ExecuteBatchAsync((ctx, ct) => ctx.EnsureWantedItemAsync(new WantedTakeoverData(id, row.AcquisitionProfileId, row.LibraryRootId, false), ct), CancellationToken);
-                        }
-                        catch (Exception exception) when (exception is not OperationCanceledException)
-                        {
-                            _logger.LogWarning(exception, "The target of work {WorkId} could not be created.", workId);
-                            results.Add(Result(MediaImportOutcomeType.Failed, workId));
-                            continue;
-                        }
-                    }
-
-                    var searches = monitored && row.Action == MediaImportActionType.MonitorAndSearch;
-                    _searches |= searches;
-                    results.Add(Result(created ? monitored ? MediaImportOutcomeType.AddedAndMonitored : MediaImportOutcomeType.Added : monitored ? MediaImportOutcomeType.Monitored : MediaImportOutcomeType.Unchanged, workId, searches));
+                    result = new MediaImportResultRowV1(row.Item.Index, row.MatchTitle ?? row.Item.Title, MediaImportOutcomeType.Deferred, false, null);
+                    remaining.Add(row.Item with { Ids = [import] });
                 }
-                finally
+                else
                 {
-                    if (OnRowProcessedAsync is { } notify && results.LastOrDefault()?.Index == row.Item.Index)
+                    var processed = await _processor.ProcessAsync(Context, row, CancellationToken);
+                    result = processed.Result;
+                    if (processed.Created) added++;
+                    if (result.OutcomeTypeId == MediaImportOutcomeType.Unavailable && row.Import is { } missing)
                     {
-                        await notify(results[^1]);
+                        unavailable.Add(missing.Namespace);
+                        remaining.Add(row.Item with { Ids = [missing] });
                     }
+                    _searches |= result.Searches;
                 }
+
+                results.Add(result);
+                if (OnRowProcessedAsync is { } notify) await notify(result);
             }
 
             // Each row is named as the library names its title.
