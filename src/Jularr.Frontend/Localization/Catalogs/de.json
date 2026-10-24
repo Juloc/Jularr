@@ -9144,6 +9144,34 @@
    "Apply condition type",
    "Bedingungsart anwenden"
   ],
+  "admin.browser.running": [
+   "Browser running",
+   "Browser läuft"
+  ],
+  "admin.browser.configured": [
+   "Browser configured but not running",
+   "Browser eingerichtet, aber nicht gestartet"
+  ],
+  "admin.browser.missing": [
+   "Browser not configured",
+   "Browser nicht eingerichtet"
+  ],
+  "admin.browser.setupHint": [
+   "Configure and start the optional browser on the Jularr host.",
+   "Richte den optionalen Browser auf dem Jularr-Host ein und starte ihn."
+  ],
+  "admin.browser.installSteps": [
+   "Browser setup commands",
+   "Befehle zur Browser-Einrichtung"
+  ],
+  "library.findWork": [
+   "Find matching work",
+   "Passendes Werk suchen"
+  ],
+  "library.useMatch": [
+   "Use this match",
+   "Diese Zuordnung übernehmen"
+  ],
   "admin.browser.title": [
    "Browser",
    "Browser"
