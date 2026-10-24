@@ -13,12 +13,14 @@ version=156.0.8078.47
 runtime="$home/runtime"
 chrome="$runtime/$folder/chrome"
 install_browser() {
-  if [ -x "$chrome" ] && [ "$(cat "$runtime/.version" 2>/dev/null || true)" = "$version" ]; then exit 0; fi
-  mkdir -p "$home"
   if [ -L "$home" ] || [ -L "$runtime" ]; then echo 'Unsafe browser directory' >&2; exit 2; fi
+  mkdir -p "$home"
+  # A SIGKILL or power loss can leave an old staging directory, even when install succeeded.
+  for dir in "$home"/.install.*; do [ ! -e "$dir" ] || rm -rf "$dir"; done
+  if [ -x "$chrome" ] && [ "$(cat "$runtime/.version" 2>/dev/null || true)" = "$version" ]; then exit 0; fi
   stage="$(mktemp -d "$home/.install.XXXXXXXX")"
   trap 'rm -rf "$stage"' EXIT HUP INT TERM
-  curl --fail --location --proto '=https' --tlsv1.2 --retry 2 --connect-timeout 20 --max-time 240 --max-filesize 300000000 \
+  curl --fail --location --proto '=https' --proto-redir '=https' --tlsv1.2 --retry 2 --connect-timeout 20 --max-time 240 --max-filesize 300000000 \
     "https://storage.googleapis.com/chrome-for-testing-public/$version/$platform/$folder.zip" -o "$stage/browser.zip"
   printf '%s  %s\n' "$sha" "$stage/browser.zip" | sha256sum --check --status
   unzip -Z1 "$stage/browser.zip" | awk -v root="$folder/" 'index($0,root)!=1 || index($0,"..") || substr($0,1,1)=="/" { bad=1 } END { exit bad }'
@@ -26,6 +28,8 @@ install_browser() {
   unzip -q "$stage/browser.zip" -d "$stage/extract"
   if [ ! -f "$stage/extract/$folder/chrome" ]; then echo 'Missing browser executable' >&2; exit 2; fi
   chmod 0755 "$stage/extract/$folder/chrome"
+  # Validate the downloaded executable before replacing a working browser.
+  "$stage/extract/$folder/chrome" --version
   printf '%s\n' "$version" > "$stage/extract/.version"
   if [ -e "$runtime" ]; then mv "$runtime" "$stage/previous"; fi
   if ! mv "$stage/extract" "$runtime"; then
