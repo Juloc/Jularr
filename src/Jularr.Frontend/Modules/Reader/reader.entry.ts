@@ -143,6 +143,11 @@ function initializeText(reader: HTMLElement): void {
         }
     }));
 
+    // Each chapter is a new document. Honor the persisted reading language on
+    // initial load too; previously only clicking a language started translation,
+    // so chapter navigation silently showed the original English text.
+    if (translate && reading !== 'original') void translate(reading);
+
     content.addEventListener('scroll', schedule, { passive: true });
     reader.querySelector('.reader__canvas')!.addEventListener('wheel', schedule, { passive: true });
     reader.addEventListener('click', event => {
