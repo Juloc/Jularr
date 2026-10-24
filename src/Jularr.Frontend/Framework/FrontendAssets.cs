@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Microsoft.AspNetCore.Html;
@@ -9,6 +10,16 @@ namespace Jularr.Frontend.Framework
     // Never hash or compile assets on a request, or guess published asset names.
     public sealed class FrontendAssets(IWebHostEnvironment environment)
     {
+        // A process-wide release identity derived from the existing Vite manifest.
+        // Content hashes already identify individual files; this identifies their coherent set.
+        private readonly Lazy<string> _buildId = new(() =>
+        {
+            var file = Path.Combine(environment.ContentRootPath, "Assets", "Generated", "manifest.json");
+            return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file)))[..16];
+        }, LazyThreadSafetyMode.ExecutionAndPublication);
+
+        public string BuildId => _buildId.Value;
+
         private sealed record Entry
         {
             public string? File { get; init; }
