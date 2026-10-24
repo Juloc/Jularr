@@ -83,6 +83,30 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(playback).Not.ToBeCheckedAsync();
                 await page.Locator(".option-type .option-row[data-module=Trickplay] .toggle").ClickAsync();
                 await Assertions.Expect(playback).ToBeCheckedAsync();
+
+                // Every Admin module exists once in Setup, and the advanced groups
+                // at the bottom are already expanded rather than silently hidden.
+                await Assertions.Expect(page.Locator("[data-module]")).ToHaveCountAsync(27);
+                await Assertions.Expect(page.Locator(".option-groups--extras .option-group")).ToHaveCountAsync(3);
+                await Assertions.Expect(page.Locator(".option-groups--extras .option-group:not([open])")).ToHaveCountAsync(0);
+                await Assertions.Expect(page.Locator(".option-groups--extras [data-module=Profiles]")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".option-groups--extras [data-module=Diagnostics]")).ToBeVisibleAsync();
+                // Optional settings are shown even when their media type is off.
+                await Assertions.Expect(page.Locator("[data-module=Translation]")).ToBeVisibleAsync();
+
+                // Complete means every module AND all media types/subtypes.
+                var complete = page.Locator("[data-setup-preset=complete]");
+                await complete.ClickAsync();
+                await Assertions.Expect(complete).ToHaveAttributeAsync("aria-pressed", "true");
+                await Assertions.Expect(page.Locator("[data-module] input[type=checkbox]:not(:checked)")).ToHaveCountAsync(0);
+                await Assertions.Expect(page.Locator("[data-media] input[type=checkbox]:not(:checked)")).ToHaveCountAsync(0);
+                await Evidence.SaveAsync(page, "setup-all-modules-" + width + (dark ? "-dark" : "-light"));
+
+                await Steps.SubmitAsync(page, page.Locator(".setup-modules__form form"));
+                await page.WaitForURLAsync("**/Setup/Profiles");
+                Assert.AreEqual(0L, await jularr.ScalarAsync("SELECT count(*) FROM \"InstanceModules\" WHERE NOT \"IsEnabled\""));
+                Assert.AreEqual(0L, await jularr.ScalarAsync("SELECT count(*) FROM \"MediaTypes\" WHERE NOT \"IsEnabled\""));
+                Assert.AreEqual(0L, await jularr.ScalarAsync("SELECT count(*) FROM \"MediaSubtypes\" WHERE NOT \"IsEnabled\""));
                 CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
             }
             catch
