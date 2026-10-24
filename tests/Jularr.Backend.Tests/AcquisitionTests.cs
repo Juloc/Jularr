@@ -2514,16 +2514,15 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Sabnzbd_UsesMatchingMediaTypeCategoryBeforeGenericOrOtherMediaTypes()
+        public async Task Sabnzbd_UsesHighestPriorityCompatibleMediaClient()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
             var sab = new FakeUsenet();
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, sab, razor: true);
 
-            // A series-only connection has better numerical priority than movies.
-            // A movie-only connection has worse numerical priority than the generic
-            // connection, but is explicitly selected for Movie acquisitions.
+            // The series-only connection is ineligible for Movie acquisitions.
+            // The movie SAB connection has the best numerical priority among compatible clients.
             foreach (var data in new[]
             {
                 new SaveAcquisitionConnectionDataV1("Native news", AcquisitionConnectionType.Usenet, null,
@@ -2531,7 +2530,7 @@ namespace Jularr.Backend.Tests
                 new SaveAcquisitionConnectionDataV1("Series SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
                     FakeUsenet.ClientKey, true, 1, [], "tv", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Series]),
                 new SaveAcquisitionConnectionDataV1("Movie SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
-                    FakeUsenet.ClientKey, true, 50, [], "films", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Movie])
+                    FakeUsenet.ClientKey, true, 0, [], "films", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Movie])
             })
             {
                 using var added = await host.SendAsync(HttpMethod.Post, Connections, data);
