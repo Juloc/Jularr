@@ -1,6 +1,7 @@
 using System.Globalization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Storage;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Storage;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Storage;
@@ -128,11 +129,24 @@ namespace Jularr.Backend.Service.Core
         public string IncompleteRoot { get; } = incompleteRoot;
         public string CompleteRoot { get; } = completeRoot;
 
-        public string Incomplete(long operationId) => Path.Combine(IncompleteRoot, operationId.ToString(CultureInfo.InvariantCulture));
-        public string Complete(long operationId) => Path.Combine(CompleteRoot, operationId.ToString(CultureInfo.InvariantCulture));
-        private string Pending(long operationId) => Path.Combine(CompleteRoot, "partial-" + operationId.ToString(CultureInfo.InvariantCulture));
+        public string Incomplete(long operationId, MediaType? mediaType = null, MediaSubtype? subtype = null) =>
+            Path.Combine(IncompleteRoot, RelativeJob(IncompleteRoot, operationId, mediaType, subtype));
 
-        public bool IsComplete(long operationId) => Directory.Exists(Complete(operationId));
+        public string Complete(long operationId, MediaType? mediaType = null, MediaSubtype? subtype = null) =>
+            Path.Combine(CompleteRoot, RelativeJob(CompleteRoot, operationId, mediaType, subtype));
+
+        private static string RelativeJob(string root, long operationId, MediaType? mediaType, MediaSubtype? subtype)
+        {
+            var legacy = operationId.ToString(CultureInfo.InvariantCulture);
+            return mediaType is null || Directory.Exists(Path.Combine(root, legacy))
+                ? legacy : DownloadWorkspaceLayout.Relative(operationId, mediaType.Value, subtype);
+        }
+
+        private string Pending(long operationId, MediaType? mediaType, MediaSubtype? subtype) =>
+            Path.Combine(Path.GetDirectoryName(Complete(operationId, mediaType, subtype))!, "partial-" + DownloadWorkspaceLayout.JobName(operationId));
+
+        public bool IsComplete(long operationId, MediaType? mediaType = null, MediaSubtype? subtype = null) =>
+            Directory.Exists(Complete(operationId, mediaType, subtype));
         public IDisposable? TryStartJob(long operationId) => reservations.TryStart(Settings.WorkspaceId, operationId, Settings.MaxParallelJobs);
 
         public IDisposable ReserveWrite(long operationId, string directory, long bytes)
@@ -155,12 +169,13 @@ namespace Jularr.Backend.Service.Core
             });
         }
 
-        public async Task<string> PrepareIncompleteAsync(long operationId, CancellationToken ct)
+        public async Task<string> PrepareIncompleteAsync(long operationId, CancellationToken ct, MediaType? mediaType = null, MediaSubtype? subtype = null)
         {
             CheckIdentity(IncompleteRoot, Settings.IncompleteFilesystemIdentity);
             await new LocalStorageFiles(Path.GetDirectoryName(IncompleteRoot)!).CreateDirectoryAsync(Path.GetFileName(IncompleteRoot), ct);
-            await new LocalStorageFiles(IncompleteRoot).CreateDirectoryAsync(operationId.ToString(CultureInfo.InvariantCulture), ct);
-            return StorageFileSystem.ResolveDirectory(IncompleteRoot, operationId.ToString(CultureInfo.InvariantCulture));
+            var relative = RelativeJob(IncompleteRoot, operationId, mediaType, subtype);
+            await new LocalStorageFiles(IncompleteRoot).CreateDirectoryAsync(relative, ct);
+            return StorageFileSystem.ResolveDirectory(IncompleteRoot, relative);
         }
 
         public long MaximumArticleBytes(string articles)
@@ -215,18 +230,22 @@ namespace Jularr.Backend.Service.Core
             if (Directory.Exists(root)) StorageFileSystem.ResolveDirectory(directory, Path.GetFileName(root));
         }
 
-        public async Task<string> CompleteAsync(long operationId, string source, IReadOnlySet<string>? extensions, CancellationToken ct)
+        public async Task<string> CompleteAsync(long operationId, string source, IReadOnlySet<string>? extensions, CancellationToken ct,
+            MediaType? mediaType = null, MediaSubtype? subtype = null)
         {
             CheckCapacity();
-            var target = Complete(operationId);
-            if (Directory.Exists(target)) return StorageFileSystem.ResolveDirectory(CompleteRoot, operationId.ToString(CultureInfo.InvariantCulture));
+            var target = Complete(operationId, mediaType, subtype);
+            if (Directory.Exists(target)) return StorageFileSystem.ResolveDirectory(CompleteRoot, Path.GetRelativePath(CompleteRoot, target));
             await new LocalStorageFiles(Path.GetDirectoryName(CompleteRoot)!).CreateDirectoryAsync(Path.GetFileName(CompleteRoot), ct);
+            var category = Path.GetRelativePath(CompleteRoot, Path.GetDirectoryName(target)!);
+            if (category != ".") await new LocalStorageFiles(CompleteRoot).CreateDirectoryAsync(category, ct);
             var state = new StorageScanState();
             var files = StorageFileSystem.EnumerateFiles(source, extensions, state, ct).ToArray();
             if (!state.IsComplete) throw new ServiceUnavailableException("download_storage_unavailable");
             var bytes = files.Sum(file => file.SizeBytes);
             CheckCapacity();
-            source = StorageFileSystem.ResolveDirectory(Incomplete(operationId), Path.GetRelativePath(Incomplete(operationId), source));
+            var incomplete = Incomplete(operationId, mediaType, subtype);
+            source = StorageFileSystem.ResolveDirectory(incomplete, Path.GetRelativePath(incomplete, source));
             var sourceVolume = StorageFileSystem.DownloadFilesystemIdentity(source, includeDirectory: false, includeMountPoint: true);
             if (sourceVolume is not null && sourceVolume == StorageFileSystem.DownloadFilesystemIdentity(CompleteRoot, includeDirectory: false, includeMountPoint: true))
             {
@@ -236,8 +255,8 @@ namespace Jularr.Backend.Service.Core
             }
 
             // Publishing a job directory is atomic on the Complete filesystem.
-            var pending = Pending(operationId);
-            if (Directory.Exists(pending)) Directory.Delete(StorageFileSystem.ResolveDirectory(CompleteRoot, Path.GetFileName(pending)), recursive: true);
+            var pending = Pending(operationId, mediaType, subtype);
+            if (Directory.Exists(pending)) Directory.Delete(StorageFileSystem.ResolveDirectory(CompleteRoot, Path.GetRelativePath(CompleteRoot, pending)), recursive: true);
             CheckCapacity(bytes);
             var root = Path.GetDirectoryName(CompleteRoot)!;
             if (StorageFileSystem.AvailableFreeSpace(root) is not { } available || bytes > available - Settings.FreeSpaceReserveBytes!.Value)
@@ -270,9 +289,10 @@ namespace Jularr.Backend.Service.Core
             foreach (var (root, expected) in new[] { (IncompleteRoot, Settings.IncompleteFilesystemIdentity), (CompleteRoot, Settings.CompleteFilesystemIdentity) })
             {
                 CheckIdentity(root, expected);
-                var name = operationId.ToString(CultureInfo.InvariantCulture);
-                var path = Path.Combine(root, name);
-                if (Directory.Exists(path)) Directory.Delete(StorageFileSystem.ResolveDirectory(root, name), recursive: true);
+                foreach (var relative in DownloadWorkspaceLayout.ExistingJobCandidates(operationId))
+                {
+                    if (Directory.Exists(Path.Combine(root, relative))) Directory.Delete(StorageFileSystem.ResolveDirectory(root, relative), recursive: true);
+                }
             }
         }
     }

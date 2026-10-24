@@ -273,7 +273,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             string? externalId = null;
             if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
-                var staging = await nativePaths!.PrepareIncompleteAsync(operationId, ct);
+                var staging = await nativePaths!.PrepareIncompleteAsync(operationId, ct, target.MediaTypeId, target.MediaSubtypeId);
                 try
                 {
                     Directory.CreateDirectory(staging);
