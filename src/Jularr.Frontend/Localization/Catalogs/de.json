@@ -912,6 +912,10 @@
    "Save note",
    "Notiz speichern"
   ],
+  "reader.settings.saveFailed": [
+   "Reader settings were not saved to your profile. They still work on this device; change a setting to retry.",
+   "Leseeinstellungen wurden nicht in deinem Profil gespeichert. Sie gelten weiter auf diesem Gerät. Ändere eine Einstellung, um es erneut zu versuchen."
+  ],
   "reader.settings": [
    "Settings",
    "Einstellungen"
@@ -10124,6 +10128,10 @@
    "Figure",
    "Abbildung"
   ],
+  "reader.figure.zoomLevel": [
+   "Image zoom",
+   "Bildzoom"
+  ],
   "reader.figure.zoomIn": [
    "Zoom in",
    "Vergrößern"
@@ -13067,6 +13075,10 @@
   "reader.pagePosition": [
    "Pages {0}–{1} of {2}",
    "Seiten {0}–{1} von {2}"
+  ],
+  "reader.chapterPagePosition": [
+   "Ch. {0}–{1}/{2}",
+   "Kap. {0}–{1}/{2}"
   ],
   "reader.seek.pages": [
    "Page position",
