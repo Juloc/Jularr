@@ -43,6 +43,7 @@ internal class TvV1ClientFlow(
         val fractionalEpisodes: List<TvWorkEpisodeV1>,
         val assetByUnit: Map<String, Long?>,
         val availableMovieAssets: List<TvWorkAvailabilityV1>,
+        val hasMoreMovieAssets: Boolean = false,
     )
 
     suspend fun home(): Home {
@@ -149,10 +150,9 @@ internal class TvV1ClientFlow(
             )
         }
 
-        val movieAssets = if (work.mediaTypeId == TvV1LegacyUiModels.MOVIE) {
-            allPages { page -> api.availability(workId, page = page, pageSize = PageSize) }
-                .filter { it.playableMediaAssetId() != null }
-        } else emptyList()
+        val moviePage = if (work.mediaTypeId == TvV1LegacyUiModels.MOVIE) {
+            movieAssetsPage(workId, 1)
+        } else PageSlice(emptyList(), false)
         val seasons = api.seasons(workId)
         val bySeason = seasons.associate { season ->
             season.seasonNumber to api.episodes(workId, season.seasonNumber)
@@ -168,7 +168,8 @@ internal class TvV1ClientFlow(
             episodeByUnit = units,
             fractionalEpisodes = episodes.filter { runCatching { it.number.intValueExact() }.isFailure },
             assetByUnit = episodes.associate { it.id.toString() to it.mediaAssetId },
-            availableMovieAssets = movieAssets,
+            availableMovieAssets = moviePage.items,
+            hasMoreMovieAssets = moviePage.hasMore,
         )
     }
 
@@ -178,23 +179,20 @@ internal class TvV1ClientFlow(
         }
     }
 
-    private suspend fun <T> allPages(
-        fetch: suspend (Int) -> TvPageV1<T>,
-    ): List<T> {
-        val all = ArrayList<T>()
-        for (page in 1..MaxPages) {
-            val result = fetch(page)
-            check(result.page == page) { "Jularr returned a mismatched page number." }
-            check(result.pageSize == PageSize) { "Jularr returned an unexpected page size." }
-            check(result.items.size <= PageSize) { "Jularr returned too many items per page." }
-            all.addAll(result.items)
-            if (result.items.size < PageSize) return all
-        }
-        error("Mehr als $MaxPages Bibliotheksseiten: Listenansicht benötigt weitere Pagination.")
+    /** Availability is paged independently from title metadata so a large film library never stalls Details. */
+    suspend fun movieAssetsPage(workId: Long, page: Int): PageSlice<TvWorkAvailabilityV1> {
+        ensureLibrary()
+        require(workId > 0 && page >= 1)
+        val result = api.availability(workId, page = page, pageSize = PageSize)
+        check(result.page == page && result.pageSize == PageSize)
+        check(result.items.size <= PageSize) { "Jularr returned too many movie assets in one page." }
+        return PageSlice(
+            items = result.items.filter { it.playableMediaAssetId() != null },
+            hasMore = result.items.size == PageSize,
+        )
     }
 
     private companion object {
         const val PageSize = 100
-        const val MaxPages = 20
     }
 }
