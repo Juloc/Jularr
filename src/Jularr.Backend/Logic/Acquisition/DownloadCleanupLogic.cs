@@ -7,13 +7,14 @@ namespace Jularr.Backend.Logic.Acquisition
     // The cleanup ledger is independent of finished Operations: pruning history cannot silently lose a remote deletion.
     internal sealed class DownloadCleanupTaskData : BaseData
     {
-        public DownloadCleanupTaskData(long id, long acquisitionConnectionId, string externalId, string reason, int attemptCount)
+        public DownloadCleanupTaskData(long id, long acquisitionConnectionId, string externalId, string reason, int attemptCount, string? sourceFingerprint)
         {
             Id = id;
             AcquisitionConnectionId = acquisitionConnectionId;
             ExternalId = externalId;
             Reason = reason;
             AttemptCount = attemptCount;
+            SourceFingerprint = sourceFingerprint;
         }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
@@ -30,6 +31,9 @@ namespace Jularr.Backend.Logic.Acquisition
 
         [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Page))]
         public int AttemptCount { get; }
+
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Fingerprint), false)]
+        public string? SourceFingerprint { get; }
     }
 
     internal sealed class DownloadCleanupOperationData : BaseData
@@ -41,12 +45,13 @@ namespace Jularr.Backend.Logic.Acquisition
 
     internal sealed class DownloadCleanupKeyData : BaseData
     {
-        public DownloadCleanupKeyData(long acquisitionConnectionId, string externalId, long? operationId = null, string? reason = null)
+        public DownloadCleanupKeyData(long acquisitionConnectionId, string externalId, long? operationId = null, string? reason = null, string? sourceFingerprint = null)
         {
             AcquisitionConnectionId = acquisitionConnectionId;
             ExternalId = externalId;
             OperationId = operationId;
             Reason = reason;
+            SourceFingerprint = sourceFingerprint;
         }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
@@ -60,6 +65,9 @@ namespace Jularr.Backend.Logic.Acquisition
 
         [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Action), false)]
         public string? Reason { get; }
+
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Fingerprint), false)]
+        public string? SourceFingerprint { get; }
     }
 
     internal sealed class DownloadCleanupAttemptData : BaseData
@@ -166,12 +174,13 @@ namespace Jularr.Backend.Logic.Acquisition
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                INSERT INTO "DownloadClientCleanups" ("AcquisitionConnectionId", "ExternalId", "Reason", "OperationId")
-                SELECT connection."Id", @ExternalId, 'imported', @OperationId
+                INSERT INTO "DownloadClientCleanups" ("AcquisitionConnectionId", "ExternalId", "Reason", "OperationId", "SourceFingerprint")
+                SELECT connection."Id", @ExternalId, 'imported', @OperationId, @SourceFingerprint
                 FROM "AcquisitionConnections" AS connection
                 WHERE connection."Id" = @AcquisitionConnectionId
                   AND connection."AcquisitionConnectionTypeId" = 2
                   AND connection."RemovesCompleted"
+                  AND @SourceFingerprint IS NOT NULL
                 ON CONFLICT ("AcquisitionConnectionId", "ExternalId") DO NOTHING;
                 """;
             sql.Parameters.Add(data);
@@ -206,7 +215,7 @@ namespace Jularr.Backend.Logic.Acquisition
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                SELECT "Id", "AcquisitionConnectionId", "ExternalId", "Reason", "AttemptCount"
+                SELECT "Id", "AcquisitionConnectionId", "ExternalId", "Reason", "AttemptCount", "SourceFingerprint"
                 FROM "DownloadClientCleanups"
                 WHERE "CompletedAt" IS NULL
                   AND "RetryAt" <= now()

@@ -1,5 +1,6 @@
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Sabnzbd;
@@ -146,11 +147,32 @@ namespace Jularr.Backend.Tests
                 File.WriteAllText(Path.Combine(root, "Downloaded.Job", "movie.mkv"), "test");
                 Directory.CreateDirectory(Path.Combine(root, "Keep.Job"));
                 File.WriteAllText(Path.Combine(root, "Keep.Job", "other.mkv"), "keep");
-                DownloadClientFileSafety.DeleteVerifiedCompleted(root, "Downloaded.Job");
-                Assert.IsFalse(Directory.Exists(Path.Combine(root, "Downloaded.Job")));
+                var job = Path.Combine(root, "Downloaded.Job");
+                var manifest = DownloadSourceInventory.Scan(job);
+                Assert.IsTrue(DownloadClientFileSafety.DeleteVerifiedCompleted(root, "Downloaded.Job", manifest));
+                Assert.IsFalse(Directory.Exists(job));
                 Assert.IsTrue(File.Exists(Path.Combine(root, "Keep.Job", "other.mkv")));
-                Assert.ThrowsExactly<DataValidationException>(() => DownloadClientFileSafety.DeleteVerifiedCompleted(root, ""));
-                Assert.ThrowsExactly<DataValidationException>(() => DownloadClientFileSafety.DeleteVerifiedCompleted(root, "../Keep.Job"));
+                Assert.ThrowsExactly<DataValidationException>(() => DownloadClientFileSafety.DeleteVerifiedCompleted(root, "", manifest));
+                Assert.ThrowsExactly<DataValidationException>(() => DownloadClientFileSafety.DeleteVerifiedCompleted(root, "../Keep.Job", manifest));
+            }
+            finally { Directory.Delete(root, recursive: true); }
+        }
+
+        [TestMethod]
+        public void AutomaticCleanup_ChangedSourceInventoryPreservesNewFiles()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "jularr-sab-source-" + Guid.NewGuid().ToString("N"));
+            var job = Directory.CreateDirectory(Path.Combine(root, "Finished")).FullName;
+            try
+            {
+                File.WriteAllText(Path.Combine(job, "movie.mkv"), "imported");
+                var manifest = DownloadSourceInventory.Scan(job);
+                File.WriteAllText(Path.Combine(job, "new-note.txt"), "must keep");
+
+                Assert.IsFalse(DownloadClientFileSafety.DeleteVerifiedCompleted(root, "Finished", manifest));
+                Assert.IsTrue(File.Exists(Path.Combine(job, "movie.mkv")));
+                Assert.IsTrue(File.Exists(Path.Combine(job, "new-note.txt")));
+                Assert.AreEqual(1, Directory.EnumerateFileSystemEntries(root).Count());
             }
             finally { Directory.Delete(root, recursive: true); }
         }

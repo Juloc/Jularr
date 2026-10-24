@@ -123,7 +123,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             if (allSourceFiles is not null
                 && ImportPlacementLogic.AllSourceFilesSelected(allSourceFiles.Select(file => file.RelativePath), placements.Select(placement => placement.SourcePath)))
             {
-                await RemoveFromClientAsync(context, download.AcquisitionConnectionId, download.ExternalId, ct);
+                await RemoveFromClientAsync(context, download.AcquisitionConnectionId, download.ExternalId,
+                    DownloadSourceInventory.Fingerprint(allSourceFiles), ct);
             }
         }
 
@@ -316,12 +317,13 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         }
 
         // A completed import first records a durable cleanup request. The worker owns remote deletion and retry.
-        public async Task RemoveFromClientAsync(LogicContext context, long acquisitionConnectionId, string? externalId, CancellationToken ct)
+        public async Task RemoveFromClientAsync(LogicContext context, long acquisitionConnectionId, string? externalId, string sourceFingerprint, CancellationToken ct)
         {
-            if (externalId is null) return;
+            if (externalId is null || string.IsNullOrWhiteSpace(sourceFingerprint)) return;
             await context.ExecuteBatchAsync(async (ctx, token) =>
             {
-                await ctx.QueueImportedCleanupAsync(new DownloadCleanupKeyData(acquisitionConnectionId, externalId), token);
+                await ctx.QueueImportedCleanupAsync(new DownloadCleanupKeyData(acquisitionConnectionId, externalId,
+                    sourceFingerprint: sourceFingerprint), token);
                 return true;
             }, ct);
             signals.Downloads.Notify();
@@ -375,9 +377,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                             continue;
                         }
 
-                        if (task.Reason == "imported" && !await DeleteImportedSourceAsync(context, connection, finished.StoragePath, ct))
+                        if (task.Reason == "imported" && (task.SourceFingerprint is null
+                            || !await DeleteImportedSourceAsync(context, connection, finished.StoragePath, task.SourceFingerprint, ct)))
                         {
-                            await RescheduleAsync(task.Id, "cleanup_source_unmapped");
+                            // A changed folder (including additional files) is never auto-deleted.
+                            // Old unverified rows remain visible for manual resolution.
+                            await RescheduleAsync(task.Id, "cleanup_source_unverified");
                             continue;
                         }
 
@@ -410,7 +415,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         // A finished SABnzbd job can keep its completed source files after a successful hard-link import.
         // Only the provider-reported path under the explicitly mapped download root is eligible.
         private async Task<bool> DeleteImportedSourceAsync(LogicContext context, AcquisitionConnectionData connection,
-            string? reportedPath, CancellationToken ct)
+            string? reportedPath, string sourceFingerprint, CancellationToken ct)
         {
             if (string.IsNullOrWhiteSpace(reportedPath) || string.IsNullOrWhiteSpace(connection.RemotePath)
                 || ImportPlacementLogic.MapRemotePath(reportedPath, connection.RemotePath) is not { Length: > 0 } relative
@@ -434,8 +439,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     return false;
             }
 
-            DownloadClientFileSafety.DeleteVerifiedCompleted(root, relative);
-            return true;
+            return DownloadClientFileSafety.DeleteVerifiedCompleted(root, relative, sourceFingerprint);
         }
 
         // The first numbered alternative whose files are all free.

@@ -437,13 +437,13 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             var handled = ImportProposal.ReadHandled(download.AttentionProposal);
             // Include non-media files when deciding whether completed source folders can be removed.
             // A failed or incomplete scan must not make the import itself fail.
-            var allFiles = new List<string>();
+            var allFiles = new List<StorageFile>();
             var sourceScanComplete = false;
             try
             {
                 var scan = new StorageScanState();
                 await foreach (var file in source.EnumerateFilesAsync(reference.Directory, null, scan, CancellationToken))
-                    allFiles.Add(file.RelativePath);
+                    allFiles.Add(file);
                 sourceScanComplete = scan.IsComplete;
             }
             catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
@@ -454,9 +454,11 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             var result = await ManualImport.RunAsync(Context, _import, download.WantedItemId, source, reference.Directory, files, isReadOnly, Data.ImportTransferModeId, Data.Files, Auth.AccountId,
                 new ManualImportDownload(download.OperationId, handled, Data.FinishesDownload, download.AttentionProposal), CancellationToken);
             if (result.FinishedDownload && sourceScanComplete
-                && ImportPlacementLogic.AllSourceFilesSelected(allFiles, handled.Concat(result.Files.Where(file => file.FailureKey is null).Select(file => file.Path))))
+                && ImportPlacementLogic.AllSourceFilesSelected(allFiles.Select(file => file.RelativePath),
+                    handled.Concat(result.Files.Where(file => file.FailureKey is null).Select(file => file.Path))))
             {
-                await _import.RemoveFromClientAsync(Context, download.AcquisitionConnectionId, download.ExternalId, CancellationToken);
+                await _import.RemoveFromClientAsync(Context, download.AcquisitionConnectionId, download.ExternalId,
+                    DownloadSourceInventory.Fingerprint(allFiles), CancellationToken);
             }
 
             // A finished manual import with omitted files remains in the client for explicit cleanup.

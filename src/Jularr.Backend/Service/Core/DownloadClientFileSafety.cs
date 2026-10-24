@@ -241,41 +241,60 @@ namespace Jularr.Backend.Service.Core
 
         // Automatic post-import cleanup deletes only the specific provider-reported output,
         // never its mapped root or a sibling; symlinks and overly large trees are refused.
-        internal static void DeleteVerifiedCompleted(string root, string relative)
+        internal static bool DeleteVerifiedCompleted(string root, string relative, string expectedFingerprint)
         {
-            // A move-mode import can already have removed the source before cleanup runs.
-            // Validate containment before checking whether that target still exists.
-            if (string.IsNullOrWhiteSpace(relative) || relative.Split('/', '\\').Any(x => x is "." or ".." or ""))
+            if (string.IsNullOrWhiteSpace(relative) || relative.Split('/', '\\').Any(x => x is "." or ".." or "")
+                || expectedFingerprint.Length != 64 || expectedFingerprint.Any(character => !Uri.IsHexDigit(character)))
                 throw new DataValidationException(nameof(relative), "invalid_path");
+
             var targetPath = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
             var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
             if (!targetPath.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, comparison))
                 throw new DataValidationException(nameof(relative), "invalid_path");
-            if (!File.Exists(targetPath) && !Directory.Exists(targetPath))
-            {
-                return;
-            }
-            var target = SafePath(root, relative);
+            if (!Directory.Exists(targetPath))
+                return !File.Exists(targetPath); // A move-mode import may already have removed the directory.
 
-            var pending = new Stack<string>();
-            pending.Push(target);
-            var checkedEntries = 0;
-            while (pending.TryPop(out var item))
+            var target = SafePath(root, relative);
+            if (!MatchesFingerprint(DownloadSourceInventory.Scan(target), expectedFingerprint))
+                return false;
+
+            // Same-parent rename is atomic on the source filesystem; unknown new files
+            // cannot be deleted merely because a prior import had once completed.
+            var quarantine = Path.Combine(Path.GetDirectoryName(target)!, ".jularr-delete-" + Guid.NewGuid().ToString("N"));
+            Directory.Move(target, quarantine);
+            try
             {
-                var full = SafePath(root, Path.GetRelativePath(root, item));
-                var attrs = File.GetAttributes(full);
-                if ((attrs & FileAttributes.ReparsePoint) != 0)
-                    throw new DataValidationException(nameof(relative), "invalid_path");
-                if (++checkedEntries > MaxFilesToDelete)
-                    throw new DataValidationException(nameof(relative), "invalid_transition");
-                if ((attrs & FileAttributes.Directory) != 0)
+                if (!MatchesFingerprint(DownloadSourceInventory.Scan(quarantine), expectedFingerprint))
                 {
-                    foreach (var child in Directory.EnumerateFileSystemEntries(full))
-                        pending.Push(child);
+                    Directory.Move(quarantine, target);
+                    return false;
+                }
+
+                // Fail before deletion if even one entry is linked or exceeds our tree limit.
+                var pending = new Stack<string>();
+                pending.Push(quarantine);
+                var visited = 0;
+                while (pending.TryPop(out var next))
+                {
+                    var attributes = File.GetAttributes(next);
+                    if ((attributes & FileAttributes.ReparsePoint) != 0 || ++visited > MaxFilesToDelete)
+                        throw new DataValidationException(nameof(relative), "invalid_path");
+                    if ((attributes & FileAttributes.Directory) != 0)
+                    {
+                        foreach (var child in Directory.EnumerateFileSystemEntries(next)) pending.Push(child);
+                    }
                 }
             }
+            catch
+            {
+                if (Directory.Exists(quarantine) && !Directory.Exists(target))
+                    Directory.Move(quarantine, target);
+                throw;
+            }
 
-            Delete(root, relative);
+            // A partially failed deletion never restores a damaged directory under its old name.
+            Delete(root, Path.GetRelativePath(root, quarantine));
+            return true;
         }
 
         internal static void Delete(string root, string relative)
