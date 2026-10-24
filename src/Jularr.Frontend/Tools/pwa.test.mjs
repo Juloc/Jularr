@@ -60,3 +60,17 @@ test('the worker caches nothing and never answers a request itself', () => {
     assert.equal(claimed, 1);
     assert.equal(waited.length, 1);
 });
+
+
+test('standalone safe areas cover login, tablet shell, mobile drawer, modal and reader', () => {
+    const login = load('Pages/Account/Login/Login.entry.scss');
+    const shell = load('Pages/Shared/Shell.scss');
+    const modal = load('Framework/Components/Modal.scss');
+    const reader = load('Modules/Reader/reader.scss');
+    for (const style of [login, shell, modal, reader]) {
+        assert.match(style, /env\(safe-area-inset-top\)/);
+        assert.match(style, /env\(safe-area-inset-bottom\)/);
+    }
+    assert.match(shell, /max\(13px, env\(safe-area-inset-right\)\)/);
+    assert.match(reader, /max\(18px, env\(safe-area-inset-left\)\)/);
+});
