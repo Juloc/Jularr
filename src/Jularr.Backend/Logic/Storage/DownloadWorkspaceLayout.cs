@@ -42,3 +42,4 @@ namespace Jularr.Backend.Logic.Storage
             foreach (var category in Categories) yield return Path.Combine(category, name);
         }
     }
+}
