@@ -26,7 +26,7 @@ namespace Jularr.Frontend.Pages.User.Details
             var chips = new List<IUiComponent>
             {
                 Chip(new Text(MediaTypeLabel.Key(work.MediaTypeId, work.MediaSubtypeId)), UiTone.Accent, TypeIcon(kind, work)),
-                new MediaAvailability(assets, work.AvailabilityStateId, work.AvailableUnits, work.MonitoredUnits).HeroChip()
+                new MediaAvailability(assets, work.AvailabilityStateId, work.AvailableUnits, work.MonitoredUnits).Badge(style: MediaAvailabilityBadgeStyle.Inline)
             };
             if (work.ProgressStateId == ProgressStateType.Finished && FinishedKey(kind) is { } finished) chips.Add(Chip(new Text(finished), UiTone.Success, "check"));
 
