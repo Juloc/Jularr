@@ -43,6 +43,7 @@ namespace Jularr.E2E.Tests
             var page = browser.Page;
             await Owner.SetUpAndSignInAsync(page);
             await jularr.RunSqlAsync(Seed);
+            await jularr.SeedLibraryFilesAsync();
             await page.RouteAsync("https://www.youtube-nocookie.com/**", route => route.FulfillAsync(new() { ContentType = "text/html", Body = Stub }));
             var asked = new List<string>();
             page.Request += (_, request) => { if (request.Url.Contains("/MediaPreview", StringComparison.Ordinal)) asked.Add(request.Url); };
@@ -203,6 +204,7 @@ namespace Jularr.E2E.Tests
             var page = browser.Page;
             await Owner.SetUpAndSignInAsync(page);
             await jularr.RunSqlAsync(Seed);
+            await jularr.SeedLibraryFilesAsync();
             await page.RouteAsync("https://www.youtube-nocookie.com/**", route => route.FulfillAsync(new() { ContentType = "text/html", Body = Stub }));
 
             try

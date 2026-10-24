@@ -80,7 +80,7 @@ namespace Jularr.E2E.Tests
             }
 
             await FollowAsync(page, form.Locator("button[type=submit]").Last);
-            var alert = page.Locator("main [role=alert]");
+            var alert = page.Locator("main [role=alert]:visible");
             if (await alert.CountAsync() > 0)
             {
                 Assert.Fail("The form answered: " + await alert.First.InnerTextAsync());

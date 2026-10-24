@@ -82,9 +82,14 @@ export function initializeBookRenderer(reader: HTMLElement) {
         const print = printing(at, columns === 1 || side === 'left' ? 0 : 1);
         if (!print) return;
         const place = printPlacement(profile(at, side), side, width / 148);
-        const gap = columns === 2 && side === 'right' ? (parseFloat(getComputedStyle(adapter.group(at)!.source).columnGap) || 0) / 2 : 0;
-        print.style.left = `${gap + place.shift}px`;
+        print.style.left = `${place.shift}px`;
         print.style.top = `${place.top}px`;
+        // Page numbers follow the paper's centre, independent of the text column's gap and mirrored placement.
+        const footer = print.querySelector<HTMLElement>('[data-book-number]');
+        if (footer) {
+            footer.style.width = `${width}px`;
+            footer.style.left = `${direction() < 0 ? place.shift + parseFloat(print.style.width) - width : -place.shift}px`;
+        }
         return print;
     };
     const exposure = () => {
