@@ -33,3 +33,17 @@ if (status) {
     window.addEventListener('pagehide', () => window.clearInterval(timer), { once: true });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
 }
+
+
+// A benchmark may take minutes. Acknowledge the form submission immediately and
+// prevent accidental duplicate downloads/benchmarks until the response navigates.
+document.querySelectorAll<HTMLFormElement>('form[data-translation-submit]').forEach(form => {
+    form.addEventListener('submit', () => {
+        form.setAttribute('aria-busy', 'true');
+        const submit = form.querySelector<HTMLButtonElement>('button[type=submit]');
+        if (submit) {
+            submit.disabled = true;
+            submit.textContent = (submit.textContent?.trim() ?? '') + '…';
+        }
+    });
+});
