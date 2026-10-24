@@ -28,6 +28,12 @@ namespace Jularr.Frontend.Pages.Admin.Browser
             page.Navigation("nav.admin");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
+            if (_status is { } state)
+            {
+                page.Content.Add(new P(new Text("admin.browser.moduleState"), new ValueText(": " + state.ManagedState)));
+                if (!string.IsNullOrWhiteSpace(state.ManagedError)) page.Content.Add(new P(new ValueText(state.ManagedError)));
+            }
+
             // What the browser is and what it did last.
             page.Content.Add(new H2(new Text("admin.browser.state")));
             page.Content.Add(new Table<BrowserEventV1>([.. _status?.Events.Items ?? []]).Text(item => item.Kind, "admin.browser.kind").Text(item => item.Message, "admin.browser.message").Text(item => item.At, "admin.browser.at"));

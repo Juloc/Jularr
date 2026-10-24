@@ -9,6 +9,8 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField ProfilePath = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Trim = true };
         public static readonly BoolField IsAvailable = new();
         public static readonly BoolField IsRunning = new();
+        public static readonly BoolField IsInstalled = new();
+        public static readonly StringField ManagedState = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false, Trim = true };
         public static readonly StringField Version = new(NpgsqlDbType.Varchar) { MaximumLength = 128, Required = false, Trim = true };
         public static readonly StringField LastUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false, Trim = true };
         public static readonly StringField LastOutcome = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false, Trim = true };

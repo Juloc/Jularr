@@ -30,7 +30,7 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
     public sealed class BrowserStatusV1 : BaseResponse
     {
         public BrowserStatusV1(string? path, string? remoteAddress, string profilePath, bool isAvailable, bool isRunning, string? version, string? lastUrl, string? lastOutcome, string? lastError,
-            DateTime? lastAttemptAt, PageResult<BrowserEventV1> events)
+            DateTime? lastAttemptAt, PageResult<BrowserEventV1> events, bool isInstalled = false, string? managedState = null, string? managedError = null)
         {
             Path = path;
             RemoteAddress = remoteAddress;
@@ -43,6 +43,9 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
             LastError = lastError;
             LastAttemptAt = lastAttemptAt;
             Events = events;
+            IsInstalled = isInstalled;
+            ManagedState = managedState;
+            ManagedError = managedError;
         }
 
         [DataField(typeof(BrowserFields), nameof(BrowserFields.Path), false)]
@@ -76,6 +79,15 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
         public DateTime? LastAttemptAt { get; }
 
         public PageResult<BrowserEventV1> Events { get; }
+
+        [DataField(typeof(BrowserFields), nameof(BrowserFields.IsInstalled))]
+        public bool IsInstalled { get; }
+
+        [DataField(typeof(BrowserFields), nameof(BrowserFields.ManagedState), false)]
+        public string? ManagedState { get; }
+
+        [DataField(typeof(BrowserFields), nameof(BrowserFields.LastError), false)]
+        public string? ManagedError { get; }
     }
 
     public sealed class RunBrowserActionDataV1 : BaseData
