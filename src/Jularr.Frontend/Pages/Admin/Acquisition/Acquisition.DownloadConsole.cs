@@ -105,7 +105,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             if (folder.RelativePath.Length > 0)
             {
                 var up = folder.RelativePath.LastIndexOf('/');
-                body.Add(new A(new ValueText("← ..")).Class("button button--compact button--soft")
+                body.Add(new A(new Icon("arrow-left", assets, 18), new Text("common.back")).Class("button button--compact button--soft")
                     .Attribute("href", FileAddress(connectionId, area, up < 0 ? "" : folder.RelativePath[..up])));
             }
             var rows = new Table<DownloadClientFileV1>(folder.Entries)
@@ -130,9 +130,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             if (folder.HasMore || FilePage > 1)
             {
                 body.Add(new Div(
-                    FilePage > 1 ? new A(new ValueText("←")).Class("button button--compact")
+                    FilePage > 1 ? new A(new Icon("arrow-left", assets, 18)).Class("button button--compact").Attribute("aria-label", texts["common.back"])
                         .Attribute("href", FileAddress(connectionId, area, folder.RelativePath, FilePage - 1)) : new Span(),
-                    folder.HasMore ? new A(new ValueText("→")).Class("button button--compact")
+                    folder.HasMore ? new A(new Icon("arrow-right", assets, 18)).Class("button button--compact").Attribute("aria-label", texts["console.nextPage"])
                         .Attribute("href", FileAddress(connectionId, area, folder.RelativePath, FilePage + 1)) : new Span()).Class("download-console__actions"));
             }
             if (_deletePreview is { } preview)
