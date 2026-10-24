@@ -18,7 +18,8 @@ namespace Jularr.E2E.Tests
             await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
             {
                 ["Storage:LocalPaths:0"] = folders.Library,
-                ["LocalTranslation:Endpoint"] = ollama.Address.ToString()
+                ["LocalTranslation:Endpoint"] = ollama.Address.ToString(),
+                ["HTTPS_PROXY"] = "http://127.0.0.1:9" // Simulate Mozilla unavailable, never depend on external services.
             });
             await using var session = await BrowserSession.StartAsync(jularr);
             var page = session.Page;
