@@ -83,8 +83,13 @@ export function initializeBookRenderer(reader: HTMLElement) {
         if (!print) return;
         const place = printPlacement(profile(at, side), side, width / 148);
         const gap = columns === 2 && side === 'right' ? (parseFloat(getComputedStyle(adapter.group(at)!.source).columnGap) || 0) / 2 : 0;
-        print.style.left = `${gap + place.shift}px`;
+        const printOffset = gap + place.shift;
+        print.style.left = `${printOffset}px`;
         print.style.top = `${place.top}px`;
+        // Ink follows the curved paper's print origin; the folio number must stay
+        // centred on the visible sheet, not follow the displaced text origin.
+        const number = print.querySelector<HTMLElement>('.reader-book__page-number');
+        if (number) number.style.left = `${-printOffset}px`;
         return print;
     };
     const exposure = () => {
