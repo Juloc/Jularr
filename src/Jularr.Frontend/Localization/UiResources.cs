@@ -790,6 +790,7 @@ namespace Jularr.Frontend.Localization
             new("setup.module.help.Library", "Manage your own library and local media."),
             new("setup.module.help.Requests", "People can ask for missing media; without Arr+ a request stays a request."),
             new("setup.module.help.Acquisition", "Search, monitor, download and import titles; an alternative to Sonarr, Radarr, Readarr and Lidarr."),
+            new("setup.module.help.Browser", "Install and manage an optional browser for supported acquisition sources. Turning the module off removes only Jularr-managed browser files."),
             new("setup.module.help.Playback", "Play films and series in the browser."),
             new("setup.module.help.Reading", "Read books, comics and light novels; books are prepared for it."),
             new("setup.module.help.Emulation", "Start retro games in the browser, with saves per profile."),
