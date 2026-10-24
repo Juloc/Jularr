@@ -681,6 +681,13 @@ namespace Jularr.E2E.Tests
             try
             {
                 await Owner.SetUpAndSignInAsync(page);
+                // The deferred book shelf also needs a complete provider fixture before any books are imported.
+                var recommendations = await page.APIRequest.GetAsync("/?type=books&handler=Recommendations", new()
+                {
+                    Headers = new Dictionary<string, string> { ["X-Jularr-Fragment"] = "recommendations" }
+                });
+                Assert.AreEqual(200, recommendations.Status, await recommendations.TextAsync());
+                StringAssert.Contains(await recommendations.TextAsync(), FakeServices.BookTitle);
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"), new LibraryPath("Manga", "Book", "Manga"),
                     new LibraryPath("Light Novels", "Book", "Light novel"));
                 await Steps.AddUsenetAsync(page, fakes, "7000,7020,7030");
