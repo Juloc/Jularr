@@ -50,6 +50,7 @@ internal fun TvV1DiscoverScreen(
     onLocalWork: (Long) -> Unit,
     onBack: () -> Unit,
     onUnauthorized: () -> Unit,
+    canRequest: Boolean = false,
     initialItem: TvDiscoverItemV1? = null,
     initialCatalog: TvV1CatalogSelection? = null,
 ) {
@@ -168,6 +169,15 @@ internal fun TvV1DiscoverScreen(
                             Text("In der Bibliothek öffnen")
                         }
                     } ?: Text("Noch kein lokales Jularr-Werk.")
+                    if (detail.workId == null) {
+                        TvV1RequestActions(
+                            catalog = catalog,
+                            itemKey = "${requireNotNull(selectedCatalog).mediaTypeId}:${requireNotNull(selectedCatalog).namespace}:${requireNotNull(selectedCatalog).externalId}",
+                            canRequest = canRequest,
+                            onUnauthorized = onUnauthorized,
+                            catalogItem = selectedCatalog,
+                        )
+                    }
                 }
             }
             Button(onClick = ::closeDetails) { Text("Zurück") }
@@ -204,6 +214,15 @@ internal fun TvV1DiscoverScreen(
                 }
             } else {
                 Text("Dieser Titel ist noch nicht in deiner Bibliothek verfügbar.")
+                if (external.mediaStateTypeId == 1 && external.tmdbId != null) {
+                    TvV1RequestActions(
+                        catalog = catalog,
+                        itemKey = "${external.mediaTypeId}:${external.tmdbId}",
+                        canRequest = canRequest,
+                        onUnauthorized = onUnauthorized,
+                        tmdb = external.mediaTypeId to requireNotNull(external.tmdbId),
+                    )
+                }
             }
             Button(onClick = ::closeDetails) { Text("Zurück") }
         }
