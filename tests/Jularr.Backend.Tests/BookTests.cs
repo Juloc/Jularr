@@ -92,19 +92,22 @@ namespace Jularr.Backend.Tests
             var books = Path.Combine(storage.Path, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Books");
             Directory.CreateDirectory(Path.Combine(books, "Pride and Prejudice"));
             File.WriteAllText(Path.Combine(books, "Pride and Prejudice", "Jane Austen - Pride and Prejudice.epub"), "book");
+            // Folders that name the author first, as downloads do, still name their book.
+            Directory.CreateDirectory(Path.Combine(books, "Austen, Jane - Pride and Prejudice (epub)"));
+            File.WriteAllText(Path.Combine(books, "Austen, Jane - Pride and Prejudice (epub)", "Austen, Jane - Pride and Prejudice.epub"), "book");
             Directory.CreateDirectory(Path.Combine(books, "Unknown Title Nobody Lists"));
             File.WriteAllText(Path.Combine(books, "Unknown Title Nobody Lists", "Somebody - Unknown Title Nobody Lists.epub"), "book");
             var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Books", MediaType.Book);
 
             // The catalog names exactly one entry with the folder's title; a title it does not list stays for a person.
             await LibraryTests.ScanAsync(host, rootId);
-            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" WHERE "CanonicalTitle" = 'Pride and Prejudice' """));
 
             // A second copy of a title that is now here is the same Work, without asking the catalog again.
             File.WriteAllText(Path.Combine(books, "Pride and Prejudice", "Pride and Prejudice (Illustrated).epub"), "book");
             await LibraryTests.ScanAsync(host, rootId);
-            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(3L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
         }
 
