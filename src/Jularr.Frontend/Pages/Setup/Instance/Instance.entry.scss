@@ -8,6 +8,63 @@
         gap: 16px;
     }
 
+    // Initial setup needs readable explanations without hover or touch popovers:
+    // all primary, media and optional rows can wrap naturally.
+    .option-row__text .truncated__text,
+    .option-group__name .truncated__text {
+        overflow: visible;
+        overflow-wrap: anywhere;
+        text-overflow: clip;
+        white-space: normal;
+    }
+    .option-row__text .truncated--clipped:is(:hover, :focus, :focus-within) > .truncated__tip,
+    .option-group__name .truncated--clipped:is(:hover, :focus, :focus-within) > .truncated__tip {
+        display: none;
+    }
+
     // The name keeps its field width; the groups and the button take the whole row.
     &__form > .ui-form > .ui-field { max-width: 360px; }
+
+    &__extras {
+        display: grid;
+        gap: 12px;
+        min-width: 0;
+        &-heading { margin: 6px 0 0; font-size: var(--text-body); }
+    }
+
+    // Seven compact, closed-by-default topic sections keep the first setup
+    // view short. Native details/summary handles mouse, keyboard and touch.
+    .option-groups--extras {
+        grid-template-columns: minmax(0, 1fr);
+
+        .option-group[data-has-enabled="true"] > .option-group__head [data-option-count] {
+            border-color: var(--accent-edge);
+            background: var(--accent-soft);
+            color: var(--accent-text);
+        }
+
+        .option-group__body {
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+            gap: 10px;
+            padding-top: 12px;
+        }
+
+        .option-group__body > .ui-form__row > .option-row {
+            min-height: 100%;
+            padding: 12px 13px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-inner);
+
+            // Enabled cards have a subtle accent tint without changing size.
+            &:has(input[type="checkbox"]:checked) {
+                border-color: var(--accent-edge);
+                background: var(--accent-soft);
+            }
+        }
+        .option-group__body > .ui-form__row + .ui-form__row > .option-row {
+            border-top: 1px solid var(--border);
+            padding-top: 12px;
+        }
+
+    }
 }

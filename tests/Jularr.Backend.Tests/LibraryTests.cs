@@ -782,7 +782,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Scan_MultiEpisodeFile_DoesNotLinkToOnlyTheFirstEpisode()
+        public async Task Scan_MultiEpisodeFile_CoversEveryEpisodeItHolds()
         {
             using var storage = new TemporaryDirectory();
             await using var host = await CreateHostAsync(storage.Path);
@@ -801,8 +801,10 @@ namespace Jularr.Backend.Tests
                 """);
 
             await ScanAsync(host, rootId);
-            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
-            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "RelativePath" LIKE '%S01E01-E02.mkv' AND "MediaAssetId" IS NULL """));
+            // The single episode and the double file: the second file is the primary unit of episode 1 as a further version and covers episode 2.
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssetAdditionalUnits" """));
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(DISTINCT "WorkUnitId") FROM "MediaAssetUnitCoverage" """));
         }
 
         [TestMethod]
@@ -955,6 +957,60 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Scan_WorkHoldsTmdbsStaleTvdbId_TakesTheFolderIdAndTheFile()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, services: services =>
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
+            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
+            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
+            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+
+            // An earlier import stored TMDB's TheTVDB link (7001); the folder, as Sonarr names it, says 4001.
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (2, 'Show 1', 2020) RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", item."Namespace", item."Value" FROM work CROSS JOIN (VALUES ('tmdb_tv', '1'), ('imdb', 'tt2000001'), ('tvdb', '7001')) AS item ("Namespace", "Value");
+                """);
+            var mountId = await CreateMountAsync(host);
+            var show = Path.Combine(storage.Path, mountId.ToString(), "Series", "Show 1 - tt2000001");
+            var folder = Path.Combine(show, "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(show, "tvshow.nfo"), "<tvshow><title>Show 1</title><uniqueid type=\"imdb\">tt2000001</uniqueid><uniqueid type=\"tvdb\">4001</uniqueid><uniqueid type=\"tmdb\">1</uniqueid></tvshow>");
+            File.WriteAllText(Path.Combine(folder, "Show 1 - S01E01 - Pilot WEBDL-1080p tt2000001.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+            Assert.AreEqual("4001", await host.ScalarAsync("""SELECT "Value" FROM "WorkExternalIdentities" WHERE "Namespace" = 'tvdb' """));
+        }
+
+        [TestMethod]
+        public async Task Scan_NoIdTheCatalogKnows_TitleAndYearNameOneEntry_TakeTheFile()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, services: services =>
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
+            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
+            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
+            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+
+            // The IMDb id in the name is one TMDB does not link; the title and the year name exactly one series.
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Show 1 (2020) - tt9999999", "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Show 1 - S01E01 - Pilot WEBDL-1080p tt9999999.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
         public async Task Scan_FolderIdTheCatalogDoesNotKnowYet_StillTakesTheFileThroughItsOtherIds()
         {
             using var storage = new TemporaryDirectory();
@@ -1069,7 +1125,11 @@ namespace Jularr.Backend.Tests
             {
                 var path = request.RequestUri!.AbsolutePath;
                 string? json = null;
-                if (path == "/3/find/4001")
+                if (path == "/3/search/tv")
+                {
+                    json = """{"results":[{"id":1,"name":"Show 1","first_air_date":"2020-01-01"}]}""";
+                }
+                else if (path == "/3/find/4001")
                 {
                     json = """{"movie_results":[],"tv_results":[{"id":1}]}""";
                 }
@@ -1387,6 +1447,16 @@ namespace Jularr.Backend.Tests
             }, plan.Select(rename => rename.TargetPath).ToArray());
         }
 
+        // A catalog that knows no book.
+        private sealed class EmptyBookCatalog : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+                Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(request.RequestUri!.Host == "openlibrary.org" ? """{"docs":[]}""" : """{"data":{"Page":{"media":[]}}}""", System.Text.Encoding.UTF8, "application/json")
+                });
+        }
+
         internal static async Task ScanAsync(Host host, long rootId)
         {
             using var queued = await host.SendAsync(HttpMethod.Post, Roots + "/" + rootId + "/scans");
@@ -1419,7 +1489,13 @@ namespace Jularr.Backend.Tests
                 ["Storage:LocalPaths:0"] = "/media/library",
                 ["Storage:LocalPaths:1"] = mountRoot
             };
-            var host = await Host.CreateAsync(razor: razor, library: true, settings: configuration, services: services);
+            // A scan of a book library asks the book catalogs; a test never reaches the real ones (its own handler, registered later, wins).
+            var host = await Host.CreateAsync(razor: razor, library: true, settings: configuration, services: collection =>
+            {
+                collection.AddHttpClient<Jularr.Integrations.Logic.OpenLibrary.OpenLibraryClient>().ConfigurePrimaryHttpMessageHandler(() => new EmptyBookCatalog());
+                collection.AddHttpClient<Jularr.Integrations.Logic.AniList.AniListClient>().ConfigurePrimaryHttpMessageHandler(() => new EmptyBookCatalog());
+                services?.Invoke(collection);
+            });
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode, await login.Content.ReadAsStringAsync());
