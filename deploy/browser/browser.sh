@@ -41,10 +41,12 @@ install_browser() {
 remove_browser() {
   [ ! -L "$home" ] || { echo 'Unsafe browser home' >&2; exit 2; }
   [ ! -L "$runtime" ] || { echo 'Unsafe browser runtime' >&2; exit 2; }
-  rm -rf "$runtime" "$home/profile" "$home/downloads" "$home/cache" "$home/config" "$home/tmp"
-  rm -f "$home/.enabled"
-  for dir in "$home"/.install.*; do [ ! -e "$dir" ] || rm -rf "$dir"; done
-  rmdir "$home" 2>/dev/null || true
+  # The entire browser-owned directory belongs to this optional module, including hidden
+  # state directories used by Chrome. Preserve a directory that is itself a volume mount.
+  if [ -d "$home" ]; then
+    find "$home" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+    rmdir "$home" 2>/dev/null || true
+  fi
 }
 run_browser() {
   [ -x "$chrome" ] || { echo 'Browser not installed' >&2; exit 2; }
@@ -57,8 +59,9 @@ run_browser() {
   else
     xvfb=
   fi
-  mkdir -p "$home/profile" "$home/cache" "$home/config" "$home/tmp"
-  XDG_CACHE_HOME="$home/cache" XDG_CONFIG_HOME="$home/config" TMPDIR="$home/tmp" DISPLAY="$display" "$chrome" --remote-debugging-port="$port" --remote-debugging-address=127.0.0.1 \
+  mkdir -p "$home/profile" "$home/cache" "$home/config" "$home/tmp" "$home/share" "$home/state"
+  HOME="$home" XDG_CACHE_HOME="$home/cache" XDG_CONFIG_HOME="$home/config" XDG_DATA_HOME="$home/share" \
+    XDG_STATE_HOME="$home/state" TMPDIR="$home/tmp" DISPLAY="$display" "$chrome" --remote-debugging-port="$port" --remote-debugging-address=127.0.0.1 \
     --user-data-dir="$home/profile" --no-first-run --no-default-browser-check --no-sandbox --disable-dev-shm-usage \
     --enable-unsafe-swiftshader --use-angle=swiftshader --window-size=1280,900 about:blank &
   browser=$!
