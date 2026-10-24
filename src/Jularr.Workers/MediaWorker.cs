@@ -24,6 +24,10 @@ namespace Jularr.Workers
             await Runner.RunAsync("aniListRelations", (services, token) =>
                 services.GetRequiredService<SyncAniListRelationsV1>().ExecuteAsync<UpdateResult>(new MediaMatchParametersV1(), default, token), ct);
 
+            // Titles without description and cover, three at a time with a pause for the provider.
+            await Runner.RunWhileBusyAsync("metadataFill", async (services, token) =>
+                (await services.GetRequiredService<FillWorkMetadataV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(5), Time, ct);
+
             // Covers still named by a provider, a pass of twenty at a time with a short pause.
             await Runner.RunWhileBusyAsync("covers", async (services, token) =>
                 (await services.GetRequiredService<StoreCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(2), Time, ct);

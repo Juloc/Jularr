@@ -8,7 +8,8 @@ namespace Jularr.Backend.Data.User.Library.V1
     public sealed class ReadLibraryParametersV1 : BaseParameters
     {
         public ReadLibraryParametersV1(MediaType[]? mediaTypeIds = null, string? query = null, LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded, int page = 1, int pageSize = 48,
-            MediaSubtype[]? mediaSubtypeIds = null, int? releaseYearFrom = null, int? releaseYearTo = null)
+            MediaSubtype[]? mediaSubtypeIds = null, int? releaseYearFrom = null, int? releaseYearTo = null, LibraryAvailabilityType[]? availabilityTypeIds = null,
+            ProgressStateType? progressStateId = null, string[]? genres = null, string[]? audioLanguages = null, string[]? subtitleLanguages = null, decimal? minimumRating = null)
         {
             MediaTypeIds = mediaTypeIds ?? [];
             MediaSubtypeIds = mediaSubtypeIds ?? [];
@@ -18,6 +19,12 @@ namespace Jularr.Backend.Data.User.Library.V1
             LibrarySortTypeId = librarySortTypeId;
             Page = page;
             PageSize = pageSize;
+            AvailabilityTypeIds = availabilityTypeIds is { Length: > 0 } ? availabilityTypeIds : [LibraryAvailabilityType.Available];
+            ProgressStateId = progressStateId;
+            Genres = genres ?? [];
+            AudioLanguages = audioLanguages ?? [];
+            SubtitleLanguages = subtitleLanguages ?? [];
+            MinimumRating = minimumRating;
         }
 
         // A type lists its Works without subtype, a subtype lists that subtype across types; none lists everything.
@@ -39,8 +46,45 @@ namespace Jularr.Backend.Data.User.Library.V1
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.LibrarySortTypeId))]
         public LibrarySortType LibrarySortTypeId { get; }
 
+        [DataField(typeof(LibraryFilterFields), nameof(LibraryFilterFields.AvailabilityTypeIds))]
+        public LibraryAvailabilityType[] AvailabilityTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ProgressStateId), false)]
+        public ProgressStateType? ProgressStateId { get; }
+
+        [DataField(typeof(LibraryFilterFields), nameof(LibraryFilterFields.Genres))]
+        public string[] Genres { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Languages))]
+        public string[] AudioLanguages { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Languages))]
+        public string[] SubtitleLanguages { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Rating), false)]
+        public decimal? MinimumRating { get; }
+
         public int Page { get; }
         public int PageSize { get; }
+    }
+
+    public sealed class LibraryFilterOptionsV1 : BaseResponse
+    {
+        public LibraryFilterOptionsV1(string[] genres, string[] audioLanguages, string[] subtitleLanguages)
+        {
+            Genres = genres;
+            AudioLanguages = audioLanguages;
+            SubtitleLanguages = subtitleLanguages;
+        }
+
+        [DataField(typeof(LibraryFilterFields), nameof(LibraryFilterFields.Genres))]
+        public string[] Genres { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Languages))]
+        public string[] AudioLanguages { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Languages))]
+        public string[] SubtitleLanguages { get; }
     }
 
     public sealed class LibraryItemV1 : BaseResponse

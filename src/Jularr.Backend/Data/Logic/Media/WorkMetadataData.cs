@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Localization;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Provider;
@@ -334,13 +335,20 @@ namespace Jularr.Backend.Data.Logic.Media
     // What the library's page is narrowed to; the order is part of the statement.
     internal sealed class LibraryPageFilterData : BaseData
     {
-        public LibraryPageFilterData(MediaType[] mediaTypeIds, MediaSubtype[] mediaSubtypeIds, int? releaseYearFrom, int? releaseYearTo, string? query)
+        public LibraryPageFilterData(MediaType[] mediaTypeIds, MediaSubtype[] mediaSubtypeIds, int? releaseYearFrom, int? releaseYearTo, string? query,
+            LibraryAvailabilityType[] availabilityTypeIds, ProgressStateType? progressStateId, string[] genres, string[] audioLanguages, string[] subtitleLanguages, decimal? minimumRating)
         {
             MediaTypeIds = mediaTypeIds;
             MediaSubtypeIds = mediaSubtypeIds;
             ReleaseYearFrom = releaseYearFrom;
             ReleaseYearTo = releaseYearTo;
             Query = query;
+            AvailabilityTypeIds = availabilityTypeIds;
+            ProgressStateId = progressStateId;
+            Genres = genres;
+            AudioLanguages = audioLanguages;
+            SubtitleLanguages = subtitleLanguages;
+            MinimumRating = minimumRating;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
@@ -357,6 +365,24 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Query), false)]
         public string? Query { get; }
+
+        [DataField(typeof(LibraryFilterFields), nameof(LibraryFilterFields.AvailabilityTypeIds))]
+        public LibraryAvailabilityType[] AvailabilityTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ProgressStateId), false)]
+        public ProgressStateType? ProgressStateId { get; }
+
+        [DataField(typeof(LibraryFilterFields), nameof(LibraryFilterFields.Genres))]
+        public string[] Genres { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Languages))]
+        public string[] AudioLanguages { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Languages))]
+        public string[] SubtitleLanguages { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Rating), false)]
+        public decimal? MinimumRating { get; }
     }
 
     // What a profile's personal list is narrowed to and how it is ordered; no scope lists every type.

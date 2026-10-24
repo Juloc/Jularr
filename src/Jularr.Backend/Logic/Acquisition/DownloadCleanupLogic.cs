@@ -151,7 +151,7 @@ namespace Jularr.Backend.Logic.Acquisition
                   AND operation."OperationStatusTypeId" = 4
                   AND operation."ExternalId" IS NOT NULL
                   AND operation."FinishedAt" >= (
-                      SELECT version."AppliedAt" FROM "DatabaseSchemaVersions" AS version WHERE version."Version" = 3
+                      SELECT version."AppliedAt" FROM "DatabaseSchemaVersions" AS version WHERE version."Version" = 5
                   )
                   AND connection."AcquisitionConnectionTypeId" = 2
                   AND operation."ErrorKey" = 'download_failed'

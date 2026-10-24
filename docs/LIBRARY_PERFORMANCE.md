@@ -53,3 +53,39 @@ Commit/rollback and pooled-connection tests verify that this setting cannot esca
 These are local service measurements, not live acceptance on the Owner's i5-6500T.
 The HTTP p95 was 74.3–104.5 ms; internet latency, full HTML rendering, cover requests,
 production concurrency and real scan/download load need their own live verification.
+
+## Library filters and infinite scrolling
+
+The filter package intentionally changes the default result set: only Works with a present
+non-subtitle file are listed. Own/other active requests are optional union choices. Genre,
+audio/subtitle language, progress and minimum rating filter the candidates before pagination.
+Languages use shared sets of Works with present tracks, avoiding a file scan per candidate.
+`ReadLibraryFilterOptionsV1` reuses the same visibility/availability boundary. Appended pages
+skip that extra options read; pagination still reads at most 48 cards, with no total count.
+
+The expanded benchmark covers nine card reads and the options endpoint. On the same local
+PostgreSQL 18/i5-1145G7 setup, .NET 10 Release, 100 measured calls per case in each run,
+with and without explicit `ANALYZE`, and no parallel builds/tests:
+
+| Read | Service p95, no ANALYZE | Service p95, ANALYZE |
+| --- | ---: | ---: |
+| Recently added | 33.0 ms | 85.0 ms |
+| Title | 33.7 ms | 84.0 ms |
+| Year | 41.2 ms | 61.6 ms |
+| Progress order | 40.8 ms | 64.7 ms |
+| Series | 39.5 ms | 31.0 ms |
+| Second page | 53.0 ms | 32.4 ms |
+| Genre + audio + subtitles | 33.8 ms | 71.2 ms |
+| Progress filter | 37.3 ms | 35.7 ms |
+| Title search | 35.4 ms | 35.5 ms |
+
+HTTP p95 for these reads was 31.2–91.6 ms across both runs; options HTTP p95 was
+13.7/11.5 ms without/with ANALYZE. These results
+describe the new available-files scope, so they are not snapshot-equivalent to the original
+performance-only comparison above. Earlier runs during builds showed outliers above 100 ms;
+this remains a local read benchmark, not a production concurrency or full-page SLA.
+
+Focused verification: `MediaTests`, `PagingTests`, the Discover request flow and Plex sync
+integration (27 tests); `LibraryFiltersTests` exercises SSR filters, automatic append,
+failure/retry, Back restoration, duplicate-free cards, mobile drawer and native paging without
+JavaScript. No production database or schema change is part of the filter package.

@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "spacingDp": {
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24
+  },
+  "radiusDp": {
+    "control": 10,
+    "token": 8,
+    "sheet": 18
+  },
+  "controlSizeDp": {
+    "touch": 44,
+    "tv": 56
+  },
+  "typographySp": {
+    "subtitleMin": 20,
+    "subtitlePreferred": 30,
+    "subtitleMax": 34,
+    "word": 26,
+    "meta": 13,
+    "playbackSubtitle": 22
+  },
+  "colors": {
+    "overlay": "#D90A0C10",
+    "sheet": "#F216191F",
+    "subtitleText": "#FFF8E8",
+    "subtitleBackground": "#A6000000",
+    "accent": "#E7A91B",
+    "accentSoft": "#38E7A91B",
+    "muted": "#AEB6C2",
+    "focus": "#FFD36B"
+  },
+  "timingMs": {
+    "controlsAutoHide": 3000,
+    "sheetTransition": 160
+  },
+  "subtitle": {
+    "bottomOffsetDp": 76,
+    "mobileBottomOffsetDp": 62,
+    "maxWidthPercent": 92,
+    "lineHeight": 1.45,
+    "backgroundPaddingHorizontalDp": 10,
+    "backgroundPaddingVerticalDp": 5
+  },
+  "playback": {
+    "speeds": [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0],
+    "seekBackSeconds": 10,
+    "seekForwardSeconds": 30
+  }
+}

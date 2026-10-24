@@ -18,6 +18,67 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class DownloadStorageTests
     {
+        private static readonly string[] AutomountedNas =
+        [
+            "1897 732 0:80 / / rw,relatime - overlay overlay rw",
+            "1908 1897 8:2 /mnt /mnt rw,relatime master:1 - ext4 /dev/sda2 rw",
+            "1909 1908 0:41 / /mnt/arr_bay4_media rw,relatime master:20 - autofs systemd-1 rw",
+            "1911 1909 0:520 / /mnt/arr_bay4_media rw,relatime master:479 - cifs //nas/media rw"
+        ];
+
+        [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public void FilesystemIdentity_AutomountedNas_UsesVisibleCifsRegardlessOfLineOrder(bool reverse)
+        {
+            var mounts = reverse ? AutomountedNas.Reverse().ToArray() : AutomountedNas;
+            var identity = StorageFileSystem.DownloadFilesystemIdentity("/mnt/arr_bay4_media/downloads/incomplete", mounts);
+            Assert.IsNotNull(identity);
+            Assert.IsTrue(identity.StartsWith("cifs:", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
+        [DataRow(false, false)]
+        [DataRow(false, true)]
+        [DataRow(true, false)]
+        [DataRow(true, true)]
+        public void FilesystemIdentity_AutomountedNas_PreservesExistingFingerprintsAcrossRemounts(bool includeDirectory, bool includeMountPoint)
+        {
+            var mounted = AutomountedNas.Where(line => !line.StartsWith("1909 ", StringComparison.Ordinal)).ToArray();
+            var remounted = AutomountedNas.Select(line => line.Replace("1911 1909", "42 1909", StringComparison.Ordinal)).ToArray();
+            const string path = "/mnt/arr_bay4_media/downloads/complete";
+            var existing = StorageFileSystem.DownloadFilesystemIdentity(path, mounted, includeDirectory, includeMountPoint);
+            Assert.IsNotNull(existing);
+            Assert.AreEqual(existing, StorageFileSystem.DownloadFilesystemIdentity(path, AutomountedNas, includeDirectory, includeMountPoint));
+            Assert.AreEqual(existing, StorageFileSystem.DownloadFilesystemIdentity(path, remounted, includeDirectory, includeMountPoint));
+        }
+
+        [TestMethod]
+        public void FilesystemIdentity_UnmountedAutomount_DoesNotFallBackToTheVmDisk()
+        {
+            Assert.IsNull(StorageFileSystem.DownloadFilesystemIdentity("/mnt/arr_bay4_media/downloads/incomplete", AutomountedNas[..3]));
+        }
+
+        [TestMethod]
+        [DataRow("tmpfs")]
+        [DataRow("overlay")]
+        [DataRow("autofs")]
+        public void FilesystemIdentity_CoveredCifs_DoesNotAcceptTheHiddenNas(string filesystem)
+        {
+            string[] mounts = [.. AutomountedNas, $"1912 1911 0:521 / /mnt/arr_bay4_media rw - {filesystem} covered rw"];
+            Assert.IsNull(StorageFileSystem.DownloadFilesystemIdentity("/mnt/arr_bay4_media/downloads/incomplete", mounts));
+        }
+
+        [TestMethod]
+        public void FilesystemIdentity_ChildOfCoveredAutomount_IsNotVisibleThroughCifs()
+        {
+            string[] mounts = [.. AutomountedNas, "1912 1909 8:3 / /mnt/arr_bay4_media/downloads rw - ext4 /dev/old-disk rw"];
+            var path = "/mnt/arr_bay4_media/downloads/incomplete";
+            var visible = StorageFileSystem.DownloadFilesystemIdentity(path, AutomountedNas.Where(line => !line.StartsWith("1909 ", StringComparison.Ordinal)).ToArray());
+            Assert.IsNotNull(visible);
+            Assert.AreEqual(visible, StorageFileSystem.DownloadFilesystemIdentity(path, mounts));
+        }
+
         private static DownloadStoragePaths Paths(string root, long? jobLimit = null, long? workspaceLimit = null)
         {
             var incomplete = Directory.CreateDirectory(Path.Combine(root, "Incomplete")).FullName;

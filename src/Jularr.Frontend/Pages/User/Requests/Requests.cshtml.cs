@@ -51,6 +51,7 @@ namespace Jularr.Frontend.Pages.User.Requests
             page.Asset("Framework/Components/Truncated.entry.ts");
             page.Asset("Pages/User/Requests/Requests.entry.scss");
             page.Asset("Pages/User/Requests/Requests.entry.ts");
+            page.Asset("Framework/Components/InfiniteList.entry.ts");
             if (_requests is not { } requests) return;
 
             var scope = LibraryScopes.Find(TypeSlug);
@@ -69,7 +70,7 @@ namespace Jularr.Frontend.Pages.User.Requests
                 page.Content.Add(new Ul([.. requests.Items.Select(item => Row(item, csrf))]).Class(Cards ? "requests-list requests-list--cards" : "requests-list"));
             }
 
-            page.Content.Add(new Span().Paged(requests.Items.Count, requests.PageSize, "p"));
+            page.Content.Add(new Span().Infinite(requests.Items.Count, requests.PageSize, "p", ".requests-list"));
 
             if (RequestId is { } selected && requests.Items.FirstOrDefault(item => item.Id == selected) is { } chosen) page.Content.Add(Drawer(chosen, csrf));
             if (FormError is not null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
@@ -126,7 +127,7 @@ namespace Jularr.Frontend.Pages.User.Requests
 
             // The person passes the source's check in their own browser; the server takes the file link from there.
             if (item is { ManualUrl: { } manual, OperationId: { } operationId }) row.Add(new Div(ManualLink(item.Id, operationId, manual, csrf)).Class("request-row__manual"));
-            return new Li([.. row]).Class("request-row");
+            return new Li([.. row]).Class("request-row").Attribute("data-list-key", item.Id.ToString(CultureInfo.InvariantCulture));
         }
 
         private IUiComponent Poster(RequestDetailsV1 item, string href)
@@ -232,7 +233,7 @@ namespace Jularr.Frontend.Pages.User.Requests
                 ?? throw new UnauthorizedAccessException("An active profile is required.");
             _media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), HttpContext.RequestAborted);
             var scope = LibraryScopes.Find(TypeSlug);
-            _requests = await read.ExecuteAsync<PageResult<RequestDetailsV1>>(new ReadRequestsParametersV1(Math.Max(1, PageNumber), 24, State, Sort, scope.Type, scope.Subtype), HttpContext.RequestAborted);
+            _requests = await read.ExecuteAsync<PageResult<RequestDetailsV1>>(new ReadRequestsParametersV1(Math.Max(1, PageNumber), 48, State, Sort, scope.Type, scope.Subtype), HttpContext.RequestAborted);
             if (RequestId is { } selected && _requests.Items.Any(item => item.Id == selected))
             {
                 _steps = await readSteps.ExecuteAsync<BaseDataList<RequestStepV1>>(new RequestParametersV1(selected), HttpContext.RequestAborted);

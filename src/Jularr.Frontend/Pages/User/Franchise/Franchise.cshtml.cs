@@ -28,12 +28,13 @@ namespace Jularr.Frontend.Pages.User.Franchise
             page.Navigation("nav.library");
             page.Asset("Pages/User/Franchise/Franchise.entry.scss");
             page.Asset("Framework/Components/MediaCard.entry.ts");
+            page.Asset("Framework/Components/InfiniteList.entry.ts");
             if (_franchise is { } franchise && _works is { } works)
             {
                 var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
                 page.Content.Add(new Div([.. works.Items.Select(item => MediaCard.For(assets, item)
-                    .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]).Class("media-grid"));
-                page.Content.Add(new Span().Paged(works.Items.Count, works.PageSize));
+                    .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]).Class("media-grid franchise-grid"));
+                page.Content.Add(new Span().Infinite(works.Items.Count, works.PageSize, PagedList.DefaultKey, ".franchise-grid"));
             }
 
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -49,7 +50,7 @@ namespace Jularr.Frontend.Pages.User.Franchise
         protected override async Task LoadDataAsync()
         {
             _franchise = await read.ExecuteAsync<FranchiseV1>(new FranchiseParametersV1(Id), HttpContext.RequestAborted);
-            _works = await readWorks.ExecuteAsync<PageResult<LibraryItemV1>>(new FranchiseWorksParametersV1(Id, Math.Max(1, PageNumber)), HttpContext.RequestAborted);
+            _works = await readWorks.ExecuteAsync<PageResult<LibraryItemV1>>(new FranchiseWorksParametersV1(Id, Math.Max(1, PageNumber), 48), HttpContext.RequestAborted);
         }
 
         private string Address(int page) => "/Franchise/" + Id.ToString(CultureInfo.InvariantCulture) + "?pageNumber=" + page.ToString(CultureInfo.InvariantCulture);

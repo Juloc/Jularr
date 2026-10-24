@@ -898,7 +898,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            // A terminal import failure is not kept in staging; reviewable downloads stay untouched.
+            // Preserve files awaiting review; terminal success and failure no longer need staging.
             var terminal = await Context.ExecuteBatchAsync((ctx, ct) => ctx.IsDownloadTerminalAsync(new DownloadOperationParameters(download.OperationId), ct), CancellationToken);
             if (terminal)
             {

@@ -1730,9 +1730,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, result.CreatedCount);
             using var library = await host.SendAsync(HttpMethod.Get, "/api/v1/library");
             var items = (await library.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items;
-            Assert.AreEqual(3, items.Count);
-            Assert.IsTrue(items.All(item => item.MediaStateTypeId == MediaStateType.Available));
-            var movieId = items.Single(item => item.Title == "Example Movie").Id;
+            Assert.AreEqual(0, items.Count, "Plex identities alone are not local playable files.");
+            var movieId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\" WHERE \"CanonicalTitle\" = 'Example Movie'"))!;
             using var details = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + movieId);
             Assert.AreEqual("https://app.plex.tv/desktop/#!/server/plexmachine1/details?key=%2Flibrary%2Fmetadata%2F11",
                 (await details.Content.ReadFromJsonAsync<Jularr.Backend.Data.User.Media.V1.WorkDetailsV1>())!.PlexUrl);
@@ -2174,6 +2173,14 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(expected, await ListAsync(WantedViewType.CutoffUnmet));
             Assert.AreEqual(5, (await ListAsync(WantedViewType.All)).Length);
 
+            using var counted = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/summary");
+            Assert.AreEqual(HttpStatusCode.OK, counted.StatusCode);
+            var summary = (await counted.Content.ReadFromJsonAsync<WantedSummaryV1>())!;
+            Assert.AreEqual(5, summary.TotalCount);
+            Assert.AreEqual(1, summary.MissingCount);
+            Assert.AreEqual(expected.Length, summary.CutoffUnmetCount);
+            Assert.AreEqual(1, summary.PausedCount);
+
             // The page offers the lists and keeps the chosen one.
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?PageNumber=1&View=CutoffUnmet");
             var html = await page.Content.ReadAsStringAsync();
@@ -2183,6 +2190,50 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "href=\"/Admin/Wanted/702\"");
             StringAssert.Contains(html, "View=CutoffUnmet&amp;handler=Pause&amp;wantedItemId=702");
             Assert.IsFalse(html.Contains("Good Film"));
+        }
+
+        [TestMethod]
+        public async Task WantedViews_UnitAvailability_CountsOnlyMissingMonitoredReleasedUnits()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES
+                    (701, 2, NULL, 'Complete'), (702, 2, NULL, 'Missing episode'),
+                    (703, 2, NULL, 'Future episode'), (704, 2, NULL, 'Unmonitored episode'),
+                    (705, 2, NULL, 'Missing file'), (706, 3, 2, 'Unknown volume release');
+                INSERT INTO "WantedItems" ("Id", "WorkId", "WantedPriorityTypeId")
+                SELECT "Id", "Id", CASE WHEN "Id" = 702 THEN 2 ELSE 1 END FROM "Works" WHERE "Id" BETWEEN 701 AND 706;
+                INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT "Id", "Id" FROM "Works" WHERE "Id" BETWEEN 701 AND 706;
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "Id", "Id", "Id" FROM "Works" WHERE "Id" BETWEEN 701 AND 706;
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number", "ReleasedOn", "IsMonitored")
+                SELECT work."Id" * 10 + number, work."Id", CASE WHEN work."Id" = 706 THEN 3 ELSE 2 END, number,
+                    CASE WHEN work."Id" = 706 AND number = 2 THEN NULL
+                         WHEN work."Id" = 703 AND number = 2 THEN current_date + 1 ELSE current_date - 1 END,
+                    NOT (work."Id" = 704 AND number = 2)
+                FROM "Works" AS work CROSS JOIN generate_series(1, 2) AS number WHERE work."Id" BETWEEN 701 AND 706;
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId")
+                SELECT "Id", "WorkId", "WorkId", "Id", 1 FROM "WorkUnits" WHERE "WorkId" BETWEEN 701 AND 706;
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "MissingSince")
+                SELECT root."Id", 'unit-' || asset."Id" || '.mkv', 1, now(), now(), asset."Id",
+                    CASE WHEN asset."WorkId" = 705 THEN now() END
+                FROM "MediaAssets" AS asset CROSS JOIN (SELECT "Id" FROM "LibraryRoots" ORDER BY "Id" LIMIT 1) AS root
+                WHERE asset."WorkId" BETWEEN 701 AND 706 AND (asset."WorkUnitId" % 10 = 1 OR asset."WorkId" = 701);
+                """);
+
+            using var missing = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted?pageSize=50&wantedViewTypeId=1");
+            Assert.AreEqual(HttpStatusCode.OK, missing.StatusCode, await missing.Content.ReadAsStringAsync());
+            var page = (await missing.Content.ReadFromJsonAsync<PageResult<WantedDetailsV1>>())!;
+            CollectionAssert.AreEqual(new long[] { 702, 705, 706 }, page.Items.Select(item => item.WorkId).Order().ToArray());
+            using var counted = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/summary");
+            Assert.AreEqual(HttpStatusCode.OK, counted.StatusCode);
+            var summary = (await counted.Content.ReadFromJsonAsync<WantedSummaryV1>())!;
+            Assert.AreEqual(6, summary.TotalCount);
+            Assert.AreEqual(3, summary.MissingCount);
+            Assert.AreEqual(0, summary.CutoffUnmetCount);
+            Assert.AreEqual(1, summary.HighCount);
+            Assert.AreEqual(0, summary.PausedCount);
         }
 
         // The queue is one row of filters: running (paused ones too), waiting for a person, importing, failed unseen, and finished; the tiles count the same states.

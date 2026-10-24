@@ -19,23 +19,17 @@ namespace Jularr.Backend.Service.User.Library.V1
         protected override ServicePermission GetPermission(ReadLibraryParametersV1 parameters, Type resultType) => new("profile.media.read");
         protected override PageRequest GetPageRequest(ReadLibraryParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
 
-        protected override async Task<IServiceOutput> OnRead()
+        protected override Task<IServiceOutput> OnRead() => ReadAsync(Context.ReadSql, Parameters, Auth.ProfileId!.Value, Page, false, CancellationToken);
+
+        internal static async Task<IServiceOutput> ReadAsync(SqlContext.SqlReadCommands readSql, ReadLibraryParametersV1 parameters, long profileId, PageRequest? page, bool options, CancellationToken cancellationToken)
         {
-            // Works the profile lists that have media, a Plex item or an acquisition target; search stays local.
-            // The order is decided over the cheap candidate rows, the card projection runs for the page alone.
-            var orderBy = Parameters.LibrarySortTypeId switch
-            {
-                LibrarySortType.Year => "work.\"ReleaseYear\" DESC NULLS LAST, visible.\"Title\", work.\"Id\"",
-                LibrarySortType.Progress => "workProgress.\"ProgressPercent\" DESC NULLS LAST, visible.\"Title\", work.\"Id\"",
-                LibrarySortType.Title => "visible.\"Title\", work.\"Id\"",
-                _ => "available.\"AddedAt\" DESC NULLS LAST, visible.\"Title\", work.\"Id\""
-            };
-            var progress = Parameters.LibrarySortTypeId == LibrarySortType.Progress ? WorkCardProjection.PageProgressJoin : "";
-            var sql = new SqlStatement();
-            sql.Statement = WorkCardProjection.Page(
-                $$"""
+            // Cards and filter options share the same visibility and availability boundary.
+            var scope = """
                 SELECT
-                    work."Id"
+                    work."Id",
+                    visible."Title",
+                    work."ReleaseYear",
+                    available."AddedAt"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
@@ -45,61 +39,125 @@ namespace Jularr.Backend.Service.User.Library.V1
                             max(file."CreatedAt") AS "AddedAt"
                         FROM
                             "MediaAssets" AS asset
-                            JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL
+                            JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
                         GROUP BY
                             asset."WorkId"
                     ) AS available ON available."WorkId" = work."Id"
-                    LEFT JOIN "WorkExternalIdentities" AS plex ON plex."WorkId" = work."Id" AND plex."Namespace" = 'plex'
-                    {{progress}}
                 WHERE
                     visible."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
-                    AND (available."AddedAt" IS NOT NULL OR plex."Value" IS NOT NULL OR EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            "WantedItems" AS wanted
-                        WHERE
-                            wanted."WorkId" = work."Id"
-                    ))
                     AND (
-                        cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
-                        OR visible."MediaSubtypeId" IS NULL AND visible."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
-                        OR visible."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[])
+                        1 = ANY(@AvailabilityTypeIds::smallint[]) AND available."AddedAt" IS NOT NULL
+                        OR EXISTS (
+                            SELECT 1 FROM "AcquisitionRequests" AS request
+                            WHERE request."WorkId" = work."Id" AND request."AcquisitionRequestStatusTypeId" BETWEEN 1 AND 5
+                                AND (2 = ANY(@AvailabilityTypeIds::smallint[]) AND request."RequestedByProfileId" = @ProfileId
+                                    OR 3 = ANY(@AvailabilityTypeIds::smallint[]) AND request."RequestedByProfileId" IS DISTINCT FROM @ProfileId)
+                        )
                     )
+                    AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        OR visible."MediaSubtypeId" IS NULL AND visible."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                        OR visible."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
                     AND (@ReleaseYearFrom::integer IS NULL OR work."ReleaseYear" >= @ReleaseYearFrom)
                     AND (@ReleaseYearTo::integer IS NULL OR work."ReleaseYear" <= @ReleaseYearTo)
                     AND (@Query::text IS NULL OR EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            "WorkTitles" AS title
-                        WHERE
-                            title."WorkId" = work."Id"
+                        SELECT 1 FROM "WorkTitles" AS title WHERE title."WorkId" = work."Id"
                             AND title."Title" ILIKE '%' || replace(replace(replace(@Query, '\', '\\'), '%', '\%'), '_', '\_') || '%'
                     ))
+                """;
+
+            var genres = """
+                SELECT
+                    btrim(genre) AS "Genre"
+                FROM unnest(string_to_array((
+                    SELECT fact."Value" FROM "WorkMetadataFacts" AS fact
+                    WHERE fact."WorkId" = work."Id" AND fact."FactKey" = 'Genres'
+                    ORDER BY fact."IsManual" DESC LIMIT 1
+                ), ',')) AS genre
+                WHERE btrim(genre) <> ''
+                """;
+
+            var tracks = """
+                SELECT
+                    asset."WorkId",
+                    track."Language",
+                    track."MediaTrackTypeId"
+                FROM
+                    "MediaAssets" AS asset
+                    JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                    JOIN "MediaTracks" AS track ON track."StoredFileId" = file."Id"
+                WHERE
+                    track."Language" IS NOT NULL
+                    AND btrim(track."Language") <> ''
+                """;
+
+            var sql = new SqlStatement();
+            sql.Parameters.Add(new LibraryPageFilterData(parameters.MediaTypeIds, parameters.MediaSubtypeIds, parameters.ReleaseYearFrom, parameters.ReleaseYearTo,
+                parameters.Query, parameters.AvailabilityTypeIds, parameters.ProgressStateId, parameters.Genres, parameters.AudioLanguages, parameters.SubtitleLanguages, parameters.MinimumRating));
+            sql.Parameters.Add(new ProfileParameters(profileId));
+            sql.DisableJit = true;
+            if (options)
+            {
+                sql.Statement = $$"""
+                WITH scoped AS MATERIALIZED ({{scope}}), tracks AS MATERIALIZED (
+                    SELECT
+                        track."Language",
+                        track."MediaTrackTypeId"
+                    FROM
+                        ({{tracks}}) AS track
+                        JOIN scoped AS work ON work."Id" = track."WorkId"
+                )
+                SELECT
+                    ARRAY(SELECT DISTINCT genre."Genre" FROM scoped AS work CROSS JOIN LATERAL ({{genres}}) AS genre ORDER BY genre."Genre" LIMIT 100) AS "Genres",
+                    ARRAY(SELECT DISTINCT "Language" FROM tracks WHERE "MediaTrackTypeId" = 2 ORDER BY "Language") AS "AudioLanguages",
+                    ARRAY(SELECT DISTINCT "Language" FROM tracks WHERE "MediaTrackTypeId" = 3 ORDER BY "Language") AS "SubtitleLanguages"
+                """;
+                return await readSql.ReadRequiredAsync<LibraryFilterOptionsV1>(sql, cancellationToken);
+            }
+            var orderBy = parameters.LibrarySortTypeId switch
+            {
+                LibrarySortType.Year => "work.\"ReleaseYear\" DESC NULLS LAST, work.\"Title\", work.\"Id\"",
+                LibrarySortType.Progress => "workProgress.\"ProgressPercent\" DESC NULLS LAST, work.\"Title\", work.\"Id\"",
+                LibrarySortType.Title => "work.\"Title\", work.\"Id\"",
+                _ => "work.\"AddedAt\" DESC NULLS LAST, work.\"Title\", work.\"Id\""
+            };
+            var useProgress = parameters.LibrarySortTypeId == LibrarySortType.Progress || parameters.ProgressStateId is not null;
+
+            sql.Statement = WorkCardProjection.Page(
+                $$"""
+                SELECT
+                    work."Id"
+                FROM
+                    ({{scope}}) AS work
+                    {{(useProgress ? WorkCardProjection.PageProgressJoin : "")}}
+                WHERE TRUE
+                    {{(parameters.ProgressStateId is null ? "" : "AND workProgress.\"ProgressStateId\" = @ProgressStateId")}}
+                    {{(parameters.Genres.Length == 0 ? "" : "AND EXISTS (SELECT 1 FROM (" + genres + ") AS genres WHERE genres.\"Genre\" = ANY(@Genres::text[]))")}}
+                    {{(parameters.AudioLanguages.Length == 0 ? "" : "AND work.\"Id\" IN (SELECT tracks.\"WorkId\" FROM (" + tracks + ") AS tracks WHERE tracks.\"MediaTrackTypeId\" = 2 AND tracks.\"Language\" = ANY(@AudioLanguages::text[]))")}}
+                    {{(parameters.SubtitleLanguages.Length == 0 ? "" : "AND work.\"Id\" IN (SELECT tracks.\"WorkId\" FROM (" + tracks + ") AS tracks WHERE tracks.\"MediaTrackTypeId\" = 3 AND tracks.\"Language\" = ANY(@SubtitleLanguages::text[]))")}}
+                    {{(parameters.MinimumRating is null ? "" : "AND (" + WorkCardProjection.Rating + ") >= @MinimumRating")}}
                 ORDER BY
                     {{orderBy}}
                 LIMIT @PageSize
                 OFFSET @Offset
                 """,
                 """
-                EXISTS (
-                    SELECT
-                        1
-                    FROM
-                        "WatchlistEntries" AS entry
-                    WHERE
-                        entry."WorkId" = work."Id"
-                        AND entry."ProfileId" = @ProfileId
-                )
+                EXISTS (SELECT 1 FROM "WatchlistEntries" AS entry WHERE entry."WorkId" = work."Id" AND entry."ProfileId" = @ProfileId)
                 """);
-            sql.Parameters.Add(new LibraryPageFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.ReleaseYearFrom, Parameters.ReleaseYearTo, Parameters.Query));
-            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
-            sql.Page = Page;
-            sql.DisableJit = true;
-            return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
+            sql.Page = page;
+
+            return await readSql.ReadPageAsync<LibraryItemV1>(sql, cancellationToken);
         }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/library/filter-options")]
+    public sealed class ReadLibraryFilterOptionsV1 : UserService<ReadLibraryParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<LibraryFilterOptionsV1>()];
+        protected override ModuleRequirement GetInstanceModules(ReadLibraryParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(ReadLibraryParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override Task<IServiceOutput> OnRead() => ReadLibraryV1.ReadAsync(Context.ReadSql, Parameters, Auth.ProfileId!.Value, null, true, CancellationToken);
     }
 
     [ServiceEndpoint("GET", "/api/v1/continue")]

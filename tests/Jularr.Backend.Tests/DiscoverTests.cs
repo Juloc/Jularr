@@ -37,6 +37,59 @@ namespace Jularr.Backend.Tests
         public TestContext TestContext { get; set; } = null!;
 
         [TestMethod]
+        public async Task Catalog_CachedRankings_RefreshKnownWorksAndStillCheckProfileAccess()
+        {
+            var provider = new FakeAniList();
+            await using var host = await CreateHostAsync(anime: provider);
+            foreach (var ranking in new[] { DiscoverFeedType.Top, DiscoverFeedType.New })
+            {
+                using var first = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, ranking, MediaSubtype.Anime));
+                Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
+                Assert.IsNull((await first.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().WorkId);
+            }
+            var requests = provider.Requests;
+            provider.IsUnavailable = true;
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (700, 2, 1, 'Imported series');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (700, 'anilist', '21');
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (700, 'Poster', '/api/v1/covers/works/700/poster?v=1', TRUE);
+                """);
+            foreach (var ranking in new[] { DiscoverFeedType.Top, DiscoverFeedType.New })
+            {
+                using var cached = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, ranking, MediaSubtype.Anime));
+                Assert.AreEqual(HttpStatusCode.OK, cached.StatusCode, await cached.Content.ReadAsStringAsync());
+                var item = (await cached.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single();
+                Assert.AreEqual(700L, item.WorkId);
+                Assert.AreEqual("/api/v1/covers/works/700/poster?v=1", item.PosterUrl);
+            }
+            Assert.AreEqual(requests, provider.Requests, "Warm rankings must not ask the unavailable provider.");
+            await host.Fixture.RunSqlAsync("INSERT INTO \"ProfileMediaRules\" (\"ProfileId\", \"MediaSubtypeId\", \"IsBlocked\") VALUES (101, 1, TRUE)");
+            using var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Top, MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.NotFound, blocked.StatusCode, await blocked.Content.ReadAsStringAsync());
+            Assert.AreEqual(requests, provider.Requests);
+        }
+
+        [TestMethod]
+        public async Task Catalog_OldAnimeTrending_ReadsStoredTitleWithoutProviderRefresh()
+        {
+            var provider = new FakeAniList();
+            await using var host = await CreateHostAsync(anime: provider);
+            var input = new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime);
+            using var first = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", input);
+            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorks\" SET \"FetchedAt\" = now() - interval '7 hours', \"Title\" = 'Kept stale season' WHERE \"Namespace\" = 'anilist'");
+            provider.IsUnavailable = true;
+            using var stale = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", input);
+            Assert.AreEqual(HttpStatusCode.OK, stale.StatusCode, await stale.Content.ReadAsStringAsync());
+            Assert.AreEqual("Kept stale season", (await stale.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().Title);
+            var requests = provider.Requests;
+            using var cooldown = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", input);
+            Assert.AreEqual(HttpStatusCode.OK, cooldown.StatusCode, await cooldown.Content.ReadAsStringAsync());
+            Assert.AreEqual("Kept stale season", (await cooldown.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().Title);
+            Assert.AreEqual(requests, provider.Requests, "The provider cooldown must also apply to stale-cache reads.");
+        }
+
+        [TestMethod]
         public async Task Discover_FeedsSearchAndRequest_ResolveOneCanonicalWork()
         {
             await using var host = await CreateHostAsync();
@@ -73,11 +126,13 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, results.Count(result => result.TmdbId == 603));
             Assert.IsTrue(results.Any(result => result.MediaTypeId == MediaType.Series && result.Title == "The Matrix Show"));
 
-            // Approval makes it part of the library; the Owner's own request is approved at once.
+            // A request without a file stays out of the default library and appears through My requests.
             await host.Fixture.RunSqlAsync("INSERT INTO \"WantedItems\" (\"WorkId\") SELECT \"Id\" FROM \"Works\" ON CONFLICT (\"WorkId\", \"GamePlatformId\") DO NOTHING");
             using var library = await host.SendAsync(HttpMethod.Get, "/api/v1/library?query=matr");
             Assert.AreEqual(HttpStatusCode.OK, library.StatusCode, await library.Content.ReadAsStringAsync());
-            var entry = (await library.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items.Single();
+            Assert.AreEqual(0, (await library.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items.Count);
+            using var ownRequests = await host.SendAsync(HttpMethod.Get, "/api/v1/library?query=matr&availabilityTypeIds=MyRequests");
+            var entry = (await ownRequests.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items.Single();
             Assert.AreEqual(MediaStateType.Requested, entry.MediaStateTypeId);
             Assert.AreEqual("https://image.tmdb.org/t/p/w500/poster.jpg", entry.PosterUrl);
         }
@@ -229,6 +284,75 @@ namespace Jularr.Backend.Tests
             using var second = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.New));
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, second.StatusCode);
             Assert.AreEqual(asked, tmdb.Requests.Count);
+        }
+
+        [TestMethod]
+        public async Task Catalog_ReadWhole_TrendingTiesKeepExactPageBoundaries()
+        {
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
+                UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'tmdb_movie';
+                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "Title", "ImageUrl", "TrendingRank")
+                SELECT 1000 + n, 'tmdb_movie', n::text, 1, 'Tied title ' || n, 'https://img.test/' || n || '.jpg', CASE WHEN n <= 30 THEN 1 ELSE 2 END
+                FROM generate_series(1, 45) n ORDER BY n DESC;
+                """);
+            for (var page = 1; page <= 4; page++)
+            {
+                using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending, page));
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                var rows = (await response.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!;
+                var expected = Enumerable.Range((page - 1) * 20 + 1, Math.Max(0, Math.Min(20, 45 - (page - 1) * 20))).ToArray();
+                CollectionAssert.AreEqual(expected, rows.Select(row => row.TmdbId).ToArray());
+            }
+        }
+
+        [TestMethod]
+        public async Task Catalog_ReadWhole_PreservesIdentityStateOwnedCoverAndBlockedWorkScope()
+        {
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
+                UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'anilist';
+                INSERT INTO "ExternalWorkSyncs" ("Namespace", "RequestsPerMinute", "CompletedAt") VALUES ('openlibrary', 20, now());
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES
+                    (100, 3, NULL, 'Owned book'), (101, 3, 3, 'Blocked novel'), (102, 2, 1, 'Anime work'), (103, 2, 1, 'Anime season');
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (100, 102, 1, 1), (101, 103, 1, 1);
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (100, 'openlibrary', 'owned'), (101, 'openlibrary', 'blocked'), (102, 'anilist', 'direct');
+                INSERT INTO "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value") VALUES (100, 'anilist', 'direct'), (101, 'anilist', 'season');
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES
+                    (100, 'Poster', '/api/v1/covers/works/100/poster?v=1', TRUE), (101, 'Poster', '/api/v1/covers/works/101/poster?v=1', TRUE),
+                    (102, 'Poster', '/api/v1/covers/works/102/poster?v=1', TRUE), (103, 'Poster', '/api/v1/covers/works/103/poster?v=1', TRUE);
+                INSERT INTO "WantedItems" ("WorkId") VALUES (100), (102), (103);
+                INSERT INTO "ProfileMediaRules" ("ProfileId", "MediaSubtypeId", "IsBlocked") VALUES (101, 3, TRUE);
+                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "MediaSubtypeId", "Title", "ImageUrl", "TrendingRank") VALUES
+                    ('openlibrary', 'owned', 3, NULL, 'Owned catalog book', 'https://img.test/owned.jpg', 1),
+                    ('openlibrary', 'blocked', 3, NULL, 'Public catalog book', 'https://img.test/blocked.jpg', 2),
+                    ('openlibrary', 'unknown', 3, NULL, 'Unknown book', 'https://img.test/unknown.jpg', 3),
+                    ('anilist', 'direct', 2, 1, 'Direct anime', 'https://img.test/direct.jpg', 1),
+                    ('anilist', 'season', 2, 1, 'Season anime', 'https://img.test/season.jpg', 2);
+                """);
+            using var books = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Book, DiscoverFeedType.Trending));
+            Assert.AreEqual(HttpStatusCode.OK, books.StatusCode, await books.Content.ReadAsStringAsync());
+            var bookItems = (await books.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!;
+            Assert.AreEqual(3, bookItems.Count);
+            Assert.AreEqual(100L, bookItems[0].WorkId);
+            Assert.AreEqual(MediaStateType.Requested, bookItems[0].MediaStateTypeId);
+            Assert.AreEqual("/api/v1/covers/works/100/poster?v=1", bookItems[0].PosterUrl);
+            Assert.IsNull(bookItems[1].WorkId);
+            Assert.IsNull(bookItems[1].MediaStateTypeId);
+            Assert.AreEqual("https://img.test/blocked.jpg", bookItems[1].PosterUrl);
+            Assert.IsNull(bookItems[2].WorkId);
+
+            using var anime = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, anime.StatusCode, await anime.Content.ReadAsStringAsync());
+            var animeItems = (await anime.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!;
+            Assert.AreEqual(2, animeItems.Count, "A Work and its season carrying the same provider identity must not duplicate the card.");
+            Assert.AreEqual(102L, animeItems[0].WorkId);
+            Assert.AreEqual("/api/v1/covers/works/102/poster?v=1", animeItems[0].PosterUrl);
+            Assert.AreEqual(103L, animeItems[1].WorkId);
+            Assert.AreEqual(MediaStateType.Requested, animeItems[1].MediaStateTypeId);
+            Assert.AreEqual("https://img.test/season.jpg", animeItems[1].PosterUrl, "A season keeps its own provider cover rather than its containing Work's cover.");
         }
 
         [TestMethod]
@@ -506,8 +630,8 @@ namespace Jularr.Backend.Tests
             using var library = await host.SendAsync(HttpMethod.Get, "/Library?type=movies");
             Assert.AreEqual(HttpStatusCode.OK, library.StatusCode);
             using var empty = await host.SendAsync(HttpMethod.Get, "/Library?type=movies&p=2");
-            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "action-dock__paging");
-            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "Page 2");
+            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "data-infinite-list=\".library-grid\"");
+            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "data-infinite-page=\"2\"");
             StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "href=\"/Library?type=movies\"");
             using var invalid = await host.SendAsync(HttpMethod.Get, "/Library?p=2147483647");
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
@@ -715,10 +839,10 @@ namespace Jularr.Backend.Tests
             }
         }
 
-        private static async Task<Host> CreateHostAsync(bool razor = false, FakeTmdb? fake = null)
+        private static async Task<Host> CreateHostAsync(bool razor = false, FakeTmdb? fake = null, FakeAniList? anime = null)
         {
             var tmdb = fake ?? new FakeTmdb();
-            var aniList = new FakeAniList();
+            var aniList = anime ?? new FakeAniList();
             var host = await Host.CreateAsync(razor: razor, library: true, services: services =>
             {
                 if (Environment.GetEnvironmentVariable("JULARR_TEST_CACHE_TIMING") == "1")
@@ -741,11 +865,15 @@ namespace Jularr.Backend.Tests
         // The Matrix Show on AniList: a first season and a second with its own trailer and cover but no banner.
         private sealed class FakeAniList : HttpMessageHandler
         {
+            public int Requests { get; private set; }
+            public bool IsUnavailable { get; set; }
             private const string First = """{"id":20,"type":"ANIME","format":"TV","title":{"romaji":"The Matrix Show"},"synonyms":[],"startDate":{"year":2020},"episodes":12,"relations":{"edges":[{"relationType":"SEQUEL","node":{"id":21,"type":"ANIME"}}]}}""";
             private const string Second = """{"id":21,"type":"ANIME","format":"TV","title":{"romaji":"The Matrix Show Season 2"},"synonyms":[],"startDate":{"year":2021},"episodes":12,"description":"Season two.","coverImage":{"large":"https://img.anili.st/second.jpg"},"trailer":{"id":"abcdefghijk","site":"youtube"},"relations":{"edges":[{"relationType":"PREQUEL","node":{"id":20,"type":"ANIME"}}]}}""";
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
+                Requests++;
+                if (IsUnavailable) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
                 using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
                 var variables = body.RootElement.GetProperty("variables");
                 var json = variables.TryGetProperty("id", out var id) ? "{\"data\":{\"Media\":" + (id.GetInt32() == 20 ? First : Second) + "}}" : "{\"data\":{\"Page\":{\"media\":[" + Second + "]}}}";
