@@ -116,6 +116,40 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task DurableJob_ThreeHundredEightEntriesAreVisibleAsWaitingBeforeProcessing()
+        {
+            await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders());
+            var titles = Enumerable.Range(0, 308)
+                .Select(index => new { type = "movie", ids = new { tmdb = (1000 + index).ToString() },
+                    title = "Queued Title " + index.ToString(System.Globalization.CultureInfo.InvariantCulture) });
+            var json = System.Text.Json.JsonSerializer.Serialize(new { version = 1, items = titles });
+
+            using var queued = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import/jobs", Form(json));
+            Assert.AreEqual(HttpStatusCode.OK, queued.StatusCode, await queued.Content.ReadAsStringAsync());
+            var job = (await queued.Content.ReadFromJsonAsync<MediaImportJobCreatedV1>())!;
+
+            using var statusResponse = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/media-import/jobs/" + job.JobId);
+            var status = (await statusResponse.Content.ReadFromJsonAsync<MediaImportJobStatusV1>())!;
+            Assert.AreEqual(OperationStatusType.Queued, status.StatusTypeId);
+            Assert.AreEqual(308, status.TotalCount);
+            Assert.AreEqual(308, status.Rows.Count);
+            Assert.AreEqual(0L, status.ProcessedCount);
+            Assert.IsTrue(status.Rows.All(row => row.Stage == "Queued" && row.OutcomeTypeId is null));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
+        public async Task DurableJob_UnselectedItemsCannotBeQueuedToStartAnImplicitImport()
+        {
+            await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders());
+            using var denied = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import/jobs",
+                new MediaImportJobRequestV1(Books, MediaImportActionType.MonitorAndSearch));
+            Assert.AreEqual(HttpStatusCode.BadRequest, denied.StatusCode);
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Operations" WHERE "OperationTypeId" = 6 """));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" """));
+        }
+
+        [TestMethod]
         public async Task DurableJob_RevokedOwnerCannotImportTheNextWork()
         {
             await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders());
