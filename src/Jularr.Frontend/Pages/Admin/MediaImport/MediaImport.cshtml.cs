@@ -133,7 +133,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 var monitorCount = intended.Count(row => row.CanMonitor && row.Action != MediaImportActionType.AddOnly);
                 var searchCount = intended.Count(row => row.CanMonitor && row.Action == MediaImportActionType.MonitorAndSearch);
                 var intent = new Div(
-                    new Strong(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["import.intent.summary"], intended.Length, monitorCount, searchCount))),
+                    new Strong(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["import.intent.summary"], intended.Length, monitorCount, searchCount))).Attribute("data-import-summary", ""),
                     new Span(new Text("import.intent.searchWarning")).Class("media-import__intent-warning").Attribute("data-import-search-warning", searchCount == 0 ? "hidden" : "visible"))
                     .Class("media-import__intent").Attribute("data-import-intent", "").TextAttribute("data-template", "import.intent.summary");
                 form.Note(intent);
