@@ -234,6 +234,39 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Selection_FlexibleWithoutRequestedLanguagePrefersOriginal()
+        {
+            var profile = new QualityProfile("profile", "Flexible", ["EPUB", "PDF"], ["EPUB", "PDF"], false, null, null, null)
+            {
+                IsBook = true,
+                OriginalLanguage = "JA",
+                LanguageFallback = LanguageFallbackType.Any
+            };
+            var result = ReleaseSelectionEngine.Select(profile,
+                [Candidate("Héctor García - IKIGAI (ES) (epub)", false, 1, "Usenet"),
+                 Candidate("Héctor García - IKIGAI (JA) (epub)", false, 50, "Anna")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (JA) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+        }
+
+        [TestMethod]
+        public void Selection_FlexibleWithoutRequestedOrOriginalPrefersBestQuality()
+        {
+            var profile = new QualityProfile("profile", "Flexible", ["EPUB", "PDF"], ["EPUB", "PDF"], false, null, null, null)
+            {
+                IsBook = true,
+                LanguageFallback = LanguageFallbackType.Any
+            };
+            var result = ReleaseSelectionEngine.Select(profile,
+                [Candidate("Héctor García - IKIGAI (ES) (pdf)", false, 1, "Usenet"),
+                 Candidate("Héctor García - IKIGAI (FR) (epub)", false, 50, "Anna")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (FR) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+        }
+
+        [TestMethod]
         public void Selection_StrictModeWithoutAnyRequestedLanguageNeverDownloadsAutomatically()
         {
             var profile = new QualityProfile("profile", "Strict", ["EPUB"], ["EPUB"], false, null, null, null)
