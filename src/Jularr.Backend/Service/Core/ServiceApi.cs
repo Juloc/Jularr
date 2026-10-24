@@ -136,6 +136,11 @@ namespace Jularr.Backend.Service.Core
             {
                 configuration.GetSection("Browser").Bind(options);
                 options.ProfilePath = Folder(options.ProfilePath, "browser");
+                if (options.Path is null && string.IsNullOrWhiteSpace(options.RemoteAddress))
+                {
+                    options.IsManaged = true;
+                    options.RemoteAddress = "http://127.0.0.1:9222";
+                }
             });
 
             // Metadata mirrors.
