@@ -27,7 +27,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private static readonly IReadOnlyDictionary<AcquisitionConnectionRole, (AcquisitionConnectionType Type, string LabelKey)[]> Additions =
             new Dictionary<AcquisitionConnectionRole, (AcquisitionConnectionType, string)[]>
             {
-                [AcquisitionConnectionRole.Search] = [(AcquisitionConnectionType.Newznab, "acquisition.connection.addIndexer"), (AcquisitionConnectionType.Nyaa, "acquisition.connection.addIndexer")],
+                [AcquisitionConnectionRole.Search] = [(AcquisitionConnectionType.Newznab, "acquisition.connection.addIndexer"), (AcquisitionConnectionType.Nyaa, "acquisition.connection.addNyaa")],
                 [AcquisitionConnectionRole.Download] = [(AcquisitionConnectionType.Sabnzbd, "acquisition.connection.addClient"), (AcquisitionConnectionType.Qbittorrent, "acquisition.connection.addClient"), (AcquisitionConnectionType.Usenet, "acquisition.connection.addUsenet")],
                 [AcquisitionConnectionRole.Subtitles] = []
             };

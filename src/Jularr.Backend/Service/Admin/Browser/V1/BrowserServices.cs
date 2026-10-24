@@ -13,8 +13,13 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
     public sealed class ReadBrowserStatusV1 : AdminService<BrowserParametersV1>
     {
         private readonly ISourceBrowser _browser;
+        private readonly BrowserPackages _packages;
 
-        internal ReadBrowserStatusV1(ISourceBrowser browser) => _browser = browser;
+        internal ReadBrowserStatusV1(ISourceBrowser browser, BrowserPackages packages)
+        {
+            _browser = browser;
+            _packages = packages;
+        }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BrowserStatusV1>()];
         protected override ModuleRequirement GetInstanceModules(BrowserParametersV1 parameters) => ModuleRequirement.All("Acquisition");
@@ -24,7 +29,7 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
         {
             var status = _browser.Status;
             return Task.FromResult<IServiceOutput>(new BrowserStatusV1(status.Path, status.RemoteAddress, status.ProfilePath, _browser.IsAvailable, status.IsRunning, status.Version,
-                status.LastUrl, status.LastOutcome, status.LastError, status.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50)));
+                status.LastUrl, status.LastOutcome, status.LastError, status.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50), _packages.State, _packages.Error, _packages.DownloadedBytes, _packages.TotalBytes));
         }
 
         private BrowserEventV1[] Events() => [.. _browser.Events.Select(item => new BrowserEventV1(item.At, item.Kind, item.Message))];
@@ -35,8 +40,13 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
     public sealed class RunBrowserActionV1 : AdminService<BrowserParametersV1, RunBrowserActionDataV1>
     {
         private readonly ISourceBrowser _browser;
+        private readonly BrowserPackages _packages;
 
-        internal RunBrowserActionV1(ISourceBrowser browser) => _browser = browser;
+        internal RunBrowserActionV1(ISourceBrowser browser, BrowserPackages packages)
+        {
+            _browser = browser;
+            _packages = packages;
+        }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BrowserStatusV1>()];
@@ -52,13 +62,13 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
             {
                 var status = _browser.Status;
                 return new BrowserStatusV1(status.Path, status.RemoteAddress, status.ProfilePath, _browser.IsAvailable, status.IsRunning, status.Version,
-                    status.LastUrl, status.LastOutcome, status.LastError, status.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50));
+                    status.LastUrl, status.LastOutcome, status.LastError, status.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50), _packages.State, _packages.Error, _packages.DownloadedBytes, _packages.TotalBytes);
             }
 
             await action;
             var state = _browser.Status;
             return new BrowserStatusV1(state.Path, state.RemoteAddress, state.ProfilePath, _browser.IsAvailable, state.IsRunning, state.Version,
-                state.LastUrl, state.LastOutcome, state.LastError, state.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50));
+                state.LastUrl, state.LastOutcome, state.LastError, state.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50), _packages.State, _packages.Error, _packages.DownloadedBytes, _packages.TotalBytes);
         }
 
         private async Task ActionAsync()

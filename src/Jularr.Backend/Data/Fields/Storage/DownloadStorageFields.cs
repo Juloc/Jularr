@@ -10,5 +10,7 @@ namespace Jularr.Backend.Data.Fields.Storage
         public static readonly BoolField IsConfigured = new();
         public static readonly BoolField Confirmed = new();
         public static readonly GuidField WorkspaceId = new();
+        public static readonly LongField CleanupCount = new() { Minimum = 0 };
+        public static readonly LongField CleanupBytes = new() { Minimum = 0 };
     }
 }

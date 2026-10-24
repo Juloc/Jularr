@@ -93,17 +93,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, unavailable.StatusCode);
             Assert.IsFalse((await unavailable.Content.ReadAsStringAsync()).Contains("New Film", StringComparison.Ordinal));
 
-            // Once a file is present, the title is found by name and added from the collection page.
-            var mount = await LibraryTests.CreateMountAsync(host);
-            var root = await LibraryTests.CreateRootAsync(host, mount, "Movies", MediaType.Movie);
-            await host.Fixture.RunSqlAsync($"""
-                INSERT INTO "WorkEditions" ("WorkId") VALUES (20);
-                INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId")
-                SELECT "WorkId", "Id" FROM "WorkEditions" WHERE "WorkId" = 20;
-                INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "MediaAssetTypeId")
-                SELECT "WorkId", "Id", 1 FROM "WorkVersions" WHERE "WorkId" = 20;
-                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
-                SELECT {root}, 'New Film.mkv', 100, now(), now(), "Id" FROM "MediaAssets" WHERE "WorkId" = 20;
+            // Own requested titles can be found and added before a file is available.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId")
+                    SELECT 20, 101, 41, "Id" FROM "UiLocales" ORDER BY "Id" LIMIT 1;
                 """);
             using var found = await host.SendAsync(HttpMethod.Get, "/Collections/" + favorites + "?q=New");
             var foundHtml = await found.Content.ReadAsStringAsync();

@@ -31,6 +31,24 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class BookTests
     {
+        [TestMethod]
+        public void BookDocumentLanguages_VerifiesExplicitEpubMetadataWithoutGuessing()
+        {
+            var bytes = ReadingTests.BuildEpub("Pride and Prejudice");
+            using var data = new MemoryStream(bytes);
+            CollectionAssert.AreEqual(new[] { "EN" }, BookDocumentLanguages.ReadEpub(data));
+
+            var strict = new QualityProfile("strict", "Strict", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true, LanguageOrder = ["DE"], LanguageFallback = LanguageFallbackType.None
+            };
+            Assert.IsTrue(BookDocumentLanguages.ContradictsStrictProfile(strict, ["EN"]));
+            Assert.IsFalse(BookDocumentLanguages.ContradictsStrictProfile(strict, ["DE", "EN"]));
+            Assert.IsFalse(BookDocumentLanguages.ContradictsStrictProfile(strict, []));
+            using var unknown = new MemoryStream("not an epub"u8.ToArray());
+            CollectionAssert.AreEqual(Array.Empty<string>(), BookDocumentLanguages.ReadEpub(unknown));
+        }
+
         private const string Connections = "/api/v1/admin/acquisition/connections";
 
         [TestMethod]

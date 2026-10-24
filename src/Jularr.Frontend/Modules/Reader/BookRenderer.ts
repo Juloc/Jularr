@@ -84,11 +84,12 @@ export function initializeBookRenderer(reader: HTMLElement) {
         const place = printPlacement(profile(at, side), side, width / 148);
         print.style.left = `${place.shift}px`;
         print.style.top = `${place.top}px`;
-        // Page numbers follow the paper's centre, independent of the text column's gap and mirrored placement.
+        // The paper curve moves the printed text, not the page number.
+        // Centre the footer on the physical sheet rather than its shifted text viewport.
         const footer = print.querySelector<HTMLElement>('[data-book-number]');
         if (footer) {
-            footer.style.width = `${width}px`;
-            footer.style.left = `${direction() < 0 ? place.shift + parseFloat(print.style.width) - width : -place.shift}px`;
+            const printWidth = parseFloat(print.style.width) || width;
+            footer.style.left = `${direction() * ((width - printWidth) / 2 - place.shift)}px`;
         }
         return print;
     };
