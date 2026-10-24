@@ -24,8 +24,15 @@ namespace Jularr.Backend.Service.User.Translation.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            var (sources, targets) = await _files.LanguagesAsync(CancellationToken);
-            return new TranslationLanguagesV1(sources, targets);
+            try
+            {
+                var (sources, targets) = await _files.LanguagesAsync(CancellationToken);
+                return new TranslationLanguagesV1(sources, targets);
+            }
+            catch (ServiceUnavailableException)
+            {
+                return new TranslationLanguagesV1([], []);
+            }
         }
     }
 

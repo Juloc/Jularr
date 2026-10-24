@@ -20,13 +20,22 @@ namespace Jularr.Backend.Tests
             var ollama = new FakeOllama();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
                 settings: new Dictionary<string, string> { ["LocalTranslation:Endpoint"] = "http://ollama:11434" },
-                services: services => services.AddHttpClient<OllamaLocalModels>()
-                    .ConfigurePrimaryHttpMessageHandler(() => ollama));
+                services: services =>
+                {
+                    services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => ollama);
+                    services.AddHttpClient<MozillaTranslationsClient>().ConfigurePrimaryHttpMessageHandler(() => new UnavailableMozilla());
+                });
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
             var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
             using var opened = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/assets/" + first + "/open");
             Assert.AreEqual(HttpStatusCode.OK, opened.StatusCode, await opened.Content.ReadAsStringAsync());
             var document = (await opened.Content.ReadFromJsonAsync<ReadingDocumentV1>())!;
+            using var reader = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
+            Assert.AreEqual(HttpStatusCode.OK, reader.StatusCode, await reader.Content.ReadAsStringAsync());
+            var readerHtml = await reader.Content.ReadAsStringAsync();
+            StringAssert.Contains(readerHtml, "data-language-choice=" + (char)34 + "de" + (char)34);
+            StringAssert.Contains(readerHtml, "data-local-model=" + (char)34 + "translategemma:4b" + (char)34);
+
             var baseUrl = "/api/v1/reading/documents/" + document.DocumentId + "/sections/0/local-translations/de/translategemma:4b";
             var request = baseUrl + "/blocks/0";
 
@@ -62,6 +71,12 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Translation'");
             using var unavailable = await host.SendAsync(HttpMethod.Post, request, new LocalReadingBlockDataV1("en"));
             Assert.AreEqual(HttpStatusCode.Forbidden, unavailable.StatusCode);
+        }
+
+        private sealed class UnavailableMozilla : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+                Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
         }
 
         private sealed class FakeOllama : HttpMessageHandler
