@@ -67,7 +67,7 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
         state('ready');
         if (!readyText) readyText = status.dataset.readyLabel!.replace('{0}', new Intl.NumberFormat(document.documentElement.lang || undefined).format(totalCount));
         if (status.textContent !== readyText) status.textContent = readyText;
-        if (key && savedKey !== key) {
+        if (key && reader.dataset.documentRevision && savedKey !== key) {
             savedKey = key;
             void writeBookPageCounts(key, counts as number[]);
         }
@@ -201,7 +201,7 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
             return;
         }
         const style = getComputedStyle(content);
-        const nextKey = JSON.stringify(['book-page-layout-v2', reader.dataset.sectionsUrl, sections, next.width, next.height, next.columns, next.gap, next.rtl, style.font, style.letterSpacing,
+        const nextKey = JSON.stringify(['book-page-layout-v3', reader.dataset.sectionsUrl, reader.dataset.documentRevision, sections, next.width, next.height, next.columns, next.gap, next.rtl, style.font, style.letterSpacing,
             style.getPropertyValue('--reader-text-width'), style.getPropertyValue('--reader-paragraph'), reader.dataset.indent, reader.dataset.hyphenation, reader.dataset.illustrations, document.documentElement.lang]);
         if (key !== nextKey) {
             cancel(); key = nextKey; failed = false; resetCounts(); clearTotal();
@@ -212,7 +212,7 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
                 if (version !== generation || !cachePending) return;
                 cachePending = false; cacheTimer = 0; schedule();
             }, 300);
-            void readBookPageCounts(key, sections).then(saved => {
+            void (reader.dataset.documentRevision ? readBookPageCounts(key, sections) : Promise.resolve(undefined)).then(saved => {
                 if (version !== generation || disposed || suspended || !cachePending) return;
                 clearTimeout(cacheTimer); cacheTimer = 0; cachePending = false;
                 // A late image, font or content change can alter this section without changing a CSS key.

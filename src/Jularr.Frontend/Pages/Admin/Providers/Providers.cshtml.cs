@@ -123,10 +123,16 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             if (ServerKeys.Contains(provider.Key) && State(provider).Key == "providers.state.connected")
             {
                 // Plex also says how many of its titles are linked to Jularr's.
-                var last = syncedAt is { } synced ? synced.ToLocalTime().ToString("g", CultureInfo.CurrentCulture) : texts["admin.plex.notSynced"];
-                var line = provider.Key == "plex" && _plex is { } linked ? string.Format(CultureInfo.CurrentCulture, texts["admin.plex.connected"], linked.LinkedCount, last)
-                    : syncedAt is null ? last : string.Format(CultureInfo.CurrentCulture, texts["providers.syncedAt"], last);
-                body.Add(new Div(new Span(new ValueText(line)).Class("feature-card__note")).Class("feature-card__row"));
+                IUiComponent line;
+                if (syncedAt is { } synced)
+                {
+                    var template = provider.Key == "plex" && _plex is { } linked
+                        ? string.Format(CultureInfo.CurrentCulture, texts["admin.plex.connected"], linked.LinkedCount, "{0}")
+                        : texts["providers.syncedAt"];
+                    line = LocalTime.Format(template, synced);
+                }
+                else line = new ValueText(texts["admin.plex.notSynced"]);
+                body.Add(new Div(new Span(line).Class("feature-card__note")).Class("feature-card__row"));
             }
 
             // The settings are inputs of the card itself: the protected key, the Plex server or the Jellyfin/Emby connection.

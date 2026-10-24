@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
+using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
@@ -12,6 +14,7 @@ using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Operation;
 using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Media.V1;
@@ -134,10 +137,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
         private readonly MusicTagIdentification _music;
         private readonly WorkMetadata _metadata;
         private readonly ILogger<ExecuteLibraryScanV1> _logger;
+        private readonly MetadataCatalog _catalog;
+        private bool _bookCatalogUnavailable;
 
-        internal ExecuteLibraryScanV1(StorageAccess storage, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music, WorkMetadata metadata, ILogger<ExecuteLibraryScanV1> logger)
+        internal ExecuteLibraryScanV1(StorageAccess storage, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music, WorkMetadata metadata, ILogger<ExecuteLibraryScanV1> logger, MetadataCatalog catalog)
         {
             _logger = logger;
+            _catalog = catalog;
             _storage = storage;
             _probe = probe;
             _roms = roms;
@@ -250,6 +256,12 @@ namespace Jularr.Backend.Service.System.Operation.V1
             // Link completely new folders to their catalog identity without moving files.
             var unfinished = root.MediaTypeId is MediaType.Movie or MediaType.Series
                 && await AssignCatalogFoldersAsync(root.Id, root.MediaTypeId, storage, directory);
+
+            // Books, manga and light novels: a folder whose title names one Work (here or in the catalog) is that Work.
+            if (root.MediaTypeId == MediaType.Book)
+            {
+                await AssignBookFoldersAsync(root.Id, root.MediaSubtypeId);
+            }
 
             await Context.ExecuteBatchAsync((ctx, ct) => ctx.UpdateOperationAsync(new OperationProgressData(Parameters.OperationId, processed, OperationStatusType.Completed), ct), CancellationToken);
             if (unfinished)
@@ -524,6 +536,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
         private async Task<bool> AssignCatalogFoldersAsync(long libraryRootId, MediaType mediaType, StorageFiles storage, string directory)
         {
             var matches = new Dictionary<(string Title, int? Year, string Ids), long?>();
+            var failures = new Dictionary<(string Title, int? Year, string Ids), string>();
             TmdbConnection? provider = null;
             var providerUnavailable = false;
             var lookups = Stopwatch.StartNew();
@@ -626,6 +639,14 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         }
 
                         parsed = MediaPathParser.ApplyPlexMatch(parsed, file.RelativePath[(rootFolder.Length + 1)..], parts[^1], rootHints, seasonHints);
+                    }
+
+                    // A file of several episodes (S01E12-E13): the first is its unit, the others it covers.
+                    IReadOnlyList<decimal> furtherEpisodes = [];
+                    if (mediaType == MediaType.Series && parsed.WorkUnitTypeId != WorkUnitType.Episode && MediaPathParser.ParseEpisodeRange(file.RelativePath) is { } range)
+                    {
+                        parsed = new MediaPathInfo(parsed.Title, parsed.Year, WorkUnitType.Episode, range.Episodes[0], range.Season);
+                        furtherEpisodes = [.. range.Episodes.Skip(1)];
                     }
 
                     if (parsed.Title.Length > 500 || mediaType == MediaType.Series && parsed.WorkUnitTypeId != WorkUnitType.Episode)
@@ -782,6 +803,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                     if (tmdbId is not null && tmdbId != resolved)
                                     {
                                         verified = false;
+                                        failures[key] = "the ids name different TMDB series (" + tmdbId + " and " + resolved + ")";
                                         break;
                                     }
 
@@ -791,11 +813,48 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                 if (verified && tmdbId is { } id)
                                 {
                                     var details = await _metadata.ReadWorkAsync(provider, mediaType, id, CancellationToken);
+                                    // The IMDb id must agree; TMDB's TheTVDB id may be a stale link, the series' own (folder, nfo) then wins for a series.
                                     if ((ids.GetValueOrDefault("imdb") is not { } imdb || details.ImdbId is null || details.ImdbId.Equals(imdb, StringComparison.OrdinalIgnoreCase))
-                                        && (ids.GetValueOrDefault("tvdb") is not { } tvdb || details.TvdbId is null || details.TvdbId.ToString() == tvdb))
+                                        && (mediaType == MediaType.Series || ids.GetValueOrDefault("tvdb") is not { } tvdb || details.TvdbId is null || details.TvdbId.ToString() == tvdb))
                                     {
-                                        workId = await _metadata.ImportAsync(Context, provider, mediaType, null, id, CancellationToken);
+                                        var folderTvdb = mediaType == MediaType.Series && int.TryParse(ids.GetValueOrDefault("tvdb"), out var named) && named > 0 ? named : (int?)null;
+                                        if (folderTvdb is { } ownTvdb)
+                                        {
+                                            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                                            {
+                                                await ctx.ReplaceStaleTvdbIdAsync(new WorkTvdbCorrectionData(id.ToString(CultureInfo.InvariantCulture), ids.GetValueOrDefault("imdb"),
+                                                    ownTvdb.ToString(CultureInfo.InvariantCulture)), ct);
+                                                return true;
+                                            }, CancellationToken);
+                                        }
+
+                                        workId = await _metadata.ImportAsync(Context, provider, mediaType, null, id, CancellationToken, folderTvdb);
                                         imported++;
+                                    }
+                                    else
+                                    {
+                                        failures[key] = "TMDB " + id + " carries imdb " + (details.ImdbId ?? "none") + " and tvdb " + (details.TvdbId?.ToString() ?? "none");
+                                    }
+                                }
+                                else if (!failures.ContainsKey(key))
+                                {
+                                    failures[key] = "none of the ids resolves to a TMDB " + (mediaType == MediaType.Series ? "series" : "film");
+
+                                    // The catalog knows none of the ids (a title it has not linked to IMDb yet): the folder's title and year may still name
+                                    // exactly one entry, as Sonarr and Radarr match by name; two or none leave the file for a person.
+                                    if (parsed.Year is { } year)
+                                    {
+                                        var hits = (await _metadata.SearchAsync(provider, mediaType, parsed.Title, year, CancellationToken))
+                                            .Where(result => result.Year == year && (TitleMatcher.Matches(parsed.Title, result.Title)
+                                                || result.OriginalTitle is { } original && TitleMatcher.Matches(parsed.Title, original)))
+                                            .ToArray();
+                                        if (hits.Length == 1)
+                                        {
+                                            workId = await _metadata.ImportAsync(Context, provider, mediaType, null, hits[0].Id, CancellationToken,
+                                                mediaType == MediaType.Series && int.TryParse(ids.GetValueOrDefault("tvdb"), out var named) && named > 0 ? named : null);
+                                            imported++;
+                                            failures.Remove(key);
+                                        }
                                     }
                                 }
                             }
@@ -806,6 +865,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             catch (Exception exception) when (exception is KeyNotFoundException or DataValidationException)
                             {
                                 // Unresolved IDs and ids of two different Works remain available for manual identification.
+                                failures[key] = exception.GetType().Name + ": " + exception.Message;
                             }
                         }
 
@@ -817,7 +877,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
                     if (workId is null)
                     {
-                        Note(providerUnavailable ? "the catalog is not available" : ids.Count == 0 ? "no id and no single Work of that title" : "no Work holds the ids " + string.Join(", ", ids.Select(item => item.Key + " " + item.Value)) + " and the catalog could not name them", file.RelativePath);
+                        Note(providerUnavailable ? "the catalog is not available" : ids.Count == 0 ? "no id and no single Work of that title" : "no Work holds the ids " + string.Join(", ", ids.Select(item => item.Key + " " + item.Value)) + " and the catalog could not name them: " + failures.GetValueOrDefault(key, "no reason recorded"), file.RelativePath);
                         continue;
                     }
 
@@ -829,13 +889,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             deferred = true;
                             refreshed.Remove(workId.Value);
                         }
-                        else if (await ReadMissingStructureAsync(workId.Value) is { } tmdbId)
+                        else if (await ReadMissingStructureAsync(workId.Value) is { } known)
                         {
                             externalLookups++;
                             try
                             {
                                 provider ??= await _metadata.ConnectAsync(Context, CancellationToken);
-                                await _metadata.ImportAsync(Context, provider, mediaType, null, tmdbId, CancellationToken);
+                                await _metadata.ImportAsync(Context, provider, mediaType, null, known.TmdbId, CancellationToken, known.TvdbId);
                                 imported++;
                             }
                             catch (ServiceUnavailableException)
@@ -852,7 +912,14 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     var assignment = new StoredFileAssignmentData(file.Id, workId, null, parsed.WorkUnitTypeId, parsed.UnitNumber, parsed.ParentUnitNumber, null, false);
                     try
                     {
-                        await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileAsync(assignment, ct), CancellationToken);
+                        if (furtherEpisodes.Count > 0)
+                        {
+                            await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileRangeAsync(assignment, furtherEpisodes, ct), CancellationToken);
+                        }
+                        else
+                        {
+                            await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileAsync(assignment, ct), CancellationToken);
+                        }
                     }
                     catch (DataValidationException)
                     {
@@ -862,26 +929,189 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
         }
 
-        // The TMDB id of a series none of whose episodes has a name yet; null when it has one or no TMDB id to read.
-        private async Task<int?> ReadMissingStructureAsync(long workId)
+        // The title of a book folder names its Work: the one Work of that title and subtype here, else the one catalog entry whose title has exactly the folder's
+        // words (the author, when named in the path, settles several such entries). Volumes keep their numbers, a single book is the whole Work.
+        private async Task AssignBookFoldersAsync(long libraryRootId, MediaSubtype? subtype)
         {
-            var identity = await Context.ExecuteBatchAsync((ctx, ct) =>
+            var folders = new Dictionary<string, long?>(StringComparer.Ordinal);
+            var unresolved = new Dictionary<string, string>(StringComparer.Ordinal);
+            var lookups = Stopwatch.StartNew();
+            var catalogLookups = 0;
+            for (var afterId = 0L; ;)
+            {
+                var files = await Context.ExecuteBatchAsync((ctx, ct) =>
+                {
+                    var sql = new SqlStatement();
+                    sql.Statement =
+                        """
+                        SELECT file."Id", file."RelativePath", file."SizeBytes", file."ModifiedAt", NULL::bigint AS "WorkId"
+                        FROM "StoredFiles" AS file
+                        WHERE file."LibraryRootId" = @LibraryRootId AND file."Id" > @AfterId
+                            AND file."MediaAssetId" IS NULL AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                        ORDER BY file."Id"
+                        LIMIT 100;
+                        """;
+                    sql.Parameters.Add(new StoredFileCursorData(libraryRootId, afterId));
+                    return ctx.ReadSql.ReadListAsync<StoredFileCandidateData>(sql, ct);
+                }, CancellationToken);
+                if (files.Count == 0)
+                {
+                    foreach (var (folder, example) in unresolved)
+                    {
+                        _logger.LogWarning("Library scan {LibraryRootId}: the folder {Folder} names no single Work here or in the catalog, for example {Example}", libraryRootId, folder, example);
+                    }
+
+                    return;
+                }
+
+                foreach (var file in files)
+                {
+                    afterId = file.Id;
+                    var parsed = MediaPathParser.Parse(file.RelativePath, MediaType.Book);
+                    if (parsed.Title.Length is 0 or > 500)
+                    {
+                        continue;
+                    }
+
+                    var key = file.RelativePath.Contains('/') ? file.RelativePath.Split('/')[0] : parsed.Title;
+                    if (!folders.TryGetValue(key, out var workId))
+                    {
+                        var catalogAllowed = !_bookCatalogUnavailable && (catalogLookups == 0 || lookups.Elapsed < LookupBudget);
+                        var (found, usedCatalog) = await FindBookWorkAsync(parsed.Title, subtype, file.RelativePath, catalogAllowed);
+                        workId = found;
+                        if (usedCatalog)
+                        {
+                            catalogLookups++;
+                        }
+
+                        if (workId is null)
+                        {
+                            unresolved[key] = file.RelativePath;
+                        }
+
+                        folders[key] = workId;
+                    }
+
+                    if (workId is null)
+                    {
+                        continue;
+                    }
+
+                    var assignment = new StoredFileAssignmentData(file.Id, workId, null, parsed.WorkUnitTypeId, parsed.UnitNumber, parsed.ParentUnitNumber, null, false);
+                    try
+                    {
+                        await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileAsync(assignment, ct), CancellationToken);
+                    }
+                    catch (DataValidationException)
+                    {
+                        // A volume or chapter structure the Work does not allow stays for manual review.
+                    }
+                }
+            }
+        }
+
+        private async Task<(long? WorkId, bool UsedCatalog)> FindBookWorkAsync(string title, MediaSubtype? subtype, string relativePath, bool catalogAllowed)
+        {
+            // The one Work of that title and subtype that is already here.
+            var local = await Context.ExecuteBatchAsync((ctx, ct) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT work."Id"
+                    FROM "Works" AS work
+                    WHERE work."MediaTypeId" = 3
+                        AND work."MediaSubtypeId" IS NOT DISTINCT FROM @MediaSubtypeId
+                        AND (lower(work."CanonicalTitle") = lower(@CanonicalTitle)
+                            OR EXISTS (SELECT 1 FROM "WorkTitles" AS name WHERE name."WorkId" = work."Id" AND lower(name."Title") = lower(@CanonicalTitle)))
+                    ORDER BY work."Id"
+                    LIMIT 2;
+                    """;
+                sql.Parameters.Add(new BookFolderMatchData(subtype, title));
+                return ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
+            }, CancellationToken);
+            if (local.Count == 1)
+            {
+                return (local[0].Id, false);
+            }
+
+            if (local.Count > 1 || !catalogAllowed)
+            {
+                return (null, false);
+            }
+
+            IReadOnlyList<MetadataSearchResultV1> results;
+            try
+            {
+                results = await _catalog.SearchAsync(Context, MediaType.Book, subtype, title, null, CancellationToken);
+            }
+            catch (ServiceUnavailableException)
+            {
+                _bookCatalogUnavailable = true;
+                return (null, false);
+            }
+
+            // Entries with exactly the folder's words as their title; several of them are told apart by an author the path names.
+            var wanted = TitleMatcher.SignificantWords(title);
+            var same = results.Where(result => TitleMatcher.SignificantWords(result.Title).SetEquals(wanted)
+                    || result.OriginalTitle is { } original && TitleMatcher.SignificantWords(original).SetEquals(wanted))
+                .DistinctBy(result => (result.Namespace, result.ExternalId)).ToArray();
+            if (same.Length > 1)
+            {
+                var dot = relativePath.LastIndexOf('.');
+                var pathWords = TitleMatcher.SignificantWords(dot > 0 ? relativePath[..dot] : relativePath);
+                same = [.. same.Where(result => result.Author is { Length: > 0 } author && TitleMatcher.SignificantWords(author).IsSubsetOf(pathWords))];
+            }
+
+            if (same.Length != 1)
+            {
+                return (null, true);
+            }
+
+            if (same[0].WorkId is { } known)
+            {
+                return (known, true);
+            }
+
+            try
+            {
+                return (await _catalog.ImportAsync(Context, MediaType.Book, subtype, same[0].Namespace, same[0].ExternalId, CancellationToken), true);
+            }
+            catch (Exception exception) when (exception is KeyNotFoundException or DataValidationException)
+            {
+                return (null, true);
+            }
+            catch (ServiceUnavailableException)
+            {
+                _bookCatalogUnavailable = true;
+                return (null, true);
+            }
+        }
+
+        // The TMDB id, and the Work's own TheTVDB id if it has one, of a series none of whose episodes has a name yet; null when it has one or no TMDB id to read.
+        private async Task<(int TmdbId, int? TvdbId)?> ReadMissingStructureAsync(long workId)
+        {
+            var identities = await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
                 sql.Statement =
                     """
                     SELECT identity."Namespace", identity."Value"
                     FROM "WorkExternalIdentities" AS identity
-                    WHERE identity."WorkId" = @Id AND identity."Namespace" = 'tmdb_tv'
+                    WHERE identity."WorkId" = @Id AND identity."Namespace" IN ('tmdb_tv', 'tvdb')
                         AND NOT EXISTS (
                             SELECT 1 FROM "WorkUnits" AS unit
                             WHERE unit."WorkId" = identity."WorkId" AND unit."WorkUnitTypeId" = 2 AND unit."Title" IS NOT NULL
                         );
                     """;
                 sql.Parameters.Add(new WorkIdData(workId));
-                return ctx.ReadSql.ReadOptionalAsync<WorkIdentityProbeData>(sql, ct);
+                return ctx.ReadSql.ReadListAsync<WorkIdentityProbeData>(sql, ct);
             }, CancellationToken);
-            return identity is not null && int.TryParse(identity.Value, out var tmdbId) && tmdbId > 0 ? tmdbId : null;
+            var tmdb = identities.FirstOrDefault(identity => identity.Namespace == "tmdb_tv");
+            var tvdb = identities.FirstOrDefault(identity => identity.Namespace == "tvdb");
+            return tmdb is not null && int.TryParse(tmdb.Value, out var tmdbId) && tmdbId > 0
+                ? (tmdbId, tvdb is not null && int.TryParse(tvdb.Value, out var tvdbId) && tvdbId > 0 ? tvdbId : null)
+                : null;
         }
 
         private async Task<PlexMatchHints> ReadPlexMatchAsync(StorageFiles storage, string directory, string folder)

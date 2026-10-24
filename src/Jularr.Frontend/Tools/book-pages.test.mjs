@@ -24,7 +24,7 @@ test('one column measurement counts the same scrolled LTR and RTL content withou
 });
 
 function harness(fetchChapter, cached = new Map(), section = 1) {
-    let currentImages = [];
+    let currentImages = [], font = '20px serif';
     const events = new Map(), windowEvents = new Map(), documentEvents = new Map();
     const tasks = new Map();
     let clock = 0, identity = 0, measuring = '', maximumRulers = 0, attached = 0, parsed = 0;
@@ -36,7 +36,7 @@ function harness(fetchChapter, cached = new Map(), section = 1) {
     const status = { hidden: true, dataset: { readyLabel: 'Book pages: {0}', calculatingLabel: 'calculating', pausedLabel: 'paused', unavailableLabel: 'unavailable' } };
     const content = { cloneNode: () => ruler, querySelectorAll: () => currentImages };
     const reader = {
-        dataset: { section: String(section), sections: '3', sectionsUrl: '/sections/', mode: 'paged', illustrations: 'true' },
+        dataset: { section: String(section), sections: '3', sectionsUrl: '/sections/', documentRevision: 'source-a:completed', mode: 'paged', illustrations: 'true' },
         querySelector: selector => selector.includes('book-pages') ? status : null,
         append() { attached++; },
         addEventListener(name, callback) { events.set(name, callback); }
@@ -59,7 +59,7 @@ function harness(fetchChapter, cached = new Map(), section = 1) {
     const exports = {};
     runInNewContext(compile('BookPages'), { exports, window, document, AbortController, TextDecoder,
         performance: { now: () => clock }, clearTimeout: id => tasks.delete(id), fetch: fetchChapter,
-        getComputedStyle: () => ({ font: '20px serif', letterSpacing: 'normal', getPropertyValue: () => '68ch' }),
+        getComputedStyle: () => ({ font, letterSpacing: 'normal', getPropertyValue: () => '68ch' }),
         require: name => name === './PaperMeasure' ? { paperPageCount: () => Number(measuring) } : {
             readBookPageCounts: async key => cached.get(key)?.slice(),
             writeBookPageCounts: async (key, counts) => { cached.set(key, counts.slice()); }
@@ -79,6 +79,7 @@ function harness(fetchChapter, cached = new Map(), section = 1) {
     }
     return { reader, counter, layout, events, windowEvents, documentEvents, document, ruler, status, advance,
         setImages: images => { currentImages = images; },
+        setFont: value => { font = value; },
         stats: () => ({ maximumRulers, attached, parsed, tasks: tasks.size, measuring }) };
 }
 
@@ -264,4 +265,48 @@ test('late illustrations defer cache lookup but retry it after the current chapt
     assert.equal(next.reader.dataset.bookPageState, 'ready');
     assert.equal(next.reader.dataset.bookPageCount, '11');
     assert.equal(requests.length, 2, 'the completed cache is restored once the illustration settles');
+});
+
+// Browser pagination is deliberately not portable across display widths or font sizes.
+// A source-derived revision must also keep an updated document from reusing old chapter counts.
+test('cache is separated by book revision, viewport dimensions and typography', async () => {
+    const cached = new Map(), requested = [];
+    const fetchChapter = async url => {
+        requested.push(url);
+        return new Response(JSON.stringify({ sectionIndex: Number(url.at(-1)), html: '4' }));
+    };
+    const first = harness(fetchChapter, cached);
+    first.counter.update(first.layout);
+    await first.advance(); await first.advance();
+    assert.equal(first.reader.dataset.bookPageState, 'ready');
+    assert.equal(requested.length, 2);
+
+    const same = harness(fetchChapter, cached);
+    same.counter.update(same.layout);
+    await same.advance();
+    assert.equal(same.reader.dataset.bookPageState, 'ready');
+    assert.equal(requested.length, 2, 'same book, source and screen should reuse cache');
+
+    const resized = harness(fetchChapter, cached);
+    resized.counter.update({ ...resized.layout, width: 420, height: 700, pages: 3 });
+    await resized.advance(); await resized.advance();
+    assert.equal(requested.length, 4, 'another device screen needs its own pagination');
+
+    const differentFont = harness(fetchChapter, cached);
+    differentFont.setFont('26px sans-serif');
+    differentFont.counter.update(differentFont.layout);
+    await differentFont.advance(); await differentFont.advance();
+    assert.equal(requested.length, 6, 'profile font and size change must invalidate layout counts');
+
+    const revised = harness(fetchChapter, cached);
+    revised.reader.dataset.documentRevision = 'source-b:completed';
+    revised.counter.update(revised.layout);
+    await revised.advance(); await revised.advance();
+    assert.equal(requested.length, 8, 'a newer reading derivation cannot reuse a previous source revision');
+
+    const unknown = harness(fetchChapter, cached);
+    delete unknown.reader.dataset.documentRevision;
+    unknown.counter.update(unknown.layout);
+    await unknown.advance(); await unknown.advance();
+    assert.equal(requested.length, 10, 'absence of a trusted source revision disables persistent cache reuse');
 });

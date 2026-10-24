@@ -135,8 +135,8 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             var asked = health.Services.Count(service => service.HealthStateTypeId != HealthStateType.Unknown);
             var reachable = health.Services.Count(service => service.HealthStateTypeId == HealthStateType.Available);
             return new Div(new StateChip(new Text(health.IsStable ? "dashboard.status.stable" : "dashboard.status.warning"), health.IsStable ? UiTone.Success : UiTone.Warning),
-                new Span(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["jobs.health.summary"], reachable, asked) + (health.CheckedAt is { } at
-                    ? " · " + string.Format(CultureInfo.CurrentCulture, texts["dashboard.services.checked"], at.ToLocalTime().ToString("t", CultureInfo.CurrentCulture)) : ""))),
+                new Span(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["jobs.health.summary"], reachable, asked)),
+                    health.CheckedAt is { } at ? new Span(new ValueText(" · "), LocalTime.Format(texts["dashboard.services.checked"], at, "time")) : new Span()),
                 new A(new Text("admin.dashboard.title")).Class("button button--soft button--compact").Attribute("href", "/Admin/Dashboard")).Class("jobs-health");
         }
 
@@ -291,7 +291,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
         private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);
 
         private static IUiComponent Time(DateTime? value) => value is { } time
-            ? new Span(new ValueText(time.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("list-value")
+            ? new Span(new LocalTime(time)).Class("list-value")
             : new Span(new ValueText("–")).Class("list-value list-value--dim");
 
         // The address of the list with its chip and filter words.

@@ -280,6 +280,9 @@ namespace Jularr.E2E.Tests
                 await OpenReaderAsync(page, 1440, 900);
                 await Evidence.SaveAsync(page, "reader-v3-double-1440-dark");
                 await OpenReaderAsync(page, 390, 844);
+                Assert.AreEqual("1", await reader.GetAttributeAsync("data-columns"));
+                Assert.AreEqual("26px", await reader.EvaluateAsync<string>("el => el.style.getPropertyValue('--reader-size')"),
+                    "The server-backed profile font size must remain after switching device viewport sizes.");
                 await Evidence.SaveAsync(page, "reader-v3-single-390-dark");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }

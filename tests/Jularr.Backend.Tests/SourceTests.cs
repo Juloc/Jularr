@@ -60,6 +60,8 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(catalog.Single(item => item.Key == "standardebooks").IsConfigured);
             Assert.IsFalse(catalog.Single(item => item.Key == "opds").IsConfigured);
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT \"AcquisitionConnectionTypeId\"::bigint FROM \"AcquisitionConnections\" ORDER BY \"Id\" LIMIT 1"));
+            // Bulk setup must not silently activate download sources before a workspace is confirmed.
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT \"IsEnabled\"::int::bigint FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 3 LIMIT 1"));
 
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Sources");
             var html = await page.Content.ReadAsStringAsync();
@@ -80,6 +82,46 @@ namespace Jularr.Backend.Tests
                 25, null, null, null, null));
             Assert.AreEqual(HttpStatusCode.OK, bare.StatusCode, await bare.Content.ReadAsStringAsync());
             StringAssert.Contains(html, "/Admin/Acquisition?Type=AnnasArchive");
+        }
+
+        [TestMethod]
+        public async Task Sources_ShowNativeStoragePrerequisitesBeforeActivation()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+
+            using (var catalog = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Sources"))
+            {
+                var html = await catalog.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, catalog.StatusCode, html);
+                StringAssert.Contains(html, "native-storage-notice");
+                StringAssert.Contains(html, "Anna&#x27;s Archive");
+                StringAssert.Contains(html, "/Admin/DownloadStorage");
+            }
+
+            using (var newAnna = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition?Type=AnnasArchive"))
+            {
+                var html = await newAnna.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, newAnna.StatusCode, html);
+                StringAssert.Contains(html, "native-storage-notice");
+                StringAssert.Contains(html, "Configure download storage");
+            }
+
+            using (var downloads = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads?Type=Usenet"))
+            {
+                var html = await downloads.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, downloads.StatusCode, html);
+                StringAssert.Contains(html, "Jularr&#x27;s own Usenet downloader needs");
+            }
+
+            // After confirming Direct storage, Anna's Archive may be configured without a warning.
+            await DownloadStorageTests.ConfigureAsync(host, storage.Path, Jularr.Backend.Data.Enums.Storage.DownloadStorageArea.Direct);
+            using (var configured = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition?Type=AnnasArchive"))
+            {
+                var html = await configured.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, configured.StatusCode, html);
+                Assert.IsFalse(html.Contains("native-storage-notice", StringComparison.Ordinal));
+            }
         }
 
         [TestMethod]

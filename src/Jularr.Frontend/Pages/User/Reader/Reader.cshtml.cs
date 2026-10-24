@@ -206,6 +206,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-antiforgery", antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "")
                 .Attribute("data-section", index.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-sections", document.SectionCount.ToString(CultureInfo.InvariantCulture))
+                .Attribute("data-document-revision", document.Revision ?? "")
                 .Attribute("data-sections-url", "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/")
                 .Attribute("data-blocks", current.Blocks.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-before", current.CharactersBefore.ToString(CultureInfo.InvariantCulture))

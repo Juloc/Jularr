@@ -21,7 +21,12 @@ reference is `9cd7fd3`. Later explicit decisions override the earlier mockups:
 - Text selection is explicitly enabled from the header. Canonical accessible HTML,
   semantic locators, annotations and existing service/progress owners remain.
 - Book thickness follows calculated Reader pages, including typography and page
-  width changes, not guessed printed-edition metadata. While whole-book counting
+  width changes, not guessed printed-edition metadata. Completed chapter counts are
+  cached per browser using a fingerprint of the server-provided content hash and
+  preparation revision, device viewport/layout and typography. New devices and
+  changed profile font sizes therefore measure their own pages. The server keeps
+  profile text settings (font, size, spacing, width and hyphenation) across devices;
+  visual layout and the page-count cache remain device-local. While whole-book counting
   is incomplete/unavailable, no whole-book total or paper-block thickness is made up.
 - The stacks are asymmetric by reading position (the original read effect): the stack of read
   pages on the left grows, the unread one on the right shrinks, and a thicker stack lifts its
