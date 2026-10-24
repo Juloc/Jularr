@@ -912,6 +912,10 @@
    "Save note",
    "Notiz speichern"
   ],
+  "reader.settings.saveFailed": [
+   "Reader settings were not saved to your profile. They still work on this device; change a setting to retry.",
+   "Leseeinstellungen wurden nicht in deinem Profil gespeichert. Sie gelten weiter auf diesem Gerät. Ändere eine Einstellung, um es erneut zu versuchen."
+  ],
   "reader.settings": [
    "Settings",
    "Einstellungen"

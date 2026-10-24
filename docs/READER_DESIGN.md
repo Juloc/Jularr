@@ -26,8 +26,10 @@ reference is `9cd7fd3`. Later explicit decisions override the earlier mockups:
   preparation revision, device viewport/layout and typography. New devices and
   changed profile font sizes therefore measure their own pages. The server keeps
   profile text settings (font, size, spacing, width and hyphenation) across devices;
-  visual layout and the page-count cache remain device-local. While whole-book counting
-  is incomplete/unavailable, no whole-book total or paper-block thickness is made up.
+  visual layout and the page-count cache remain device-local. Profile changes save in
+  order, with a visible error when the server rejects them or cannot be reached;
+  local changes remain usable, and the next profile edit retries saving. While whole-book
+  counting is incomplete/unavailable, no whole-book total or paper-block thickness is made up.
 - The stacks are asymmetric by reading position (the original read effect): the stack of read
   pages on the left grows, the unread one on the right shrinks, and a thicker stack lifts its
   sheet higher and narrows it at the outer edge. The text box and the page number follow their

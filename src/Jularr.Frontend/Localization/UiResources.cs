@@ -522,6 +522,7 @@ namespace Jularr.Frontend.Localization
             new("reader.highlight.Pink", "Pink"),
             new("reader.saveNote", "Save note"),
             new("reader.settings", "Settings"),
+            new("reader.settings.saveFailed", "Reader settings were not saved to your profile. They still work on this device; change a setting to retry."),
             new("reader.appearance", "Appearance"),
             new("reader.more", "More"),
             new("reader.pageNavigation", "Page navigation"),

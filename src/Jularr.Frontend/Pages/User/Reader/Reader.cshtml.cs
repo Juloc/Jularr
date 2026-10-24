@@ -562,7 +562,10 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Color(data => data.Colour, "reader.colour")),
             pages ? new Span() : SettingsGroup("motion", "reader.settings.motion", group => group
                 .Select(data => data.Animation, "reader.animation", [new("system", texts["reader.animation.system"]), new("on", texts["reader.animation.on"]), new("off", texts["reader.animation.off"])])
-                .Content(new P(new Text("reader.animation.hint")))))
+                .Content(new P(new Text("reader.animation.hint")))),
+            new P(new Text("reader.settings.saveFailed")).Attribute("data-role", "reader-settings-save-error")
+                .Attribute("role", "alert").Attribute("hidden", "hidden")
+            )
             .Class("reader__panel").Attribute("data-panel", "settings").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.settings"]);
 
         private static IUiComponent SettingsGroup(string name, string title, Action<Form<ReaderSettingsData>> define, bool open = false)
