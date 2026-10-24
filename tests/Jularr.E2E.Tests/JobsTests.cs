@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
@@ -6,13 +7,6 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class JobsTests
     {
-        private static readonly string[] Jobs =
-        [
-            "Library scans", "Backups", "Download tracking", "Wanted search", "Provider sync", "Plex sync", "Jellyfin sync", "Emby sync", "Usenet downloads", "AniList matching", "AniList relations", "AniList sync", "Provider covers",
-            "Storage check", "Scan scheduling", "Automatic backup", "Housekeeping", "Seek thumbnails", "Subtitles", "Text recognition", "Catalog sync", "Resource sampling",
-            "Transcoding benchmark", "Missing metadata", "Cover conversion", "Discover cache", "Health check", "Reading copies"
-        ];
-
         // The row of a job: the one whose title button carries its name.
         private static ILocator Row(IPage page, string job) =>
             page.Locator(".list-body .list-row").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = job, Exact = true }) });
@@ -36,17 +30,22 @@ namespace Jularr.E2E.Tests
             try
             {
                 await Owner.SetUpAndSignInAsync(page);
+                var jobs = await page.APIRequest.GetAsync("/api/v1/admin/jobs");
+                Assert.AreEqual(200, jobs.Status);
+                using var definitions = JsonDocument.Parse(await jobs.TextAsync());
+                var expectedJobs = definitions.RootElement.EnumerateArray().Select(job => job.GetProperty("key").GetString()).ToArray();
                 await page.GotoAsync("/Admin/Jobs");
                 var shownJobs = new List<string>();
                 while (true)
                 {
-                    shownJobs.AddRange(await page.Locator(".jobs-list .list-identity__title").AllTextContentsAsync());
+                    shownJobs.AddRange(await page.Locator(".jobs-list .list-identity__title").EvaluateAllAsync<string[]>(
+                        "buttons => buttons.map(button => button.dataset.drawerOpen.slice('job-'.length))"));
                     var next = page.GetByRole(AriaRole.Navigation, new() { Name = "Pages", Exact = true })
                         .GetByRole(AriaRole.Link, new() { Name = "Next", Exact = true });
                     if (await next.CountAsync() == 0) break;
                     await Steps.FollowAsync(page, next);
                 }
-                CollectionAssert.AreEquivalent(Jobs, shownJobs.ToArray());
+                CollectionAssert.AreEquivalent(expectedJobs, shownJobs.ToArray());
                 await page.GotoAsync("/Admin/Jobs");
 
                 // Pausing shows at once and keeps the job from running; resuming undoes it.
