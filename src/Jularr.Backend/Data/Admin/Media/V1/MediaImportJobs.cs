@@ -81,6 +81,14 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         }
     }
 
+    public sealed class MediaImportLatestJobV1 : BaseResponse
+    {
+        public MediaImportLatestJobV1(Guid? jobId) => JobId = jobId;
+
+        [DataField(typeof(MediaImportJobFields), nameof(MediaImportJobFields.LatestJobId), false)]
+        public Guid? JobId { get; }
+    }
+
     public sealed class MediaImportJobCreatedV1 : BaseResponse
     {
         public MediaImportJobCreatedV1(Guid jobId) => JobId = jobId;
