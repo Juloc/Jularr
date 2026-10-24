@@ -7,6 +7,7 @@ import de.juloc.jularr.core.api.catalog.TvCatalogV1Filters
 import de.juloc.jularr.core.api.catalog.TvContinueItemV1
 import de.juloc.jularr.core.api.catalog.TvHomeShelfV1
 import de.juloc.jularr.core.api.catalog.TvPageV1
+import de.juloc.jularr.core.api.catalog.TvWorkAvailabilityV1
 import de.juloc.jularr.core.api.catalog.TvWorkCardV1
 import de.juloc.jularr.core.api.catalog.TvWorkDetailsV1
 import de.juloc.jularr.core.api.catalog.TvWorkEpisodeV1
@@ -147,6 +148,43 @@ class TvV1ClientFlowMigrationTest {
         assertEquals(null, result.assetByUnit["401"])
         assertEquals(9002L, result.assetByUnit["402"])
         assertEquals(listOf("401"), result.detail!!.seasons.single().episodes.map { it.id })
+    }
+
+    @Test fun movieEditionsAreFetchedByPageAndUnavailableAssetsAreNeverPlayable() = runBlocking {
+        val requestedPages = mutableListOf<Int>()
+        fun asset(id: Long, available: Boolean) = TvWorkAvailabilityV1(
+            id = id, workVersionId = 10, workEditionId = 12, workUnitId = null,
+            mediaAssetTypeId = 1, workUnitTypeId = null, unitNumber = null,
+            parentUnitNumber = null, fileCount = if (available) 1 else 0,
+            sizeBytes = 200_000L, durationMs = null, isAvailable = available,
+            height = 1080, audioLanguages = listOf("de"), subtitleLanguages = emptyList(),
+            resumePositionMs = null, isCompleted = false, isEmulated = false,
+            groupName = null, unitTitle = null, hasProgress = false, platformName = null,
+            unitImageUrl = null, discNumber = null,
+        )
+        val backend = object : TvCatalogV1Client by fallback {
+            override suspend fun work(workId: Long) =
+                this@TvV1ClientFlowMigrationTest.work(workId).copy(
+                    mediaTypeId = 1, mediaSubtypeId = null,
+                )
+            override suspend fun availability(workId: Long, page: Int, pageSize: Int) =
+                TvPageV1(
+                    if (page == 1) (1L..100L).map { asset(it, it == 99L) }
+                    else listOf(asset(101L, true), asset(102L, false)),
+                    page, pageSize,
+                ).also { requestedPages += page }
+            override suspend fun seasons(workId: Long) = emptyList<TvWorkSeasonV1>()
+        }
+        val flow = TvV1ClientFlow(backend, permissions)
+        val work = flow.work(701)
+        assertEquals(listOf(1), requestedPages)
+        assertEquals(listOf(99L), work.availableMovieAssets.map { it.id })
+        assertTrue(work.hasMoreMovieAssets)
+
+        val page21 = flow.movieAssetsPage(701, 21)
+        assertFalse(page21.hasMore)
+        assertEquals(listOf(101L), page21.items.map { it.id })
+        assertEquals(listOf(1, 21), requestedPages)
     }
 
     @Test fun libraryAfterTwoThousandWorksKeepsRealServerPages() = runBlocking {
