@@ -54,11 +54,16 @@ class GitHubUpdateChecker(
             return UpdateCheckResult.UpToDate
         }
 
+        val checksumAsset = UpdateAssetResolver.resolveChecksum(release, apkAsset)
+        if (variant == AppVariant.Tv && checksumAsset == null) {
+            return UpdateCheckResult.Error("The TV release is missing its required SHA-256 checksum.")
+        }
+
         return UpdateCheckResult.UpdateAvailable(
             release = release,
             version = releaseVersionText,
             apkAsset = apkAsset,
-            checksumAsset = UpdateAssetResolver.resolveChecksum(release, apkAsset),
+            checksumAsset = checksumAsset,
         )
     }
 }
