@@ -977,7 +977,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     if (!folders.TryGetValue(key, out var workId))
                     {
                         var catalogAllowed = !_bookCatalogUnavailable && (catalogLookups == 0 || lookups.Elapsed < LookupBudget);
-                        var (found, usedCatalog) = await FindBookWorkAsync(parsed.Title, subtype, file.RelativePath, catalogAllowed);
+                        var (found, usedCatalog, why) = await FindBookWorkAsync(parsed.Title, subtype, file.RelativePath, catalogAllowed);
                         workId = found;
                         if (usedCatalog)
                         {
@@ -986,7 +986,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
                         if (workId is null)
                         {
-                            unresolved[key] = file.RelativePath;
+                            unresolved[key] = file.RelativePath + " (" + why + ")";
                         }
 
                         folders[key] = workId;
@@ -1010,7 +1010,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
         }
 
-        private async Task<(long? WorkId, bool UsedCatalog)> FindBookWorkAsync(string title, MediaSubtype? subtype, string relativePath, bool catalogAllowed)
+        private async Task<(long? WorkId, bool UsedCatalog, string? Why)> FindBookWorkAsync(string title, MediaSubtype? subtype, string relativePath, bool catalogAllowed)
         {
             // The one Work of that title and subtype that is already here.
             var local = await Context.ExecuteBatchAsync((ctx, ct) =>
@@ -1032,12 +1032,17 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }, CancellationToken);
             if (local.Count == 1)
             {
-                return (local[0].Id, false);
+                return (local[0].Id, false, null);
             }
 
-            if (local.Count > 1 || !catalogAllowed)
+            if (local.Count > 1)
             {
-                return (null, false);
+                return (null, false, "several Works here have that title");
+            }
+
+            if (!catalogAllowed)
+            {
+                return (null, false, "the catalog is not asked now");
             }
 
             IReadOnlyList<MetadataSearchResultV1> results;
@@ -1045,46 +1050,46 @@ namespace Jularr.Backend.Service.System.Operation.V1
             {
                 results = await _catalog.SearchAsync(Context, MediaType.Book, subtype, title, null, CancellationToken);
             }
-            catch (ServiceUnavailableException)
+            catch (ServiceUnavailableException exception)
             {
                 _bookCatalogUnavailable = true;
-                return (null, false);
+                return (null, false, "the catalog is unavailable: " + exception.Message);
             }
 
-            // Entries with exactly the folder's words as their title; several of them are told apart by an author the path names.
+            // The path's words name the book and often its author. Best first: an entry with exactly the folder's words as title and its author in the path,
+            // then the first (most relevant) entry with exactly that title, then an entry whose title and author both lie inside the path's words.
             var wanted = TitleMatcher.SignificantWords(title);
-            var same = results.Where(result => TitleMatcher.SignificantWords(result.Title).SetEquals(wanted)
-                    || result.OriginalTitle is { } original && TitleMatcher.SignificantWords(original).SetEquals(wanted))
-                .DistinctBy(result => (result.Namespace, result.ExternalId)).ToArray();
-            if (same.Length > 1)
+            var dot = relativePath.LastIndexOf('.');
+            var pathWords = TitleMatcher.SignificantWords(dot > 0 ? relativePath[..dot] : relativePath);
+            bool AuthorInPath(MetadataSearchResultV1 result) => result.Author is { Length: > 0 } author && TitleMatcher.SignificantWords(author).IsSubsetOf(pathWords);
+            bool SameTitle(MetadataSearchResultV1 result) => TitleMatcher.SignificantWords(result.Title).SetEquals(wanted)
+                || result.OriginalTitle is { } original && TitleMatcher.SignificantWords(original).SetEquals(wanted);
+            bool TitleInPath(MetadataSearchResultV1 result) => TitleMatcher.SignificantWords(result.Title) is { Count: > 0 } words && words.IsSubsetOf(pathWords);
+            var chosen = results.FirstOrDefault(result => SameTitle(result) && AuthorInPath(result))
+                ?? results.FirstOrDefault(SameTitle)
+                ?? results.FirstOrDefault(result => TitleInPath(result) && AuthorInPath(result));
+            if (chosen is null)
             {
-                var dot = relativePath.LastIndexOf('.');
-                var pathWords = TitleMatcher.SignificantWords(dot > 0 ? relativePath[..dot] : relativePath);
-                same = [.. same.Where(result => result.Author is { Length: > 0 } author && TitleMatcher.SignificantWords(author).IsSubsetOf(pathWords))];
+                return (null, true, results.Count + " catalog entries, none with that title");
             }
 
-            if (same.Length != 1)
+            if (chosen.WorkId is { } known)
             {
-                return (null, true);
-            }
-
-            if (same[0].WorkId is { } known)
-            {
-                return (known, true);
+                return (known, true, null);
             }
 
             try
             {
-                return (await _catalog.ImportAsync(Context, MediaType.Book, subtype, same[0].Namespace, same[0].ExternalId, CancellationToken), true);
+                return (await _catalog.ImportAsync(Context, MediaType.Book, subtype, chosen.Namespace, chosen.ExternalId, CancellationToken), true, null);
             }
             catch (Exception exception) when (exception is KeyNotFoundException or DataValidationException)
             {
-                return (null, true);
+                return (null, true, "the import of " + chosen.Namespace + " " + chosen.ExternalId + " failed: " + exception.GetType().Name);
             }
-            catch (ServiceUnavailableException)
+            catch (ServiceUnavailableException exception)
             {
                 _bookCatalogUnavailable = true;
-                return (null, true);
+                return (null, true, "the catalog is unavailable: " + exception.Message);
             }
         }
 
