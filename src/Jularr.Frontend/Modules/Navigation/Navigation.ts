@@ -32,3 +32,13 @@ export function signInForExpiredPage(method: string, address: string, current: L
     const returnUrl = localGet ? requested.pathname + requested.search + requested.hash : fallback;
     return "/Account/Login?ReturnUrl=" + encodeURIComponent(returnUrl);
 }
+
+
+// Browsers can follow an authentication redirect and turn the original 302 into a 200 login document.
+export function redirectedToSignIn(responseAddress: string | undefined, requestAddress: string, current: Location): boolean {
+    if (!responseAddress) return false;
+    const response = new URL(responseAddress, current.href);
+    const request = new URL(requestAddress, current.href);
+    return response.origin === current.origin && response.pathname.toLowerCase() === "/account/login"
+        && request.pathname.toLowerCase() !== "/account/login";
+}
