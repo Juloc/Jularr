@@ -6512,6 +6512,7 @@
    "Remove identification",
    "Zuordnung entfernen"
   ],
+  "operation.type.MediaImport": ["Media list import", "Medienlistenimport"],
   "operation.type.LibraryScan": [
    "Library scan",
    "Bibliotheksscan"
@@ -10174,6 +10175,7 @@
    "The server is busy, so this plays in a lower quality.",
    "Der Server ist ausgelastet, deshalb läuft dies in niedrigerer Qualität."
   ],
+  "jobs.job.mediaImportQueue": ["Media imports", "Medienimporte"],
   "jobs.job.benchmarkQueue": [
    "Transcoding benchmark",
    "Transcoding-Benchmark"
