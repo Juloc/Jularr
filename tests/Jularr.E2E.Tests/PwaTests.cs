@@ -27,7 +27,7 @@ namespace Jularr.E2E.Tests
             await browser.Context.RouteAsync("**/pwa/version", route => route.FulfillAsync(new()
             {
                 ContentType = "application/json",
-                Body = "{\\\"build\\\":\\\"AAAAAAAAAAAAAAAA\\\"}"
+                Body = """{"build":"AAAAAAAAAAAAAAAA"}"""
             }));
 
             await page.GotoAsync("/");
