@@ -12,8 +12,33 @@ namespace Jularr.Integrations.Logic.Browser
 
         public string State { get; private set; } = "disabled";
         public string? LastError { get; private set; }
-        public bool IsInstalled => File.Exists(Path.Combine(_home, "runtime", ".version"))
-            && File.ReadAllText(Path.Combine(_home, "runtime", ".version")).Trim() == "156.0.8078.47";
+        public bool IsInstalled
+        {
+            get
+            {
+                try
+                {
+                    var binary = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture switch
+                    {
+                        System.Runtime.InteropServices.Architecture.X64 => "chrome-linux64",
+                        System.Runtime.InteropServices.Architecture.Arm64 => "chrome-linux-arm64",
+                        _ => null
+                    };
+                    return binary is not null
+                        && File.Exists(Path.Combine(_home, "runtime", binary, "chrome"))
+                        && File.ReadAllText(Path.Combine(_home, "runtime", ".version")).Trim() == "156.0.8078.47";
+                }
+                catch (IOException)
+                {
+                    // The install/removal worker can replace the runtime while the Owner reads its status.
+                    return false;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    return false;
+                }
+            }
+        }
 
         public async Task ReconcileAsync(bool enabled, CancellationToken ct)
         {
