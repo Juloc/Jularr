@@ -11844,6 +11844,10 @@
    "Open profile settings",
    "Profileinstellungen öffnen"
   ],
+  "reader.language.saving": [
+   "Saving reading language…",
+   "Lesesprache wird gespeichert…"
+  ],
   "reader.chapter.previous": [
    "Previous chapter",
    "Vorheriges Kapitel"
