@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:shortcutId="downloads"
+        android:shortcutShortLabel="@string/shortcut_downloads">
+        <intent
+            android:action="de.juloc.jularr.action.DOWNLOADS"
+            android:targetClass="de.juloc.jularr.MainActivity"
+            android:targetPackage="de.juloc.jularr" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:shortcutId="library_downloads"
+        android:shortcutShortLabel="@string/shortcut_library_downloads">
+        <intent
+            android:action="de.juloc.jularr.action.LIBRARY_DOWNLOADS"
+            android:targetClass="de.juloc.jularr.MainActivity"
+            android:targetPackage="de.juloc.jularr" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:shortcutId="check_for_updates"
+        android:shortcutShortLabel="@string/shortcut_check_for_updates">
+        <intent
+            android:action="de.juloc.jularr.action.CHECK_UPDATES"
+            android:targetClass="de.juloc.jularr.MainActivity"
+            android:targetPackage="de.juloc.jularr" />
+    </shortcut>
+</shortcuts>
