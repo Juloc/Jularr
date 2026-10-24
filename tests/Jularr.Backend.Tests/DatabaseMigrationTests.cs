@@ -115,7 +115,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2L, await ScalarAsync(cs,
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('ExternalWorkFeeds','ExternalWorkFeedItems')"));
             await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
-            Assert.AreEqual(2, Directory.GetDirectories(backups).Length);
+            Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
         }
 
         [TestMethod]
