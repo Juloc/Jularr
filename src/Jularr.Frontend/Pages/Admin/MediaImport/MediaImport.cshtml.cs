@@ -417,18 +417,18 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 return BadRequest();
 
             var result = await editions.ExecuteAsync<MediaImportEditionsV1>(new MediaImportEditionParametersV1(workId), HttpContext.RequestAborted);
-            return new JsonResult(new
-            {
-                items = result.Editions.Select(item => new
-                {
-                    title = item.Title,
-                    language = item.Language,
-                    format = item.Format,
-                    publisher = item.Publisher,
-                    year = item.Year,
-                    isbn = item.Isbn
-                })
-            });
+            IUiComponent content = result.Editions.Count == 0
+                ? new P(new Text("import.edition.empty"))
+                : new Table<MediaImportEditionV1>(result.Editions).Compact()
+                    .Text(item => item.Title, "import.edition.title")
+                    .Text(item => item.Language, "import.edition.language")
+                    .Text(item => item.Year, "import.edition.year")
+                    .Text(item => item.Format, "import.edition.format")
+                    .Text(item => item.Publisher, "import.edition.publisher")
+                    .Content("import.edition.isbn", item => new ValueText(item.Isbn ?? "—"));
+            using var writer = new StringWriter(CultureInfo.CurrentCulture);
+            content.WriteTo(writer, HtmlEncoder.Default, texts);
+            return Content(writer.ToString(), "text/html; charset=utf-8");
         }
 
         public IActionResult OnGetExample()
