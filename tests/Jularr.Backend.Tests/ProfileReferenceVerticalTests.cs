@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Fields.Profile;
 using Jularr.Backend.Data.User.Profile.V1;
@@ -374,7 +375,7 @@ namespace Jularr.Backend.Tests
                 ServiceCaller caller,
                 ServicePermission permission,
                 LogicContext context,
-                CancellationToken cancellationToken)
+                CancellationToken cancellationToken, SqlAccessMode mode = SqlAccessMode.ReadWrite)
             {
                 Events.Add("transaction");
                 if (DenyTransactionalWrite || permission.Key != "profile.self.update")

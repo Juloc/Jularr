@@ -6,6 +6,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Profile;
@@ -56,18 +57,18 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
             // A whole catalog answers every page itself.
             var list = new ExternalWorkListData(WorkMetadata.Namespace(Data.MediaTypeId), Data.MediaTypeId, null);
-            if ((await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWholeExternalWorkCatalogsAsync(ct), CancellationToken)).Contains(list.Namespace))
+            if ((await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWholeExternalWorkCatalogsAsync(ct), CancellationToken, mode: SqlAccessMode.ReadOnly)).Contains(list.Namespace))
             {
                 var shelf = new ExternalWorkShelfData(0, list.Namespace, Data.MediaTypeId, null, Data.DiscoverFeedTypeId);
                 var rows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkShelvesAsync(new ExternalWorkShelfQueryData([shelf], Auth.ProfileId!.Value,
-                    DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime), (Data.Page - 1) * ExternalWorkLogic.ShelfSize), ct), CancellationToken);
+                    DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime), (Data.Page - 1) * ExternalWorkLogic.ShelfSize), ct), CancellationToken, mode: SqlAccessMode.ReadOnly);
                 return new BaseDataList<DiscoverItemV1>([.. rows.Select(row => DiscoverQueries.ToItem(Data.MediaTypeId, row))]);
             }
 
             // The first trending page comes from the catalog while it is fresh, and from there too while TMDB cannot answer.
-            var keeps = await Context.ExecuteBatchAsync((ctx, ct) => ctx.KeepsDiscoverTitlesAsync(ct), CancellationToken);
+            var keeps = await Context.ExecuteBatchAsync((ctx, ct) => ctx.KeepsDiscoverTitlesAsync(ct), CancellationToken, mode: SqlAccessMode.ReadOnly);
             var isTrending = Data.DiscoverFeedTypeId == DiscoverFeedType.Trending && Data.Page <= 1;
-            var known = keeps && isTrending ? await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadTrendingExternalWorksAsync(list, ct), CancellationToken) : [];
+            var known = keeps && isTrending ? await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadTrendingExternalWorksAsync(list, ct), CancellationToken, mode: SqlAccessMode.ReadOnly) : [];
             IReadOnlyList<ExternalWorkData> works;
             if (ExternalWorkLogic.IsFresh(known, _time.GetUtcNow()))
             {
@@ -202,7 +203,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
                 sql.Page = new PageRequest(Data.Page, LocalLimit);
                 return ctx.ReadSql.ReadListAsync<DiscoverItemV1>(sql, ct);
-            }, CancellationToken);
+            }, CancellationToken, mode: SqlAccessMode.ReadOnly);
 
             // Provider results add what is not local yet; an unavailable provider leaves the local results.
             var items = local.Take(LocalLimit).ToList();
@@ -219,7 +220,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
                     var results = await _metadata.SearchAsync(connection, mediaType, Data.Query, null, CancellationToken, Data.Page);
                     var list = new ExternalWorkListData(WorkMetadata.Namespace(mediaType), mediaType, null);
-                    if (await Context.ExecuteBatchAsync((ctx, ct) => ctx.KeepsDiscoverTitlesAsync(ct), CancellationToken))
+                    if (await Context.ExecuteBatchAsync((ctx, ct) => ctx.KeepsDiscoverTitlesAsync(ct), CancellationToken, mode: SqlAccessMode.ReadOnly))
                     {
                         await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, [.. results.Select(result => DiscoverQueries.ExternalWork(list.Namespace, result))], false), ct),
                             CancellationToken);
@@ -343,7 +344,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 sql.Parameters.Add(Parameters);
                 sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
                 return ctx.ReadSql.ReadOptionalAsync<WorkIdentityData>(sql, ct);
-            }, CancellationToken);
+            }, CancellationToken, mode: SqlAccessMode.ReadOnly);
             var mediaType = identity?.Namespace == WorkMetadata.Namespace(MediaType.Movie) ? MediaType.Movie : MediaType.Series;
             if (identity is null || !int.TryParse(identity.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var tmdbId)
                 || !(await DiscoverQueries.ReadTypesAsync(Context, Auth.ProfileId!.Value, CancellationToken)).Listed.Contains(mediaType))
@@ -450,17 +451,17 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var whole = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWholeExternalWorkCatalogsAsync(ct), CancellationToken);
+            var whole = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWholeExternalWorkCatalogsAsync(ct), CancellationToken, mode: SqlAccessMode.ReadOnly);
             if (whole.Count == 0) return new BaseDataList<DiscoverShelfV1>([]);
 
-            var scopes = await Context.ExecuteBatchAsync((ctx, ct) => DiscoverQueries.ReadScopesAsync(ctx, Auth.ProfileId!.Value, ct), CancellationToken);
+            var scopes = await Context.ExecuteBatchAsync((ctx, ct) => DiscoverQueries.ReadScopesAsync(ctx, Auth.ProfileId!.Value, ct), CancellationToken, mode: SqlAccessMode.ReadOnly);
             var shelves = scopes.Where(scope => (Data.ScopeSlug is null || scope.Slug == Data.ScopeSlug) && whole.Contains(DiscoverQueries.Namespace(scope)))
                 .SelectMany(scope => scope.Feeds.Select(feed => (Scope: scope, Feed: feed))).ToArray();
             if (shelves.Length == 0) return new BaseDataList<DiscoverShelfV1>([]);
 
             var query = new ExternalWorkShelfQueryData([.. shelves.Select((shelf, index) => new ExternalWorkShelfData(index, DiscoverQueries.Namespace(shelf.Scope), shelf.Scope.MediaTypeId,
                 shelf.Scope.MediaSubtypeId, shelf.Feed))], Auth.ProfileId!.Value, DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime));
-            var rows = (await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkShelvesAsync(query, ct), CancellationToken)).ToLookup(row => row.Shelf);
+            var rows = (await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkShelvesAsync(query, ct), CancellationToken, mode: SqlAccessMode.ReadOnly)).ToLookup(row => row.Shelf);
             return new BaseDataList<DiscoverShelfV1>([.. shelves.Select((shelf, index) => shelf.Scope.IsCatalog
                 ? new DiscoverShelfV1(shelf.Scope.Slug, shelf.Feed, [], [.. rows[index].Select(DiscoverQueries.CatalogItem)])
                 : new DiscoverShelfV1(shelf.Scope.Slug, shelf.Feed, [.. rows[index].Select(row => DiscoverQueries.ToItem(shelf.Scope.MediaTypeId, row))], []))]);
@@ -480,18 +481,18 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             var text = Data.Query.Trim();
             if (text.Length < 2 || ExternalWorkLogic.SearchTerms(text) is not { } terms
-                || !await Context.ExecuteBatchAsync((ctx, ct) => ctx.KeepsDiscoverTitlesAsync(ct), CancellationToken))
+                || !await Context.ExecuteBatchAsync((ctx, ct) => ctx.KeepsDiscoverTitlesAsync(ct), CancellationToken, mode: SqlAccessMode.ReadOnly))
             {
                 return new BaseDataList<DiscoverSuggestionV1>([]);
             }
 
-            var scopes = (await Context.ExecuteBatchAsync((ctx, ct) => DiscoverQueries.ReadScopesAsync(ctx, Auth.ProfileId!.Value, ct), CancellationToken))
+            var scopes = (await Context.ExecuteBatchAsync((ctx, ct) => DiscoverQueries.ReadScopesAsync(ctx, Auth.ProfileId!.Value, ct), CancellationToken, mode: SqlAccessMode.ReadOnly))
                 .Where(scope => Data.ScopeSlug is null || scope.Slug == Data.ScopeSlug).ToArray();
             if (scopes.Length == 0) return new BaseDataList<DiscoverSuggestionV1>([]);
 
             var query = new ExternalWorkSuggestionQueryData([.. scopes.Select((scope, index) => new ExternalWorkShelfData(index, DiscoverQueries.Namespace(scope), scope.MediaTypeId,
                 scope.MediaSubtypeId))], Auth.ProfileId!.Value, terms, ExternalWorkLogic.TitlePrefix(text), ExternalWorkLogic.SuggestionCount);
-            var rows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.SuggestExternalWorksAsync(query, ct), CancellationToken);
+            var rows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.SuggestExternalWorksAsync(query, ct), CancellationToken, mode: SqlAccessMode.ReadOnly);
             return new BaseDataList<DiscoverSuggestionV1>([.. rows.Select(row => new DiscoverSuggestionV1(scopes[row.Shelf].Slug, row.Namespace, row.Value, row.Title, row.ReleaseYear,
                 row.ImageUrl, row.WorkId))]);
         }
@@ -544,11 +545,11 @@ namespace Jularr.Backend.Service.User.Discover.V1
             await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
             var scope = DiscoverScopes.All.FirstOrDefault(scope => scope.MediaTypeId == Data.MediaTypeId && scope.MediaSubtypeId == Data.MediaSubtypeId);
             if (scope is not null && scope.Feeds.Contains(Data.DiscoverFeedTypeId)
-                && (await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWholeExternalWorkCatalogsAsync(ct), CancellationToken)).Contains(DiscoverQueries.Namespace(scope)))
+                && (await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWholeExternalWorkCatalogsAsync(ct), CancellationToken, mode: SqlAccessMode.ReadOnly)).Contains(DiscoverQueries.Namespace(scope)))
             {
                 var shelf = new ExternalWorkShelfData(0, DiscoverQueries.Namespace(scope), Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId);
                 var rows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkShelvesAsync(new ExternalWorkShelfQueryData([shelf], Auth.ProfileId!.Value,
-                    DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime)), ct), CancellationToken);
+                    DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime)), ct), CancellationToken, mode: SqlAccessMode.ReadOnly);
                 return new BaseDataList<DiscoverCatalogItemV1>([.. rows.Select(DiscoverQueries.CatalogItem)]);
             }
 
@@ -667,7 +668,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                     """;
                 sql.Parameters.Add(new ProfileParameters(profileId));
                 return ctx.ReadSql.ReadListAsync<ProfileMediaV1>(sql, token);
-            }, ct)).Count == 0)
+            }, ct, mode: SqlAccessMode.ReadOnly)).Count == 0)
             {
                 throw new KeyNotFoundException("The media type is not available.");
             }
@@ -692,7 +693,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                     """;
                 sql.Parameters.Add(new ProfileParameters(profileId));
                 return ctx.ReadSql.ReadListAsync<ProfileMediaV1>(sql, token);
-            }, ct);
+            }, ct, mode: SqlAccessMode.ReadOnly);
             return (categories.Select(category => Enum.Parse<MediaType>(category.Key)).ToHashSet(),
                 categories.Where(category => !category.IsHidden).Select(category => Enum.Parse<MediaType>(category.Key)).ToHashSet());
         }
@@ -764,7 +765,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 sql.Parameters.Add(new WorkIdentityLookupData(ids));
                 sql.Parameters.Add(new ProfileParameters(profileId));
                 return ctx.ReadSql.ReadListAsync<DiscoverOverlayData>(sql, token);
-            }, ct);
+            }, ct, mode: SqlAccessMode.ReadOnly);
             return rows.ToDictionary(row => int.Parse(row.Value, CultureInfo.InvariantCulture));
         }
 

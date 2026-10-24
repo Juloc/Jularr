@@ -3,6 +3,7 @@ using System.Text.Json;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Infrastructure.Sql;
@@ -219,9 +220,9 @@ namespace Jularr.Backend.Service.Core
 
             // Trending comes from the catalog while it is fresh, and from there too while the provider cannot answer.
             var list = new ExternalWorkListData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype);
-            var keeps = await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverTitlesAsync(token), ct);
+            var keeps = await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverTitlesAsync(token), ct, mode: SqlAccessMode.ReadOnly);
             var isTrending = keeps && feed == DiscoverFeedType.Trending;
-            var known = isTrending ? await context.ExecuteBatchAsync((ctx, token) => ctx.ReadTrendingExternalWorksAsync(list, token), ct) : [];
+            var known = isTrending ? await context.ExecuteBatchAsync((ctx, token) => ctx.ReadTrendingExternalWorksAsync(list, token), ct, mode: SqlAccessMode.ReadOnly) : [];
             if (ExternalWorkLogic.IsFresh(known, time.GetUtcNow()))
             {
                 return await MarkKnownAsync(context, [.. known.Select(Catalog)], ct);
@@ -272,7 +273,7 @@ namespace Jularr.Backend.Service.Core
         // Every catalog title a search or list showed stays in the catalog, each catalog under its own name.
         public async Task KeepAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, IReadOnlyList<MetadataSearchResultV1> results, CancellationToken ct)
         {
-            if (!await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverTitlesAsync(token), ct)) return;
+            if (!await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverTitlesAsync(token), ct, mode: SqlAccessMode.ReadOnly)) return;
             foreach (var group in results.GroupBy(result => result.Namespace))
             {
                 var list = new ExternalWorkListData(group.Key, mediaType, subtype);
@@ -347,7 +348,7 @@ namespace Jularr.Backend.Service.Core
                     .Concat(results.Select(result => (Result: result, Series: AnimeSeries(result))).Where(item => item.Series is not null)
                         .Select(item => new { Namespace = WorkMetadata.Namespace(MediaType.Series), Value = item.Series!.Value.ToString(CultureInfo.InvariantCulture) })))));
                 return ctx.ReadSql.ReadListAsync<WorkIdentityPosterData>(sql, token);
-            }, ct);
+            }, ct, mode: SqlAccessMode.ReadOnly);
             var works = known.DistinctBy(identity => (identity.Namespace, identity.Value)).ToDictionary(identity => (identity.Namespace, identity.Value), identity => identity.WorkId);
             var posters = known.Where(identity => identity.PosterUrl is not null).GroupBy(identity => (identity.Namespace, identity.Value)).ToDictionary(group => group.Key, group => group.First().PosterUrl);
             return [.. results.Select(result => new MetadataSearchResultV1(result.Namespace, result.ExternalId, result.Title, result.OriginalTitle,

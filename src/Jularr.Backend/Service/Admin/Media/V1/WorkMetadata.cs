@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Provider;
 using Jularr.Backend.Infrastructure.Sql;
@@ -57,7 +58,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     """;
                 var language = await ctx.ReadSql.ReadOptionalAsync<MetadataLanguageData>(sql, token);
                 return (await ctx.ReadProviderCredentialAsync(new ProviderParameters("tmdb"), token), language?.Locale ?? "en");
-            }, ct);
+            }, ct, mode: SqlAccessMode.ReadOnly);
 
             // Without an enabled key there is no metadata provider.
             if (credential is not { IsEnabled: true, ProtectedSecret: { } secret })

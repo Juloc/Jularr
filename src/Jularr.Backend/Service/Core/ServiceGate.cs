@@ -1,6 +1,7 @@
 using System.Security;
 using Microsoft.AspNetCore.Http;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Data.Logic.Instance;
@@ -102,7 +103,7 @@ namespace Jularr.Backend.Service.Core
             return Task.CompletedTask;
         }
 
-        public async Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken)
+        public async Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken, SqlAccessMode mode = SqlAccessMode.ReadWrite)
         {
             RequirePermission(caller, permission);
 
@@ -111,9 +112,11 @@ namespace Jularr.Backend.Service.Core
                 return;
             }
 
-            // Lock mutable session state.
+            // Revalidate reads; lock writes.
             var parameters = _sessions.Parameters ?? throw new UnauthorizedAccessException("The session is unavailable.");
-            var current = await context.ReadSessionAsync(parameters, cancellationToken);
+            var current = mode == SqlAccessMode.ReadOnly
+                ? await context.ReadSessionProofAsync(parameters, cancellationToken)
+                : await context.ReadSessionAsync(parameters, cancellationToken);
 
             if (current.AccountId != caller.AccountId || current.ProfileId != caller.ProfileId
                 || current.ProfileOwnerAccountId != caller.ProfileOwnerAccountId || current.AccountRoleTypeId != caller.AccountRoleTypeId || current.IsDevice != caller.IsDevice)

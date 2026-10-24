@@ -112,7 +112,8 @@ namespace Jularr.Backend.Infrastructure.Sql
             _finished = true;
         }
 
-        internal async Task<TResult> RunShortWriteBatchAsync<TResult>(
+        internal async Task<TResult> RunShortBatchAsync<TResult>(
+            SqlAccessMode mode,
             Func<CancellationToken, Task<TResult>> action,
             Func<CancellationToken, Task> transactionalAccessCheck,
             CancellationToken cancellationToken)
@@ -137,7 +138,7 @@ namespace Jularr.Backend.Infrastructure.Sql
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeout.CancelAfter(TimeSpan.FromSeconds(30));
 
-                await BeginAsync(SqlAccessMode.ReadWrite, IsolationLevel.ReadCommitted, timeout.Token);
+                await BeginAsync(mode, IsolationLevel.ReadCommitted, timeout.Token);
 
                 try
                 {
