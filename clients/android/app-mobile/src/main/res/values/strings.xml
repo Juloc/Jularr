@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_downloads">Downloads</string>
+    <string name="shortcut_library_downloads">Offline books</string>
+    <string name="shortcut_check_for_updates">Check for updates</string>
+
+    <!-- Self-update (#490) -->
+    <string name="update_screen_title">Updates</string>
+    <string name="update_current_version">Current version: %1$s</string>
+    <string name="update_toggle_automatic_checks">Automatically check for updates</string>
+    <string name="update_action_check_now">Check now</string>
+    <string name="update_status_checking">Checking for updates…</string>
+    <string name="update_status_up_to_date">Jularr is up to date.</string>
+    <string name="update_status_error">Could not check for updates: %1$s</string>
+    <string name="update_available_title">Update available: v%1$s</string>
+    <string name="update_available_size">%1$s download</string>
+    <string name="update_notes_label">What\'s new</string>
+    <string name="update_action_update_now">Update now</string>
+    <string name="update_action_later">Later</string>
+    <string name="update_action_close">Close</string>
+    <string name="update_action_retry">Retry</string>
+    <string name="update_downloading">Downloading update… %1$d%%</string>
+    <string name="update_downloading_indeterminate">Downloading update…</string>
+    <string name="update_ready_title">Update ready to install</string>
+    <string name="update_ready_body">Jularr v%1$s has been downloaded and verified.</string>
+    <string name="update_action_install">Install</string>
+    <string name="update_permission_required">Allow Jularr to install updates in the system settings that just opened, then tap Install again.</string>
+    <string name="update_failed_checksum">The downloaded update failed verification. Please retry.</string>
+</resources>
