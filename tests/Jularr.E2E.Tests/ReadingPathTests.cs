@@ -737,7 +737,7 @@ namespace Jularr.E2E.Tests
                 await Steps.OpenReaderAsync(page, novelDetails);
                 await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Chapter Two");
 
-                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray(), string.Join(Environment.NewLine, session.Problems));
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
             {

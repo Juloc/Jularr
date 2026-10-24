@@ -11,6 +11,19 @@ namespace Jularr.E2E.Tests
             INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES
                 (9201, 1, 'Old Film', 1999), (9202, 1, 'New Film', 2022), (9203, 2, 'New Series', 2023), (9204, 3, 'Old Book', 2001);
             INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works" WHERE "Id" BETWEEN 9201 AND 9204;
+            DO $$ DECLARE mount bigint; root bigint;
+            BEGIN
+                INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly")
+                VALUES ('List filters', 3, '/list-filter-test', FALSE) RETURNING "Id" INTO mount;
+                INSERT INTO "LibraryRoots" ("Name", "MediaTypeId", "StorageMountId", "RelativePath")
+                VALUES ('Library', 1, mount, 'library') RETURNING "Id" INTO root;
+                INSERT INTO "WorkEditions" ("WorkId") SELECT "Id" FROM "Works" WHERE "Id" BETWEEN 9201 AND 9204;
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "WorkId", "WorkId", "Id" FROM "WorkEditions";
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId")
+                SELECT "Id", "Id", "Id", CASE WHEN "MediaTypeId" = 3 THEN 3 ELSE 1 END FROM "Works" WHERE "Id" BETWEEN 9201 AND 9204;
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
+                SELECT root, "Id" || CASE WHEN "MediaAssetTypeId" = 3 THEN '.epub' ELSE '.mkv' END, 100, now(), now(), "Id" FROM "MediaAssets";
+            END $$;
             INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId") SELECT p."Id", w FROM "Profiles" AS p CROSS JOIN (VALUES (9201), (9202), (9204)) AS v (w);
             INSERT INTO "Collections" ("ProfileId", "Name") SELECT "Id", 'Weekend' FROM "Profiles";
             INSERT INTO "CollectionWorks" ("CollectionId", "WorkId", "Position") SELECT c."Id", 9202, 1 FROM "Collections" AS c;
