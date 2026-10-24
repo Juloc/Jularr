@@ -18,10 +18,10 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Acquisition
 {
     // Indexers, download clients and subtitle providers, each kind on its own page: a card per connection whose settings are inputs inside it, saved by the page's pill; adding opens a dialog.
-    public sealed class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
-        UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search,
-        ReadDownloadStorageSettingsV1 downloadStorage, FrontendAssets assets,
-        IAntiforgery antiforgery, UiText texts, ReadStorageMountsV1 mounts, ReadStorageDirectoriesV1 directories) : JularrPage
+    public sealed partial class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
+        UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, ReadDownloadStorageSettingsV1 downloadStorage, FrontendAssets assets,
+        IAntiforgery antiforgery, UiText texts, ReadStorageMountsV1 mounts, ReadStorageDirectoriesV1 directories, InspectDownloadClientV1 inspect, ManageDownloadClientJobV1 manage,
+        BrowseDownloadClientFilesV1 browseFiles, PreviewDownloadClientFileDeleteV1 previewDelete, DeleteDownloadClientFilesV1 deleteFiles) : JularrPage
     {
         // The kinds each page adds.
         private static readonly IReadOnlyDictionary<AcquisitionConnectionRole, (AcquisitionConnectionType Type, string LabelKey)[]> Additions =
@@ -40,6 +40,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private readonly List<StorageMountDetailsV1> _storageMounts = [];
         private bool _directStorageReady = true;
         private bool _usenetStorageReady = true;
+        private DownloadClientDashboardV1? _downloadDashboard;
+        private DownloadClientBrowseResultV1? _fileBrowser;
+        private DownloadClientDeletionPreviewV1? _deletePreview;
 
         [BindProperty(SupportsGet = true)]
         public long? AcquisitionConnectionId { get; set; }
@@ -75,12 +78,34 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
 
+        [BindProperty(SupportsGet = true)]
+        public string? Pane { get; set; } = "downloads";
+
+        [BindProperty(SupportsGet = true)]
+        public string? Area { get; set; } = "complete";
+
+        [BindProperty(SupportsGet = true)]
+        public string? FolderPath { get; set; }
+
+        [BindProperty(SupportsGet = true)]
+        public int FilePage { get; set; } = 1;
+
+        [BindProperty(SupportsGet = true)]
+        public string? DeleteArea { get; set; }
+
+        [BindProperty(SupportsGet = true)]
+        public string? DeletePath { get; set; }
+
+        [BindProperty(SupportsGet = true)]
+        public string? ConfirmJobId { get; set; }
+
         protected override void Define(Page page)
         {
             page.Title("acquisition.role." + Role);
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/Modal.entry.ts");
             page.Asset("Pages/Admin/Acquisition/Acquisition.entry.scss");
+            page.Asset("Pages/Admin/Acquisition/DownloadConsole.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
             page.Asset("Framework/Components/Truncated.entry.ts");
             page.Asset("Framework/Components/Form.entry.ts");
@@ -98,11 +123,14 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             }
 
             page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request)));
-            // Show missing prerequisites before a source is enabled or a download attempted.
             if (!_directStorageReady && items.Any(item => NativeDownloadStorageNotice.RequiresDirectStorage(item.AcquisitionConnectionTypeId)))
+            {
                 page.Content.Add(StorageNotice(DownloadStorageArea.Direct));
+            }
             if (!_usenetStorageReady && items.Any(item => item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet))
+            {
                 page.Content.Add(StorageNotice(DownloadStorageArea.Usenet));
+            }
             var reachable = items.Count(item => State(item) == "healthy");
             var failing = items.Count(item => State(item) is "error" or "backoff");
             var figures = new KpiTiles(
@@ -121,6 +149,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             }
 
             AddDialogs(page, csrf);
+            if (Role == AcquisitionConnectionRole.Download && _selected is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Sabnzbd } client)
+            {
+                page.Content.Add(DownloadClientTabs(client.Id));
+                page.Content.Add(DownloadClientPane(client.Id, csrf));
+            }
 
             // The page's actions and the paging float at the bottom.
             var actions = new List<IUiComponent>();
@@ -165,9 +198,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             var cards = new List<IUiComponent>([.. items.Select(item => Card(item, csrf))]);
             if (!_directStorageReady && items.Any(item => NativeDownloadStorageNotice.RequiresDirectStorage(item.AcquisitionConnectionTypeId)))
+            {
                 page.Content.Add(StorageNotice(DownloadStorageArea.Direct));
+            }
             if (!_usenetStorageReady && items.Any(item => item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet))
+            {
                 page.Content.Add(StorageNotice(DownloadStorageArea.Usenet));
+            }
 
             // The card that adds one: each kind opens its dialog.
             var adds = Additions[Role].Select(addition => (IUiComponent)new A(Glyph("plus", 14), new Text(addition.LabelKey)).Class("button button--compact button--soft").Attribute("href", Address(type: addition.Type))).ToList();
@@ -197,12 +234,20 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 "error" => texts["errors." + item.ErrorKey],
                 _ => null
             };
-            if (note is not null) body.Add(new Div(new Span(new Truncated(note), state == "backoff" ? new Span(new ValueText(" "), new LocalTime(item.RetryAt!.Value)) : new Span()).Class("feature-card__note")).Class("feature-card__row"));
+            if (note is not null)
+            {
+                body.Add(new Div(new Span(new Truncated(note), state == "backoff" ? new Span(new ValueText(" "), new LocalTime(item.RetryAt!.Value)) : new Span())
+                    .Class("feature-card__note")).Class("feature-card__row"));
+            }
             body.Add(new Div(new Span(new Text("acquisition.connection.lastTest")).Class("feature-card__note"), Time(item.CheckedAt)).Class("feature-card__row"));
             if (Role == AcquisitionConnectionRole.Search && item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab)
             {
                 body.Add(new Div(new Span(new Text("acquisition.connection.today")).Class("feature-card__note"), Usage(item)).Class("feature-card__row"));
             }
+
+            if (item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd)
+                body.Add(new A(Glyph("download", 14), new Text("console.open")).Class("button button--compact button--soft")
+                    .Attribute("href", Address(item.Id) + "&Pane=downloads"));
 
             // The settings are inputs of the card; the page's pill saves them. A key or password is never shown again.
             body.Add(ConnectionForm(item.AcquisitionConnectionTypeId, csrf, item));
@@ -289,14 +334,14 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         public async Task<IActionResult> OnPostAsync([BindRequired] AcquisitionConnectionType acquisitionConnectionTypeId, string? name, string? baseUrl, string? apiKey,
             bool? isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
             int? maxConnections, string? password, int[]? mediaTypeIds, bool? searchesAutomatically, int? queryLimit, int? grabLimit, string? host, int? port, bool? useSsl,
-            long? downloadStorageMountId, bool? removesCompleted)
+            long? downloadStorageMountId, bool? removesCompleted, string? incompleteRemotePath, string? incompleteLocalPath, bool? removesFailed)
         {
             // A card's inputs leave out the switch, which is its own action: the stored state stays.
             var ct = HttpContext.RequestAborted;
             var enabled = isEnabled ?? (AcquisitionConnectionId is { } stored ? (await connection.ExecuteAsync<AcquisitionConnectionDetailsV1>(new AcquisitionConnectionParametersV1(stored), ct)).IsEnabled : true);
             _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl, apiKey, enabled, priority, Categories(categories),
                 downloadCategory, remotePath, localPath, username, maxConnections, password, mediaTypeIds, searchesAutomatically ?? true, queryLimit, grabLimit, host, port, useSsl,
-                downloadStorageMountId, removesCompleted ?? true);
+                downloadStorageMountId, removesCompleted ?? true, incompleteRemotePath, incompleteLocalPath, removesFailed ?? true);
             if (AcquisitionConnectionId is { } existing)
             {
                 await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(existing), _input, ct);
@@ -307,6 +352,40 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             }
 
             return LocalRedirect(Address());
+        }
+
+        // An authorized SSR fragment: polling never reloads forms, other tabs, or the whole document.
+        public async Task<IActionResult> OnGetConsoleAsync()
+        {
+            if (Pane is not ("downloads" or "history"))
+                return BadRequest();
+            var selected = await connection.ExecuteAsync<AcquisitionConnectionDetailsV1>(
+                new AcquisitionConnectionParametersV1(SelectedId()), HttpContext.RequestAborted);
+            if (selected.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd)
+                return BadRequest();
+
+            _downloadDashboard = await inspect.ExecuteAsync<DownloadClientDashboardV1>(
+                new AcquisitionConnectionParametersV1(selected.Id), default, HttpContext.RequestAborted);
+            var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            using var writer = new StringWriter(CultureInfo.InvariantCulture);
+            DownloadClientPane(selected.Id, csrf).WriteTo(writer, HtmlEncoder.Default, texts);
+            Response.Headers.CacheControl = "no-store";
+            return Content(writer.ToString(), "text/html");
+        }
+
+        public async Task<IActionResult> OnPostJobAsync(string jobId, string action, bool confirmed = false)
+        {
+            await manage.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(SelectedId()),
+                new DownloadClientJobCommandV1(jobId, action, confirmed), HttpContext.RequestAborted);
+            return LocalRedirect(Address(SelectedId()) + "&Pane=" + (action == "removeHistory" ? "history" : "downloads"));
+        }
+
+        public async Task<IActionResult> OnPostDeleteFileAsync(string area, string? relativePath, bool confirmed, string? fingerprint)
+        {
+            await deleteFiles.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(SelectedId()),
+                new DownloadClientFolderRequestV1(area, relativePath, 1, confirmed, fingerprint), HttpContext.RequestAborted);
+            var parent = relativePath?.LastIndexOf('/') ?? -1;
+            return LocalRedirect(FileAddress(SelectedId(), area, parent < 0 ? "" : relativePath![..parent]));
         }
 
         // A row's switch changes only whether the connection is used; its key and password stay.
@@ -384,6 +463,23 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     new DownloadStorageParametersV1(DownloadStorageArea.Usenet), HttpContext.RequestAborted);
                 _usenetStorageReady = NativeDownloadStorageNotice.IsConfigured(settings);
             }
+            if (_selected is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Sabnzbd } client && !SetupWizard.IsActive(Request))
+            {
+                _downloadDashboard = await inspect.ExecuteAsync<DownloadClientDashboardV1>(
+                    new AcquisitionConnectionParametersV1(client.Id), default, HttpContext.RequestAborted);
+                if (Pane == "files")
+                {
+                    try
+                    {
+                        _fileBrowser = await browseFiles.ExecuteAsync<DownloadClientBrowseResultV1>(new AcquisitionConnectionParametersV1(client.Id),
+                            new DownloadClientFolderRequestV1(Area ?? "complete", FolderPath, FilePage), HttpContext.RequestAborted);
+                    }
+                    catch (DataValidationException) { _fileBrowser = null; }
+                    if (DeleteArea is { } deleteArea && DeletePath is { } deletePath)
+                        _deletePreview = await previewDelete.ExecuteAsync<DownloadClientDeletionPreviewV1>(new AcquisitionConnectionParametersV1(client.Id),
+                            new DownloadClientFolderRequestV1(deleteArea, deletePath), HttpContext.RequestAborted);
+                }
+            }
             if (Role == AcquisitionConnectionRole.Download)
             {
                 _storageMounts.Clear();
@@ -400,7 +496,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private static SaveAcquisitionConnectionDataV1 InputOf(AcquisitionConnectionDetailsV1 selected, bool? isEnabled = null) =>
             new(selected.Name, selected.AcquisitionConnectionTypeId, selected.BaseUrl, null, isEnabled ?? selected.IsEnabled, selected.Priority, selected.Categories,
                 selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username, selected.MaxConnections, null, selected.MediaTypeIds,
-                selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl, selected.DownloadStorageMountId, selected.RemovesCompleted);
+                selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl, selected.DownloadStorageMountId, selected.RemovesCompleted, selected.IncompleteRemotePath, selected.IncompleteLocalPath, selected.RemovesFailed);
 
         // The inputs of a connection: a card's own (saved by the pill) or, without one, the new connection's in its dialog.
         private Form<SaveAcquisitionConnectionDataV1> ConnectionForm(AcquisitionConnectionType type, string? csrf, AcquisitionConnectionDetailsV1? existing)
@@ -414,11 +510,14 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             return new Form<SaveAcquisitionConnectionDataV1>(form =>
             {
                 form.Hidden(item => item.AcquisitionConnectionTypeId);
-                // The form opens before activation. A missing mount or reserve must be visible now.
                 if (NativeDownloadStorageNotice.RequiresDirectStorage(type) && !_directStorageReady)
+                {
                     form.Content(StorageNotice(DownloadStorageArea.Direct));
+                }
                 else if (type == AcquisitionConnectionType.Usenet && !_usenetStorageReady)
+                {
                     form.Content(StorageNotice(DownloadStorageArea.Usenet));
+                }
                 form.Text(item => item.Name, "acquisition.connection.name");
                 // A news server is entered as in SABnzbd: server, port and SSL; every other connection by its web address.
                 if (type == AcquisitionConnectionType.Usenet)
@@ -487,6 +586,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 {
                     form.Text(item => item.DownloadCategory, "acquisition.connection.category");
                     form.Toggle(item => item.RemovesCompleted, "acquisition.connection.removesCompleted");
+                    form.Toggle(item => item.RemovesFailed, "acquisition.connection.removesFailed");
                     // SAB reports its real Complete path; only the Jularr-visible folder is chosen here.
                     if (existing?.RemotePath is { } detected)
                         form.Content(new P(new Strong(new Text("acquisition.connection.remotePath")), new ValueText(": " + detected)));
@@ -499,11 +599,15 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     }
                     else form.Hidden(item => item.DownloadStorageMountId);
                     form.Text(item => item.LocalPath, "acquisition.connection.localPath");
+                    form.Text(item => item.IncompleteRemotePath, "console.incompleteRemotePath");
+                    form.Text(item => item.IncompleteLocalPath, "console.incompleteLocalPath");
                     var browse = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(Address(existing?.Id, type, "Folders"),
                         "storageMountId", input.DownloadStorageMountId?.ToString(CultureInfo.InvariantCulture) ?? "");
                     if (texts.Can("storage.read"))
                     {
                         form.Content(new FolderPicker(assets, browse, input.LocalPath ?? "", nameof(input.LocalPath), "/Admin/Storage",
+                            storageMountFieldName: nameof(input.DownloadStorageMountId), isVisible: input.DownloadStorageMountId is not null));
+                        form.Content(new FolderPicker(assets, browse, input.IncompleteLocalPath ?? "", nameof(input.IncompleteLocalPath), "/Admin/Storage",
                             storageMountFieldName: nameof(input.DownloadStorageMountId), isVisible: input.DownloadStorageMountId is not null));
                     }
                 }

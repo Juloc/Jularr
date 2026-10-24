@@ -160,6 +160,15 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             }
         }
 
+        // Remove a terminal history job only: never cancel an active queue item during automatic cleanup.
+        public async Task RemoveHistoryJobAsync(SabnzbdConnection connection, string nzoId, CancellationToken ct)
+        {
+            var id = ValidateNzoId(nzoId);
+            using var response = await SendAsync(connection,
+                [new("mode", "history"), new("name", "delete"), new("value", id), new("del_files", "1"), new("archive", "0")], ct);
+            RequireStatus(await RequireBodyAsync(response, ct));
+        }
+
         public async Task PauseJobAsync(SabnzbdConnection connection, string nzoId, bool isPaused, CancellationToken ct)
         {
             ValidateNzoId(nzoId);
@@ -180,6 +189,80 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             catch (JsonException exception)
             {
                 throw new SabnzbdException("SABnzbd returned an invalid answer.", exception);
+            }
+        }
+
+        // Bounded full queue/history reads for the admin console. Tracked-job reads remain unchanged.
+        public async Task<SabnzbdConsoleSnapshot> ReadConsoleAsync(SabnzbdConnection connection, CancellationToken ct)
+        {
+            using var queueResponse = await SendAsync(connection, [new("mode", "queue"), new("start", "0"), new("limit", PageSize)], ct);
+            var queueJson = await RequireBodyAsync(queueResponse, ct);
+            using var queueDocument = JsonDocument.Parse(queueJson);
+            var queue = queueDocument.RootElement.GetProperty("queue");
+            var speedKb = ReadDouble(queue, "kbpersec");
+            var diskMb = ReadDouble(queue, "diskspace1");
+
+            using var historyResponse = await SendAsync(connection, [new("mode", "history"), new("start", "0"), new("limit", PageSize)], ct);
+            var historyJson = await RequireBodyAsync(historyResponse, ct);
+
+            using var statisticsResponse = await SendAsync(connection, [new("mode", "server_stats")], ct);
+            using var statisticsDocument = JsonDocument.Parse(await RequireBodyAsync(statisticsResponse, ct));
+            var usage = statisticsDocument.RootElement;
+
+            using var statusResponse = await SendAsync(connection, [new("mode", "status")], ct);
+            using var statusDocument = JsonDocument.Parse(await RequireBodyAsync(statusResponse, ct));
+            var status = statusDocument.RootElement.GetProperty("status");
+
+            return new SabnzbdConsoleSnapshot(ParseQueueResponse(queueJson).Jobs, ParseHistoryResponse(historyJson).Jobs,
+                speedKb is >= 0 and < 1e9 ? (long?)Math.Round(speedKb.Value * 1024) : null,
+                diskMb is >= 0 and < 1e6 ? (long?)Math.Round(diskMb.Value * 1024 * 1024) : null,
+                ReadBool(queue, "paused") is true,
+                ReadLong(usage, "day"), ReadLong(usage, "week"), ReadLong(usage, "month"), ReadLong(usage, "total"),
+                ReadStringArray(status, "folders"), ReadString(status, "completedir"), ReadString(status, "downloaddir"));
+        }
+
+        public async Task<IReadOnlyList<string>> ReadCategoriesAsync(SabnzbdConnection connection, CancellationToken ct)
+        {
+            using var response = await SendAsync(connection, [new("mode", "get_cats")], ct);
+            using var document = JsonDocument.Parse(await RequireBodyAsync(response, ct));
+            return ReadStringArray(document.RootElement, "categories");
+        }
+
+        // Never accept a provider mode from user input; destructive operations have explicit branches.
+        public async Task RemoveOrphanAsync(SabnzbdConnection connection, string folderName, CancellationToken ct)
+        {
+            if (folderName.Length is 0 or > 200 || folderName is "." or ".."
+                || folderName.Any(character => char.IsControl(character) || character is '/' or '\\'))
+            {
+                throw new ArgumentException("Invalid orphan folder name.", nameof(folderName));
+            }
+
+            using var response = await SendAsync(connection,
+                [new("mode", "status"), new("name", "delete_orphan"), new("value", folderName)], ct);
+            using var document = JsonDocument.Parse(await RequireBodyAsync(response, ct));
+            if (ReadBool(document.RootElement, "status") is not true)
+            {
+                throw new SabnzbdException("SABnzbd did not confirm orphan removal.");
+            }
+        }
+
+        public async Task ControlJobAsync(SabnzbdConnection connection, string nzoId, SabnzbdJobCommand command, CancellationToken ct)
+        {
+            var id = ValidateNzoId(nzoId);
+            KeyValuePair<string, string?>[] fields = command switch
+            {
+                SabnzbdJobCommand.Pause => [new("mode", "queue"), new("name", "pause"), new("value", id)],
+                SabnzbdJobCommand.Resume => [new("mode", "queue"), new("name", "resume"), new("value", id)],
+                SabnzbdJobCommand.RemoveFromQueue => [new("mode", "queue"), new("name", "delete"), new("value", id), new("del_files", "1")],
+                SabnzbdJobCommand.RemoveFromHistory => [new("mode", "history"), new("name", "delete"), new("value", id), new("archive", "0"), new("del_files", "0")],
+                _ => throw new ArgumentOutOfRangeException(nameof(command))
+            };
+
+            using var response = await SendAsync(connection, fields, ct);
+            using var document = JsonDocument.Parse(await RequireBodyAsync(response, ct));
+            if (ReadBool(document.RootElement, "status") is not true)
+            {
+                throw new SabnzbdException("SABnzbd did not accept the requested action.");
             }
         }
 
@@ -351,6 +434,9 @@ namespace Jularr.Integrations.Logic.Sabnzbd
                 _ => null
             };
         }
+
+        private static long? ReadLong(JsonElement element, string name) =>
+            long.TryParse(ReadString(element, name), NumberStyles.None, CultureInfo.InvariantCulture, out var value) && value >= 0 ? value : null;
 
         private static long? Megabytes(double? value) => value is >= 0 and < 1e9 ? (long)Math.Round(value.Value * 1024 * 1024) : null;
 
