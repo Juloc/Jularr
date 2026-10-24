@@ -16,10 +16,11 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class MediaImportJobRowV1 : BaseResponse
     {
-        public MediaImportJobRowV1(int index, string? title, MediaImportOutcomeType? outcomeTypeId, long? workId, bool searches)
+        public MediaImportJobRowV1(int index, string? title, string stage, MediaImportOutcomeType? outcomeTypeId, long? workId, bool searches)
         {
             Index = index;
             Title = title;
+            Stage = stage;
             OutcomeTypeId = outcomeTypeId;
             WorkId = workId;
             Searches = searches;
@@ -30,6 +31,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Title), false)]
         public string? Title { get; }
+
+        [DataField(typeof(MediaImportJobFields), nameof(MediaImportJobFields.Stage))]
+        public string Stage { get; }
 
         [DataField(typeof(MediaImportFields), nameof(MediaImportFields.OutcomeTypeId), false)]
         public MediaImportOutcomeType? OutcomeTypeId { get; }
