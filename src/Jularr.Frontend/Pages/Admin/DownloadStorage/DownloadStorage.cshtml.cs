@@ -14,11 +14,13 @@ using Microsoft.AspNetCore.WebUtilities;
 namespace Jularr.Frontend.Pages.Admin.DownloadStorage
 {
     public sealed class DownloadStorageModel(ReadDownloadStorageSettingsV1 read, SaveDownloadStorageSettingsV1 save, ReadStorageMountsV1 mounts,
-        ReadStorageMountV1 mount, ReadStorageDirectoriesV1 directories, ReadStorageLocalPathsV1 localPaths, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadStorageMountV1 mount, ReadStorageDirectoriesV1 directories, ReadStorageLocalPathsV1 localPaths, ReadDirectCleanupStatsV1 cleanup,
+        FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private readonly Dictionary<DownloadStorageArea, DownloadStorageSettingsV1> _settings = [];
         private readonly Dictionary<long, StorageMountDetailsV1> _mounts = [];
         private SaveDownloadStorageDataV1? _input;
+        private DirectCleanupStatsV1? _cleanupStats;
         private DownloadStorageArea? _failedArea;
         private bool IsSetup => SetupWizard.IsActive(Request);
 
@@ -28,7 +30,21 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/FolderPicker.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            if (!IsSetup) page.Content.Add(new P(new Text("downloadStorage.purpose")));
+            if (!IsSetup)
+            {
+                page.Content.Add(new P(new Text("downloadStorage.purpose")));
+                if (_cleanupStats is { } stats)
+                {
+                    page.Content.Add(new UiSection("downloadStorage.cleanup.title",
+                    [
+                        new P(new Text("downloadStorage.cleanup.scanned"), new ValueText(": " + stats.Scanned.ToString(CultureInfo.CurrentCulture))),
+                        new P(new Text("downloadStorage.cleanup.deleted"), new ValueText(": " + stats.Deleted.ToString(CultureInfo.CurrentCulture))),
+                        new P(new Text("downloadStorage.cleanup.bytes"), new ValueText(": " + ByteSize.Format(stats.ReclaimedBytes))),
+                        new P(new Text("downloadStorage.cleanup.skipped"), new ValueText(": " + stats.Skipped.ToString(CultureInfo.CurrentCulture))),
+                        new P(new Text("downloadStorage.cleanup.errors"), new ValueText(": " + stats.Errors.ToString(CultureInfo.CurrentCulture)))
+                    ]));
+                }
+            }
             foreach (var area in Enum.GetValues<DownloadStorageArea>())
             {
                 if (!_settings.TryGetValue(area, out var settings)) continue;
@@ -106,6 +122,7 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
 
         protected override async Task LoadDataAsync()
         {
+            if (!IsSetup) _cleanupStats = await cleanup.ExecuteAsync<DirectCleanupStatsV1>(new DownloadStorageParametersV1(DownloadStorageArea.Direct), HttpContext.RequestAborted);
             foreach (var area in Enum.GetValues<DownloadStorageArea>())
             {
                 var settings = await read.ExecuteAsync<DownloadStorageSettingsV1>(new DownloadStorageParametersV1(area), HttpContext.RequestAborted);
