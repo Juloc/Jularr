@@ -17,6 +17,8 @@ namespace Jularr.Integrations.Logic.Browser
         private string? _error;
         private long _downloaded;
         private long _total;
+        private long _retryAfterTicks;
+        private int _installFailures;
         private bool _enabled;
 
         public bool Enabled { get => Volatile.Read(ref _enabled); set => Volatile.Write(ref _enabled, value); }
@@ -27,6 +29,7 @@ namespace Jularr.Integrations.Logic.Browser
         public string ExecutablePath => Path.Combine(_root, "current", "chrome-" + Platform(), "chrome");
         public bool IsInstalled => File.Exists(ExecutablePath) && VersionMatches(Path.Combine(_root, "current", ".jularr-version"));
         public bool HasManagedData => Directory.Exists(_root);
+        public bool CanRetryInstall => DateTime.UtcNow.Ticks >= Interlocked.Read(ref _retryAfterTicks);
 
         public static string? InstalledExecutable(string profilePath)
         {
@@ -81,6 +84,8 @@ namespace Jularr.Integrations.Logic.Browser
                     await File.WriteAllTextAsync(Path.Combine(stage, ".jularr-version"), Version, ct);
                     if (Directory.Exists(active)) Directory.Delete(active, recursive: true);
                     Directory.Move(stage, active);
+                    Interlocked.Exchange(ref _installFailures, 0);
+                    Interlocked.Exchange(ref _retryAfterTicks, 0);
                     Volatile.Write(ref _state, "installed");
                 }
                 finally
@@ -91,6 +96,9 @@ namespace Jularr.Integrations.Logic.Browser
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
+                var failures = Interlocked.Increment(ref _installFailures);
+                var minutes = Math.Min(60, Math.Pow(2, Math.Min(6, failures - 1)));
+                Interlocked.Exchange(ref _retryAfterTicks, DateTime.UtcNow.AddMinutes(minutes).Ticks);
                 Volatile.Write(ref _error, exception.Message);
                 Volatile.Write(ref _state, "failed");
                 throw;
@@ -111,6 +119,8 @@ namespace Jularr.Integrations.Logic.Browser
                 if (installedByJularr) Directory.Delete(_root, recursive: true);
                 // All managed cache, cookies, downloads, and profile are inside _root.
                 // Older/manual profiles outside _root are intentionally left untouched.
+                Interlocked.Exchange(ref _installFailures, 0);
+                Interlocked.Exchange(ref _retryAfterTicks, 0);
                 Volatile.Write(ref _error, null);
                 Volatile.Write(ref _state, "disabled");
             }

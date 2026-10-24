@@ -48,6 +48,7 @@ namespace Jularr.Backend.Service.System.Browser.V1
 
             if (_options.Path is null && string.IsNullOrWhiteSpace(_options.RemoteAddress))
             {
+                if (!_packages.CanRetryInstall) return new UpdateResult(false);
                 await _packages.InstallAsync(CancellationToken);
             }
 
