@@ -84,10 +84,26 @@ namespace Jularr.Backend.Tests
             using var confirm = await host.SendAsync(HttpMethod.Get, "/Collections/" + favorites + "?delete=true");
             StringAssert.Contains(await confirm.Content.ReadAsStringAsync(), "The titles themselves stay.");
 
-            // A title of the library is found by name and added from the collection page.
+            // A wanted title without a file is not offered by the library search.
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "WantedItems" ("WorkId") VALUES (20);
                 INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual") VALUES (20, 'New Film', TRUE);
+                """);
+            using var unavailable = await host.SendAsync(HttpMethod.Get, "/Collections/" + favorites + "?q=New");
+            Assert.AreEqual(HttpStatusCode.OK, unavailable.StatusCode);
+            Assert.IsFalse((await unavailable.Content.ReadAsStringAsync()).Contains("New Film", StringComparison.Ordinal));
+
+            // Once a file is present, the title is found by name and added from the collection page.
+            var mount = await LibraryTests.CreateMountAsync(host);
+            var root = await LibraryTests.CreateRootAsync(host, mount, "Movies", MediaType.Movie);
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkEditions" ("WorkId") VALUES (20);
+                INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId")
+                SELECT "WorkId", "Id" FROM "WorkEditions" WHERE "WorkId" = 20;
+                INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "MediaAssetTypeId")
+                SELECT "WorkId", "Id", 1 FROM "WorkVersions" WHERE "WorkId" = 20;
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
+                SELECT {root}, 'New Film.mkv', 100, now(), now(), "Id" FROM "MediaAssets" WHERE "WorkId" = 20;
                 """);
             using var found = await host.SendAsync(HttpMethod.Get, "/Collections/" + favorites + "?q=New");
             var foundHtml = await found.Content.ReadAsStringAsync();
