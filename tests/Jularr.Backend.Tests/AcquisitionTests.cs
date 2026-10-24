@@ -1701,9 +1701,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, result.CreatedCount);
             using var library = await host.SendAsync(HttpMethod.Get, "/api/v1/library");
             var items = (await library.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items;
-            Assert.AreEqual(3, items.Count);
-            Assert.IsTrue(items.All(item => item.MediaStateTypeId == MediaStateType.Available));
-            var movieId = items.Single(item => item.Title == "Example Movie").Id;
+            Assert.AreEqual(0, items.Count, "Plex identities alone are not local playable files.");
+            var movieId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\" WHERE \"CanonicalTitle\" = 'Example Movie'"))!;
             using var details = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + movieId);
             Assert.AreEqual("https://app.plex.tv/desktop/#!/server/plexmachine1/details?key=%2Flibrary%2Fmetadata%2F11",
                 (await details.Content.ReadFromJsonAsync<Jularr.Backend.Data.User.Media.V1.WorkDetailsV1>())!.PlexUrl);

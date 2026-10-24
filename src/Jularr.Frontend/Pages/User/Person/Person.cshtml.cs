@@ -28,14 +28,15 @@ namespace Jularr.Frontend.Pages.User.Person
             page.Navigation("nav.library");
             page.Asset("Pages/User/Person/Person.entry.scss");
             page.Asset("Framework/Components/MediaCard.entry.ts");
+            page.Asset("Framework/Components/InfiniteList.entry.ts");
             if (_person is { } person && _works is { } works)
             {
                 var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
                 page.Content.Add(works.Items.Count > 0
                     ? new Div([.. works.Items.Select(item => MediaCard.For(assets, item)
-                        .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]).Class("media-grid")
+                        .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]).Class("media-grid person-grid")
                     : new P(new Text("person.empty")));
-                page.Content.Add(new Span().Paged(works.Items.Count, works.PageSize));
+                page.Content.Add(new Span().Infinite(works.Items.Count, works.PageSize, PagedList.DefaultKey, ".person-grid"));
             }
 
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -51,7 +52,7 @@ namespace Jularr.Frontend.Pages.User.Person
         protected override async Task LoadDataAsync()
         {
             _person = await readPerson.ExecuteAsync<PersonV1>(new PersonParametersV1(PersonId), HttpContext.RequestAborted);
-            _works = await readWorks.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadPersonWorksParametersV1(PersonId, Math.Max(1, PageNumber)), HttpContext.RequestAborted);
+            _works = await readWorks.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadPersonWorksParametersV1(PersonId, Math.Max(1, PageNumber), 48), HttpContext.RequestAborted);
         }
 
         private string Address(int page) => "/People/" + PersonId.ToString(CultureInfo.InvariantCulture) + "?pageNumber=" + page.ToString(CultureInfo.InvariantCulture);

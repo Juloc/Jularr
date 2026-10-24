@@ -53,6 +53,7 @@ namespace Jularr.Frontend.Framework
         public int PageSize { get; }
         public string Key { get; }
         public bool IsPrimary { get; }
+        public string? InfiniteTarget { get; internal set; }
 
         // Set when the pager sits in the page's dock.
         public bool IsDocked { get; internal set; }
@@ -62,6 +63,16 @@ namespace Jularr.Frontend.Framework
         // The small pager under a list that is not the page's primary one.
         public void WriteInline(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
+            if (InfiniteTarget is { } target)
+            {
+                var links = new List<IUiComponent>();
+                if (Paging?.PreviousHref is { } previous) links.Add(new A(new Text("common.previous")).Attribute("href", previous).Class("button"));
+                if (Paging?.NextHref is { } next) links.Add(new A(new Text("list.loadMore")).Attribute("href", next).Attribute("data-infinite-next", "").Attribute("hx-ignore", "").Class("button"));
+                links.Add(new Span().Attribute("role", "status").Attribute("aria-live", "polite").Attribute("data-infinite-status", ""));
+                new Div([.. links]).Class("infinite-list").Attribute("data-infinite-list", target).Attribute("data-infinite-page", Page.ToString(CultureInfo.InvariantCulture))
+                    .Attribute("data-loading", texts["list.loading"]).Attribute("data-error", texts["list.retry"]).WriteTo(writer, encoder, texts);
+                return;
+            }
             if (!IsDocked && _scope is not null && Paging is { } paging) ActionDock.PagingZone(_scope.Assets, paging, inline: true).WriteTo(writer, encoder, texts);
         }
     }
@@ -107,7 +118,7 @@ namespace Jularr.Frontend.Framework
         {
             // The reader and the player have no dock; their pagers stay in place.
             if (page.IsReader || page.IsPlayer) return;
-            var primary = _lists.FirstOrDefault(list => list.IsPrimary) ?? _lists.FirstOrDefault();
+            var primary = _lists.FirstOrDefault(list => list.InfiniteTarget is null && list.IsPrimary) ?? _lists.FirstOrDefault(list => list.InfiniteTarget is null);
             if (primary?.Paging is not { } paging) return;
             primary.IsDocked = true;
             var dock = page.Content.OfType<ActionDock>().FirstOrDefault(item => !item.IsForm);
@@ -144,6 +155,13 @@ namespace Jularr.Frontend.Framework
     // Paging for a list that is not a Table or ListPanel (a grid of cards, a short list): the content with its pager.
     public static class PagedExtensions
     {
+        public static IUiComponent Infinite(this IUiComponent content, int rows, int pageSize, string key, string target)
+        {
+            var list = PagingScope.Register(rows, pageSize, key, false);
+            list.InfiniteTarget = target;
+            return new PagedBlock(content, list);
+        }
+
         public static IUiComponent Paged(this IUiComponent content, int rows, int pageSize = 25, string key = PagedList.DefaultKey, bool primary = false) =>
             new PagedBlock(content, PagingScope.Register(rows, pageSize, key, primary));
 

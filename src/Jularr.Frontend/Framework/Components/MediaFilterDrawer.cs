@@ -5,7 +5,7 @@ namespace Jularr.Frontend.Framework
     // The filter drawer of Library and Favorites: the media types by area, then the release year, in one GET form so that the address holds the choice.
     // The page's other address values travel as hidden fields; a form for several panes is the page's own.
     public sealed class MediaFilterDrawer(FrontendAssets assets, string id, string titleKey, string formAddress, ScopeSelection scopes, string? year, string resetHref,
-        IReadOnlyDictionary<string, string> keep) : IUiComponent
+        IReadOnlyDictionary<string, string> keep, IReadOnlyList<IUiComponent>? additional = null) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -18,6 +18,7 @@ namespace Jularr.Frontend.Framework
             }
 
             body.Add(new ChoiceGroup(assets, "discover.filter.year", "year", [new("", year is null, "discover.all"), new("2020", year == "2020", "discover.year.since2020"), new("old", year == "old", "discover.year.before2020")]));
+            body.AddRange(additional ?? []);
             body.AddRange(keep.Select(item => (IUiComponent)new Input().Attribute("type", "hidden").Attribute("name", item.Key).Attribute("value", item.Value)));
 
             new Drawer(assets, id, [new DrawerPane("main", titleKey, titleKey, "filter", body,
