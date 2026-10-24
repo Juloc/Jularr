@@ -128,16 +128,20 @@ namespace Jularr.Backend.Logic.Media
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                INSERT INTO "MediaImportJobRows" ("OperationId", "RowIndex", "OutcomeTypeId", "Title", "WorkId", "Searches", "UpdatedAt")
-                SELECT @OperationId, @RowIndex, @OutcomeTypeId, @Title, @WorkId, @Searches, now()
-                FROM "MediaImportJobs" WHERE "OperationId" = @OperationId AND "Cursor" = @RowIndex
-                ON CONFLICT ("OperationId", "RowIndex") DO NOTHING;
-
-                UPDATE "MediaImportJobs" SET "Cursor" = "Cursor" + 1, "Sequence" = "Sequence" + 1, "UpdatedAt" = now()
-                WHERE "OperationId" = @OperationId AND "Cursor" = @RowIndex;
-
+                WITH checkpoint AS (
+                    UPDATE "MediaImportJobs"
+                    SET "Cursor" = "Cursor" + 1, "Sequence" = "Sequence" + 1, "UpdatedAt" = now()
+                    WHERE "OperationId" = @OperationId AND "Cursor" = @RowIndex
+                    RETURNING "OperationId"
+                ), journal AS (
+                    INSERT INTO "MediaImportJobRows" ("OperationId", "RowIndex", "OutcomeTypeId", "Title", "WorkId", "Searches", "UpdatedAt")
+                    SELECT "OperationId", @RowIndex, @OutcomeTypeId, @Title, @WorkId, @Searches, now()
+                    FROM checkpoint
+                    ON CONFLICT ("OperationId", "RowIndex") DO NOTHING
+                )
                 UPDATE "Operations" SET "ProcessedCount" = @RowIndex + 1
-                WHERE "Id" = @OperationId AND "OperationTypeId" = 6 AND "OperationStatusTypeId" = 2;
+                WHERE "Id" = @OperationId AND "OperationTypeId" = 6 AND "OperationStatusTypeId" = 2
+                  AND EXISTS (SELECT 1 FROM checkpoint);
                 """;
             sql.Parameters.Add(data);
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
