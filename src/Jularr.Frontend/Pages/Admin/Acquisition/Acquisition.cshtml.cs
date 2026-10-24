@@ -7,6 +7,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Admin.Storage.V1;
 using Jularr.Frontend.Framework;
@@ -18,7 +19,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 {
     // Indexers, download clients and subtitle providers, each kind on its own page: a card per connection whose settings are inputs inside it, saved by the page's pill; adding opens a dialog.
     public sealed class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
-        UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, FrontendAssets assets,
+        UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search,
+        ReadDownloadStorageSettingsV1 downloadStorage, FrontendAssets assets,
         IAntiforgery antiforgery, UiText texts, ReadStorageMountsV1 mounts, ReadStorageDirectoriesV1 directories) : JularrPage
     {
         // The kinds each page adds.
@@ -36,6 +38,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private SearchAcquisitionConnectionDataV1? _searchInput;
         private IReadOnlyList<IndexerReleaseV1>? _releases;
         private readonly List<StorageMountDetailsV1> _storageMounts = [];
+        private bool _directStorageReady = true;
+        private bool _usenetStorageReady = true;
 
         [BindProperty(SupportsGet = true)]
         public long? AcquisitionConnectionId { get; set; }
@@ -94,6 +98,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             }
 
             page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request)));
+            // Show missing prerequisites before a source is enabled or a download attempted.
+            if (!_directStorageReady && items.Any(item => NativeDownloadStorageNotice.RequiresDirectStorage(item.AcquisitionConnectionTypeId)))
+                page.Content.Add(StorageNotice(DownloadStorageArea.Direct));
+            if (!_usenetStorageReady && items.Any(item => item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet))
+                page.Content.Add(StorageNotice(DownloadStorageArea.Usenet));
             var reachable = items.Count(item => State(item) == "healthy");
             var failing = items.Count(item => State(item) is "error" or "backoff");
             var figures = new KpiTiles(
@@ -155,6 +164,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private void DefineCards(Page page, string? csrf, IReadOnlyList<AcquisitionConnectionDetailsV1> items)
         {
             var cards = new List<IUiComponent>([.. items.Select(item => Card(item, csrf))]);
+            if (!_directStorageReady && items.Any(item => NativeDownloadStorageNotice.RequiresDirectStorage(item.AcquisitionConnectionTypeId)))
+                page.Content.Add(StorageNotice(DownloadStorageArea.Direct));
+            if (!_usenetStorageReady && items.Any(item => item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet))
+                page.Content.Add(StorageNotice(DownloadStorageArea.Usenet));
 
             // The card that adds one: each kind opens its dialog.
             var adds = Additions[Role].Select(addition => (IUiComponent)new A(Glyph("plus", 14), new Text(addition.LabelKey)).Class("button button--compact button--soft").Attribute("href", Address(type: addition.Type))).ToList();
@@ -180,11 +193,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var body = new List<IUiComponent>();
             var note = state switch
             {
-                "backoff" => texts["acquisition.connection.backoff"] + " " + item.RetryAt!.Value.ToLocalTime().ToString("g", CultureInfo.CurrentCulture),
+                "backoff" => texts["acquisition.connection.backoff"],
                 "error" => texts["errors." + item.ErrorKey],
                 _ => null
             };
-            if (note is not null) body.Add(new Div(new Span(new Truncated(note)).Class("feature-card__note")).Class("feature-card__row"));
+            if (note is not null) body.Add(new Div(new Span(new Truncated(note), state == "backoff" ? new Span(new ValueText(" "), new LocalTime(item.RetryAt!.Value)) : new Span()).Class("feature-card__note")).Class("feature-card__row"));
             body.Add(new Div(new Span(new Text("acquisition.connection.lastTest")).Class("feature-card__note"), Time(item.CheckedAt)).Class("feature-card__row"));
             if (Role == AcquisitionConnectionRole.Search && item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab)
             {
@@ -207,6 +220,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var end = new List<IUiComponent> { Post("Toggle", item.Id, csrf, [("isEnabled", item.IsEnabled ? "false" : "true")], new SwitchButton(item.IsEnabled, "acquisition.connection.active")) };
             return new FeatureCard(new IconTile(Glyph(icon, 18), tone), item.Name, texts["acquisition.connection.type." + item.AcquisitionConnectionTypeId], StateChipOf(item, state), body, start, end).Wide();
         }
+
+        private IUiComponent StorageNotice(DownloadStorageArea area) =>
+            NativeDownloadStorageNotice.Message(area, SetupWizard.IsActive(Request) ? SetupWizard.Paths[SetupStepType.DownloadStorage] : "/Admin/DownloadStorage");
 
         // The state of a connection: switched off, failing and paused, failing, not tested yet or reachable.
         private static string State(AcquisitionConnectionDetailsV1 item) => !item.IsEnabled ? "off" : item is { IsBackedOff: true, RetryAt: not null } ? "backoff"
@@ -354,6 +370,20 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
             _connections = await connections.ExecuteAsync<PageResult<AcquisitionConnectionDetailsV1>>(new ReadAcquisitionConnectionsParametersV1(PageNumber, acquisitionConnectionRoleId: Role),
                 HttpContext.RequestAborted);
+            if (Type is { } requested && NativeDownloadStorageNotice.RequiresDirectStorage(requested)
+                || _selected is { } selected && NativeDownloadStorageNotice.RequiresDirectStorage(selected.AcquisitionConnectionTypeId)
+                || _connections.Items.Any(item => NativeDownloadStorageNotice.RequiresDirectStorage(item.AcquisitionConnectionTypeId)))
+            {
+                var settings = await downloadStorage.ExecuteAsync<DownloadStorageSettingsV1>(
+                    new DownloadStorageParametersV1(DownloadStorageArea.Direct), HttpContext.RequestAborted);
+                _directStorageReady = settings.IsConfigured;
+            }
+            if (Role == AcquisitionConnectionRole.Download)
+            {
+                var settings = await downloadStorage.ExecuteAsync<DownloadStorageSettingsV1>(
+                    new DownloadStorageParametersV1(DownloadStorageArea.Usenet), HttpContext.RequestAborted);
+                _usenetStorageReady = settings.IsConfigured;
+            }
             if (Role == AcquisitionConnectionRole.Download)
             {
                 _storageMounts.Clear();
@@ -377,12 +407,18 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             var submitted = _input is not null && AcquisitionConnectionId == existing?.Id;
             var input = submitted ? _input! : existing is not null ? InputOf(existing)
-                : (_input ?? new SaveAcquisitionConnectionDataV1(SuggestedName ?? "", type, type == AcquisitionConnectionType.Usenet ? null : SuggestedUrl ?? "", null, true,
+                : (_input ?? new SaveAcquisitionConnectionDataV1(SuggestedName ?? "", type, type == AcquisitionConnectionType.Usenet ? null : SuggestedUrl ?? "", null,
+                    !(NativeDownloadStorageNotice.RequiresDirectStorage(type) && !_directStorageReady || type == AcquisitionConnectionType.Usenet && !_usenetStorageReady),
                     type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd ? 25 : 50, [], null, null, null, useSsl: type == AcquisitionConnectionType.Usenet ? true : null));
 
             return new Form<SaveAcquisitionConnectionDataV1>(form =>
             {
                 form.Hidden(item => item.AcquisitionConnectionTypeId);
+                // The form opens before activation. A missing mount or reserve must be visible now.
+                if (NativeDownloadStorageNotice.RequiresDirectStorage(type) && !_directStorageReady)
+                    form.Content(StorageNotice(DownloadStorageArea.Direct));
+                else if (type == AcquisitionConnectionType.Usenet && !_usenetStorageReady)
+                    form.Content(StorageNotice(DownloadStorageArea.Usenet));
                 form.Text(item => item.Name, "acquisition.connection.name");
                 // A news server is entered as in SABnzbd: server, port and SSL; every other connection by its web address.
                 if (type == AcquisitionConnectionType.Usenet)
@@ -491,7 +527,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private static IUiComponent Dim() => new Span(new ValueText("–")).Class("list-value list-value--dim");
 
         private static IUiComponent Time(DateTime? value) => value is { } time
-            ? new Span(new ValueText(time.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("list-value")
+            ? new Span(new LocalTime(time)).Class("list-value")
             : Dim();
 
         // Today's queries and grabs of an indexer against its limits.

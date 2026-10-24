@@ -151,7 +151,8 @@
     &__content a { color: inherit; }
     &__content table { border-collapse: collapse; }
     &__content td, &__content th { border: 1px solid var(--border); padding: 4px 8px; }
-    &[data-mode=paged] &__content { columns: var(--reader-columns, 1); column-gap: 0; column-fill: auto; overflow: hidden; }
+    &[data-mode=paged] &__content { columns: var(--reader-columns, 1); column-gap: clamp(36px, 3.4vw, 56px); column-fill: auto; overflow: hidden; }
+    &[data-mode=paged][data-columns="1"] &__content :is(p,h1,h2,h3,h4,h5,h6,blockquote,pre,table,figure,ul,ol,dl) { max-width: min(var(--reader-text-width, 68ch), calc(100% - 68px)); }
     &[data-mode=paged] &__content[data-pad]::after { content: ''; display: block; height: 1px; break-before: column; }
     &[data-direction=rtl][data-mode=paged] &__content { direction: rtl; }
     &__content [data-b] { unicode-bidi: plaintext; }

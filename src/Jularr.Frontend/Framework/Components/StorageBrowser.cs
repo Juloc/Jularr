@@ -23,7 +23,7 @@ namespace Jularr.Frontend.Framework
                 var warning = !needsWriting ? null : connection.IsReadOnly ? "downloadStorage.readOnly" : connection.StorageProtocolTypeId == StorageProtocolType.Smb && !connection.IsVolume
                     ? "downloadStorage.mountRequired" : null;
                 return FolderPicker.Directories(browse, path ?? "", items.Select(item => item.Name).ToArray(), texts, afterName, items.Count == StorageDirectoryV1.PageSize,
-                    home, id, connection.Name + " /" + path, warning);
+                    home, id, connection.Name + " /" + path, warning, needsWriting && warning is null);
             }
 
             var configured = await mounts.ExecuteAsync<PageResult<StorageMountDetailsV1>>(new ReadStorageMountsParametersV1(mountPage), ct);

@@ -47,7 +47,7 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
                         form.Hidden(item => item.CompletePath);
                         form.Content(new Div(new Span(new Text("downloadStorage.complete")).Class("ui-field__top"),
                             Picker(input.CompleteStorageMountId, input.CompletePath ?? "", nameof(input.CompletePath), nameof(input.CompleteStorageMountId))).Class("ui-field"));
-                        form.ByteSize(item => item.FreeSpaceReserveBytes, "downloadStorage.reserve");
+                        form.ByteSize(item => item.FreeSpaceReserveBytes, "downloadStorage.reserve", new FieldHelp(Info: "downloadStorage.reserveHint"));
                         form.Number(item => item.MaxParallelJobs, "downloadStorage.parallel");
                         form.ByteSize(item => item.MaxJobBytes, "downloadStorage.jobLimit", new FieldHelp(Info: "downloadStorage.limitHint"));
                         form.ByteSize(item => item.MaxWorkspaceBytes, "downloadStorage.workspaceLimit", new FieldHelp(Info: "downloadStorage.limitHint"));

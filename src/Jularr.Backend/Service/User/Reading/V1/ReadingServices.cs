@@ -116,6 +116,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     """
                     SELECT
                         document."Id" AS "DocumentId",
+                        (encode(document."ContentHash", 'hex') || ':' || coalesce(document."CacheCompletedAt"::text, 'pending')) AS "Revision",
                         asset."WorkId",
                         coalesce(visible."Title", document."Title") AS "Title",
                         document."ReadingFormatTypeId",

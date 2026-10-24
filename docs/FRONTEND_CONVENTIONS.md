@@ -338,6 +338,12 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   middleware. Setting culture inside an awaited initialization method alone does
   not establish the caller's rendering culture. Never localize IDs or wire values.
 
+## Time and calendar dates
+
+- Persist absolute timestamps as UTC. Render them through `LocalTime` so the browser applies its own IANA zone, locale and daylight-saving rules; no `DateTime.ToLocalTime()` in Razor.
+- `DateOnly` release dates are civil dates and **never** UTC-converted. For Calendar and Work, compute the request's `Today` once using `BrowserTimeZone` and the browser's advisory timezone cookie; the browser corrects visible day markers/countdowns in place before requesting additional pages.
+- Timezone changes and local midnight must not trigger `location.reload()`, full-page replacement, layout jumps or periodic global scans. Synchronize the cookie before htmx navigation and only update the relevant text/classes. Keep UTC and timezone tests in the Frontend, Backend and Chromium suites.
+
 ## Asset ownership, build and caching (MANDATORY)
 
 - Pages are grouped by area and page: `Pages/<Area>/<Page>/`. Keep the

@@ -228,6 +228,26 @@ namespace Jularr.Backend.Data.Logic.Media
         public string Locale { get; }
     }
 
+    // The series' own TheTVDB id (folder, nfo) next to the TMDB series it was verified with and, if the folder names one, its IMDb id.
+    internal sealed class WorkTvdbCorrectionData : BaseData
+    {
+        public WorkTvdbCorrectionData(string tmdbTvId, string? imdbId, string tvdbId)
+        {
+            TmdbTvId = tmdbTvId;
+            ImdbId = imdbId;
+            TvdbId = tvdbId;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
+        public string TmdbTvId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value), false)]
+        public string? ImdbId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
+        public string TvdbId { get; }
+    }
+
     internal sealed class WorkIdentityProbeData : BaseData
     {
         public WorkIdentityProbeData(string @namespace, string value)

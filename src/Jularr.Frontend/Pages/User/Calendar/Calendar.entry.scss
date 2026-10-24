@@ -391,11 +391,12 @@ $types: (
         text-decoration: none;
 
         span:first-child { font-size: 10px; font-weight: 760; }
-        strong { font-size: 18px; line-height: 1.3; }
+        // Every day reserves the highlighted day's box, including when today leaves this week.
+        strong { display: grid; place-items: center; width: 28px; height: 28px; font-size: 18px; line-height: 1.3; }
         &:hover { background: var(--surface-hover); }
 
         &--selected { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
-        &--today strong { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: var(--accent-contrast); }
+        &--today strong { border-radius: 50%; background: var(--accent); color: var(--accent-contrast); }
     }
 
     &__dot {

@@ -170,7 +170,7 @@ namespace Jularr.Backend.Data
             {
                 var elementType = type.GetElementType()!;
                 if (type.GetArrayRank() != 1 || (elementType != typeof(string) && elementType != typeof(int)
-                    && elementType != typeof(long) && elementType != typeof(bool) && elementType != typeof(Guid)
+                    && elementType != typeof(long) && elementType != typeof(decimal) && elementType != typeof(bool) && elementType != typeof(Guid)
                     && !(elementType.IsEnum && Enum.GetUnderlyingType(elementType) == typeof(byte))))
                 {
                     throw new NotSupportedException("The PostgreSQL array element type is unsupported.");

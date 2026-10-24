@@ -119,3 +119,30 @@
         .media-availability-badge__body > * { opacity: 1; }
     }
 }
+
+// A compact status in the normal document flow; the parent StateChip owns appearance.
+.media-availability-badge {
+    &--inline {
+        position: static;
+        display: inline-flex;
+        align-self: flex-start;
+        min-width: 0;
+        max-width: 100%;
+        height: auto;
+        padding: 0;
+
+        .media-availability-badge__body {
+            width: auto;
+            max-width: 100%;
+            height: auto;
+            padding: 0;
+            overflow: visible;
+            background: none;
+            box-shadow: none;
+            > * { opacity: 1; }
+        }
+        .media-availability-badge__label { color: inherit; font-size: inherit; line-height: inherit; }
+        .media-availability { color: inherit; }
+        .media-availability__track { color: color-mix(in srgb, currentColor 45%, transparent); }
+    }
+}

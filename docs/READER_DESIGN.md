@@ -21,8 +21,17 @@ reference is `9cd7fd3`. Later explicit decisions override the earlier mockups:
 - Text selection is explicitly enabled from the header. Canonical accessible HTML,
   semantic locators, annotations and existing service/progress owners remain.
 - Book thickness follows calculated Reader pages, including typography and page
-  width changes, not guessed printed-edition metadata. While whole-book counting
-  is incomplete/unavailable, no whole-book total or paper-block thickness is made up.
+  width changes, not guessed printed-edition metadata. Completed chapter counts are
+  cached per browser using a fingerprint of the server-provided content hash and
+  preparation revision, device viewport/layout and typography. New devices and
+  changed profile font sizes therefore measure their own pages. The server keeps
+  profile text settings (font, size, spacing, width and hyphenation) across devices;
+  visual layout and the page-count cache remain device-local. Profile changes save in
+  order, with a visible error when the server rejects them or cannot be reached;
+  local changes remain usable, and the next profile edit retries saving. While whole-book
+  counting is incomplete/unavailable, no whole-book total or paper-block thickness is made up.
+  Chapter size limits are evaluated when content or layout is measured, not on every
+  normal page turn; background chapter measurement runs during idle time.
 - The stacks are asymmetric by reading position (the original read effect): the stack of read
   pages on the left grows, the unread one on the right shrinks, and a thicker stack lifts its
   sheet higher and narrows it at the outer edge. The text box and the page number follow their
@@ -114,8 +123,10 @@ a vector drawing (as an SVG that keeps its labels), a table or an irregular mult
 layout becomes such a figure instead of a tiny inline picture; EPUB pictures become
 figures by their declared kind or their size. A tap or click, Enter or Space on a figure
 opens the full-screen view (`dialog.reader-figure`): the picture fits the screen; wheel,
-pinch, double tap and the three buttons zoom, dragging moves a zoomed picture, Escape or
-a tap on the empty stage closes it. On the printed pages of the book view the figure is
+pinch, double tap, the zoom buttons and the 100–800% range adjust magnification.
+Dragging pans within the visible picture's actual fitted bounds, not the full viewport.
+The close button, Escape or a tap on the empty letterboxed stage closes the modal;
+pointer events in the modal cannot reopen the printed picture behind it. On the printed pages of the book view the figure is
 found by position, because those pages take no pointer events. A page only the original
 PDF can show stands in the text as a one-line note with a link to its page and is left
 out of the EPUB. The figure's look follows the global tokens; the cursor is `zoom-in`.
@@ -155,7 +166,20 @@ Failures/oversized/unauthorized chapters leave totals unavailable without blocki
 reading or endless retry. Translated views without all translated chapter HTML
 do not substitute original text counts. Scroll mode does not run this count.
 Only complete counts publish the total, preceding pages and current global page;
-image adapters already know their source count.
+image adapters already know their source count. Until that happens the footer explicitly
+labels local chapter page numbers with a short localized chapter prefix, rather than
+presenting them as whole-book page numbers. Completed numeric counts are cached
+in the browser's bounded IndexedDB layout store, keyed by immutable reading document
+and exact geometry/typography settings. Opening another chapter restores the whole-book
+count without fetching every section again; the currently rendered chapter must still
+match the saved count. Resizes, font changes and layout changes invalidate the key.
+A failed/private-mode cache falls back to the existing bounded background ruler.
+Ordinary page turns defer new ruler work without aborting a request already in flight.
+
+Paged spreads reserve a responsive central CSS column gap in the canonical text
+layout (mirrored inside margins, including RTL); one-page mode uses wider symmetric
+text margins. The decorative book samples the same column gap, so neither text nor
+page numbers intrude into the pronounced paper crown at the binding.
 
 ## Single book renderer
 

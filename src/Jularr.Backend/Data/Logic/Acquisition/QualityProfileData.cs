@@ -65,7 +65,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string? OriginalLanguage { get; init; }
 
         // The fallback when no file carries an asked language: the original language of the work, English, or nothing.
-        public LanguageFallbackType LanguageFallback { get; init; } = LanguageFallbackType.Original;
+        public LanguageFallbackType LanguageFallback { get; init; } = LanguageFallbackType.Any;
         public int? Year { get; init; }
         public AcquisitionSourcePolicy SourcePolicy { get; init; } = AcquisitionSourcePolicy.Unrestricted;
 
@@ -181,7 +181,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string[] LanguageOrder { get; init; } = [];
 
         // The fallback when no file carries an asked language: the original language of the work, English, or nothing.
-        public LanguageFallbackType LanguageFallback { get; init; } = LanguageFallbackType.Original;
+        public LanguageFallbackType LanguageFallback { get; init; } = LanguageFallbackType.Any;
 
     }
 
