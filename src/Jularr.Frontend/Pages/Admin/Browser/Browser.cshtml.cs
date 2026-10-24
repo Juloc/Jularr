@@ -39,8 +39,8 @@ namespace Jularr.Frontend.Pages.Admin.Browser
                     new Text("admin.browser.installation." + browser.InstallationState)));
                 if (browser.TotalBytes > 0 && browser.InstallationState == "downloading")
                 {
-                    page.Content.Add(new P(new ValueText(browser.DownloadedBytes.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                        new ValueText(" / " + browser.TotalBytes.ToString(System.Globalization.CultureInfo.InvariantCulture) + " bytes")));
+                    page.Content.Add(new P(new ValueText(browser.DownloadedBytes.ToString(CultureInfo.InvariantCulture)),
+                        new ValueText(" / " + browser.TotalBytes.ToString(CultureInfo.InvariantCulture) + " bytes")));
                 }
                 if (browser.InstallationError is { } installError) page.Content.Add(new P(new ValueText(installError)));
                 page.Content.Add(new P(new Text("admin.browser.moduleHint"),
