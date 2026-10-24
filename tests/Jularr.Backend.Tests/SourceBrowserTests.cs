@@ -40,6 +40,20 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ManagedBrowser_RefreshCanBeQueuedAndCancelledByUninstall()
+        {
+            using var folder = new TemporaryDirectory();
+            var packages = new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path });
+            packages.RequestRefresh(repair: false);
+            Assert.AreEqual("queued", packages.State);
+            packages.RequestRefresh(repair: true);
+            Assert.AreEqual("queued", packages.State);
+            await packages.RemoveAsync(CancellationToken.None);
+            Assert.AreEqual("disabled", packages.State);
+            Assert.IsTrue(packages.CanRetryInstall);
+        }
+
+        [TestMethod]
         public async Task ManagedBrowser_FailedInstallBacksOffAndTurningOffClearsRetry()
         {
             var packages = new BrowserPackages(new BrowserOptions { ProfilePath = Path.Combine("relative", "nonexistent-root") });
