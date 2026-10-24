@@ -2,6 +2,15 @@ package de.juloc.jularr.tv
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Surface
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -41,7 +50,7 @@ import kotlinx.coroutines.launch
 /**
  * Transitional data host for the *original* TV Compose screens, not a replacement TV design.
  * /api/v1 never goes through the old cookie-based TvAppController or TvClientFlow.
- * The actual Media3 playback session adapter remains a separate follow-up.
+ * Media3 playback is owned by TvV1PlaybackHost; this host only navigates between surfaces.
  */
 @Composable
 fun TvV1CatalogHost(
@@ -780,30 +789,45 @@ fun TvV1CatalogHost(
             pagingError = personWorksPagingError,
             onBack = ::back,
         )
-        TvV1CatalogPage.MovieEditions -> TvCenteredPanel(
-            title = "Filmversion wählen",
-            description = detailedTitle,
-        ) {
-            if (playableMovieAssets.isEmpty() && movieAssetNextPage != null) {
-                Text("Auf dieser Seite sind keine abspielbaren Versionen vorhanden.")
-            }
-            playableMovieAssets.forEach { asset ->
-                Button(onClick = { playAsset(asset.id) }) {
-                    Text(
-                        listOfNotNull(
-                            asset.height?.let { "${it}p" },
-                            asset.audioLanguages.takeIf { it.isNotEmpty() }?.joinToString(", "),
-                            asset.sizeBytes.takeIf { it > 0 }?.let { "${it / 1_000_000} MB" },
-                        ).joinToString(" · ").ifEmpty { "MediaAsset ${asset.id}" },
-                    )
+        TvV1CatalogPage.MovieEditions -> Surface(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(32.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text("Filmversion wählen", style = MaterialTheme.typography.headlineLarge)
+                Text(detailedTitle, style = MaterialTheme.typography.bodyLarge)
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(playableMovieAssets, key = { it.id }) { asset ->
+                        Button(onClick = { playAsset(asset.id) }, modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                listOfNotNull(
+                                    asset.height?.let { "${it}p" },
+                                    asset.audioLanguages.takeIf { it.isNotEmpty() }?.joinToString(", "),
+                                    asset.sizeBytes.takeIf { it > 0 }?.let { "${it / 1_000_000} MB" },
+                                ).joinToString(" · ").ifEmpty { "MediaAsset ${asset.id}" },
+                            )
+                        }
+                    }
+                    if (playableMovieAssets.isEmpty() && movieAssetNextPage != null) item {
+                        Text("Auf dieser Seite sind keine abspielbaren Versionen vorhanden.")
+                    }
+                    if (movieAssetPagingBusy) item {
+                        Text("Weitere Filmversionen werden geladen …")
+                    }
+                    movieAssetPagingError?.let { message -> item {
+                        Text(message, color = MaterialTheme.colorScheme.error)
+                    } }
+                    if (movieAssetNextPage != null && !movieAssetPagingBusy) item {
+                        Button(onClick = ::loadMoreMovieAssets) { Text("Weitere Filmversionen laden") }
+                    }
+                    item {
+                        Button(onClick = ::back) { Text("Zurück") }
+                    }
                 }
             }
-            if (movieAssetPagingBusy) Text("Weitere Filmversionen werden geladen …")
-            movieAssetPagingError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            if (movieAssetNextPage != null && !movieAssetPagingBusy) {
-                Button(onClick = ::loadMoreMovieAssets) { Text("Weitere Filmversionen laden") }
-            }
-            Button(onClick = ::back) { Text("Zurück") }
         }
         TvV1CatalogPage.Player -> TvV1PlaybackHost(
             origin = serverOrigin,
