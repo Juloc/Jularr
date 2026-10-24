@@ -95,20 +95,29 @@ namespace Jularr.Backend.Tests
             // Folders that name the author first, as downloads do, still name their book.
             Directory.CreateDirectory(Path.Combine(books, "Austen, Jane - Pride and Prejudice (epub)"));
             File.WriteAllText(Path.Combine(books, "Austen, Jane - Pride and Prejudice (epub)", "Austen, Jane - Pride and Prejudice.epub"), "book");
+            // A download's release name carries the title of a Work that is already here.
+            await host.Fixture.RunSqlAsync("""INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (3, 'Das Kind in dir muss Heimat finden');""");
+            const string release = "Stefanie.Stahl.Das.Kind.in.dir.muss.Heimat.finden.GERMAN.2017.RETAiL.ePub.eBook-VENTOLiN";
+            Directory.CreateDirectory(Path.Combine(books, release));
+            File.WriteAllText(Path.Combine(books, release, release + ".epub"), "book");
             Directory.CreateDirectory(Path.Combine(books, "Unknown Title Nobody Lists"));
             File.WriteAllText(Path.Combine(books, "Unknown Title Nobody Lists", "Somebody - Unknown Title Nobody Lists.epub"), "book");
             var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Books", MediaType.Book);
 
             // The catalog names exactly one entry with the folder's title; a title it does not list stays for a person.
             await LibraryTests.ScanAsync(host, rootId);
-            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(3L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" WHERE "CanonicalTitle" = 'Pride and Prejudice' """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""
+                SELECT count(*) FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId" JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                WHERE work."CanonicalTitle" = 'Das Kind in dir muss Heimat finden'
+                """));
 
             // A second copy of a title that is now here is the same Work, without asking the catalog again.
             File.WriteAllText(Path.Combine(books, "Pride and Prejudice", "Pride and Prejudice (Illustrated).epub"), "book");
             await LibraryTests.ScanAsync(host, rootId);
-            Assert.AreEqual(3L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
-            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+            Assert.AreEqual(4L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
         }
 
         [TestMethod]
