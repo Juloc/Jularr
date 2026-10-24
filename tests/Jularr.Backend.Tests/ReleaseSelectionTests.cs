@@ -128,12 +128,12 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void Selection_TheSourceWithTheHigherPriority_Comes_First()
         {
-            // As in Readarr: the preferred source decides, the quality only among its own releases.
+            // Within the same language, the preferred source wins.
             var result = ReleaseSelectionEngine.Select(Profile(),
-                [Candidate("Héctor García - IKIGAI (EN) (epub)", false, 2, "Usenet"), Candidate("Héctor García - IKIGAI (DE) (epub)", false, 1, "Anna")]);
+                [Candidate("Héctor García - IKIGAI (DE) (epub)", false, 2, "Usenet"), Candidate("Héctor García - IKIGAI (DE) (epub)", false, 1, "Anna")]);
 
             Assert.IsNotNull(result.Winner);
-            Assert.AreEqual("Héctor García - IKIGAI (DE) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+            Assert.AreEqual("Anna", result.Winner.Candidate.Indexer);
             Assert.AreEqual("IndexerPriority", result.WinnerReason!.Code);
         }
 
