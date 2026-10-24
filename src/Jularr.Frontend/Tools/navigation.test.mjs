@@ -8,7 +8,7 @@ const source = readFileSync(new URL('../Modules/Navigation/Navigation.ts', impor
 const script = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 const module = { exports: {} };
 runInNewContext(script, { exports: module.exports, module, URL });
-const { hasNewBuild, signInForExpiredPage, staysInApp } = module.exports;
+const { hasNewBuild, redirectedToSignIn, signInForExpiredPage, staysInApp } = module.exports;
 
 const current = { href: 'https://jularr.test/Details/1', origin: 'https://jularr.test', pathname: '/Details/1', search: '', hash: '' };
 const element = (attributes = {}, dataset = {}) => ({
@@ -56,4 +56,13 @@ test('expired POST never repeats a mutation on return from login', () => {
         '/Account/Login?ReturnUrl=%2FDetails%2F1');
     assert.equal(signInForExpiredPage('GET', '/Account/Login', current),
         '/Account/Login?ReturnUrl=%2FDetails%2F1');
+});
+
+test('a followed authentication redirect must not render the login document in the app shell', () => {
+    assert.equal(redirectedToSignIn('https://jularr.test/Account/Login?ReturnUrl=%2FDetails%2F17', '/Details/17', current), true);
+    assert.equal(redirectedToSignIn('/Account/Login', '/Details/17', current), true);
+    assert.equal(redirectedToSignIn('https://evil.test/Account/Login', '/Details/17', current), false);
+    assert.equal(redirectedToSignIn('/Account/Login', '/Account/Login', current), false);
+    assert.equal(redirectedToSignIn('/Details/17', '/Details/17', current), false);
+    assert.equal(redirectedToSignIn(undefined, '/Details/17', current), false);
 });
