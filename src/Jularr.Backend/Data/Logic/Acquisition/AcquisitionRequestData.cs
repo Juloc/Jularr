@@ -11,8 +11,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 {
     internal sealed class AcquisitionRequestCreationData : BaseData
     {
-        public AcquisitionRequestCreationData(long workId, long requestedByProfileId, long requestedByAccountId, long uiLocaleId, long? gamePlatformId, long? acquisitionProfileId, bool isOwner)
+        public AcquisitionRequestCreationData(long workId, long requestedByProfileId, long requestedByAccountId, long uiLocaleId, long? gamePlatformId, long? acquisitionProfileId, bool isOwner, int? startSeasonNumber = null)
         {
+            StartSeasonNumber = startSeasonNumber;
             WorkId = workId;
             RequestedByProfileId = requestedByProfileId;
             RequestedByAccountId = requestedByAccountId;
@@ -40,6 +41,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // A quality the requester's rule offers; without one the defaults apply.
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id), false)]
         public long? AcquisitionProfileId { get; }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.StartSeasonNumber), false)]
+        public int? StartSeasonNumber { get; }
 
         // The session's role: a device paired to the Owner requests like a normal user.
         [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.IsOwner))]
@@ -235,10 +239,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class RequestPlatformCheckData : BaseData
     {
-        public RequestPlatformCheckData(bool isGame, bool isPlatformListed)
+        public RequestPlatformCheckData(bool isGame, bool isPlatformListed, bool isSeries = false, bool hasRequestedSeason = true)
         {
             IsGame = isGame;
             IsPlatformListed = isPlatformListed;
+            IsSeries = isSeries;
+            HasRequestedSeason = hasRequestedSeason;
         }
 
         [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.IsGame))]
@@ -246,5 +252,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.IsPlatformListed))]
         public bool IsPlatformListed { get; }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.IsSeries))]
+        public bool IsSeries { get; }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.HasRequestedSeason))]
+        public bool HasRequestedSeason { get; }
     }
 }

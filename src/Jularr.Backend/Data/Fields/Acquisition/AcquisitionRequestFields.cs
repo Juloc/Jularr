@@ -15,6 +15,9 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly BoolField IsGame = new();
         public static readonly BoolField IsPlatformListed = new();
         public static readonly BoolField IsOwner = new();
+        public static readonly BoolField IsSeries = new();
+        public static readonly BoolField HasRequestedSeason = new();
+        public static readonly IntField StartSeasonNumber = new() { Minimum = 1, Maximum = 999, Required = false };
         public static readonly BoolField IsBlocked = new();
         public static readonly BoolField IsProfileAllowed = new();
         public static readonly LongField RecentCount = new() { Minimum = 0 };

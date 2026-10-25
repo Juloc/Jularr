@@ -351,13 +351,14 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
     public sealed class RequestDiscoverCatalogDataV1 : BaseData
     {
-        public RequestDiscoverCatalogDataV1(MediaType mediaTypeId, string @namespace, string externalId, long uiLocaleId, MediaSubtype? mediaSubtypeId = null)
+        public RequestDiscoverCatalogDataV1(MediaType mediaTypeId, string @namespace, string externalId, long uiLocaleId, MediaSubtype? mediaSubtypeId = null, int? startSeasonNumber = null)
         {
             MediaTypeId = mediaTypeId;
             Namespace = @namespace;
             ExternalId = externalId;
             UiLocaleId = uiLocaleId;
             MediaSubtypeId = mediaSubtypeId;
+            StartSeasonNumber = startSeasonNumber;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
@@ -374,6 +375,9 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
         public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(Fields.Acquisition.AcquisitionRequestFields), nameof(Fields.Acquisition.AcquisitionRequestFields.StartSeasonNumber), false)]
+        public int? StartSeasonNumber { get; }
     }
 
     public sealed class DiscoverItemParametersV1 : BaseParameters

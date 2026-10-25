@@ -53,11 +53,12 @@ namespace Jularr.Backend.Data.User.Request.V1
 
     public sealed class CreateRequestDataV1 : BaseData
     {
-        public CreateRequestDataV1(long uiLocaleId, long? gamePlatformId = null, long? acquisitionProfileId = null)
+        public CreateRequestDataV1(long uiLocaleId, long? gamePlatformId = null, long? acquisitionProfileId = null, int? startSeasonNumber = null)
         {
             UiLocaleId = uiLocaleId;
             GamePlatformId = gamePlatformId;
             AcquisitionProfileId = acquisitionProfileId;
+            StartSeasonNumber = startSeasonNumber;
         }
 
         [DataField(typeof(UiLocaleFields), nameof(UiLocaleFields.Id))]
@@ -66,6 +67,10 @@ namespace Jularr.Backend.Data.User.Request.V1
         // Games are requested for one of their platforms.
         [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id), false)]
         public long? GamePlatformId { get; }
+
+        // The starting TVDB season for this request; null requests all seasons.
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.StartSeasonNumber), false)]
+        public int? StartSeasonNumber { get; }
 
         // One of the qualities the request rule offers for the Work.
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id), false)]

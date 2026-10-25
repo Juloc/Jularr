@@ -148,7 +148,7 @@ namespace Jularr.Backend.Tests
             var options = Backup(folder.Path, out var backups);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
 
-            Assert.AreEqual(11, DatabaseBaseline.CurrentVersion, "All production migrations must have unique contiguous numbers.");
+            Assert.AreEqual(12, DatabaseBaseline.CurrentVersion, "All production migrations must have unique contiguous numbers.");
             await new DatabaseBaseline(cs, options, tools, migrations: [DatabaseBaseline.Migrations[0]]).StartAsync(CancellationToken.None);
             Assert.AreEqual("0002_external_work_feeds", await ScalarAsync(cs,
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 2"));
