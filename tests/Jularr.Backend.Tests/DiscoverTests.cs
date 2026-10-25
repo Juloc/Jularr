@@ -541,9 +541,42 @@ namespace Jularr.Backend.Tests
             var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"))!;
             Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"MediaSubtypeId\" FROM \"Works\" WHERE \"Id\" = " + workId));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"StartSeasonNumber\" FROM \"AcquisitionRequests\" LIMIT 1"));
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"MinimumSeasonNumber\" FROM \"WantedItems\" LIMIT 1"));
+            Assert.AreEqual(0L, await host.ScalarAsync($"""
+                SELECT count(*) FROM "WorkUnits" AS episode
+                JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
+                WHERE episode."WorkId" = {workId} AND episode."WorkUnitTypeId" = 2
+                    AND season."Number" = 1 AND episode."IsMonitored";
+                """));
+            using var invalidSeason = await host.SendAsync(HttpMethod.Post, "/api/v1/works/" + workId + "/requests",
+                new CreateRequestDataV1(1, startSeasonNumber: 999));
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalidSeason.StatusCode);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
             using var known = await host.SendAsync(HttpMethod.Get, "/Details?source=anilist&externalId=21&type=anime");
             Assert.AreEqual(HttpStatusCode.Redirect, known.StatusCode);
             Assert.AreEqual("/Details/" + workId + "?season=2", known.Headers.Location!.OriginalString);
+        }
+
+        [TestMethod]
+        public async Task ExistingWholeSeriesRequest_IsNotNarrowedByLaterSeasonRequest()
+        {
+            await using var host = await CreateHostAsync();
+            using var favorited = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/favorite",
+                new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, favorited.StatusCode, await favorited.Content.ReadAsStringAsync());
+            var workId = (await favorited.Content.ReadFromJsonAsync<FavoriteDiscoverResultV1>())!.WorkId;
+
+            using var whole = await host.SendAsync(HttpMethod.Post, "/api/v1/works/" + workId + "/requests",
+                new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, whole.StatusCode, await whole.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"MinimumSeasonNumber\" FROM \"WantedItems\""));
+
+            using var later = await host.SendAsync(HttpMethod.Post, "/api/v1/works/" + workId + "/requests",
+                new CreateRequestDataV1(1, startSeasonNumber: 2));
+            Assert.AreEqual(HttpStatusCode.OK, later.StatusCode, await later.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"MinimumSeasonNumber\" FROM \"WantedItems\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
         }
 
         [TestMethod]
