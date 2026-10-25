@@ -28,6 +28,12 @@ Exit code **1**: at least one sentinel socket/HTTP hit, demonstrable bypass — 
 
 Optionally use --seconds 15, but do not increase test duration without a reason.
 
+## Automated disposable Debian check (PR CI)
+
+`.github/workflows/annas-browser-staging.yml` now builds the backend test project inside a fresh Debian-based .NET SDK Docker container, runs as an unprivileged user, installs the real pinned managed Chrome for Testing package, and starts Jularr's `SourceBrowser` with its original flags and built-in egress proxy. The gated `Browser_NetworkStaging_ManagedChromeCannotReachLoopbackSentinel` test first proves that its own TCP sentinel is reachable from the test process, then navigates a real Chrome tab toward that loopback address using both HTTP and HTTPS. An inbound sentinel connection is a **test failure**. A browser start failure is also a failure, not a passing security check.
+
+This automated check is narrower than the manual network-capture protocol: it tests real managed Chrome and a direct private socket, not kernel-level browser-only network isolation, public-to-private redirects, DNS rebinding or all IPv6/subresource/UDP paths. A green workflow **does not close #1483**; attach logs and version details to the issue before interpreting results. An unsuccessful run blocks sign-off and requires a focused fix rather than bypassing the test.
+
 ## Mandatory independent evidence for #1483
 
 1. On the same isolated staging network, serve an owner-controlled public HTTPS fixture for redirect chains and subresources; perform packet-level capture of **browser-originated traffic** for public/private mixed DNS responses, DNS rebinding, private/link-local IPv4 and IPv6, redirects, iframe, image, script, fetch, WebSocket and UDP. Record failures and blocked attempts without disclosing secrets. Sentinel callbacks alone cannot establish a missing socket.
