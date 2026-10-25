@@ -294,6 +294,9 @@ namespace Jularr.Backend.Data.User.Discover.V1
         // The verified TVDB season opened when this is an AniList anime entry.
         [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.CatalogSeasonNumber), false)]
         public int? SeasonNumber { get; init; }
+
+        // Relations read from the metadata provider, even while this title is not persisted.
+        public IReadOnlyList<User.Media.V1.WorkRelationV1> Relations { get; init; } = [];
     }
 
     public sealed class FavoriteDiscoverResultV1 : BaseResponse
