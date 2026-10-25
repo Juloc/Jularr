@@ -1379,6 +1379,18 @@
    "Your changes were saved.",
    "Deine Änderungen wurden gespeichert."
   ],
+  "profile.favorite.title": [
+   "Favorites",
+   "Favoriten"
+  ],
+  "profile.favorite.autoRequest": [
+   "Automatically request new favorites",
+   "Neue Favoriten automatisch anfragen"
+  ],
+  "profile.favorite.autoRequestHelp": [
+   "Only when Requests is enabled; normal approval and download rules still apply.",
+   "Nur bei aktiviertem Anfragen-Modul. Freigabe- und Downloadregeln gelten weiterhin."
+  ],
   "admin.library.description": [
    "Imported media and file availability",
    "Importierte Medien und Dateiverfügbarkeit"
