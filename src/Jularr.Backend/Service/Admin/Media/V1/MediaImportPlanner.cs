@@ -60,7 +60,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
 
             var known = await ReadKnownAsync(context, identities.SelectMany(list => list), ct);
-            var lookups = new Budget(LookupsPerPlan);
+            // Large imports finish title/author matching in the server-owned job.
+            // Do not block their preview on hundreds of per-ISBN provider calls.
+            var lookups = new Budget(items.Count >= 100 ? 8 : LookupsPerPlan);
             var conflicts = new HashSet<int>();
             var resolvedAny = false;
             string? providerFailure = null;
