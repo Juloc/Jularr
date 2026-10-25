@@ -2945,6 +2945,8 @@ namespace Jularr.Frontend.Localization
             new("import.search.go", "Search"),
             new("import.choose", "Choose a match"),
             new("import.unsearched", "not searched yet"),
+            new("import.providerFailure.rate_limited", "Open Library has limited requests. Some books could not be searched. Try again later; existing choices stay intact."),
+            new("import.providerFailure.unavailable", "The book metadata provider could not be reached. Unsearched books have not been checked; try again when the provider is available."),
             new("import.searches", "Searching"),
             new("import.duplicateOf", "Same as row {0}"),
             new("import.intent.Tracked", "Already monitored"),
