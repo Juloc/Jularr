@@ -8,6 +8,9 @@ namespace Jularr.Frontend.Localization
     {
         public static IReadOnlyList<UiTextResource> English { get; } =
         [
+            new("pwa.update.available", "An update is available."),
+            new("pwa.update.install", "Update"),
+            new("pwa.update.later", "Later"),
             new("companion.title", "Phone remote"),
             new("companion.description", "Control playback on your paired Jularr TV. You must be signed in with the same account and profile."),
             new("companion.invite", "TV invitation"),

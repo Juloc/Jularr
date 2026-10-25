@@ -9,6 +9,43 @@ namespace Jularr.E2E.Tests
     {
         [TestMethod]
         [Timeout(180_000)]
+        public async Task InstalledPwa_ShowsUpdateButNeverReloadsUntilUserChooses()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+
+            // Model Chrome's installed-app display mode without depending on a platform launcher.
+            await browser.Context.AddInitScriptAsync("""
+                (() => {
+                    const native = window.matchMedia.bind(window);
+                    window.matchMedia = query => query === '(display-mode: standalone)'
+                        ? { matches: true, media: query, addEventListener() {}, removeEventListener() {} }
+                        : native(query);
+                })();
+                """);
+            await browser.Context.RouteAsync("**/pwa/version", route => route.FulfillAsync(new()
+            {
+                ContentType = "application/json",
+                Body = """{"build":"AAAAAAAAAAAAAAAA"}"""
+            }));
+
+            await page.GotoAsync("/");
+            var notice = page.Locator("[data-pwa-update]");
+            await Assertions.Expect(notice).ToBeVisibleAsync();
+            // The notification cannot force a reload; it leaves an active document marker intact.
+            await page.EvaluateAsync("() => { window.pwaDocumentMarker = 1; }");
+            await notice.Locator("[data-pwa-later]").ClickAsync();
+            await Assertions.Expect(notice).ToBeHiddenAsync();
+            Assert.AreEqual(1, await page.EvaluateAsync<int>("() => window.pwaDocumentMarker"));
+            await page.EvaluateAsync("() => window.dispatchEvent(new Event('pageshow'))");
+            await Assertions.Expect(notice).ToBeHiddenAsync();
+            Assert.AreEqual(1, await page.EvaluateAsync<int>("() => window.pwaDocumentMarker"));
+            CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
+        }
+
+        [TestMethod]
+        [Timeout(180_000)]
         public async Task ExpiredSession_FromBoostedLink_SignsInAndRestoresDeepLink()
         {
             await using var jularr = await JularrInstance.StartAsync();
