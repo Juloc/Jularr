@@ -640,6 +640,28 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task LocalWork_FavoriteUsesTheSameAutoRequestProfileSetting()
+        {
+            await using var host = await CreateHostAsync();
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/favorite",
+                new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var workId = (await created.Content.ReadFromJsonAsync<FavoriteDiscoverResultV1>())!.WorkId;
+
+            using var removed = await host.SendAsync(HttpMethod.Put, "/api/v1/watchlist/" + workId, new UpdateWatchlistDataV1(false));
+            Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            using var setting = await host.SendAsync(HttpMethod.Put, "/api/v1/profiles/101/favorite-request",
+                new UpdateProfileFavoriteRequestDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, setting.StatusCode, await setting.Content.ReadAsStringAsync());
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/watchlist/" + workId, new UpdateWatchlistDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+            using var repeated = await host.SendAsync(HttpMethod.Put, "/api/v1/watchlist/" + workId, new UpdateWatchlistDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, repeated.StatusCode, await repeated.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+        }
+
+        [TestMethod]
         public async Task RelatedWork_RequestedFromItsRow_IsTheDiscoverRequestWithoutLeavingThePage()
         {
             await using var host = await CreateHostAsync(razor: true);
