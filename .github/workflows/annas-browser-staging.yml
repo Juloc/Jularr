@@ -1,7 +1,8 @@
-name: Anna Browser Debian Staging
+name: Anna Browser Linux Container Probe
 
-# Disposable Docker job: exercises the actual SourceBrowser + managed Chrome,
-# not an arbitrary locally launched Chromium with different proxy flags.
+# Fast, fail-closed smoke check of managed Chrome in an ephemeral Linux container.
+# The .NET 10 SDK default image is Ubuntu, NOT Debian. A real Debian VM with
+# browser-scoped kernel egress isolation remains a separate release gate.
 on:
   pull_request:
     branches: [main]
@@ -23,7 +24,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: mcr.microsoft.com/dotnet/sdk:10.0
-    timeout-minutes: 30
+    timeout-minutes: 10
     env:
       JULARR_BROWSER_NETWORK_STAGING: '1'
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
@@ -32,12 +33,28 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Install Debian managed-Chrome runtime dependencies
+      - name: Fail fast if Chrome cannot use its namespace sandbox
         shell: bash
         run: |
           set -euo pipefail
           . /etc/os-release
-          echo "Debian-based image: ${PRETTY_NAME}"
+          echo "Container OS: ${PRETTY_NAME}"
+          # Check BEFORE apt, npm, Chrome download or .NET build. An unavailable
+          # sandbox must fail the security test, never become an inconclusive PASS.
+          useradd --create-home --uid 10001 jularr
+          if ! command -v unshare >/dev/null 2>&1; then
+            echo "::error title=Chrome sandbox unavailable::unshare is missing in the test image."
+            exit 1
+          fi
+          if ! runuser -u jularr -- unshare --user --map-root-user true; then
+            echo "::error title=Chrome sandbox unavailable::The test container blocks unprivileged user namespaces. Run browser staging on an isolated host with a supported sandbox policy; do not use --no-sandbox or relax the production container."
+            exit 1
+          fi
+          echo "Unprivileged user namespace: available"
+      - name: Install managed-Chrome runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
           apt-get update
           apt-get install -y --no-install-recommends \
             ca-certificates libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2 \
@@ -45,16 +62,6 @@ jobs:
             libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 \
             libxkbcommon0 libxrandr2 libxshmfence1 libpango-1.0-0 \
             libcairo2 libx11-xcb1 libxrender1 libxss1 libxi6 libxtst6 fonts-liberation
-          useradd --create-home --uid 10001 jularr
-          echo "Chrome sandbox prerequisites (diagnostic only):"
-          cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || true
-          if command -v unshare >/dev/null 2>&1; then
-            if runuser -u jularr -- unshare --user --map-root-user true; then
-              echo "Unprivileged user namespace: available"
-            else
-              echo "Unprivileged user namespace: denied in this Docker container"
-            fi
-          fi
           install -d -m 0755 -o jularr -g jularr /tmp/jularr-stage-home /tmp/jularr-stage-results
           rm -rf /var/lib/apt/lists/*
       - uses: actions/setup-node@v7
@@ -71,7 +78,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          runuser -u jularr -- env \
+          timeout --signal=TERM --kill-after=5s 240s runuser -u jularr -- env \
             HOME=/tmp/jularr-stage-home \
             DOTNET_CLI_HOME=/tmp/jularr-stage-home \
             JULARR_BROWSER_NETWORK_STAGING=1 \
