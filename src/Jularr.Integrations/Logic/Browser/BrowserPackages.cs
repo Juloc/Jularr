@@ -314,13 +314,25 @@ namespace Jularr.Integrations.Logic.Browser
 
         private static async Task VerifyAsync(string binary, CancellationToken ct)
         {
-            using var process = Process.Start(new ProcessStartInfo(binary, "--version") { UseShellExecute = false, RedirectStandardOutput = true })
-                ?? throw new InvalidDataException("Chrome could not start.");
+            using var process = Process.Start(new ProcessStartInfo(binary, "--version")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            }) ?? throw new InvalidDataException("Chrome could not start.");
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
             deadline.CancelAfter(TimeSpan.FromSeconds(20));
+            var output = process.StandardOutput.ReadToEndAsync(deadline.Token);
+            var error = process.StandardError.ReadToEndAsync(deadline.Token);
             await process.WaitForExitAsync(deadline.Token);
-            if (process.ExitCode != 0 || !(await process.StandardOutput.ReadToEndAsync(ct)).Contains("Chrome", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Chrome executable failed the version check.");
+            var version = await output;
+            var diagnostic = await error;
+            if (process.ExitCode != 0 || !version.Contains("Chrome", StringComparison.OrdinalIgnoreCase))
+            {
+                // --version receives no source URL or member key; bounded stderr identifies missing runtime libraries.
+                throw new InvalidDataException("Chrome executable failed the version check (exit "
+                    + process.ExitCode + "): " + (diagnostic.Length > 500 ? diagnostic[..500] : diagnostic));
+            }
         }
 
         private static string Platform() => RuntimeInformation.ProcessArchitecture switch
