@@ -68,7 +68,7 @@ namespace Jularr.Frontend.Pages.User.Details
 
             // The season's own progress; starting over names where it begins.
             var chosen = _seasons.FirstOrDefault(season => season.SeasonNumber == SelectedSeason);
-            if (texts.CanReadMedia() && chosen is not null)
+            if (!IsExternal && texts.CanReadMedia() && chosen is not null)
             {
                 var started = chosen.WatchedCount > 0 || _episodes.Any(episode => episode.ResumePositionMs > 0);
                 var seasonStart = _episodes.Where(episode => texts.CanPlay() && episode.MediaAssetId is not null).Select(episode => "/Player/" + episode.MediaAssetId!.Value.ToString(CultureInfo.InvariantCulture)).FirstOrDefault();
