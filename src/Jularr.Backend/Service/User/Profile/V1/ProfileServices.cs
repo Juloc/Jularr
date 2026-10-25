@@ -43,7 +43,7 @@ namespace Jularr.Backend.Service.User.Profile.V1
                     profile."AccentHex",
                     (profile."PinHash" IS NOT NULL) AS "HasPin",
                     coalesce(preference."AutoplayPreviews", TRUE) AS "AutoplayPreviews",
-                    profile."AutoRequestOnFavorite"
+                    coalesce((to_jsonb(profile)->>'AutoRequestOnFavorite')::boolean, FALSE) AS "AutoRequestOnFavorite"
                 FROM
                     "Profiles" AS profile
                     LEFT JOIN "ProfilePlaybackPreferences" AS preference ON preference."ProfileId" = profile."Id"
