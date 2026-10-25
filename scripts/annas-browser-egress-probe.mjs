@@ -7,10 +7,17 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 const args = process.argv.slice(2);
 const arg = name => { const index = args.indexOf(name); return index < 0 ? undefined : args[index + 1]; };
-const port = Number(arg('--port') ?? fs.readFileSync(arg('--port-file') ?? '/data/browser/managed/profile/browser.port', 'utf8').trim());
-const seconds = Number(arg('--seconds') ?? 8);
-if (!Number.isInteger(port) || port < 1 || port > 65535) throw Error('Invalid CDP port.');
-if (!Number.isInteger(seconds) || seconds < 3 || seconds > 30) throw Error('Seconds must be 3–30.');
+let port;
+let seconds;
+try {
+    port = Number(arg('--port') ?? fs.readFileSync(arg('--port-file') ?? '/data/browser/managed/profile/browser.port', 'utf8').trim());
+    seconds = Number(arg('--seconds') ?? 8);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw Error('Invalid CDP port.');
+    if (!Number.isInteger(seconds) || seconds < 3 || seconds > 30) throw Error('Seconds must be 3–30.');
+} catch (error) {
+    console.error('INCONCLUSIVE: test setup failed: ' + error.message);
+    process.exit(2);
+}
 const base = 'http://127.0.0.1:' + port;
 const hits = [];
 const servers = [];
