@@ -466,12 +466,16 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 try
                 {
                     var media = await _aniList.ReadAsync(AniListMediaType.Anime, aniListId, CancellationToken);
-                    var targets = JsonSerializer.Serialize(WorkRelationLogic.AniListTargets(media));
-                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    var related = WorkRelationLogic.AniListTargets(media);
+                    if (related.Count > 0)
                     {
-                        await ctx.SaveWorkRelationsAsync(new WorkRelationSyncData(workId, AniListMetadata.Namespace, targets), ct);
-                        return true;
-                    }, CancellationToken);
+                        var targets = JsonSerializer.Serialize(related);
+                        await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                        {
+                            await ctx.SaveWorkRelationsAsync(new WorkRelationSyncData(workId, AniListMetadata.Namespace, targets), ct);
+                            return true;
+                        }, CancellationToken);
+                    }
                 }
                 catch (ServiceUnavailableException)
                 {
