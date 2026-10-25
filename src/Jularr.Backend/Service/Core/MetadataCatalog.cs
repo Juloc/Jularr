@@ -144,7 +144,7 @@ namespace Jularr.Backend.Service.Core
                 TextLimit.Cut(media.Description ?? series?.Overview, 4000), media.CoverUrl ?? TmdbClient.PosterUrl(series?.PosterPath), media.BannerUrl ?? TmdbClient.BackdropUrl(series?.BackdropPath),
                 media.TrailerKey ?? series?.Details.TrailerKey, workId)
             {
-                SeasonNumber = conflict ? null : linked?.SeasonNumber,
+                SeasonNumber = conflict ? null : linked?.SeasonNumber ?? mapped?.TvdbSeasonNumber,
                 Relations = AnimeRelations(media)
             };
         }
