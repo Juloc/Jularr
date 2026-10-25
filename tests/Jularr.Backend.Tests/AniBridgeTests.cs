@@ -44,7 +44,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(500, links[300].TvdbSeriesId);
             Assert.AreEqual(2, links[300].TvdbSeasonNumber);
             Assert.IsFalse(links.ContainsKey(400));
-            Assert.AreEqual(901, links[500].TvdbSeriesId);
+            Assert.IsFalse(links.ContainsKey(500));
             Assert.AreEqual(902, links[600].TvdbSeriesId);
             Assert.AreEqual(2, links[600].TvdbSeasonNumber);
         }
