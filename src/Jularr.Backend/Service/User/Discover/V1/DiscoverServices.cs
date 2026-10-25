@@ -18,6 +18,7 @@ using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.AniList;
 using Jularr.Integrations.Data.Tmdb;
 using Jularr.Integrations.Logic.Tmdb;
 using UserMedia = Jularr.Backend.Data.User.Media.V1;
