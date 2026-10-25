@@ -139,6 +139,66 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task DurableJob_SelectedTitleAndAuthor_ResolvesOnlyUnambiguousBooksOnTheServer()
+        {
+            await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders());
+            const string json = """
+                {"version":1,"items":[
+                  {"type":"book","title":"Pride and Prejudice","author":"Jane Austen"},
+                  {"type":"book","title":"Pride and Prejudice","author":"Another Author"}
+                ]}
+                """;
+            using var queued = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import/jobs", Form(json));
+            Assert.AreEqual(HttpStatusCode.OK, queued.StatusCode, await queued.Content.ReadAsStringAsync());
+            var job = (await queued.Content.ReadFromJsonAsync<MediaImportJobCreatedV1>())!;
+
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                var claim = await scope.ServiceProvider.GetRequiredService<ClaimOperationV1>()
+                    .ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(OperationType.MediaImport), default);
+                Assert.IsNotNull(claim.OperationId);
+                var completed = await scope.ServiceProvider.GetRequiredService<ExecuteMediaImportJobV1>()
+                    .ExecuteAsync<UpdateResult>(new OperationParametersV1(claim.OperationId.Value), default);
+                Assert.IsTrue(completed.Success);
+            }
+
+            using var statusResponse = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/media-import/jobs/" + job.JobId);
+            var status = (await statusResponse.Content.ReadFromJsonAsync<MediaImportJobStatusV1>())!;
+            Assert.AreEqual(2L, status.ProcessedCount);
+            Assert.AreEqual(MediaImportOutcomeType.Added, status.Rows[0].OutcomeTypeId);
+            Assert.AreEqual(MediaImportOutcomeType.Unavailable, status.Rows[1].OutcomeTypeId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" """),
+                "Add only must not monitor or download automatically.");
+        }
+
+        [TestMethod]
+        public async Task DurableJob_SelectedUnresolvedIsbn_NeverSubstitutesAnUnverifiedTitle()
+        {
+            await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders());
+            const string json = """
+                {"version":1,"items":[
+                  {"type":"book","title":"Pride and Prejudice","author":"Jane Austen","ids":{"isbn":"9780000000002"}}
+                ]}
+                """;
+            using var queued = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import/jobs", Form(json));
+            Assert.AreEqual(HttpStatusCode.OK, queued.StatusCode);
+            var job = (await queued.Content.ReadFromJsonAsync<MediaImportJobCreatedV1>())!;
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                var claim = await scope.ServiceProvider.GetRequiredService<ClaimOperationV1>()
+                    .ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(OperationType.MediaImport), default);
+                Assert.IsNotNull(claim.OperationId);
+                await scope.ServiceProvider.GetRequiredService<ExecuteMediaImportJobV1>()
+                    .ExecuteAsync<UpdateResult>(new OperationParametersV1(claim.OperationId.Value), default);
+            }
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/media-import/jobs/" + job.JobId);
+            var status = (await read.Content.ReadFromJsonAsync<MediaImportJobStatusV1>())!;
+            Assert.AreEqual(MediaImportOutcomeType.NotFound, status.Rows.Single().OutcomeTypeId);
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
         public async Task DurableJob_UnselectedItemsCannotBeQueuedToStartAnImplicitImport()
         {
             await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders());
