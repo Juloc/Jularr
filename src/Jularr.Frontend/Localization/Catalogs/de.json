@@ -9713,6 +9713,14 @@
    "not searched yet",
    "noch nicht gesucht"
   ],
+  "import.backgroundMatchHelp": [
+   "Unresolved books can be selected for server-side matching. Only one unambiguous title-and-author match will be added; other entries remain for review.",
+   "Offene Bücher können für die serverseitige Suche ausgewählt werden. Nur ein eindeutiger Treffer aus Titel und Autor wird importiert; andere Einträge bleiben zur Prüfung offen."
+  ],
+  "import.job.stage.Searching": [
+   "Searching catalog",
+   "Katalog durchsuchen"
+  ],
   "import.providerFailure.rate_limited": [
    "Open Library has limited requests. Some books could not be searched. Try again later; existing choices stay intact.",
    "Open Library begrenzt die Anfragen. Einige Bücher konnten nicht gesucht werden. Später erneut versuchen; die Auswahl bleibt erhalten."
