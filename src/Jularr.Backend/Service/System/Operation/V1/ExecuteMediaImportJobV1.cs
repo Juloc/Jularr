@@ -89,7 +89,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 var choices = new[]
                 {
                     selected is null ? new MediaImportChoiceV1(0, false, null, null, null, null, null)
-                        : new MediaImportChoiceV1(0, selected.Include == true, selected.Choice, selected.Query,
+                        : new MediaImportChoiceV1(0, selected.Include == true, string.IsNullOrWhiteSpace(selected.Choice) ? null : selected.Choice, selected.Query,
                             selected.Action, selected.AcquisitionProfileId, selected.LibraryRootId)
                 };
                 var data = new MediaImportDataV1(null, json, stored.Action, new(stored.Defaults), new(choices));
@@ -101,7 +101,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 // be resolved in this durable worker. Never silently replace a
                 // supplied ISBN or choose among ambiguous/weak matches.
                 MediaImportRowExecution? unresolved = null;
-                if (selected?.Include == true && selected.Choice is null
+                if (selected?.Include == true && string.IsNullOrWhiteSpace(selected.Choice)
                     && row.Item.Type == MediaType.Book && row.Item.Ids.Count == 0
                     && row.Status == MediaImportStatusType.Open)
                 {
@@ -131,7 +131,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             new MediaImportResultRowV1(index, row.Item.Title, outcome, false, null), false);
                     }
                 }
-                else if (selected?.Include == true && selected.Choice is null
+                else if (selected?.Include == true && string.IsNullOrWhiteSpace(selected.Choice)
                     && row.Item.Type == MediaType.Book && row.Item.Ids.Count > 0
                     && row.Status == MediaImportStatusType.Open)
                 {
