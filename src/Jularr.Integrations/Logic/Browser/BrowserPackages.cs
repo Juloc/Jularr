@@ -31,6 +31,7 @@ namespace Jularr.Integrations.Logic.Browser
             _stableVersion = stableVersion;
         }
 
+        public bool OwnsRuntime => options.Path is null && string.IsNullOrWhiteSpace(options.RemoteAddress);
         public bool Enabled { get => Volatile.Read(ref _enabled); set => Volatile.Write(ref _enabled, value); }
         public string State => Volatile.Read(ref _state);
         public string? Error => Volatile.Read(ref _error);
