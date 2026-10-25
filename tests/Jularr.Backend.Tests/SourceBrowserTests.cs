@@ -305,7 +305,8 @@ namespace Jularr.Backend.Tests
             using var folder = new TemporaryDirectory();
             var executable = Path.Combine(folder.Path, "exits.sh");
             var attempts = Path.Combine(folder.Path, "starts.log");
-            await File.WriteAllTextAsync(executable, "#!/bin/sh\\nprintf 'started\\\\n' >> \\"" + attempts + "\\"\\nexit 23\\n");
+            await File.WriteAllTextAsync(executable,
+                string.Join(Environment.NewLine, "#!/bin/sh", "echo started >> " + '"' + attempts + '"', "exit 23", ""));
             File.SetUnixFileMode(executable, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 
             using var source = new SourceBrowser(new BrowserOptions { Path = executable, ProfilePath = folder.Path });
