@@ -32,10 +32,16 @@ namespace Jularr.Frontend.Modules.Pwa
             }).AllowAnonymous();
             endpoints.MapGet("/pwa/icons/{kind}/{color}.png", (HttpContext http, string kind, string color) =>
             {
-                if (!PwaIconRenderer.IsValid(kind, color)) return Results.NotFound();
+                if (kind == "favicon-svg" || !PwaIconRenderer.IsValid(kind, color)) return Results.NotFound();
                 // Only the public color and asset kind affect the pixels; no IDs, secrets, cookies or profile content.
                 http.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
                 return Results.File(PwaIconRenderer.Render(kind, color), "image/png", enableRangeProcessing: true);
+            }).AllowAnonymous();
+            endpoints.MapGet("/pwa/icons/favicon/{color}.svg", (HttpContext http, string color) =>
+            {
+                if (!PwaIconRenderer.IsValid("favicon-svg", color)) return Results.NotFound();
+                http.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+                return Results.Text(PwaIconRenderer.RenderSvg(color), "image/svg+xml");
             }).AllowAnonymous();
             // The running frontend's build identity is public, contains no account state and is never cached.
             // A standalone PWA checks it when resumed; the user decides when a new build may replace the current document.
@@ -67,7 +73,7 @@ namespace Jularr.Frontend.Modules.Pwa
                 start_url = "/",
                 scope = "/",
                 display = "standalone",
-                theme_color = ThemeColor,
+                theme_color = accent is null ? ThemeColor : "#" + accent,
                 background_color = BackgroundColor,
                 icons = new[]
                 {

@@ -27,10 +27,26 @@ namespace Jularr.Frontend.Modules.Pwa
         });
 
         public static bool IsValid(string kind, string color) =>
-            kind is "192" or "512" or "maskable-512" or "apple-180"
+            kind is "192" or "512" or "maskable-512" or "apple-180" or "favicon-16" or "favicon-32" or "favicon-svg"
             && color.Length == 6 && color.All(ch => ch is >= '0' and <= '9' or >= 'a' and <= 'f');
 
         public static string IconUrl(string kind, string color) => "/pwa/icons/" + kind + "/" + color + ".png";
+
+        // Keep the scalable browser tab icon in the same color as the canonical parrot artwork.
+        // The route accepts six lowercase hex digits only: the result never contains user data.
+        private static readonly Lazy<string> FaviconVector = new(() =>
+        {
+            using var stream = typeof(PwaIconRenderer).Assembly.GetManifestResourceStream("Jularr.Frontend.Pages.Shared.brand-clean.svg")
+                ?? throw new InvalidOperationException("The canonical parrot artwork is missing.");
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
+        });
+
+        public static string RenderSvg(string color)
+        {
+            if (!IsValid("favicon-svg", color)) throw new ArgumentException("Invalid favicon color.", nameof(color));
+            return FaviconVector.Value.Replace("fill=\"currentColor\"", "fill=\"#" + color + "\"", StringComparison.Ordinal);
+        }
 
         public static byte[] Render(string kind, string color)
         {
@@ -38,7 +54,7 @@ namespace Jularr.Frontend.Modules.Pwa
             var key = kind + ":" + color;
             if (Cache.TryGetValue(key, out byte[]? cached) && cached is not null) return cached;
 
-            var size = kind switch { "192" => 192, "apple-180" => 180, _ => 512 };
+            var size = kind switch { "192" => 192, "apple-180" => 180, "favicon-16" => 16, "favicon-32" => 32, _ => 512 };
             using var bitmap = new SKBitmap(size, size);
             using var canvas = new SKCanvas(bitmap);
             // Nontransparent rectangular artwork: the operating system applies the final rounded mask.

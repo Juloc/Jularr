@@ -540,7 +540,7 @@ namespace Jularr.Backend.Tests
                 // Catalog baselines are installed together, as in a fresh installation; Razor pages need all of them.
                 library |= media || storage || razor;
                 media = storage = library;
-                var fixture = await Fixture.CreateAsync();
+                var fixture = await Fixture.CreateAsync(appliesAccountMigrations: false);
                 using (var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Instance.sql")!)
                 using (var reader = new StreamReader(schema))
                 {
