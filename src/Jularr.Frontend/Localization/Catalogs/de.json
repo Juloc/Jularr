@@ -13917,6 +13917,18 @@
    "Download model",
    "Modell herunterladen"
   ],
+  "translation.local.retry": [
+   "Retry / resume download",
+   "Download erneut starten / fortsetzen"
+  ],
+  "translation.local.retryInfo": [
+   "This model download was interrupted. Select Retry to resume using the partial files saved by Ollama; nothing restarts automatically.",
+   "Der Modelldownload wurde unterbrochen. Mit erneutem Start werden bereits von Ollama gespeicherte Teile weiterverwendet. Nach einem Neustart wird nichts automatisch heruntergeladen."
+  ],
+  "translation.local.failureInfo": [
+   "Model download failed. Check Ollama and available storage, then retry.",
+   "Modelldownload fehlgeschlagen. Prüfe Ollama und den verfügbaren Speicher und starte ihn erneut."
+  ],
   "translation.local.pullBlocked": [
    "Download not available: verify free space or finish the active download.",
    "Download nicht möglich: Prüfe den freien Speicherplatz oder warte, bis der aktive Download abgeschlossen ist."
@@ -13956,6 +13968,18 @@
   "reader.translation.localQuality": [
    "TranslateGemma · local",
    "TranslateGemma · lokal"
+  ],
+  "reader.translation.provider.original": [
+   "Original text — no translation",
+   "Originaltext – keine Übersetzung"
+  ],
+  "reader.translation.provider.browser": [
+   "Engine: Mozilla/Bergamot · browser",
+   "Engine: Mozilla/Bergamot · Browser"
+  ],
+  "reader.translation.provider.local": [
+   "Engine: TranslateGemma · local",
+   "Engine: TranslateGemma · lokal"
   ],
   "errors.validation.password_incorrect": [
    "The current password is not correct.",
