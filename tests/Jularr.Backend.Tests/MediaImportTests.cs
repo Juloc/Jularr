@@ -134,6 +134,35 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ImportPreview_WhenMetadataProviderIsUnavailable_ExplainsWhyBooksRemainUnsearched()
+        {
+            var providers = new FakeProviders { IsUnavailable = true };
+            await using var host = await CreateHostAsync(providers);
+            const string json = """
+                {"version":1,"items":[{"type":"book","title":"Unlisted Novel","author":"Some Author"}]}
+                """;
+
+            var result = await PreviewAsync(host, json);
+            Assert.AreEqual("unavailable", result.ProviderFailure);
+            Assert.AreEqual(1, result.Unsearched);
+            Assert.AreEqual(MediaImportStatusType.Open, result.Rows.Single().StatusTypeId);
+            Assert.IsFalse(result.Rows.Single().IsIncluded);
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+
+            using var form = await host.SendAsync(HttpMethod.Get, "/Admin/Import");
+            var token = LibraryTests.Token(await form.Content.ReadAsStringAsync());
+            using var response = await host.SendAsync(HttpMethod.Post, "/Admin/Import?handler=Preview",
+                new FormUrlEncodedContent([
+                    KeyValuePair.Create("__RequestVerificationToken", token),
+                    KeyValuePair.Create("Json", json),
+                    KeyValuePair.Create("Action", "1")
+                ]));
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            StringAssert.Contains(await response.Content.ReadAsStringAsync(),
+                "The book metadata provider could not be reached");
+        }
+
+        [TestMethod]
         public async Task Import_BookSearch_OmitsAudioOnlyWorks_ButKeepsPrintedBooksAndMixedFormatWorks()
         {
             var providers = new FakeProviders();
