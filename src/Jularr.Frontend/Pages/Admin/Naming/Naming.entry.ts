@@ -27,7 +27,10 @@ async function showExample(form: HTMLFormElement): Promise<void> {
 }
 
 document.addEventListener("focusin", event => {
-    if (event.target instanceof HTMLInputElement && event.target.closest('form[data-form-kind$="UpdateNamingPatternDataV1"]')) lastField = event.target;
+    const field = event.target;
+    if (!(field instanceof HTMLInputElement)) return;
+    if (field.closest('form[data-form-kind$="UpdateNamingPatternDataV1"]')
+        || field.name === "SpecialsFolder" && field.closest('form[data-form-kind$="UpdateNamingSettingsDataV1"]')) lastField = field;
 });
 
 document.addEventListener("input", event => {

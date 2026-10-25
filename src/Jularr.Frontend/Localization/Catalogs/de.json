@@ -6371,8 +6371,8 @@
    "Eigener Ersatz für den Doppelpunkt"
   ],
   "library.naming.specials": [
-   "Folder of season 0",
-   "Ordner für Staffel 0"
+   "Specials folder format",
+   "Ordnerformat für Specials"
   ],
   "library.naming.colon.Delete": [
    "Delete",
@@ -6405,6 +6405,10 @@
   "library.naming.rules": [
    "Formats of Sonarr and Radarr work as they are, for example {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} or {series title}. Empty placeholders leave with their brackets; the file name always names the film or the episode.",
    "Formate von Sonarr und Radarr funktionieren unverändert, zum Beispiel {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} oder {series title}. Leere Platzhalter verschwinden samt ihren Klammern; der Dateiname nennt immer den Film oder die Folge."
+  ],
+  "library.naming.token.ImdbId": [
+   "IMDb ID",
+   "IMDb-ID"
   ],
   "library.naming.token.Title": [
    "The title",
@@ -8937,6 +8941,10 @@
   "errors.validation.naming_needs_release_token": [
    "Several releases need {Quality}, {Release Group} or {Edition} in every file name.",
    "Mehrere Releases brauchen {Quality}, {Release Group} oder {Edition} in jedem Dateinamen."
+  ],
+  "errors.validation.naming_invalid_folder": [
+   "Use one folder name without slashes; '.' and '..' are not allowed.",
+   "Verwende einen einzelnen Ordnernamen ohne Schrägstriche; '.' und '..' sind nicht erlaubt."
   ],
   "errors.validation.naming_invalid_path": [
    "Each folder of the pattern needs a name.",

@@ -12,12 +12,7 @@ namespace Jularr.Backend.Logic.Library
     {
         public static void Validate(MediaType mediaType, string pattern, string field)
         {
-            var pieces = Parse(pattern);
-            if (pieces.Any(piece => piece.Name is null || !ValidFormat(piece.Name, piece.Format))
-                || Piece().Replace(pattern, "").IndexOfAny(['{', '}']) >= 0)
-            {
-                throw new DataValidationException(field, "naming_unknown_token");
-            }
+            var pieces = ValidateTokens(pattern, field);
 
             var names = pieces.Select(piece => piece.Name!).ToArray();
             var hasTitle = names.Any(name => name.Equals("Title", StringComparison.OrdinalIgnoreCase)
@@ -38,6 +33,27 @@ namespace Jularr.Backend.Logic.Library
             {
                 throw new DataValidationException(field, "naming_invalid_path");
             }
+        }
+
+        public static void ValidateFolder(string pattern, string field)
+        {
+            ValidateTokens(pattern, field);
+            if (pattern.Trim() is "" or "." or ".." || pattern.IndexOfAny(['/', '\\']) >= 0)
+            {
+                throw new DataValidationException(field, "naming_invalid_folder");
+            }
+        }
+
+        private static IReadOnlyList<NamingPiece> ValidateTokens(string pattern, string field)
+        {
+            var pieces = Parse(pattern);
+            if (pieces.Any(piece => piece.Name is null || !ValidFormat(piece.Name, piece.Format))
+                || Piece().Replace(pattern, "").IndexOfAny(['{', '}']) >= 0)
+            {
+                throw new DataValidationException(field, "naming_unknown_token");
+            }
+
+            return pieces;
         }
 
         public static string Join(string? folder, string file) => string.IsNullOrWhiteSpace(folder) ? file : folder.Trim().Trim('/') + "/" + file.Trim();
@@ -61,18 +77,18 @@ namespace Jularr.Backend.Logic.Library
             var parts = pattern.Split('/');
             for (var index = 0; index < parts.Length; index++)
             {
-                // Season 0 goes to its own folder instead of the season folder.
+                // Season 0 uses the same token rendering for its own folder format.
+                var part = parts[index];
                 if (values.Season == 0 && values.Rules.SpecialsFolder is { Length: > 0 } specials && index < parts.Length - 1
-                    && Parse(parts[index]).Any(piece => piece.Name == "Season"))
+                    && Parse(part).Any(piece => piece.Name == "Season"))
                 {
-                    segments.Add(LibraryNaming.SafeName(specials));
-                    continue;
+                    part = specials;
                 }
 
                 // Empty tokens drop out with the brackets and separators around them; what stays is rendered afterwards,
                 // so values keep whatever characters they have.
                 var rendered = new List<string>();
-                var literal = Tidy(Piece().Replace(parts[index], match =>
+                var literal = Tidy(Piece().Replace(part, match =>
                 {
                     var text = Render(ToPiece(match), values);
                     if (text is null)
