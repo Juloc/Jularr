@@ -146,7 +146,8 @@ namespace Jularr.Frontend.Pages.User.Settings
                             form.Toggle(option => option.AutoRequestOnFavorite, "profile.favorite.autoRequest");
                             form.Save();
                         }, Url.Page("/User/Settings/Settings", "FavoriteRequest"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                            new UpdateProfileFavoriteRequestDataV1(_profile.AutoRequestOnFavorite))
+                            new UpdateProfileFavoriteRequestDataV1(_profile.AutoRequestOnFavorite)),
+                        new P(new Text("profile.favorite.autoRequestHelp"))
                     ]));
                 }
                 if (_playback is not null && texts.CanPlay()) page.Content.Add(new UiSection("playback.settings.title", [PlaybackForm(_playback)]));
