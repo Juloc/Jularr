@@ -37,7 +37,7 @@ namespace Jularr.Frontend.Pages.User.Details
         // The series, then the typed relations as a list: a title the library has leads to its Work, any other to its Discover page and is requested from its row.
         private IUiComponent Related(WorkDetailsV1 work, bool preview)
         {
-            var canManage = texts.CanManageRelations();
+            var canManage = !IsExternal && texts.CanManageRelations();
             var parts = new List<IUiComponent>();
             if (work.FranchiseId is { } franchiseId && work.FranchiseName is { } franchiseName)
             {
@@ -73,7 +73,7 @@ namespace Jularr.Frontend.Pages.User.Details
             var state = isRequested ? (IUiComponent)new StateChip(new Text("details.relation.requested"), UiTone.Accent, new Icon("requests", assets, 14)) : Availability(relation);
 
             var actions = new List<IUiComponent>();
-            if (relation.RelatedWorkId is null && !isRequested && address is not null && texts.CanRequest())
+            if (!IsExternal && relation.RelatedWorkId is null && !isRequested && address is not null && texts.CanRequest())
             {
                 actions.Add(new PostForm(Address(query => query["handler"] = "RequestRelated"), _csrf, [("namespace", relation.Namespace ?? ""), ("externalId", relation.ExternalId ?? "")],
                     new Button(new Text("details.relation.request")).Compact().Soft().Submit()));
