@@ -212,7 +212,7 @@ namespace Jularr.Backend.Service.Core
                 var films = new HashSet<int>();
                 foreach (var target in source.Value.EnumerateObject())
                 {
-                    if (target.Value.ValueKind != JsonValueKind.Object || !target.Value.EnumerateObject().Any(range => range.Value.ValueKind == JsonValueKind.String))
+                    if (target.Value.ValueKind != JsonValueKind.Object)
                     {
                         continue;
                     }
