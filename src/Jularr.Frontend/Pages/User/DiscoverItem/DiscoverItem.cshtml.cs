@@ -56,9 +56,13 @@ namespace Jularr.Frontend.Pages.User.DiscoverItem
 
         public async Task<IActionResult> OnGetAsync()
         {
-            await LoadDataAsync();
-            PreparePage();
-            return Page();
+            var scopes = await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
+            var scope = scopes.FirstOrDefault(item => item.Slug == Type && !item.IsCatalog)
+                ?? throw new KeyNotFoundException("Unknown media category.");
+            var source = scope.MediaTypeId == MediaType.Movie ? "tmdb_movie" : "tmdb_tv";
+            return LocalRedirect("/Details?source=" + source
+                + "&externalId=" + TmdbId.ToString(CultureInfo.InvariantCulture)
+                + "&type=" + Uri.EscapeDataString(Type));
         }
 
         public async Task<IActionResult> OnPostAsync([BindRequired] long uiLocaleId)
