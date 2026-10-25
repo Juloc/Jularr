@@ -26,6 +26,9 @@ namespace Jularr.Backend.Tests
                     },
                     "anilist:400": {
                         "tvdb_show:900:s1": { "1-12": null }
+                    },
+                    "anilist:500": {
+                        "tvdb_show:901:s1": {}
                     }
                 }
                 """);
@@ -37,6 +40,7 @@ namespace Jularr.Backend.Tests
             Assert.IsNull(links[300].TvdbSeriesId);
             Assert.IsNull(links[300].TvdbSeasonNumber);
             Assert.IsFalse(links.ContainsKey(400));
+            Assert.AreEqual(901, links[500].TvdbSeriesId);
         }
 
         [TestMethod]
