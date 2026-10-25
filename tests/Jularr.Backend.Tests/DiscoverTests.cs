@@ -599,6 +599,43 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task RepeatedApprovedSeasonRequest_BroadensOnlyNewlyRequestedSeasons()
+        {
+            await using var host = await CreateHostAsync();
+            using var favorite = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/favorite",
+                new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, favorite.StatusCode, await favorite.Content.ReadAsStringAsync());
+            var workId = (await favorite.Content.ReadFromJsonAsync<FavoriteDiscoverResultV1>())!.WorkId;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number")
+                    VALUES ({workId}, 1, 1), ({workId}, 1, 2), ({workId}, 1, 3);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "IsMonitored")
+                    SELECT {workId}, season."Id", 2, 1, TRUE FROM "WorkUnits" AS season
+                    WHERE season."WorkId" = {workId} AND season."WorkUnitTypeId" = 1;
+                """);
+            using var fromThree = await host.SendAsync(HttpMethod.Post, "/api/v1/works/" + workId + "/requests",
+                new CreateRequestDataV1(1, startSeasonNumber: 3));
+            Assert.AreEqual(HttpStatusCode.OK, fromThree.StatusCode, await fromThree.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"MinimumSeasonNumber\" FROM \"WantedItems\""));
+
+            using var fromTwo = await host.SendAsync(HttpMethod.Post, "/api/v1/works/" + workId + "/requests",
+                new CreateRequestDataV1(1, startSeasonNumber: 2));
+            Assert.AreEqual(HttpStatusCode.OK, fromTwo.StatusCode, await fromTwo.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"MinimumSeasonNumber\" FROM \"WantedItems\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+            Assert.AreEqual(1L, await host.ScalarAsync($"""
+                SELECT count(*) FROM "WorkUnits" AS episode
+                JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
+                WHERE episode."WorkId" = {workId} AND season."Number" = 2 AND episode."IsMonitored";
+                """));
+            Assert.AreEqual(0L, await host.ScalarAsync($"""
+                SELECT count(*) FROM "WorkUnits" AS episode
+                JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
+                WHERE episode."WorkId" = {workId} AND season."Number" = 1 AND episode."IsMonitored";
+                """));
+        }
+
+        [TestMethod]
         public async Task UnifiedDetails_ExternalAnimeIsReadOnly_FavoriteCreatesExactlyOneWork_AndShowsAniListProgress()
         {
             await using var host = await CreateHostAsync(razor: true);

@@ -111,6 +111,50 @@ namespace Jularr.Backend.Logic.Acquisition
 
         private sealed record ExistingSeasonScope(int MinimumSeasonNumber);
 
+        // Re-submitting an approved request for an earlier season broadens the shared target.
+        // An Open request only records its intent; Wanted changes after approval.
+        public static async Task<bool> BroadenRequestedSeasonAsync(this LogicContext ctx, AcquisitionRequestData request, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement = """
+                SELECT wanted."Id" AS "WantedItemId",
+                    wanted."MinimumSeasonNumber" AS "OldMinimumSeasonNumber",
+                    coalesce(request."StartSeasonNumber", 1) AS "NewMinimumSeasonNumber"
+                FROM "RequestTargets" AS link
+                JOIN "WantedItems" AS wanted ON wanted."Id" = link."WantedItemId"
+                JOIN "AcquisitionRequests" AS request ON request."Id" = link."AcquisitionRequestId"
+                WHERE link."AcquisitionRequestId" = @Id
+                FOR UPDATE OF wanted;
+                """;
+            sql.Parameters.Add(request);
+            var scope = await ctx.ReadOptionalAsync<RequestedSeasonBroadening>(sql, ct);
+            if (scope is null || scope.NewMinimumSeasonNumber >= scope.OldMinimumSeasonNumber) return false;
+
+            sql = new SqlStatement();
+            sql.Statement = """
+                UPDATE "WantedItems" SET "MinimumSeasonNumber" = @NewMinimumSeasonNumber,
+                    "NextSearchAt" = NULL, "UpdatedAt" = now(), "Version" = "Version" + 1
+                WHERE "Id" = @WantedItemId AND "MinimumSeasonNumber" > @NewMinimumSeasonNumber;
+                """;
+            sql.Parameters.Add(scope);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1) return false;
+
+            sql = new SqlStatement();
+            sql.Statement = """
+                UPDATE "WorkUnits" AS episode SET "IsMonitored" = TRUE
+                FROM "WorkUnits" AS season
+                WHERE episode."WorkId" = @WorkId AND episode."ParentWorkUnitId" = season."Id"
+                    AND episode."WorkUnitTypeId" = 2 AND season."WorkUnitTypeId" = 1
+                    AND season."Number" >= @NewMinimumSeasonNumber
+                    AND season."Number" < @OldMinimumSeasonNumber;
+                """;
+            sql.Parameters.Add(new { request.WorkId, scope.NewMinimumSeasonNumber, scope.OldMinimumSeasonNumber });
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            return true;
+        }
+
+        private sealed record RequestedSeasonBroadening(long WantedItemId, int OldMinimumSeasonNumber, int NewMinimumSeasonNumber);
+
         // A target for a title that has none; one that exists stays as it is. Without the data asking for monitoring, a new target starts paused and the Owner unpauses it later.
         public static async Task<bool> EnsureWantedItemAsync(this LogicContext ctx, WantedTakeoverData data, CancellationToken ct)
         {

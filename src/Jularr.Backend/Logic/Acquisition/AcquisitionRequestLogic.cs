@@ -145,7 +145,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 await ctx.UpdateAcquisitionRequestAsync(new AcquisitionRequestUpdateData(request.Id, AcquisitionRequestStatusType.Approved, 1, data.RequestedByAccountId), ct);
             }
 
-            return (request, newlyApproved);
+            // A repeated approved request can widen its previous season intent, but never narrow
+            // someone else's monitoring. Pending requests only store the new season floor.
+            var broadened = policy.ActiveRequestId is not null && await ctx.BroadenRequestedSeasonAsync(request, ct);
+            return (request, newlyApproved || broadened);
         }
 
         public static async Task UpdateAcquisitionRequestAsync(this LogicContext ctx, AcquisitionRequestUpdateData data, CancellationToken ct)
