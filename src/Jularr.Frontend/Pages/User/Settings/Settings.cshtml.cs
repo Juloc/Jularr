@@ -28,7 +28,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.User.Settings
 {
-    public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, ReadProfileMediaV1 readMedia, UpdateProfileMediaV1 updateMedia,
+    public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, UpdateProfileFavoriteRequestV1 updateFavoriteRequest, ReadProfileMediaV1 readMedia, UpdateProfileMediaV1 updateMedia,
         UpdateProfilePinV1 updatePin, ChangeAccountPasswordV1 changePassword, RemoveProfilePinV1 removePin, DeleteProfileV1 deleteProfile, ReadUiLocalesV1 readLocales, ReadHomeLayoutV1 readLayout, SaveHomeLayoutV1 saveLayout,
         ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAvailableSpeechModelsV1 readSpeechModels, ReadPlaybackPreferencesV1 readPlayback, SavePlaybackPreferencesV1 savePlayback,
         ReadAniListConnectionV1 readAniList, ConnectAniListV1 connectAniList, DisconnectAniListV1 disconnectAniList, UpdateAniListPushV1 updateAniListPush,
@@ -138,6 +138,17 @@ namespace Jularr.Frontend.Pages.User.Settings
                 }
 
                 page.Content.Add(new UiSection("profile.settings.title", content));
+                if (_authentication!.Permissions.Contains("profile.self.update", StringComparer.Ordinal))
+                {
+                    page.Content.Add(new UiSection("profile.favorite.title", [
+                        new Form<UpdateProfileFavoriteRequestDataV1>(form =>
+                        {
+                            form.Toggle(option => option.AutoRequestOnFavorite, "profile.favorite.autoRequest");
+                            form.Save();
+                        }, Url.Page("/User/Settings/Settings", "FavoriteRequest"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                            new UpdateProfileFavoriteRequestDataV1(_profile.AutoRequestOnFavorite))
+                    ]));
+                }
                 if (_playback is not null && texts.CanPlay()) page.Content.Add(new UiSection("playback.settings.title", [PlaybackForm(_playback)]));
 
                 // Each profile connects its own AniList account; a profile can connect it once the Owner has set the application up.
@@ -246,6 +257,15 @@ namespace Jularr.Frontend.Pages.User.Settings
 
             // Save through the canonical writer.
             await updateProfile.ExecuteAsync<UpdateResult>(new UpdateProfileParametersV1(profileId), _input, HttpContext.RequestAborted);
+            return RedirectToPage("/User/Settings/Settings");
+        }
+
+        public async Task<IActionResult> OnPostFavoriteRequestAsync(bool autoRequestOnFavorite)
+        {
+            var current = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted);
+            var profileId = current.ProfileId ?? throw new UnauthorizedAccessException("An active profile is required.");
+            await updateFavoriteRequest.ExecuteAsync<UpdateResult>(new UpdateProfileParametersV1(profileId),
+                new UpdateProfileFavoriteRequestDataV1(autoRequestOnFavorite), HttpContext.RequestAborted);
             return RedirectToPage("/User/Settings/Settings");
         }
 
