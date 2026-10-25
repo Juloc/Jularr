@@ -2981,6 +2981,7 @@ namespace Jularr.Frontend.Localization
             new("import.outcome.Skipped", "Skipped"),
             new("import.outcome.NotFound", "Not found"),
             new("import.outcome.Unavailable", "Provider unavailable"),
+            new("import.outcome.NeedsReview", "Review the match"),
             new("import.outcome.Excluded", "Excluded"),
             new("import.outcome.Deferred", "Waiting for the next run"),
             new("import.outcome.Failed", "Failed"),
