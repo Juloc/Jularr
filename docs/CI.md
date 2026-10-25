@@ -1,5 +1,10 @@
 # CI gates for main and dev
 
+The four `setup-dotnet` callers pin SDK `10.0.403` explicitly. This avoids a
+latest-channel `aka.ms` redirect to an unavailable download origin. Update the
+version in Backend, Backend Full, Frontend and Browser Smoke together and verify
+their normal gates.
+
 The ordinary PR gate is deliberately bounded. An opted-in Full PR skips the
 fast Backend build; its stable `Backend / test` gate waits for the reusable Full
 regression instead of compiling and testing the backend twice. The full suite is retained,
