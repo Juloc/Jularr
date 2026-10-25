@@ -1,5 +1,5 @@
 using Jularr.Backend.Data.Common;
-using Jularr.Backend.Data.Enums.Field;
+using Jularr.Backend.Data.Fields;
 
 namespace Jularr.Backend.Data.Admin.Network.V1
 {
