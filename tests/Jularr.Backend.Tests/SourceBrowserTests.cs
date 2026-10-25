@@ -54,6 +54,22 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void ManagedBrowser_SizeScanCannotFollowSymlinksToUnrelatedFiles()
+        {
+            if (!OperatingSystem.IsLinux()) return;
+            using var folder = new TemporaryDirectory();
+            var managed = Path.Combine(folder.Path, "managed");
+            var outside = Path.Combine(folder.Path, "outside");
+            Directory.CreateDirectory(managed);
+            Directory.CreateDirectory(outside);
+            File.WriteAllBytes(Path.Combine(managed, "owned.dat"), new byte[7]);
+            File.WriteAllBytes(Path.Combine(outside, "foreign.dat"), new byte[29]);
+            Directory.CreateSymbolicLink(Path.Combine(managed, "foreign"), outside);
+            var packages = new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path });
+            Assert.AreEqual(7L, packages.ManagedSizeBytes);
+        }
+
+        [TestMethod]
         public async Task ManagedBrowser_FailedInstallBacksOffAndTurningOffClearsRetry()
         {
             var packages = new BrowserPackages(new BrowserOptions { ProfilePath = Path.Combine("relative", "nonexistent-root") });
