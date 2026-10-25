@@ -552,6 +552,56 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task UnifiedDetails_ExternalAnimeIsReadOnly_FavoriteCreatesExactlyOneWork_AndShowsAniListProgress()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "AniListConnections" ("ProfileId", "ViewerId", "ViewerName", "ProtectedToken")
+                    VALUES (101, 123456, 'Test Viewer', decode('00', 'hex'));
+                INSERT INTO "AniListEntries" ("ProfileId", "MediaId", "ListEntryId", "IsManga", "Title", "Status", "Progress", "TotalCount", "RemoteUpdatedAt")
+                    VALUES (101, 21, 5051, FALSE, 'The Matrix Show Season 2', 'CURRENT', 6, 12, now());
+                """);
+
+            using var snapshot = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/external-details",
+                new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, snapshot.StatusCode, await snapshot.Content.ReadAsStringAsync());
+            var details = (await snapshot.Content.ReadFromJsonAsync<DiscoverExternalDetailsV1>())!;
+            Assert.IsNull(details.Entry.WorkId);
+            Assert.AreEqual(6, details.AniListProgress);
+            Assert.AreEqual(12, details.AniListTotal);
+            Assert.AreEqual("CURRENT", details.AniListStatus);
+
+            using var browser = await host.SendAsync(HttpMethod.Get, "/Details?source=anilist&externalId=21&type=anime");
+            var html = await browser.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, browser.StatusCode, html);
+            StringAssert.Contains(html, "The Matrix Show Season 2");
+            StringAssert.Contains(html, "AniList");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WatchlistEntries\""));
+
+            using var favorite = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/favorite",
+                new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, favorite.StatusCode, await favorite.Content.ReadAsStringAsync());
+            var saved = (await favorite.Content.ReadFromJsonAsync<FavoriteDiscoverResultV1>())!;
+            Assert.IsTrue(saved.WorkId > 0);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WatchlistEntries\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+
+            using var repeated = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/favorite",
+                new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, repeated.StatusCode, await repeated.Content.ReadAsStringAsync());
+            Assert.AreEqual(saved.WorkId, (await repeated.Content.ReadFromJsonAsync<FavoriteDiscoverResultV1>())!.WorkId);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WatchlistEntries\""));
+
+            using var nowLocal = await host.SendAsync(HttpMethod.Get, "/Details?source=anilist&externalId=21&type=anime");
+            Assert.AreEqual(HttpStatusCode.Redirect, nowLocal.StatusCode);
+            StringAssert.Contains(nowLocal.Headers.Location!.OriginalString, "/Details/" + saved.WorkId);
+        }
+
+        [TestMethod]
         public async Task RelatedWork_RequestedFromItsRow_IsTheDiscoverRequestWithoutLeavingThePage()
         {
             await using var host = await CreateHostAsync(razor: true);
