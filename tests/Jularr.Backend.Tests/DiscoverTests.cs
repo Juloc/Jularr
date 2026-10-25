@@ -12,6 +12,7 @@ using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Request.V1;
+using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Media.V1;
@@ -599,6 +600,49 @@ namespace Jularr.Backend.Tests
             using var nowLocal = await host.SendAsync(HttpMethod.Get, "/Details?source=anilist&externalId=21&type=anime");
             Assert.AreEqual(HttpStatusCode.Redirect, nowLocal.StatusCode);
             StringAssert.Contains(nowLocal.Headers.Location!.OriginalString, "/Details/" + saved.WorkId);
+        }
+
+        [TestMethod]
+        public async Task Favorite_AutoRequestIsOptIn_AndRespectsRequestsModule()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+
+            using var preference = await host.SendAsync(HttpMethod.Put, "/api/v1/profiles/101/favorite-request",
+                new UpdateProfileFavoriteRequestDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, preference.StatusCode, await preference.Content.ReadAsStringAsync());
+
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/profiles/101");
+            Assert.IsTrue((await read.Content.ReadFromJsonAsync<ReadProfileResultV1>())!.AutoRequestOnFavorite);
+
+            // Disabled request creation must not stop the favorite action.
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = FALSE WHERE "Key" = 'Requests';
+                """);
+            using var favorite = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/favorite",
+                new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, favorite.StatusCode, await favorite.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WatchlistEntries\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+        }
+
+        [TestMethod]
+        public async Task Favorite_NewProfileOptIn_CreatesOneApprovedRequest()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            using var preference = await host.SendAsync(HttpMethod.Put, "/api/v1/profiles/101/favorite-request",
+                new UpdateProfileFavoriteRequestDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, preference.StatusCode, await preference.Content.ReadAsStringAsync());
+
+            using var favorite = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/favorite",
+                new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, favorite.StatusCode, await favorite.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WatchlistEntries\""));
+
+            using var twice = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/favorite",
+                new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, twice.StatusCode, await twice.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
         }
 
         [TestMethod]
