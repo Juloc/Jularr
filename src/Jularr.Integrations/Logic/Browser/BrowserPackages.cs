@@ -24,6 +24,12 @@ namespace Jularr.Integrations.Logic.Browser
         private int _installFailures;
         private int _refreshMode;
         private bool _enabled;
+        private Func<CancellationToken, Task<string>> _stableVersion = LatestStableVersionAsync;
+
+        internal BrowserPackages(BrowserOptions options, Func<CancellationToken, Task<string>> stableVersion) : this(options)
+        {
+            _stableVersion = stableVersion;
+        }
 
         public bool Enabled { get => Volatile.Read(ref _enabled); set => Volatile.Write(ref _enabled, value); }
         public string State => Volatile.Read(ref _state);
