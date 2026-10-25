@@ -101,7 +101,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 .Select(item => (IUiComponent)new Tag(new Strong(new ValueText(item.Count.ToString(CultureInfo.CurrentCulture))), new Text("import.status." + item.Status))).ToList();
             if (listing.Unsearched > 0) summary.Add(new Tag(new Strong(new ValueText(listing.Unsearched.ToString(CultureInfo.CurrentCulture))), new Text("import.unsearched")));
             // Unsearched due to provider failure is not the same as a planned next search batch.
-            if (listing.ProviderFailure is { } failure) summary.Add(new Span(new Icon("alert-triangle", assets, 14),
+            if (listing.ProviderFailure is { } failure) summary.Add(new Span(new Icon("info", assets, 14),
                 new Text("import.providerFailure." + failure)).Class("media-import__provider-warning").Attribute("role", "alert"));
             summary.Add(new A(new Text("import.restart")).Class("button button--compact").Attribute("href", Address));
             content.Add(new Div(new H2(new Text("import.previewTitle")), new Div([.. summary]).Class("media-import__summary")).Class("media-import__head"));
