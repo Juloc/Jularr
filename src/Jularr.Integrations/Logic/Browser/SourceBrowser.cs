@@ -227,16 +227,16 @@ namespace Jularr.Integrations.Logic.Browser
             try
             {
                 await StartBrowserAsync(ct);
-                _lastUrl = uri.AbsoluteUri;
+                _lastUrl = DiagnosticOrigin(uri);
                 _lastAttemptAt = DateTime.UtcNow;
-                Note("navigate", uri.AbsoluteUri);
+                Note("navigate", DiagnosticOrigin(uri));
                 await _client!.SendAsync("Page.navigate", new { url = uri.AbsoluteUri }, ct);
                 var page = await WaitForPageAsync(uri, ct);
                 if (page is null)
                 {
                     _lastOutcome = _refused ? "refused" : "no answer";
                     _lastError = _refused ? "the source refused this browser" : null;
-                    Note(_lastOutcome, _lastError ?? $"no answer for {uri.AbsoluteUri}");
+                    Note(_lastOutcome, _lastError ?? $"no answer for {DiagnosticOrigin(uri)}");
                     // A source that refuses this client gets a new one next time.
                     if (_refused)
                     {
@@ -249,7 +249,7 @@ namespace Jularr.Integrations.Logic.Browser
 
                 _lastOutcome = "read";
                 _lastError = null;
-                Note("read", $"{uri.AbsoluteUri} ({page.Length} bytes)");
+                Note("read", $"{DiagnosticOrigin(uri)} ({page.Length} bytes)");
                 return page;
             }
             catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException or System.Text.Json.JsonException)
@@ -324,7 +324,7 @@ namespace Jularr.Integrations.Logic.Browser
                             continue;
                         }
 
-                        Note("read", $"{page.Address.AbsoluteUri} ({state.Html.Length} bytes)");
+                        Note("read", $"{DiagnosticOrigin(page.Address)} ({state.Html.Length} bytes)");
                         return new BrowserPage(page.Address, state.Html);
                     }
 
@@ -667,7 +667,7 @@ namespace Jularr.Integrations.Logic.Browser
             await _client.ConnectAsync(remote, ct);
             await _client.SendAsync("Page.enable", null, ct);
             await RememberVersionAsync(ct);
-            Note("started", $"the browser at {_options.RemoteAddress} answers");
+            Note("started", $"the browser at {DiagnosticOrigin(new Uri(_options.RemoteAddress!))} answers");
         }
 
         private async Task CloseProcessAsync()
@@ -837,6 +837,14 @@ namespace Jularr.Integrations.Logic.Browser
         private static string Location(string address)
         {
             return Uri.TryCreate(address, UriKind.Absolute, out var uri) ? uri.GetLeftPart(UriPartial.Path) : address;
+        }
+
+        // A provider URL may carry a member key, signed file token or private search term.
+        // Only the source origin belongs in administrator diagnostics and status responses.
+        internal static string DiagnosticOrigin(Uri uri)
+        {
+            var host = uri.HostNameType == UriHostNameType.IPv6 ? "[" + uri.IdnHost + "]" : uri.IdnHost;
+            return uri.Scheme + "://" + host + (uri.IsDefaultPort ? "" : ":" + uri.Port);
         }
 
         // What the browser did, for the administrator to see.
