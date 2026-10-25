@@ -19,8 +19,21 @@ namespace Jularr.Backend.Tests
         internal static readonly Dictionary<MediaType, string> Defaults = new()
         {
             [MediaType.Movie] = "{Title} ({Year})/{Title} ({Year}) [{Quality}]",
-            [MediaType.Series] = "{Title}/Season {Season:00}/{Title} - S{Season:00}E{Episode:00} [{Quality}]"
+            [MediaType.Series] = "{Title}/Season {Season:00}/{Title} - S{Season:00}E{Episode:00} [{Quality}]",
+            [MediaType.Book] = "{Author}/{Title} ({Year})/{Title}",
+            [MediaType.Music] = "{Artist}/{Album} ({Year})/{Track:00} - {Track Title}",
+            [MediaType.Game] = "{Platform}/{Title} ({Year})/{Original Filename}"
         };
+
+        internal static NamingSet DefaultSet
+        {
+            get
+            {
+                var patterns = Defaults.ToDictionary(item => (item.Key, (MediaSubtype?)null), item => item.Value);
+                patterns[(MediaType.Book, MediaSubtype.Manga)] = "{Title}/{Title} {Volume Label:00}";
+                return new NamingSet(patterns);
+            }
+        }
 
         [TestMethod]
         public void NamingPattern_EmptyPlaceholders_DropWithTheirBrackets()
@@ -240,8 +253,8 @@ namespace Jularr.Backend.Tests
             var series = all.Single(pattern => pattern.MediaTypeId == MediaType.Series && pattern.MediaSubtypeId is null);
             Assert.AreEqual(Defaults[MediaType.Series], all.Single(pattern => pattern.MediaSubtypeId == MediaSubtype.Anime).Folder + "/" + all.Single(pattern => pattern.MediaSubtypeId == MediaSubtype.Anime).File);
             Assert.AreEqual(Defaults[MediaType.Series], series.Folder + "/" + series.File);
-            Assert.AreEqual("Example Show/Season 01/Example Show - S01E02 [WEBDL-1080p].mkv", series.Example);
-            StringAssert.Contains(html, "Example Show/Season 01/Example Show - S01E02 [WEBDL-1080p].mkv");
+            Assert.AreEqual("The Series Title's!/Season 01/The Series Title's! - S01E01 [WEBDL-1080p].mkv", series.Example);
+            StringAssert.Contains(WebUtility.HtmlDecode(html), "The Series Title's!/Season 01/The Series Title's! - S01E01 [WEBDL-1080p].mkv");
 
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series", new UpdateNamingPatternDataV1("{Title}/S{Season:00}", "{Title} S{Season:00}E{Episode:00}", series.Version));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
@@ -264,7 +277,7 @@ namespace Jularr.Backend.Tests
             using var good = await host.SendAsync(HttpMethod.Get, Address("Series", "{Title}/S{Season:00}", "{Series.Title} S{Season:00}E{Episode:00}"));
             Assert.AreEqual(HttpStatusCode.OK, good.StatusCode, await good.Content.ReadAsStringAsync());
             var preview = (await good.Content.ReadFromJsonAsync<NamingPreviewV1>())!;
-            Assert.AreEqual("Example Show/S01/Example.Show S01E02.mkv", preview.Example);
+            Assert.AreEqual("The Series Title's!/S01/The.Series.Title's! S01E01.mkv", preview.Example);
             Assert.IsNull(preview.Problem);
 
             using var unknown = await host.SendAsync(HttpMethod.Get, Address("Movie", null, "{Title} {Nothing}"));

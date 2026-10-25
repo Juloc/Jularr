@@ -108,9 +108,9 @@ namespace Jularr.Backend.Tests
             File.WriteAllBytes(Path.Combine(pack, "Example Manga v02 (2019) (Digital) small.cbz"), Archive("PK\u0003\u0004", 100));
             sources.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Pack","status":"Completed","storage":"/downloads/Example Manga v01-02"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
-            var library = Path.Combine(storage.Path, "1", "Manga", "Example Manga");
-            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Manga v01.cbz")));
-            Assert.AreEqual(2100L, new FileInfo(Path.Combine(library, "Example Manga v02.cbz")).Length);
+            var library = Path.Combine(storage.Path, "1", "Manga", "Example Manga {anilist-101}");
+            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Manga v01 {anilist-101}.cbz")));
+            Assert.AreEqual(2100L, new FileInfo(Path.Combine(library, "Example Manga v02 {anilist-101}.cbz")).Length);
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\" WHERE \"WorkUnitId\" IS NOT NULL AND \"MediaAssetTypeId\" = 4"));
             Assert.AreNotEqual((short)6, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
 
@@ -118,7 +118,7 @@ namespace Jularr.Backend.Tests
             File.WriteAllBytes(Path.Combine(single, "Example Manga v03 (2021) (Digital).cbr"), Archive("Rar!\u001A\u0007", 3000));
             sources.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_2","name":"Single","status":"Completed","storage":"/downloads/Example Manga v03"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
-            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Manga v03.cbr")));
+            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Manga v03 {anilist-101}.cbr")));
             Assert.AreEqual((short)6, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
 
             // A present volume of equal quality is a manual choice; other series and chapter releases do not fill it.
@@ -162,9 +162,9 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "FR" }, Judge("Example Manga (French) (Digital)").Languages!.ToArray());
 
             // A file holding several volumes is no single volume.
-            Assert.AreEqual(0, ImportPlacementLogic.Plan(MediaType.Book, MediaSubtype.Manga, "Example Manga", null, null, [new("Example Manga v01-03.cbz", 1000, DateTime.UtcNow)], NamingPatternTests.Defaults, null).Count);
+            Assert.AreEqual(0, ImportPlacementLogic.Plan(MediaType.Book, MediaSubtype.Manga, "Example Manga", null, null, [new("Example Manga v01-03.cbz", 1000, DateTime.UtcNow)], NamingPatternTests.DefaultSet, null).Count);
             Assert.AreEqual(1, ImportPlacementLogic.Plan(MediaType.Book, MediaSubtype.Manga, "Example Manga", null, null, [new("Example Manga v01-03.cbz", 1000, DateTime.UtcNow),
-                new("Example Manga v04.cbz", 1000, DateTime.UtcNow)], NamingPatternTests.Defaults, null).Count);
+                new("Example Manga v04.cbz", 1000, DateTime.UtcNow)], NamingPatternTests.DefaultSet, null).Count);
 
             static ReleaseJudgement<MangaIdentityMatch> Judge(string title) => MangaReleaseJudge.Judge(["Example Manga"], null,
                 new ReleaseOffer(title, 1, "Indexer", 25, "guid", new Uri("https://indexer.example.test/guid"), null, 1_000_000, DateTimeOffset.UtcNow, ["title"]));

@@ -85,7 +85,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 }
 
                 foreach (var placement in ImportPlacementLogic.Plan(download.MediaTypeId, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey,
-                    files, patterns, facts, download.Author, download.TrackCount, download.PlatformName, EpisodeNumbering.Episodes(units), tags))
+                    files, patterns, facts, download.Author, download.TrackCount, download.PlatformName, EpisodeNumbering.Episodes(units), tags, ImportPlacementLogic.KnownValues(target)))
                 {
                     if (!placement.IsMedia || LibraryFileTypes.GetAssetType(placement.SourcePath) is not (MediaAssetType.Ebook or MediaAssetType.Comic)
                         || await IsDocumentAsync(source, StoragePath.Combine(sourceDirectory, placement.SourcePath), placement.Extension, ct))
@@ -138,7 +138,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 }
             }
 
-            var commit = await CommitAsync(context, new ImportCommitRequest(root, download.WorkId, download.GamePlatformId, placements, source, sourceDirectory, files, _ => facts,
+            var commit = await CommitAsync(context, new ImportCommitRequest(root, download.WorkId, download.GamePlatformId, placements, source, sourceDirectory, files,
+                path => download.MediaTypeId == MediaType.Game ? new ReleaseFact(TextLimit.Cut(Path.GetFileName(path), 500)!, facts.ReleaseGroup, facts.QualityKey, facts.Edition, facts.Revision) : facts,
                 ImportTransferMode.Link, download.OperationId, null, download.MediaTypeId, acquisitionProfile), ct);
             if (commit.FailureKey is { } failure)
             {
@@ -258,8 +259,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                             throw new ImportAssignmentException();
                         }
 
-                        assigned.Add((await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, request.WorkId, null, placement.WorkUnitTypeId, placement.UnitNumber,
-                            placement.ParentUnitNumber, request.GamePlatformId, false), token)).Id);
+                        var assignment = new StoredFileAssignmentData(file.Id, request.WorkId, null, placement.WorkUnitTypeId, placement.UnitNumber,
+                            placement.ParentUnitNumber, request.GamePlatformId, false);
+                        assigned.Add((placement.FurtherEpisodes.Count > 0
+                            ? await ctx.AssignStoredFileRangeAsync(assignment, placement.FurtherEpisodes, token)
+                            : await ctx.AssignStoredFileAsync(assignment, token)).Id);
 
                         // An import by itself is recorded with its operation, one by hand with the person who made it (and the download it was made for).
                         await ctx.RecordActivityAsync(request.AccountId is { } accountId ? new ActivityEventData(ActivityEventType.ManualImport, operationId: request.OperationId, storedFileId: file.Id, accountId: accountId)

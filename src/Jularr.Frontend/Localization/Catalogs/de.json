@@ -6411,8 +6411,8 @@
    "Platzhalter"
   ],
   "library.naming.rules": [
-   "Formats of Sonarr and Radarr work as they are, for example {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} or {series title}. Empty placeholders leave with their brackets; the file name always names the film or the episode.",
-   "Formate von Sonarr und Radarr funktionieren unverändert, zum Beispiel {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} oder {series title}. Leere Platzhalter verschwinden samt ihren Klammern; der Dateiname nennt immer den Film oder die Folge."
+   "Use placeholders such as {Title}, {anilist-{AnilistId}}, {olid-{OpenLibraryId}} or {[Quality Full]}. Empty placeholders disappear with their decoration. Saving changes import names; existing files move only after a confirmed rename preview. Multi-file game releases keep their internal paths.",
+   "Verwende Platzhalter wie {Title}, {anilist-{AnilistId}}, {olid-{OpenLibraryId}} oder {[Quality Full]}. Leere Platzhalter verschwinden samt ihren Zusätzen. Speichern ändert Importnamen; vorhandene Dateien werden erst nach einer bestätigten Umbenennungsvorschau verschoben. Mehrteilige Spiel-Releases behalten ihre internen Pfade."
   ],
   "library.naming.token.ImdbId": [
    "IMDb ID",
@@ -14004,6 +14004,258 @@
   "admin.accounts.passwordLinkShown": [
    "Give this link to the person. It sets a new password, works once and is valid for 24 hours. It is shown only now.",
    "Diesen Link der Person geben. Er setzt ein neues Passwort, funktioniert einmal und ist 24 Stunden gültig. Er wird nur jetzt angezeigt."
+  ],
+  "library.naming.Book": [
+   "Book files",
+   "Buchdateien"
+  ],
+  "library.naming.Book.Manga": [
+   "Manga files",
+   "Manga-Dateien"
+  ],
+  "library.naming.Book.LightNovel": [
+   "Light novel files",
+   "Light-Novel-Dateien"
+  ],
+  "library.naming.Music": [
+   "Music files",
+   "Musikdateien"
+  ],
+  "library.naming.Game": [
+   "Game files",
+   "Spieldateien"
+  ],
+  "library.naming.seasonFolder": [
+   "Season folder format",
+   "Staffelordnerformat"
+  ],
+  "library.naming.dailyFile": [
+   "Daily episode file format",
+   "Dateiformat für tägliche Folgen"
+  ],
+  "library.naming.renamesFiles": [
+   "Rename imported files",
+   "Importierte Dateien umbenennen"
+  ],
+  "library.naming.multiStyle": [
+   "Multi-episode style",
+   "Benennung mehrerer Folgen"
+  ],
+  "library.naming.multiExample": [
+   "Multiple episodes:",
+   "Mehrere Folgen:"
+  ],
+  "library.naming.dailyExample": [
+   "Daily episode:",
+   "Tägliche Folge:"
+  ],
+  "library.naming.specialsExample": [
+   "Special episode:",
+   "Spezialfolge:"
+  ],
+  "library.naming.multi.Extend": [
+   "Extend (S01E01-02-03)",
+   "Erweitert (S01E01-02-03)"
+  ],
+  "library.naming.multi.Duplicate": [
+   "Duplicate (S01E01 - S01E02 - S01E03)",
+   "Wiederholt (S01E01 - S01E02 - S01E03)"
+  ],
+  "library.naming.multi.Repeat": [
+   "Repeat (S01E01E02E03)",
+   "Aneinander (S01E01E02E03)"
+  ],
+  "library.naming.multi.Scene": [
+   "Scene (S01E01-E02-E03)",
+   "Scene-Stil (S01E01-E02-E03)"
+  ],
+  "library.naming.multi.Range": [
+   "Range (S01E01-03)",
+   "Bereich (S01E01-03)"
+  ],
+  "library.naming.multi.PrefixedRange": [
+   "Prefixed range (S01E01-E03)",
+   "Bereich mit Präfix (S01E01-E03)"
+  ],
+  "library.naming.token.Author": [
+   "The first author",
+   "Der erste Autor"
+  ],
+  "library.naming.token.AuthorName": [
+   "The author name",
+   "Der Autorenname"
+  ],
+  "library.naming.token.AuthorCleanName": [
+   "The author without punctuation",
+   "Der Autor ohne Satzzeichen"
+  ],
+  "library.naming.token.AuthorSortName": [
+   "The author name for sorting",
+   "Der Autorenname zur Sortierung"
+  ],
+  "library.naming.token.BookTitle": [
+   "The book title",
+   "Der Buchtitel"
+  ],
+  "library.naming.token.BookCleanTitle": [
+   "The book title without punctuation",
+   "Der Buchtitel ohne Satzzeichen"
+  ],
+  "library.naming.token.BookSeries": [
+   "The book series",
+   "Die Buchreihe"
+  ],
+  "library.naming.token.BookSeriesPosition": [
+   "The position in the book series",
+   "Die Position in der Buchreihe"
+  ],
+  "library.naming.token.BookYear": [
+   "The book release year",
+   "Das Erscheinungsjahr des Buchs"
+  ],
+  "library.naming.token.BookLanguage": [
+   "The known book language",
+   "Die bekannte Buchsprache"
+  ],
+  "library.naming.token.Artist": [
+   "The album artist",
+   "Der Albuminterpret"
+  ],
+  "library.naming.token.ArtistName": [
+   "The artist name",
+   "Der Interpretenname"
+  ],
+  "library.naming.token.AlbumArtist": [
+   "The album artist name",
+   "Der Name des Albuminterpreten"
+  ],
+  "library.naming.token.Album": [
+   "The album title",
+   "Der Albumtitel"
+  ],
+  "library.naming.token.AlbumTitle": [
+   "The title of the album",
+   "Der Titel des Albums"
+  ],
+  "library.naming.token.AlbumCleanTitle": [
+   "The album title without punctuation",
+   "Der Albumtitel ohne Satzzeichen"
+  ],
+  "library.naming.token.AlbumReleaseYear": [
+   "The album release year",
+   "Das Erscheinungsjahr des Albums"
+  ],
+  "library.naming.token.Track": [
+   "The track number",
+   "Die Titelnummer"
+  ],
+  "library.naming.token.TrackTitle": [
+   "The track title",
+   "Der Musiktitel"
+  ],
+  "library.naming.token.TrackCleanTitle": [
+   "The track title without punctuation",
+   "Der Musiktitel ohne Satzzeichen"
+  ],
+  "library.naming.token.DiscPrefix": [
+   "The disc prefix for multi-disc albums, empty for one disc",
+   "Das Disc-Präfix bei mehreren Discs, leer bei einer Disc"
+  ],
+  "library.naming.token.Disc": [
+   "The disc number",
+   "Die Discnummer"
+  ],
+  "library.naming.token.DiscCount": [
+   "The number of discs",
+   "Die Anzahl der Discs"
+  ],
+  "library.naming.token.Volume": [
+   "The volume number",
+   "Die Bandnummer"
+  ],
+  "library.naming.token.VolumeLabel": [
+   "The volume number prefixed with v",
+   "Die Bandnummer mit vorangestelltem v"
+  ],
+  "library.naming.token.Language": [
+   "The known language",
+   "Die bekannte Sprache"
+  ],
+  "library.naming.token.Format": [
+   "The file format",
+   "Das Dateiformat"
+  ],
+  "library.naming.token.Platform": [
+   "The game platform",
+   "Die Spielplattform"
+  ],
+  "library.naming.token.Region": [
+   "The game region",
+   "Die Spielregion"
+  ],
+  "library.naming.token.Version": [
+   "The game version",
+   "Die Spielversion"
+  ],
+  "library.naming.token.GameTitle": [
+   "The game title",
+   "Der Spieltitel"
+  ],
+  "library.naming.token.GameYear": [
+   "The game release year",
+   "Das Erscheinungsjahr des Spiels"
+  ],
+  "library.naming.token.GamePlatform": [
+   "The platform of the game",
+   "Die Plattform des Spiels"
+  ],
+  "library.naming.token.PrimaryId": [
+   "The main catalog ID for this media type",
+   "Die Hauptkatalog-ID für diesen Medientyp"
+  ],
+  "library.naming.token.ProviderId": [
+   "Any known provider ID, for example {ProviderId:anilist}",
+   "Eine bekannte Anbieter-ID, zum Beispiel {ProviderId:anilist}"
+  ],
+  "library.naming.token.TmdbId": [
+   "TMDB ID",
+   "TMDB-ID"
+  ],
+  "library.naming.token.TvdbId": [
+   "TVDB ID",
+   "TVDB-ID"
+  ],
+  "library.naming.token.TvMazeId": [
+   "TVmaze ID",
+   "TVmaze-ID"
+  ],
+  "library.naming.token.AnilistId": [
+   "AniList ID",
+   "AniList-ID"
+  ],
+  "library.naming.token.MusicBrainzId": [
+   "MusicBrainz ID",
+   "MusicBrainz-ID"
+  ],
+  "library.naming.token.OpenLibraryId": [
+   "OpenLibrary ID",
+   "OpenLibrary-ID"
+  ],
+  "library.naming.token.IgdbId": [
+   "IGDB ID",
+   "IGDB-ID"
+  ],
+  "library.naming.token.GutenbergId": [
+   "Gutenberg ID",
+   "Gutenberg-ID"
+  ],
+  "library.naming.token.IsbnId": [
+   "ISBN ID",
+   "ISBN-ID"
+  ],
+  "library.naming.token.PlexId": [
+   "Plex ID",
+   "Plex-ID"
   ]
  }
 }

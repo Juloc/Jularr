@@ -131,8 +131,9 @@ namespace Jularr.Backend.Data.Logic.Library
     // Where a Work's own files go: its title and the first writable library of its type and subtype.
     internal sealed class UploadTargetData : BaseData
     {
-        public UploadTargetData(string canonicalTitle, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, long? libraryRootId, long? storageMountId, string? relativePath)
+        public UploadTargetData(string canonicalTitle, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, long? libraryRootId, long? storageMountId, string? relativePath, string providerIds = "{}")
         {
+            ProviderIds = providerIds;
             MediaTypeId = mediaTypeId;
             CanonicalTitle = canonicalTitle;
             MediaSubtypeId = mediaSubtypeId;
@@ -140,6 +141,9 @@ namespace Jularr.Backend.Data.Logic.Library
             StorageMountId = storageMountId;
             RelativePath = relativePath;
         }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalIdentities))]
+        public string ProviderIds { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string CanonicalTitle { get; }

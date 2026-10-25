@@ -96,10 +96,10 @@ namespace Jularr.Backend.Logic.Media
                         SELECT
                             1
                         FROM
-                            "MediaAssets" AS asset
-                            LEFT JOIN "WorkUnits" AS child ON child."Id" = asset."WorkUnitId"
+                            "MediaAssetUnitCoverage" AS coverage
+                            LEFT JOIN "WorkUnits" AS child ON child."Id" = coverage."WorkUnitId"
                         WHERE
-                            asset."WorkUnitId" = unit."Id"
+                            coverage."WorkUnitId" = unit."Id"
                             OR child."ParentWorkUnitId" = unit."Id"
                     );
 

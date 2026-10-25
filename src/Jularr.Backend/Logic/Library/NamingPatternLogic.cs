@@ -16,14 +16,17 @@ namespace Jularr.Backend.Logic.Library
                 SELECT
                     pattern."MediaTypeId",
                     pattern."MediaSubtypeId",
-                    pattern."Pattern"
+                    pattern."Pattern",
+                    pattern."DailyFile"
                 FROM
                     "NamingPatterns" AS pattern;
                 """;
-            var patterns = (await ctx.ReadSql.ReadListAsync<NamingPatternData>(sql, ct)).ToDictionary(pattern => (pattern.MediaTypeId, pattern.MediaSubtypeId), pattern => pattern.Pattern);
+            var stored = await ctx.ReadSql.ReadListAsync<NamingPatternData>(sql, ct);
+            var patterns = stored.ToDictionary(pattern => (pattern.MediaTypeId, pattern.MediaSubtypeId), pattern => pattern.Pattern);
+            var daily = stored.Where(pattern => pattern.DailyFile is not null).ToDictionary(pattern => (pattern.MediaTypeId, pattern.MediaSubtypeId), pattern => pattern.DailyFile!);
             var rules = (await ctx.ReadNamingSettingsAsync(ct)).ToDictionary(settings => settings.MediaTypeId,
-                settings => new NamingRules(settings.ReplacesIllegalCharacters, settings.ColonReplacementId, settings.CustomColonReplacement, settings.SpecialsFolder));
-            return new NamingSet(patterns, rules);
+                settings => new NamingRules(settings.ReplacesIllegalCharacters, settings.ColonReplacementId, settings.CustomColonReplacement, settings.SpecialsFolder, settings.RenamesFiles, settings.MultiEpisodeStyleId));
+            return new NamingSet(patterns, rules, daily);
         }
 
         public static async Task<IReadOnlyList<NamingSettingsData>> ReadNamingSettingsAsync(this LogicContext ctx, CancellationToken ct)
@@ -37,6 +40,8 @@ namespace Jularr.Backend.Logic.Library
                     settings."ColonReplacementId",
                     settings."CustomColonReplacement",
                     settings."SpecialsFolder",
+                    settings."RenamesFiles",
+                    settings."MultiEpisodeStyleId",
                     settings."Version"
                 FROM
                     "NamingSettings" AS settings
@@ -48,26 +53,9 @@ namespace Jularr.Backend.Logic.Library
 
         public static async Task SaveNamingSettingsAsync(this LogicContext ctx, NamingSettingsData data, CancellationToken ct)
         {
-            // A custom replacement is only kept with its choice; the folder of season 0 only belongs to episodes.
-            if (data.ColonReplacementId == ColonReplacement.Custom && data.CustomColonReplacement is null)
-            {
-                throw new DataValidationException(nameof(data.CustomColonReplacement), "required");
-            }
-
+            NamingPattern.ValidateRules(new NamingRules(data.ReplacesIllegalCharacters, data.ColonReplacementId, data.CustomColonReplacement, data.SpecialsFolder));
             if (data.SpecialsFolder is not null && data.MediaTypeId != MediaType.Series)
-            {
                 throw new DataValidationException(nameof(data.SpecialsFolder), "invalid_value");
-            }
-
-            if (data.SpecialsFolder is { } specials)
-            {
-                NamingPattern.ValidateFolder(specials, nameof(data.SpecialsFolder));
-            }
-
-            if (data.CustomColonReplacement?.IndexOfAny(['/', '\\', ':']) >= 0)
-            {
-                throw new DataValidationException(nameof(data.CustomColonReplacement), "invalid_value");
-            }
 
             var sql = new SqlStatement();
             sql.Statement =
@@ -79,6 +67,8 @@ namespace Jularr.Backend.Logic.Library
                     "ColonReplacementId" = @ColonReplacementId,
                     "CustomColonReplacement" = CASE WHEN @ColonReplacementId = 6 THEN @CustomColonReplacement END,
                     "SpecialsFolder" = @SpecialsFolder,
+                    "RenamesFiles" = @RenamesFiles,
+                    "MultiEpisodeStyleId" = @MultiEpisodeStyleId,
                     "Version" = settings."Version" + 1
                 WHERE
                     settings."MediaTypeId" = @MediaTypeId
@@ -94,13 +84,15 @@ namespace Jularr.Backend.Logic.Library
         public static async Task SaveNamingPatternAsync(this LogicContext ctx, NamingPatternSaveData data, CancellationToken ct)
         {
             // Folders and file are stored as one pattern of at most 500 characters.
+            NamingPattern.ValidateDaily(data.MediaTypeId, data.MediaSubtypeId, NamingPattern.Split(data.Pattern).Folder, data.DailyFile, nameof(data.DailyFile));
+
             if (data.Pattern.Length > 500)
             {
                 throw new DataValidationException(nameof(data.Pattern), "too_long");
             }
 
             NamingPattern.Validate(data.MediaTypeId, data.Pattern, nameof(data.Pattern));
-            if (!NamingPattern.Distinguishes(data.Pattern) && (await ctx.ReadReplacementSettingsAsync(ct)).KeepsReleases)
+            if (data.MediaTypeId is MediaType.Movie or MediaType.Series && (!NamingPattern.Distinguishes(data.Pattern) || data.DailyFile is { } dailyFile && !NamingPattern.Distinguishes(dailyFile)) && (await ctx.ReadReplacementSettingsAsync(ct)).KeepsReleases)
             {
                 throw new DataValidationException(nameof(data.Pattern), "naming_needs_release_token");
             }
@@ -113,6 +105,7 @@ namespace Jularr.Backend.Logic.Library
                     "NamingPatterns" AS pattern
                 SET
                     "Pattern" = @Pattern,
+                    "DailyFile" = @DailyFile,
                     "Version" = pattern."Version" + 1
                 WHERE
                     pattern."MediaTypeId" = @MediaTypeId
