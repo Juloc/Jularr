@@ -1044,6 +1044,18 @@
    "Your changes were saved.",
    "Perubahan Anda disimpan."
   ],
+  "profile.favorite.title": [
+   "Favorites",
+   "Favorit"
+  ],
+  "profile.favorite.autoRequest": [
+   "Automatically request new favorites",
+   "Ajukan permintaan otomatis untuk favorit baru"
+  ],
+  "profile.favorite.autoRequestHelp": [
+   "Only when Requests is enabled; normal approval and download rules still apply.",
+   "Hanya saat modul Permintaan aktif. Aturan persetujuan dan pengunduhan tetap berlaku."
+  ],
   "admin.library.description": [
    "Imported media and file availability",
    "Media yang diimpor dan ketersediaan file"
