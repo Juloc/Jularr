@@ -584,12 +584,22 @@ namespace Jularr.Integrations.Logic.Browser
             // A browser that does not open its port may have met the remains of an earlier one; it is tried again.
             for (var attempt = 1; attempt <= 3; attempt++)
             {
-                _process = Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false, Arguments = arguments });
+                _process = Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false, Arguments = arguments })
+                    ?? throw new SourceBrowserException("The browser process could not be started.");
 
-                // The browser needs a moment before its first page counts.
-                await Task.Delay(StartMilliseconds, ct);
                 try
                 {
+                    // A process that exits without a debugging port cannot be fixed by
+                    // waiting through three identical 30-second startup attempts.
+                    using var startupWait = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    var exited = _process.WaitForExitAsync(startupWait.Token);
+                    if (await Task.WhenAny(exited, Task.Delay(StartMilliseconds, ct)) == exited)
+                    {
+                        await exited;
+                        throw new SourceBrowserException("The browser process exited during startup.");
+                    }
+
+                    startupWait.Cancel();
                     var socket = await ReadPageSocketAsync(new Uri($"http://127.0.0.1:{port}"), ct);
                     _client = new DevToolsClient();
                     await _client.ConnectAsync(socket, ct);
@@ -601,7 +611,16 @@ namespace Jularr.Integrations.Logic.Browser
                 }
                 catch (SourceBrowserException)
                 {
+                    var exited = _process?.HasExited == true;
+                    var exitCode = exited ? _process!.ExitCode : 0;
                     await CloseProcessAsync();
+                    if (exited)
+                    {
+                        _egress?.Dispose();
+                        _egress = null;
+                        throw new SourceBrowserException($"The browser exited before its debugging port opened (exit code {exitCode}).");
+                    }
+
                     if (attempt < 3)
                     {
                         Note("retry", $"the browser did not answer on port {port}; it is started again");
