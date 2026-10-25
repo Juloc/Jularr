@@ -169,15 +169,6 @@ namespace Jularr.Backend.Service.Core
                         work."Id" AS "WorkId",
                         coalesce(
                             (
-                                SELECT CASE WHEN count(DISTINCT season."Number") = 1 THEN min(season."Number")::integer END
-                                FROM "WorkUnitExternalIdentities" AS identity
-                                JOIN "WorkUnits" AS season ON season."Id" = identity."WorkUnitId"
-                                WHERE identity."Namespace" = 'anilist'
-                                    AND identity."Value" = @AniListId
-                                    AND season."WorkId" = work."Id"
-                                    AND season."WorkUnitTypeId" = 1
-                            ),
-                            (
                                 SELECT season."Number"::integer
                                 FROM "WorkUnits" AS season
                                 WHERE season."WorkId" = work."Id"
@@ -185,6 +176,15 @@ namespace Jularr.Backend.Service.Core
                                     AND season."ParentWorkUnitId" IS NULL
                                     AND season."Number" = @SeasonNumber
                                 LIMIT 1
+                            ),
+                            (
+                                SELECT CASE WHEN count(DISTINCT season."Number") = 1 THEN min(season."Number")::integer END
+                                FROM "WorkUnitExternalIdentities" AS identity
+                                JOIN "WorkUnits" AS season ON season."Id" = identity."WorkUnitId"
+                                WHERE identity."Namespace" = 'anilist'
+                                    AND identity."Value" = @AniListId
+                                    AND season."WorkId" = work."Id"
+                                    AND season."WorkUnitTypeId" = 1
                             )
                         ) AS "SeasonNumber"
                     FROM "Works" AS work

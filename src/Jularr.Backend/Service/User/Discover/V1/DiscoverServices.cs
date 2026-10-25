@@ -425,6 +425,63 @@ namespace Jularr.Backend.Service.User.Discover.V1
         }
     }
 
+    // Browsing an anime can materialize its full metadata and TVDB structure without creating a request or Wanted item.
+    [ServiceEndpoint("POST", "/api/v1/discover/catalog/open-details")]
+    public sealed class OpenDiscoverAnimeDetailsV1 : UserService<DiscoverParametersV1, ReadDiscoverCatalogEntryDataV1>
+    {
+        private readonly MetadataCatalog _catalog;
+        private readonly AniListMetadata _aniList;
+
+        internal OpenDiscoverAnimeDetailsV1(MetadataCatalog catalog, AniListMetadata aniList)
+        {
+            _catalog = catalog;
+            _aniList = aniList;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<DiscoverCatalogEntryV1>()];
+        protected override ModuleRequirement GetInstanceModules(DiscoverParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(DiscoverParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // The endpoint only opens AniList anime; it never asks for a download or starts monitoring.
+            if (Data.Namespace != AniListMetadata.Namespace || Data.MediaSubtypeId != MediaSubtype.Anime
+                || Data.MediaTypeId is not (MediaType.Movie or MediaType.Series))
+            {
+                throw new KeyNotFoundException("This catalog entry has no anime details.");
+            }
+
+            await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
+            var existing = await _catalog.ReadEntryAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
+            if (existing.WorkId is not null) return existing;
+
+            // The same canonical TMDB/TVDB import used by requests, deliberately without its acquisition step.
+            var workId = await _catalog.ImportAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
+
+            // Make the selected anime's immediate relations visible on the existing Details page.
+            if (int.TryParse(Data.ExternalId, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var aniListId))
+            {
+                try
+                {
+                    var media = await _aniList.ReadAsync(AniListMediaType.Anime, aniListId, CancellationToken);
+                    var targets = JsonSerializer.Serialize(WorkRelationLogic.AniListTargets(media));
+                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    {
+                        await ctx.SaveWorkRelationsAsync(new WorkRelationSyncData(workId, AniListMetadata.Namespace, targets), ct);
+                        return true;
+                    }, CancellationToken);
+                }
+                catch (ServiceUnavailableException)
+                {
+                    // Metadata and seasons remain usable while AniList relations are temporarily unavailable.
+                }
+            }
+
+            return await _catalog.ReadEntryAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
+        }
+    }
+
     // The description of a catalog title from what the local catalog keeps of it; no provider is asked.
     [ServiceEndpoint("GET", "/api/v1/discover/preview")]
     public sealed class ReadDiscoverPreviewV1 : UserService<ReadDiscoverPreviewParametersV1>

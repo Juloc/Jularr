@@ -236,8 +236,10 @@ namespace Jularr.Backend.Service.Core
                 // Ambiguous provider IDs or seasons are not automatically chosen.
                 if (tvdb.Count > 0 || tmdb.Count > 0 || films.Count > 0)
                 {
-                    var onlyTvdb = tvdb.Count == 1 ? tvdb.Single() : ((int Id, int Season)?)null;
-                    links[aniListId] = new Link(onlyTvdb?.Id, onlyTvdb?.Season, tmdb.Count == 1 ? tmdb.Single() : null, films.Count == 1 ? films.Single() : null);
+                    var seriesIds = tvdb.Select(value => value.Id).Distinct().ToArray();
+                    var tvdbId = seriesIds.Length == 1 ? seriesIds[0] : (int?)null;
+                    var firstSeason = tvdbId is null ? (int?)null : tvdb.Min(value => value.Season);
+                    links[aniListId] = new Link(tvdbId, firstSeason, tmdb.Count == 1 ? tmdb.Single() : null, films.Count == 1 ? films.Single() : null);
                 }
             }
 
