@@ -120,7 +120,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     var searchQuery = string.Join(" ", new[] { input.Title, input.Creator }
                         .Where(part => !string.IsNullOrWhiteSpace(part)));
                     if (!string.IsNullOrWhiteSpace(selected.Query)) searchQuery = selected.Query;
-                    if (searchQuery.Length > 500) searchQuery = searchQuery[..500];
+                    if (searchQuery.Length > 1200) searchQuery = searchQuery[..1200];
                     await StageAsync(index, "Searching", "openlibrary", searchQuery, "catalog_search");
                     var searched = await _planner.PlanAsync(Context, single, data, 1, CancellationToken);
                     var foundCandidates = searched.Rows.Single().Candidates;

@@ -151,7 +151,7 @@ export function initializeDurableJobs(): void {
                 addField(content, panel.dataset.jobSource ?? "Source", item.source ? sourceName(item.source) : null);
                 addField(content, panel.dataset.jobQuery ?? "Query", item.query);
                 addField(content, panel.dataset.jobCandidates ?? "Candidates",
-                    item.candidateCount === null ? null : String(item.candidateCount));
+                    item.candidateCount == null ? null : String(item.candidateCount));
                 addField(content, panel.dataset.jobAttempt ?? "Retry",
                     item.attempt > 0 ? String(item.attempt) : null);
                 addField(content, panel.dataset.jobHistory ?? "Details", item.detail ? labelReason(item.detail) : null);
@@ -167,7 +167,7 @@ export function initializeDurableJobs(): void {
                         labelStage(event.stage),
                         event.source ? sourceName(event.source) : null,
                         event.query,
-                        event.candidateCount === null ? null : (panel.dataset.jobCandidates ?? "Candidates") + ": " + event.candidateCount,
+                        event.candidateCount == null ? null : (panel.dataset.jobCandidates ?? "Candidates") + ": " + event.candidateCount,
                         event.detail ? labelReason(event.detail) : null,
                         event.attempt > 0 ? (panel.dataset.jobAttempt ?? "Retry") + ": " + event.attempt : null
                     ].filter(Boolean).join(" · ");

@@ -190,6 +190,16 @@ namespace Jularr.Backend.Logic.Media
                             "Title" = coalesce(EXCLUDED."Title", "MediaImportJobRows"."Title"),
                             "WorkId" = EXCLUDED."WorkId",
                             "Searches" = EXCLUDED."Searches",
+                            "History" = (
+                                SELECT COALESCE(jsonb_agg(recent.item ORDER BY recent.ordinal), '[]'::jsonb)
+                                FROM (
+                                    SELECT value AS item, ordinality AS ordinal
+                                    FROM jsonb_array_elements("MediaImportJobRows"."History") WITH ORDINALITY
+                                    ORDER BY ordinality DESC LIMIT 19
+                                ) AS recent
+                            ) || jsonb_build_array(jsonb_build_object(
+                                'stage', 'Done', 'source', NULL, 'query', NULL, 'detail', NULL,
+                                'candidateCount', NULL, 'attempt', 0, 'at', now())),
                             "UpdatedAt" = now()
                 )
                 UPDATE "Operations" SET "ProcessedCount" = @RowIndex + 1
