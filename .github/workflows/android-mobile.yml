@@ -1,0 +1,82 @@
+name: Android Mobile
+
+on:
+  workflow_dispatch:
+
+  pull_request:
+    paths:
+      - "clients/android/app-mobile/**"
+      - "clients/android/core-api/**"
+      - "clients/android/core-model/**"
+      - "clients/android/core-player/**"
+      - "clients/android/core-tts/**"
+      - "clients/android/core-update/**"
+      - "clients/android/build.gradle.kts"
+      - "clients/android/settings.gradle.kts"
+      - "clients/android/gradle.properties"
+      - "clients/android/gradle/**"
+      - ".github/workflows/android-mobile.yml"
+  push:
+    branches:
+      - "dev"
+    paths:
+      - "clients/android/app-mobile/**"
+      - "clients/android/core-api/**"
+      - "clients/android/core-model/**"
+      - "clients/android/core-player/**"
+      - "clients/android/core-tts/**"
+      - "clients/android/core-update/**"
+      - "clients/android/build.gradle.kts"
+      - "clients/android/settings.gradle.kts"
+      - "clients/android/gradle.properties"
+      - "clients/android/gradle/**"
+      - ".github/workflows/android-mobile.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-mobile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "9.8.0"
+
+      # The sherpa AAR is optional and not available to CI. Test the default phone build.
+      - name: Test and lint Android phone
+        working-directory: clients/android
+        run: >-
+          gradle --stacktrace --parallel --build-cache
+          :core-api:testDebugUnitTest
+          :core-model:testDebugUnitTest
+          :core-player:testDebugUnitTest
+          :core-tts:testDebugUnitTest
+          :core-update:testDebugUnitTest
+          :app-mobile:testDebugUnitTest
+          :app-mobile:lintDebug
+          :core-api:lintDebug
+          :core-model:lintDebug
+          :core-player:lintDebug
+          :core-tts:lintDebug
+          :core-update:lintDebug
