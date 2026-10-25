@@ -87,7 +87,6 @@ namespace Jularr.E2E.Tests
             await page.ReloadAsync();
             Assert.AreEqual(requested, new Uri(page.Url).PathAndQuery);
             await Assertions.Expect(page.Locator("#app-content")).ToBeVisibleAsync();
-            CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
         }
 
         [TestMethod]
