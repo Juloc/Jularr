@@ -130,6 +130,17 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             new MediaImportResultRowV1(index, row.Item.Title, outcome, false, null), false);
                     }
                 }
+                else if (selected?.Include == true && selected.Choice is null
+                    && row.Item.Type == MediaType.Book && row.Item.Ids.Count > 0
+                    && row.Status == MediaImportStatusType.Open)
+                {
+                    // The ISBN was already retried by the planner. Never silently
+                    // substitute a title search for a supplied edition identity.
+                    var outcome = plan.ProviderFailure is not null
+                        ? MediaImportOutcomeType.Unavailable : MediaImportOutcomeType.NotFound;
+                    unresolved = new MediaImportRowExecution(
+                        new MediaImportResultRowV1(index, row.Item.Title, outcome, false, null), false);
+                }
 
                 await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 {
