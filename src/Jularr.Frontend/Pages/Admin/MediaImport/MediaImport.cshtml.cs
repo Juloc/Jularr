@@ -75,6 +75,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 .TextAttribute("data-job-stage-review", "import.job.stage.Review")
                 .TextAttribute("data-job-stage-no-match", "import.job.stage.NoMatch")
                 .TextAttribute("data-job-stage-retrying", "import.job.stage.Retrying")
+                .TextAttribute("data-job-stage-unavailable", "import.job.stage.Unavailable")
                 .TextAttribute("data-job-reason-checking-library", "import.job.reason.checking_library")
                 .TextAttribute("data-job-reason-isbn-lookup", "import.job.reason.isbn_lookup")
                 .TextAttribute("data-job-reason-catalog-search", "import.job.reason.catalog_search")

@@ -136,7 +136,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             choice = candidate.Choice,
                             isSuggested = candidate.IsSuggested
                         }));
-                    await StageAsync(index, searched.ProviderFailure is not null ? "Retrying"
+                    await StageAsync(index, searched.ProviderFailure is not null ? "Unavailable"
                         : foundCandidates.Count == 0 ? "NoMatch" : matches.Length == 1 ? "Candidates" : "Review",
                         "openlibrary", searchQuery,
                         searched.ProviderFailure ?? (foundCandidates.Count == 0 ? "no_match"
@@ -170,7 +170,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         ? MediaImportOutcomeType.Unavailable : MediaImportOutcomeType.NotFound;
                     unresolved = new MediaImportRowExecution(
                         new MediaImportResultRowV1(index, row.Item.Title, outcome, false, null), false);
-                    await StageAsync(index, outcome == MediaImportOutcomeType.Unavailable ? "Retrying" : "NoMatch",
+                    await StageAsync(index, outcome == MediaImportOutcomeType.Unavailable ? "Unavailable" : "NoMatch",
                         "openlibrary", input.Ids.FirstOrDefault(identity => identity.Namespace == "isbn")?.Value,
                         outcome == MediaImportOutcomeType.Unavailable ? "unavailable" : "isbn_no_match");
                 }
