@@ -9,12 +9,14 @@
 }
 
 // The panels are the page: forms of one panel sit apart on the panel's rhythm.
+.ui-section > .ui-form + .naming-examples,
 .ui-section > .ui-form + p,
 .ui-section > .ui-form + h3,
 .ui-section > p + .ui-form,
 .ui-section > p + h3 { margin-top: 14px; }
 
 .ui-section > h3 { margin: 18px 0 10px; }
+.naming-examples > p,
 .ui-section > p { margin: 8px 0 0; color: var(--muted); font-size: var(--text-control); }
 .ui-section > .ui-form { margin-top: 14px; }
 .ui-section > .ui-form:first-of-type { margin-top: 0; }

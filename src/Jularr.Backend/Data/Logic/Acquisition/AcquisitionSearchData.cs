@@ -164,8 +164,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     // One canonical unit a search targets: an episode in its season or a volume; movies and books have none.
     internal sealed class TargetUnit
     {
-        public TargetUnit(long id, int? parentNumber, int number, bool hasFile, int? absolute = null, DateOnly? releasedOn = null)
+        public TargetUnit(long id, int? parentNumber, int number, bool hasFile, int? absolute = null, DateOnly? releasedOn = null, string? title = null)
         {
+            Title = title;
             Absolute = absolute;
             ReleasedOn = releasedOn;
             Id = id;
@@ -177,6 +178,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public long Id { get; }
         public int? ParentNumber { get; }
         public int Number { get; }
+        public string? Title { get; }
         public int? Absolute { get; }
         public DateOnly? ReleasedOn { get; }
         public bool HasFile { get; }

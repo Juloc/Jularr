@@ -128,8 +128,8 @@ namespace Jularr.Backend.Tests
 
             sources.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Album","status":"Completed","storage":"/downloads/Example Artist - Example Album"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
-            var folder = Path.Combine(storage.Path, "1", "Music", "Example Artist", "Example Album (2019)");
-            CollectionAssert.AreEquivalent(new[] { "01 - Opening.flac", "02 - Middle Song.flac", "03 - Closing.flac" }, Directory.GetFiles(folder).Select(Path.GetFileName).ToArray());
+            var folder = Path.Combine(storage.Path, "1", "Music", "Example Artist", "Example Album (2019) {mbid-" + Album + "}");
+            CollectionAssert.AreEquivalent(new[] { "01 - Opening {mbid-" + Album + "}.flac", "02 - Middle Song {mbid-" + Album + "}.flac", "03 - Closing {mbid-" + Album + "}.flac" }, Directory.GetFiles(folder).Select(Path.GetFileName).ToArray());
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\" WHERE \"WorkUnitId\" IS NOT NULL AND \"MediaAssetTypeId\" = 2"));
             Assert.AreEqual((short)6, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
         }
@@ -151,10 +151,10 @@ namespace Jularr.Backend.Tests
         public void Music_Placement_KeepsNaturalOrderAndTiesTracksOnlyWhenCountsAgree()
         {
             var files = new[] { "10 - Ten.flac", "2 - Two.flac", "1 - One.flac" }.Select(name => new Jularr.Integrations.Data.Storage.StorageFile(name, 1000, DateTime.UtcNow)).ToArray();
-            var tied = ImportPlacementLogic.Plan(MediaType.Music, null, "Album", 2019, "FLAC", files, NamingPatternTests.Defaults, null, author: "Artist", trackCount: 3);
+            var tied = ImportPlacementLogic.Plan(MediaType.Music, null, "Album", 2019, "FLAC", files, NamingPatternTests.DefaultSet, null, author: "Artist", trackCount: 3);
             CollectionAssert.AreEqual(new[] { "Artist/Album (2019)/01 - One", "Artist/Album (2019)/02 - Two", "Artist/Album (2019)/03 - Ten" }, tied.Select(placement => placement.TargetStem).ToArray());
             Assert.IsTrue(tied.All(placement => placement.WorkUnitTypeId == WorkUnitType.Track));
-            Assert.IsTrue(ImportPlacementLogic.Plan(MediaType.Music, null, "Album", 2019, "FLAC", files, NamingPatternTests.Defaults, null, author: "Artist", trackCount: 4).All(placement => placement.WorkUnitTypeId is null));
+            Assert.IsTrue(ImportPlacementLogic.Plan(MediaType.Music, null, "Album", 2019, "FLAC", files, NamingPatternTests.DefaultSet, null, author: "Artist", trackCount: 4).All(placement => placement.WorkUnitTypeId is null));
         }
 
         [TestMethod]
@@ -162,8 +162,8 @@ namespace Jularr.Backend.Tests
         {
             var files = new[] { "a.flac", "b.flac", "c.flac" }.Select(name => new Jularr.Integrations.Data.Storage.StorageFile(name, 1000, DateTime.UtcNow)).ToArray();
             var tags = new Dictionary<string, AudioTags> { ["a.flac"] = new("Closing", 2, 1, null), ["b.flac"] = new("Opening", 1, 1, null), ["c.flac"] = new("Middle Song", 1, 2, null) };
-            var placed = ImportPlacementLogic.Plan(MediaType.Music, null, "Album", 2019, "FLAC", files, NamingPatternTests.Defaults, null, author: "Artist", trackCount: 3, tags: tags);
-            CollectionAssert.AreEqual(new[] { "Artist/Album (2019)/01 - Opening", "Artist/Album (2019)/02 - Middle Song", "Artist/Album (2019)/03 - Closing" },
+            var placed = ImportPlacementLogic.Plan(MediaType.Music, null, "Album", 2019, "FLAC", files, NamingPatternTests.DefaultSet, null, author: "Artist", trackCount: 3, tags: tags);
+            CollectionAssert.AreEqual(new[] { "Artist/Album (2019)/01 - Opening", "Artist/Album (2019)/02 - Middle Song", "Artist/Album (2019)/01 - Closing" },
                 placed.Select(placement => placement.TargetStem).ToArray());
             CollectionAssert.AreEqual(new[] { "b.flac", "c.flac", "a.flac" }, placed.Select(placement => placement.SourcePath).ToArray());
         }
