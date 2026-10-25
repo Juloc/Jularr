@@ -296,6 +296,14 @@ namespace Jularr.Backend.Data.User.Discover.V1
         public int? SeasonNumber { get; init; }
     }
 
+    public sealed class FavoriteDiscoverResultV1 : BaseResponse
+    {
+        public FavoriteDiscoverResultV1(long workId) { WorkId = workId; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+    }
+
     // Data for the SAME user detail page, even when no local Work exists.
     // Season and episode IDs in this read-only preview are provider IDs and must never be sent to Work mutation APIs.
     public sealed class DiscoverExternalDetailsV1 : BaseResponse
