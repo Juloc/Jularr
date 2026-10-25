@@ -118,7 +118,9 @@ namespace Jularr.E2E.Tests
         public static async Task SaveAsync(IPage page)
         {
             await FollowAsync(page, page.Locator("[data-save-pill] [data-save-submit]"));
-            var alert = page.Locator("main [role=alert]");
+            // Ignore hidden alerts (e.g. appearance's error placeholder); only visible
+            // server errors are relevant after a save.
+            var alert = page.Locator("main [role=alert]:visible");
             if (await alert.CountAsync() > 0)
             {
                 Assert.Fail("The page answered: " + await alert.First.InnerTextAsync());
