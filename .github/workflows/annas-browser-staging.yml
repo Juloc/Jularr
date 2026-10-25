@@ -46,6 +46,15 @@ jobs:
             libxkbcommon0 libxrandr2 libxshmfence1 libpango-1.0-0 \
             libcairo2 libx11-xcb1 libxrender1 libxss1 libxi6 libxtst6 fonts-liberation
           useradd --create-home --uid 10001 jularr
+          echo "Chrome sandbox prerequisites (diagnostic only):"
+          cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || true
+          if command -v unshare >/dev/null 2>&1; then
+            if runuser -u jularr -- unshare --user --map-root-user true; then
+              echo "Unprivileged user namespace: available"
+            else
+              echo "Unprivileged user namespace: denied in this Docker container"
+            fi
+          fi
           install -d -m 0755 -o jularr -g jularr /tmp/jularr-stage-home /tmp/jularr-stage-results
           rm -rf /var/lib/apt/lists/*
       - uses: actions/setup-node@v7
