@@ -4,6 +4,9 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "pwa.update.available": ["An update is available.", "Eine Aktualisierung ist verfügbar."],
+  "pwa.update.install": ["Update", "Aktualisieren"],
+  "pwa.update.later": ["Later", "Später"],
   "acquisition.connection.downloadPathWarning": ["Select a folder that Jularr can read. Until a download path is mapped, grabs from this client cannot start.","Wähle einen Ordner aus, auf den Jularr zugreifen kann. Ohne zugeordneten Downloadpfad können keine Downloads über diesen Client gestartet werden."],
   "activity.view.queue": ["Queue","Warteschlange"],
   "activity.view.history": ["History","Verlauf"],
@@ -2090,6 +2093,14 @@
   "acquisition.connection.type.Sabnzbd": [
    "SABnzbd",
    "SABnzbd"
+  ],
+  "acquisition.connection.type.Qbittorrent": [
+   "qBittorrent",
+   "qBittorrent"
+  ],
+  "acquisition.connection.type.Nyaa": [
+   "Nyaa",
+   "Nyaa"
   ],
   "acquisition.connection.baseUrl": [
    "Address",
@@ -4802,6 +4813,14 @@
   "acquisition.outcome.import_no_library": [
    "No library path for this media type",
    "Kein Bibliothekspfad für diesen Medientyp"
+  ],
+  "acquisition.outcome.import_book_language_unknown": [
+   "EPUB language could not be verified. The strict profile requires manual review; the download was kept.",
+   "Die Sprache dieses EPUBs konnte nicht bestätigt werden. Das strikte Profil erfordert eine manuelle Prüfung. Der Download bleibt erhalten."
+  ],
+  "acquisition.outcome.import_book_language_mismatch": [
+   "EPUB language differs from the mandatory profile language. The download was kept for review.",
+   "Die EPUB-Sprache entspricht nicht der verpflichtenden Profilsprache. Der Download bleibt zur Prüfung erhalten."
   ],
   "acquisition.outcome.import_source_unavailable": [
    "Download folder is unreachable",
@@ -12216,12 +12235,16 @@
    "Absatzabstand (%)"
   ],
   "reader.language.none": [
-   "No reading language is set up yet. Choose your languages in the profile settings.",
-   "Noch keine Lesesprache eingerichtet. Wähle deine Sprachen in den Profileinstellungen."
+   "No translation engine is available right now. You can still read this book in its original language.",
+   "Derzeit ist keine Übersetzungs-Engine verfügbar. Du kannst das Buch weiterhin in seiner Originalsprache lesen."
   ],
   "reader.language.configure": [
    "Open profile settings",
    "Profileinstellungen öffnen"
+  ],
+  "reader.language.saving": [
+   "Saving reading language…",
+   "Lesesprache wird gespeichert…"
   ],
   "reader.chapter.previous": [
    "Previous chapter",

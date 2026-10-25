@@ -8,6 +8,9 @@ namespace Jularr.Frontend.Localization
     {
         public static IReadOnlyList<UiTextResource> English { get; } =
         [
+            new("pwa.update.available", "An update is available."),
+            new("pwa.update.install", "Update"),
+            new("pwa.update.later", "Later"),
             new("companion.title", "Phone remote"),
             new("companion.description", "Control playback on your paired Jularr TV. You must be signed in with the same account and profile."),
             new("companion.invite", "TV invitation"),
@@ -524,8 +527,9 @@ namespace Jularr.Frontend.Localization
             new("translation.local.state.failed", "Failed"),
             new("translation.local.state.interrupted", "Interrupted"),
             new("reader.translation.localQuality", "TranslateGemma · local"),
-            new("reader.language.none", "No reading language is set up yet. Choose your languages in the profile settings."),
+            new("reader.language.none", "No translation engine is available right now. You can still read this book in its original language."),
             new("reader.language.configure", "Open profile settings"),
+            new("reader.language.saving", "Saving reading language…"),
             new("reader.translating", "Translating"),
             new("reader.translationFailed", "Translation is unavailable right now; the text stays in its language."),
             new("reader.search", "Search in this book"),
@@ -952,6 +956,8 @@ namespace Jularr.Frontend.Localization
             new("acquisition.connection.type", "Type"),
             new("acquisition.connection.type.Newznab", "Newznab indexer"),
             new("acquisition.connection.type.Sabnzbd", "SABnzbd"),
+            new("acquisition.connection.type.Qbittorrent", "qBittorrent"),
+            new("acquisition.connection.type.Nyaa", "Nyaa"),
             new("acquisition.connection.baseUrl", "Address"),
             new("acquisition.connection.host", "Server"),
             new("acquisition.connection.port", "Port"),
@@ -1792,6 +1798,8 @@ namespace Jularr.Frontend.Localization
             new("acquisition.outcome.import_path_unmapped", "Download folder is not mapped to storage"),
             new("acquisition.outcome.import_no_library", "No library path for this media type"),
             new("acquisition.outcome.import_source_unavailable", "Download folder is unreachable"),
+            new("acquisition.outcome.import_book_language_unknown", "EPUB language could not be verified. The strict profile requires manual review; the download was kept."),
+            new("acquisition.outcome.import_book_language_mismatch", "EPUB language differs from the mandatory profile language. The download was kept for review."),
             new("acquisition.outcome.import_storage_unavailable", "Storage became unavailable while importing"),
             new("acquisition.outcome.import_assignment_failed", "The copied files could not be fully assigned to the library. Download files were kept for recovery."),
             new("acquisition.outcome.import_target_conflict", "All available import filenames are occupied. The existing library files were not overwritten."),

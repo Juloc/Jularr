@@ -35,6 +35,7 @@
     <meta name="apple-mobile-web-app-title" content="@T.InstanceName" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     @Assets.Styles("Assets/Shared/shell.entry.scss")
+    @Assets.Styles("Modules/Pwa/pwa.entry.scss")
     @if (!showShell)
     {
         @Assets.Styles(pageAssets)
@@ -102,6 +103,12 @@
     {
         <main class="@(isSetup ? "setup-main" : "auth-main")" id="main-content" tabindex="-1">@RenderBody()</main>
     }
+    @* Only made visible after a verified frontend build change, never while the page is active by force. *@
+    <aside class="pwa-update" data-pwa-update hidden role="status" aria-live="polite">
+        <span class="pwa-update__message">@T["pwa.update.available"]</span>
+        <button type="button" class="pwa-update__apply" data-pwa-apply>@T["pwa.update.install"]</button>
+        <button type="button" class="pwa-update__later" data-pwa-later>@T["pwa.update.later"]</button>
+    </aside>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

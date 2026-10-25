@@ -98,6 +98,7 @@ namespace Jularr.E2E.Tests
                 INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works" WHERE "Id" BETWEEN 9301 AND 9302;
                 INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (9302, 'Poster', '/missing/poster.jpg', true);
                 """);
+            await jularr.SeedLibraryFilesAsync();
 
             await page.GotoAsync("/Library");
             var cards = page.Locator(".media-card");

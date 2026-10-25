@@ -80,8 +80,6 @@ namespace Jularr.E2E.Tests
             }
 
             await FollowAsync(page, form.Locator("button[type=submit]").Last);
-            // Hidden error placeholders are part of many forms and are not a failed response.
-            // Only an alert actually shown to the user indicates a failed submission.
             var alert = page.Locator("main [role=alert]:visible");
             if (await alert.CountAsync() > 0)
             {
@@ -161,7 +159,7 @@ namespace Jularr.E2E.Tests
         public static async Task AddUsenetAsync(IPage page, FakeServices fakes, string categories, bool searchesAutomatically = false)
         {
             await page.GotoAsync("/Admin/Acquisition");
-            await FollowAsync(page, page.Locator("a[href*='Type=Newznab']"));
+            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add indexer", Exact = true }).And(page.Locator("[href*='Type=Newznab']")));
             await page.FillAsync("dialog#connection-editor form [name=Name]", "Indexer");
             await page.FillAsync("dialog#connection-editor form [name=BaseUrl]", new Uri(fakes.Address, "newznab/").ToString());
             await page.FillAsync("dialog#connection-editor form [name=ApiKey]", FakeServices.IndexerKey);
@@ -170,9 +168,7 @@ namespace Jularr.E2E.Tests
             await page.Locator("dialog#connection-editor form").GetByLabel(searchesAutomatically ? "Automatic and manual" : "Manual only", new() { Exact = true }).CheckAsync();
             await SubmitAsync(page, page.Locator("dialog#connection-editor form"));
             await page.GotoAsync("/Admin/Acquisition/Downloads");
-            // The downloads page offers SABnzbd and qBittorrent with the same visible label.
-            // The scenario configures a SABnzbd test client, so select its typed link.
-            await FollowAsync(page, page.Locator("a[href*='Type=Sabnzbd']"));
+            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }).And(page.Locator("[href*='Type=Sabnzbd']")));
             await page.FillAsync("dialog#connection-editor form [name=Name]", "SABnzbd");
             await page.FillAsync("dialog#connection-editor form [name=BaseUrl]", new Uri(fakes.Address, "sabnzbd/").ToString());
             await page.FillAsync("dialog#connection-editor form [name=ApiKey]", FakeServices.ClientKey);
@@ -425,7 +421,7 @@ namespace Jularr.E2E.Tests
             return file;
         }
 
-        public static string WriteEpub(string file, string title, string author, string? firstChapter = null)
+        public static string WriteEpub(string file, string title, string author, string? firstChapter = null, int paragraphsPerChapter = 60)
         {
             using var archive = ZipFile.Open(file, ZipArchiveMode.Create);
             var mimetype = archive.CreateEntry("mimetype", CompressionLevel.NoCompression);
@@ -438,7 +434,7 @@ namespace Jularr.E2E.Tests
             Entry(archive, "OEBPS/content.opf", $"""<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">e2e-book</dc:identifier><dc:title>{SecurityElement.Escape(title)}</dc:title><dc:creator>{SecurityElement.Escape(author)}</dc:creator><dc:language>en</dc:language><meta property="dcterms:modified">2026-01-01T00:00:00Z</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="one" href="one.xhtml" media-type="application/xhtml+xml"/><item id="two" href="two.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="one"/><itemref idref="two"/></spine></package>""");
             Entry(archive, "OEBPS/nav.xhtml", """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Contents</title></head><body><nav epub:type="toc"><ol><li><a href="one.xhtml">Chapter One</a></li><li><a href="two.xhtml">Chapter Two</a></li></ol></nav></body></html>""");
             // Chapters long enough to scroll through.
-            var text = string.Concat(Enumerable.Range(1, 60).Select(number => "<p>Paragraph " + number + " of a long chapter, written to be read on.</p>"));
+            var text = string.Concat(Enumerable.Range(1, paragraphsPerChapter).Select(number => "<p>Paragraph " + number + " of a long chapter, written to be read on.</p>"));
             Entry(archive, "OEBPS/one.xhtml", """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter One</title></head><body><h1>Chapter One</h1>""" + (firstChapter ?? text) + "</body></html>");
             Entry(archive, "OEBPS/two.xhtml", """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter Two</title></head><body><h1>Chapter Two</h1>""" + text + "</body></html>");
             return file;
