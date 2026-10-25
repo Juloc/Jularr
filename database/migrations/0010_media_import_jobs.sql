@@ -24,6 +24,12 @@ CREATE TABLE "MediaImportJobRows" (
     "Title" varchar(500) NULL,
     "WorkId" bigint NULL REFERENCES "Works" ("Id") ON DELETE SET NULL,
     "Searches" boolean NOT NULL DEFAULT false,
+    "Source" varchar(48) NULL,
+    "Query" varchar(500) NULL,
+    "Detail" varchar(64) NULL,
+    "CandidateCount" integer NULL CHECK ("CandidateCount" >= 0),
+    "Attempt" integer NOT NULL DEFAULT 0 CHECK ("Attempt" >= 0),
+    "History" jsonb NOT NULL DEFAULT '[]'::jsonb,
     "UpdatedAt" timestamptz NULL,
     PRIMARY KEY ("OperationId", "RowIndex")
 );

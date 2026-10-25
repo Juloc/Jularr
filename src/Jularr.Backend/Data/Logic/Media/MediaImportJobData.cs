@@ -13,10 +13,12 @@ namespace Jularr.Backend.Data.Logic.Media
     internal sealed record MediaImportJobOperationData(long OperationId);
     internal sealed record MediaImportJobCheckpointData(long OperationId, int RowIndex, MediaImportOutcomeType OutcomeTypeId, string? Title, long? WorkId, bool Searches);
     internal sealed record MediaImportJobIdData(Guid JobId);
-    internal sealed record MediaImportJobStageData(long OperationId, int RowIndex, string Stage);
+    internal sealed record MediaImportJobStageData(long OperationId, int RowIndex, string Stage,
+        string? Source = null, string? Query = null, string? Detail = null, int? CandidateCount = null, int Attempt = 0);
     internal sealed record MediaImportJobPermissionData(bool Allowed);
     internal sealed record MediaImportJobWorkData(long OperationId, long RequestedByAccountId, string Payload, int TotalCount, int Cursor);
     internal sealed record MediaImportJobHeaderData(Guid JobId, OperationStatusType StatusTypeId, int TotalCount, long ProcessedCount, long Sequence, string? ErrorKey);
-    internal sealed record MediaImportJobRowData(int Index, string? Title, string Stage, MediaImportOutcomeType? OutcomeTypeId, long? WorkId, bool Searches);
+    internal sealed record MediaImportJobRowData(int Index, string? Title, string Stage, MediaImportOutcomeType? OutcomeTypeId, long? WorkId, bool Searches,
+        string? Source, string? Query, string? Detail, int? CandidateCount, int Attempt, string HistoryJson);
 
 }

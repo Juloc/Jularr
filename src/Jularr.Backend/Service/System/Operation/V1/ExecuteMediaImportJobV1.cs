@@ -70,16 +70,24 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 }
             }
 
+            // Server-owned and owner-scoped: a durable record of each visible search phase.
+            async Task StageAsync(int rowIndex, string stage, string? source = null, string? query = null,
+                string? detail = null, int? candidates = null, int attempt = 0)
+            {
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.MarkImportJobStageAsync(new MediaImportJobStageData(job.OperationId, rowIndex, stage,
+                        source, query, detail, candidates, attempt), ct);
+                    return true;
+                }, CancellationToken);
+            }
+
             for (var index = job.Cursor; index < items.Count; index++)
             {
                 CancellationToken.ThrowIfCancellationRequested();
                 await CheckOwnerAsync();
 
-                await Context.ExecuteBatchAsync(async (ctx, ct) =>
-                {
-                    await ctx.MarkImportJobStageAsync(new MediaImportJobStageData(job.OperationId, index, "Matching"), ct);
-                    return true;
-                }, CancellationToken);
+                await StageAsync(index, "Matching", "library", detail: "checking_library");
 
                 // This is the same canonical planner/processor as the old HTTP import.
                 // A single-item list makes every restart and re-evaluation idempotent.
@@ -94,6 +102,10 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 };
                 var data = new MediaImportDataV1(null, json, stored.Action, new(stored.Defaults), new(choices));
                 var single = MediaImportParser.Parse(json);
+                var input = single[0];
+                if (selected?.Include == true && input.Type == MediaType.Book &&
+                    input.Ids.FirstOrDefault(identity => identity.Namespace == "isbn") is { } isbn)
+                    await StageAsync(index, "Resolving", "openlibrary", isbn.Value, "isbn_lookup");
                 var plan = await _planner.PlanAsync(Context, single, data, 0, CancellationToken);
                 var row = plan.Rows.Single();
 
@@ -105,13 +117,19 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     && row.Item.Type == MediaType.Book && row.Item.Ids.Count == 0
                     && row.Status == MediaImportStatusType.Open)
                 {
-                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
-                    {
-                        await ctx.MarkImportJobStageAsync(new MediaImportJobStageData(job.OperationId, index, "Searching"), ct);
-                        return true;
-                    }, CancellationToken);
+                    var searchQuery = string.Join(" ", new[] { input.Title, input.Creator }
+                        .Where(part => !string.IsNullOrWhiteSpace(part)));
+                    if (!string.IsNullOrWhiteSpace(selected.Query)) searchQuery = selected.Query;
+                    if (searchQuery.Length > 500) searchQuery = searchQuery[..500];
+                    await StageAsync(index, "Searching", "openlibrary", searchQuery, "catalog_search");
                     var searched = await _planner.PlanAsync(Context, single, data, 1, CancellationToken);
-                    var matches = searched.Rows.Single().Candidates.Where(candidate => candidate.IsSuggested).ToArray();
+                    var foundCandidates = searched.Rows.Single().Candidates;
+                    var matches = foundCandidates.Where(candidate => candidate.IsSuggested).ToArray();
+                    await StageAsync(index, searched.ProviderFailure is not null ? "Retrying"
+                        : foundCandidates.Count == 0 ? "NoMatch" : matches.Length == 1 ? "Candidates" : "Review",
+                        "openlibrary", searchQuery,
+                        searched.ProviderFailure ?? (foundCandidates.Count == 0 ? "no_match"
+                            : matches.Length == 1 ? "match_found" : "needs_review"), foundCandidates.Count);
                     if (matches.Length == 1)
                     {
                         choices[0] = new MediaImportChoiceV1(0, true, matches[0].Choice,
@@ -141,13 +159,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         ? MediaImportOutcomeType.Unavailable : MediaImportOutcomeType.NotFound;
                     unresolved = new MediaImportRowExecution(
                         new MediaImportResultRowV1(index, row.Item.Title, outcome, false, null), false);
+                    await StageAsync(index, outcome == MediaImportOutcomeType.Unavailable ? "Retrying" : "NoMatch",
+                        "openlibrary", input.Ids.FirstOrDefault(identity => identity.Namespace == "isbn")?.Value,
+                        outcome == MediaImportOutcomeType.Unavailable ? "unavailable" : "isbn_no_match");
                 }
 
-                await Context.ExecuteBatchAsync(async (ctx, ct) =>
-                {
-                    await ctx.MarkImportJobStageAsync(new MediaImportJobStageData(job.OperationId, index, "Importing"), ct);
-                    return true;
-                }, CancellationToken);
+                if (unresolved is null && selected?.Include == true)
+                    await StageAsync(index, "Importing", row.MatchSource ?? "catalog", detail: "importing");
 
                 // A temporarily unavailable provider is retried by the canonical
                 // importer. Unresolved metadata is reported, not guessed.
@@ -162,6 +180,8 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     {
                         processed = await _processor.ProcessAsync(Context, row, CancellationToken, CheckOwnerAsync);
                         if (processed.Result.OutcomeTypeId != MediaImportOutcomeType.Unavailable || attempt >= 2) break;
+                        await StageAsync(index, "Retrying", row.MatchSource ?? "catalog",
+                            detail: "provider_retry", attempt: attempt + 2);
                         await Task.Delay(TimeSpan.FromSeconds((attempt + 1) * 5), CancellationToken);
                         await CheckOwnerAsync();
                     }

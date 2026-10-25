@@ -66,6 +66,9 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(status.Sequence >= 2L, "The sequence includes live stage transitions, not only completed titles.");
             Assert.AreEqual(2, status.Rows.Count);
             Assert.IsTrue(status.Rows.All(item => item.OutcomeTypeId == MediaImportOutcomeType.Added));
+            Assert.IsTrue(status.Rows.All(item => item.HistoryJson.Contains("\"checking_library\"", StringComparison.Ordinal)));
+            Assert.IsTrue(status.Rows.All(item => item.HistoryJson.Contains("\"importing\"", StringComparison.Ordinal)));
+            Assert.IsTrue(status.Rows.All(item => item.Attempt == 0));
             Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
             Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" """));
 
@@ -167,6 +170,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2L, status.ProcessedCount);
             Assert.AreEqual(MediaImportOutcomeType.Added, status.Rows[0].OutcomeTypeId);
             Assert.AreEqual(MediaImportOutcomeType.NeedsReview, status.Rows[1].OutcomeTypeId);
+            Assert.AreEqual("openlibrary", status.Rows[0].Source);
+            StringAssert.Contains(status.Rows[0].Query!, "Pride and Prejudice Jane Austen");
+            StringAssert.Contains(status.Rows[0].HistoryJson, "\"catalog_search\"");
+            Assert.IsTrue(status.Rows[0].CandidateCount >= 1);
+            StringAssert.Contains(status.Rows[1].HistoryJson, "\"needs_review\"");
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
             Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" """),
                 "Add only must not monitor or download automatically.");
@@ -195,6 +203,9 @@ namespace Jularr.Backend.Tests
             using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/media-import/jobs/" + job.JobId);
             var status = (await read.Content.ReadFromJsonAsync<MediaImportJobStatusV1>())!;
             Assert.AreEqual(MediaImportOutcomeType.NotFound, status.Rows.Single().OutcomeTypeId);
+            Assert.AreEqual("openlibrary", status.Rows.Single().Source);
+            Assert.AreEqual("9780000000002", status.Rows.Single().Query);
+            StringAssert.Contains(status.Rows.Single().HistoryJson, "\"isbn_lookup\"");
             Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
         }
 

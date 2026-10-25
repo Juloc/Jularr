@@ -59,9 +59,25 @@ namespace Jularr.Backend.Logic.Media
                 """
                 WITH changed AS (
                     UPDATE "MediaImportJobRows"
-                    SET "Stage" = @Stage, "UpdatedAt" = now()
+                    SET "Stage" = @Stage, "UpdatedAt" = now(),
+                        "Source" = COALESCE(@Source, "Source"),
+                        "Query" = COALESCE(@Query, "Query"),
+                        "Detail" = COALESCE(@Detail, "Detail"),
+                        "CandidateCount" = COALESCE(@CandidateCount, "CandidateCount"),
+                        "Attempt" = GREATEST("Attempt", @Attempt),
+                        "History" = (
+                            SELECT COALESCE(jsonb_agg(recent.item ORDER BY recent.ordinal), '[]'::jsonb)
+                            FROM (
+                                SELECT value AS item, ordinality AS ordinal
+                                FROM jsonb_array_elements("MediaImportJobRows"."History") WITH ORDINALITY
+                                ORDER BY ordinality DESC LIMIT 19
+                            ) AS recent
+                        ) || jsonb_build_array(jsonb_build_object(
+                            'stage', @Stage, 'source', @Source, 'query', @Query,
+                            'detail', @Detail, 'candidateCount', @CandidateCount,
+                            'attempt', @Attempt, 'at', now()))
                     WHERE "OperationId" = @OperationId AND "RowIndex" = @RowIndex
-                      AND "OutcomeTypeId" IS NULL AND "Stage" <> @Stage
+                      AND "OutcomeTypeId" IS NULL
                     RETURNING "OperationId"
                 )
                 UPDATE "MediaImportJobs"
@@ -106,7 +122,9 @@ namespace Jularr.Backend.Logic.Media
             sql = new SqlStatement();
             sql.Statement =
                 """
-                SELECT row."RowIndex" AS "Index", row."Title", row."Stage", row."OutcomeTypeId", row."WorkId", row."Searches"
+                SELECT row."RowIndex" AS "Index", row."Title", row."Stage", row."OutcomeTypeId", row."WorkId", row."Searches",
+                       row."Source", row."Query", row."Detail", row."CandidateCount", row."Attempt",
+                       row."History"::text AS "HistoryJson"
                 FROM "MediaImportJobRows" AS row
                 JOIN "MediaImportJobs" AS job ON job."OperationId" = row."OperationId"
                 WHERE job."PublicId" = @JobId AND job."RequestedByAccountId" = @AccountId
@@ -115,7 +133,8 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(data);
             var rows = await ctx.ReadSql.ReadListAsync<MediaImportJobRowData>(sql, ct);
             return new MediaImportJobStatusV1(header.JobId, header.StatusTypeId, header.TotalCount, header.ProcessedCount,
-                header.Sequence, header.ErrorKey, new(rows.Select(row => new MediaImportJobRowV1(row.Index, row.Title, row.Stage, row.OutcomeTypeId, row.WorkId, row.Searches))));
+                header.Sequence, header.ErrorKey, new(rows.Select(row => new MediaImportJobRowV1(row.Index, row.Title, row.Stage, row.OutcomeTypeId, row.WorkId, row.Searches,
+                    row.Source, row.Query, row.Detail, row.CandidateCount, row.Attempt, row.HistoryJson))));
         }
 
         public static Task<MediaImportJobWorkData?> ReadImportJobWorkAsync(this LogicContext ctx, MediaImportJobOperationData data, CancellationToken ct)

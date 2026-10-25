@@ -46,7 +46,8 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class MediaImportJobRowV1 : BaseResponse
     {
-        public MediaImportJobRowV1(int index, string? title, string stage, MediaImportOutcomeType? outcomeTypeId, long? workId, bool searches)
+        public MediaImportJobRowV1(int index, string? title, string stage, MediaImportOutcomeType? outcomeTypeId, long? workId, bool searches,
+            string? source, string? query, string? detail, int? candidateCount, int attempt, string historyJson)
         {
             Index = index;
             Title = title;
@@ -54,6 +55,12 @@ namespace Jularr.Backend.Data.Admin.Media.V1
             OutcomeTypeId = outcomeTypeId;
             WorkId = workId;
             Searches = searches;
+            Source = source;
+            Query = query;
+            Detail = detail;
+            CandidateCount = candidateCount;
+            Attempt = attempt;
+            HistoryJson = historyJson;
         }
 
         [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Index))]
@@ -73,6 +80,24 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Flag))]
         public bool Searches { get; }
+
+        [DataField(typeof(MediaImportJobFields), nameof(MediaImportJobFields.Source), false)]
+        public string? Source { get; }
+
+        [DataField(typeof(MediaImportJobFields), nameof(MediaImportJobFields.Query), false)]
+        public string? Query { get; }
+
+        [DataField(typeof(MediaImportJobFields), nameof(MediaImportJobFields.Detail), false)]
+        public string? Detail { get; }
+
+        [DataField(typeof(MediaImportJobFields), nameof(MediaImportJobFields.CandidateCount), false)]
+        public int? CandidateCount { get; }
+
+        [DataField(typeof(MediaImportJobFields), nameof(MediaImportJobFields.Attempt))]
+        public int Attempt { get; }
+
+        [DataField(typeof(MediaImportJobFields), nameof(MediaImportJobFields.HistoryJson))]
+        public string HistoryJson { get; }
     }
 
     public sealed class MediaImportJobStatusV1 : BaseResponse
