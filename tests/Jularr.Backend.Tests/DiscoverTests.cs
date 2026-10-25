@@ -522,17 +522,33 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("https://img.anili.st/second.jpg", season.PosterUrl);
             Assert.AreEqual("https://image.tmdb.org/t/p/w1280/show-backdrop.jpg", season.BackdropUrl);
             Assert.IsNull(season.WorkId);
+            // Opening an unrequested anime creates metadata only, then uses the full series Details page.
             using var page = await host.SendAsync(HttpMethod.Get, "/Discover/anime/anilist/21");
-            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "https://www.youtube.com/watch?v=abcdefghijk");
+            Assert.AreEqual(HttpStatusCode.Redirect, page.StatusCode, await page.Content.ReadAsStringAsync());
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"))!;
+            Assert.AreEqual("/Details/" + workId, page.Headers.Location!.OriginalString);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"MediaSubtypeId\" FROM \"Works\" WHERE \"Id\" = " + workId));
 
-            // The request creates the TMDB series as Anime; the season then leads to it.
+            // All TVDB seasons are still visible even when the initial AniList card represents a later one.
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number") VALUES
+                    ({workId}, 1, 1), ({workId}, 1, 2);
+                """);
+            using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId + "?tab=episodes&season=2");
+            Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, await details.Content.ReadAsStringAsync());
+            var detailsHtml = await details.Content.ReadAsStringAsync();
+            StringAssert.Contains(detailsHtml, "Season 1");
+            StringAssert.Contains(detailsHtml, "Season 2");
+
+            // Requesting afterwards reuses the same Work rather than creating another series.
             using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/requests", new RequestDiscoverCatalogDataV1(MediaType.Series, "anilist", "21", 1, MediaSubtype.Anime));
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
-            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"))!;
-            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"MediaSubtypeId\" FROM \"Works\" WHERE \"Id\" = " + workId));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
             using var known = await host.SendAsync(HttpMethod.Get, "/Discover/anime/anilist/21");
             Assert.AreEqual(HttpStatusCode.Redirect, known.StatusCode);
-            Assert.AreEqual("/Details/" + workId, known.Headers.Location!.OriginalString);
+            Assert.AreEqual("/Details/" + workId + "?season=2", known.Headers.Location!.OriginalString);
         }
 
         [TestMethod]
@@ -852,6 +868,7 @@ namespace Jularr.Backend.Tests
                 }
                 services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => tmdb);
                 services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList);
+                services.AddHttpClient<AniBridgeMappings>().ConfigurePrimaryHttpMessageHandler(() => new FakeAniBridge());
             });
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
@@ -860,6 +877,23 @@ namespace Jularr.Backend.Tests
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1(Token));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             return host;
+        }
+
+        private sealed class FakeAniBridge : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+                Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""
+                        {
+                            "$meta":{"schema_version":"3.0.3"},
+                            "anilist:21":{
+                                "tvdb_show:81189:s2":{"1-12":"1-12"},
+                                "tmdb_show:1399:s2":{}
+                            }
+                        }
+                        """, Encoding.UTF8, "application/json")
+                });
         }
 
         // The Matrix Show on AniList: a first season and a second with its own trailer and cover but no banner.
