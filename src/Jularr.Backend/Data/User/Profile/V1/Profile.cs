@@ -67,11 +67,22 @@ namespace Jularr.Backend.Data.User.Profile.V1
         public string Pin { get; }
     }
 
+    public sealed class UpdateProfileFavoriteRequestDataV1 : BaseData
+    {
+        public UpdateProfileFavoriteRequestDataV1(bool autoRequestOnFavorite)
+        {
+            AutoRequestOnFavorite = autoRequestOnFavorite;
+        }
+
+        public bool AutoRequestOnFavorite { get; }
+    }
+
     public sealed class ReadProfileResultV1 : BaseResponse
     {
-        public ReadProfileResultV1(long id, string displayName, long uiLocaleId, bool hasPin, bool autoplayPreviews = true)
+        public ReadProfileResultV1(long id, string displayName, long uiLocaleId, bool hasPin, bool autoplayPreviews = true, bool autoRequestOnFavorite = false)
         {
             AutoplayPreviews = autoplayPreviews;
+            AutoRequestOnFavorite = autoRequestOnFavorite;
             Id = id;
             DisplayName = displayName;
             UiLocaleId = uiLocaleId;
@@ -91,5 +102,8 @@ namespace Jularr.Backend.Data.User.Profile.V1
 
         // Whether a card that lingers on a touch device plays its preview by itself; the profile's playback preference.
         public bool AutoplayPreviews { get; }
+
+        // Opt-in to create a request when a new title is favorited; does not bypass the Requests module or approval.
+        public bool AutoRequestOnFavorite { get; }
     }
 }
