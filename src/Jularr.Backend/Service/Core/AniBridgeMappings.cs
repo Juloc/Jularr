@@ -92,7 +92,8 @@ namespace Jularr.Backend.Service.Core
                     }
 
                     candidateIds.Add(aniListId);
-                    if (target.Value.ValueKind != JsonValueKind.Object)
+                    if (target.Value.ValueKind != JsonValueKind.Object ||
+                        target.Value.EnumerateObject().Any() && !target.Value.EnumerateObject().Any(range => range.Value.ValueKind == JsonValueKind.String))
                     {
                         requiresReview = true;
                         continue;
