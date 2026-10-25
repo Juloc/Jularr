@@ -173,6 +173,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("openlibrary", status.Rows[0].Source);
             StringAssert.Contains(status.Rows[0].Query!, "Pride and Prejudice Jane Austen");
             StringAssert.Contains(status.Rows[0].HistoryJson, "\"catalog_search\"");
+            StringAssert.Contains(status.Rows[0].HistoryJson, "\"matches\"");
+            StringAssert.Contains(status.Rows[0].HistoryJson, "\"Pride and Prejudice\"");
             Assert.IsTrue(status.Rows[0].CandidateCount >= 1);
             StringAssert.Contains(status.Rows[1].HistoryJson, "\"needs_review\"");
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));

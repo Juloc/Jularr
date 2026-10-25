@@ -1,6 +1,10 @@
 // A durable import is owned by the server's operation queue, not by this page
 // or a long-lived fetch. Polling may stop freely on navigation and reconnects.
-type JobEvent = { stage: string; source: string | null; query: string | null; detail: string | null; candidateCount: number | null; attempt: number; at: string };
+type JobEvent = {
+    stage: string; source: string | null; query: string | null; detail: string | null;
+    candidateCount: number | null; attempt: number; at: string;
+    matches?: { title: string; author: string | null; source: string; choice: string; isSuggested: boolean }[];
+};
 type JobRow = { index: number; title: string | null; stage: string; stageKey: string; outcome: string | null; outcomeKey: string | null;
     workId: number | null; source: string | null; query: string | null; detail: string | null; candidateCount: number | null;
     attempt: number; history: JobEvent[] };
@@ -171,6 +175,17 @@ export function initializeDurableJobs(): void {
                         event.detail ? labelReason(event.detail) : null,
                         event.attempt > 0 ? (panel.dataset.jobAttempt ?? "Retry") + ": " + event.attempt : null
                     ].filter(Boolean).join(" · ");
+                    if (event.matches?.length) {
+                        const proposals = document.createElement("ul");
+                        proposals.className = "media-import__job-candidates";
+                        for (const candidate of event.matches) {
+                            const proposal = document.createElement("li");
+                            proposal.textContent = [candidate.title, candidate.author,
+                                sourceName(candidate.source), candidate.choice].filter(Boolean).join(" · ");
+                            proposals.append(proposal);
+                        }
+                        li.append(proposals);
+                    }
                     history.append(li);
                 }
                 content.append(heading, history);

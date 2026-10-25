@@ -72,12 +72,12 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
             // Server-owned and owner-scoped: a durable record of each visible search phase.
             async Task StageAsync(int rowIndex, string stage, string? source = null, string? query = null,
-                string? detail = null, int? candidates = null, int attempt = 0)
+                string? detail = null, int? candidates = null, int attempt = 0, string? matchesJson = null)
             {
                 await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 {
                     await ctx.MarkImportJobStageAsync(new MediaImportJobStageData(job.OperationId, rowIndex, stage,
-                        source, query, detail, candidates, attempt), ct);
+                        source, query, detail, candidates, attempt, matchesJson), ct);
                     return true;
                 }, CancellationToken);
             }
@@ -125,11 +125,22 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     var searched = await _planner.PlanAsync(Context, single, data, 1, CancellationToken);
                     var foundCandidates = searched.Rows.Single().Candidates;
                     var matches = foundCandidates.Where(candidate => candidate.IsSuggested).ToArray();
+                    // Keep the actual provider proposals on the owner-scoped job,
+                    // so an ambiguous book remains explainable after a restart.
+                    var candidatePayload = foundCandidates.Count == 0 ? null :
+                        JsonSerializer.Serialize(foundCandidates.Select(candidate => new
+                        {
+                            title = candidate.Title,
+                            author = candidate.Creator,
+                            source = candidate.Source,
+                            choice = candidate.Choice,
+                            isSuggested = candidate.IsSuggested
+                        }));
                     await StageAsync(index, searched.ProviderFailure is not null ? "Retrying"
                         : foundCandidates.Count == 0 ? "NoMatch" : matches.Length == 1 ? "Candidates" : "Review",
                         "openlibrary", searchQuery,
                         searched.ProviderFailure ?? (foundCandidates.Count == 0 ? "no_match"
-                            : matches.Length == 1 ? "match_found" : "needs_review"), foundCandidates.Count);
+                            : matches.Length == 1 ? "match_found" : "needs_review"), foundCandidates.Count, matchesJson: candidatePayload);
                     if (matches.Length == 1)
                     {
                         choices[0] = new MediaImportChoiceV1(0, true, matches[0].Choice,

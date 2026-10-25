@@ -75,7 +75,8 @@ namespace Jularr.Backend.Logic.Media
                         ) || jsonb_build_array(jsonb_build_object(
                             'stage', @Stage, 'source', @Source, 'query', @Query,
                             'detail', @Detail, 'candidateCount', @CandidateCount,
-                            'attempt', @Attempt, 'at', now()))
+                            'attempt', @Attempt, 'matches', COALESCE(@MatchesJson::jsonb, '[]'::jsonb),
+                            'at', now()))
                     WHERE "OperationId" = @OperationId AND "RowIndex" = @RowIndex
                       AND "OutcomeTypeId" IS NULL
                     RETURNING "OperationId"
