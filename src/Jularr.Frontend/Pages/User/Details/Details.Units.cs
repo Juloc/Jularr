@@ -117,7 +117,7 @@ namespace Jularr.Frontend.Pages.User.Details
         // An episode: watched or not with one icon, and starting over where it was begun or finished.
         private IUiComponent? EpisodeActions(WorkEpisodeV1 episode)
         {
-            if (!texts.CanReadMedia()) return null;
+            if (IsExternal || !texts.CanReadMedia()) return null;
             var started = episode.IsCompleted || episode.ResumePositionMs > 0;
             return new Div(
                 started && texts.CanPlay() && episode.MediaAssetId is { } asset
