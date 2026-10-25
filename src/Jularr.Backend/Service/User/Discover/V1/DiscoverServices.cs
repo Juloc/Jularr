@@ -488,6 +488,39 @@ namespace Jularr.Backend.Service.User.Discover.V1
         }
     }
 
+    // Explicitly favoriting an external item imports the canonical Work once; browsing never does.
+    [ServiceEndpoint("POST", "/api/v1/discover/catalog/favorite")]
+    public sealed class FavoriteDiscoverCatalogItemV1 : UserService<DiscoverParametersV1, ReadDiscoverCatalogEntryDataV1>
+    {
+        private readonly MetadataCatalog _catalog;
+
+        internal FavoriteDiscoverCatalogItemV1(MetadataCatalog catalog) { _catalog = catalog; }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<FavoriteDiscoverResultV1>()];
+        protected override ModuleRequirement GetInstanceModules(DiscoverParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(DiscoverParametersV1 parameters, Type resultType) => new("profile.watchlist.update");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var catalog = Data.Namespace is "anilist" or "openlibrary";
+            if (catalog)
+                await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
+            else if (Data.Namespace is "tmdb_movie" or "tmdb_tv" or "tvdb")
+                await DiscoverQueries.RequireTypeAsync(Context, Data.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
+            else
+                throw new KeyNotFoundException("Unknown external identity.");
+
+            var workId = await _catalog.ImportAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.UpdateWatchlistAsync(new WatchlistData(Auth.ProfileId!.Value, workId), true, ct);
+                return true;
+            }, CancellationToken);
+            return new FavoriteDiscoverResultV1(workId);
+        }
+    }
+
     // A read-only, provider-backed snapshot for the regular Details Razor page.
     // Resolving it NEVER persists a Work, WatchlistEntry, Request or WantedItem.
     [ServiceEndpoint("POST", "/api/v1/discover/external-details")]
