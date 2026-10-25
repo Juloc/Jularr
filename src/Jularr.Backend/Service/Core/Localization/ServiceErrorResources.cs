@@ -161,6 +161,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.naming_incomplete", "The pattern needs the title, and for episodes the season and episode."),
             new("errors.validation.naming_needs_release_token", "Several releases need {Quality}, {Release Group} or {Edition} in every file name."),
             new("errors.validation.naming_invalid_path", "Each folder of the pattern needs a name."),
+            new("errors.validation.naming_invalid_folder", "Use one folder name without slashes; '.' and '..' are not allowed."),
             new("errors.validation.setup_completed", "Only an instance that has not finished setup can be replaced by a backup."),
             new("errors.validation.backup_incompatible", "This backup belongs to another Jularr version."),
             new("errors.validation.library_rename_changed", "The library changed since the preview. Please check the new preview."),
