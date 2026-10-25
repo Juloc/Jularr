@@ -40,7 +40,12 @@ namespace Jularr.Frontend.Pages.User.Details
                     RatingSource(work.RatingSource) is { } source ? new Small(new ValueText(source)) : new Span()).Class("media-hero__rating"));
             }
 
-            if (work.ProgressStateId != ProgressStateType.NotStarted && kind != WorkKind.Game) hero.Progress(work.ProgressPercent, texts[ProgressKey(kind)], ProgressValue(work, kind));
+            if (IsExternal && _external?.AniListProgress is { } remote)
+                hero.Progress(work.ProgressPercent, "AniList", _external.AniListTotal is > 0
+                    ? remote.ToString(CultureInfo.CurrentCulture) + " / " + _external.AniListTotal.Value.ToString(CultureInfo.CurrentCulture)
+                    : remote.ToString(CultureInfo.CurrentCulture));
+            else if (work.ProgressStateId != ProgressStateType.NotStarted && kind != WorkKind.Game)
+                hero.Progress(work.ProgressPercent, texts[ProgressKey(kind)], ProgressValue(work, kind));
             return hero;
         }
 
@@ -70,7 +75,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 page.Asset("Framework/Components/LiveProgress.entry.ts");
             }
 
-            if (RequestMenu(work) is { } request) actions.Add(request);
+            if ((IsExternal ? ExternalRequestMenu() : RequestMenu(work)) is { } request) actions.Add(request);
 
             // Which version, edition or platform the primary action opens.
             if (variants.Count > 1)
@@ -86,9 +91,38 @@ namespace Jularr.Frontend.Pages.User.Details
                     .Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"));
             }
 
-            actions.Add(new MediaBookmark(assets, work.Id, work.IsWatchlisted, Request.Path + Request.QueryString, _csrf));
-            if (MoreMenu(work, kind) is { } more) actions.Add(more);
+            if (IsExternal)
+            {
+                var address = Address();
+                actions.Add(new Form<UpdateWatchlistDataV1>(form =>
+                {
+                    form.Hidden(data => data.IsWatchlisted);
+                    form.Submit(new Button(new Icon("heart", assets)).IconOnly(texts["media.favorites.add"]));
+                }, address + (address.Contains('?') ? "&" : "?") + "handler=FavoriteExternal",
+                    _csrf, new UpdateWatchlistDataV1(true)));
+            }
+            else
+            {
+                actions.Add(new MediaBookmark(assets, work.Id, work.IsWatchlisted, Request.Path + Request.QueryString, _csrf));
+            }
+            if (!IsExternal && MoreMenu(work, kind) is { } more) actions.Add(more);
             return actions;
+        }
+
+        private IUiComponent? ExternalRequestMenu()
+        {
+            if (_locales is not { Count: > 0 } languages) return null;
+            var options = languages.Select(locale => new SelectOption(locale.Id.ToString(CultureInfo.InvariantCulture), locale.Name));
+            var selected = languages.FirstOrDefault(locale => string.Equals(locale.Locale, texts.Locale, StringComparison.OrdinalIgnoreCase));
+            var address = Address();
+            var form = new Form<CreateRequestDataV1>(form =>
+            {
+                form.Select(item => item.UiLocaleId, "request.language", options);
+                form.Submit("request.create");
+            }, address + (address.Contains('?') ? "&" : "?") + "handler=RequestExternal", _csrf,
+                _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id)), FormError);
+            return new ActionMenu(new Span(new Icon("plus", assets, 16), new Span(new Text("details.request"))),
+                [form], "button button--primary", null, FormError is not null && _requestInput is not null);
         }
 
         // The language, the platform of a game and the quality a request is made for, in a panel beside the primary action.
