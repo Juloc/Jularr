@@ -75,6 +75,27 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task FaviconColors_UseCanonicalVectorWithPublicColorOnlyUrls()
+        {
+            await using var app = await StartAsync();
+            using var svgResponse = await app.GetTestClient().GetAsync("/pwa/icons/favicon/1b8aa0.svg");
+            Assert.AreEqual(HttpStatusCode.OK, svgResponse.StatusCode);
+            Assert.AreEqual("image/svg+xml", svgResponse.Content.Headers.ContentType?.MediaType);
+            StringAssert.Contains(await svgResponse.Content.ReadAsStringAsync(), "fill=\"#1b8aa0\"");
+            Assert.IsFalse((await svgResponse.Content.ReadAsStringAsync()).Contains("currentColor", StringComparison.Ordinal));
+
+            using var pngResponse = await app.GetTestClient().GetAsync("/pwa/icons/favicon-32/1b8aa0.png");
+            Assert.AreEqual(HttpStatusCode.OK, pngResponse.StatusCode);
+            Assert.AreEqual("image/png", pngResponse.Content.Headers.ContentType?.MediaType);
+            using var bitmap = SkiaSharp.SKBitmap.Decode(await pngResponse.Content.ReadAsByteArrayAsync());
+            Assert.AreEqual(32, bitmap.Width);
+            Assert.AreEqual(32, bitmap.Height);
+
+            using var invalid = await app.GetTestClient().GetAsync("/pwa/icons/favicon/not-a-color.svg");
+            Assert.AreEqual(HttpStatusCode.NotFound, invalid.StatusCode);
+        }
+
+        [TestMethod]
         public async Task SignedInManifestAndAppleTouchIcon_UseThePersistedMainProfileAccent()
         {
             await using var host = await Host.CreateAsync(razor: true, endpoints: endpoints => endpoints.MapJularrPwa());
@@ -96,9 +117,12 @@ namespace Jularr.Backend.Tests
                 "/pwa/icons/192/336699.png", "/pwa/icons/512/336699.png", "/pwa/icons/maskable-512/336699.png"
             }, icons);
 
+            Assert.AreEqual("#336699", json.RootElement.GetProperty("theme_color").GetString());
             using var page = await host.SendAsync(HttpMethod.Get, "/Settings");
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode);
             StringAssert.Contains(await page.Content.ReadAsStringAsync(), "rel=\"apple-touch-icon\" href=\"/pwa/icons/apple-180/336699.png\"");
+            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "/pwa/icons/favicon/336699.svg");
+            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "/pwa/icons/favicon-32/336699.png");
         }
 
         [TestMethod]
