@@ -74,6 +74,7 @@ namespace Jularr.Backend.Data.User.Profile.V1
             AutoRequestOnFavorite = autoRequestOnFavorite;
         }
 
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.AutoRequestOnFavorite))]
         public bool AutoRequestOnFavorite { get; }
     }
 
@@ -107,6 +108,7 @@ namespace Jularr.Backend.Data.User.Profile.V1
         // Whether a card that lingers on a touch device plays its preview by itself; the profile's playback preference.
         public bool AutoplayPreviews { get; }
 
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.AutoRequestOnFavorite))]
         public bool AutoRequestOnFavorite { get; }
     }
 }
