@@ -603,7 +603,9 @@ namespace Jularr.Backend.Tests
                         """);
                     foreach (var migration in migrations)
                     {
-                        await fixture.RunSqlAsync(migration.Statement);
+                        // The shared profile fixture already installs the account/PWA migration.
+                        // Other migrations are applied here for the full library schema.
+                        if (migration.Version != 9) await fixture.RunSqlAsync(migration.Statement);
                         await fixture.RunSqlAsync($"""
                             INSERT INTO "DatabaseSchemaVersions" ("Version", "Name", "Fingerprint")
                             VALUES ({migration.Version}, '{migration.Name}', '{DatabaseBaseline.Fingerprint(migration.Version, migrations)}');
@@ -611,14 +613,8 @@ namespace Jularr.Backend.Tests
                     }
                 }
 
-                // Lightweight authentication fixtures install only Account/Instance baselines. Keep
-                // their account/profile columns at the current production version as well; full
-                // library fixtures already apply every migration through their schema ledger above.
-                if (!library)
-                {
-                    var accountAppearanceMigration = DatabaseBaseline.Migrations.Single(migration => migration.Version == 9);
-                    await fixture.RunSqlAsync(accountAppearanceMigration.Statement);
-                }
+                // The shared ProfileFixture installed version 9 (PWA account/profile columns).
+                // Never apply the same ALTER TABLE again in auth-only or full-library fixtures.
 
                 var hasher = new PasswordHasher<AccountAuthenticationData>();
                 var hash = hasher.HashPassword(new AccountAuthenticationData(41, 1, null, true, false), Password);

@@ -1,12 +1,14 @@
 
 
+using NpgsqlTypes;
+
 namespace Jularr.Backend.Data.Fields.Profile
 {
     public static class ProfileFields
     {
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly StringField DisplayName = new() { AllowBlank = false, Trim = true };
-        public static readonly StringField AccentHex = new() { AllowBlank = false, MinimumLength = 7, Trim = true };
+        public static readonly StringField AccentHex = new(NpgsqlDbType.Varchar) { AllowBlank = false, MinimumLength = 7, MaximumLength = 7, Trim = true };
         public static readonly LongField UiLocaleId = new() { Minimum = 1 };
         public static readonly LongField OwnerAccountId = new() { Minimum = 1 };
         public static readonly StringField PinHash = new() { Required = false };
