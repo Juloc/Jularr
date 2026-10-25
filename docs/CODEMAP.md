@@ -145,6 +145,8 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 - [Pagination.cs](../src/Jularr.Backend/Data/Pagination.cs), [SqlStatement.cs](../src/Jularr.Backend/Infrastructure/Sql/SqlStatement.cs): shared PageRequest and bounded page results, including direct JSON deserialization of items/page/pageSize through the same bounds; [ListService.cs](../src/Jularr.Backend/Service/Core/ListService.cs): once-per-invocation page hook.
 - [Account.sql](../database/Account.sql): the single fresh Account/Profile/auth/session/localization baseline; [schema scope](../database/README.md). [UiTranslationFields.cs](../src/Jularr.Backend/Data/Fields/Localization/UiTranslationFields.cs) and [UiTranslationStatusType.cs](../src/Jularr.Backend/Data/Enums/Localization/UiTranslationStatusType.cs) own translation fields/catalog values.
 
+Anna search health is owned by [AnnasArchiveMirrors.cs](../src/Jularr.Integrations/Logic/AnnasArchive/AnnasArchiveMirrors.cs); the existing Anna client classifies and parses search pages. [AnnasArchiveSearchTests.cs](../tests/Jularr.Backend.Tests/AnnasArchiveSearchTests.cs) covers observed list/table/empty fixtures, mirror cooldowns, scoped answer reuse and failure reasons. The wanted search shares an `AnnasArchiveSearchContext` across configured Anna connections for one invocation only.
+
 ## Focused tests
 
 - Wanted SQL latency: [measurement and reproduction](WANTED_PERFORMANCE.md), opt-in `WantedPerformanceTests`; behavior in `AcquisitionTests.WantedViews_*` and `AcquisitionTests.WantedPriority_*`.

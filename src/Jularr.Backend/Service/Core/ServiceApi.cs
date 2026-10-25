@@ -335,6 +335,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<OcrModelClient>(services, 600, null, agent: true, baseAddress: providers.OcrModels,
                 handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
             AddClient<OpdsClient>(services, 60, null, agent: true);
+            services.TryAddSingleton<AnnasArchiveMirrors>();
             AddClient<AnnasArchiveClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
             AddClient<OpenLibraryClient>(services, 15, 4, agent: true, baseAddress: providers.OpenLibrary, provider: "openlibrary");
             AddClient<HardcoverClient>(services, 15, 4, agent: true, baseAddress: providers.Hardcover, provider: "hardcover");

@@ -199,9 +199,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             var wantedId = await CreateWantedBookAsync(host);
 
-            // A challenge is never passed in production; the source simply has no results.
+            // A browser confirmation is distinct from an unavailable source or an empty search.
             using var tested = await host.SendAsync(HttpMethod.Post, Connections + "/2/test");
-            Assert.AreEqual("acquisition_unavailable", (await tested.Content.ReadFromJsonAsync<AcquisitionConnectionTestV1>())!.ErrorKey);
+            Assert.AreEqual("source_gate", (await tested.Content.ReadFromJsonAsync<AcquisitionConnectionTestV1>())!.ErrorKey);
             using var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, blocked.StatusCode);
 
@@ -216,6 +216,25 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Books", "Jane Austen", "Pride and Prejudice (1813)", "Pride and Prejudice.epub")));
             Assert.IsTrue(sources.Requests.Any(request => request.StartsWith("annas.example.test/dyn/api/fast_download.json", StringComparison.Ordinal) && request.Contains(FakeSources.MemberKey)));
             Assert.IsFalse(sources.Requests.Any(request => request.StartsWith("files.example.test", StringComparison.Ordinal) && request.Contains(FakeSources.MemberKey)));
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_UnreadableSearch_ReportsLayoutFailureThroughProbeAndSearch()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeSources();
+            sources.SearchPages["Austen"] = "<html><title>Domain for sale</title></html>";
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas.example.test", null, true, 60, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode);
+            var wantedId = await CreateWantedBookAsync(host);
+            using var tested = await host.SendAsync(HttpMethod.Post, Connections + "/2/test");
+            Assert.AreEqual("source_markup_changed", (await tested.Content.ReadFromJsonAsync<AcquisitionConnectionTestV1>())!.ErrorKey);
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, searched.StatusCode);
+            StringAssert.Contains(await searched.Content.ReadAsStringAsync(), "source_markup_changed");
         }
 
         [TestMethod]
