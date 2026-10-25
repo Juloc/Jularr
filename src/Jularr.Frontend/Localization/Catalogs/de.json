@@ -9420,7 +9420,7 @@
   "admin.browser.manualLoading": ["Connecting to the source browser…", "Verbindung zum Quellen-Browser wird hergestellt…"],
   "admin.browser.manualText": ["Text for the selected field in the source browser", "Text für das ausgewählte Feld im Quellen-Browser"],
   "admin.browser.manualSend": ["Send text", "Text senden"],
-  "admin.browser.manualTab": ["Tab", "Tab"],
+  "admin.browser.manualTab": ["Tab", "Tabulator"],
   "admin.browser.manualEnter": ["Enter", "Eingabe"],
   "admin.browser.manualUp": ["Scroll up", "Nach oben scrollen"],
   "admin.browser.manualDown": ["Scroll down", "Nach unten scrollen"],
