@@ -40,6 +40,19 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow("https://user:password@annas-archive.gl/search?q=private-title&key=member-secret", "https://annas-archive.gl")]
+        [DataRow("https://files.example.org:8443/signed/book-secret.epub?token=download-secret", "https://files.example.org:8443")]
+        [DataRow("https://[::1]:9222/json/list?auth=private-secret", "https://[::1]:9222")]
+        public void BrowserDiagnostics_KeepOnlyPublicOrigin(string address, string expected)
+        {
+            var safe = SourceBrowser.DiagnosticOrigin(new Uri(address));
+            Assert.AreEqual(expected, safe);
+            Assert.IsFalse(safe.Contains("secret", StringComparison.OrdinalIgnoreCase));
+            Assert.IsFalse(safe.Contains("@", StringComparison.Ordinal));
+            Assert.IsFalse(safe.Contains("?", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
         public async Task ManagedBrowser_FailedInstallBacksOffAndTurningOffClearsRetry()
         {
             var packages = new BrowserPackages(new BrowserOptions { ProfilePath = Path.Combine("relative", "nonexistent-root") });
