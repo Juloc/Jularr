@@ -21,7 +21,7 @@ namespace Jularr.Backend.Logic.Media
 
             var sql = new SqlStatement();
             sql.Statement = """
-                SELECT profile."AutoRequestOnFavorite", profile."UiLocaleId",
+                SELECT coalesce((to_jsonb(profile)->>'AutoRequestOnFavorite')::boolean, FALSE) AS "AutoRequestOnFavorite", profile."UiLocaleId",
                     EXISTS (SELECT 1 FROM "WatchlistEntries" AS existing
                         WHERE existing."ProfileId" = profile."Id" AND existing."WorkId" = @WorkId) AS "AlreadyFavorite",
                     EXISTS (SELECT 1 FROM "InstanceModules" AS module
