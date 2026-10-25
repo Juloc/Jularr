@@ -232,9 +232,9 @@ namespace Jularr.Frontend.Pages.User.Details
             return RedirectToPage("/User/Details/Details", new { id = Id });
         }
 
-        public async Task<IActionResult> OnPostRequestAsync([BindRequired] long uiLocaleId, long? gamePlatformId, long? acquisitionProfileId)
+        public async Task<IActionResult> OnPostRequestAsync([BindRequired] long uiLocaleId, long? gamePlatformId, long? acquisitionProfileId, int? startSeasonNumber)
         {
-            _requestInput = new CreateRequestDataV1(uiLocaleId, gamePlatformId, acquisitionProfileId);
+            _requestInput = new CreateRequestDataV1(uiLocaleId, gamePlatformId, acquisitionProfileId, startSeasonNumber);
             await request.ExecuteAsync<CreateRequestResultV1>(new CreateRequestParametersV1(Id), _requestInput, HttpContext.RequestAborted);
             return RedirectToPage("/User/Requests/Requests");
         }
@@ -248,19 +248,19 @@ namespace Jularr.Frontend.Pages.User.Details
             return LocalRedirect("/Details/" + result.WorkId.ToString(CultureInfo.InvariantCulture));
         }
 
-        public async Task<IActionResult> OnPostRequestExternalAsync([BindRequired] long uiLocaleId)
+        public async Task<IActionResult> OnPostRequestExternalAsync([BindRequired] long uiLocaleId, int? startSeasonNumber)
         {
             var scope = await ExternalScopeAsync();
             if (ExternalSource is "tmdb_movie" or "tmdb_tv")
             {
                 var tmdbId = int.Parse(ExternalId!, NumberStyles.None, CultureInfo.InvariantCulture);
                 await requestTmdb.ExecuteAsync<CreateRequestResultV1>(new DiscoverItemParametersV1(scope.MediaTypeId, tmdbId),
-                    new CreateRequestDataV1(uiLocaleId), HttpContext.RequestAborted);
+                    new CreateRequestDataV1(uiLocaleId, startSeasonNumber: startSeasonNumber), HttpContext.RequestAborted);
             }
             else
             {
                 await requestCatalog.ExecuteAsync<CreateRequestResultV1>(new DiscoverParametersV1(),
-                    new RequestDiscoverCatalogDataV1(scope.MediaTypeId, ExternalSource!, ExternalId!, uiLocaleId, scope.MediaSubtypeId),
+                    new RequestDiscoverCatalogDataV1(scope.MediaTypeId, ExternalSource!, ExternalId!, uiLocaleId, scope.MediaSubtypeId, startSeasonNumber),
                     HttpContext.RequestAborted);
             }
             return RedirectToPage("/User/Requests/Requests");

@@ -118,9 +118,10 @@ namespace Jularr.Frontend.Pages.User.Details
             var form = new Form<CreateRequestDataV1>(form =>
             {
                 form.Select(item => item.UiLocaleId, "request.language", options);
+                form.Hidden(item => item.StartSeasonNumber);
                 form.Submit("request.create");
             }, address + (address.Contains('?') ? "&" : "?") + "handler=RequestExternal", _csrf,
-                _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id)), FormError);
+                _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id, startSeasonNumber: SeasonNumber)), FormError);
             return new ActionMenu(new Span(new Icon("plus", assets, 16), new Span(new Text("details.request"))),
                 [form], "button button--primary", null, FormError is not null && _requestInput is not null);
         }
@@ -135,6 +136,7 @@ namespace Jularr.Frontend.Pages.User.Details
             var form = new Form<CreateRequestDataV1>(form =>
             {
                 form.Select(item => item.UiLocaleId, "request.language", options);
+                form.Hidden(item => item.StartSeasonNumber);
 
                 // A game is requested for one of its platforms.
                 if (_platforms is { Count: > 0 } platforms)
@@ -151,7 +153,7 @@ namespace Jularr.Frontend.Pages.User.Details
 
                 form.Submit("request.create");
             }, "/Details/" + work.Id.ToString(CultureInfo.InvariantCulture) + "?handler=Request", _csrf,
-                _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id)), _requestInput is null ? null : FormError);
+                _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id, startSeasonNumber: SeasonNumber)), _requestInput is null ? null : FormError);
             return new ActionMenu(new Span(new Icon("plus", assets, 16), new Span(new Text("details.request"))), [form], "button button--primary", null, FormError is not null && _requestInput is not null);
         }
 

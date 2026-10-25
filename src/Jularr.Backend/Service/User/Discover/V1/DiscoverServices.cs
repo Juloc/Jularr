@@ -21,7 +21,6 @@ using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.AniList;
 using Jularr.Integrations.Data.Tmdb;
 using Jularr.Integrations.Logic.Tmdb;
-using Jularr.Integrations.Logic.Tmdb;
 using UserMedia = Jularr.Backend.Data.User.Media.V1;
 
 namespace Jularr.Backend.Service.User.Discover.V1
@@ -302,7 +301,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             }, CancellationToken);
             var connection = await _metadata.ConnectAsync(Context, CancellationToken);
             var workId = await _metadata.ImportAsync(Context, connection, Parameters.MediaTypeId, null, Parameters.TmdbId, CancellationToken);
-            var (request, newlyApproved) = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct),
+            var (request, newlyApproved) = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner, Data.StartSeasonNumber), ct),
                 CancellationToken);
             _newlyApproved = newlyApproved;
             return new CreateRequestResultV1(request.Id);
@@ -830,8 +829,14 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 return true;
             }, CancellationToken);
             var workId = await _catalog.ImportAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
+            var selectedSeason = Data.StartSeasonNumber;
+            if (selectedSeason is null && Data.MediaTypeId == MediaType.Series && Data.Namespace == "anilist")
+            {
+                selectedSeason = (await _catalog.ReadEntryAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId,
+                    Data.Namespace, Data.ExternalId, CancellationToken)).SeasonNumber;
+            }
             var (request, newlyApproved) = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value,
-                Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct), CancellationToken);
+                Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner, selectedSeason), ct), CancellationToken);
             _newlyApproved = newlyApproved;
             return new CreateRequestResultV1(request.Id);
         }
