@@ -227,7 +227,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         }
 
         private static string ProviderFailureKey(ServiceUnavailableException exception) =>
-            exception.Message == "metadata_rate_limited" ? "rate_limited" : "unavailable";
+            exception.Code == "metadata_rate_limited" ? "rate_limited" : "unavailable";
 
         private static string? QueryOf(MediaImportChoiceV1? choice) => choice?.Query is { } query && !string.IsNullOrWhiteSpace(query) ? query : null;
 
