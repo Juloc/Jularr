@@ -79,6 +79,10 @@ oder eine Container-Neuerstellung behält den Browser unter dem persistenten `/d
 Der Installationsfortschritt und Fehler erscheinen unter `/Admin/Browser`; die
 Modulverwaltung prüft den Zustand ungefähr alle 30 Sekunden.
 
+Das Image enthält die benötigten Chrome-Laufzeitbibliotheken, einschließlich der
+`t64`-Paketnamen neuerer Ubuntu-Versionen. Die Image-CI prüft den verwalteten
+Chrome-Versionsstand als unprivilegierter Anwendungsbenutzer.
+
 Beim Ausschalten wird die Browserbenutzung unterbunden und der eigene Prozess gestoppt.
 Jularr entfernt nur seine verwalteten Browserdateien, temporären Dateien, Cookies und
 sein Browserprofil; Bibliotheken, NAS-Mounts und andere Downloadordner bleiben erhalten.
