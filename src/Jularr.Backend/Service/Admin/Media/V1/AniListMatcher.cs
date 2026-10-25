@@ -25,11 +25,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 && int.TryParse(target.TvdbId, NumberStyles.None, CultureInfo.InvariantCulture, out var tvdbId)
                 && await bridge.ReadTvdbAsync(tvdbId, seasons, ct) is { } mapped)
             {
-                var candidates = JsonSerializer.Serialize(mapped.CandidateIds.Select(id => new { Id = id, Title = "AniList " + id, Year = (int?)null, Format = "AniBridge" }));
+                var bridgeCandidates = JsonSerializer.Serialize(mapped.CandidateIds.Select(id => new { Id = id, Title = "AniList " + id, Year = (int?)null, Format = "AniBridge" }));
                 var entries = mapped.RequiresReview ? "[]" : JsonSerializer.Serialize(mapped.Seasons.Select(entry =>
                     new { entry.Season, Value = entry.AniListId.ToString(CultureInfo.InvariantCulture), entry.Offset }));
                 return new IdentityMatchResultData(target.WorkId, AniListMetadata.Namespace,
-                    mapped.RequiresReview ? IdentityMatchStatusType.Review : IdentityMatchStatusType.Matched, candidates, null, entries, false);
+                    mapped.RequiresReview ? IdentityMatchStatusType.Review : IdentityMatchStatusType.Matched, bridgeCandidates, null, entries, false);
             }
 
             // A person's choice is taken as it is; otherwise one clear candidate is.
