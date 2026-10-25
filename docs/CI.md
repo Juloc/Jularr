@@ -21,7 +21,7 @@ and, as class totals, in [`tests/ci-durations.json`](../tests/ci-durations.json)
 
 PR checks are scoped to PRs targeting `main` or `dev`; ordinary feature-branch pushes do not start Actions. Draft PRs retain the lightweight `Backend / test` and authorship checks, while builds, browser smoke, image smoke and full regression wait until `ready_for_review`. Pure frontend/E2E changes no longer run the backend compilation; dedicated frontend/browser jobs cover those areas. `Backend Full` is a reusable job within `Backend` for opt-in PRs, so ordinary PRs create no separate skipped full workflow run.
 
-The `Release` workflow runs only for a `v*` tag (or by hand as a dry run) and is described in [RELEASE.md](RELEASE.md).
+The `Release` workflow runs only for a `v*` tag (or by hand as a dry run) and is described in [RELEASE.md](RELEASE.md). TV builds, TV tests and TV lint run only if TV code or its shared Android dependencies changed since the last signed TV APK. [Android TV CI](../.github/workflows/android.yml) and [Android Mobile CI](../.github/workflows/android-mobile.yml) are separately path-filtered; server-only changes do not start either.
 
 ## Backend Full: fast and fail-fast
 
