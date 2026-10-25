@@ -99,7 +99,7 @@ namespace Jularr.Backend.Service.Core
                 if (!File.Exists(_statePath)) return;
                 var info = new FileInfo(_statePath);
                 if (info.Length is < 2 or > 4096) throw new InvalidDataException("Invalid local download status size.");
-                var saved = System.Text.Json.JsonSerializer.Deserialize<DownloadSnapshot>(File.ReadAllText(_statePath));
+                var saved = global::System.Text.Json.JsonSerializer.Deserialize<DownloadSnapshot>(File.ReadAllText(_statePath));
                 if (saved is null || !OllamaLocalModels.Supported(saved.Model)
                     || saved.State is not ("queued" or "downloading" or "installed" or "failed" or "interrupted")
                     || saved.Progress is < 0 or > 100) throw new InvalidDataException("Invalid local download status.");
@@ -110,7 +110,7 @@ namespace Jularr.Backend.Service.Core
                 // The Admin can explicitly retry; Ollama itself reuses partial blobs.
                 _state = saved.State is "queued" or "downloading" ? "interrupted" : saved.State;
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or global::System.Text.Json.JsonException or InvalidDataException)
             {
                 _state = "failed";
                 _storageHealthy = false;
@@ -125,7 +125,7 @@ namespace Jularr.Backend.Service.Core
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(_statePath)!);
-                File.WriteAllText(temporary, System.Text.Json.JsonSerializer.Serialize(status));
+                File.WriteAllText(temporary, global::System.Text.Json.JsonSerializer.Serialize(status));
                 File.Move(temporary, _statePath, overwrite: true);
                 return true;
             }
