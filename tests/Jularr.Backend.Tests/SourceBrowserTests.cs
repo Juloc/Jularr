@@ -54,6 +54,27 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ManagedBrowser_FailedUpdateKeepsPreviousPackageAvailable()
+        {
+            if (!OperatingSystem.IsLinux()) return;
+            using var folder = new TemporaryDirectory();
+            var packages = new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path },
+                _ => Task.FromException<string>(new HttpRequestException("Test-only metadata outage.")));
+            Directory.CreateDirectory(Path.GetDirectoryName(packages.ExecutablePath)!);
+            await File.WriteAllBytesAsync(packages.ExecutablePath, [1, 2, 3]);
+            var marker = Path.Combine(folder.Path, "managed", "current", ".jularr-version");
+            await File.WriteAllTextAsync(marker, "156.0.8078.47");
+            packages.RequestRefresh(repair: false);
+
+            await Assert.ThrowsExactlyAsync<HttpRequestException>(() => packages.InstallAsync(CancellationToken.None));
+            Assert.AreEqual("failed", packages.State);
+            Assert.IsFalse(packages.CanRetryInstall);
+            Assert.IsTrue(packages.IsInstalled);
+            Assert.IsTrue(File.Exists(packages.ExecutablePath));
+            Assert.AreEqual("156.0.8078.47", packages.InstalledVersion);
+        }
+
+        [TestMethod]
         public void ManagedBrowser_SizeScanCannotFollowSymlinksToUnrelatedFiles()
         {
             if (!OperatingSystem.IsLinux()) return;
