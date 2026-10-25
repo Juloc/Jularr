@@ -100,6 +100,9 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             var summary = Enum.GetValues<MediaImportStatusType>().Select(status => (Status: status, Count: rows.Count(row => row.StatusTypeId == status))).Where(item => item.Count > 0)
                 .Select(item => (IUiComponent)new Tag(new Strong(new ValueText(item.Count.ToString(CultureInfo.CurrentCulture))), new Text("import.status." + item.Status))).ToList();
             if (listing.Unsearched > 0) summary.Add(new Tag(new Strong(new ValueText(listing.Unsearched.ToString(CultureInfo.CurrentCulture))), new Text("import.unsearched")));
+            // Unsearched due to provider failure is not the same as a planned next search batch.
+            if (listing.ProviderFailure is { } failure) summary.Add(new Span(new Icon("alert-triangle", assets, 14),
+                new Text("import.providerFailure." + failure)).Class("media-import__provider-warning").Attribute("role", "alert"));
             summary.Add(new A(new Text("import.restart")).Class("button button--compact").Attribute("href", Address));
             content.Add(new Div(new H2(new Text("import.previewTitle")), new Div([.. summary]).Class("media-import__summary")).Class("media-import__head"));
 
@@ -474,7 +477,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             try
             {
                 var result = await preview.ExecuteAsync<MediaImportPreviewV1>(_input!, HttpContext.RequestAborted);
-                await WriteProgressAsync(new { kind = "done", total = result.Rows.Count, unsearched = result.Unsearched });
+                await WriteProgressAsync(new { kind = "done", total = result.Rows.Count, unsearched = result.Unsearched, providerFailure = result.ProviderFailure });
             }
             catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
             {
