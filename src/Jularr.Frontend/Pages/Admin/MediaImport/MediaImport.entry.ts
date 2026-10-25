@@ -33,8 +33,12 @@ function initializePreview(): void {
     const rows = Array.from(document.querySelectorAll<HTMLInputElement>("[data-import-row]"));
     const form = all?.closest("form") ?? null;
     const intent = form?.querySelector<HTMLElement>("[data-import-intent]");
-    const globalAction = form?.querySelector<HTMLSelectElement>('select[name="Action"]');
-    const previewedAction = globalAction?.value;
+    // Form.Select uses segmented radio inputs for the three import actions.
+    // Other versions render a select: support both without inventing a default.
+    const globalAction = (): string =>
+        form?.querySelector<HTMLInputElement>('input[name="Action"]:checked')?.value ??
+        form?.querySelector<HTMLSelectElement>('select[name="Action"]')?.value ?? "1";
+    const previewedAction = globalAction();
     if (!all || all.dataset.ready !== undefined) return;
     all.dataset.ready = "";
     const update = () => {
@@ -53,7 +57,7 @@ function initializePreview(): void {
                 const match = /^Choices\[(\d+)\]\.Include$/.exec(row.name);
                 if (!match) continue;
                 const own = form?.querySelector<HTMLSelectElement>('select[name="Choices[' + match[1] + '].Action"]');
-                const action = own?.value || globalAction?.value || "1";
+                const action = own?.value || globalAction();
                 if (action === "2" || action === "3") monitored++;
                 if (action === "3") searched++;
             }
@@ -69,7 +73,7 @@ function initializePreview(): void {
         }
         // Existing unmonitored Works become actionable only after the server rerenders
         // the preview for the newly chosen global action.
-        if (apply) apply.disabled = selection.count === 0 || globalAction?.value !== previewedAction;
+        if (apply) apply.disabled = selection.count === 0 || globalAction() !== previewedAction;
     };
 
     all.addEventListener("change", () => {
@@ -77,7 +81,8 @@ function initializePreview(): void {
         update();
     });
     for (const row of rows) row.addEventListener("change", update);
-    globalAction?.addEventListener("change", update);
+    form?.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input[name="Action"],select[name="Action"]')
+        .forEach(control => control.addEventListener("change", update));
     form?.querySelectorAll<HTMLSelectElement>('select[name$=".Action"]').forEach(select => select.addEventListener("change", update));
     update();
 }

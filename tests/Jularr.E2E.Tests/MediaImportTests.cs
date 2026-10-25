@@ -27,7 +27,6 @@ namespace Jularr.E2E.Tests
         private static FilePayload Payload(string name, string text, string type = "application/json") => new() { Name = name, MimeType = type, Buffer = Encoding.UTF8.GetBytes(text) };
 
         [TestMethod]
-        [Ignore("Red since #1519; see issue #1578.")]
         [Timeout(300_000)]
         public async Task MixedList_IsUploadedPreviewedImportedAndRepeatedWithoutDuplicates()
         {
@@ -57,9 +56,9 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(input.Locator(".file-input__zone")).ToBeVisibleAsync();
                 await Assertions.Expect(input.GetByRole(AriaRole.Button, new() { Name = "Choose file" })).ToBeVisibleAsync();
                 await Assertions.Expect(input.Locator(".file-input__limit")).ToHaveTextAsync("JSON · up to 1.0 MB");
-                await Assertions.Expect(page.Locator(".media-import__upload select[name=\"Action\"]")).ToHaveValueAsync("1");
+                await Assertions.Expect(page.Locator(".media-import__upload input[name='Action'][value='1']")).ToBeCheckedAsync();
                 // This test deliberately opts in to monitor/search instead of relying on a dangerous default.
-                await page.Locator(".media-import__upload select[name=\"Action\"]").SelectOptionAsync("3");
+                await page.Locator(".media-import__upload input[name='Action'][value='3']").Locator("xpath=ancestor::label[1]").ClickAsync();
                 await Assertions.Expect(input.Locator("input[type=file]")).ToHaveCSSAsync("opacity", "0");
                 await Assertions.Expect(page.Locator("[data-import-status]")).ToHaveTextAsync("Waiting for a list");
                 await Evidence.SaveAsync(page, "media-import-upload");
@@ -174,7 +173,7 @@ namespace Jularr.E2E.Tests
                 // The person imports the chosen rows without leaving the page; actual per-row outcomes stream live.
                 await page.Locator("[data-import-apply]").ClickAsync();
                 await Assertions.Expect(page.Locator("[data-import-job-state]")).ToHaveTextAsync("Import complete");
-                await Assertions.Expect(page.Locator("[data-import-job-rows] li", new() { HasText = "Added, monitored" })).ToHaveCountAsync(4);
+                await Assertions.Expect(page.Locator("[data-import-job-rows] > li", new() { HasText = "Added, monitored" })).ToHaveCountAsync(4);
                 await Assertions.Expect(page.Locator("[data-import-job-progress]")).ToHaveJSPropertyAsync("value", 6);
                 // The operation has a stable ID and reconnects from the server
                 // after leaving this page rather than depending on JS memory.
@@ -223,7 +222,6 @@ namespace Jularr.E2E.Tests
         }
 
         [TestMethod]
-        [Ignore("Red since #1519; see issue #1578.")]
         [Timeout(300_000)]
         public async Task LongList_ContinuesWithTheChoicesOfItsRows()
         {
@@ -247,7 +245,7 @@ namespace Jularr.E2E.Tests
                 var list = "{\"version\":1,\"items\":[" + string.Join(',', Enumerable.Range(30000, 42).Select(id => "{\"type\":\"movie\",\"ids\":{\"tmdb\":\"" + id + "\"}}")) + "]}";
                 await page.GotoAsync("/Admin/Import");
                 await page.Locator("input[type=file]").SetInputFilesAsync(Payload("bulk.json", list));
-                await page.Locator(".media-import__upload select[name=\"Action\"]").SelectOptionAsync("3");
+                await page.Locator(".media-import__upload input[name='Action'][value='3']").Locator("xpath=ancestor::label[1]").ClickAsync();
                 await Assertions.Expect(page.Locator("[data-import-status]")).ToHaveTextAsync("Valid list · 42 entries");
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Preview import"));
                 var rows = page.Locator("main table tbody tr");
@@ -262,11 +260,11 @@ namespace Jularr.E2E.Tests
                 // continues the remaining two automatically, preserving their per-row actions.
                 await Assertions.Expect(page.Locator("[data-import-job-state]")).ToHaveTextAsync("Import complete");
                 await Assertions.Expect(page.Locator("[data-import-job-progress]")).ToHaveJSPropertyAsync("value", 42);
-                await Assertions.Expect(page.Locator("[data-import-job-rows] li")).ToHaveCountAsync(42);
+                await Assertions.Expect(page.Locator("[data-import-job-rows] > li")).ToHaveCountAsync(42);
                 await Assertions.Expect(page.Locator("[data-import-job-panel] form")).ToHaveCountAsync(0);
                 await Evidence.SaveAsync(page, "media-import-auto-batches");
-                await Assertions.Expect(page.Locator("[data-import-job-rows] li", new() { HasText = "Bulk Movie 30040" })).ToContainTextAsync("Added");
-                await Assertions.Expect(page.Locator("[data-import-job-rows] li", new() { HasText = "Bulk Movie 30041" })).ToContainTextAsync("Added, monitored");
+                await Assertions.Expect(page.Locator("[data-import-job-rows] > li", new() { HasText = "Bulk Movie 30040" })).ToContainTextAsync("Added");
+                await Assertions.Expect(page.Locator("[data-import-job-rows] > li", new() { HasText = "Bulk Movie 30041" })).ToContainTextAsync("Added, monitored");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
