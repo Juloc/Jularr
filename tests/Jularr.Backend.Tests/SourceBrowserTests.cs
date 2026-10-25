@@ -298,6 +298,28 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Browser_ExitedProcessFailsFastWithoutThreeRetries()
+        {
+            if (!OperatingSystem.IsLinux()) return;
+
+            using var folder = new TemporaryDirectory();
+            var executable = Path.Combine(folder.Path, "exits.sh");
+            var attempts = Path.Combine(folder.Path, "starts.log");
+            await File.WriteAllTextAsync(executable, "#!/bin/sh\\nprintf 'started\\\\n' >> \\"" + attempts + "\\"\\nexit 23\\n");
+            File.SetUnixFileMode(executable, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+            using var source = new SourceBrowser(new BrowserOptions { Path = executable, ProfilePath = folder.Path });
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var error = await Assert.ThrowsExactlyAsync<Integrations.Data.Browser.SourceBrowserException>(
+                () => source.StartAsync(CancellationToken.None));
+            stopwatch.Stop();
+
+            StringAssert.Contains(error.Message, "exit code 23");
+            Assert.AreEqual(1, File.ReadAllLines(attempts).Length, "An exited browser must not be restarted.");
+            Assert.IsTrue(stopwatch.Elapsed < TimeSpan.FromSeconds(15), "Startup must stop promptly after process exit.");
+        }
+
+        [TestMethod]
         public async Task Browser_WithoutABinaryAnswersNothing()
         {
             using var folder = new TemporaryDirectory();
