@@ -22,10 +22,20 @@ namespace Jularr.Frontend.Modules.Pwa
 
         public static IEndpointRouteBuilder MapJularrPwa(this IEndpointRouteBuilder endpoints)
         {
-            endpoints.MapGet("/manifest.webmanifest", (HttpContext http, FrontendAssets assets) =>
+            endpoints.MapGet("/manifest.webmanifest", async (HttpContext http, FrontendAssets assets) =>
             {
-                http.Response.Headers.CacheControl = "no-cache";
-                return Results.Text(Manifest(assets), "application/manifest+json");
+                var accent = await PwaIconRenderer.AccountAccentAsync(http);
+                // The manifest can differ by signed-in account. Never let a shared cache serve another account's choice.
+                http.Response.Headers.CacheControl = accent is null ? "no-cache" : "private, no-store";
+                http.Response.Headers.Vary = "Cookie";
+                return Results.Text(Manifest(assets, accent), "application/manifest+json");
+            }).AllowAnonymous();
+            endpoints.MapGet("/pwa/icons/{kind}/{color}.png", (HttpContext http, string kind, string color) =>
+            {
+                if (!PwaIconRenderer.IsValid(kind, color)) return Results.NotFound();
+                // Only the public color and asset kind affect the pixels; no IDs, secrets, cookies or profile content.
+                http.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+                return Results.File(PwaIconRenderer.Render(kind, color), "image/png", enableRangeProcessing: true);
             }).AllowAnonymous();
             // The running frontend's build identity is public, contains no account state and is never cached.
             // A standalone PWA checks it when resumed; the user decides when a new build may replace the current document.
@@ -44,11 +54,11 @@ namespace Jularr.Frontend.Modules.Pwa
         }
 
         // The icons are the fingerprinted brand files the layout links as well, so a new build never serves a stale picture.
-        private static string Manifest(FrontendAssets assets)
+        private static string Manifest(FrontendAssets assets, string? accent)
         {
-            var icon192 = assets.ImageUrl("Assets/Shared/icon-192.png");
-            var icon512 = assets.ImageUrl("Assets/Shared/icon-512.png");
-            var maskable = assets.ImageUrl("Assets/Shared/icon-maskable-512.png");
+            var icon192 = accent is null ? assets.ImageUrl("Assets/Shared/icon-192.png") : PwaIconRenderer.IconUrl("192", accent);
+            var icon512 = accent is null ? assets.ImageUrl("Assets/Shared/icon-512.png") : PwaIconRenderer.IconUrl("512", accent);
+            var maskable = accent is null ? assets.ImageUrl("Assets/Shared/icon-maskable-512.png") : PwaIconRenderer.IconUrl("maskable-512", accent);
             return JsonSerializer.Serialize(new
             {
                 id = "/",
