@@ -266,7 +266,7 @@ namespace Jularr.Backend.Tests
                 var profile = Path.Combine(options.ProfilePath, "managed", "profile");
                 var chromePort = int.Parse(await File.ReadAllTextAsync(Path.Combine(profile, "browser.port")));
                 using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-                using var pages = System.Text.Json.JsonDocument.Parse(await http.GetStringAsync($"http://127.0.0.1:{chromePort}/json/list\"));
+                using var pages = System.Text.Json.JsonDocument.Parse(await http.GetStringAsync($"http://127.0.0.1:{chromePort}/json/list"));
                 var socketUrl = pages.RootElement.EnumerateArray()
                     .Where(item => item.GetProperty("type").GetString() == "page")
                     .Select(item => item.GetProperty("webSocketDebuggerUrl").GetString())
@@ -279,7 +279,7 @@ namespace Jularr.Backend.Tests
                     await devtools.SendAsync("Page.enable", null, CancellationToken.None, session);
                     foreach (var scheme in new[] { "http", "https" })
                     {
-                        await devtools.SendAsync("Page.navigate", new { url = $"{scheme}://127.0.0.1:{address.Port}/sentinel\" }, CancellationToken.None, session);
+                        await devtools.SendAsync("Page.navigate", new { url = $"{scheme}://127.0.0.1:{address.Port}/sentinel" }, CancellationToken.None, session);
                         await Task.Delay(1000);
                     }
                     Assert.AreEqual(0, Volatile.Read(ref hits), "Managed Chrome reached a private socket despite its configured egress proxy.");
