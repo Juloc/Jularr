@@ -51,6 +51,15 @@ namespace Jularr.E2E.Tests
             await using var jularr = await JularrInstance.StartAsync();
             await using var browser = await BrowserSession.StartAsync(jularr);
             var page = browser.Page;
+            // Reproduce Android's installed PWA mode, not just a normal Chromium tab.
+            await browser.Context.AddInitScriptAsync("""
+                (() => {
+                    const native = window.matchMedia.bind(window);
+                    window.matchMedia = query => query === '(display-mode: standalone)'
+                        ? { matches: true, media: query, addEventListener() {}, removeEventListener() {} }
+                        : native(query);
+                })();
+                """);
             await Owner.SetUpAndSignInAsync(page);
             await page.GotoAsync("/Admin/Jobs");
 
@@ -74,6 +83,11 @@ namespace Jularr.E2E.Tests
             await page.WaitForURLAsync(url => new Uri(url).PathAndQuery == requested);
             Assert.AreEqual(requested, new Uri(page.Url).PathAndQuery);
             await Assertions.Expect(page.Locator("#app-content")).ToBeVisibleAsync();
+            // Refresh after the restored login: the PWA retains the new authenticated cookie.
+            await page.ReloadAsync();
+            Assert.AreEqual(requested, new Uri(page.Url).PathAndQuery);
+            await Assertions.Expect(page.Locator("#app-content")).ToBeVisibleAsync();
+            CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
         }
 
         [TestMethod]
