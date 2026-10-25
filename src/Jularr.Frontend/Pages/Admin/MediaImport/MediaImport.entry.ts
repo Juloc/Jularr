@@ -207,13 +207,14 @@ function registerPreviewStream(
                         if (event.source) state.dataset.source = event.source;
                         if (event.query) state.dataset.query = event.query;
                         if (event.reason) state.dataset.reason = event.reason;
+                        else delete state.dataset.reason;
                         const source = state.dataset.source === "openlibrary" ? "Open Library" :
                             state.dataset.source === "catalog" ? "Metadata catalog" : state.dataset.source;
                         const trace = [source, state.dataset.query].filter(Boolean).join(" · ");
-                        const reason = state.dataset.reason === "search_budget" ? "Waiting for next search batch" :
-                            state.dataset.reason === "rate_limited" ? "Provider rate limit" :
-                            state.dataset.reason === "unavailable" ? "Provider unavailable" :
-                            state.dataset.reason === "no_match" ? "No matching identity" : state.dataset.reason;
+                        const reason = state.dataset.reason === "search_budget" ? labels?.phaseReasonSearchBudget :
+                            state.dataset.reason === "rate_limited" ? labels?.phaseReasonRateLimited :
+                            state.dataset.reason === "unavailable" ? labels?.phaseReasonUnavailable :
+                            state.dataset.reason === "no_match" ? labels?.phaseNoMatch : state.dataset.reason;
                         state.textContent = (event.stage === "candidates" && event.count !== undefined
                             ? label + " (" + event.count + ")" : label) +
                             (trace ? " · " + trace : "") + (reason ? " · " + reason : "");
