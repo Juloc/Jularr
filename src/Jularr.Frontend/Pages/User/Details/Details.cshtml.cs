@@ -25,7 +25,7 @@ namespace Jularr.Frontend.Pages.User.Details
 {
     // A title's own page: the hero, one row of tabs and the blocks of the Overview, each of which is also a tab of its own ([hero](Details.Hero.cs),
     // [tabs and blocks](Details.Blocks.cs), [units](Details.Units.cs), [versions](Details.Versions.cs)).
-    public sealed partial class DetailsModel(ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, ReadWorkEditionsV1 readEditions, UpdateWatchlistV1 update, CreateRequestV1 request,
+    public sealed partial class DetailsModel(ReadDiscoverExternalDetailsV1 readExternal, FavoriteDiscoverCatalogItemV1 favoriteExternal, ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, ReadWorkEditionsV1 readEditions, UpdateWatchlistV1 update, CreateRequestV1 request,
         ReadUiLocalesV1 locales, ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
         RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits,
         ReadWorkRecommendationsV1 readRecommendations, ReadWorkRelationsV1 readRelations, AdminServices.CreateWorkRelationV1 createRelation, AdminServices.DeleteWorkRelationV1 deleteRelation, SuggestDiscoverV1 suggest,
@@ -38,6 +38,8 @@ namespace Jularr.Frontend.Pages.User.Details
         private IReadOnlyList<WorkEpisodeV1> _episodes = [];
         private IReadOnlyList<WorkEditionV1> _editions = [];
         private WorkDetailsV1? _work;
+        private DiscoverExternalDetailsV1? _external;
+        private DiscoverScopeV1? _externalScope;
         private IReadOnlyList<WorkCollectionV1> _collections = [];
         private PageResult<WorkAvailabilityV1>? _availability;
         private BaseDataList<UiLocaleDetailsV1>? _locales;
@@ -48,6 +50,17 @@ namespace Jularr.Frontend.Pages.User.Details
 
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
+
+        [BindProperty(SupportsGet = true, Name = "source")]
+        public string? ExternalSource { get; set; }
+
+        [BindProperty(SupportsGet = true, Name = "externalId")]
+        public string? ExternalId { get; set; }
+
+        [BindProperty(SupportsGet = true, Name = "type")]
+        public string? ExternalType { get; set; }
+
+        private bool IsExternal => !string.IsNullOrWhiteSpace(ExternalSource);
 
         // One bounded page of the title's files.
         [BindProperty(SupportsGet = true, Name = "p")]
@@ -118,12 +131,20 @@ namespace Jularr.Frontend.Pages.User.Details
             };
             change?.Invoke(query);
             var parts = query.Where(item => !string.IsNullOrEmpty(item.Value)).Select(item => item.Key + "=" + Uri.EscapeDataString(item.Value!));
-            return "/Details/" + Id.ToString(CultureInfo.InvariantCulture) + (query.Any(item => !string.IsNullOrEmpty(item.Value)) ? "?" + string.Join('&', parts) : "");
+            var root = IsExternal
+                ? "/Details?source=" + Uri.EscapeDataString(ExternalSource!) + "&externalId=" + Uri.EscapeDataString(ExternalId ?? "")
+                    + "&type=" + Uri.EscapeDataString(ExternalType ?? "")
+                : "/Details/" + Id.ToString(CultureInfo.InvariantCulture);
+            var suffix = string.Join('&', parts);
+            return root + (suffix.Length == 0 ? "" : (IsExternal ? "&" : "?") + suffix);
         }
 
         public async Task<IActionResult> OnGetAsync()
         {
             await LoadDataAsync();
+            if (_external?.Entry.WorkId is { } known)
+                return LocalRedirect("/Details/" + known.ToString(CultureInfo.InvariantCulture)
+                    + (_external.Entry.SeasonNumber is { } season ? "?season=" + season.ToString(CultureInfo.InvariantCulture) : ""));
             PreparePage();
             return Page();
         }
@@ -218,8 +239,66 @@ namespace Jularr.Frontend.Pages.User.Details
             return RedirectToPage("/User/Requests/Requests");
         }
 
+        public async Task<IActionResult> OnPostFavoriteExternalAsync()
+        {
+            var scope = await ExternalScopeAsync();
+            var result = await favoriteExternal.ExecuteAsync<FavoriteDiscoverResultV1>(new DiscoverParametersV1(),
+                new ReadDiscoverCatalogEntryDataV1(scope.MediaTypeId, ExternalSource!, ExternalId!, scope.MediaSubtypeId),
+                HttpContext.RequestAborted);
+            return LocalRedirect("/Details/" + result.WorkId.ToString(CultureInfo.InvariantCulture));
+        }
+
+        public async Task<IActionResult> OnPostRequestExternalAsync([BindRequired] long uiLocaleId)
+        {
+            var scope = await ExternalScopeAsync();
+            if (ExternalSource is "tmdb_movie" or "tmdb_tv")
+            {
+                var tmdbId = int.Parse(ExternalId!, NumberStyles.None, CultureInfo.InvariantCulture);
+                await requestTmdb.ExecuteAsync<CreateRequestResultV1>(new DiscoverItemParametersV1(scope.MediaTypeId, tmdbId),
+                    new CreateRequestDataV1(uiLocaleId), HttpContext.RequestAborted);
+            }
+            else
+            {
+                await requestCatalog.ExecuteAsync<CreateRequestResultV1>(new DiscoverParametersV1(),
+                    new RequestDiscoverCatalogDataV1(scope.MediaTypeId, ExternalSource!, ExternalId!, uiLocaleId, scope.MediaSubtypeId),
+                    HttpContext.RequestAborted);
+            }
+            return RedirectToPage("/User/Requests/Requests");
+        }
+
+        private async Task<DiscoverScopeV1> ExternalScopeAsync()
+        {
+            if (string.IsNullOrWhiteSpace(ExternalSource) || string.IsNullOrWhiteSpace(ExternalId) || string.IsNullOrWhiteSpace(ExternalType))
+                throw new KeyNotFoundException("Missing external identity.");
+            return _externalScope ??= (await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(
+                new DiscoverParametersV1(), HttpContext.RequestAborted)).FirstOrDefault(scope => scope.Slug == ExternalType)
+                ?? throw new KeyNotFoundException("Unknown media category.");
+        }
+
         protected override async Task LoadDataAsync()
         {
+            if (IsExternal)
+            {
+                var scope = await ExternalScopeAsync();
+                _external = await readExternal.ExecuteAsync<DiscoverExternalDetailsV1>(new DiscoverParametersV1(),
+                    new ReadDiscoverCatalogEntryDataV1(scope.MediaTypeId, ExternalSource!, ExternalId!, scope.MediaSubtypeId),
+                    HttpContext.RequestAborted);
+                var entry = _external.Entry;
+                _seasons = _external.Seasons;
+                _episodes = _external.Episodes;
+                var progress = _external.AniListProgress;
+                var total = _external.AniListTotal;
+                var percent = progress is { } count && total is > 0 ? (int)Math.Clamp((long)count * 100 / total.Value, 0, 100) : 0;
+                var progressState = progress is > 0 && total is > 0 && progress >= total
+                    ? ProgressStateType.Finished : progress is > 0 ? ProgressStateType.InProgress : ProgressStateType.NotStarted;
+                _work = new WorkDetailsV1(0, scope.MediaTypeId, scope.MediaSubtypeId, entry.Title, false,
+                    entry.ReleaseYear, entry.Overview, entry.PosterUrl, entry.BackdropUrl, null, [], null, null,
+                    true, null, null, null, entry.TrailerKey, entry.Author, MediaAvailabilityState.Missing,
+                    0, 0, progressState, percent, null, null, null, null, null);
+                if (texts.CanRequest())
+                    _locales = await locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: HttpContext.RequestAborted);
+                return;
+            }
             _work = await read.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), HttpContext.RequestAborted);
             if (_work.MediaTypeId == MediaType.Series)
             {
