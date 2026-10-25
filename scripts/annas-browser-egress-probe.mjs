@@ -133,7 +133,16 @@ try {
     const navigation = await browser.send('Page.navigate', { url: 'data:text/html;charset=utf-8,' + encodeURIComponent(payload) });
     if (navigation.errorText) throw Error('CDP navigation failed: ' + navigation.errorText);
     await sleep(seconds * 1000);
-    console.log(JSON.stringify({ browserCdpPort: port, seconds, sentinels: endpoints, callbacks: hits }, null, 2));
+    // Also navigate directly to each owned sentinel. Browser preflight protection and
+    // data-URL restrictions can otherwise hide a socket bypass in subresource tests.
+    // A blocked navigation is expected, while any sentinel callback is a real failure.
+    const direct = [];
+    for (const url of endpoints) {
+        const navigation = await browser.send('Page.navigate', { url: url + '/direct' });
+        direct.push({ target: url, error: navigation.errorText ?? null });
+        await sleep(250);
+    }
+    console.log(JSON.stringify({ browserCdpPort: port, seconds, sentinels: endpoints, callbacks: hits, direct }, null, 2));
     if (hits.length) {
         console.error('FAIL: Chrome reached an internal sentinel; leave Browser OFF.');
         process.exitCode = 1;
