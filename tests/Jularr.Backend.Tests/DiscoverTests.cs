@@ -527,7 +527,7 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Discover/anime/anilist/21");
             Assert.AreEqual(HttpStatusCode.Redirect, page.StatusCode, await page.Content.ReadAsStringAsync());
             Assert.AreEqual("/Details?source=anilist&externalId=21&type=anime", page.Headers.Location!.OriginalString);
-            using var details = await host.SendAsync(HttpMethod.Get, page.Headers.Location);
+            using var details = await host.SendAsync(HttpMethod.Get, page.Headers.Location!.OriginalString);
             Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, await details.Content.ReadAsStringAsync());
             StringAssert.Contains(await details.Content.ReadAsStringAsync(), "The Matrix Show Season 2");
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
@@ -746,7 +746,7 @@ namespace Jularr.Backend.Tests
             using var title = await host.SendAsync(HttpMethod.Get, "/Discover/movies/603");
             Assert.AreEqual(HttpStatusCode.Redirect, title.StatusCode);
             Assert.AreEqual("/Details?source=tmdb_movie&externalId=603&type=movies", title.Headers.Location!.OriginalString);
-            using var full = await host.SendAsync(HttpMethod.Get, title.Headers.Location);
+            using var full = await host.SendAsync(HttpMethod.Get, title.Headers.Location!.OriginalString);
             html = await full.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, full.StatusCode, html);
             StringAssert.Contains(html, "A hacker learns the truth.");
