@@ -95,3 +95,48 @@ jobs:
           path: /tmp/jularr-stage-results/*.trx
           if-no-files-found: ignore
           retention-days: 7
+
+  exited-browser:
+    # The generic Backend workflow skips test shards for draft PRs. Execute the
+    # one focused local-process test without installing Chrome or using Docker.
+    # On ready-for-review PRs the normal Backend workflow runs the same test.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/Jularr.Frontend/package-lock.json
+      - name: Compile test assets
+        working-directory: src/Jularr.Frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Assert a dead browser fails once and promptly
+        run: |
+          dotnet test tests/Jularr.Backend.Tests --configuration Release \
+            --filter "FullyQualifiedName~Browser_ExitedProcessFailsFastWithoutThreeRetries" \
+            --logger "trx;LogFileName=browser-exit.trx" \
+            --results-directory TestResults/ci/anna-browser-exit
+      - name: Preserve isolated test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: anna-browser-exit
+          path: TestResults/ci/anna-browser-exit/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
