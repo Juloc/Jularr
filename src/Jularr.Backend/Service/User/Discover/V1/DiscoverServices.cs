@@ -461,7 +461,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             var workId = await _catalog.ImportAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
 
             // Make the selected anime's immediate relations visible on the existing Details page.
-            if (int.TryParse(Data.ExternalId, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var aniListId))
+            if (int.TryParse(Data.ExternalId, NumberStyles.None, CultureInfo.InvariantCulture, out var aniListId))
             {
                 try
                 {
