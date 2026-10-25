@@ -432,8 +432,14 @@ namespace Jularr.Backend.Service.User.Discover.V1
     public sealed class FavoriteDiscoverCatalogItemV1 : UserService<DiscoverParametersV1, ReadDiscoverCatalogEntryDataV1>
     {
         private readonly MetadataCatalog _catalog;
+        private readonly AcquisitionSearchSignal _searchSignal;
+        private bool _newlyApproved;
 
-        internal FavoriteDiscoverCatalogItemV1(MetadataCatalog catalog) { _catalog = catalog; }
+        internal FavoriteDiscoverCatalogItemV1(MetadataCatalog catalog, AcquisitionSearchSignal searchSignal)
+        {
+            _catalog = catalog;
+            _searchSignal = searchSignal;
+        }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<FavoriteDiscoverResultV1>()];
@@ -450,14 +456,45 @@ namespace Jularr.Backend.Service.User.Discover.V1
             else
                 throw new KeyNotFoundException("Unknown external identity.");
 
+            // External lookup and metadata import precede the short atomic profile write.
             var workId = await _catalog.ImportAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
+                var sql = new SqlStatement();
+                sql.Statement = """
+                    SELECT profile."AutoRequestOnFavorite", profile."UiLocaleId",
+                        EXISTS (SELECT 1 FROM "WatchlistEntries" AS existing
+                            WHERE existing."ProfileId" = profile."Id" AND existing."WorkId" = @WorkId) AS "AlreadyFavorite",
+                        EXISTS (SELECT 1 FROM "InstanceModules" AS module
+                            WHERE module."Key" = 'Requests' AND module."IsEnabled") AS "RequestsEnabled"
+                    FROM "Profiles" AS profile
+                    WHERE profile."Id" = @ProfileId
+                    FOR UPDATE OF profile;
+                    """;
+                sql.Parameters.Add(new { ProfileId = Auth.ProfileId!.Value, WorkId = workId });
+                var preference = await ctx.ReadRequiredAsync<FavoriteRequestPreference>(sql, ct);
                 await ctx.UpdateWatchlistAsync(new WatchlistData(Auth.ProfileId!.Value, workId), true, ct);
+
+                // Opt-in, only for a NEW favorite while Requests is enabled.
+                // Uses the normal quota, moderation, language and Wanted creation rules.
+                if (preference.AutoRequestOnFavorite && !preference.AlreadyFavorite && preference.RequestsEnabled)
+                {
+                    var (_, newlyApproved) = await ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(
+                        workId, Auth.ProfileId!.Value, Auth.AccountId!.Value, preference.UiLocaleId,
+                        null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct);
+                    _newlyApproved = newlyApproved;
+                }
                 return true;
             }, CancellationToken);
             return new FavoriteDiscoverResultV1(workId);
         }
+
+        protected override void OnCommitted()
+        {
+            if (_newlyApproved) _searchSignal.RequestSearch();
+        }
+
+        private sealed record FavoriteRequestPreference(bool AutoRequestOnFavorite, long UiLocaleId, bool AlreadyFavorite, bool RequestsEnabled);
     }
 
     // A read-only, provider-backed snapshot for the regular Details Razor page.
