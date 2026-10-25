@@ -241,6 +241,17 @@ namespace Jularr.E2E.Tests
                     await Evidence.SaveAsync(page, $"reader-v3-double-{width}-light");
                 }
 
+                // Mirroring the book must not move its page numbers off the physical paper's centre.
+                await OpenReaderAsync(page, 1440, 900);
+                foreach (var direction in new[] { "rtl", "ltr" })
+                {
+                    await page.Locator("[data-panel=settings] [name=Direction]").EvaluateAsync("""
+                        (field, value) => { field.value = value; field.dispatchEvent(new Event('input', { bubbles: true })); }
+                        """, direction);
+                    await page.WaitForFunctionAsync("direction => document.querySelector('.reader-book').dataset.bookDirection === direction && document.querySelector('.reader').dataset.bookState === 'idle'", direction);
+                    await AssertPaperPositionsAsync(page, "1440 " + direction);
+                }
+
                 await OpenReaderAsync(page, 390, 844);
                 Assert.AreEqual("1", await reader.GetAttributeAsync("data-columns"));
                 var leftMargin = await page.Locator(".reader__content p").First.EvaluateAsync<double>("p => p.getBoundingClientRect().left - p.closest('.reader__content').getBoundingClientRect().left");

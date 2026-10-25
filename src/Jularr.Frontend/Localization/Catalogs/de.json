@@ -2094,6 +2094,14 @@
    "SABnzbd",
    "SABnzbd"
   ],
+  "acquisition.connection.type.Qbittorrent": [
+   "qBittorrent",
+   "qBittorrent"
+  ],
+  "acquisition.connection.type.Nyaa": [
+   "Nyaa",
+   "Nyaa"
+  ],
   "acquisition.connection.baseUrl": [
    "Address",
    "Adresse"

@@ -80,7 +80,7 @@ namespace Jularr.E2E.Tests
             }
 
             await FollowAsync(page, form.Locator("button[type=submit]").Last);
-            var alert = page.Locator("main [role=alert]");
+            var alert = page.Locator("main [role=alert]:visible");
             if (await alert.CountAsync() > 0)
             {
                 Assert.Fail("The form answered: " + await alert.First.InnerTextAsync());
@@ -159,7 +159,7 @@ namespace Jularr.E2E.Tests
         public static async Task AddUsenetAsync(IPage page, FakeServices fakes, string categories, bool searchesAutomatically = false)
         {
             await page.GotoAsync("/Admin/Acquisition");
-            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add indexer" }));
+            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add indexer", Exact = true }).And(page.Locator("[href*='Type=Newznab']")));
             await page.FillAsync("dialog#connection-editor form [name=Name]", "Indexer");
             await page.FillAsync("dialog#connection-editor form [name=BaseUrl]", new Uri(fakes.Address, "newznab/").ToString());
             await page.FillAsync("dialog#connection-editor form [name=ApiKey]", FakeServices.IndexerKey);
@@ -168,7 +168,7 @@ namespace Jularr.E2E.Tests
             await page.Locator("dialog#connection-editor form").GetByLabel(searchesAutomatically ? "Automatic and manual" : "Manual only", new() { Exact = true }).CheckAsync();
             await SubmitAsync(page, page.Locator("dialog#connection-editor form"));
             await page.GotoAsync("/Admin/Acquisition/Downloads");
-            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client" }));
+            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }).And(page.Locator("[href*='Type=Sabnzbd']")));
             await page.FillAsync("dialog#connection-editor form [name=Name]", "SABnzbd");
             await page.FillAsync("dialog#connection-editor form [name=BaseUrl]", new Uri(fakes.Address, "sabnzbd/").ToString());
             await page.FillAsync("dialog#connection-editor form [name=ApiKey]", FakeServices.ClientKey);
