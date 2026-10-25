@@ -44,7 +44,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var rows = plan.Rows.Select(row => new MediaImportRowV1(row.Item.Index, row.Item.TypeKey, row.Item.Type, row.Item.Subtype, row.Item.Title, row.Item.Year, row.Item.Creator, row.Status, row.Problem, row.ProblemDetail,
                 row.WorkId, row.MatchTitle, row.MatchYear, row.MatchSource, row.Import is { } import ? import.Namespace + ":" + import.Value : null, row.HasTarget, row.CanMonitor, row.IsIncluded,
                 row.Query, row.DuplicateOf, new BaseDataList<MediaImportCandidateV1>(row.Candidates), row.Action));
-            return new MediaImportPreviewV1(json, new BaseDataList<MediaImportRowV1>(rows), new BaseDataList<MediaImportOptionV1>(profiles), new BaseDataList<MediaImportOptionV1>(libraries), plan.Unsearched);
+            return new MediaImportPreviewV1(json, new BaseDataList<MediaImportRowV1>(rows), new BaseDataList<MediaImportOptionV1>(profiles), new BaseDataList<MediaImportOptionV1>(libraries), plan.Unsearched, plan.ProviderFailure);
         }
     }
 
