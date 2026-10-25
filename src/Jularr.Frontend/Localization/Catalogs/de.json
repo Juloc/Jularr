@@ -223,8 +223,12 @@
    "Standard des Stils verwenden"
   ],
   "appearance.devicePreference": [
-   "Appearance choices are stored in this browser.",
-   "Die Darstellungsauswahl wird in diesem Browser gespeichert."
+   "Style and brightness are stored on this device; signed-in accent is stored on the main profile.",
+   "Stil und Helligkeit bleiben auf diesem Gerät; die Akzentfarbe wird beim Hauptprofil gespeichert."
+  ],
+  "appearance.accentSaveFailed": [
+   "The main profile color could not be saved. The previous color was restored.",
+   "Die Hauptprofilfarbe konnte nicht gespeichert werden. Die bisherige Farbe wurde wiederhergestellt."
   ],
   "design.title": [
    "Design lab",

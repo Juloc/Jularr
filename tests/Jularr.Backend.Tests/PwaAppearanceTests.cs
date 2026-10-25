@@ -58,6 +58,32 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task MainAccentPicker_SavesOnlyAnOwnedMainProfile_NotAnotherAccountsSharedProfile()
+        {
+            await using var host = await Host.CreateAsync();
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"PwaMainProfileId\" = 101 WHERE \"Id\" = 41");
+            using var authState = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
+
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/profile/pwa/accent", new SavePwaAccentDataV1("#1b8aa0"));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            using var appearance = await host.SendAsync(HttpMethod.Get, "/api/v1/profile/pwa");
+            Assert.AreEqual("#1b8aa0", (await appearance.Content.ReadFromJsonAsync<PwaAppearanceV1>())!.AccentHex);
+
+            using var invalid = await host.SendAsync(HttpMethod.Put, "/api/v1/profile/pwa/accent", new SavePwaAccentDataV1("javascript:alert(1)"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 202);
+                UPDATE "Accounts" SET "PwaMainProfileId" = 202 WHERE "Id" = 41;
+                """);
+            using var refused = await host.SendAsync(HttpMethod.Put, "/api/v1/profile/pwa/accent", new SavePwaAccentDataV1("#112233"));
+            Assert.AreEqual(HttpStatusCode.NotFound, refused.StatusCode);
+            Assert.AreEqual("#8040f7", await host.ScalarAsync("SELECT \"AccentHex\" FROM \"Profiles\" WHERE \"Id\" = 202"));
+        }
+
+        [TestMethod]
         public async Task RemovingAssignedMainProfileClearsTheSelection()
         {
             await using var host = await Host.CreateAsync();
