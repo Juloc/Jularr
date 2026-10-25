@@ -4,6 +4,10 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "pwa.main.choose": ["Use as main profile", "Als Hauptprofil verwenden"],
+  "pwa.main.current": ["Main profile for the home screen icon", "Hauptprofil für das Homescreen-Icon"],
+  "pwa.main.manage": ["Choose main profile for the home screen icon", "Hauptprofil für das Homescreen-Icon auswählen"],
+  "pwa.profile.accent": ["Profile accent (e.g. #8040f7)", "Profil-Akzentfarbe (z. B. #8040f7)"],
   "pwa.update.available": ["An update is available.", "Eine Aktualisierung ist verfügbar."],
   "pwa.update.install": ["Update", "Aktualisieren"],
   "pwa.update.later": ["Later", "Später"],
