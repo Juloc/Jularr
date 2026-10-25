@@ -9853,6 +9853,7 @@
    "Not found",
    "Nicht gefunden"
   ],
+  "import.outcome.NeedsReview": ["Review the match", "Treffer prüfen"],
   "import.outcome.Unavailable": [
    "Provider unavailable",
    "Anbieter nicht erreichbar"
