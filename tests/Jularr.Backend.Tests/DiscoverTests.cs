@@ -523,31 +523,25 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("https://img.anili.st/second.jpg", season.PosterUrl);
             Assert.AreEqual("https://image.tmdb.org/t/p/w1280/show-backdrop.jpg", season.BackdropUrl);
             Assert.IsNull(season.WorkId);
-            // Opening an unrequested anime creates metadata only, then uses the full series Details page.
+            // Discover is only a redirect to shared details. Neither redirect nor details creates a Work.
             using var page = await host.SendAsync(HttpMethod.Get, "/Discover/anime/anilist/21");
             Assert.AreEqual(HttpStatusCode.Redirect, page.StatusCode, await page.Content.ReadAsStringAsync());
-            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"))!;
-            Assert.AreEqual("/Details/" + workId, page.Headers.Location!.OriginalString);
+            Assert.AreEqual("/Details?source=anilist&externalId=21&type=anime", page.Headers.Location!.OriginalString);
+            using var details = await host.SendAsync(HttpMethod.Get, page.Headers.Location);
+            Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, await details.Content.ReadAsStringAsync());
+            StringAssert.Contains(await details.Content.ReadAsStringAsync(), "The Matrix Show Season 2");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
-            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"MediaSubtypeId\" FROM \"Works\" WHERE \"Id\" = " + workId));
 
-            // All TVDB seasons are still visible even when the initial AniList card represents a later one.
-            await host.Fixture.RunSqlAsync($"""
-                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number") VALUES
-                    ({workId}, 1, 1), ({workId}, 1, 2);
-                """);
-            using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId + "?tab=episodes&season=2");
-            Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, await details.Content.ReadAsStringAsync());
-            var detailsHtml = await details.Content.ReadAsStringAsync();
-            StringAssert.Contains(detailsHtml, "Season 1");
-            StringAssert.Contains(detailsHtml, "Season 2");
-
-            // Requesting afterwards reuses the same Work rather than creating another series.
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/requests", new RequestDiscoverCatalogDataV1(MediaType.Series, "anilist", "21", 1, MediaSubtype.Anime));
+            // Explicit request imports the canonical series; the same identity then redirects to its Work.
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/requests",
+                new RequestDiscoverCatalogDataV1(MediaType.Series, "anilist", "21", 1, MediaSubtype.Anime));
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"))!;
+            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"MediaSubtypeId\" FROM \"Works\" WHERE \"Id\" = " + workId));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
-            using var known = await host.SendAsync(HttpMethod.Get, "/Discover/anime/anilist/21");
+            using var known = await host.SendAsync(HttpMethod.Get, "/Details?source=anilist&externalId=21&type=anime");
             Assert.AreEqual(HttpStatusCode.Redirect, known.StatusCode);
             Assert.AreEqual("/Details/" + workId + "?season=2", known.Headers.Location!.OriginalString);
         }
@@ -728,14 +722,15 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, System.Text.RegularExpressions.Regex.Matches(browseHtml, "class=\"navigation-tabs[ \"]").Count);
 
             using var title = await host.SendAsync(HttpMethod.Get, "/Discover/movies/603");
-            html = await title.Content.ReadAsStringAsync();
-            Assert.AreEqual(HttpStatusCode.OK, title.StatusCode, html);
+            Assert.AreEqual(HttpStatusCode.Redirect, title.StatusCode);
+            Assert.AreEqual("/Details?source=tmdb_movie&externalId=603&type=movies", title.Headers.Location!.OriginalString);
+            using var full = await host.SendAsync(HttpMethod.Get, title.Headers.Location);
+            html = await full.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, full.StatusCode, html);
             StringAssert.Contains(html, "A hacker learns the truth.");
-            using var requested = await host.SendAsync(HttpMethod.Post, "/Discover/movies/603", new Dictionary<string, string>
-            {
-                ["__RequestVerificationToken"] = LibraryTests.Token(html), ["UiLocaleId"] = "1"
-            });
-            Assert.AreEqual(HttpStatusCode.Redirect, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
 
             using var library = await host.SendAsync(HttpMethod.Get, "/Library?type=movies");
             Assert.AreEqual(HttpStatusCode.OK, library.StatusCode);
