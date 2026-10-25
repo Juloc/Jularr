@@ -1,10 +1,49 @@
 using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Media
 {
     internal static class WatchlistLogic
     {
+        // One opt-in flow shared by local Work and external catalog favorites.
+        // No implicit request for an existing favorite, disabled Requests module, or removing a favorite.
+        // Executes in the caller's transaction so a request failure also rolls back the favorite.
+        public static async Task<bool> UpdateFavoriteWithRequestAsync(this LogicContext ctx, WatchlistData data,
+            bool isWatchlisted, long accountId, bool owner, CancellationToken ct)
+        {
+            if (!isWatchlisted)
+            {
+                await ctx.UpdateWatchlistAsync(data, false, ct);
+                return false;
+            }
+
+            var sql = new SqlStatement();
+            sql.Statement = """
+                SELECT profile."AutoRequestOnFavorite", profile."UiLocaleId",
+                    EXISTS (SELECT 1 FROM "WatchlistEntries" AS existing
+                        WHERE existing."ProfileId" = profile."Id" AND existing."WorkId" = @WorkId) AS "AlreadyFavorite",
+                    EXISTS (SELECT 1 FROM "InstanceModules" AS module
+                        WHERE module."Key" = 'Requests' AND module."IsEnabled") AS "RequestsEnabled"
+                FROM "Profiles" AS profile
+                WHERE profile."Id" = @ProfileId
+                FOR UPDATE OF profile;
+                """;
+            sql.Parameters.Add(data);
+            var preference = await ctx.ReadRequiredAsync<FavoriteRequestPreference>(sql, ct);
+            await ctx.UpdateWatchlistAsync(data, true, ct);
+            if (!preference.AutoRequestOnFavorite || preference.AlreadyFavorite || !preference.RequestsEnabled)
+                return false;
+
+            var (_, newlyApproved) = await ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(
+                data.WorkId, data.ProfileId, accountId, preference.UiLocaleId,
+                null, null, owner), ct);
+            return newlyApproved;
+        }
+
+        private sealed record FavoriteRequestPreference(bool AutoRequestOnFavorite, long UiLocaleId, bool AlreadyFavorite, bool RequestsEnabled);
+
         public static async Task UpdateWatchlistAsync(this LogicContext ctx, WatchlistData data, bool isWatchlisted, CancellationToken ct)
         {
             // Only Works the profile may open.
