@@ -21,6 +21,7 @@ using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.AniList;
 using Jularr.Integrations.Data.Tmdb;
 using Jularr.Integrations.Logic.Tmdb;
+using Jularr.Integrations.Logic.Tmdb;
 using UserMedia = Jularr.Backend.Data.User.Media.V1;
 
 namespace Jularr.Backend.Service.User.Discover.V1
@@ -485,6 +486,157 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
             return await _catalog.ReadEntryAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
         }
+    }
+
+    // A read-only, provider-backed snapshot for the regular Details Razor page.
+    // Resolving it NEVER persists a Work, WatchlistEntry, Request or WantedItem.
+    [ServiceEndpoint("POST", "/api/v1/discover/external-details")]
+    public sealed class ReadDiscoverExternalDetailsV1 : UserService<DiscoverParametersV1, ReadDiscoverCatalogEntryDataV1>
+    {
+        private readonly MetadataCatalog _catalog;
+        private readonly WorkMetadata _metadata;
+        private readonly TvdbMetadata _tvdb;
+        private readonly AniBridgeMappings _bridge;
+
+        internal ReadDiscoverExternalDetailsV1(MetadataCatalog catalog, WorkMetadata metadata, TvdbMetadata tvdb, AniBridgeMappings bridge)
+        {
+            _catalog = catalog;
+            _metadata = metadata;
+            _tvdb = tvdb;
+            _bridge = bridge;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<DiscoverExternalDetailsV1>()];
+        protected override ModuleRequirement GetInstanceModules(DiscoverParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(DiscoverParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var source = Data.Namespace;
+            var anime = source == "anilist" && Data.MediaSubtypeId == MediaSubtype.Anime;
+            var catalog = source == "openlibrary" && Data.MediaTypeId == MediaType.Book
+                || source == "anilist" && (Data.MediaTypeId == MediaType.Book
+                    && Data.MediaSubtypeId is MediaSubtype.Manga or MediaSubtype.LightNovel
+                    || anime && Data.MediaTypeId is MediaType.Series or MediaType.Movie);
+            var tmdb = source == "tmdb_movie" && Data.MediaTypeId == MediaType.Movie
+                || source == "tmdb_tv" && Data.MediaTypeId == MediaType.Series;
+            var tvdb = source == "tvdb" && Data.MediaTypeId == MediaType.Series;
+            if (!catalog && !tmdb && !tvdb) throw new KeyNotFoundException("Unknown external detail identity.");
+
+            if (catalog)
+                await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
+            else
+                await DiscoverQueries.RequireTypeAsync(Context, Data.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
+
+            DiscoverCatalogEntryV1 entry;
+            Jularr.Integrations.Data.Tmdb.TmdbWork? tmdbWork = null;
+            int? tvdbId = null;
+            if (catalog)
+            {
+                entry = await _catalog.ReadEntryAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, source, Data.ExternalId, CancellationToken);
+                if (anime && int.TryParse(Data.ExternalId, NumberStyles.None, CultureInfo.InvariantCulture, out var aniId))
+                {
+                    var mapped = await _bridge.ReadAsync(aniId, CancellationToken);
+                    tvdbId = mapped?.TvdbSeriesId;
+                }
+            }
+            else if (tmdb)
+            {
+                if (!int.TryParse(Data.ExternalId, NumberStyles.None, CultureInfo.InvariantCulture, out var externalId) || externalId <= 0)
+                    throw new KeyNotFoundException("Invalid TMDB id.");
+                var conn = await _metadata.ConnectAsync(Context, CancellationToken);
+                tmdbWork = await _metadata.ReadWorkAsync(conn, Data.MediaTypeId, externalId, CancellationToken);
+                tvdbId = tmdbWork.TvdbId;
+                entry = new DiscoverCatalogEntryV1(tmdbWork.Title, tmdbWork.Year, tmdbWork.Overview,
+                    TmdbClient.PosterUrl(tmdbWork.PosterPath), TmdbClient.BackdropUrl(tmdbWork.BackdropPath),
+                    tmdbWork.Details.TrailerKey, null);
+            }
+            else
+            {
+                if (!int.TryParse(Data.ExternalId, NumberStyles.None, CultureInfo.InvariantCulture, out var id) || id <= 0)
+                    throw new KeyNotFoundException("Invalid TVDB id.");
+                tvdbId = id;
+                var session = await Context.ExecuteBatchAsync((ctx, ct) => _tvdb.ConnectAsync(ctx, ct), CancellationToken);
+                var series = await _tvdb.ReadSeriesAsync(session, id, CancellationToken);
+                entry = new DiscoverCatalogEntryV1(series.Name, null, null, null, null, null, null);
+            }
+
+            // A cached external item may have become an existing Work since it was listed.
+            // Resolve only exact identities; never link by title.
+            if (entry.WorkId is null)
+            {
+                var lookupNamespace = source == "tvdb" ? "tvdb" : source;
+                var candidates = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    var sql = new SqlStatement();
+                    sql.Statement = """
+                        SELECT identity."WorkId"
+                        FROM "WorkExternalIdentities" AS identity
+                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = identity."WorkId"
+                            AND visible."ProfileId" = @ProfileId AND NOT visible."IsHidden"
+                        WHERE identity."Namespace" = @Namespace AND identity."Value" = @ExternalId
+                        LIMIT 2;
+                        """;
+                    sql.Parameters.Add(new { ProfileId = Auth.ProfileId!.Value, Namespace = lookupNamespace, Data.ExternalId });
+                    return await ctx.ReadSql.ReadListAsync<ExternalDetailsWorkId>(sql, ct);
+                }, CancellationToken, mode: SqlAccessMode.ReadOnly);
+                if (candidates.Count == 1)
+                    entry = new DiscoverCatalogEntryV1(entry.Title, entry.ReleaseYear, entry.Overview, entry.PosterUrl,
+                        entry.BackdropUrl, entry.TrailerKey, candidates[0].WorkId) { Author = entry.Author, SeasonNumber = entry.SeasonNumber };
+            }
+
+            var seasons = new List<UserMedia.WorkSeasonV1>();
+            var episodes = new List<UserMedia.WorkEpisodeV1>();
+            if (Data.MediaTypeId == MediaType.Series && tvdbId is { } mappedId)
+            {
+                var structure = await _tvdb.TryReadStructureAsync(Context, mappedId, tmdbWork?.ImdbId, CancellationToken);
+                if (structure is not null)
+                {
+                    var selected = entry.SeasonNumber ?? structure.Episodes.Where(item => item.SeasonNumber > 0)
+                        .Select(item => (int?)item.SeasonNumber).Min() ?? structure.Episodes.Min(item => item.SeasonNumber);
+                    foreach (var group in structure.Episodes.GroupBy(item => item.SeasonNumber).OrderBy(item => item.Key))
+                    {
+                        seasons.Add(new UserMedia.WorkSeasonV1(group.Key, null, null,
+                            group.Where(item => item.Aired is not null).Select(item => (int?)item.Aired!.Value.Year).Min(),
+                            group.Count(), 0, group.Key + 1L, 0));
+                        if (group.Key != selected) continue;
+                        foreach (var episode in group.OrderBy(item => item.EpisodeNumber))
+                            episodes.Add(new UserMedia.WorkEpisodeV1(episode.Id, group.Key, episode.EpisodeNumber,
+                                episode.Name, null, null, episode.Runtime, episode.Aired, null, null, null,
+                                false, MediaStateType.NotRequested, episode.Aired is { } air && air > DateOnly.FromDateTime(DateTime.UtcNow), null));
+                    }
+                }
+            }
+            if (seasons.Count == 0 && tmdbWork is not null && Data.MediaTypeId == MediaType.Series)
+                seasons.AddRange(tmdbWork.Seasons.OrderBy(item => item.SeasonNumber).Select(item => new UserMedia.WorkSeasonV1(item.SeasonNumber, item.Name,
+                    TmdbClient.PosterUrl(item.PosterPath), item.AirDate?.Year, item.EpisodeCount, 0, item.SeasonNumber + 1L, 0)));
+
+            int? progress = null, total = null;
+            string? status = null;
+            if (source == "anilist" && int.TryParse(Data.ExternalId, NumberStyles.None, CultureInfo.InvariantCulture, out var mediaId))
+            {
+                var synced = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    var sql = new SqlStatement();
+                    sql.Statement = """
+                        SELECT "Progress", "TotalCount", "Status"
+                        FROM "AniListEntries"
+                        WHERE "ProfileId" = @ProfileId AND "MediaId" = @MediaId;
+                        """;
+                    sql.Parameters.Add(new { ProfileId = Auth.ProfileId!.Value, MediaId = mediaId });
+                    return await ctx.ReadSql.ReadOptionalAsync<ExternalAniListProgress>(sql, ct);
+                }, CancellationToken, mode: SqlAccessMode.ReadOnly);
+                progress = synced?.Progress;
+                total = synced?.TotalCount;
+                status = synced?.Status;
+            }
+
+            return new DiscoverExternalDetailsV1(entry, seasons, episodes, progress, total, status);
+        }
+
+        private sealed record ExternalDetailsWorkId(long WorkId);
+        private sealed record ExternalAniListProgress(int Progress, int? TotalCount, string Status);
     }
 
     // The description of a catalog title from what the local catalog keeps of it; no provider is asked.

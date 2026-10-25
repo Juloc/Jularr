@@ -296,6 +296,29 @@ namespace Jularr.Backend.Data.User.Discover.V1
         public int? SeasonNumber { get; init; }
     }
 
+    // Data for the SAME user detail page, even when no local Work exists.
+    // Season and episode IDs in this read-only preview are provider IDs and must never be sent to Work mutation APIs.
+    public sealed class DiscoverExternalDetailsV1 : BaseResponse
+    {
+        public DiscoverExternalDetailsV1(DiscoverCatalogEntryV1 entry, IReadOnlyList<User.Media.V1.WorkSeasonV1> seasons,
+            IReadOnlyList<User.Media.V1.WorkEpisodeV1> episodes, int? aniListProgress, int? aniListTotal, string? aniListStatus)
+        {
+            Entry = entry;
+            Seasons = seasons;
+            Episodes = episodes;
+            AniListProgress = aniListProgress;
+            AniListTotal = aniListTotal;
+            AniListStatus = aniListStatus;
+        }
+
+        public DiscoverCatalogEntryV1 Entry { get; }
+        public IReadOnlyList<User.Media.V1.WorkSeasonV1> Seasons { get; }
+        public IReadOnlyList<User.Media.V1.WorkEpisodeV1> Episodes { get; }
+        public int? AniListProgress { get; }
+        public int? AniListTotal { get; }
+        public string? AniListStatus { get; }
+    }
+
     public sealed class ReadDiscoverCatalogFeedDataV1 : BaseData
     {
         public ReadDiscoverCatalogFeedDataV1(MediaType mediaTypeId, DiscoverFeedType discoverFeedTypeId, MediaSubtype? mediaSubtypeId = null)
