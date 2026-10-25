@@ -23,7 +23,8 @@ namespace Jularr.E2E.Tests
             var tv = await tvContext.NewPageAsync();
             await tv.GotoAsync("/Devices/Link");
             await tv.Locator("form button[type=submit]").Last.ClickAsync();
-            var code = (await tv.Locator("[aria-live=polite]").InnerTextAsync()).Trim();
+            // The global PWA update notice also uses aria-live=polite; scope to the code paragraph.
+            var code = (await tv.Locator("main p[aria-live=polite]").InnerTextAsync()).Trim();
             StringAssert.Matches(code, new System.Text.RegularExpressions.Regex("^[0-9]{6}$"));
             Assert.AreEqual(1, await tv.Locator("main svg[role=img]").CountAsync());
 
