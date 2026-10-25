@@ -10,6 +10,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="QRCoder" Version="1.8.1" />
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
   </ItemGroup>
   <ItemGroup>
     <Content Update="Assets/Generated/*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
@@ -24,5 +25,6 @@
   <ItemGroup>
     <EmbeddedResource Include="Localization/Catalogs/*.json" />
     <EmbeddedResource Include="Modules/Pwa/ServiceWorker.js" LogicalName="Jularr.Frontend.Modules.Pwa.ServiceWorker.js" />
+    <EmbeddedResource Include="Pages/Shared/brand-clean.svg" LogicalName="Jularr.Frontend.Pages.Shared.brand-clean.svg" />
   </ItemGroup>
 </Project>

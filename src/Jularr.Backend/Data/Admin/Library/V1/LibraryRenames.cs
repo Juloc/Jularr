@@ -135,12 +135,13 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
     public sealed class NamingPatternV1 : BaseResponse
     {
-        public NamingPatternV1(MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? folder, string file, string example, long version)
+        public NamingPatternV1(MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? folder, string file, string example, long version, string? dailyFile = null)
         {
             MediaSubtypeId = mediaSubtypeId;
             MediaTypeId = mediaTypeId;
             Folder = folder;
             File = file;
+            DailyFile = dailyFile;
             Example = example;
             Version = version;
         }
@@ -157,6 +158,9 @@ namespace Jularr.Backend.Data.Admin.Library.V1
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.File))]
         public string File { get; }
 
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.DailyFile))]
+        public string? DailyFile { get; }
+
         // A sample title in this pattern.
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Example))]
         public string Example { get; }
@@ -168,11 +172,22 @@ namespace Jularr.Backend.Data.Admin.Library.V1
     // The pattern as typed, before it is saved.
     public sealed class NamingPreviewParametersV1 : BaseParameters
     {
-        public NamingPreviewParametersV1(MediaType mediaTypeId, string? folder, string file)
+        public NamingPreviewParametersV1(MediaType mediaTypeId, string? folder, string file, string? dailyFile = null, string? seasonFolder = null, MediaSubtype? mediaSubtypeId = null,
+            bool replacesIllegalCharacters = true, ColonReplacement colonReplacementId = ColonReplacement.Smart, string? customColonReplacement = null, string? specialsFolder = "Specials",
+            bool renamesFiles = true, MultiEpisodeStyle multiEpisodeStyleId = MultiEpisodeStyle.PrefixedRange)
         {
             MediaTypeId = mediaTypeId;
             Folder = folder;
             File = file;
+            DailyFile = dailyFile;
+            SeasonFolder = seasonFolder;
+            MediaSubtypeId = mediaSubtypeId;
+            ReplacesIllegalCharacters = replacesIllegalCharacters;
+            ColonReplacementId = colonReplacementId;
+            CustomColonReplacement = customColonReplacement;
+            SpecialsFolder = specialsFolder;
+            RenamesFiles = renamesFiles;
+            MultiEpisodeStyleId = multiEpisodeStyleId;
         }
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MediaTypeId))]
@@ -183,15 +198,45 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.File))]
         public string File { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.DailyFile))]
+        public string? DailyFile { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Folder))]
+        public string? SeasonFolder { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.ReplacesIllegalCharacters))]
+        public bool ReplacesIllegalCharacters { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.ColonReplacementId))]
+        public ColonReplacement ColonReplacementId { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.CustomColonReplacement))]
+        public string? CustomColonReplacement { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.SpecialsFolder))]
+        public string? SpecialsFolder { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.RenamesFiles))]
+        public bool RenamesFiles { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MultiEpisodeStyleId))]
+        public MultiEpisodeStyle MultiEpisodeStyleId { get; }
     }
 
     // A sample title in the typed pattern, or why it cannot be used.
     public sealed class NamingPreviewV1 : BaseResponse
     {
-        public NamingPreviewV1(string? example, string? problem)
+        public NamingPreviewV1(string? example, string? problem, string? multiExample = null, string? dailyExample = null, string? specialsExample = null)
         {
             Example = example;
             Problem = problem;
+            MultiExample = multiExample;
+            DailyExample = dailyExample;
+            SpecialsExample = specialsExample;
         }
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Example))]
@@ -199,14 +244,25 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Problem))]
         public string? Problem { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Example))]
+        public string? MultiExample { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Example))]
+        public string? DailyExample { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Example))]
+        public string? SpecialsExample { get; }
     }
 
     public sealed class UpdateNamingPatternDataV1 : BaseData
     {
-        public UpdateNamingPatternDataV1(string? folder, string file, long version)
+        public UpdateNamingPatternDataV1(string? folder, string file, long version, string? dailyFile = null, string? seasonFolder = null)
         {
             Folder = folder;
             File = file;
+            DailyFile = dailyFile;
+            SeasonFolder = seasonFolder;
             Version = version;
         }
 
@@ -215,6 +271,12 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.File))]
         public string File { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.DailyFile))]
+        public string? DailyFile { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Folder))]
+        public string? SeasonFolder { get; }
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Version))]
         public long Version { get; }
@@ -238,13 +300,15 @@ namespace Jularr.Backend.Data.Admin.Library.V1
     // How names are made of values for one media type.
     public sealed class NamingSettingsV1 : BaseResponse
     {
-        public NamingSettingsV1(MediaType mediaTypeId, bool replacesIllegalCharacters, ColonReplacement colonReplacementId, string? customColonReplacement, string? specialsFolder, long version)
+        public NamingSettingsV1(MediaType mediaTypeId, bool replacesIllegalCharacters, ColonReplacement colonReplacementId, string? customColonReplacement, string? specialsFolder, long version, bool renamesFiles = true, MultiEpisodeStyle multiEpisodeStyleId = MultiEpisodeStyle.PrefixedRange)
         {
             MediaTypeId = mediaTypeId;
             ReplacesIllegalCharacters = replacesIllegalCharacters;
             ColonReplacementId = colonReplacementId;
             CustomColonReplacement = customColonReplacement;
             SpecialsFolder = specialsFolder;
+            RenamesFiles = renamesFiles;
+            MultiEpisodeStyleId = multiEpisodeStyleId;
             Version = version;
         }
 
@@ -263,18 +327,26 @@ namespace Jularr.Backend.Data.Admin.Library.V1
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.SpecialsFolder))]
         public string? SpecialsFolder { get; }
 
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.RenamesFiles))]
+        public bool RenamesFiles { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MultiEpisodeStyleId))]
+        public MultiEpisodeStyle MultiEpisodeStyleId { get; }
+
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Version))]
         public long Version { get; }
     }
 
     public sealed class UpdateNamingSettingsDataV1 : BaseData
     {
-        public UpdateNamingSettingsDataV1(bool replacesIllegalCharacters, ColonReplacement colonReplacementId, string? customColonReplacement, string? specialsFolder, long version)
+        public UpdateNamingSettingsDataV1(bool replacesIllegalCharacters, ColonReplacement colonReplacementId, string? customColonReplacement, string? specialsFolder, long version, bool renamesFiles = true, MultiEpisodeStyle multiEpisodeStyleId = MultiEpisodeStyle.PrefixedRange)
         {
             ReplacesIllegalCharacters = replacesIllegalCharacters;
             ColonReplacementId = colonReplacementId;
             CustomColonReplacement = customColonReplacement;
             SpecialsFolder = specialsFolder;
+            RenamesFiles = renamesFiles;
+            MultiEpisodeStyleId = multiEpisodeStyleId;
             Version = version;
         }
 
@@ -289,6 +361,12 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.SpecialsFolder))]
         public string? SpecialsFolder { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.RenamesFiles))]
+        public bool RenamesFiles { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MultiEpisodeStyleId))]
+        public MultiEpisodeStyle MultiEpisodeStyleId { get; }
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Version))]
         public long Version { get; }

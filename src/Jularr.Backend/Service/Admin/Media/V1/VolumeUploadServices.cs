@@ -39,7 +39,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             // Manga volumes only, into the library the import would choose.
-            var target = await Context.ExecuteBatchAsync((ctx, ct) => ReadTargetAsync(ctx, ct), CancellationToken);
+            var (target, patterns) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await ReadTargetAsync(ctx, ct), await ctx.ReadNamingPatternsAsync(ct)), CancellationToken);
             if (target.MediaTypeId != MediaType.Book || target.MediaSubtypeId != MediaSubtype.Manga)
             {
                 throw new DataValidationException(nameof(WorkParametersV1.WorkId), "invalid_transition");
@@ -52,7 +52,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
             var file = Data.File ?? throw new InvalidOperationException("The volume file is validated as required.");
             var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-            var relativePath = LibraryNaming.Volume(target.CanonicalTitle, Data.VolumeNumber) + extension;
+            var relativePath = NamingPattern.Apply(patterns.Pattern(target.MediaTypeId, target.MediaSubtypeId),
+                new NamingValues(target.CanonicalTitle, null, null, null, null, null, null, null, 1)
+                {
+                    MediaTypeId = target.MediaTypeId, MediaSubtypeId = target.MediaSubtypeId, Volume = Data.VolumeNumber,
+                    Rules = patterns.Rules(target.MediaTypeId), ProviderIds = JsonSerializer.Deserialize<Dictionary<string, string>>(target.ProviderIds),
+                    OriginalFilename = Path.GetFileNameWithoutExtension(file.FileName), Format = extension.TrimStart('.').ToUpperInvariant()
+                }) + extension;
             if (!LibraryNaming.IsStorable(relativePath))
             {
                 throw new DataValidationException(nameof(UploadVolumeDataV1.File), "invalid_value");
@@ -105,6 +111,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 """
                 SELECT
                     work."CanonicalTitle",
+                    coalesce((SELECT jsonb_object_agg(identity."Namespace", identity."Value")::text FROM "WorkExternalIdentities" AS identity
+                        WHERE identity."WorkId" = work."Id"), '{}') AS "ProviderIds",
                     work."MediaTypeId",
                     kind."MediaSubtypeId",
                     root."Id" AS "LibraryRootId",

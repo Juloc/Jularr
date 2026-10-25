@@ -34,13 +34,20 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
             var progress = _downloads.Current();
             if (server is null) return new LocalTranslationModelsV1(false, OllamaLocalModels.Candidates, [], [], "Configure a local Ollama endpoint.",
                 _options.OperatorVerifiedFreeBytes, progress.Model, progress.State, progress.Progress);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(5));
             try
             {
                 return new LocalTranslationModelsV1(true, OllamaLocalModels.Candidates,
-                    await _models.InstalledAsync(server, CancellationToken), await _models.RunningAsync(server, CancellationToken), null,
+                    await _models.InstalledAsync(server, timeout.Token), await _models.RunningAsync(server, timeout.Token), null,
                     _options.OperatorVerifiedFreeBytes, progress.Model, progress.State, progress.Progress);
             }
-            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException or InvalidDataException)
+            catch (OperationCanceledException) when (!CancellationToken.IsCancellationRequested)
+            {
+                return new LocalTranslationModelsV1(true, OllamaLocalModels.Candidates, [], [], "Ollama is not responding correctly.",
+                    _options.OperatorVerifiedFreeBytes, progress.Model, progress.State, progress.Progress);
+            }
+            catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException)
             {
                 return new LocalTranslationModelsV1(true, OllamaLocalModels.Candidates, [], [], "Ollama is not responding correctly.",
                     _options.OperatorVerifiedFreeBytes, progress.Model, progress.State, progress.Progress);

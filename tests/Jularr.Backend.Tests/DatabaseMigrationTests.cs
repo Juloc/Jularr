@@ -102,6 +102,28 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Upgrade_NamingFromVersionEight_PreservesEditedVideoPatternsAndSeedsOtherMediaOnce()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_NamingFromVersionEight_PreservesEditedVideoPatternsAndSeedsOtherMediaOnce));
+            var options = Backup(folder.Path, out var backups);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, options, tools, migrations: [.. DatabaseBaseline.Migrations.Where(migration => migration.Version <= 8)]).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs, """
+                UPDATE "NamingPatterns" SET "Pattern" = '{Title}/S{Season:00}/{Title} - S{Season:00}E{Episode:00} {ImdbId}', "Version" = 7 WHERE "MediaTypeId" = 2;
+                UPDATE "NamingSettings" SET "ColonReplacementId" = 6, "CustomColonReplacement" = '~', "SpecialsFolder" = 'Extras - {ImdbId}', "Version" = 4 WHERE "MediaTypeId" = 2;
+                """);
+            var current = new DatabaseBaseline(cs, options, tools);
+            await current.StartAsync(CancellationToken.None);
+            await current.StartAsync(CancellationToken.None);
+            Assert.AreEqual(2L, await ScalarAsync(cs, """SELECT count(*) FROM "NamingPatterns" WHERE "MediaTypeId" = 2 AND "Version" = 7 AND "Pattern" = '{Title}/S{Season:00}/{Title} - S{Season:00}E{Episode:00} {ImdbId}'"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "NamingSettings" WHERE "MediaTypeId" = 2 AND "Version" = 4 AND "SpecialsFolder" = 'Extras - {ImdbId}' AND "CustomColonReplacement" = '~' AND "RenamesFiles" = TRUE"""));
+            Assert.AreEqual(5L, await ScalarAsync(cs, """SELECT count(*) FROM "NamingPatterns" WHERE "MediaTypeId" IN (3,6,7)"""));
+            Assert.AreEqual(3L, await ScalarAsync(cs, """SELECT count(*) FROM "NamingSettings" WHERE "MediaTypeId" IN (3,6,7)"""));
+            Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
+        }
+
+        [TestMethod]
         public async Task Upgrade_ProductionFeedMigration_PreservesVersionOneDataAndBacksUpOnce()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
@@ -126,7 +148,7 @@ namespace Jularr.Backend.Tests
             var options = Backup(folder.Path, out var backups);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
 
-            Assert.AreEqual(7, DatabaseBaseline.CurrentVersion, "All production migrations must have unique contiguous numbers.");
+            Assert.AreEqual(10, DatabaseBaseline.CurrentVersion, "All production migrations must have unique contiguous numbers.");
             await new DatabaseBaseline(cs, options, tools, migrations: [DatabaseBaseline.Migrations[0]]).StartAsync(CancellationToken.None);
             Assert.AreEqual("0002_external_work_feeds", await ScalarAsync(cs,
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 2"));
@@ -145,6 +167,8 @@ namespace Jularr.Backend.Tests
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 6"));
             Assert.AreEqual("0007_download_cleanup_source_inventory", await ScalarAsync(cs,
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 7"));
+            Assert.AreEqual("0008_browser_module", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 8"));
             Assert.AreEqual(1L, await ScalarAsync(cs,
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'PlaybackCompanionStates'"));
             Assert.AreEqual(2L, await ScalarAsync(cs,

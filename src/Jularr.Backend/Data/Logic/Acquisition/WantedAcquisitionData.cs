@@ -165,8 +165,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class UnitStateData : BaseData
     {
-        public UnitStateData(long workUnitId, int? parentNumber, int number, bool isAvailable, bool hasMedia, bool isCovered, int? absoluteNumber = null, DateOnly? releasedOn = null, bool needsUpgrade = false)
+        public UnitStateData(long workUnitId, int? parentNumber, int number, bool isAvailable, bool hasMedia, bool isCovered, int? absoluteNumber = null, DateOnly? releasedOn = null, bool needsUpgrade = false, string? title = null)
         {
+            Title = title;
             NeedsUpgrade = needsUpgrade;
             AbsoluteNumber = absoluteNumber;
             ReleasedOn = releasedOn;
@@ -203,6 +204,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WorkFields), nameof(WorkFields.ReleasedOn))]
         public DateOnly? ReleasedOn { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Title))]
+        public string? Title { get; }
 
         public bool IsMissing => IsAvailable && !HasMedia && !IsCovered;
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.NeedsUpgrade))]

@@ -67,6 +67,7 @@ namespace Jularr.E2E.Tests
                 await page.WaitForURLAsync("**/Setup/Storage");
                 await page.GetByRole(AriaRole.Button, new() { Name = "Continue", Exact = true }).Last.ClickAsync();
                 await page.WaitForURLAsync("**/Setup/Instance");
+                await Assertions.Expect(page.Locator("[data-module=Browser] input[type=checkbox]")).Not.ToBeCheckedAsync();
                 await Assertions.Expect(page.Locator(".stepper__step--done, .stepper__step--skipped")).ToHaveCountAsync(3);
                 await Assertions.Expect(page.Locator(".stepper__step--current")).ToHaveCountAsync(1);
                 await Evidence.SaveAsync(page, "setup-modules-" + width + (dark ? "-dark" : "-light"));
@@ -85,7 +86,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(playback).Not.ToBeCheckedAsync();
                 var watchGroup = page.Locator(".option-groups--extras .option-group").Filter(new() { Has = page.Locator("[data-module=Trickplay]") });
                 await watchGroup.Locator("summary").ClickAsync();
-                await Assertions.Expect(watchGroup).ToHaveAttributeAsync("open", "open");
+                await Assertions.Expect(watchGroup).ToHaveAttributeAsync("open", "");
                 await page.Locator(".option-groups--extras [data-module=Trickplay] .toggle").ClickAsync();
                 await Assertions.Expect(playback).ToBeCheckedAsync();
                 await Assertions.Expect(watchGroup.Locator("[data-option-count]")).ToHaveTextAsync("1/3 on");
@@ -93,10 +94,12 @@ namespace Jularr.E2E.Tests
 
                 // Every Admin module exists once in Setup, grouped in seven
                 // collapsible, clearly labeled sections below the media types.
-                await Assertions.Expect(page.Locator("[data-module]")).ToHaveCountAsync(27);
+                var modules = (string[])(await jularr.ScalarAsync("SELECT array_agg(\"Key\" ORDER BY \"Key\") FROM \"InstanceModules\""))!;
+                CollectionAssert.AreEquivalent(modules, await page.Locator("[data-module]")
+                    .EvaluateAllAsync<string[]>("rows => rows.map(row => row.dataset.module)"));
                 await Assertions.Expect(page.Locator(".option-groups--extras .option-group")).ToHaveCountAsync(7);
                 await Assertions.Expect(page.Locator(".option-grid [data-module]")).ToHaveCountAsync(5);
-                await Assertions.Expect(page.Locator(".option-groups--extras [data-module]")).ToHaveCountAsync(22);
+                await Assertions.Expect(page.Locator(".option-groups--extras [data-module]")).ToHaveCountAsync(modules.Length - 5);
                 await Assertions.Expect(page.Locator(".option-type [data-module]")).ToHaveCountAsync(0);
                 await Assertions.Expect(page.Locator(".option-groups--extras .option-group").Filter(new() { HasText = "Playback & anime" })
                     .Locator("[data-module=Trickplay]")).ToHaveCountAsync(1);

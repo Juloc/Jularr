@@ -32,6 +32,7 @@ namespace Jularr.Backend.Data.Fields.Account
         public static readonly BoolField MayConfirmSources = new();
         public static readonly BoolField TranscodingPriority = new();
         public static readonly DateTimeField EmailVerifiedAt = new() { Required = false };
+        public static readonly LongField PwaMainProfileId = new() { Minimum = 1, Required = false };
         public static readonly LongField CredentialRevision = new() { Minimum = 1 };
 
         public static readonly DateTimeField CreatedAt = new();

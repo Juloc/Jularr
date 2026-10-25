@@ -45,8 +45,45 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(BookDocumentLanguages.ContradictsStrictProfile(strict, ["EN"]));
             Assert.IsFalse(BookDocumentLanguages.ContradictsStrictProfile(strict, ["DE", "EN"]));
             Assert.IsFalse(BookDocumentLanguages.ContradictsStrictProfile(strict, []));
+            Assert.AreEqual("import_book_language_unknown", BookDocumentLanguages.StrictEpubAttentionReason(strict, []));
+            Assert.AreEqual("import_book_language_mismatch", BookDocumentLanguages.StrictEpubAttentionReason(strict, ["EN"]));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(strict, ["DE"]));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(strict, ["DE", "EN"]));
+            var flexible = new QualityProfile("flexible", "Flexible", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true, LanguageOrder = ["DE"], LanguageFallback = LanguageFallbackType.Any
+            };
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(flexible, []));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(flexible, ["EN"]));
             using var unknown = new MemoryStream("not an epub"u8.ToArray());
             CollectionAssert.AreEqual(Array.Empty<string>(), BookDocumentLanguages.ReadEpub(unknown));
+        }
+
+        [TestMethod]
+        public void StrictEpubWithoutLanguageMetadata_RequiresManualReview()
+        {
+            using var stream = new MemoryStream(ReadingTests.BuildEpub("Unlabelled document"));
+            using (var archive = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Update, leaveOpen: true))
+            {
+                var opf = archive.GetEntry("OEBPS/content.opf")!;
+                string xml;
+                using (var reader = new StreamReader(opf.Open(), leaveOpen: false))
+                {
+                    xml = reader.ReadToEnd();
+                }
+                opf.Delete();
+                using var writer = new StreamWriter(archive.CreateEntry("OEBPS/content.opf").Open());
+                writer.Write(xml.Replace("<dc:language>en</dc:language>", "", StringComparison.Ordinal));
+            }
+
+            stream.Position = 0;
+            var actual = BookDocumentLanguages.ReadEpub(stream);
+            CollectionAssert.AreEqual(Array.Empty<string>(), actual);
+            var strict = new QualityProfile("strict", "Strict", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true, LanguageOrder = ["DE"], LanguageFallback = LanguageFallbackType.None
+            };
+            Assert.AreEqual("import_book_language_unknown", BookDocumentLanguages.StrictEpubAttentionReason(strict, actual));
         }
 
         private const string Connections = "/api/v1/admin/acquisition/connections";
@@ -89,7 +126,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, grabbed.StatusCode, await grabbed.Content.ReadAsStringAsync());
             Assert.AreEqual(0, sources.SabGrabs);
             await RunAsync<MonitorDownloadsV1>(host);
-            var book = Path.Combine(storage.Path, "1", "Books", "Jane Austen", "Pride and Prejudice (1813)", "Pride and Prejudice.epub");
+            var book = Path.Combine(storage.Path, "1", "Books", "Jane Austen", "Pride and Prejudice (1813) {olid-OL66554W}", "Pride and Prejudice {olid-OL66554W} [en].epub");
             Assert.IsTrue(File.Exists(book));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));

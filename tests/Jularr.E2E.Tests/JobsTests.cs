@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
@@ -6,12 +7,6 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class JobsTests
     {
-        private static readonly string[] Jobs =
-        [
-            "Library scans", "Backups", "Download tracking", "Wanted search", "Provider sync", "Plex sync", "Jellyfin sync", "Emby sync", "Usenet downloads", "AniList matching", "AniList relations", "AniList sync", "Provider covers",
-            "Storage check", "Scan scheduling", "Automatic backup", "Housekeeping", "Seek thumbnails", "Subtitles", "Text recognition", "Catalog sync", "Resource sampling"
-        ];
-
         // The row of a job: the one whose title button carries its name.
         private static ILocator Row(IPage page, string job) =>
             page.Locator(".list-body .list-row").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = job, Exact = true }) });
@@ -29,17 +24,37 @@ namespace Jularr.E2E.Tests
         [Timeout(300_000)]
         public async Task OwnerSeesEveryJob_PausesResumesAndRunsOne_AndChangesWhetherItWaits()
         {
-            await using var jularr = await JularrInstance.StartAsync();
+            using var folders = new Folders();
+            await using var fakes = await FakeServices.StartAsync(folders.Downloads);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
+                ["Providers:OpenLibrary"] = fakes.OpenLibrary.ToString(),
+                ["Providers:AniList"] = fakes.AniList.ToString()
+            });
             await using var browser = await BrowserSession.StartAsync(jularr);
             var page = browser.Page;
             try
             {
                 await Owner.SetUpAndSignInAsync(page);
+                var jobs = await page.APIRequest.GetAsync("/api/v1/admin/jobs");
+                Assert.AreEqual(200, jobs.Status);
+                using var definitions = JsonDocument.Parse(await jobs.TextAsync());
+                var expectedJobs = definitions.RootElement.EnumerateArray().Select(job => job.GetProperty("key").GetString()).ToArray();
                 await page.GotoAsync("/Admin/Jobs");
-                foreach (var job in Jobs)
+                var shownJobs = new List<string>();
+                while (true)
                 {
-                    await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = job, Exact = true })).ToHaveCountAsync(1);
+                    shownJobs.AddRange(await page.Locator(".jobs-list .list-identity__title").EvaluateAllAsync<string[]>(
+                        "buttons => buttons.map(button => button.dataset.drawerOpen.slice('job-'.length))"));
+                    var next = page.GetByRole(AriaRole.Navigation, new() { Name = "Pages", Exact = true })
+                        .GetByRole(AriaRole.Link, new() { Name = "Next", Exact = true });
+                    if (await next.CountAsync() == 0) break;
+                    await Steps.FollowAsync(page, next);
                 }
+                CollectionAssert.AreEquivalent(expectedJobs, shownJobs.ToArray());
+                await page.GotoAsync("/Admin/Jobs");
 
                 // Pausing shows at once and keeps the job from running; resuming undoes it.
                 var trickplay = Row(page, "Seek thumbnails");
@@ -70,8 +85,10 @@ namespace Jularr.E2E.Tests
                 await page.GetByRole(AriaRole.Searchbox, new() { Name = "Filter jobs" }).FillAsync("");
 
                 // Run now wakes the worker; the catalog's module is off, so its pass ends as Off.
+                await page.GotoAsync("/Admin/Jobs?q=catalog");
                 var catalog = Row(page, "Catalog sync");
                 await Steps.FollowAsync(page, catalog.GetByRole(AriaRole.Button, new() { Name = "Run now", Exact = true }));
+                await page.GotoAsync("/Admin/Jobs?q=catalog");
                 for (var attempt = 0; attempt < 30 && !(await catalog.InnerTextAsync()).Contains("Off", StringComparison.Ordinal); attempt++)
                 {
                     await Task.Delay(500);

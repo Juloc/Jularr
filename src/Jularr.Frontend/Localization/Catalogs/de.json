@@ -4,6 +4,13 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "pwa.main.choose": ["Use as main profile", "Als Hauptprofil verwenden"],
+  "pwa.main.current": ["Main profile for the home screen icon", "Hauptprofil für das Homescreen-Icon"],
+  "pwa.main.manage": ["Choose main profile for the home screen icon", "Hauptprofil für das Homescreen-Icon auswählen"],
+  "pwa.profile.accent": ["Profile accent (e.g. #8040f7)", "Profil-Akzentfarbe (z. B. #8040f7)"],
+  "pwa.update.available": ["An update is available.", "Eine Aktualisierung ist verfügbar."],
+  "pwa.update.install": ["Update", "Aktualisieren"],
+  "pwa.update.later": ["Later", "Später"],
   "acquisition.connection.downloadPathWarning": ["Select a folder that Jularr can read. Until a download path is mapped, grabs from this client cannot start.","Wähle einen Ordner aus, auf den Jularr zugreifen kann. Ohne zugeordneten Downloadpfad können keine Downloads über diesen Client gestartet werden."],
   "activity.view.queue": ["Queue","Warteschlange"],
   "activity.view.history": ["History","Verlauf"],
@@ -216,8 +223,12 @@
    "Standard des Stils verwenden"
   ],
   "appearance.devicePreference": [
-   "Appearance choices are stored in this browser.",
-   "Die Darstellungsauswahl wird in diesem Browser gespeichert."
+   "Style and brightness are stored on this device; signed-in accent is stored on the main profile.",
+   "Stil und Helligkeit bleiben auf diesem Gerät; die Akzentfarbe wird beim Hauptprofil gespeichert."
+  ],
+  "appearance.accentSaveFailed": [
+   "The main profile color could not be saved. The previous color was restored.",
+   "Die Hauptprofilfarbe konnte nicht gespeichert werden. Die bisherige Farbe wurde wiederhergestellt."
   ],
   "design.title": [
    "Design lab",
@@ -2103,6 +2114,14 @@
    "SABnzbd",
    "SABnzbd"
   ],
+  "acquisition.connection.type.Qbittorrent": [
+   "qBittorrent",
+   "qBittorrent"
+  ],
+  "acquisition.connection.type.Nyaa": [
+   "Nyaa",
+   "Nyaa"
+  ],
   "acquisition.connection.baseUrl": [
    "Address",
    "Adresse"
@@ -2891,6 +2910,10 @@
    "Add indexer",
    "Indexer hinzufügen"
   ],
+  "acquisition.connection.addNyaa": [
+   "Add Nyaa indexer",
+   "Nyaa-Indexer hinzufügen"
+  ],
   "acquisition.connection.addClient": [
    "Add download client",
    "Download-Client hinzufügen"
@@ -3118,6 +3141,10 @@
   "instance.module.Requests": [
    "Requests",
    "Anfragen"
+  ],
+  "instance.module.Browser": [
+   "Browser support",
+   "Browser-Unterstützung"
   ],
   "instance.module.Acquisition": [
    "Arr+",
@@ -4807,6 +4834,14 @@
    "No library path for this media type",
    "Kein Bibliothekspfad für diesen Medientyp"
   ],
+  "acquisition.outcome.import_book_language_unknown": [
+   "EPUB language could not be verified. The strict profile requires manual review; the download was kept.",
+   "Die Sprache dieses EPUBs konnte nicht bestätigt werden. Das strikte Profil erfordert eine manuelle Prüfung. Der Download bleibt erhalten."
+  ],
+  "acquisition.outcome.import_book_language_mismatch": [
+   "EPUB language differs from the mandatory profile language. The download was kept for review.",
+   "Die EPUB-Sprache entspricht nicht der verpflichtenden Profilsprache. Der Download bleibt zur Prüfung erhalten."
+  ],
   "acquisition.outcome.import_source_unavailable": [
    "Download folder is unreachable",
    "Download-Ordner ist nicht erreichbar"
@@ -6356,8 +6391,8 @@
    "Eigener Ersatz für den Doppelpunkt"
   ],
   "library.naming.specials": [
-   "Folder of season 0",
-   "Ordner für Staffel 0"
+   "Specials folder format",
+   "Ordnerformat für Specials"
   ],
   "library.naming.colon.Delete": [
    "Delete",
@@ -6388,8 +6423,12 @@
    "Platzhalter"
   ],
   "library.naming.rules": [
-   "Formats of Sonarr and Radarr work as they are, for example {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} or {series title}. Empty placeholders leave with their brackets; the file name always names the film or the episode.",
-   "Formate von Sonarr und Radarr funktionieren unverändert, zum Beispiel {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} oder {series title}. Leere Platzhalter verschwinden samt ihren Klammern; der Dateiname nennt immer den Film oder die Folge."
+   "Use placeholders such as {Title}, {anilist-{AnilistId}}, {olid-{OpenLibraryId}} or {[Quality Full]}. Empty placeholders disappear with their decoration. Saving changes import names; existing files move only after a confirmed rename preview. Multi-file game releases keep their internal paths.",
+   "Verwende Platzhalter wie {Title}, {anilist-{AnilistId}}, {olid-{OpenLibraryId}} oder {[Quality Full]}. Leere Platzhalter verschwinden samt ihren Zusätzen. Speichern ändert Importnamen; vorhandene Dateien werden erst nach einer bestätigten Umbenennungsvorschau verschoben. Mehrteilige Spiel-Releases behalten ihre internen Pfade."
+  ],
+  "library.naming.token.ImdbId": [
+   "IMDb ID",
+   "IMDb-ID"
   ],
   "library.naming.token.Title": [
    "The title",
@@ -8923,6 +8962,10 @@
    "Several releases need {Quality}, {Release Group} or {Edition} in every file name.",
    "Mehrere Releases brauchen {Quality}, {Release Group} oder {Edition} in jedem Dateinamen."
   ],
+  "errors.validation.naming_invalid_folder": [
+   "Use one folder name without slashes; '.' and '..' are not allowed.",
+   "Verwende einen einzelnen Ordnernamen ohne Schrägstriche; '.' und '..' sind nicht erlaubt."
+  ],
   "errors.validation.naming_invalid_path": [
    "Each folder of the pattern needs a name.",
    "Jeder Ordner des Musters braucht einen Namen."
@@ -9282,6 +9325,38 @@
   "admin.browser.setupHint": [
    "Install Chrome inside this Jularr container. Package installation requires container root and cannot run from the web interface. No additional container is needed.",
    "Chrome wird im bestehenden Jularr-Container installiert. Die Installation benötigt Root-Rechte im Container und kann nicht über die Weboberfläche ausgeführt werden. Ein zusätzlicher Container ist nicht nötig."
+  ],
+  "admin.browser.installation": [
+   "Browser package",
+   "Browser-Paket"
+  ],
+  "admin.browser.installation.disabled": [
+   "Disabled / not installed",
+   "Deaktiviert / nicht installiert"
+  ],
+  "admin.browser.installation.downloading": [
+   "Downloading",
+   "Download läuft"
+  ],
+  "admin.browser.installation.extracting": [
+   "Installing",
+   "Wird installiert"
+  ],
+  "admin.browser.installation.installed": [
+   "Installed",
+   "Installiert"
+  ],
+  "admin.browser.installation.failed": [
+   "Installation failed",
+   "Installation fehlgeschlagen"
+  ],
+  "admin.browser.moduleHint": [
+   "Browser installation and removal follow the optional Browser module switch.",
+   "Installation und Bereinigung erfolgen über den Schalter des optionalen Browser-Moduls."
+  ],
+  "admin.browser.moduleLink": [
+   "Open module settings",
+   "Moduleinstellungen öffnen"
   ],
   "admin.browser.installSteps": [
    "Show installation commands",
@@ -12171,12 +12246,16 @@
    "Absatzabstand (%)"
   ],
   "reader.language.none": [
-   "No reading language is set up yet. Choose your languages in the profile settings.",
-   "Noch keine Lesesprache eingerichtet. Wähle deine Sprachen in den Profileinstellungen."
+   "No translation engine is available right now. You can still read this book in its original language.",
+   "Derzeit ist keine Übersetzungs-Engine verfügbar. Du kannst das Buch weiterhin in seiner Originalsprache lesen."
   ],
   "reader.language.configure": [
    "Open profile settings",
    "Profileinstellungen öffnen"
+  ],
+  "reader.language.saving": [
+   "Saving reading language…",
+   "Lesesprache wird gespeichert…"
   ],
   "reader.chapter.previous": [
    "Previous chapter",
@@ -12657,6 +12736,10 @@
   "setup.module.help.Acquisition": [
    "Search, monitor, download and import titles; an alternative to Sonarr, Radarr, Readarr and Lidarr.",
    "Titel suchen, überwachen, herunterladen und importieren, als Alternative zu Sonarr, Radarr, Readarr und Lidarr."
+  ],
+  "setup.module.help.Browser": [
+   "Install and manage an optional browser for supported acquisition sources. Turning the module off removes only Jularr-managed browser files.",
+   "Optionalen Browser für unterstützte Bezugsquellen installieren und verwalten. Beim Ausschalten werden nur von Jularr verwaltete Browserdateien entfernt."
   ],
   "setup.module.help.Playback": [
    "Play films and series in the browser.",
@@ -13586,6 +13669,30 @@
    "Configure download storage",
    "Download-Speicher einrichten"
   ],
+  "downloadStorage.cleanup.title": [
+   "Direct download cleanup · since last restart",
+   "Bereinigung direkter Downloads · seit dem Neustart"
+  ],
+  "downloadStorage.cleanup.scanned": [
+   "Folders checked",
+   "Geprüfte Ordner"
+  ],
+  "downloadStorage.cleanup.deleted": [
+   "Orphaned folders removed",
+   "Entfernte verwaiste Ordner"
+  ],
+  "downloadStorage.cleanup.bytes": [
+   "Storage reclaimed",
+   "Freigegebener Speicher"
+  ],
+  "downloadStorage.cleanup.skipped": [
+   "Folders kept or skipped",
+   "Behaltene oder übersprungene Ordner"
+  ],
+  "downloadStorage.cleanup.errors": [
+   "Cleanup errors",
+   "Bereinigungsfehler"
+  ],
   "downloadStorage.purpose": [
    "Choose Incomplete and Complete folders for Jularr's own downloads. External clients keep their own download folders.",
    "Wähle die Ordner Incomplete und Complete für die eigenen Downloads von Jularr. Externe Clients behalten ihre eigenen Download-Ordner."
@@ -13909,6 +14016,258 @@
   "admin.accounts.passwordLinkShown": [
    "Give this link to the person. It sets a new password, works once and is valid for 24 hours. It is shown only now.",
    "Diesen Link der Person geben. Er setzt ein neues Passwort, funktioniert einmal und ist 24 Stunden gültig. Er wird nur jetzt angezeigt."
+  ],
+  "library.naming.Book": [
+   "Book files",
+   "Buchdateien"
+  ],
+  "library.naming.Book.Manga": [
+   "Manga files",
+   "Manga-Dateien"
+  ],
+  "library.naming.Book.LightNovel": [
+   "Light novel files",
+   "Light-Novel-Dateien"
+  ],
+  "library.naming.Music": [
+   "Music files",
+   "Musikdateien"
+  ],
+  "library.naming.Game": [
+   "Game files",
+   "Spieldateien"
+  ],
+  "library.naming.seasonFolder": [
+   "Season folder format",
+   "Staffelordnerformat"
+  ],
+  "library.naming.dailyFile": [
+   "Daily episode file format",
+   "Dateiformat für tägliche Folgen"
+  ],
+  "library.naming.renamesFiles": [
+   "Rename imported files",
+   "Importierte Dateien umbenennen"
+  ],
+  "library.naming.multiStyle": [
+   "Multi-episode style",
+   "Benennung mehrerer Folgen"
+  ],
+  "library.naming.multiExample": [
+   "Multiple episodes:",
+   "Mehrere Folgen:"
+  ],
+  "library.naming.dailyExample": [
+   "Daily episode:",
+   "Tägliche Folge:"
+  ],
+  "library.naming.specialsExample": [
+   "Special episode:",
+   "Spezialfolge:"
+  ],
+  "library.naming.multi.Extend": [
+   "Extend (S01E01-02-03)",
+   "Erweitert (S01E01-02-03)"
+  ],
+  "library.naming.multi.Duplicate": [
+   "Duplicate (S01E01 - S01E02 - S01E03)",
+   "Wiederholt (S01E01 - S01E02 - S01E03)"
+  ],
+  "library.naming.multi.Repeat": [
+   "Repeat (S01E01E02E03)",
+   "Aneinander (S01E01E02E03)"
+  ],
+  "library.naming.multi.Scene": [
+   "Scene (S01E01-E02-E03)",
+   "Scene-Stil (S01E01-E02-E03)"
+  ],
+  "library.naming.multi.Range": [
+   "Range (S01E01-03)",
+   "Bereich (S01E01-03)"
+  ],
+  "library.naming.multi.PrefixedRange": [
+   "Prefixed range (S01E01-E03)",
+   "Bereich mit Präfix (S01E01-E03)"
+  ],
+  "library.naming.token.Author": [
+   "The first author",
+   "Der erste Autor"
+  ],
+  "library.naming.token.AuthorName": [
+   "The author name",
+   "Der Autorenname"
+  ],
+  "library.naming.token.AuthorCleanName": [
+   "The author without punctuation",
+   "Der Autor ohne Satzzeichen"
+  ],
+  "library.naming.token.AuthorSortName": [
+   "The author name for sorting",
+   "Der Autorenname zur Sortierung"
+  ],
+  "library.naming.token.BookTitle": [
+   "The book title",
+   "Der Buchtitel"
+  ],
+  "library.naming.token.BookCleanTitle": [
+   "The book title without punctuation",
+   "Der Buchtitel ohne Satzzeichen"
+  ],
+  "library.naming.token.BookSeries": [
+   "The book series",
+   "Die Buchreihe"
+  ],
+  "library.naming.token.BookSeriesPosition": [
+   "The position in the book series",
+   "Die Position in der Buchreihe"
+  ],
+  "library.naming.token.BookYear": [
+   "The book release year",
+   "Das Erscheinungsjahr des Buchs"
+  ],
+  "library.naming.token.BookLanguage": [
+   "The known book language",
+   "Die bekannte Buchsprache"
+  ],
+  "library.naming.token.Artist": [
+   "The album artist",
+   "Der Albuminterpret"
+  ],
+  "library.naming.token.ArtistName": [
+   "The artist name",
+   "Der Interpretenname"
+  ],
+  "library.naming.token.AlbumArtist": [
+   "The album artist name",
+   "Der Name des Albuminterpreten"
+  ],
+  "library.naming.token.Album": [
+   "The album title",
+   "Der Albumtitel"
+  ],
+  "library.naming.token.AlbumTitle": [
+   "The title of the album",
+   "Der Titel des Albums"
+  ],
+  "library.naming.token.AlbumCleanTitle": [
+   "The album title without punctuation",
+   "Der Albumtitel ohne Satzzeichen"
+  ],
+  "library.naming.token.AlbumReleaseYear": [
+   "The album release year",
+   "Das Erscheinungsjahr des Albums"
+  ],
+  "library.naming.token.Track": [
+   "The track number",
+   "Die Titelnummer"
+  ],
+  "library.naming.token.TrackTitle": [
+   "The track title",
+   "Der Musiktitel"
+  ],
+  "library.naming.token.TrackCleanTitle": [
+   "The track title without punctuation",
+   "Der Musiktitel ohne Satzzeichen"
+  ],
+  "library.naming.token.DiscPrefix": [
+   "The disc prefix for multi-disc albums, empty for one disc",
+   "Das Disc-Präfix bei mehreren Discs, leer bei einer Disc"
+  ],
+  "library.naming.token.Disc": [
+   "The disc number",
+   "Die Discnummer"
+  ],
+  "library.naming.token.DiscCount": [
+   "The number of discs",
+   "Die Anzahl der Discs"
+  ],
+  "library.naming.token.Volume": [
+   "The volume number",
+   "Die Bandnummer"
+  ],
+  "library.naming.token.VolumeLabel": [
+   "The volume number prefixed with v",
+   "Die Bandnummer mit vorangestelltem v"
+  ],
+  "library.naming.token.Language": [
+   "The known language",
+   "Die bekannte Sprache"
+  ],
+  "library.naming.token.Format": [
+   "The file format",
+   "Das Dateiformat"
+  ],
+  "library.naming.token.Platform": [
+   "The game platform",
+   "Die Spielplattform"
+  ],
+  "library.naming.token.Region": [
+   "The game region",
+   "Die Spielregion"
+  ],
+  "library.naming.token.Version": [
+   "The game version",
+   "Die Spielversion"
+  ],
+  "library.naming.token.GameTitle": [
+   "The game title",
+   "Der Spieltitel"
+  ],
+  "library.naming.token.GameYear": [
+   "The game release year",
+   "Das Erscheinungsjahr des Spiels"
+  ],
+  "library.naming.token.GamePlatform": [
+   "The platform of the game",
+   "Die Plattform des Spiels"
+  ],
+  "library.naming.token.PrimaryId": [
+   "The main catalog ID for this media type",
+   "Die Hauptkatalog-ID für diesen Medientyp"
+  ],
+  "library.naming.token.ProviderId": [
+   "Any known provider ID, for example {ProviderId:anilist}",
+   "Eine bekannte Anbieter-ID, zum Beispiel {ProviderId:anilist}"
+  ],
+  "library.naming.token.TmdbId": [
+   "TMDB ID",
+   "TMDB-ID"
+  ],
+  "library.naming.token.TvdbId": [
+   "TVDB ID",
+   "TVDB-ID"
+  ],
+  "library.naming.token.TvMazeId": [
+   "TVmaze ID",
+   "TVmaze-ID"
+  ],
+  "library.naming.token.AnilistId": [
+   "AniList ID",
+   "AniList-ID"
+  ],
+  "library.naming.token.MusicBrainzId": [
+   "MusicBrainz ID",
+   "MusicBrainz-ID"
+  ],
+  "library.naming.token.OpenLibraryId": [
+   "OpenLibrary ID",
+   "OpenLibrary-ID"
+  ],
+  "library.naming.token.IgdbId": [
+   "IGDB ID",
+   "IGDB-ID"
+  ],
+  "library.naming.token.GutenbergId": [
+   "Gutenberg ID",
+   "Gutenberg-ID"
+  ],
+  "library.naming.token.IsbnId": [
+   "ISBN ID",
+   "ISBN-ID"
+  ],
+  "library.naming.token.PlexId": [
+   "Plex ID",
+   "Plex-ID"
   ]
  }
 }

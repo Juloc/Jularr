@@ -1,4 +1,5 @@
 using Jularr.Backend.Data;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.User.Profile.V1;
@@ -9,9 +10,10 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Account.Profiles
 {
-    public sealed class ProfilesModel(ReadProfilesV1 readProfiles, SelectProfileV1 selectProfile, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
+    public sealed class ProfilesModel(ReadProfilesV1 readProfiles, SelectProfileV1 selectProfile, ReadPwaAppearanceV1 readPwaAppearance, SetPwaMainProfileV1 setMainProfile, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         private PageResult<ProfileSelectionDetailsV1>? _profiles;
+        private PwaAppearanceV1? _pwa;
         private string _returnUrl = "/";
         private int _pageNumber = 1;
 
@@ -28,6 +30,19 @@ namespace Jularr.Frontend.Pages.Account.Profiles
             {
                 foreach (var profile in _profiles.Items)
                 {
+                    if (_pwa?.MainProfileId == profile.Id)
+                    {
+                        content.Add(new P(new Text("pwa.main.current")).Attribute("role", "status"));
+                    }
+                    else
+                    {
+                        content.Add(new Form<SelectProfileParametersV1>(form =>
+                        {
+                            form.Hidden(x => x.ProfileId);
+                            form.Submit("pwa.main.choose", profile.DisplayName);
+                        }, Url.Page("/Account/Profiles/Profiles", "Main", new { returnUrl = _returnUrl }),
+                            antiforgery.GetAndStoreTokens(HttpContext).RequestToken, new SelectProfileParametersV1(profile.Id)));
+                    }
                     if (profile.IsLocked)
                     {
                         content.Add(new A(new ValueText(profile.DisplayName), new Icon("key", assets), new Span(new Text("account.profile.locked")).Class("visually-hidden"))
@@ -73,8 +88,16 @@ namespace Jularr.Frontend.Pages.Account.Profiles
             return LocalRedirect(_returnUrl);
         }
 
+        public async Task<IActionResult> OnPostMainAsync(long profileId, string? returnUrl)
+        {
+            _returnUrl = SafeReturnUrl(returnUrl);
+            await setMainProfile.ExecuteAsync<UpdateResult>(new SelectProfileParametersV1(profileId), default, HttpContext.RequestAborted);
+            return RedirectToPage("/Account/Profiles/Profiles", new { returnUrl = _returnUrl });
+        }
+
         protected override async Task LoadDataAsync()
         {
+            _pwa = await readPwaAppearance.ExecuteAsync<PwaAppearanceV1>(cancellationToken: HttpContext.RequestAborted);
             _profiles = await readProfiles.ExecuteAsync<PageResult<ProfileSelectionDetailsV1>>(new ReadProfilesParametersV1(_pageNumber), HttpContext.RequestAborted);
         }
 
