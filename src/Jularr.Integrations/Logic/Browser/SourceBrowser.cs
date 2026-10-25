@@ -26,7 +26,7 @@ namespace Jularr.Integrations.Logic.Browser
 
     // A real browser reads the pages and files a plain request cannot: the source answers with a browser check.
     // The browser is started without automation flags, so the source sees an ordinary browser and no captcha is solved.
-    internal sealed partial class SourceBrowser : ISourceBrowser, IDisposable
+    internal sealed partial class SourceBrowser : ISourceBrowser, IDisposable, IAsyncDisposable
     {
         // The source's own check needs an undisturbed page; reading it too often makes it fail.
         private const int PollMilliseconds = 3000;
@@ -105,14 +105,35 @@ namespace Jularr.Integrations.Logic.Browser
 
         public async Task StopAsync()
         {
-            // Stop an earlier process after a host restart too, not just one started by this object.
-            // Never shut down an external browser selected by RemoteAddress.
-            if (string.IsNullOrWhiteSpace(_options.RemoteAddress))
+            await _gate.WaitAsync(CancellationToken.None);
+            try
             {
-                await CloseRunningBrowserAsync(CancellationToken.None);
+                // Stop an earlier process after a host restart too, not just one started by this object.
+                // Never shut down an external browser selected by RemoteAddress.
+                if (string.IsNullOrWhiteSpace(_options.RemoteAddress))
+                {
+                    if (_client is not null) await CloseBrowserAsync(CancellationToken.None);
+                    else await CloseRunningBrowserAsync(CancellationToken.None);
+                    // Chrome flushes persistent cookies while closing; killing it immediately loses them.
+                    if (_process is { } process)
+                    {
+                        try
+                        {
+                            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                        }
+                        catch (TimeoutException)
+                        {
+                            // A stuck browser is terminated by CloseAsync below.
+                        }
+                    }
+                }
+                await CloseAsync();
+                Note("stopped", "the browser is stopped");
             }
-            await CloseAsync();
-            Note("stopped", "the browser is stopped");
+            finally
+            {
+                _gate.Release();
+            }
         }
 
         // A new client: the profile and the state the source knows of the old one go.
@@ -226,6 +247,7 @@ namespace Jularr.Integrations.Logic.Browser
             await _gate.WaitAsync(ct);
             try
             {
+                if (HasManualControl) return null;
                 await StartBrowserAsync(ct);
                 _lastUrl = uri.AbsoluteUri;
                 _lastAttemptAt = DateTime.UtcNow;
@@ -237,10 +259,9 @@ namespace Jularr.Integrations.Logic.Browser
                     _lastOutcome = _refused ? "refused" : "no answer";
                     _lastError = _refused ? "the source refused this browser" : null;
                     Note(_lastOutcome, _lastError ?? $"no answer for {uri.AbsoluteUri}");
-                    // A source that refuses this client gets a new one next time.
+                    // Restart a refused process, keeping the source session until an explicit reset.
                     if (_refused)
                     {
-                        await ForgetAsync(uri, ct);
                         await CloseAsync();
                     }
 
@@ -293,6 +314,7 @@ namespace Jularr.Integrations.Logic.Browser
             var opened = new List<OpenPage>();
             try
             {
+                if (HasManualControl) return null;
                 await StartBrowserAsync(ct);
                 foreach (var address in safe)
                 {
@@ -387,6 +409,7 @@ namespace Jularr.Integrations.Logic.Browser
             await _gate.WaitAsync(ct);
             try
             {
+                if (HasManualControl) throw new SourceBrowserException("A person currently controls the source browser.");
                 await StartBrowserAsync(ct);
                 Directory.CreateDirectory(_downloads);
                 foreach (var stale in Directory.GetFiles(_downloads))
@@ -437,6 +460,12 @@ namespace Jularr.Integrations.Logic.Browser
             }
         }
 
+        public async ValueTask DisposeAsync()
+        {
+            await StopAsync();
+            Dispose();
+        }
+
         public void Dispose()
         {
             _egress?.Dispose();
@@ -465,6 +494,7 @@ namespace Jularr.Integrations.Logic.Browser
 
         private async Task CloseAsync()
         {
+            Interlocked.Exchange(ref _manualUntil, 0);
             _egress?.Dispose();
             _egress = null;
             var client = _client;
@@ -489,33 +519,6 @@ namespace Jularr.Integrations.Logic.Browser
             catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or SystemException)
             {
                 // The browser is already gone.
-            }
-
-            // A refused client is worth nothing; the next one starts fresh.
-            if (Directory.Exists(_profile))
-            {
-                try
-                {
-                    Directory.Delete(_profile, true);
-                }
-                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-                {
-                    // The profile stays; the next attempt uses it as it is.
-                }
-            }
-        }
-
-        // A refused client is worth nothing: the source's own state of it goes, so the next attempt is a new one.
-        private async Task ForgetAsync(Uri uri, CancellationToken ct)
-        {
-            try
-            {
-                await _client!.SendAsync("Network.clearBrowserCookies", null, ct);
-                await _client.SendAsync("Storage.clearDataForOrigin", new { origin = uri.GetLeftPart(UriPartial.Authority), storageTypes = "all" }, ct);
-            }
-            catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException or System.Text.Json.JsonException)
-            {
-                // The browser is gone; the next attempt starts a new one.
             }
         }
 

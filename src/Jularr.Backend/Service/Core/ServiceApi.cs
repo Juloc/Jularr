@@ -245,8 +245,11 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<UsenetJob>();
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
             services.TryAddSingleton(provider => new BrowserPackages(provider.GetRequiredService<IOptions<BrowserOptions>>().Value));
-            services.AddSingleton<ISourceBrowser>(provider => new SourceBrowser(provider.GetRequiredService<IOptions<BrowserOptions>>().Value,
+            services.AddSingleton<SourceBrowser>(provider => new SourceBrowser(provider.GetRequiredService<IOptions<BrowserOptions>>().Value,
                 provider.GetRequiredService<BrowserPackages>()));
+            services.AddSingleton<ISourceBrowser>(provider => provider.GetRequiredService<SourceBrowser>());
+            services.AddSingleton<IBrowserInteraction>(provider => provider.GetRequiredService<SourceBrowser>());
+            services.TryAddSingleton<BrowserAssistance>();
             services.TryAddTransient<ReadingContent>();
             services.TryAddTransient<ReadingDerivation>();
             services.TryAddSingleton<ReadingActivity>();
