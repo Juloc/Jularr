@@ -8,6 +8,10 @@ namespace Jularr.Frontend.Localization
     {
         public static IReadOnlyList<UiTextResource> English { get; } =
         [
+            new("pwa.main.choose", "Use as main profile"),
+            new("pwa.main.current", "Main profile for the home screen icon"),
+            new("pwa.main.manage", "Choose main profile for the home screen icon"),
+            new("pwa.profile.accent", "Profile accent (e.g. #8040f7)"),
             new("pwa.update.available", "An update is available."),
             new("pwa.update.install", "Update"),
             new("pwa.update.later", "Later"),

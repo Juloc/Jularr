@@ -45,6 +45,63 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ProfileColoredIcons_AreOpaqueSafeAndContainNoAccountIdentifiers()
+        {
+            await using var app = await StartAsync();
+            using var response = await app.GetTestClient().GetAsync("/pwa/icons/maskable-512/336699.png");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            Assert.AreEqual("image/png", response.Content.Headers.ContentType?.MediaType);
+            Assert.IsTrue(response.Headers.CacheControl?.Public == true);
+            var png = await response.Content.ReadAsByteArrayAsync();
+            using var bitmap = SkiaSharp.SKBitmap.Decode(png);
+            Assert.AreEqual(512, bitmap.Width);
+            Assert.AreEqual(512, bitmap.Height);
+            var colored = 0;
+            for (var y = 0; y < bitmap.Height; y++)
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var color = bitmap.GetPixel(x, y);
+                Assert.AreEqual((byte)255, color.Alpha);
+                if (color.Red == 255 && color.Green == 255 && color.Blue == 255) continue;
+                colored++;
+                // Android maskable icons can clip outside this central 80%-diameter circle.
+                var dx = x - 255.5d;
+                var dy = y - 255.5d;
+                Assert.IsTrue(dx * dx + dy * dy <= 205 * 205, $"Unsafe color at {x},{y}");
+            }
+            Assert.IsTrue(colored > 1000, "The parrot path must be rendered.");
+            using var bad = await app.GetTestClient().GetAsync("/pwa/icons/512/not-hex.png");
+            Assert.AreEqual(HttpStatusCode.NotFound, bad.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task SignedInManifestAndAppleTouchIcon_UseThePersistedMainProfileAccent()
+        {
+            await using var host = await Host.CreateAsync(razor: true, endpoints: endpoints => endpoints.MapJularrPwa());
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"PwaMainProfileId\" = 101 WHERE \"Id\" = 41");
+            using var authState = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login",
+                new Jularr.Backend.Data.Public.Authentication.V1.LoginDataV1("a@example.test", "test-password-123"));
+            Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/profiles/101/pwa/accent",
+                new Jularr.Backend.Data.User.Profile.V1.SavePwaAccentDataV1("#336699"));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+
+            using var manifest = await host.SendAsync(HttpMethod.Get, "/manifest.webmanifest");
+            Assert.AreEqual(HttpStatusCode.OK, manifest.StatusCode);
+            Assert.IsTrue(manifest.Headers.CacheControl?.NoStore == true, "Account-specific manifest must never enter a shared cache.");
+            using var json = JsonDocument.Parse(await manifest.Content.ReadAsStringAsync());
+            var icons = json.RootElement.GetProperty("icons").EnumerateArray().Select(icon => icon.GetProperty("src").GetString()).ToArray();
+            CollectionAssert.AreEquivalent(new[] {
+                "/pwa/icons/192/336699.png", "/pwa/icons/512/336699.png", "/pwa/icons/maskable-512/336699.png"
+            }, icons);
+
+            using var page = await host.SendAsync(HttpMethod.Get, "/Settings");
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode);
+            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "rel=\"apple-touch-icon\" href=\"/pwa/icons/apple-180/336699.png\"");
+        }
+
+        [TestMethod]
         public async Task Version_IsPublicNeverCached_AndMatchesFrontendBuild()
         {
             await using var app = await StartAsync();

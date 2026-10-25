@@ -611,6 +611,15 @@ namespace Jularr.Backend.Tests
                     }
                 }
 
+                // Lightweight authentication fixtures install only Account/Instance baselines. Keep
+                // their account/profile columns at the current production version as well; full
+                // library fixtures already apply every migration through their schema ledger above.
+                if (!library)
+                {
+                    var accountAppearanceMigration = DatabaseBaseline.Migrations.Single(migration => migration.Version == 9);
+                    await fixture.RunSqlAsync(accountAppearanceMigration.Statement);
+                }
+
                 var hasher = new PasswordHasher<AccountAuthenticationData>();
                 var hash = hasher.HashPassword(new AccountAuthenticationData(41, 1, null, true, false), Password);
                 await fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 1 WHERE \"Id\" = 41");

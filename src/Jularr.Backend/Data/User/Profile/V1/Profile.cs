@@ -69,9 +69,10 @@ namespace Jularr.Backend.Data.User.Profile.V1
 
     public sealed class ReadProfileResultV1 : BaseResponse
     {
-        public ReadProfileResultV1(long id, string displayName, long uiLocaleId, bool hasPin, bool autoplayPreviews = true)
+        public ReadProfileResultV1(long id, string displayName, long uiLocaleId, bool hasPin, bool autoplayPreviews = true, string accentHex = "#8040f7")
         {
             AutoplayPreviews = autoplayPreviews;
+            AccentHex = accentHex;
             Id = id;
             DisplayName = displayName;
             UiLocaleId = uiLocaleId;
@@ -88,6 +89,9 @@ namespace Jularr.Backend.Data.User.Profile.V1
         public long UiLocaleId { get; }
 
         public bool HasPin { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.AccentHex))]
+        public string AccentHex { get; }
 
         // Whether a card that lingers on a touch device plays its preview by itself; the profile's playback preference.
         public bool AutoplayPreviews { get; }
