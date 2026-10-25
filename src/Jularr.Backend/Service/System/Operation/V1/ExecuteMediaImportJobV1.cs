@@ -93,8 +93,43 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             selected.Action, selected.AcquisitionProfileId, selected.LibraryRootId)
                 };
                 var data = new MediaImportDataV1(null, json, stored.Action, new(stored.Defaults), new(choices));
-                var plan = await _planner.PlanAsync(Context, MediaImportParser.Parse(json), data, 0, CancellationToken);
+                var single = MediaImportParser.Parse(json);
+                var plan = await _planner.PlanAsync(Context, single, data, 0, CancellationToken);
                 var row = plan.Rows.Single();
+
+                // A title-and-author-only book explicitly selected for import may
+                // be resolved in this durable worker. Never silently replace a
+                // supplied ISBN or choose among ambiguous/weak matches.
+                MediaImportRowExecution? unresolved = null;
+                if (selected?.Include == true && selected.Choice is null
+                    && row.Item.Type == MediaType.Book && row.Item.Ids.Count == 0
+                    && row.Status == MediaImportStatusType.Open)
+                {
+                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    {
+                        await ctx.MarkImportJobStageAsync(new MediaImportJobStageData(job.OperationId, index, "Searching"), ct);
+                        return true;
+                    }, CancellationToken);
+                    var searched = await _planner.PlanAsync(Context, single, data, 1, CancellationToken);
+                    var matches = searched.Rows.Single().Candidates.Where(candidate => candidate.IsSuggested).ToArray();
+                    if (matches.Length == 1)
+                    {
+                        choices[0] = new MediaImportChoiceV1(0, true, matches[0].Choice,
+                            selected.Query, selected.Action, selected.AcquisitionProfileId, selected.LibraryRootId);
+                        data = new MediaImportDataV1(null, json, stored.Action, new(stored.Defaults), new(choices));
+                        plan = await _planner.PlanAsync(Context, single, data, 0, CancellationToken);
+                        row = plan.Rows.Single();
+                    }
+                    else
+                    {
+                        // Keep a durable, reviewable outcome instead of importing a
+                        // different edition or fabricating a catalog identity.
+                        var outcome = searched.ProviderFailure is not null || matches.Length > 1 || searched.Rows.Single().Candidates.Count > 0
+                            ? MediaImportOutcomeType.Unavailable : MediaImportOutcomeType.NotFound;
+                        unresolved = new MediaImportRowExecution(
+                            new MediaImportResultRowV1(index, row.Item.Title, outcome, false, null), false);
+                    }
+                }
 
                 await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 {
@@ -102,15 +137,22 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     return true;
                 }, CancellationToken);
 
-                // A temporarily unavailable provider is tried a bounded number of times.
-                // An unresolved row remains explicitly visible in the outcome journal.
+                // A temporarily unavailable provider is retried by the canonical
+                // importer. Unresolved metadata is reported, not guessed.
                 MediaImportRowExecution processed;
-                for (var attempt = 0; ; attempt++)
+                if (unresolved is not null)
                 {
-                    processed = await _processor.ProcessAsync(Context, row, CancellationToken, CheckOwnerAsync);
-                    if (processed.Result.OutcomeTypeId != MediaImportOutcomeType.Unavailable || attempt >= 2) break;
-                    await Task.Delay(TimeSpan.FromSeconds((attempt + 1) * 5), CancellationToken);
-                    await CheckOwnerAsync();
+                    processed = unresolved;
+                }
+                else
+                {
+                    for (var attempt = 0; ; attempt++)
+                    {
+                        processed = await _processor.ProcessAsync(Context, row, CancellationToken, CheckOwnerAsync);
+                        if (processed.Result.OutcomeTypeId != MediaImportOutcomeType.Unavailable || attempt >= 2) break;
+                        await Task.Delay(TimeSpan.FromSeconds((attempt + 1) * 5), CancellationToken);
+                        await CheckOwnerAsync();
+                    }
                 }
 
                 var result = processed.Result;
