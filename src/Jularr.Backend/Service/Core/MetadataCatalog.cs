@@ -439,9 +439,11 @@ namespace Jularr.Backend.Service.Core
                 var media = await ReadAnimeEntryAsync(int.TryParse(externalId, NumberStyles.None, CultureInfo.InvariantCulture, out var aniListId) ? aniListId
                     : throw new KeyNotFoundException("Invalid AniList id."), ct);
                 var connection = await metadata.ConnectAsync(context, ct);
-                // A later AniList cour can map to a different TMDB show; importing must keep the canonical first-season series.
-                return await FindAnimeSeriesAsync(connection, media, ct) is { } tmdbId
-                    ? await metadata.ImportAsync(context, connection, MediaType.Series, MediaSubtype.Anime, tmdbId, ct)
+                // Prefer a verified AniBridge identity. TVDB defines the canonical series and season structure.
+                var mapping = await bridge.ReadAsync(aniListId, ct);
+                var tmdbId = mapping?.TmdbSeriesId ?? await FindAnimeSeriesAsync(connection, media, ct);
+                return tmdbId is { } matched
+                    ? await metadata.ImportAsync(context, connection, MediaType.Series, MediaSubtype.Anime, matched, ct, preferredTvdbId: mapping?.TvdbSeriesId)
                     : throw new KeyNotFoundException("TMDB does not know this anime.");
             }
 
@@ -464,6 +466,17 @@ namespace Jularr.Backend.Service.Core
                 return tmdbId is { } matched
                     ? await metadata.ImportAsync(context, connection, MediaType.Movie, MediaSubtype.Anime, matched, ct)
                     : throw new KeyNotFoundException("TMDB does not know this anime movie.");
+            }
+
+            // TVDB is an external series identity; resolve it to TMDB first without guessing by title.
+            if (mediaType == MediaType.Series && @namespace == "tvdb")
+            {
+                if (!int.TryParse(externalId, NumberStyles.None, CultureInfo.InvariantCulture, out var tvdbId) || tvdbId <= 0)
+                    throw new KeyNotFoundException("Invalid TVDB series ID.");
+                var connection = await metadata.ConnectAsync(context, ct);
+                var tmdbId = await metadata.FindExternalAsync(connection, MediaType.Series, "tvdb", externalId, ct)
+                    ?? throw new KeyNotFoundException("TMDB has no verified TVDB series identity.");
+                return await metadata.ImportAsync(context, connection, MediaType.Series, subtype, tmdbId, ct, preferredTvdbId: tvdbId);
             }
 
             // Importing an existing mapping refreshes the same Work.
