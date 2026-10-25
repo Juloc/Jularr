@@ -217,6 +217,87 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Browser_NetworkStaging_ManagedChromeCannotReachLoopbackSentinel()
+        {
+            if (Environment.GetEnvironmentVariable("JULARR_BROWSER_NETWORK_STAGING") != "1")
+            {
+                Assert.Inconclusive("Real managed-Chrome network staging is opt-in.");
+            }
+
+            using var folder = new TemporaryDirectory();
+            var options = new BrowserOptions { ProfilePath = Path.Combine(folder.Path, "browser"), PageTimeoutSeconds = 15 };
+            var packages = new BrowserPackages(options);
+            await packages.InstallAsync(CancellationToken.None);
+            packages.Enabled = true;
+            using var source = new SourceBrowser(options, packages);
+            await source.StartAsync(CancellationToken.None);
+
+            using var sentinel = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+            sentinel.Start();
+            var address = (IPEndPoint)sentinel.LocalEndpoint;
+            using var stop = new CancellationTokenSource();
+            var hits = 0;
+            var accepting = Task.Run(async () =>
+            {
+                try
+                {
+                    while (!stop.Token.IsCancellationRequested)
+                    {
+                        using var connection = await sentinel.AcceptTcpClientAsync(stop.Token);
+                        Interlocked.Increment(ref hits);
+                    }
+                }
+                catch (OperationCanceledException) when (stop.IsCancellationRequested)
+                {
+                }
+            });
+
+            try
+            {
+                // A positive control is mandatory: without it zero hits could mean a dead sentinel.
+                using (var control = new System.Net.Sockets.TcpClient())
+                {
+                    await control.ConnectAsync(IPAddress.Loopback, address.Port);
+                }
+                for (var i = 0; i < 20 && Volatile.Read(ref hits) == 0; i++) await Task.Delay(50);
+                Assert.AreEqual(1, Volatile.Read(ref hits), "The sentinel positive control must reach its socket.");
+                Interlocked.Exchange(ref hits, 0);
+
+                var profile = Path.Combine(options.ProfilePath, "managed", "profile");
+                var chromePort = int.Parse(await File.ReadAllTextAsync(Path.Combine(profile, "browser.port")));
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                using var pages = System.Text.Json.JsonDocument.Parse(await http.GetStringAsync($\"http://127.0.0.1:{chromePort}/json/list\"));
+                var socketUrl = pages.RootElement.EnumerateArray()
+                    .Where(item => item.GetProperty("type").GetString() == "page")
+                    .Select(item => item.GetProperty("webSocketDebuggerUrl").GetString())
+                    .First(url => url is not null)!;
+                await using var devtools = new DevToolsClient();
+                await devtools.ConnectAsync(socketUrl, CancellationToken.None);
+                var (target, session) = await devtools.OpenPageAsync(CancellationToken.None);
+                try
+                {
+                    await devtools.SendAsync("Page.enable", null, CancellationToken.None, session);
+                    foreach (var scheme in new[] { "http", "https" })
+                    {
+                        await devtools.SendAsync("Page.navigate", new { url = $\"{scheme}://127.0.0.1:{address.Port}/sentinel\" }, CancellationToken.None, session);
+                        await Task.Delay(1000);
+                    }
+                    Assert.AreEqual(0, Volatile.Read(ref hits), "Managed Chrome reached a private socket despite its configured egress proxy.");
+                }
+                finally
+                {
+                    await devtools.ClosePageAsync(target, CancellationToken.None);
+                }
+            }
+            finally
+            {
+                await stop.CancelAsync();
+                sentinel.Stop();
+                await accepting;
+            }
+        }
+
+        [TestMethod]
         public async Task Browser_WithoutABinaryAnswersNothing()
         {
             using var folder = new TemporaryDirectory();
