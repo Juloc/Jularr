@@ -239,6 +239,14 @@ namespace Jularr.Backend.Tests
                         ?? throw new InvalidOperationException("The account schema is missing.");
                     using var reader = new StreamReader(schema);
                     await fixture.RunBootstrapAsync(await reader.ReadToEndAsync());
+                    // This isolated account schema fixture starts from the frozen
+                    // baseline; bring its columns forward using the real PWA
+                    // migration rather than weakening the schema audit.
+                    using var pwaMigration = typeof(ReadProfileV1).Assembly.GetManifestResourceStream(
+                        "Jularr.Database.Migrations.0009_pwa_main_profile_accent.sql")
+                        ?? throw new InvalidOperationException("The PWA profile migration is missing.");
+                    using var migrationReader = new StreamReader(pwaMigration);
+                    await fixture.RunBootstrapAsync(await migrationReader.ReadToEndAsync());
                     await fixture.RunBootstrapAsync(
                         """
                         BEGIN;
