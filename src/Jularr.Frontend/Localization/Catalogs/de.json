@@ -13969,6 +13969,18 @@
    "TranslateGemma · local",
    "TranslateGemma · lokal"
   ],
+  "reader.translation.provider.original": [
+   "Original text — no translation",
+   "Originaltext – keine Übersetzung"
+  ],
+  "reader.translation.provider.browser": [
+   "Engine: Mozilla/Bergamot · browser",
+   "Engine: Mozilla/Bergamot · Browser"
+  ],
+  "reader.translation.provider.local": [
+   "Engine: TranslateGemma · local",
+   "Engine: TranslateGemma · lokal"
+  ],
   "errors.validation.password_incorrect": [
    "The current password is not correct.",
    "Das aktuelle Passwort ist nicht korrekt."
