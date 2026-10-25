@@ -455,12 +455,19 @@ namespace Jularr.Backend.Service.User.Discover.V1
             else
                 throw new KeyNotFoundException("Unknown external identity.");
 
+            // AniBridge identifies the cour of an AniList card; an auto-request must
+            // start there, not download all earlier TVDB seasons.
+            int? startSeason = null;
+            if (Data.MediaTypeId == MediaType.Series && Data.Namespace == "anilist")
+                startSeason = (await _catalog.ReadEntryAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId,
+                    Data.Namespace, Data.ExternalId, CancellationToken)).SeasonNumber;
+
             // External lookup and metadata import precede the short atomic profile write.
             var workId = await _catalog.ImportAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
             _newlyApproved = await Context.ExecuteBatchAsync(
                 (ctx, ct) => ctx.UpdateFavoriteWithRequestAsync(
                     new WatchlistData(Auth.ProfileId!.Value, workId), true, Auth.AccountId!.Value,
-                    Auth.AccountRoleTypeId == AccountRoleType.Owner, ct), CancellationToken);
+                    Auth.AccountRoleTypeId == AccountRoleType.Owner, ct, startSeason), CancellationToken);
             return new FavoriteDiscoverResultV1(workId);
         }
 

@@ -11,7 +11,7 @@ namespace Jularr.Backend.Logic.Media
         // No implicit request for an existing favorite, disabled Requests module, or removing a favorite.
         // Executes in the caller's transaction so a request failure also rolls back the favorite.
         public static async Task<bool> UpdateFavoriteWithRequestAsync(this LogicContext ctx, WatchlistData data,
-            bool isWatchlisted, long accountId, bool owner, CancellationToken ct)
+            bool isWatchlisted, long accountId, bool owner, CancellationToken ct, int? startSeasonNumber = null)
         {
             if (!isWatchlisted)
             {
@@ -36,13 +36,28 @@ namespace Jularr.Backend.Logic.Media
             if (!preference.AutoRequestOnFavorite || preference.AlreadyFavorite || !preference.RequestsEnabled)
                 return false;
 
+            // An AniList cour with no verified local TVDB season must never trigger a
+            // whole-series automatic request as a fallback. The favorite still succeeds.
+            if (startSeasonNumber is { } season)
+            {
+                sql = new SqlStatement();
+                sql.Statement = """
+                    SELECT EXISTS (
+                        SELECT 1 FROM "WorkUnits"
+                        WHERE "WorkId" = @WorkId AND "WorkUnitTypeId" = 1 AND "Number" = @Season
+                    ) AS "IsValid";
+                    """;
+                sql.Parameters.Add(new { data.WorkId, Season = season });
+                if (!(await ctx.ReadRequiredAsync<VerifiedSeason>(sql, ct)).IsValid) return false;
+            }
             var (_, newlyApproved) = await ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(
                 data.WorkId, data.ProfileId, accountId, preference.UiLocaleId,
-                null, null, owner), ct);
+                null, null, owner, startSeasonNumber), ct);
             return newlyApproved;
         }
 
         private sealed record FavoriteRequestPreference(bool AutoRequestOnFavorite, long UiLocaleId, bool AlreadyFavorite, bool RequestsEnabled);
+        private sealed record VerifiedSeason(bool IsValid);
 
         public static async Task UpdateWatchlistAsync(this LogicContext ctx, WatchlistData data, bool isWatchlisted, CancellationToken ct)
         {
