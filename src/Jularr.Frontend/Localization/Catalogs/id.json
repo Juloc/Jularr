@@ -1056,6 +1056,14 @@
    "Only when Requests is enabled; normal approval and download rules still apply.",
    "Hanya saat modul Permintaan aktif. Aturan persetujuan dan pengunduhan tetap berlaku."
   ],
+  "request.startsAtSeason": [
+   "Monitor season {0} and newer",
+   "Pantau musim {0} dan seterusnya"
+  ],
+  "request.anime.unmapped": [
+   "The starting season could not be verified. No automatic request will be created.",
+   "Musim awal tidak dapat diverifikasi. Permintaan otomatis tidak akan dibuat."
+  ],
   "admin.library.description": [
    "Imported media and file availability",
    "Media yang diimpor dan ketersediaan file"

@@ -75,7 +75,12 @@ namespace Jularr.Frontend.Pages.User.Details
                 page.Asset("Framework/Components/LiveProgress.entry.ts");
             }
 
-            if ((IsExternal ? ExternalRequestMenu() : RequestMenu(work)) is { } request) actions.Add(request);
+            if (IsExternal && ExternalSource == "anilist" && work.MediaTypeId == MediaType.Series
+                && _external?.Entry.SeasonNumber is null)
+            {
+                if (texts.CanRequest()) actions.Add(new Span(new Text("request.anime.unmapped")));
+            }
+            else if ((IsExternal ? ExternalRequestMenu() : RequestMenu(work)) is { } request) actions.Add(request);
 
             // Which version, edition or platform the primary action opens.
             if (variants.Count > 1)
@@ -123,7 +128,9 @@ namespace Jularr.Frontend.Pages.User.Details
             }, address + (address.Contains('?') ? "&" : "?") + "handler=RequestExternal", _csrf,
                 _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id, startSeasonNumber: SeasonNumber)), FormError);
             return new ActionMenu(new Span(new Icon("plus", assets, 16), new Span(new Text("details.request"))),
-                [form], "button button--primary", null, FormError is not null && _requestInput is not null);
+                SeasonNumber is { } seasonNumber
+                    ? [new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["request.startsAtSeason"], seasonNumber))), form]
+                    : [form], "button button--primary", null, FormError is not null && _requestInput is not null);
         }
 
         // The language, the platform of a game and the quality a request is made for, in a panel beside the primary action.
@@ -154,7 +161,10 @@ namespace Jularr.Frontend.Pages.User.Details
                 form.Submit("request.create");
             }, "/Details/" + work.Id.ToString(CultureInfo.InvariantCulture) + "?handler=Request", _csrf,
                 _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id, startSeasonNumber: SeasonNumber)), _requestInput is null ? null : FormError);
-            return new ActionMenu(new Span(new Icon("plus", assets, 16), new Span(new Text("details.request"))), [form], "button button--primary", null, FormError is not null && _requestInput is not null);
+            return new ActionMenu(new Span(new Icon("plus", assets, 16), new Span(new Text("details.request"))),
+                SeasonNumber is { } seasonNumber
+                    ? [new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["request.startsAtSeason"], seasonNumber))), form]
+                    : [form], "button button--primary", null, FormError is not null && _requestInput is not null);
         }
 
         // Mark the title watched or unwatched or begin it again, and for an administrator the way to its management page.

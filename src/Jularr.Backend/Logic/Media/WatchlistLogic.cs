@@ -11,7 +11,7 @@ namespace Jularr.Backend.Logic.Media
         // No implicit request for an existing favorite, disabled Requests module, or removing a favorite.
         // Executes in the caller's transaction so a request failure also rolls back the favorite.
         public static async Task<bool> UpdateFavoriteWithRequestAsync(this LogicContext ctx, WatchlistData data,
-            bool isWatchlisted, long accountId, bool owner, CancellationToken ct, int? startSeasonNumber = null)
+            bool isWatchlisted, long accountId, bool owner, CancellationToken ct, int? startSeasonNumber = null, bool allowAutomaticRequest = true)
         {
             if (!isWatchlisted)
             {
@@ -33,7 +33,7 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(data);
             var preference = await ctx.ReadRequiredAsync<FavoriteRequestPreference>(sql, ct);
             await ctx.UpdateWatchlistAsync(data, true, ct);
-            if (!preference.AutoRequestOnFavorite || preference.AlreadyFavorite || !preference.RequestsEnabled)
+            if (!allowAutomaticRequest || !preference.AutoRequestOnFavorite || preference.AlreadyFavorite || !preference.RequestsEnabled)
                 return false;
 
             // An AniList cour with no verified local TVDB season must never trigger a

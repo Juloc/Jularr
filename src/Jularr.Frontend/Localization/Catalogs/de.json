@@ -1402,6 +1402,14 @@
    "Only when Requests is enabled; normal approval and download rules still apply.",
    "Nur bei aktiviertem Anfragen-Modul. Freigabe- und Downloadregeln gelten weiterhin."
   ],
+  "request.startsAtSeason": [
+   "Monitor season {0} and newer",
+   "Staffel {0} und folgende überwachen"
+  ],
+  "request.anime.unmapped": [
+   "The starting season could not be verified. No automatic request will be created.",
+   "Die Anfangsstaffel konnte nicht verifiziert werden. Es wird keine automatische Anfrage erstellt."
+  ],
   "admin.library.description": [
    "Imported media and file availability",
    "Importierte Medien und Dateiverfügbarkeit"

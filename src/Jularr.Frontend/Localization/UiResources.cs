@@ -606,6 +606,8 @@ namespace Jularr.Frontend.Localization
             new("profile.favorite.title", "Favorites"),
             new("profile.favorite.autoRequest", "Automatically request new favorites"),
             new("profile.favorite.autoRequestHelp", "Only when Requests is enabled; normal approval and download rules still apply."),
+            new("request.startsAtSeason", "Monitor season {0} and newer"),
+            new("request.anime.unmapped", "The starting season could not be verified. No automatic request will be created."),
             new("admin.library.description", "Imported media and file availability"),
             new("admin.activity.title", "Queue"),
             new("admin.requests.title", "Requests"),

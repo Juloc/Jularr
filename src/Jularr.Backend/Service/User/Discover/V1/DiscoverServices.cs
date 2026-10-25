@@ -467,7 +467,8 @@ namespace Jularr.Backend.Service.User.Discover.V1
             _newlyApproved = await Context.ExecuteBatchAsync(
                 (ctx, ct) => ctx.UpdateFavoriteWithRequestAsync(
                     new WatchlistData(Auth.ProfileId!.Value, workId), true, Auth.AccountId!.Value,
-                    Auth.AccountRoleTypeId == AccountRoleType.Owner, ct, startSeason), CancellationToken);
+                    Auth.AccountRoleTypeId == AccountRoleType.Owner, ct, startSeason,
+                    Data.MediaTypeId != MediaType.Series || Data.Namespace != "anilist" || startSeason is not null), CancellationToken);
             return new FavoriteDiscoverResultV1(workId);
         }
 
@@ -841,6 +842,8 @@ namespace Jularr.Backend.Service.User.Discover.V1
             {
                 selectedSeason = (await _catalog.ReadEntryAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId,
                     Data.Namespace, Data.ExternalId, CancellationToken)).SeasonNumber;
+                if (selectedSeason is null)
+                    throw new DataValidationException(nameof(Data.StartSeasonNumber), "unknown_reference");
             }
             var (request, newlyApproved) = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value,
                 Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner, selectedSeason), ct), CancellationToken);
