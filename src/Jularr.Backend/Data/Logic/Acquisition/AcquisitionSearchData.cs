@@ -217,17 +217,19 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class WantedSearchResult
     {
-        public WantedSearchResult(SelectionResult selection, IReadOnlyDictionary<string, ReleaseOffer> offers, bool indexersUnavailable, string outcomeKey)
+        public WantedSearchResult(SelectionResult selection, IReadOnlyDictionary<string, ReleaseOffer> offers, bool indexersUnavailable, string outcomeKey, string? errorKey = null)
         {
             Selection = selection;
             Offers = offers;
             IndexersUnavailable = indexersUnavailable;
             OutcomeKey = outcomeKey;
+            ErrorKey = errorKey;
         }
 
         public SelectionResult Selection { get; }
         public IReadOnlyDictionary<string, ReleaseOffer> Offers { get; }
         public bool IndexersUnavailable { get; }
         public string OutcomeKey { get; }
+        public string? ErrorKey { get; }
     }
 }
