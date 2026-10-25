@@ -549,7 +549,8 @@ namespace Jularr.Backend.Logic.Media
                             "Overview" text, "ImageUrl" text, "RuntimeMinutes" integer, "Disc" integer)
                 ), monitoring AS (
                     SELECT
-                        COALESCE(bool_and(wanted."MonitorsNewUnits"), TRUE) AS "MonitorsNewUnits"
+                        COALESCE(bool_and(wanted."MonitorsNewUnits"), TRUE) AS "MonitorsNewUnits",
+                        COALESCE(min(wanted."MinimumSeasonNumber"), 1) AS "MinimumSeasonNumber"
                     FROM
                         "WantedItems" AS wanted
                     WHERE
@@ -620,7 +621,7 @@ namespace Jularr.Backend.Logic.Media
                     item."Episode",
                     NULLIF(btrim(item."Title"), ''),
                     item."ReleasedOn",
-                    item."Season" > 0 AND monitoring."MonitorsNewUnits",
+                    item."Season" >= monitoring."MinimumSeasonNumber" AND monitoring."MonitorsNewUnits",
                     NULLIF(btrim(item."Overview"), ''),
                     item."ImageUrl",
                     item."RuntimeMinutes"

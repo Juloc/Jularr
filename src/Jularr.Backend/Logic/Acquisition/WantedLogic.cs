@@ -10,26 +10,45 @@ namespace Jularr.Backend.Logic.Acquisition
     {
         public static async Task RecordRequestTargetAsync(this LogicContext ctx, AcquisitionRequestData request, CancellationToken ct)
         {
-            // One shared target per Work, per platform for games; a new target takes the requested quality, an existing one keeps its own.
+            // Serialize target changes by canonical Work, so concurrent requests cannot lose a season floor.
             var sql = new SqlStatement();
+            sql.Statement = "SELECT \"Id\" FROM \"Works\" WHERE \"Id\" = @Id FOR UPDATE;";
+            sql.Parameters.Add(new WorkIdData(request.WorkId));
+            _ = await ctx.ReadRequiredAsync<WorkIdData>(sql, ct);
+
+            sql = new SqlStatement();
+            sql.Statement = """
+                SELECT wanted."MinimumSeasonNumber"
+                FROM "WantedItems" AS wanted
+                WHERE wanted."WorkId" = @WorkId
+                    AND wanted."GamePlatformId" IS NOT DISTINCT FROM @GamePlatformId;
+                """;
+            sql.Parameters.Add(request);
+            var prior = await ctx.ReadOptionalAsync<ExistingSeasonScope>(sql, ct);
+
+            // The requested earliest season is retained during moderation and only applied on approval.
+            sql = new SqlStatement();
             sql.Statement =
                 """
                 WITH target AS (
                     INSERT INTO "WantedItems" (
                         "WorkId",
                         "GamePlatformId",
-                        "AcquisitionProfileId"
+                        "AcquisitionProfileId",
+                        "MinimumSeasonNumber"
                     )
                     SELECT
                         @WorkId,
                         @GamePlatformId,
-                        request."AcquisitionProfileId"
+                        request."AcquisitionProfileId",
+                        coalesce(request."StartSeasonNumber", 1)
                     FROM
                         "AcquisitionRequests" AS request
                     WHERE
                         request."Id" = @Id
                     ON CONFLICT ("WorkId", "GamePlatformId") DO UPDATE SET
-                        "WorkId" = EXCLUDED."WorkId"
+                        "WorkId" = EXCLUDED."WorkId",
+                        "MinimumSeasonNumber" = least("WantedItems"."MinimumSeasonNumber", EXCLUDED."MinimumSeasonNumber")
                     RETURNING
                         "Id"
                 )
@@ -48,7 +67,49 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 throw new InvalidOperationException("The request target was not recorded.");
             }
+
+            sql = new SqlStatement();
+            sql.Statement = """
+                SELECT "MinimumSeasonNumber" FROM "WantedItems"
+                WHERE "WorkId" = @WorkId AND "GamePlatformId" IS NOT DISTINCT FROM @GamePlatformId;
+                """;
+            sql.Parameters.Add(request);
+            var now = await ctx.ReadRequiredAsync<ExistingSeasonScope>(sql, ct);
+
+            if (prior is null && now.MinimumSeasonNumber > 1)
+            {
+                // Fresh target: imported older seasons were initially marked as monitored by default.
+                // There is no prior Wanted target with manually selected older seasons to disturb.
+                sql = new SqlStatement();
+                sql.Statement = """
+                    UPDATE "WorkUnits" AS episode SET "IsMonitored" = FALSE
+                    FROM "WorkUnits" AS season
+                    WHERE episode."WorkId" = @WorkId AND episode."ParentWorkUnitId" = season."Id"
+                        AND episode."WorkUnitTypeId" = 2 AND season."WorkUnitTypeId" = 1
+                        AND season."Number" > 0 AND season."Number" < @MinimumSeasonNumber;
+                    """;
+                sql.Parameters.Add(new { request.WorkId, now.MinimumSeasonNumber });
+                await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            }
+            else if (prior is { } existing && now.MinimumSeasonNumber < existing.MinimumSeasonNumber)
+            {
+                // A second explicit requester broadens the shared acquisition intent.
+                // Do not touch seasons outside this newly requested range.
+                sql = new SqlStatement();
+                sql.Statement = """
+                    UPDATE "WorkUnits" AS episode SET "IsMonitored" = TRUE
+                    FROM "WorkUnits" AS season
+                    WHERE episode."WorkId" = @WorkId AND episode."ParentWorkUnitId" = season."Id"
+                        AND episode."WorkUnitTypeId" = 2 AND season."WorkUnitTypeId" = 1
+                        AND season."Number" >= @MinimumSeasonNumber
+                        AND season."Number" < @OldMinimumSeasonNumber;
+                    """;
+                sql.Parameters.Add(new { request.WorkId, now.MinimumSeasonNumber, OldMinimumSeasonNumber = existing.MinimumSeasonNumber });
+                await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            }
         }
+
+        private sealed record ExistingSeasonScope(int MinimumSeasonNumber);
 
         // A target for a title that has none; one that exists stays as it is. Without the data asking for monitoring, a new target starts paused and the Owner unpauses it later.
         public static async Task<bool> EnsureWantedItemAsync(this LogicContext ctx, WantedTakeoverData data, CancellationToken ct)

@@ -39,6 +39,12 @@ namespace Jularr.Backend.Logic.Acquisition
                 """
                 SELECT
                     work."MediaTypeId" = 7 AS "IsGame",
+                    work."MediaTypeId" = 2 AS "IsSeries",
+                    (@StartSeasonNumber::int IS NULL OR EXISTS (
+                        SELECT 1 FROM "WorkUnits" AS season
+                        WHERE season."WorkId" = work."Id" AND season."WorkUnitTypeId" = 1
+                            AND season."Number" = @StartSeasonNumber
+                    )) AS "HasRequestedSeason",
                     EXISTS (
                         SELECT
                             1
@@ -67,6 +73,12 @@ namespace Jularr.Backend.Logic.Acquisition
             if (work.IsGame != work.IsPlatformListed)
             {
                 throw new DataValidationException(nameof(data.GamePlatformId), "unknown_reference");
+            }
+
+            // A scoped request cannot silently fall back to the whole series.
+            if (data.StartSeasonNumber is not null && (!work.IsSeries || !work.HasRequestedSeason))
+            {
+                throw new DataValidationException(nameof(data.StartSeasonNumber), "unknown_reference");
             }
 
             // Repeated submissions share intent; new ones follow the account's request rule.
@@ -98,7 +110,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     "RequestedByAccountId",
                     "UiLocaleId",
                     "GamePlatformId",
-                    "AcquisitionProfileId"
+                    "AcquisitionProfileId",
+                    "StartSeasonNumber"
                 )
                 VALUES (
                     @WorkId,
@@ -106,12 +119,17 @@ namespace Jularr.Backend.Logic.Acquisition
                     @RequestedByAccountId,
                     @UiLocaleId,
                     @GamePlatformId,
-                    @AcquisitionProfileId
+                    @AcquisitionProfileId,
+                    @StartSeasonNumber
                 )
                 ON CONFLICT ("RequestedByProfileId", "WorkId", "UiLocaleId", "GamePlatformId")
                     WHERE "AcquisitionRequestStatusTypeId" IN (1, 2, 3, 4, 5) AND "RequestedByProfileId" IS NOT NULL
                 DO UPDATE SET
-                    "WorkId" = EXCLUDED."WorkId"
+                    "WorkId" = EXCLUDED."WorkId",
+                    "StartSeasonNumber" = CASE
+                        WHEN "AcquisitionRequests"."StartSeasonNumber" IS NULL OR EXCLUDED."StartSeasonNumber" IS NULL THEN NULL
+                        ELSE least("AcquisitionRequests"."StartSeasonNumber", EXCLUDED."StartSeasonNumber")
+                    END
                 RETURNING
                     "Id",
                     "WorkId",

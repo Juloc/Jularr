@@ -269,7 +269,7 @@ namespace Jularr.Backend.Service.User.Request.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
-            var (request, newlyApproved) = await Context.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(Parameters.WorkId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, Data.GamePlatformId, Data.AcquisitionProfileId, Auth.AccountRoleTypeId == AccountRoleType.Owner), CancellationToken);
+            var (request, newlyApproved) = await Context.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(Parameters.WorkId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, Data.GamePlatformId, Data.AcquisitionProfileId, Auth.AccountRoleTypeId == AccountRoleType.Owner, Data.StartSeasonNumber), CancellationToken);
             _newlyApproved = newlyApproved;
             return new CreateRequestResultV1(request.Id);
         }
