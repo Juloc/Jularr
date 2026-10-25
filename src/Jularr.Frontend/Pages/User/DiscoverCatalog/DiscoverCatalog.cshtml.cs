@@ -15,7 +15,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.DiscoverCatalog
 {
     // A catalog title from Discover; the request imports it as a Work, an anime season as its TMDB series.
-    public sealed class DiscoverCatalogModel(RequestDiscoverCatalogItemV1 request, ReadDiscoverScopesV1 readScopes, ReadDiscoverCatalogEntryV1 readEntry, OpenDiscoverAnimeDetailsV1 openAnime, ReadUiLocalesV1 locales,
+    public sealed class DiscoverCatalogModel(RequestDiscoverCatalogItemV1 request, ReadDiscoverScopesV1 readScopes, ReadDiscoverCatalogEntryV1 readEntry, ReadUiLocalesV1 locales,
         IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private DiscoverScopeV1? _scope;
@@ -59,39 +59,13 @@ namespace Jularr.Frontend.Pages.User.DiscoverCatalog
             }
         }
 
-        public async Task<IActionResult> OnGetAsync()
+        public IActionResult OnGet()
         {
-            await LoadDataAsync();
-
-            // Unrequested anime open the normal full Work details; merely viewing never creates a request.
-            var scope = await ScopeAsync();
-            if (_entry?.WorkId is null && Source == "anilist" && scope.MediaSubtypeId == MediaSubtype.Anime
-                && scope.MediaTypeId is MediaType.Series or MediaType.Movie)
-            {
-                try
-                {
-                    _entry = await openAnime.ExecuteAsync<DiscoverCatalogEntryV1>(new DiscoverParametersV1(),
-                        new ReadDiscoverCatalogEntryDataV1(scope.MediaTypeId, Source, ExternalId, scope.MediaSubtypeId), HttpContext.RequestAborted);
-                }
-                catch (ServiceUnavailableException)
-                {
-                    // Keep the provider overview available if TMDB/TVDB is temporarily unreachable.
-                }
-                catch (KeyNotFoundException)
-                {
-                    // A title with no canonical work still has its AniList overview.
-                }
-            }
-
-            // Every available canonical Work uses the same full details page.
-            if (_entry?.WorkId is { } workId)
-            {
-                var season = _entry.SeasonNumber is { } number ? "?season=" + number.ToString(CultureInfo.InvariantCulture) : "";
-                return LocalRedirect("/Details/" + workId.ToString(CultureInfo.InvariantCulture) + season);
-            }
-
-            PreparePage();
-            return Page();
+            // All catalog titles resolve through the same Details Razor page.
+            // Do not write Works just to view metadata.
+            return LocalRedirect("/Details?source=" + Uri.EscapeDataString(Source)
+                + "&externalId=" + Uri.EscapeDataString(ExternalId)
+                + "&type=" + Uri.EscapeDataString(Type));
         }
 
         public async Task<IActionResult> OnPostAsync([BindRequired] long uiLocaleId)
