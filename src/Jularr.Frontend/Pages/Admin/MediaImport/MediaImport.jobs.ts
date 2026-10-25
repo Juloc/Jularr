@@ -1,6 +1,9 @@
 // A durable import is owned by the server's operation queue, not by this page
 // or a long-lived fetch. Polling may stop freely on navigation and reconnects.
-type JobRow = { index: number; title: string | null; stage: string; outcome: string | null; workId: number | null };
+type JobEvent = { stage: string; source: string | null; query: string | null; detail: string | null; candidateCount: number | null; attempt: number; at: string };
+type JobRow = { index: number; title: string | null; stage: string; stageKey: string; outcome: string | null; outcomeKey: string | null;
+    workId: number | null; source: string | null; query: string | null; detail: string | null; candidateCount: number | null;
+    attempt: number; history: JobEvent[] };
 type JobState = {
     jobId: string;
     state: "Queued" | "Running" | "Completed" | "Failed";
@@ -37,6 +40,20 @@ export function initializeDurableJobs(): void {
     const rows = panel.querySelector<HTMLOListElement>("[data-import-job-rows]");
     const reportButton = panel.querySelector<HTMLButtonElement>("[data-import-job-report]");
     if (!count || !status || !progress || !rows) return;
+    const active = document.createElement("section");
+    active.className = "media-import__job-active";
+    active.setAttribute("role", "status");
+    active.setAttribute("aria-live", "polite");
+    active.hidden = true;
+    const filter = document.createElement("select");
+    filter.setAttribute("aria-label", panel.dataset.jobFilterLabel ?? "Filter results");
+    for (const category of ["All", "Queued", "Running", "Done", "Review", "Problem"]) {
+        const option = document.createElement("option");
+        option.value = category.toLowerCase();
+        option.textContent = panel.dataset["jobFilter" + category] ?? category;
+        filter.append(option);
+    }
+    progress.after(active, filter);
 
     let current: string | null = null;
     let requestGeneration = 0;
@@ -52,38 +69,113 @@ export function initializeDurableJobs(): void {
         return url.toString();
     };
 
+    const labelStage = (stage: string): string => panel.dataset["jobStage" + stage] ?? stage;
+    const labelReason = (reason: string): string => {
+        const key = "jobReason" + reason.split("_").map(x => x.charAt(0).toUpperCase() + x.slice(1)).join("");
+        return panel.dataset[key] ?? reason;
+    };
+    const sourceName = (source: string): string => ({
+        library: "Jularr", openlibrary: "Open Library", catalog: "Metadata catalog",
+        tmdb_movie: "TMDB", tmdb_tv: "TMDB", anilist: "AniList",
+        igdb: "IGDB", musicbrainz: "MusicBrainz"
+    } as Record<string, string>)[source] ?? source;
+    const classification = (row: JobRow): string => {
+        if (!row.outcomeKey) return row.stageKey === "Queued" ? "queued" : "running";
+        if (["NotFound", "Unavailable", "Failed"].includes(row.outcomeKey)) return "problem";
+        if (["NeedsReview", "Excluded", "Deferred"].includes(row.outcomeKey)) return "review";
+        return "done";
+    };
+    const applyFilter = (): void => {
+        for (const [index, entry] of existing) {
+            const row = lastSnapshot?.rows.find(item => item.index === index);
+            entry.hidden = filter.value !== "all" && row !== undefined && classification(row) !== filter.value;
+        }
+    };
+    filter.addEventListener("change", applyFilter);
+    const addField = (parent: HTMLElement, title: string, value: string | null | undefined): void => {
+        if (!value) return;
+        const p = document.createElement("p");
+        const name = document.createElement("strong");
+        name.textContent = title + ": ";
+        p.append(name, document.createTextNode(value));
+        parent.append(p);
+    };
+
     const render = (job: JobState): void => {
         if (current !== job.jobId) return;
         panel.hidden = false;
         lastSnapshot = job;
         if (reportButton) reportButton.hidden = job.state !== "Completed" && job.state !== "Failed";
         const state = job.state.toLowerCase();
-        status.textContent = panel.dataset["job" + state[0].toUpperCase() + state.slice(1)]
-            ?? job.state;
+        status.textContent = panel.dataset["job" + state[0].toUpperCase() + state.slice(1)] ?? job.state;
         count.textContent = job.processed + " / " + job.total;
         progress.max = Math.max(job.total, 1);
         progress.value = job.processed;
+        const working = job.state === "Running" ? job.rows.find(row =>
+            !row.outcomeKey && row.stageKey !== "Queued") : undefined;
+        active.hidden = !working;
+        active.textContent = working ? [
+            panel.dataset.jobCurrent, working.title ?? "#" + (working.index + 1),
+            working.stage, working.source ? sourceName(working.source) : null, working.query
+        ].filter(Boolean).join(" · ") : "";
 
         if (job.sequence !== lastSequence) {
             lastSequence = job.sequence;
-            for (const row of job.rows) {
-                let entry = existing.get(row.index);
+            for (const item of job.rows) {
+                let entry = existing.get(item.index);
                 if (!entry) {
                     entry = document.createElement("li");
                     entry.className = "media-import__job-row";
+                    const details = document.createElement("details");
+                    const summary = document.createElement("summary");
                     const name = document.createElement("span");
                     name.setAttribute("data-job-title", "");
                     const outcome = document.createElement("span");
                     outcome.setAttribute("data-job-outcome", "");
-                    entry.append(name, outcome);
-                    existing.set(row.index, entry);
+                    summary.append(name, outcome);
+                    const content = document.createElement("div");
+                    content.className = "media-import__job-details";
+                    content.setAttribute("data-job-details", "");
+                    details.append(summary, content);
+                    entry.append(details);
+                    existing.set(item.index, entry);
                     rows.append(entry);
                 }
                 const name = entry.querySelector<HTMLElement>("[data-job-title]");
                 const outcome = entry.querySelector<HTMLElement>("[data-job-outcome]");
-                if (name) name.textContent = row.title || "#" + (row.index + 1);
-                if (outcome) outcome.textContent = row.outcome ?? row.stage;
+                const content = entry.querySelector<HTMLElement>("[data-job-details]");
+                if (name) name.textContent = item.title ?? "#" + (item.index + 1);
+                if (outcome) outcome.textContent = item.outcome ?? item.stage;
+                if (!content) continue;
+                content.replaceChildren();
+                addField(content, panel.dataset.jobSource ?? "Source", item.source ? sourceName(item.source) : null);
+                addField(content, panel.dataset.jobQuery ?? "Query", item.query);
+                addField(content, panel.dataset.jobCandidates ?? "Candidates",
+                    item.candidateCount === null ? null : String(item.candidateCount));
+                addField(content, panel.dataset.jobAttempt ?? "Retry",
+                    item.attempt > 0 ? String(item.attempt) : null);
+                addField(content, panel.dataset.jobHistory ?? "Details", item.detail ? labelReason(item.detail) : null);
+                if (!item.history?.length) continue;
+                const heading = document.createElement("strong");
+                heading.textContent = panel.dataset.jobHistory ?? "Search history";
+                const history = document.createElement("ol");
+                history.className = "media-import__job-history";
+                for (const event of item.history) {
+                    const li = document.createElement("li");
+                    li.textContent = [
+                        event.at ? new Date(event.at).toLocaleTimeString() : null,
+                        labelStage(event.stage),
+                        event.source ? sourceName(event.source) : null,
+                        event.query,
+                        event.candidateCount === null ? null : (panel.dataset.jobCandidates ?? "Candidates") + ": " + event.candidateCount,
+                        event.detail ? labelReason(event.detail) : null,
+                        event.attempt > 0 ? (panel.dataset.jobAttempt ?? "Retry") + ": " + event.attempt : null
+                    ].filter(Boolean).join(" · ");
+                    history.append(li);
+                }
+                content.append(heading, history);
             }
+            applyFilter();
         }
         if (job.error) status.textContent += " · " + job.error;
     };
@@ -117,6 +209,9 @@ export function initializeDurableJobs(): void {
         lastSequence = -1;
         existing.clear();
         rows.replaceChildren();
+        active.hidden = true;
+        active.textContent = "";
+        filter.value = "all";
         panel.hidden = false;
         status.textContent = panel.dataset.jobQueued ?? "Queued";
         void poll(requestGeneration);
@@ -124,7 +219,7 @@ export function initializeDurableJobs(): void {
 
     reportButton?.addEventListener("click", () => {
         if (!lastSnapshot) return;
-        const report = { version: 1, jobId: lastSnapshot.jobId, state: lastSnapshot.state, results: lastSnapshot.rows };
+        const report = { version: 2, jobId: lastSnapshot.jobId, state: lastSnapshot.state, results: lastSnapshot.rows };
         const file = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
         const uri = URL.createObjectURL(file);
         const link = document.createElement("a");

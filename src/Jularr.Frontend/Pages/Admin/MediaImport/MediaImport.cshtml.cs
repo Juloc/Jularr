@@ -56,7 +56,36 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 .TextAttribute("data-job-completed", "import.job.completed")
                 .TextAttribute("data-job-failed", "import.job.failed")
                 .TextAttribute("data-job-disconnected", "import.job.disconnected")
-                .TextAttribute("data-job-start-failed", "import.job.startFailed"));
+                .TextAttribute("data-job-start-failed", "import.job.startFailed")
+                .TextAttribute("data-job-filter-label", "import.job.filterLabel")
+                .TextAttribute("data-job-filter-all", "import.job.filterAll")
+                .TextAttribute("data-job-filter-queued", "import.job.filterQueued")
+                .TextAttribute("data-job-filter-running", "import.job.filterRunning")
+                .TextAttribute("data-job-filter-done", "import.job.filterDone")
+                .TextAttribute("data-job-filter-review", "import.job.filterReview")
+                .TextAttribute("data-job-filter-problem", "import.job.filterProblem")
+                .TextAttribute("data-job-current", "import.job.current")
+                .TextAttribute("data-job-source", "import.job.source")
+                .TextAttribute("data-job-query", "import.job.query")
+                .TextAttribute("data-job-candidates", "import.job.candidates")
+                .TextAttribute("data-job-attempt", "import.job.attempt")
+                .TextAttribute("data-job-history", "import.job.history")
+                .TextAttribute("data-job-stage-resolving", "import.job.stage.Resolving")
+                .TextAttribute("data-job-stage-candidates", "import.job.stage.Candidates")
+                .TextAttribute("data-job-stage-review", "import.job.stage.Review")
+                .TextAttribute("data-job-stage-no-match", "import.job.stage.NoMatch")
+                .TextAttribute("data-job-stage-retrying", "import.job.stage.Retrying")
+                .TextAttribute("data-job-reason-checking-library", "import.job.reason.checking_library")
+                .TextAttribute("data-job-reason-isbn-lookup", "import.job.reason.isbn_lookup")
+                .TextAttribute("data-job-reason-catalog-search", "import.job.reason.catalog_search")
+                .TextAttribute("data-job-reason-no-match", "import.job.reason.no_match")
+                .TextAttribute("data-job-reason-isbn-no-match", "import.job.reason.isbn_no_match")
+                .TextAttribute("data-job-reason-match-found", "import.job.reason.match_found")
+                .TextAttribute("data-job-reason-needs-review", "import.job.reason.needs_review")
+                .TextAttribute("data-job-reason-unavailable", "import.job.reason.unavailable")
+                .TextAttribute("data-job-reason-rate-limited", "import.job.reason.rate_limited")
+                .TextAttribute("data-job-reason-provider-retry", "import.job.reason.provider_retry")
+                .TextAttribute("data-job-reason-importing", "import.job.reason.importing"));
             page.Content.Add(new Div([.. content]).Class("media-import"));
         }
 
@@ -527,6 +556,14 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                     title = row.Title,
                     outcome = row.OutcomeTypeId is { } outcome ? texts["import.outcome." + outcome] : null,
                     stage = texts["import.job.stage." + row.Stage],
+                    stageKey = row.Stage,
+                    outcomeKey = row.OutcomeTypeId?.ToString(),
+                    source = row.Source,
+                    query = row.Query,
+                    detail = row.Detail,
+                    candidateCount = row.CandidateCount,
+                    attempt = row.Attempt,
+                    history = JsonSerializer.Deserialize<JsonElement>(row.HistoryJson),
                     workId = row.WorkId
                 })
             });

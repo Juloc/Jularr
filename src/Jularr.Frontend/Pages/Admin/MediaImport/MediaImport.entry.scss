@@ -289,3 +289,46 @@
         [data-job-outcome] { color: var(--muted); }
     }
 }
+
+.media-import__job-panel > select {
+    align-self: start;
+    min-width: min(260px, 100%);
+    max-width: 100%;
+    padding: 8px 12px;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+}
+.media-import__job-active {
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    overflow-wrap: anywhere;
+}
+.media-import__job-row {
+    display: block;
+    &[hidden] { display: none; }
+    details { min-width: 0; }
+    summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        justify-content: space-between;
+        cursor: pointer;
+        padding: 6px 2px;
+    }
+}
+.media-import__job-details {
+    padding: 10px 12px;
+    margin-block: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    font-size: var(--text-control);
+    p { margin: 4px 0; }
+}
+.media-import__job-history {
+    max-height: none !important;
+    overflow: visible !important;
+    margin-block: 8px 0;
+}
