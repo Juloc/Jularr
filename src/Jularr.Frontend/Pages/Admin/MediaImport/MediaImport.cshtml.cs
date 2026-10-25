@@ -122,6 +122,9 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 .TextAttribute("data-stage-open", "import.status.Open")
                 .TextAttribute("data-stage-invalid", "import.status.Invalid"));
 
+            if (rows.Any(row => row.StatusTypeId == MediaImportStatusType.Open && CanInclude(row) && row.Candidates.Count == 0))
+                content.Add(new P(new Text("import.backgroundMatchHelp")).Class("media-import__background-match-help"));
+
             // The defaults of each kind of title the list holds.
             var action = _input?.Action ?? MediaImportActionType.AddOnly;
             var kinds = rows.Where(row => row.MediaTypeId is not null).GroupBy(row => row.TypeKey, StringComparer.Ordinal).Select(group => group.First()).ToDictionary(row => row.TypeKey, StringComparer.Ordinal);
@@ -295,7 +298,11 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         {
             MediaImportStatusType.New => true,
             MediaImportStatusType.InLibrary => !row.HasTarget && row.CanMonitor && row.Action != MediaImportActionType.AddOnly,
-            MediaImportStatusType.Open => row.Candidates.Count > 0,
+            // For books without a provider ID, an explicit checkbox requests safe
+            // title+author matching by the durable server job. Ambiguous rows remain for review.
+            MediaImportStatusType.Open => row.Candidates.Count > 0 ||
+                row.TypeKey == "book" && row.Problem is null &&
+                !string.IsNullOrWhiteSpace(row.Title) && !string.IsNullOrWhiteSpace(row.Creator),
             _ => false
         };
 
