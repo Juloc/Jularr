@@ -23,5 +23,13 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField Message = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Trim = true };
         public static readonly StringField Action = new(NpgsqlDbType.Varchar) { MaximumLength = 32, Trim = true };
         public static readonly StringField Url = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false, Trim = true };
+        public static readonly GuidField LeaseId = new();
+        public static readonly IntField Width = new() { Minimum = 1, Maximum = 4096 };
+        public static readonly IntField Height = new() { Minimum = 1, Maximum = 4096 };
+        public static readonly IntField X = new() { Minimum = 0, Maximum = 4095 };
+        public static readonly IntField Y = new() { Minimum = 0, Maximum = 4095 };
+        public static readonly IntField Delta = new() { Minimum = -2000, Maximum = 2000 };
+        public static readonly StringField Key = new(NpgsqlDbType.Varchar) { MaximumLength = 32, Required = false };
+        public static readonly StringField Text = new(NpgsqlDbType.Varchar) { MaximumLength = 1000, Required = false };
     }
 }

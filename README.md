@@ -89,6 +89,16 @@ sein Browserprofil; Bibliotheken, NAS-Mounts und andere Downloadordner bleiben e
 Ein vorhandener manuell konfigurierter Browser über `Browser:Path` oder
 `Browser:RemoteAddress` bleibt als Konfigurationsoption erhalten.
 
+Bei einer manuellen Prüfung von Anna’s Archive öffnet „Browser bedienen“ unter
+`/Admin/Browser` eine bedienbare Ansicht derselben lokalen Chrome-Sitzung. Zugriff
+haben Owner mit `acquisition.manage`; Bild und Eingaben sind an
+die öffnende Anmeldesitzung gebunden. Solange diese Ansicht aktiv ist, wechselt die
+Automatik die Seite nicht. Nach zwei Minuten ohne Abruf oder Eingabe wird sie frei.
+„Fertig und schließen“ und normales Stoppen erhalten das Profil; nur Zurücksetzen
+oder Ausschalten des verwalteten Browser-Moduls löschen es. Die Ansicht überträgt
+keine beliebigen Debugging-Befehle und erlaubt keine direkten Browser-Downloads.
+Ein zusätzlicher Container oder öffentliches Debugging-Port ist dafür nicht nötig.
+
 **Sicherheit:** Die normale HTTPS-Adressprüfung ist keine vollständige Browser-
 Netzwerkisolierung. Für nicht vertrauenswürdige Seiten muss die ausgehende
 Verbindungsbegrenzung gegen interne IPs auch für Redirects, Skripte, Frames und
