@@ -534,7 +534,22 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
 
-            // Explicit request imports the canonical series; the same identity then redirects to its Work.
+            // Provider test metadata deliberately lacks episode structure; seed the verified
+            // TVDB season numbers so a scoped request is never downgraded to all seasons.
+            using var favorited = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/favorite",
+                new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, favorited.StatusCode, await favorited.Content.ReadAsStringAsync());
+            var importedId = (await favorited.Content.ReadFromJsonAsync<FavoriteDiscoverResultV1>())!.WorkId;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number")
+                    VALUES ({importedId}, 1, 1), ({importedId}, 1, 2);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "IsMonitored")
+                    SELECT {importedId}, season."Id", 2, n, TRUE
+                    FROM "WorkUnits" AS season CROSS JOIN generate_series(1, 12) AS n
+                    WHERE season."WorkId" = {importedId} AND season."WorkUnitTypeId" = 1;
+                """);
+
+            // Explicit request reuses the canonical series; the same identity then redirects to its Work.
             using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/requests",
                 new RequestDiscoverCatalogDataV1(MediaType.Series, "anilist", "21", 1, MediaSubtype.Anime));
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
@@ -566,6 +581,10 @@ namespace Jularr.Backend.Tests
                 new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
             Assert.AreEqual(HttpStatusCode.OK, favorited.StatusCode, await favorited.Content.ReadAsStringAsync());
             var workId = (await favorited.Content.ReadFromJsonAsync<FavoriteDiscoverResultV1>())!.WorkId;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number")
+                    VALUES ({workId}, 1, 1), ({workId}, 1, 2);
+                """);
 
             using var whole = await host.SendAsync(HttpMethod.Post, "/api/v1/works/" + workId + "/requests",
                 new CreateRequestDataV1(1));
@@ -656,6 +675,19 @@ namespace Jularr.Backend.Tests
         public async Task Favorite_NewProfileOptIn_CreatesOneApprovedRequest()
         {
             await using var host = await CreateHostAsync(razor: true);
+            // A real verified season must exist for the automatic AniBridge request.
+            using var first = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/favorite",
+                new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
+            var workId = (await first.Content.ReadFromJsonAsync<FavoriteDiscoverResultV1>())!.WorkId;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number")
+                    VALUES ({workId}, 1, 1), ({workId}, 1, 2);
+                """);
+            using var unfavorited = await host.SendAsync(HttpMethod.Put, "/api/v1/watchlist/" + workId,
+                new UpdateWatchlistDataV1(false));
+            Assert.AreEqual(HttpStatusCode.OK, unfavorited.StatusCode);
+
             using var preference = await host.SendAsync(HttpMethod.Put, "/api/v1/profiles/101/favorite-request",
                 new UpdateProfileFavoriteRequestDataV1(true));
             Assert.AreEqual(HttpStatusCode.OK, preference.StatusCode, await preference.Content.ReadAsStringAsync());
@@ -664,12 +696,28 @@ namespace Jularr.Backend.Tests
                 new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
             Assert.AreEqual(HttpStatusCode.OK, favorite.StatusCode, await favorite.Content.ReadAsStringAsync());
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"MinimumSeasonNumber\" FROM \"WantedItems\""));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WatchlistEntries\""));
 
             using var twice = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/favorite",
                 new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
             Assert.AreEqual(HttpStatusCode.OK, twice.StatusCode, await twice.Content.ReadAsStringAsync());
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+        }
+
+        [TestMethod]
+        public async Task AniBridgeAutoFavorite_WithoutVerifiedTvdbSeason_IsFavoriteOnly()
+        {
+            await using var host = await CreateHostAsync();
+            using var enabled = await host.SendAsync(HttpMethod.Put, "/api/v1/profiles/101/favorite-request",
+                new UpdateProfileFavoriteRequestDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, enabled.StatusCode);
+            using var favorite = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/favorite",
+                new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, favorite.StatusCode, await favorite.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WatchlistEntries\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
         }
 
         [TestMethod]
