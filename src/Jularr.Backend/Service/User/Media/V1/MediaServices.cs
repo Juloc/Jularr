@@ -524,6 +524,11 @@ namespace Jularr.Backend.Service.User.Media.V1
     [ServiceEndpoint("PUT", "/api/v1/watchlist/{workId:long}")]
     public sealed class UpdateWatchlistV1 : UserService<WorkParametersV1, UpdateWatchlistDataV1>
     {
+        private readonly AcquisitionSearchSignal _searchSignal;
+        private bool _newlyApproved;
+
+        internal UpdateWatchlistV1(AcquisitionSearchSignal searchSignal) { _searchSignal = searchSignal; }
+
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.All("Library");
@@ -531,8 +536,16 @@ namespace Jularr.Backend.Service.User.Media.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.UpdateWatchlistAsync(new WatchlistData(Auth.ProfileId!.Value, Parameters.WorkId), Data.IsWatchlisted, CancellationToken);
+            _newlyApproved = await Context.UpdateFavoriteWithRequestAsync(
+                new WatchlistData(Auth.ProfileId!.Value, Parameters.WorkId), Data.IsWatchlisted,
+                Auth.AccountId!.Value, Auth.AccountRoleTypeId == Jularr.Backend.Data.Enums.Account.AccountRoleType.Owner,
+                CancellationToken);
             return new UpdateResult(true);
+        }
+
+        protected override void OnCommitted()
+        {
+            if (_newlyApproved) _searchSignal.RequestSearch();
         }
     }
 
