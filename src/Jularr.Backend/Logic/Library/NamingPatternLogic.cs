@@ -59,6 +59,11 @@ namespace Jularr.Backend.Logic.Library
                 throw new DataValidationException(nameof(data.SpecialsFolder), "invalid_value");
             }
 
+            if (data.SpecialsFolder is { } specials)
+            {
+                NamingPattern.ValidateFolder(specials, nameof(data.SpecialsFolder));
+            }
+
             if (data.CustomColonReplacement?.IndexOfAny(['/', '\\', ':']) >= 0)
             {
                 throw new DataValidationException(nameof(data.CustomColonReplacement), "invalid_value");

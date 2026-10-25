@@ -19,7 +19,9 @@ namespace Jularr.Frontend.Modules.Appearance
                         new Button(new Text("appearance.jularrRed")).Attribute("data-set-accent", "#c8102e").Attribute("aria-pressed", "false"),
                         new Button(new Text("appearance.jularrPurple")).Attribute("data-set-accent", "#8040f7").Attribute("aria-pressed", "false"),
                         new Button(new Text("appearance.accentDefault")).Attribute("data-reset-accent", "true")).Class("appearance__choices"),
-                    new P(new Text("appearance.devicePreference")).Class("appearance__hint")))
+                    new P(new Text("appearance.devicePreference")).Class("appearance__hint"),
+                    new P(new Text("appearance.accentSaveFailed")).Class("appearance__hint").Attribute("data-accent-save-error", "")
+                        .Attribute("role", "alert").Attribute("hidden", "")))
                 .Class("appearance__options");
 
             if (collapsible)

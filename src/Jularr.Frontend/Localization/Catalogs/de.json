@@ -4,6 +4,10 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "pwa.main.choose": ["Use as main profile", "Als Hauptprofil verwenden"],
+  "pwa.main.current": ["Main profile for the home screen icon", "Hauptprofil für das Homescreen-Icon"],
+  "pwa.main.manage": ["Choose main profile for the home screen icon", "Hauptprofil für das Homescreen-Icon auswählen"],
+  "pwa.profile.accent": ["Profile accent (e.g. #8040f7)", "Profil-Akzentfarbe (z. B. #8040f7)"],
   "pwa.update.available": ["An update is available.", "Eine Aktualisierung ist verfügbar."],
   "pwa.update.install": ["Update", "Aktualisieren"],
   "pwa.update.later": ["Later", "Später"],
@@ -219,8 +223,12 @@
    "Standard des Stils verwenden"
   ],
   "appearance.devicePreference": [
-   "Appearance choices are stored in this browser.",
-   "Die Darstellungsauswahl wird in diesem Browser gespeichert."
+   "Style and brightness are stored on this device; signed-in accent is stored on the main profile.",
+   "Stil und Helligkeit bleiben auf diesem Gerät; die Akzentfarbe wird beim Hauptprofil gespeichert."
+  ],
+  "appearance.accentSaveFailed": [
+   "The main profile color could not be saved. The previous color was restored.",
+   "Die Hauptprofilfarbe konnte nicht gespeichert werden. Die bisherige Farbe wurde wiederhergestellt."
   ],
   "design.title": [
    "Design lab",
@@ -6371,8 +6379,8 @@
    "Eigener Ersatz für den Doppelpunkt"
   ],
   "library.naming.specials": [
-   "Folder of season 0",
-   "Ordner für Staffel 0"
+   "Specials folder format",
+   "Ordnerformat für Specials"
   ],
   "library.naming.colon.Delete": [
    "Delete",
@@ -6405,6 +6413,10 @@
   "library.naming.rules": [
    "Formats of Sonarr and Radarr work as they are, for example {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} or {series title}. Empty placeholders leave with their brackets; the file name always names the film or the episode.",
    "Formate von Sonarr und Radarr funktionieren unverändert, zum Beispiel {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} oder {series title}. Leere Platzhalter verschwinden samt ihren Klammern; der Dateiname nennt immer den Film oder die Folge."
+  ],
+  "library.naming.token.ImdbId": [
+   "IMDb ID",
+   "IMDb-ID"
   ],
   "library.naming.token.Title": [
    "The title",
@@ -8938,6 +8950,10 @@
   "errors.validation.naming_needs_release_token": [
    "Several releases need {Quality}, {Release Group} or {Edition} in every file name.",
    "Mehrere Releases brauchen {Quality}, {Release Group} oder {Edition} in jedem Dateinamen."
+  ],
+  "errors.validation.naming_invalid_folder": [
+   "Use one folder name without slashes; '.' and '..' are not allowed.",
+   "Verwende einen einzelnen Ordnernamen ohne Schrägstriche; '.' und '..' sind nicht erlaubt."
   ],
   "errors.validation.naming_invalid_path": [
    "Each folder of the pattern needs a name.",

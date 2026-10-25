@@ -8,6 +8,10 @@ namespace Jularr.Frontend.Localization
     {
         public static IReadOnlyList<UiTextResource> English { get; } =
         [
+            new("pwa.main.choose", "Use as main profile"),
+            new("pwa.main.current", "Main profile for the home screen icon"),
+            new("pwa.main.manage", "Choose main profile for the home screen icon"),
+            new("pwa.profile.accent", "Profile accent (e.g. #8040f7)"),
             new("pwa.update.available", "An update is available."),
             new("pwa.update.install", "Update"),
             new("pwa.update.later", "Later"),
@@ -169,7 +173,8 @@ namespace Jularr.Frontend.Localization
             new("appearance.jularrRed", "Jularr red"),
             new("appearance.jularrPurple", "Jularr purple"),
             new("appearance.accentDefault", "Use style default"),
-            new("appearance.devicePreference", "Appearance choices are stored in this browser."),
+            new("appearance.devicePreference", "Style and brightness are stored on this device; signed-in accent is stored on the main profile."),
+            new("appearance.accentSaveFailed", "The main profile color could not be saved. The previous color was restored."),
             new("design.title", "Design lab"),
             new("design.cards.title", "Approved cover card states"),
             new("design.cards.notice", "Design samples only; bookmarks toggle locally and actions open a preview, without library playback, requests or account changes. Green: complete in the profile audio language. Yellow: complete in other audio languages. Orange: partial in the profile language. Yellow–orange: partial in other audio languages. Subtitles do not change this status. Hover longer for the official muted trailer."),
@@ -2510,7 +2515,7 @@ namespace Jularr.Frontend.Localization
             new("library.naming.replacesIllegal", "Replace illegal characters"),
             new("library.naming.colon", "Colon replacement"),
             new("library.naming.colonCustom", "Own replacement for the colon"),
-            new("library.naming.specials", "Folder of season 0"),
+            new("library.naming.specials", "Specials folder format"),
             new("library.naming.colon.Delete", "Delete"),
             new("library.naming.colon.Dash", "Dash"),
             new("library.naming.colon.SpaceDash", "Space dash"),
@@ -2519,6 +2524,7 @@ namespace Jularr.Frontend.Localization
             new("library.naming.colon.Custom", "Own"),
             new("library.naming.placeholders", "Placeholders"),
             new("library.naming.rules", "Formats of Sonarr and Radarr work as they are, for example {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} or {series title}. Empty placeholders leave with their brackets; the file name always names the film or the episode."),
+            new("library.naming.token.ImdbId", "IMDb ID"),
             new("library.naming.token.Title", "The title"),
             new("library.naming.token.Year", "The year of release"),
             new("library.naming.token.Season", "The season number, with :00 two digits"),

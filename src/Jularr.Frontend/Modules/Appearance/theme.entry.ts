@@ -20,6 +20,13 @@ let accent = "";
 try { accent = localStorage.getItem("jularr-ui-accent") ?? ""; } catch { /* Storage is optional. */ }
 if (!/^#[a-f\d]{6}$/i.test(accent)) accent = "";
 accent = accent.toLowerCase();
+// The main profile is the server's single source of truth for signed-in branding.
+// Anonymous visitors retain their device-local preview preference.
+const mainAccent = /^#[a-f\d]{6}$/i.test(root.dataset.pwaAccent ?? "") ? root.dataset.pwaAccent!.toLowerCase() : "";
+if (mainAccent) accent = mainAccent;
+let lastSavedAccent = mainAccent;
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let savingAccent: Promise<void> = Promise.resolve();
 let palette: ReturnType<typeof buildPalette>;
 
 function applyPalette(): void {
@@ -32,6 +39,20 @@ function applyPalette(): void {
     root.style.setProperty("--art-hue-rotate", palette.rotation);
     root.style.setProperty("--art-saturate", palette.saturation);
     updateBrowserColor();
+    updateBrandIcons(seed);
+}
+
+function updateBrandIcons(seed: string): void {
+    const color = seed.toLowerCase().slice(1);
+    // Public icon URLs include only the chosen hex color, never an account/profile/session ID.
+    document.querySelector<HTMLLinkElement>('link[data-pwa-favicon="svg"]')
+        ?.setAttribute("href", "/pwa/icons/favicon/" + color + ".svg");
+    document.querySelector<HTMLLinkElement>('link[data-pwa-favicon="png"]')
+        ?.setAttribute("href", "/pwa/icons/favicon-32/" + color + ".png");
+    if (mainAccent) {
+        document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]')
+            ?.setAttribute("href", "/pwa/icons/apple-180/" + color + ".png");
+    }
 }
 
 const systemMode = window.matchMedia("(prefers-color-scheme: dark)");
@@ -103,13 +124,52 @@ document.addEventListener("input", event => {
 
 function setAccent(value: string): void {
     if (value !== "" && !/^#[a-f\d]{6}$/i.test(value)) return;
-    accent = value.toLowerCase();
-    try {
-        if (accent) localStorage.setItem("jularr-ui-accent", accent);
-        else localStorage.removeItem("jularr-ui-accent");
-    } catch {
-        // Storage is optional.
+    const requested = value.toLowerCase();
+    accent = mainAccent && !requested ? (root.dataset.skin === "original" ? OriginalAccent : CleanAccent) : requested;
+    if (!mainAccent) {
+        try {
+            if (accent) localStorage.setItem("jularr-ui-accent", accent);
+            else localStorage.removeItem("jularr-ui-accent");
+        } catch {
+            // Storage is optional for signed-out visitors.
+        }
     }
     applyPalette();
     refreshControls();
+    if (mainAccent) {
+        clearTimeout(saveTimer);
+        // Native color pickers emit many input events. Only save the settled color.
+        const selected = accent;
+        saveTimer = setTimeout(() => {
+            savingAccent = savingAccent.then(() => persistMainAccent(selected));
+        }, 350);
+    }
+}
+
+// Never replace the main profile's saved color with a local-only preference.
+// Mutations are sequential, same-origin and antiforgery checked. A failed save rolls
+// back the optimistic palette and favicons, so their displayed state stays truthful.
+async function persistMainAccent(next: string): Promise<void> {
+    const status = document.querySelector<HTMLElement>("[data-accent-save-error]");
+    if (status) status.hidden = true;
+    try {
+        const auth = await fetch("/api/v1/auth", { cache: "no-store", credentials: "same-origin" });
+        const token = auth.headers.get("RequestVerificationToken");
+        if (!auth.ok || !token) throw new Error("Authentication expired");
+        const response = await fetch("/api/v1/profile/pwa/accent", {
+            method: "PUT", credentials: "same-origin",
+            headers: { "Content-Type": "application/json", RequestVerificationToken: token },
+            body: JSON.stringify({ accentHex: next })
+        });
+        if (!response.ok) throw new Error("Accent could not be saved");
+        lastSavedAccent = next;
+        root.dataset.pwaAccent = next;
+    } catch {
+        if (accent === next) {
+            accent = lastSavedAccent;
+            applyPalette();
+            refreshControls();
+        }
+        if (status) status.hidden = false;
+    }
 }
