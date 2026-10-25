@@ -262,7 +262,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         {
             MediaImportOutcomeType.Added or MediaImportOutcomeType.AddedAndMonitored or MediaImportOutcomeType.Monitored => ("available", "check"),
             MediaImportOutcomeType.Unchanged or MediaImportOutcomeType.Skipped => ("", "check"),
-            MediaImportOutcomeType.Unavailable or MediaImportOutcomeType.Deferred => ("warning", "info"),
+            MediaImportOutcomeType.Unavailable or MediaImportOutcomeType.Deferred or MediaImportOutcomeType.NeedsReview => ("warning", "info"),
             _ => ("danger", "close")
         };
 
