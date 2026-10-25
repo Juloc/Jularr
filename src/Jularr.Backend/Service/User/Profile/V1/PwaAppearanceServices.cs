@@ -94,4 +94,38 @@ namespace Jularr.Backend.Service.User.Profile.V1
         }
 
     }
+    // The visible account accent is the owned main profile's stored color.
+    // Selecting a shared profile for the launcher does not grant permission to recolor somebody else's profile.
+    [ServiceEndpoint("PUT", "/api/v1/profile/pwa/accent")]
+    public sealed class SaveMainPwaAccentV1 : UserService<PwaAppearanceParametersV1, SavePwaAccentDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(PwaAppearanceParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(PwaAppearanceParametersV1 parameters, Type resultType) => new("session.profile.select");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            var accent = Data.AccentHex.ToLowerInvariant();
+            if (accent.Length != 7 || accent[0] != '#' || accent.AsSpan(1).IndexOfAnyExcept("0123456789abcdef") >= 0)
+                throw new DataValidationException(nameof(Data.AccentHex), "invalid_text");
+
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE "Profiles" AS profile
+                SET "AccentHex" = @AccentHex, "UpdatedAt" = now()
+                FROM "Accounts" AS account
+                WHERE account."Id" = @AccountId
+                  AND account."PwaMainProfileId" = profile."Id"
+                  AND profile."OwnerAccountId" = account."Id";
+                """;
+            sql.Parameters.Add(new AccountParameters(Auth.AccountId!.Value));
+            sql.Parameters.Add(new SavePwaAccentDataV1(accent));
+            if (await Context.ExecuteAsyncForAffectedRows(sql, CancellationToken) != 1)
+                throw new KeyNotFoundException("No owned main profile is available for this account.");
+            return new UpdateResult(true);
+        }
+    }
+
 }
