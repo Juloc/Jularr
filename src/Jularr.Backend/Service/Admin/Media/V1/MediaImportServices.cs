@@ -38,7 +38,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         {
             var json = await MediaImportText.ReadAsync(Data, CancellationToken);
             var items = MediaImportParser.Parse(json);
-            var plan = await _planner.PlanAsync(Context, items, Data, SearchesPerPreview, CancellationToken, OnItemProgressAsync);
+            // Bulk lists can be queued for durable per-item discovery; keep the
+            // interactive preview short instead of spending minutes on Open Library.
+            var searchBudget = items.Count >= 100 ? 8 : SearchesPerPreview;
+            var plan = await _planner.PlanAsync(Context, items, Data, searchBudget, CancellationToken, OnItemProgressAsync);
             var profiles = await Context.ExecuteBatchAsync((ctx, ct) => MediaImportQueries.ReadProfilesAsync(ctx, ct), CancellationToken);
             var libraries = await Context.ExecuteBatchAsync((ctx, ct) => MediaImportQueries.ReadLibrariesAsync(ctx, ct), CancellationToken);
             var rows = plan.Rows.Select(row => new MediaImportRowV1(row.Item.Index, row.Item.TypeKey, row.Item.Type, row.Item.Subtype, row.Item.Title, row.Item.Year, row.Item.Creator, row.Status, row.Problem, row.ProblemDetail,
