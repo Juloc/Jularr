@@ -458,34 +458,10 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
             // External lookup and metadata import precede the short atomic profile write.
             var workId = await _catalog.ImportAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
-            await Context.ExecuteBatchAsync(async (ctx, ct) =>
-            {
-                var sql = new SqlStatement();
-                sql.Statement = """
-                    SELECT profile."AutoRequestOnFavorite", profile."UiLocaleId",
-                        EXISTS (SELECT 1 FROM "WatchlistEntries" AS existing
-                            WHERE existing."ProfileId" = profile."Id" AND existing."WorkId" = @WorkId) AS "AlreadyFavorite",
-                        EXISTS (SELECT 1 FROM "InstanceModules" AS module
-                            WHERE module."Key" = 'Requests' AND module."IsEnabled") AS "RequestsEnabled"
-                    FROM "Profiles" AS profile
-                    WHERE profile."Id" = @ProfileId
-                    FOR UPDATE OF profile;
-                    """;
-                sql.Parameters.Add(new { ProfileId = Auth.ProfileId!.Value, WorkId = workId });
-                var preference = await ctx.ReadRequiredAsync<FavoriteRequestPreference>(sql, ct);
-                await ctx.UpdateWatchlistAsync(new WatchlistData(Auth.ProfileId!.Value, workId), true, ct);
-
-                // Opt-in, only for a NEW favorite while Requests is enabled.
-                // Uses the normal quota, moderation, language and Wanted creation rules.
-                if (preference.AutoRequestOnFavorite && !preference.AlreadyFavorite && preference.RequestsEnabled)
-                {
-                    var (_, newlyApproved) = await ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(
-                        workId, Auth.ProfileId!.Value, Auth.AccountId!.Value, preference.UiLocaleId,
-                        null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct);
-                    _newlyApproved = newlyApproved;
-                }
-                return true;
-            }, CancellationToken);
+            _newlyApproved = await Context.ExecuteBatchAsync(
+                (ctx, ct) => ctx.UpdateFavoriteWithRequestAsync(
+                    new WatchlistData(Auth.ProfileId!.Value, workId), true, Auth.AccountId!.Value,
+                    Auth.AccountRoleTypeId == AccountRoleType.Owner, ct), CancellationToken);
             return new FavoriteDiscoverResultV1(workId);
         }
 
@@ -494,7 +470,6 @@ namespace Jularr.Backend.Service.User.Discover.V1
             if (_newlyApproved) _searchSignal.RequestSearch();
         }
 
-        private sealed record FavoriteRequestPreference(bool AutoRequestOnFavorite, long UiLocaleId, bool AlreadyFavorite, bool RequestsEnabled);
     }
 
     // A read-only, provider-backed snapshot for the regular Details Razor page.
