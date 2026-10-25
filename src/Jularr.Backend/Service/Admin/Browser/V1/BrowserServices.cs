@@ -86,9 +86,11 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
                     break;
                 case "update":
                 case "repair":
-                    if (!_packages.Enabled && _packages.State != "failed") throw new DataValidationException(nameof(Data.Action), "not_allowed");
-                    // The worker performs installation; stop Chrome before replacing its binary.
+                    if (!_packages.OwnsRuntime || (!_packages.Enabled && _packages.State != "failed"))
+                        throw new DataValidationException(nameof(Data.Action), "not_allowed");
+                    // Prevent a concurrent source request from restarting Chrome during replacement.
                     await _browser.StopAsync();
+                    _packages.Enabled = false;
                     _packages.RequestRefresh(repair: Data.Action == "repair");
                     break;
                 case "read":
