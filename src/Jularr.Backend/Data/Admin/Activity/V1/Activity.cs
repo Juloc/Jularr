@@ -12,15 +12,19 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 {
     public sealed class ReadActivityParametersV1 : BaseParameters
     {
-        public ReadActivityParametersV1(ActivityFilterType activityFilterTypeId = ActivityFilterType.All, int page = 1, int pageSize = 25)
+        public ReadActivityParametersV1(ActivityFilterType activityFilterTypeId = ActivityFilterType.All, int page = 1, int pageSize = 25, bool torrentOnly = false)
         {
             ActivityFilterTypeId = activityFilterTypeId;
+            TorrentOnly = torrentOnly;
             Page = page;
             PageSize = pageSize;
         }
 
         [DataField(typeof(OperationFields), nameof(OperationFields.ActivityFilterTypeId))]
         public ActivityFilterType ActivityFilterTypeId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.TorrentOnly))]
+        public bool TorrentOnly { get; }
 
         public int Page { get; }
         public int PageSize { get; }
@@ -40,11 +44,13 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     public sealed class ActivityItemV1 : BaseResponse
     {
         public ActivityItemV1(long id, OperationType operationTypeId, OperationStatusType operationStatusTypeId, string title, long? workId, string? workTitle, int? progressPercent,
-            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false, string? indexerName = null, long? bytesPerSecond = null)
+            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false, string? indexerName = null, long? bytesPerSecond = null, bool canBrowseFiles = false, long? sabnzbdConnectionId = null)
         {
             IndexerName = indexerName;
             BytesPerSecond = bytesPerSecond;
             CanPause = canPause;
+            CanBrowseFiles = canBrowseFiles;
+            SabnzbdConnectionId = sabnzbdConnectionId;
             CanRetryImport = canRetryImport;
             IsWaiting = isWaiting;
             CanImportManually = canImportManually;
@@ -126,6 +132,14 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // SABnzbd can be told to wait while the download runs.
         [DataField(typeof(OperationFields), nameof(OperationFields.CanPause))]
         public bool CanPause { get; }
+
+        // A torrent shows individual file progress; SABnzbd opens its guarded folder browser.
+        [DataField(typeof(OperationFields), nameof(OperationFields.CanPause))]
+        public bool CanBrowseFiles { get; }
+
+        // Only the SABnzbd client ID, never its credentials or filesystem path.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
+        public long? SabnzbdConnectionId { get; }
 
         // A waiting download is read again on request.
         [DataField(typeof(OperationFields), nameof(OperationFields.CanRetryImport))]

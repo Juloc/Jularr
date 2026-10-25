@@ -130,7 +130,13 @@ namespace Jularr.Backend.Logic.Acquisition
         // Equal releases from several queries are one candidate with every stage that found it.
         public static ReleaseOffer Merge(ReleaseOffer existing, ReleaseOffer found) =>
             new(existing.Title, existing.ConnectionId, existing.ConnectionName, existing.ConnectionPriority, existing.Guid, existing.DownloadUri, existing.InfoUrl, existing.SizeBytes,
-                existing.PublishedAt, [.. existing.Stages.Union(found.Stages)]);
+                existing.PublishedAt, [.. existing.Stages.Union(found.Stages)])
+            {
+                Transport = existing.Transport == DownloadTransport.Torrent || found.Transport == DownloadTransport.Torrent
+                    ? DownloadTransport.Torrent : DownloadTransport.Usenet,
+                IndexerFlags = [.. existing.IndexerFlags.Union(found.IndexerFlags)],
+                IsPart = existing.IsPart || found.IsPart
+            };
 
         public static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, UnitScope? scope, IEnumerable<ReleaseOffer> offers, string? focusLanguage = null)
         {

@@ -238,6 +238,34 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Targets_EveryTitleWithFilesGetsAPausedOne_InTheLibraryOfItsFiles_AndNothingElse()
+        {
+            await using var host = await CreateAsync();
+            await SeedAsync(host);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (907, 1, 'Eta'), (908, 1, 'Theta');
+                INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (904, 904), (907, 907);
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (904, 904, 904), (907, 907, 907);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (904, 904, 904, 1), (907, 907, 907, 1);
+                INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "MissingSince") VALUES
+                    (904, 802, 'Delta (2021)/Delta.mkv', 2000000000, now(), now(), 904, NULL),
+                    (907, 802, 'Eta/Eta.mkv', 2000000000, now(), now(), 907, now());
+                """);
+
+            await using var scope = host.Services.CreateAsyncScope();
+            var job = scope.ServiceProvider.GetRequiredService<Jularr.Backend.Service.System.Media.V1.EnsureWantedTargetsV1>();
+            var result = await job.ExecuteAsync<UpdateResult>(new Jularr.Backend.Data.System.Media.V1.CoverParametersV1(), default);
+            Assert.IsFalse(result.Success, "One pass was enough.");
+
+            // Delta has files and gets a target; Eta's file is missing, Theta has none, Zeta is a game and Alpha already has its own.
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" WHERE "WorkId" = 904 AND "IsPaused" AND "LibraryRootId" = 802"""));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" WHERE "WorkId" IN (907, 908)"""));
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" WHERE "WorkId" = 906"""));
+            Assert.AreEqual(801L, await host.ScalarAsync("""SELECT "LibraryRootId" FROM "WantedItems" WHERE "WorkId" = 901"""));
+            Assert.IsFalse((bool)(await host.ScalarAsync("""SELECT "IsPaused" FROM "WantedItems" WHERE "WorkId" = 901"""))!);
+        }
+
+        [TestMethod]
         [DataRow("monitoring")]
         [DataRow("profile")]
         [DataRow("library")]

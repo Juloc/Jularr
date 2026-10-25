@@ -24,8 +24,10 @@ using Jularr.Backend.Service.Admin.Provider.V1;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Sabnzbd;
+using Jularr.Integrations.Data.Qbittorrent;
 using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Storage;
@@ -352,19 +354,19 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             using var lease = paths.TryStartJob(download.OperationId);
             if (lease is null) return new UpdateResult(false);
-            var waiting = Path.Combine(paths.Incomplete(download.OperationId), WaitingName);
+            var waiting = Path.Combine(paths.Incomplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId), WaitingName);
             if (File.Exists(waiting) && _time.GetUtcNow().UtcDateTime - File.GetLastWriteTimeUtc(waiting) < WaitingRest) return new UpdateResult(false);
             return new UpdateResult(await RunAsync(download, connection, paths));
         }
 
         private async Task<bool> RunAsync(DownloadData download, AcquisitionConnectionData connection, DownloadStoragePaths paths)
         {
-            var staging = paths.Incomplete(download.OperationId);
+            var staging = paths.Incomplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId);
             UsenetPassResult pass;
             try
             {
-                pass = paths.IsComplete(download.OperationId)
-                    ? new UsenetPassResult(UsenetPassState.Completed, 100, 0, 0, outputPath: paths.Complete(download.OperationId))
+                pass = paths.IsComplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId)
+                    ? new UsenetPassResult(UsenetPassState.Completed, 100, 0, 0, outputPath: paths.Complete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId))
                     : await _jobs.RunAsync(connection, staging, _time.GetUtcNow() + PassLength, CancellationToken, paths, download.OperationId);
             }
             catch (UsenetException exception) when (exception.Failure == UsenetFailure.Unauthorized)
@@ -415,7 +417,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     try
                     {
                         var extensions = LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId);
-                        var complete = await paths.CompleteAsync(download.OperationId, pass.OutputPath!, extensions, CancellationToken);
+                        var complete = await paths.CompleteAsync(download.OperationId, pass.OutputPath!, extensions, CancellationToken, download.MediaTypeId, download.MediaSubtypeId);
                         var state = new StorageScanState();
                         var files = StorageFileSystem.EnumerateFiles(complete, extensions, state, CancellationToken).ToArray();
                         await _import.PlaceAsync(Context, download, new LocalStorageFiles(complete), new ImportSourceRef(null, complete, ""), files, state.IsComplete, CancellationToken);
@@ -470,17 +472,19 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private static readonly TimeSpan InterruptedRetry = TimeSpan.FromMinutes(30);
         private const int DirectPerCycle = 5;
         private readonly SabnzbdClient _sabnzbd;
+        private readonly QbittorrentClient _qbittorrent;
         private readonly IDataProtector _protector;
         private readonly TimeProvider _time;
         private readonly DownloadImport _import;
         private readonly StorageAccess _storage;
         private readonly RunDirectDownloadJobV1 _runner;
 
-        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, DownloadImport import, IDataProtectionProvider protection, TimeProvider time, StorageAccess storage, RunDirectDownloadJobV1 runner)
+        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadImport import, IDataProtectionProvider protection, TimeProvider time, StorageAccess storage, RunDirectDownloadJobV1 runner)
         {
             _runner = runner;
             _storage = storage;
             _sabnzbd = sabnzbd;
+            _qbittorrent = qbittorrent;
             _import = import;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
             _time = time;
@@ -514,6 +518,74 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     continue;
                 }
 
+                // A torrent client reports the state of its torrents; the finished file is read from its folder.
+                if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent)
+                {
+                    var torrentClient = new QbittorrentConnection(connection.HttpAddress, connection.Username,
+                        AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedPassword));
+                    QbittorrentSnapshot snapshot;
+                    try
+                    {
+                        var hashes = group.Select(download => download.ExternalId).OfType<string>().ToArray();
+                        snapshot = await _qbittorrent.GetSnapshotAsync(torrentClient, hashes, CancellationToken);
+                    }
+                    catch (Exception exception) when (exception is HttpRequestException or QbittorrentException or JsonException
+                        || exception is TaskCanceledException && !CancellationToken.IsCancellationRequested)
+                    {
+                        continue;
+                    }
+
+                    var torrents = snapshot.Torrents.ToDictionary(torrent => torrent.Hash, StringComparer.Ordinal);
+                    var torrentProgress = group.Where(download => download.ExternalId is not null && torrents.ContainsKey(download.ExternalId!))
+                        .Select(download =>
+                        {
+                            var torrent = torrents[download.ExternalId!];
+                            return new
+                            {
+                                download.OperationId,
+                                ProgressPercent = (int?)Math.Clamp((int)Math.Round(torrent.Progress * 100), 0, 99),
+                                SizeBytes = (long?)torrent.SizeBytes,
+                                RemainingBytes = (long?)Math.Max(0, torrent.SizeBytes - torrent.DownloadedBytes),
+                                EtaSeconds = torrent.DownloadSpeed > 0
+                                    ? (int?)Math.Min(int.MaxValue, Math.Ceiling((double)Math.Max(0, torrent.SizeBytes - torrent.DownloadedBytes) / torrent.DownloadSpeed))
+                                    : null,
+                                DownloadStateTypeId = (byte)DownloadLogic.ReadDownloadState(torrent.IsPaused ? "Paused" : torrent.IsFailed ? "Failed" : "Downloading")
+                            };
+                        })
+                        .ToArray();
+                    if (torrentProgress.Length > 0)
+                    {
+                        await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                        {
+                            await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(JsonSerializer.Serialize(torrentProgress)), ct);
+                            return true;
+                        }, CancellationToken);
+                    }
+
+                    foreach (var download in group)
+                    {
+                        if (download.ExternalId is not { } hash || !torrents.TryGetValue(hash, out var torrent))
+                        {
+                            if (_time.GetUtcNow().UtcDateTime - download.StartedAt > LostAfter)
+                                await _import.FailAsync(Context, download.OperationId, DownloadLogic.InterruptedReasonKey,
+                                    _time.GetUtcNow().UtcDateTime + InterruptedRetry, CancellationToken);
+                            continue;
+                        }
+
+                        if (torrent.IsFailed)
+                        {
+                            await _import.FailAsync(Context, download.OperationId, DownloadLogic.InterruptedReasonKey,
+                                _time.GetUtcNow().UtcDateTime + InterruptedRetry, CancellationToken);
+                        }
+                        else if (torrent.IsCompleted)
+                        {
+                            // Import only the exact hash registered by the grab, never an adjacent torrent.
+                            await ImportAsync(download, connection, torrent.ContentPath);
+                        }
+                    }
+
+                    continue;
+                }
                 var client = new SabnzbdConnection(connection.HttpAddress, AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey));
                 SabnzbdQueueSnapshot queue;
                 SabnzbdHistorySnapshot history;
@@ -569,7 +641,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
 
             // Whether downloads are still running tells the worker how soon to look again.
-            return new UpdateResult(downloads.Count > 0);
+            var cleanups = await _import.ProcessCleanupAsync(Context, CancellationToken);
+            return new UpdateResult(downloads.Count > 0 || cleanups > 0);
         }
 
         private async Task RecoverAsync(DownloadData download, SabnzbdConnection client)
@@ -655,6 +728,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             // Read the job below the mapped folder without following links.
             IReadOnlyList<StorageFile> files;
+            IReadOnlyList<StorageFile>? allSourceFiles = null;
             StorageFiles source;
             string sourceDirectory;
             long? sourceMountId = null;
@@ -687,12 +761,14 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 {
                     sourceDirectory = path;
                     var found = new List<StorageFile>();
-                    await foreach (var file in source.EnumerateFilesAsync(path, LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId), state, CancellationToken))
+                    await foreach (var file in source.EnumerateFilesAsync(path, null, state, CancellationToken))
                     {
                         found.Add(file);
                     }
 
-                    files = found;
+                    allSourceFiles = found;
+                    var extensions = LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId);
+                    files = extensions is null ? found : found.Where(file => extensions.Contains(Path.GetExtension(file.RelativePath).ToLowerInvariant())).ToArray();
                 }
             }
             catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
@@ -701,7 +777,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            await _import.PlaceAsync(Context, download, source, new ImportSourceRef(sourceMountId, sourceRoot, sourceDirectory), files, state.IsComplete, CancellationToken);
+            await _import.PlaceAsync(Context, download, source, new ImportSourceRef(sourceMountId, sourceRoot, sourceDirectory), files, state.IsComplete, CancellationToken, allSourceFiles);
         }
 
 
@@ -754,14 +830,14 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         // Jularr downloads direct-source books itself into staging, then imports them like any other job.
         private async Task DownloadDirectAsync(DownloadData download, AcquisitionConnectionData connection, DownloadStoragePaths paths)
         {
-            var staging = paths.Incomplete(download.OperationId);
+            var staging = paths.Incomplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId);
             var name = "book." + DirectSources.Format(download.ExternalId ?? "");
             var path = Path.Combine(staging, name);
-            if (!paths.IsComplete(download.OperationId) && !File.Exists(path))
+            if (!paths.IsComplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId) && !File.Exists(path))
             {
                 try
                 {
-                    await paths.PrepareIncompleteAsync(download.OperationId, CancellationToken);
+                    await paths.PrepareIncompleteAsync(download.OperationId, CancellationToken, download.MediaTypeId, download.MediaSubtypeId);
                     File.Delete(path + ".part");
                     await _direct.DownloadAsync(connection, download, path + ".part", paths, CancellationToken);
                     // A file of an earlier attempt is replaced; it never stays beside the new one.
@@ -807,7 +883,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             try
             {
-                var complete = await paths.CompleteAsync(download.OperationId, staging, LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId), CancellationToken);
+                var complete = await paths.CompleteAsync(download.OperationId, staging, LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId), CancellationToken, download.MediaTypeId, download.MediaSubtypeId);
                 var file = new FileInfo(Path.Combine(complete, name));
                 await _import.PlaceAsync(Context, download, new LocalStorageFiles(complete), new ImportSourceRef(null, complete, ""), [new StorageFile(name, file.Length, file.LastWriteTimeUtc)], true, CancellationToken);
             }

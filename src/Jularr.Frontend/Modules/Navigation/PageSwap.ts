@@ -1,5 +1,5 @@
 import htmx from "htmx.org";
-import { staysInApp } from "./Navigation";
+import { hasNewBuild, redirectedToSignIn, signInForExpiredPage, staysInApp } from "./Navigation";
 
 // The settle step temporarily copies every old attribute, including control values.
 // Focused inputs then keep that stale value. Native SCSS transitions need no such step.
@@ -27,9 +27,35 @@ document.addEventListener("htmx:before:init", event => {
     }
 });
 
+// Expired authentication is a normal full navigation, never an htmx region swap.
+// POST is not repeated: after signing in, return to the current GET page instead.
+document.addEventListener("htmx:after:request", event => {
+    const ctx = contextOf(event);
+    if (ctx.response?.raw.status !== 401) return;
+    // Replace the invalid session entry, or Android/iOS Back would return to a 401 loop.
+    location.replace(signInForExpiredPage(ctx.request.method, ctx.request.action, location));
+});
+
 // A response that is not an app page (sign-in after expiry, a redirect to another shell) is loaded as a page.
 document.addEventListener("htmx:before:swap", event => {
     const ctx = contextOf(event);
+    if (ctx.response?.raw.status === 401) {
+        event.preventDefault();
+        return;
+    }
+    // A browser that followed the redirect has a successful HTTP response, but it is still the login shell.
+    if (redirectedToSignIn(ctx.response?.raw.url, ctx.request.action, location)) {
+        event.preventDefault();
+        location.replace(signInForExpiredPage(ctx.request.method, ctx.request.action, location));
+        return;
+    }
+    // Never swap HTML from a new release into the old document's CSS and JavaScript.
+    // A mutation has already happened on POST, so navigate to the current GET page instead of repeating the action.
+    if (hasNewBuild(document.documentElement.dataset.build, ctx.text)) {
+        event.preventDefault();
+        location.assign(ctx.request.method === "GET" ? (ctx.response?.raw.url || ctx.request.action) : location.href);
+        return;
+    }
     if (!isPageSwap(ctx) || /id="app-content"[^>]*data-shell="app"/.test(ctx.text ?? "")) return;
     event.preventDefault();
     location.assign(ctx.response?.raw.url || ctx.request.action);

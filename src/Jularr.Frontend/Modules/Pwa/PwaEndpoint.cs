@@ -27,6 +27,13 @@ namespace Jularr.Frontend.Modules.Pwa
                 http.Response.Headers.CacheControl = "no-cache";
                 return Results.Text(Manifest(assets), "application/manifest+json");
             }).AllowAnonymous();
+            // The running frontend's build identity is public, contains no account state and is never cached.
+            // A standalone PWA checks it when resumed; the user decides when a new build may replace the current document.
+            endpoints.MapGet("/pwa/version", (HttpContext http, FrontendAssets assets) =>
+            {
+                http.Response.Headers.CacheControl = "no-store";
+                return Results.Json(new { build = assets.BuildId });
+            }).AllowAnonymous();
             endpoints.MapGet("/service-worker.js", (HttpContext http) =>
             {
                 http.Response.Headers.CacheControl = "no-cache";

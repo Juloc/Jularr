@@ -33,7 +33,9 @@ using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Nas;
 using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Newznab;
+using Jularr.Integrations.Logic.Nyaa;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Logic.Servarr;
 using Jularr.Integrations.Logic.Tmdb;
 using Jularr.Integrations.Logic.Tvdb;
@@ -230,17 +232,21 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<MusicMetadata>();
             services.TryAddTransient<GameMetadata>();
             services.TryAddTransient<DirectSources>();
+            services.TryAddTransient<NyaaSources>();
             services.TryAddTransient<SubtitleProviders>();
             services.TryAddTransient<Jularr.Backend.Service.Admin.Acquisition.V1.AcquisitionConnectionProbe>();
             services.TryAddTransient<HealthProbes>();
             services.TryAddTransient<SubtitleFiles>();
             services.TryAddTransient<DownloadImport>();
             services.TryAddSingleton<UsenetDownloader>();
+            services.TryAddSingleton<DirectDownloadCleanup>();
             services.TryAddSingleton<ArchiveTools>();
             services.TryAddSingleton<PostgresBackupTools>();
             services.TryAddTransient<UsenetJob>();
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
-            services.AddSingleton<ISourceBrowser>(provider => new SourceBrowser(provider.GetRequiredService<IOptions<BrowserOptions>>().Value));
+            services.TryAddSingleton(provider => new BrowserPackages(provider.GetRequiredService<IOptions<BrowserOptions>>().Value));
+            services.AddSingleton<ISourceBrowser>(provider => new SourceBrowser(provider.GetRequiredService<IOptions<BrowserOptions>>().Value,
+                provider.GetRequiredService<BrowserPackages>()));
             services.TryAddTransient<ReadingContent>();
             services.TryAddTransient<ReadingDerivation>();
             services.TryAddSingleton<ReadingActivity>();
@@ -346,8 +352,10 @@ namespace Jularr.Backend.Service.Core
             AddClient<TmdbClient>(services, 15, 4, baseAddress: providers.Tmdb, provider: "tmdb");
             AddClient<TvdbClient>(services, 15, 4, baseAddress: providers.Tvdb, provider: "tvdb");
             AddClient<SabnzbdClient>(services, 15, 16);
+            AddClient<QbittorrentClient>(services, 15, 16);
             AddClient<OpenSubtitlesClient>(services, 30, 12, agent: true);
             AddClient<SubDlClient>(services, 30, 12, agent: true);
+    AddClient<NyaaClient>(services, 30, 16, agent: true, handler: PublicNetwork.CreateHandler);
 
             // Covers come from the providers' image hosts only, over public addresses.
             var covers = new CoverMirrors(new Dictionary<string, Uri>(providers.Images, StringComparer.OrdinalIgnoreCase));

@@ -82,17 +82,21 @@ export function initializeBookRenderer(reader: HTMLElement) {
         const print = printing(at, columns === 1 || side === 'left' ? 0 : 1);
         if (!print) return;
         const place = printPlacement(profile(at, side), side, width / 148);
-        const gap = columns === 2 && side === 'right' ? (parseFloat(getComputedStyle(adapter.group(at)!.source).columnGap) || 0) / 2 : 0;
-        const printLeft = gap + place.shift;
-        print.style.left = `${printLeft}px`;
+        print.style.left = `${place.shift}px`;
         print.style.top = `${place.top}px`;
-        // Native browser glyphs follow the *same* curved surface as the page.
-        // This decorates the existing measured print, never changing line breaks,
-        // font size, canonical pages or their count.
+        // The paper curve moves the printed text, not the page number.
+        // Centre the footer on the physical sheet rather than its shifted text viewport.
+        const footer = print.querySelector<HTMLElement>('[data-book-number]');
+        if (footer) {
+            const printWidth = parseFloat(print.style.width) || width;
+            footer.style.left = `${direction() * ((width - printWidth) / 2 - place.shift)}px`;
+        }
+        // Bend the native text ink along the physical paper while preserving
+        // the existing page number's centered sheet coordinates and text flow.
         const section = profile(at, side);
         for (const ink of Array.from(print.querySelectorAll<HTMLElement>('[data-paper-ink]'))) {
             const x = Number(ink.dataset.paperX), spanWidth = Number(ink.dataset.paperWidth);
-            const pose = paperInkPose(section, side === 'left' ? 'left' : 'right', width, printLeft + x, spanWidth);
+            const pose = paperInkPose(section, side === 'left' ? 'left' : 'right', width, place.shift + x, spanWidth);
             ink.style.transform = `translateY(${pose.y.toFixed(3)}px) rotate(${pose.angle.toFixed(3)}deg)`;
         }
         return print;

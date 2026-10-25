@@ -165,6 +165,11 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
+          # Parallel dotnet test launches share one ready runtime directory. Without
+          # initialization the NuGet-Migrations mutex can race in /run/user/.../shm.
+          export XDG_RUNTIME_DIR="${RUNNER_TEMP}/jularr-dotnet-runtime"
+          install -d -m 0700 "${XDG_RUNTIME_DIR}" "${XDG_RUNTIME_DIR}/.dotnet" "${XDG_RUNTIME_DIR}/.dotnet/shm"
+          dotnet --info >/dev/null
           mapfile -t lanes < <(python3 scripts/ci-shard-tests.py plan --kind backend --shard "${SHARD}" --lanes 2 --reserve 4=150)
           pids=()
           for index in "${!lanes[@]}"; do

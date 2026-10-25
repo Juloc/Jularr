@@ -45,6 +45,19 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Version_IsPublicNeverCached_AndMatchesFrontendBuild()
+        {
+            await using var app = await StartAsync();
+            using var response = await app.GetTestClient().GetAsync("/pwa/version");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            Assert.AreEqual("application/json", response.Content.Headers.ContentType?.MediaType);
+            Assert.AreEqual("no-store", response.Headers.CacheControl?.ToString());
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var build = app.Services.GetRequiredService<FrontendAssets>().BuildId;
+            Assert.AreEqual(build, document.RootElement.GetProperty("build").GetString());
+        }
+
+        [TestMethod]
         public async Task Worker_IsServedFromTheRootWithScope_NeverCached_AndPassesEveryRequestThrough()
         {
             await using var app = await StartAsync();
@@ -69,13 +82,18 @@ namespace Jularr.Backend.Tests
             using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
             var loginHtml = await login.Content.ReadAsStringAsync();
             AssertInstallTags(loginHtml);
+            var build = host.Services.GetRequiredService<FrontendAssets>().BuildId;
+            StringAssert.Matches(build, new System.Text.RegularExpressions.Regex("^[0-9A-F]{16}$"));
+            StringAssert.Contains(loginHtml, "data-build=\"" + build + "\"");
 
             var form = new Dictionary<string, string> { ["Username"] = "a@example.test", ["Password"] = "test-password-123", ["__RequestVerificationToken"] = LibraryTests.Token(loginHtml) };
             using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", form);
             Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
             using var home = await host.SendAsync(HttpMethod.Get, "/Settings");
             Assert.AreEqual(HttpStatusCode.OK, home.StatusCode);
-            AssertInstallTags(await home.Content.ReadAsStringAsync());
+            var homeHtml = await home.Content.ReadAsStringAsync();
+            AssertInstallTags(homeHtml);
+            StringAssert.Contains(homeHtml, "data-build=\"" + build + "\"");
         }
 
         // Only the two public files, over the real frontend assets: they need no database.

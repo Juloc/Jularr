@@ -31,6 +31,61 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class BookTests
     {
+        [TestMethod]
+        public void BookDocumentLanguages_VerifiesExplicitEpubMetadataWithoutGuessing()
+        {
+            var bytes = ReadingTests.BuildEpub("Pride and Prejudice");
+            using var data = new MemoryStream(bytes);
+            CollectionAssert.AreEqual(new[] { "EN" }, BookDocumentLanguages.ReadEpub(data));
+
+            var strict = new QualityProfile("strict", "Strict", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true, LanguageOrder = ["DE"], LanguageFallback = LanguageFallbackType.None
+            };
+            Assert.IsTrue(BookDocumentLanguages.ContradictsStrictProfile(strict, ["EN"]));
+            Assert.IsFalse(BookDocumentLanguages.ContradictsStrictProfile(strict, ["DE", "EN"]));
+            Assert.IsFalse(BookDocumentLanguages.ContradictsStrictProfile(strict, []));
+            Assert.AreEqual("import_book_language_unknown", BookDocumentLanguages.StrictEpubAttentionReason(strict, []));
+            Assert.AreEqual("import_book_language_mismatch", BookDocumentLanguages.StrictEpubAttentionReason(strict, ["EN"]));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(strict, ["DE"]));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(strict, ["DE", "EN"]));
+            var flexible = new QualityProfile("flexible", "Flexible", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true, LanguageOrder = ["DE"], LanguageFallback = LanguageFallbackType.Any
+            };
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(flexible, []));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(flexible, ["EN"]));
+            using var unknown = new MemoryStream("not an epub"u8.ToArray());
+            CollectionAssert.AreEqual(Array.Empty<string>(), BookDocumentLanguages.ReadEpub(unknown));
+        }
+
+        [TestMethod]
+        public void StrictEpubWithoutLanguageMetadata_RequiresManualReview()
+        {
+            using var stream = new MemoryStream(ReadingTests.BuildEpub("Unlabelled document"));
+            using (var archive = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Update, leaveOpen: true))
+            {
+                var opf = archive.GetEntry("OEBPS/content.opf")!;
+                string xml;
+                using (var reader = new StreamReader(opf.Open(), leaveOpen: false))
+                {
+                    xml = reader.ReadToEnd();
+                }
+                opf.Delete();
+                using var writer = new StreamWriter(archive.CreateEntry("OEBPS/content.opf").Open());
+                writer.Write(xml.Replace("<dc:language>en</dc:language>", "", StringComparison.Ordinal));
+            }
+
+            stream.Position = 0;
+            var actual = BookDocumentLanguages.ReadEpub(stream);
+            CollectionAssert.AreEqual(Array.Empty<string>(), actual);
+            var strict = new QualityProfile("strict", "Strict", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true, LanguageOrder = ["DE"], LanguageFallback = LanguageFallbackType.None
+            };
+            Assert.AreEqual("import_book_language_unknown", BookDocumentLanguages.StrictEpubAttentionReason(strict, actual));
+        }
+
         private const string Connections = "/api/v1/admin/acquisition/connections";
 
         [TestMethod]
@@ -213,11 +268,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("download_failed", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""));
             Assert.IsFalse(Directory.Exists(Path.Combine(storage.Path, "1", "Books", "Jane Austen")));
             Assert.AreEqual(0, Directory.EnumerateFiles(downloads.Path, "*", SearchOption.AllDirectories).Count(),
-                "A rejected ebook must not leave files of any extension, including .part.");
+                "A rejected ebook must not leave payloads or .part files.");
             var operationId = (await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2 LIMIT 1"))!.ToString();
             Assert.IsFalse(Directory.EnumerateDirectories(downloads.Path, "*", SearchOption.AllDirectories)
-                .Any(directory => Path.GetFileName(directory) == operationId),
-                "A terminal operation must not leave an empty complete or incomplete staging folder.");
+                .Any(directory => Path.GetFileName(directory) is { } name && (name == operationId || name == "j-" + operationId)),
+                "A terminal operation must not leave complete or incomplete staging folders.");
             using var activity = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=Queue");
             Assert.AreEqual(OperationType.Download, (await activity.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single().OperationTypeId);
             Assert.AreEqual(wantedId, (long)(await host.ScalarAsync("SELECT \"WantedItemId\" FROM \"AcquisitionReleases\""))!);

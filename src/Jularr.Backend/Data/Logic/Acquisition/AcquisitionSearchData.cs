@@ -96,6 +96,14 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string Key => $"{Mode}|{Text?.ToLowerInvariant()}|{string.Join('&', Parameters.Select(pair => $"{pair.Key}={pair.Value}"))}|{(AnyCategory ? "any" : "cat")}";
     }
 
+    // The transport an offer requires, independent of the source that found it.
+    // Future source adapters explicitly set this instead of making the download scheduler guess from URLs.
+    internal enum DownloadTransport : byte
+    {
+        Usenet = 1,
+        Torrent = 2
+    }
+
     // One normalized release found by an indexer; the download link never leaves the server.
     internal sealed class ReleaseOffer
     {
@@ -124,6 +132,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public DateTimeOffset? PublishedAt { get; }
         public IReadOnlyList<string> Stages { get; }
         public IReadOnlyList<string> IndexerFlags { get; init; } = [];
+        public DownloadTransport Transport { get; init; } = DownloadTransport.Usenet;
 
         // The file is one part of a work; the rest of it is elsewhere.
         public bool IsPart { get; init; }

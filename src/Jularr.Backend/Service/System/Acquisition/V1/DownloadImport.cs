@@ -32,7 +32,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     // Shared by every downloader: plan, check, link or copy and assign; waits and failures are recorded the same way.
     internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, StorageAccess storage, TimeProvider time, SabnzbdClient sabnzbd, IDataProtectionProvider protection, WorkSignals signals)
     {
-        public async Task PlaceAsync(LogicContext context, DownloadData download, StorageFiles source, ImportSourceRef sourceRef, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct)
+        public async Task PlaceAsync(LogicContext context, DownloadData download, StorageFiles source, ImportSourceRef sourceRef, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct,
+            IReadOnlyList<StorageFile>? allSourceFiles = null)
         {
             var sourceDirectory = sourceRef.Directory;
             if (!isComplete)
@@ -109,16 +110,50 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
+            var acquisitionProfile = target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target);
+
+            // A trustworthy EPUB language tag can contradict a strictly configured source
+            // release. Hold the original file for the Owner instead of importing the wrong language.
+            // EPUBs without verifiable language metadata wait for manual review under strict profiles.
+            // PDFs have no reliable language reader here; selection still requires release language evidence.
+            if (acquisitionProfile is { IsBook: true, LanguageFallback: LanguageFallbackType.None, LanguageOrder.Length: > 0 })
+            {
+                try
+                {
+                    foreach (var placement in placements.Where(placement => placement.Extension.Equals(".epub", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        await using var book = await source.OpenReadAsync(StoragePath.Combine(sourceDirectory, placement.SourcePath), ct);
+                        var languageIssue = BookDocumentLanguages.StrictEpubAttentionReason(acquisitionProfile, BookDocumentLanguages.ReadEpub(book));
+                        if (languageIssue is not null)
+                        {
+                            await AttentionAsync(context, download.OperationId, languageIssue, null, ct);
+                            return;
+                        }
+                    }
+                }
+                catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+                {
+                    await AttentionAsync(context, download.OperationId, "import_source_unavailable", null, ct);
+                    return;
+                }
+            }
+
             var commit = await CommitAsync(context, new ImportCommitRequest(root, download.WorkId, download.GamePlatformId, placements, source, sourceDirectory, files, _ => facts,
-                ImportTransferMode.Link, download.OperationId, null, download.MediaTypeId, target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target)), ct);
+                ImportTransferMode.Link, download.OperationId, null, download.MediaTypeId, acquisitionProfile), ct);
             if (commit.FailureKey is { } failure)
             {
                 await AttentionAsync(context, download.OperationId, failure, null, ct);
                 return;
             }
 
-            // Its job leaves SABnzbd with its files, when the connection is set to; a library file placed by link stays.
-            await RemoveFromClientAsync(context, download.AcquisitionConnectionId, download.ExternalId, ct);
+            // Client-owned files are cleaned only after a complete inventory was supplied.
+            // A missing inventory (for example a single reported path) cannot prove there are no sidecars.
+            if (allSourceFiles is not null
+                && ImportPlacementLogic.AllSourceFilesSelected(allSourceFiles.Select(file => file.RelativePath), placements.Select(placement => placement.SourcePath)))
+            {
+                await RemoveFromClientAsync(context, download.AcquisitionConnectionId, download.ExternalId,
+                    DownloadSourceInventory.Fingerprint(allSourceFiles), ct);
+            }
         }
 
         // Links, copies or moves the planned files into the library and assigns them to their work; the failure key names what a person must settle, and nothing is left half done.
@@ -309,21 +344,139 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
         }
 
-        // Tidying is no reason to fail an import that worked: a client that cannot be reached keeps the job.
-        public async Task RemoveFromClientAsync(LogicContext context, long acquisitionConnectionId, string? externalId, CancellationToken ct)
+        // A completed import first records a durable cleanup request. The worker owns remote deletion and retry.
+        public async Task RemoveFromClientAsync(LogicContext context, long acquisitionConnectionId, string? externalId, string sourceFingerprint, CancellationToken ct)
         {
-            try
+            if (externalId is null || string.IsNullOrWhiteSpace(sourceFingerprint)) return;
+            await context.ExecuteBatchAsync(async (ctx, token) =>
             {
-                var connection = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadAcquisitionConnectionAsync(acquisitionConnectionId, token), ct);
-                if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd && connection.RemovesCompleted && externalId is { } nzoId)
+                await ctx.QueueImportedCleanupAsync(new DownloadCleanupKeyData(acquisitionConnectionId, externalId,
+                    sourceFingerprint: sourceFingerprint), token);
+                return true;
+            }, ct);
+            signals.Downloads.Notify();
+        }
+
+        // Retry only terminal history jobs. This never removes a job that remains in SABnzbd's active queue.
+        public async Task<int> ProcessCleanupAsync(LogicContext context, CancellationToken ct)
+        {
+            // Reconcile the durable download outcome after an interrupted enqueue.
+            await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                await ctx.QueueMissedDownloadCleanupsAsync(token);
+                return true;
+            }, ct);
+            var due = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadDueDownloadCleanupsAsync(token), ct);
+            var processed = 0;
+            foreach (var task in due)
+            {
+                if (!await context.ExecuteBatchAsync((ctx, token) => ctx.ClaimDownloadCleanupAsync(new DownloadCleanupAttemptData(task.Id), token), ct))
+                    continue;
+
+                processed++;
+                try
                 {
+                    var connection = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadAcquisitionConnectionAsync(task.AcquisitionConnectionId, token), ct);
+                    if (connection.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd)
+                    {
+                        await RescheduleAsync(task.Id, "cleanup_invalid_client");
+                        continue;
+                    }
+
                     var key = AcquisitionConnectionInput.Unprotect(protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose), connection.ProtectedApiKey);
-                    await sabnzbd.RemoveJobAsync(new SabnzbdConnection(connection.HttpAddress, key), nzoId, true, ct);
+                    var client = new SabnzbdConnection(connection.HttpAddress, key);
+                    var queued = await sabnzbd.GetQueueAsync(client, [task.ExternalId], ct);
+                    if (queued.Jobs.Count != 0)
+                    {
+                        await RescheduleAsync(task.Id, "cleanup_still_active");
+                        continue;
+                    }
+
+                    var history = await sabnzbd.GetHistoryAsync(client, [task.ExternalId], ct);
+                    var finished = history.Jobs.FirstOrDefault(job => job.NzoId == task.ExternalId);
+                    // A missing history entry was removed externally, so there is no job left to clean.
+                    if (finished is not null)
+                    {
+                        if (task.Reason == "imported" && !finished.IsCompleted
+                            || task.Reason == "failed" && !finished.IsFailed
+                            || task.Reason is not ("imported" or "failed"))
+                        {
+                            await RescheduleAsync(task.Id, "cleanup_status_mismatch");
+                            continue;
+                        }
+
+                        if (task.Reason == "imported" && (task.SourceFingerprint is null
+                            || !await DeleteImportedSourceAsync(context, connection, finished.StoragePath, task.SourceFingerprint, ct)))
+                        {
+                            // A changed folder (including additional files) is never auto-deleted.
+                            // Old unverified rows remain visible for manual resolution.
+                            await RescheduleAsync(task.Id, "cleanup_source_unverified");
+                            continue;
+                        }
+
+                        // Imported source files were already verified and removed locally.
+                        // Do not ask SABnzbd to delete that path again: a client may have
+                        // recreated it between the atomic local rename and history removal.
+                        await sabnzbd.RemoveHistoryJobAsync(client, task.ExternalId, task.Reason != "imported", ct);
+                    }
+
+                    await context.ExecuteBatchAsync(async (ctx, token) =>
+                    {
+                        await ctx.MarkDownloadCleanupDoneAsync(new DownloadCleanupAttemptData(task.Id), token);
+                        return true;
+                    }, ct);
+                }
+                catch (DataValidationException)
+                {
+                    // The provider directory or its inventory changed. Preserve source data
+                    // and leave the durable cleanup available for explicit reconciliation.
+                    await RescheduleAsync(task.Id, "cleanup_source_unverified");
+                }
+                catch (Exception exception) when (exception is HttpRequestException or SabnzbdException or JsonException
+                    or IOException or UnauthorizedAccessException or NasMountException
+                    || exception is TaskCanceledException && !ct.IsCancellationRequested)
+                {
+                    await RescheduleAsync(task.Id, "cleanup_client_unavailable");
                 }
             }
-            catch (Exception exception) when (exception is HttpRequestException or SabnzbdException || exception is TaskCanceledException && !ct.IsCancellationRequested)
+
+            return processed;
+
+            Task RescheduleAsync(long id, string reason) => context.ExecuteBatchAsync(async (ctx, token) =>
             {
+                await ctx.RetryDownloadCleanupAsync(new DownloadCleanupAttemptData(id, reason), token);
+                return true;
+            }, ct);
+        }
+
+        // A finished SABnzbd job can keep its completed source files after a successful hard-link import.
+        // Only the provider-reported path under the explicitly mapped download root is eligible.
+        private async Task<bool> DeleteImportedSourceAsync(LogicContext context, AcquisitionConnectionData connection,
+            string? reportedPath, string sourceFingerprint, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(reportedPath) || string.IsNullOrWhiteSpace(connection.RemotePath)
+                || ImportPlacementLogic.MapRemotePath(reportedPath, connection.RemotePath) is not { Length: > 0 } relative
+                || !connection.RemovesCompleted)
+                return false;
+
+            string root;
+            if (connection.DownloadStorageMountId is { } mountId)
+            {
+                if (string.IsNullOrWhiteSpace(connection.LocalPath)) return false;
+                var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(mountId, token), ct);
+                if (mount.IsReadOnly || storage.Open(mount) is not LocalStorageFiles local) return false;
+                root = local.ResolveDirectory(StoragePath.Check(connection.LocalPath));
             }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(connection.LocalPath) || !Path.IsPathFullyQualified(connection.LocalPath))
+                    return false;
+                root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(connection.LocalPath));
+                if (root == Path.GetPathRoot(root) || !Directory.Exists(root))
+                    return false;
+            }
+
+            return DownloadClientFileSafety.DeleteVerifiedCompleted(root, relative, sourceFingerprint);
         }
 
         // The first numbered alternative whose files are all free.
@@ -366,6 +519,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 await ctx.FailDownloadAsync(new DownloadFailureData(operationId, reasonKey, nextSearchAt), token);
+                await ctx.QueueFailedCleanupAsync(new DownloadCleanupOperationData(operationId), token);
                 return true;
             }, ct);
 

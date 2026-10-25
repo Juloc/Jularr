@@ -24,8 +24,24 @@ namespace Jularr.Backend.Service.User.Translation.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            var (sources, targets) = await _files.LanguagesAsync(CancellationToken);
-            return new TranslationLanguagesV1(sources, targets);
+            // A remote catalogue must never keep the Reader page waiting for the
+            // HTTP client's long default timeout. No negative result is cached:
+            // opening the Reader again can retry after Mozilla recovers.
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+            try
+            {
+                var (sources, targets) = await _files.LanguagesAsync(timeout.Token);
+                return new TranslationLanguagesV1(sources, targets);
+            }
+            catch (ServiceUnavailableException)
+            {
+                return new TranslationLanguagesV1([], []);
+            }
+            catch (OperationCanceledException) when (!CancellationToken.IsCancellationRequested)
+            {
+                return new TranslationLanguagesV1([], []);
+            }
         }
     }
 

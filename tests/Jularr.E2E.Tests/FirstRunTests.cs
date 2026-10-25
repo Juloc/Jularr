@@ -41,7 +41,11 @@ namespace Jularr.E2E.Tests
                     // The page itself is what is checked: covers of the real catalogs may load slowly or never in a test run.
                     var response = await page.GotoAsync(link, new() { WaitUntil = WaitUntilState.DOMContentLoaded });
                     Assert.IsNotNull(response, link);
-                    Assert.IsTrue(response.Status < 400, link + " answered " + response.Status);
+                    if (response.Status >= 400)
+                    {
+                        throw new InvalidOperationException("Menu route " + link + " returned HTTP " + response.Status
+                            + " (current URL " + page.Url + ")");
+                    }
                     Assert.AreEqual(1, await page.Locator("main").CountAsync(), link + " has no page content");
                 }
 

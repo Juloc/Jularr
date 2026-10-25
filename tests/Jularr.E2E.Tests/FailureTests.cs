@@ -107,7 +107,14 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator("[data-live=queue][data-live-text=errors]")).ToHaveTextAsync("1");
                 await Steps.FollowAsync(page, page.Locator(".list-toolbar").GetByRole(AriaRole.Link, new() { Name = "Errors", Exact = false }));
                 await Assertions.Expect(Steps.ListRow(page, "Download failed")).ToHaveCountAsync(1);
-                await Assertions.Expect(page.Locator(".list-toolbar .navigation-tabs__divider ~ .navigation-tabs__link")).ToHaveCountAsync(6);
+                var filters = page.GetByRole(AriaRole.Navigation, new() { Name = "Queue states", Exact = true });
+                foreach (var filter in new[] { "All", "Active", "Waiting", "Import", "Errors" })
+                {
+                    var address = filter == "All" ? "/Admin/Activity" : "/Admin/Activity?Filter=" + filter;
+                    await Assertions.Expect(filters.Locator(".navigation-tabs__divider ~ a[href='" + address + "']")).ToHaveCountAsync(1);
+                }
+                await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "History", Exact = true }).And(page.Locator(".view-switch__link")))
+                    .ToHaveAttributeAsync("href", "/Admin/Activity?Filter=History");
                 await Steps.SubmitAsync(page, failed.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Retry" }) }));
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));

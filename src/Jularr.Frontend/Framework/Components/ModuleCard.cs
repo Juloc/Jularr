@@ -13,6 +13,7 @@ namespace Jularr.Frontend.Framework
             ["Library"] = "library",
             ["Requests"] = "requests",
             ["Acquisition"] = "download",
+            ["Browser"] = "globe",
             ["Playback"] = "play",
             ["Reading"] = "book",
             ["Profiles"] = "users",
