@@ -124,8 +124,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     {
                         // Keep a durable, reviewable outcome instead of importing a
                         // different edition or fabricating a catalog identity.
-                        var outcome = searched.ProviderFailure is not null || matches.Length > 1 || searched.Rows.Single().Candidates.Count > 0
-                            ? MediaImportOutcomeType.Unavailable : MediaImportOutcomeType.NotFound;
+                        var outcome = searched.ProviderFailure is not null ? MediaImportOutcomeType.Unavailable
+                            : searched.Rows.Single().Candidates.Count > 0 ? MediaImportOutcomeType.NeedsReview
+                            : MediaImportOutcomeType.NotFound;
                         unresolved = new MediaImportRowExecution(
                             new MediaImportResultRowV1(index, row.Item.Title, outcome, false, null), false);
                     }
