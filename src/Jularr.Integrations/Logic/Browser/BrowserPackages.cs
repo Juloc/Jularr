@@ -115,7 +115,7 @@ namespace Jularr.Integrations.Logic.Browser
                 Directory.CreateDirectory(_root);
                 if (!Directory.Exists(active) && Directory.Exists(previous)) Directory.Move(previous, active);
                 if (Directory.Exists(active) && Directory.Exists(previous)) Directory.Delete(previous, recursive: true);
-                var version = await LatestStableVersionAsync(ct);
+                var version = await _stableVersion(ct);
                 if (refresh == 1 && IsInstalled && string.Equals(InstalledVersion, version, StringComparison.Ordinal))
                 {
                     Interlocked.Exchange(ref _refreshMode, 0);
