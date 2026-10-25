@@ -160,6 +160,17 @@ namespace Jularr.Backend.Logic.Profile
 
             // Establish ownership before commit.
             await ctx.AddAccountProfileAsync(new AccountProfileData(data.OwnerAccountId, profile.Id), ct);
+
+            // The first owned profile becomes this account's main PWA profile; choosing another one is explicit.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE "Accounts"
+                SET "PwaMainProfileId" = @ProfileId
+                WHERE "Id" = @AccountId AND "PwaMainProfileId" IS NULL;
+                """;
+            sql.Parameters.Add(new AccountProfileData(data.OwnerAccountId, profile.Id));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         public static Task<ProfileUpdateData> ReadProfileAsync(this LogicContext ctx, long profileId, CancellationToken ct)
