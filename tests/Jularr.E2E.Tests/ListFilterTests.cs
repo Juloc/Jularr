@@ -50,8 +50,9 @@ namespace Jularr.E2E.Tests
             await using var browser = await BrowserSession.StartAsync(jularr);
             var page = browser.Page;
             await Owner.SetUpAndSignInAsync(page);
+            // Seed already creates editions, versions, assets, and stored files.
+            // Calling SeedLibraryFilesAsync again violates UX_WorkEditions_Name.
             await jularr.RunSqlAsync(Seed);
-            await jularr.SeedLibraryFilesAsync();
 
             try
             {
