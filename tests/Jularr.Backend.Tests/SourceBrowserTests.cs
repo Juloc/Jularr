@@ -54,6 +54,16 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void ManagedBrowser_ExternalRuntimeCannotBeManaged()
+        {
+            using var folder = new TemporaryDirectory();
+            Assert.IsTrue(new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path }).OwnsRuntime);
+            Assert.IsFalse(new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path, Path = "/usr/bin/chromium" }).OwnsRuntime);
+            Assert.IsFalse(new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path,
+                RemoteAddress = "http://127.0.0.1:9222" }).OwnsRuntime);
+        }
+
+        [TestMethod]
         public async Task ManagedBrowser_FailedUpdateKeepsPreviousPackageAvailable()
         {
             if (!OperatingSystem.IsLinux()) return;
