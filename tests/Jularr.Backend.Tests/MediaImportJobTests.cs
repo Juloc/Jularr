@@ -166,7 +166,7 @@ namespace Jularr.Backend.Tests
             var status = (await statusResponse.Content.ReadFromJsonAsync<MediaImportJobStatusV1>())!;
             Assert.AreEqual(2L, status.ProcessedCount);
             Assert.AreEqual(MediaImportOutcomeType.Added, status.Rows[0].OutcomeTypeId);
-            Assert.AreEqual(MediaImportOutcomeType.Unavailable, status.Rows[1].OutcomeTypeId);
+            Assert.AreEqual(MediaImportOutcomeType.NeedsReview, status.Rows[1].OutcomeTypeId);
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
             Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" """),
                 "Add only must not monitor or download automatically.");
