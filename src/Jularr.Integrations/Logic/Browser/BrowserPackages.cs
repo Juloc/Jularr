@@ -11,6 +11,7 @@ namespace Jularr.Integrations.Logic.Browser
     internal sealed class BrowserPackages(BrowserOptions options)
     {
         private const int MaximumMetadataBytes = 128 * 1024;
+        private const int MaximumSizeScanFiles = 10_000;
         private const long MaximumArchiveBytes = 450L * 1024 * 1024;
         private const long MaximumExpandedBytes = 1_500L * 1024 * 1024;
         private readonly SemaphoreSlim _gate = new(1, 1);
@@ -39,9 +40,21 @@ namespace Jularr.Integrations.Logic.Browser
                 if (!Directory.Exists(_root)) return 0;
                 try
                 {
+                    // Admin status reads must stay bounded and must not traverse a
+                    // symbolic link into unrelated DataPath/library directories.
                     long total = 0;
-                    foreach (var file in Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories))
+                    var files = 0;
+                    var scan = new EnumerationOptions
+                    {
+                        RecurseSubdirectories = true,
+                        IgnoreInaccessible = true,
+                        AttributesToSkip = FileAttributes.ReparsePoint
+                    };
+                    foreach (var file in Directory.EnumerateFiles(_root, "*", scan))
+                    {
+                        if (++files > MaximumSizeScanFiles) return 0; // Unknown, not a misleading partial size.
                         total = checked(total + new FileInfo(file).Length);
+                    }
                     return total;
                 }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OverflowException)
