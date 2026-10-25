@@ -46,7 +46,7 @@ test("rejects tracked credential files and private keys", () => {
 });
 
 test("rejects secret key blocks but allows source templates", () => {
-  const r = check({ "test.txt": "-----BEGIN PRIVATE KEY-----\n", ".env.example": "JULARR_DB_PASSWORD=\n" });
+  const r = check({ "test.txt": "-----BEGIN " + "PRIVATE KEY-----\n", ".env.example": "JULARR_DB_PASSWORD=\n" });
   assert.equal(r.status, 1);
   assert.match(r.stderr, /private key block/);
   assert.doesNotMatch(r.stderr, /restricted credential or key filename/);
