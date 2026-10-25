@@ -71,6 +71,11 @@ Rate-Limits und Zeitüberschreitungen. Erfolgreiche Seiten werden nur innerhalb 
 Suchlaufs wiederverwendet. Zuletzt erfolgreiche vertrauenswürdige Mirrors werden bevorzugt;
 unlesbare Mirrors pausieren fünf Minuten, andere Verbindungsfehler eine Minute.
 
+Bei der Buchauswahl gelten erkennbare Zusammenfassungen, Kurzfassungen, Workbooks
+und Guides zum angefragten Original als anderes Werk. Autorname oder eine Suche
+nach einer ISBN heben diesen Titelkonflikt nicht auf. Ausdrücklich angefragte
+Zusammenfassungen und Guides bleiben über ihren eigenen Titel oder Alias zulässig.
+
 **Standardmäßig deaktiviert.** Das optionale Modul **Browser** lässt sich im Adminbereich
 unter `/Admin/Instance/Modules` einschalten und wieder ausschalten; es hängt von
 **Acquisition** ab. Jularr benötigt dafür keinen zweiten Container, keine Root-Befehle

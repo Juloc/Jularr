@@ -176,6 +176,44 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow(true)]
+        [DataRow(false)]
+        public async Task AnnasArchive_DerivativeIsRejectedBeforeAutomaticGrab(bool includesOriginal)
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeSources();
+            sources.SearchPages[""] = """
+                <html><body>
+                <a href="/md5/11111111111111111111111111111111"><h3>The expert guide to Jane Austen's Pride and Prejudice -- in 30 minutes</h3>
+                <div class="italic">Jane Austen</div><div>English [en], .epub, 1.2MB, guide.epub</div></a>
+                """ + (includesOriginal ? """
+                <a href="/md5/0123456789abcdef0123456789abcdef"><h3>Pride and Prejudice</h3>
+                <div class="italic">Jane Austen</div><div>English [en], .epub, 1.2MB, original.epub</div></a>
+                """ : "") + "</body></html>";
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas.example.test", null, true, 50, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var wantedId = await CreateWantedBookAsync(host);
+
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+            var candidates = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!;
+            var derivative = candidates.Single(candidate => candidate.Title.Contains("expert guide", StringComparison.Ordinal));
+            Assert.AreEqual(ReleaseDecisionType.Rejected, derivative.ReleaseDecisionTypeId);
+            Assert.AreEqual("WrongTitle", derivative.ReasonCode);
+
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(includesOriginal ? 1L : 0L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\" WHERE \"Title\" LIKE '%expert guide%'"));
+            if (includesOriginal)
+            {
+                Assert.AreEqual("Jane Austen - Pride and Prejudice (EN) (epub)", await host.ScalarAsync("SELECT \"Title\" FROM \"AcquisitionReleases\""));
+            }
+        }
+
+        [TestMethod]
         public async Task AnnasArchive_ExistingMirrorIsAlreadyConfigured()
         {
             using var storage = new TemporaryDirectory();
