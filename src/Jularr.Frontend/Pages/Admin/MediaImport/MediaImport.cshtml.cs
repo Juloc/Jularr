@@ -301,8 +301,8 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             // For books without a provider ID, an explicit checkbox requests safe
             // title+author matching by the durable server job. Ambiguous rows remain for review.
             MediaImportStatusType.Open => row.Candidates.Count > 0 ||
-                row.TypeKey == "book" && row.Problem is null &&
-                !string.IsNullOrWhiteSpace(row.Title) && !string.IsNullOrWhiteSpace(row.Creator),
+                row.TypeKey == "book" && (row.Problem == "no_match" ||
+                    row.Problem is null && !string.IsNullOrWhiteSpace(row.Title) && !string.IsNullOrWhiteSpace(row.Creator)),
             _ => false
         };
 
