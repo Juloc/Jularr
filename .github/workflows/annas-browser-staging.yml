@@ -1,0 +1,80 @@
+name: Anna Browser Debian Staging
+
+# Disposable Docker job: exercises the actual SourceBrowser + managed Chrome,
+# not an arbitrary locally launched Chromium with different proxy flags.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tests/Jularr.Backend.Tests/SourceBrowserTests.cs'
+      - 'src/Jularr.Integrations/Logic/Browser/**'
+      - '.github/workflows/annas-browser-staging.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: anna-browser-staging-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  private-egress:
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/dotnet/sdk:10.0
+    timeout-minutes: 30
+    env:
+      JULARR_BROWSER_NETWORK_STAGING: '1'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      JULARR_TEST_DB: ''
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install Debian managed-Chrome runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          . /etc/os-release
+          echo "Debian-based image: ${PRETTY_NAME}"
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2 \
+            libdbus-1-3 libnss3 libnspr4 libgbm1 libdrm2 libglib2.0-0 \
+            libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 \
+            libxkbcommon0 libxrandr2 libxshmfence1 libpango-1.0-0 fonts-liberation
+          useradd --create-home --uid 10001 jularr
+          install -d -m 0755 -o jularr -g jularr /tmp/jularr-stage-home /tmp/jularr-stage-results
+          rm -rf /var/lib/apt/lists/*
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Compile frontend assets needed by the test project
+        working-directory: src/Jularr.Frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Compile isolated backend test project
+        run: dotnet build tests/Jularr.Backend.Tests --configuration Release
+      - name: Managed Chrome real private-socket test as unprivileged user
+        shell: bash
+        run: |
+          set -euo pipefail
+          runuser -u jularr -- env \
+            HOME=/tmp/jularr-stage-home \
+            DOTNET_CLI_HOME=/tmp/jularr-stage-home \
+            JULARR_BROWSER_NETWORK_STAGING=1 \
+            dotnet test tests/Jularr.Backend.Tests \
+              --configuration Release --no-build \
+              --filter "FullyQualifiedName~Browser_NetworkStaging_ManagedChromeCannotReachLoopbackSentinel" \
+              --logger "trx;LogFileName=anna-browser-staging.trx" \
+              --results-directory /tmp/jularr-stage-results
+      - name: Preserve focused evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: anna-browser-debian-stage
+          path: /tmp/jularr-stage-results/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
