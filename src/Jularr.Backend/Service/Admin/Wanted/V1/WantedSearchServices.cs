@@ -39,7 +39,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: false, CancellationToken, scope, Data.Language);
             if (result.IndexersUnavailable)
             {
-                throw new ServiceUnavailableException("acquisition_unavailable");
+                throw new ServiceUnavailableException(result.ErrorKey ?? "acquisition_unavailable");
             }
 
             var winner = result.Selection.Winner;

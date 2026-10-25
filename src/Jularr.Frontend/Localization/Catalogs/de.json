@@ -8762,6 +8762,22 @@
    "The indexer or download client returned an invalid response.",
    "Der Indexer oder Download-Client hat eine ungültige Antwort geliefert."
   ],
+  "errors.source_gate": [
+   "The source needs a browser confirmation.",
+   "Die Quelle benötigt eine Bestätigung im Browser."
+  ],
+  "errors.source_markup_changed": [
+   "The source page could not be read. Its layout may have changed.",
+   "Die Quellenseite konnte nicht gelesen werden. Ihr Aufbau hat sich möglicherweise geändert."
+  ],
+  "errors.source_untrusted_origin": [
+   "The source returned an address outside its trusted mirrors.",
+   "Die Quelle hat eine Adresse außerhalb ihrer vertrauenswürdigen Mirrors geliefert."
+  ],
+  "errors.source_timeout": [
+   "The source did not answer in time.",
+   "Die Quelle hat nicht rechtzeitig geantwortet."
+  ],
   "errors.acquisition_download_path_unconfigured": [
    "Download workspace is not configured or is unavailable",
    "Download-Zwischenspeicher nicht eingerichtet oder nicht verfügbar"

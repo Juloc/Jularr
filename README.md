@@ -66,6 +66,11 @@ erfolgreichem Backup migriert.
 
 ### Browser für Quellen mit Browserprüfung
 
+Anna-Suchen unterscheiden bestätigte Nulltreffer von unlesbaren Seiten, Browserprüfungen,
+Rate-Limits und Zeitüberschreitungen. Erfolgreiche Seiten werden nur innerhalb eines
+Suchlaufs wiederverwendet. Zuletzt erfolgreiche vertrauenswürdige Mirrors werden bevorzugt;
+unlesbare Mirrors pausieren fünf Minuten, andere Verbindungsfehler eine Minute.
+
 **Standardmäßig deaktiviert.** Das optionale Modul **Browser** lässt sich im Adminbereich
 unter `/Admin/Instance/Modules` einschalten und wieder ausschalten; es hängt von
 **Acquisition** ab. Jularr benötigt dafür keinen zweiten Container, keine Root-Befehle

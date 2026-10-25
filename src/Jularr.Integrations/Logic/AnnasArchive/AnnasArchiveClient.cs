@@ -11,8 +11,10 @@ using Jularr.Integrations.Logic.Common;
 namespace Jularr.Integrations.Logic.AnnasArchive
 {
     // Search results and member fast downloads; the member key only goes to Anna's Archive itself.
-    internal sealed partial class AnnasArchiveClient(HttpClient http, ISourceGateResolver gates, ISourceBrowser browser)
+    internal sealed partial class AnnasArchiveClient(HttpClient http, ISourceGateResolver gates, ISourceBrowser browser, AnnasArchiveMirrors? mirrors = null)
     {
+        private readonly AnnasArchiveMirrors _mirrors = mirrors ?? new(TimeProvider.System);
+
         // The source answers on one of its mirrors; all of them are tried, the fast way first.
         private const int SlowServers = 3;
         private const long MaximumPageBytes = 4L * 1024 * 1024;
@@ -58,49 +60,110 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
         public static string? ReadMd5(Uri record) => Md5Path().Match(record.AbsolutePath) is { Success: true } match ? match.Groups[1].Value : null;
 
-        public async Task<IReadOnlyList<AnnasArchiveRecord>> SearchAsync(Uri site, string query, CancellationToken ct)
+        public async Task<IReadOnlyList<AnnasArchiveRecord>> SearchAsync(Uri site, string query, CancellationToken ct, AnnasArchiveSearchContext? context = null)
         {
-            // The source answers on one of its mirrors; all of them are tried, the fast way first.
-            var mirrors = Mirrors(site);
-            string? page = null;
-            Uri? answered = null;
-            foreach (var mirror in mirrors)
+            if (site.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(site.UserInfo))
             {
-                if (await ReadAsync(mirror, query, ct) is { } direct)
-                {
-                    page = direct;
-                    answered = mirror;
-                    break;
-                }
+                throw new AnnasArchiveException(AnnasArchiveFailure.UntrustedOrigin, "The search requires a trusted HTTPS origin.");
             }
 
-            if (page is null)
+            var ownsContext = context is null;
+            context ??= new AnnasArchiveSearchContext();
+            using var contextLifetime = ownsContext ? context : null;
+            var origin = IsFallbackOrigin(site) && site.IsDefaultPort ? "annas-archive" : site.AbsoluteUri;
+            var key = origin + "\n" + query;
+            await context.Gate.WaitAsync(ct);
+            try
             {
-                // A check in front of the site: the browser reads the mirrors at the same time.
-                var read = await browser.ReadPagesAsync([.. mirrors.Select(mirror => new Uri(mirror, "search?q=" + Uri.EscapeDataString(query)))], ct);
-                if (read is null)
+                if (context.Answers.TryGetValue(key, out var cached)) return cached;
+                if (context.BlockedOrigins.Contains(origin))
                 {
-                    throw new AnnasArchiveException(AnnasArchiveFailure.Gate, "Anna's Archive could not be searched.");
+                    throw new AnnasArchiveException(AnnasArchiveFailure.Gate, "Anna's Archive needs a browser confirmation.");
                 }
 
-                page = read.Html;
-                answered = new Uri(read.Address.GetLeftPart(UriPartial.Authority) + "/");
-                if (!IsTrustedSource(site, answered))
+                var known = Mirrors(site);
+                var available = _mirrors.Available(known);
+                var blocked = new List<Uri>();
+                AnnasArchiveException? last = null;
+                foreach (var mirror in available)
                 {
-                    throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The browser returned an untrusted source.");
+                    try
+                    {
+                        // Use the shared bounded transport; inspect the final origin before parsing.
+                        using var response = await DirectDownload.SendAsync(http, new Uri(mirror, "search?q=" + Uri.EscapeDataString(query)), null, gates, ct);
+                        var address = response.RequestMessage?.RequestUri ?? mirror;
+                        if (!IsTrustedSource(site, address))
+                        {
+                            throw new AnnasArchiveException(AnnasArchiveFailure.UntrustedOrigin, "The search returned an untrusted source.");
+                        }
+
+                        var page = await DirectDownload.ReadPageContentAsync(response, ct);
+                        var answered = new Uri(address.GetLeftPart(UriPartial.Authority) + "/");
+                        var records = Records(page, answered);
+                        _mirrors.Record(answered, null);
+                        context.Answers[key] = records;
+                        return records;
+                    }
+                    catch (DirectDownloadException exception) when (exception.Failure == DirectDownloadFailure.TooLarge)
+                    {
+                        throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The search page is too large.", exception);
+                    }
+                    catch (DirectDownloadException exception) when (exception.Failure == DirectDownloadFailure.Gate)
+                    {
+                        blocked.Add(mirror);
+                    }
+                    catch (DirectDownloadException exception)
+                    {
+                        var failure = exception.Failure switch
+                        {
+                            DirectDownloadFailure.RateLimited => AnnasArchiveFailure.RateLimited,
+                            DirectDownloadFailure.TimedOut => AnnasArchiveFailure.TimedOut,
+                            DirectDownloadFailure.ForbiddenRedirect => AnnasArchiveFailure.UntrustedOrigin,
+                            DirectDownloadFailure.Unauthorized => AnnasArchiveFailure.Refused,
+                            _ => AnnasArchiveFailure.Unavailable
+                        };
+                        last = new AnnasArchiveException(failure, "Anna's Archive search is unavailable.", exception);
+                        _mirrors.Record(mirror, failure);
+                    }
+                    catch (AnnasArchiveException exception) when (exception.Failure == AnnasArchiveFailure.Gate)
+                    {
+                        blocked.Add(mirror);
+                    }
+                    catch (AnnasArchiveException exception)
+                    {
+                        last = exception;
+                        _mirrors.Record(mirror, exception.Failure);
+                    }
                 }
+
+                // The browser gets one attempt across challenged mirrors, rather than serial attempts and a second full pass.
+                if (blocked.Count > 0)
+                {
+                    var read = await browser.ReadPagesAsync([.. blocked.Select(mirror => new Uri(mirror, "search?q=" + Uri.EscapeDataString(query)))], ct);
+                    if (read is null)
+                    {
+                        context.BlockedOrigins.Add(origin);
+                        throw new AnnasArchiveException(AnnasArchiveFailure.Gate, "Anna's Archive needs a browser confirmation.");
+                    }
+
+                    if (!IsTrustedSource(site, read.Address))
+                    {
+                        throw new AnnasArchiveException(AnnasArchiveFailure.UntrustedOrigin, "The browser returned an untrusted source.");
+                    }
+
+                    var answered = new Uri(read.Address.GetLeftPart(UriPartial.Authority) + "/");
+                    var records = Records(read.Html, answered);
+                    _mirrors.Record(answered, null);
+                    context.Answers[key] = records;
+                    return records;
+                }
+
+                throw last ?? new AnnasArchiveException(_mirrors.LastFailure(known[0]), "No trusted search mirror is available.");
             }
-
-            var records = new List<AnnasArchiveRecord>();
-            foreach (var record in Records(page, answered!))
+            finally
             {
-                if (records.All(known => known.Md5 != record.Md5))
-                {
-                    records.Add(record);
-                }
+                context.Gate.Release();
             }
-
-            return records;
         }
 
         // Each record is a row: the file's facts, the title link and the author.
@@ -113,9 +176,10 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
             var document = new HtmlParser().ParseDocument(page);
             var records = new List<AnnasArchiveRecord>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var link in document.QuerySelectorAll("a[href^='/md5/']"))
             {
-                if (Md5Path().Match(link.GetAttribute("href") ?? "") is not { Success: true } match || records.Any(record => record.Md5 == match.Groups[1].Value))
+                if (Md5Path().Match(link.GetAttribute("href") ?? "") is not { Success: true } match || seen.Contains(match.Groups[1].Value))
                 {
                     continue;
                 }
@@ -123,6 +187,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 if (ReadRecord(link, match.Groups[1].Value, site) is { } record)
                 {
                     records.Add(record);
+                    seen.Add(record.Md5);
                 }
 
                 if (records.Count >= 50)
@@ -131,7 +196,24 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 }
             }
 
-            return records;
+            if (records.Count > 0) return records;
+
+            // A finished result page may still mention its protection service in scripts or comments.
+            var title = (document.Title ?? "").Trim();
+            if (title.Equals("ddos-guard", StringComparison.OrdinalIgnoreCase) || title.StartsWith("Just a moment", StringComparison.OrdinalIgnoreCase)
+                || title.StartsWith("Checking your browser", StringComparison.OrdinalIgnoreCase) || page.Contains("ddg-captcha", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new AnnasArchiveException(AnnasArchiveFailure.Gate, "The source returned a browser confirmation.");
+            }
+
+            if (title.Replace('’', '\'').Contains("Anna's Archive", StringComparison.OrdinalIgnoreCase)
+                && document.QuerySelector("form[action='/search']") is not null
+                && document.QuerySelectorAll("span").Any(element => element.TextContent.Trim().Equals("No files found.", StringComparison.OrdinalIgnoreCase)))
+            {
+                return [];
+            }
+
+            throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The source search layout could not be read.");
         }
 
         // The mirrors of the source; the one of the connection comes first. Only a connection that points at
@@ -154,23 +236,6 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             }
 
             return mirrors;
-        }
-
-        // The page of one mirror, or nothing when it puts a check in front.
-        private async Task<string?> ReadAsync(Uri mirror, string query, CancellationToken ct)
-        {
-            try
-            {
-                return await DirectDownload.ReadPageAsync(http, new Uri(mirror, "search?q=" + Uri.EscapeDataString(query)), gates, browser, ct);
-            }
-            catch (DirectDownloadException exception) when (exception.Failure == DirectDownloadFailure.TooLarge)
-            {
-                throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The search page exceeds its size limit.", exception);
-            }
-            catch (DirectDownloadException)
-            {
-                return null;
-            }
         }
 
         public async Task DownloadAsync(Uri site, string memberKey, string md5, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
@@ -389,6 +454,24 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         // Each record is a row: the file's facts, the title link and the author.
         private static AnnasArchiveRecord? ReadRecord(IElement link, string md5, Uri site)
         {
+            // The current table uses separate cells for title, author, language, format and size.
+            if (link.Closest("tr") is { } tableRow)
+            {
+                var cells = tableRow.Children.Where(element => element.LocalName == "td").ToArray();
+                if (cells.Length == 12 && cells[1].QuerySelector("a[href='/md5/" + md5 + "']") is not null)
+                {
+                    var tableTitle = cells[1].TextContent.Trim();
+                    var tableFormat = cells[9].TextContent.Trim().ToLowerInvariant();
+                    if (tableTitle.Length > 0 && tableFormat.Length > 0 && Format().Match(tableFormat).Value == tableFormat)
+                    {
+                        var tableAuthor = cells[2].TextContent.Trim();
+                        var tableLanguage = cells[7].TextContent.Trim();
+                        return new AnnasArchiveRecord(md5, Limit(tableTitle, 500), tableAuthor.Length == 0 ? null : Limit(tableAuthor, 200), tableFormat,
+                            tableLanguage.Length == 0 ? null : tableLanguage, ReadSize(cells[10].TextContent), site, IsPart(Lines(cells[5])));
+                    }
+                }
+            }
+
             var title = (link.QuerySelector("h3")?.TextContent ?? link.TextContent ?? "").Trim();
             if (title.Length == 0)
             {
