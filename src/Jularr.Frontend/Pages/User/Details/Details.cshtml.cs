@@ -285,6 +285,7 @@ namespace Jularr.Frontend.Pages.User.Details
                     HttpContext.RequestAborted);
                 var entry = _external.Entry;
                 _seasons = _external.Seasons;
+                if (SeasonNumber is null && entry.SeasonNumber is { } mappedSeason) SeasonNumber = mappedSeason;
                 _episodes = _external.Episodes;
                 if (texts.CanSeeRelations())
                 {
