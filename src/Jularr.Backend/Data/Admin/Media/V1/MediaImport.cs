@@ -284,13 +284,14 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class MediaImportPreviewV1 : BaseResponse
     {
-        public MediaImportPreviewV1(string json, BaseDataList<MediaImportRowV1> rows, BaseDataList<MediaImportOptionV1> profiles, BaseDataList<MediaImportOptionV1> libraries, int unsearched)
+        public MediaImportPreviewV1(string json, BaseDataList<MediaImportRowV1> rows, BaseDataList<MediaImportOptionV1> profiles, BaseDataList<MediaImportOptionV1> libraries, int unsearched, string? providerFailure = null)
         {
             Json = json;
             Rows = rows;
             Profiles = profiles;
             Libraries = libraries;
             Unsearched = unsearched;
+            ProviderFailure = providerFailure;
         }
 
         // The list as it is carried through the steps.
@@ -304,6 +305,10 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         // Open rows whose search waits for another preview.
         [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Count))]
         public int Unsearched { get; }
+
+        // Distinguishes a provider outage or rate-limit from an ordinary batch boundary.
+        [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Problem), false)]
+        public string? ProviderFailure { get; }
 
         public override void Validate()
         {
