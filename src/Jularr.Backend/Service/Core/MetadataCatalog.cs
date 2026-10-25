@@ -142,7 +142,11 @@ namespace Jularr.Backend.Service.Core
             var workId = conflict ? null : linked?.WorkId ?? known;
             return new DiscoverCatalogEntryV1(TextLimit.Cut(AniListMetadata.Title(media), 500)!, media.Year is >= 1800 and <= 2200 ? media.Year : null,
                 TextLimit.Cut(media.Description ?? series?.Overview, 4000), media.CoverUrl ?? TmdbClient.PosterUrl(series?.PosterPath), media.BannerUrl ?? TmdbClient.BackdropUrl(series?.BackdropPath),
-                media.TrailerKey ?? series?.Details.TrailerKey, workId) { SeasonNumber = conflict ? null : linked?.SeasonNumber };
+                media.TrailerKey ?? series?.Details.TrailerKey, workId)
+            {
+                SeasonNumber = conflict ? null : linked?.SeasonNumber,
+                Relations = AnimeRelations(media)
+            };
         }
 
         private async Task<DiscoverCatalogEntryV1> ReadAnimeMovieAsync(LogicContext context, int id, CancellationToken ct)
@@ -155,8 +159,17 @@ namespace Jularr.Backend.Service.Core
             var linked = await FindAnimeWorkAsync(context, MediaType.Movie, id, mapped, ct);
             var workId = known is { } existing && linked is { } resolved && existing != resolved.WorkId ? null : linked?.WorkId ?? known;
             return new DiscoverCatalogEntryV1(TextLimit.Cut(AniListMetadata.Title(media), 500)!, media.Year is >= 1800 and <= 2200 ? media.Year : null,
-                TextLimit.Cut(media.Description, 4000), media.CoverUrl, media.BannerUrl, media.TrailerKey, workId);
+                TextLimit.Cut(media.Description, 4000), media.CoverUrl, media.BannerUrl, media.TrailerKey, workId)
+            {
+                Relations = AnimeRelations(media)
+            };
         }
+
+        private static IReadOnlyList<Jularr.Backend.Data.User.Media.V1.WorkRelationV1> AnimeRelations(AniListMedia media) =>
+            [.. WorkRelationLogic.AniListTargets(media).Select(target =>
+                new Jularr.Backend.Data.User.Media.V1.WorkRelationV1(null, target.WorkRelationTypeId, AniListMetadata.Namespace,
+                    null, target.Namespace, target.Value, target.MediaTypeId, target.MediaSubtypeId, target.Title,
+                    target.ReleaseYear, target.ImageUrl))];
 
         // An exact external identity wins over a guessed title. Conflicting Works are never silently merged.
         private Task<AnimeCatalogWorkData?> FindAnimeWorkAsync(LogicContext context, MediaType mediaType, int aniListId, AniBridgeMappings.Link? mapped, CancellationToken ct) =>
