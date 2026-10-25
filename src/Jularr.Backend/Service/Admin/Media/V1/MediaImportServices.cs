@@ -22,7 +22,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         private readonly MediaImportPlanner _planner;
 
         // Optional request-scoped status events for the interactive preview.
-        public Func<int, string, int?, Task>? OnItemProgressAsync { get; set; }
+        public Func<int, string, int?, string?, string?, string?, Task>? OnItemProgressAsync { get; set; }
 
         internal PreviewMediaImportV1(MediaImportPlanner planner)
         {

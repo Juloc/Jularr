@@ -508,7 +508,8 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             Read(file, json, action, defaults, choices);
             BeginProgressStream();
             await WriteProgressAsync(new { kind = "started" });
-            preview.OnItemProgressAsync = (index, stage, count) => WriteProgressAsync(new { kind = "row", index, stage, count });
+            preview.OnItemProgressAsync = (index, stage, count, source, query, reason) =>
+                WriteProgressAsync(new { kind = "row", index, stage, count, source, query, reason });
 
             try
             {

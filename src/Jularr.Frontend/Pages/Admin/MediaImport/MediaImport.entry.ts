@@ -197,18 +197,33 @@ function registerPreviewStream(
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = "";
-            const handle = (event: { kind: string; index?: number; stage?: string; count?: number; total?: number }): void => {
+            const handle = (event: { kind: string; index?: number; stage?: string; count?: number; total?: number;
+                source?: string | null; query?: string | null; reason?: string | null }): void => {
                 if (event.kind === "row" && event.index !== undefined && event.stage !== undefined) {
                     const state = nodes.get(event.index);
                     if (state) {
                         const label = texts[event.stage] ?? event.stage;
-                        state.textContent = event.stage === "candidates" && event.count !== undefined
-                            ? label + " (" + event.count + ")" : label;
+                        // Only report the actual backend search parameters, never guessed client-side values.
+                        if (event.source) state.dataset.source = event.source;
+                        if (event.query) state.dataset.query = event.query;
+                        if (event.reason) state.dataset.reason = event.reason;
+                        const source = state.dataset.source === "openlibrary" ? "Open Library" :
+                            state.dataset.source === "catalog" ? "Metadata catalog" : state.dataset.source;
+                        const trace = [source, state.dataset.query].filter(Boolean).join(" · ");
+                        const reason = state.dataset.reason === "search_budget" ? "Waiting for next search batch" :
+                            state.dataset.reason === "rate_limited" ? "Provider rate limit" :
+                            state.dataset.reason === "unavailable" ? "Provider unavailable" :
+                            state.dataset.reason === "no_match" ? "No matching identity" : state.dataset.reason;
+                        state.textContent = (event.stage === "candidates" && event.count !== undefined
+                            ? label + " (" + event.count + ")" : label) +
+                            (trace ? " · " + trace : "") + (reason ? " · " + reason : "");
                     }
                     if (finishedStages.has(event.stage)) complete.add(event.index);
                     progress.value = complete.size;
                     const title = state?.parentElement?.firstElementChild?.textContent;
-                    heading.textContent = (title ? title + " · " : "") + (texts[event.stage] ?? event.stage) + " · " + complete.size + " / " + progress.max;
+                    heading.textContent = (title ? title + " · " : "") + (texts[event.stage] ?? event.stage) +
+                        (event.source ? " · " + (event.source === "openlibrary" ? "Open Library" : event.source) : "") +
+                        (event.query ? " · " + event.query : "") + " · " + complete.size + " / " + progress.max;
                 } else if (event.kind === "done") {
                     finished = true;
                     heading.textContent = labels?.phaseComplete ?? "Preview ready";
@@ -224,7 +239,8 @@ function registerPreviewStream(
                 while ((cut = buffer.indexOf("\n")) !== -1) {
                     const line = buffer.slice(0, cut).trim();
                     buffer = buffer.slice(cut + 1);
-                    if (line) handle(JSON.parse(line) as { kind: string; index?: number; stage?: string; count?: number; total?: number });
+                    if (line) handle(JSON.parse(line) as { kind: string; index?: number; stage?: string; count?: number; total?: number;
+                        source?: string | null; query?: string | null; reason?: string | null });
                 }
             }
             buffer += decoder.decode();
