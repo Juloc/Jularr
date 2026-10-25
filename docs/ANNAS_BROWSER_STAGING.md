@@ -28,9 +28,13 @@ Exit code **1**: at least one sentinel socket/HTTP hit, demonstrable bypass — 
 
 Optionally use --seconds 15, but do not increase test duration without a reason.
 
-## Automated disposable Debian check (PR CI)
+## Automated Linux-container browser probe (PR CI)
 
-`.github/workflows/annas-browser-staging.yml` now builds the backend test project inside a fresh Debian-based .NET SDK Docker container, runs as an unprivileged user, installs the real pinned managed Chrome for Testing package, and starts Jularr's `SourceBrowser` with its original flags and built-in egress proxy. The gated `Browser_NetworkStaging_ManagedChromeCannotReachLoopbackSentinel` test first proves that its own TCP sentinel is reachable from the test process, then navigates a real Chrome tab toward that loopback address using both HTTP and HTTPS. An inbound sentinel connection is a **test failure**. A browser start failure is also a failure, not a passing security check.
+`.github/workflows/annas-browser-staging.yml` targets an **Ubuntu 24.04-based .NET 10 SDK image**, not Debian; the default .NET 10 SDK image changed its base distribution. Its title intentionally says *Linux Container Probe*. This is separate from the **mandatory real Debian VM/Docker acceptance test** in this document.
+
+The PR workflow checks whether the unprivileged browser user can create a user namespace **before** installing OS packages, building frontend/backend assets or downloading Chrome. If container seccomp or host AppArmor denies this prerequisite, CI exits with a clear **failure (BLOCKED environment)** within the preflight step; it never disables the Chrome sandbox, retries the failed start, or presents this as a security pass. Re-run the browser probe only on an appropriately isolated runner whose sandbox prerequisite succeeds; do not loosen production container privileges to accommodate CI. The actual browser-test step has a four-minute hard limit, and the workflow has a ten-minute maximum.
+
+When the prerequisite succeeds, the job builds the targeted test project, installs the actual managed Chrome package, and launches Jularr's `SourceBrowser` using its existing flags and local egress proxy. The gated `Browser_NetworkStaging_ManagedChromeCannotReachLoopbackSentinel` test first confirms the TCP sentinel is reachable from the test process, then navigates real Chrome toward that sentinel via HTTP and HTTPS. Any inbound callback **fails** the test. Browser-start failure also **fails**; no inconclusive or skipped outcome counts as proof.
 
 This automated check is narrower than the manual network-capture protocol: it tests real managed Chrome and a direct private socket, not kernel-level browser-only network isolation, public-to-private redirects, DNS rebinding or all IPv6/subresource/UDP paths. A green workflow **does not close #1483**; attach logs and version details to the issue before interpreting results. An unsuccessful run blocks sign-off and requires a focused fix rather than bypassing the test.
 
