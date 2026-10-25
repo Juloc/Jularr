@@ -110,7 +110,7 @@ namespace Jularr.Backend.Service.Core
                 // The Admin can explicitly retry; Ollama itself reuses partial blobs.
                 _state = saved.State is "queued" or "downloading" ? "interrupted" : saved.State;
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException)
             {
                 _state = "failed";
                 _storageHealthy = false;
@@ -155,9 +155,12 @@ namespace Jularr.Backend.Service.Core
                     await _gate.HeavyWork.WaitAsync(stoppingToken);
                     try
                     {
-                        Set("downloading", 0);
-                        await _models.PullAsync(server, model, stoppingToken, fraction => Set("downloading", fraction));
-                        Set("installed", 100);
+                        if (!Set("downloading", 0)) throw new IOException("Model status storage is unavailable.");
+                        await _models.PullAsync(server, model, stoppingToken, fraction =>
+                        {
+                            if (!Set("downloading", fraction)) throw new IOException("Model status storage is unavailable.");
+                        });
+                        if (!Set("installed", 100)) throw new IOException("Model status storage is unavailable.");
                     }
                     finally { _gate.HeavyWork.Release(); }
                 }
@@ -174,16 +177,17 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        private void Set(string state, int progress)
+        private bool Set(string state, int progress)
         {
             lock (_guard)
             {
-                if (!_storageHealthy) { _state = "failed"; return; }
+                if (!_storageHealthy) { _state = "failed"; return false; }
                 var bounded = Math.Clamp(progress, 0, 100);
-                if (_state == state && _progress == bounded) return;
-                if (!SaveStatus(new DownloadSnapshot(_active ?? _lastModel, state, bounded))) return;
+                if (_state == state && _progress == bounded) return true;
+                if (!SaveStatus(new DownloadSnapshot(_active ?? _lastModel, state, bounded))) return false;
                 _state = state;
                 _progress = bounded;
+                return true;
             }
         }
     }
