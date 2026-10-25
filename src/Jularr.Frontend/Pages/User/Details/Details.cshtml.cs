@@ -111,7 +111,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 page.Content.Add(new Div(new NavigationTabs([new NavigationTab("details.tab.overview", Address(query => query["tab"] = null), shown is null),
                     .. blocks.Select(block => new NavigationTab(block.LabelKey, Address(query => query["tab"] = block.TabKey), block == shown, false, block.Count))], "details.tabs")).Class("details-tabs"));
                 page.Content.Add(new Div(shown is null ? [.. blocks.Select(Preview)] : [shown.Render(false)]).Class("details-panel"));
-                if (texts.CanManageRelations()) page.Content.Add(RelationDialog());
+                if (!IsExternal && texts.CanManageRelations()) page.Content.Add(RelationDialog());
             }
             else if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
@@ -286,6 +286,12 @@ namespace Jularr.Frontend.Pages.User.Details
                 var entry = _external.Entry;
                 _seasons = _external.Seasons;
                 _episodes = _external.Episodes;
+                if (texts.CanSeeRelations())
+                {
+                    _relations = _external.Entry.Relations;
+                    if (_relations.Count > 0)
+                        _scopes = await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
+                }
                 var progress = _external.AniListProgress;
                 var total = _external.AniListTotal;
                 var percent = progress is { } count && total is > 0 ? (int)Math.Clamp((long)count * 100 / total.Value, 0, 100) : 0;
