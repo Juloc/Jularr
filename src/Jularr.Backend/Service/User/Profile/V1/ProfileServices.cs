@@ -41,7 +41,8 @@ namespace Jularr.Backend.Service.User.Profile.V1
                     profile."DisplayName",
                     profile."UiLocaleId",
                     (profile."PinHash" IS NOT NULL) AS "HasPin",
-                    coalesce(preference."AutoplayPreviews", TRUE) AS "AutoplayPreviews"
+                    coalesce(preference."AutoplayPreviews", TRUE) AS "AutoplayPreviews",
+                    profile."AutoRequestOnFavorite"
                 FROM
                     "Profiles" AS profile
                     LEFT JOIN "ProfilePlaybackPreferences" AS preference ON preference."ProfileId" = profile."Id"
@@ -51,6 +52,34 @@ namespace Jularr.Backend.Service.User.Profile.V1
             sql.Parameters.Add(Parameters);
 
             return await Context.ReadRequiredAsync<ReadProfileResultV1>(sql, CancellationToken);
+        }
+    }
+
+    // Independent opt-in; admin can restrict it by disabling Requests.
+    [ServiceEndpoint("PUT", "/api/v1/profiles/{profileId:long}/favorite-request")]
+    public sealed class UpdateProfileFavoriteRequestV1 : UserService<UpdateProfileParametersV1, UpdateProfileFavoriteRequestDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(UpdateProfileParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(UpdateProfileParametersV1 parameters, Type resultType) => new("profile.self.update");
+
+        protected override Task ValidatePermissions(UpdateProfileParametersV1 parameters) =>
+            parameters.ProfileId == Auth.ProfileId ? Task.CompletedTask : throw new KeyNotFoundException("The authorized profile was not found.");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            var sql = new SqlStatement();
+            sql.Statement = """
+                UPDATE "Profiles" AS profile
+                SET "AutoRequestOnFavorite" = @AutoRequestOnFavorite, "UpdatedAt" = now()
+                WHERE profile."Id" = @ProfileId;
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(Data);
+            if (await Context.ExecuteAsyncForAffectedRows(sql, CancellationToken) != 1)
+                throw new KeyNotFoundException("The authorized profile was not found.");
+            return new UpdateResult(true);
         }
     }
 
