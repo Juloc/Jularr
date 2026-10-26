@@ -164,6 +164,8 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.module_dependency", "A module needs the modules it builds on, so it cannot be on while one is off, and they stay on while it is."),
             new("errors.validation.invalid_file_type", "This kind of file is not accepted here."),
             new("errors.validation.invalid_value", "This value cannot be used here."),
+            new("errors.validation.not_allowed", "This action is not available for this item."),
+            new("errors.validation.invalid_wireguard_configuration", "The WireGuard configuration cannot be used. It needs one interface, one peer and only supported keys."),
             new("errors.validation.unknown_language", "Use two-letter language codes such as de or en."),
             new("errors.validation.backup_passphrase", "The passphrase does not open this backup's key ring."),
             new("errors.validation.naming_unknown_token", "The pattern uses an unknown placeholder."),
