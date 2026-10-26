@@ -100,7 +100,9 @@ namespace Jularr.Frontend.Pages.User.Details
             var (tone, icon) = state switch
             {
                 MediaAvailabilityState.Available or MediaAvailabilityState.ProfileAudio => (UiTone.Success, "check"),
-                MediaAvailabilityState.Partial or MediaAvailabilityState.PartialOtherAudio => (UiTone.Warning, "layers"),
+                MediaAvailabilityState.Partial or MediaAvailabilityState.PartialOtherAudio or MediaAvailabilityState.PartialPreferredSubtitles => (UiTone.Warning, "layers"),
+                MediaAvailabilityState.PreferredSubtitles => (UiTone.Info, "subtitles"),
+                MediaAvailabilityState.Paused => (UiTone.Neutral, "pause"),
                 MediaAvailabilityState.OtherAudio => (UiTone.Info, "subtitles"),
                 MediaAvailabilityState.Downloading => (UiTone.Info, "download"),
                 MediaAvailabilityState.Searching => (UiTone.Info, "search"),
@@ -110,7 +112,7 @@ namespace Jularr.Frontend.Pages.User.Details
             var label = state switch
             {
                 MediaAvailabilityState.Missing => texts["details.relation.missing"],
-                MediaAvailabilityState.Partial or MediaAvailabilityState.PartialOtherAudio => string.Format(CultureInfo.CurrentCulture, texts["media.availability.tag." + state], relation.AvailableUnits, relation.MonitoredUnits),
+                MediaAvailabilityState.Partial or MediaAvailabilityState.PartialOtherAudio or MediaAvailabilityState.PartialPreferredSubtitles => string.Format(CultureInfo.CurrentCulture, texts["media.availability.tag." + state], relation.AvailableUnits, relation.MonitoredUnits),
                 _ => texts["media.availability.tag." + state]
             };
             return new StateChip(new ValueText(label), tone, new Icon(icon, assets, 14));

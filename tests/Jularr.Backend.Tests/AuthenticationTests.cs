@@ -616,8 +616,10 @@ namespace Jularr.Backend.Tests
                 // library fixtures already apply every migration through their schema ledger above.
                 if (!library)
                 {
-                    var accountAppearanceMigration = DatabaseBaseline.Migrations.Single(migration => migration.Version == 9);
-                    await fixture.RunSqlAsync(accountAppearanceMigration.Statement);
+                    foreach (var migration in ProfileReferenceVerticalTests.ProfileFixture.AccountMigrations)
+                    {
+                        await fixture.RunSqlAsync(migration.Statement);
+                    }
                 }
 
                 var hasher = new PasswordHasher<AccountAuthenticationData>();

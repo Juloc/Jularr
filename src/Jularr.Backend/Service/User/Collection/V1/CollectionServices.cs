@@ -212,6 +212,7 @@ namespace Jularr.Backend.Service.User.Collection.V1
                 """;
             sql.Parameters.Add(new CollectionOwnerData(Auth.ProfileId!.Value, Parameters.CollectionId));
             sql.Parameters.Add(new WorkListFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.ReleaseYearFrom, Parameters.ReleaseYearTo, Parameters.ProgressStateId, Parameters.LibrarySortTypeId));
+            sql.Parameters.Add(LanguageCodes.Aliases);
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
         }

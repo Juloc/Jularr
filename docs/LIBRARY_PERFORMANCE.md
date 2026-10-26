@@ -89,3 +89,28 @@ Focused verification: `MediaTests`, `PagingTests`, the Discover request flow and
 integration (27 tests); `LibraryFiltersTests` exercises SSR filters, automatic append,
 failure/retry, Back restoration, duplicate-free cards, mobile drawer and native paging without
 JavaScript. No production database or schema change is part of the filter package.
+
+## Current availability and content languages
+
+`WorkCardProjection` evaluates present files before acquisition labels, using every version
+and the canonical additional-unit coverage. A paused missing target is distinct from one
+awaiting another search; an existing file stays available during an upgrade. Library,
+Favorites, details and Discover's bounded `/api/v1/library/availability` overlay share
+that projection. Provider metadata stays cached; local status is read at display time.
+
+Profiles may choose a first and a second content language in Settings. Either is accepted;
+menu locale and acquisition quality settings stay independent. Video/audio uses present
+tracks, books use current parsed document language or their file's edition language.
+Unknown language stays neutral. Matching subtitles have their own complete/partial states.
+Migration `0011_profile_content_languages` adds nullable preferences without inferring a
+choice for existing profiles. Regression coverage: `ProfileReferenceVerticalTests`,
+`MediaTests.WorkCard_*`, `DatabaseMigrationTests.ContentLanguages_*` and
+`ContentAvailabilityTests`. The benchmark now enables both content languages and measures
+the bounded Discover availability overlay as well as the existing Library reads.
+
+Verification on 26 October 2026: isolated local PostgreSQL, .NET 10 Release, 411 Works
+with 11,100 episodes, both content languages set, 100 measured calls after two warmups
+per case, no explicit ANALYZE and no concurrent builds/tests. All nine Library reads
+passed the 100 ms p95 budget: service p95 31.7–46.2 ms, HTTP p95 37.1–51.2 ms.
+The mixed 20-Work availability overlay was 23.1 ms HTTP p95; filter options 15.3 ms.
+These are local read measurements, not a production concurrency or full-page guarantee.

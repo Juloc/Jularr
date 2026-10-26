@@ -31,6 +31,8 @@ namespace Jularr.Backend.Data.User.Profile.V1
     {
         private string? _displayName;
         private long? _uiLocaleId;
+        private string? _firstContentLanguage;
+        private string? _secondContentLanguage;
 
         public UpdateProfileDataV1() : base(trackChanges: true)
         {
@@ -54,6 +56,20 @@ namespace Jularr.Backend.Data.User.Profile.V1
             get => _uiLocaleId;
             init => SetField(ref _uiLocaleId, value);
         }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.ContentLanguage))]
+        public string? FirstContentLanguage
+        {
+            get => _firstContentLanguage;
+            init => SetField(ref _firstContentLanguage, value);
+        }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.ContentLanguage))]
+        public string? SecondContentLanguage
+        {
+            get => _secondContentLanguage;
+            init => SetField(ref _secondContentLanguage, value);
+        }
     }
 
     public sealed class UpdateProfilePinDataV1 : BaseData
@@ -69,8 +85,10 @@ namespace Jularr.Backend.Data.User.Profile.V1
 
     public sealed class ReadProfileResultV1 : BaseResponse
     {
-        public ReadProfileResultV1(long id, string displayName, long uiLocaleId, bool hasPin, bool autoplayPreviews = true, string accentHex = "#8040f7")
+        public ReadProfileResultV1(long id, string displayName, long uiLocaleId, bool hasPin, bool autoplayPreviews = true, string accentHex = "#8040f7", string? firstContentLanguage = null, string? secondContentLanguage = null)
         {
+            FirstContentLanguage = firstContentLanguage;
+            SecondContentLanguage = secondContentLanguage;
             AutoplayPreviews = autoplayPreviews;
             AccentHex = accentHex;
             Id = id;
@@ -87,6 +105,12 @@ namespace Jularr.Backend.Data.User.Profile.V1
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.UiLocaleId))]
         public long UiLocaleId { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.ContentLanguage))]
+        public string? FirstContentLanguage { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.ContentLanguage))]
+        public string? SecondContentLanguage { get; }
 
         public bool HasPin { get; }
 
