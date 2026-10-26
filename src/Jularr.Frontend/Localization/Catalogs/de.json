@@ -8957,6 +8957,14 @@
    "This value cannot be used here.",
    "Dieser Wert kann hier nicht verwendet werden."
   ],
+  "errors.validation.not_allowed": [
+   "This action is not available for this item.",
+   "Diese Aktion ist für diesen Eintrag nicht verfügbar."
+  ],
+  "errors.validation.invalid_wireguard_configuration": [
+   "The WireGuard configuration cannot be used. It needs one interface, one peer and only supported keys.",
+   "Die WireGuard-Konfiguration kann nicht verwendet werden. Sie braucht genau eine Schnittstelle, einen Peer und nur unterstützte Schlüssel."
+  ],
   "errors.validation.unknown_language": [
    "Use two-letter language codes such as de or en.",
    "Verwende zweibuchstabige Sprachcodes wie de oder en."
