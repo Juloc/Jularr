@@ -218,7 +218,7 @@ namespace Jularr.Backend.Tests
             using var denied = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import/jobs",
                 new MediaImportJobRequestV1(Books, MediaImportActionType.MonitorAndSearch));
             Assert.AreEqual(HttpStatusCode.BadRequest, denied.StatusCode);
-            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Operations" WHERE "OperationTypeId" = 6 """));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Operations" WHERE "OperationTypeId" = 7 """));
             Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" """));
         }
 

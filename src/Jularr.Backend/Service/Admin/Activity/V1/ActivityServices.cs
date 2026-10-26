@@ -30,7 +30,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     operation."Id",
                     operation."OperationTypeId",
                     operation."OperationStatusTypeId",
-                    coalesce(release."Title", root."Name", CASE WHEN operation."OperationTypeId" = 6 THEN 'Media import' END, operation."WorkerJobKey", '') AS "Title",
+                    coalesce(release."Title", root."Name", CASE WHEN operation."OperationTypeId" = 7 THEN 'Media import' END, operation."WorkerJobKey", '') AS "Title",
                     work."Id" AS "WorkId",
                     work."CanonicalTitle" AS "WorkTitle",
                     operation."ProgressPercent"::integer AS "ProgressPercent",
@@ -233,6 +233,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             _signals.Scans.Notify();
             _signals.Backups.Notify();
             _signals.Benchmarks.Notify();
+            _signals.Searches.Notify();
         }
     }
 

@@ -1,8 +1,8 @@
 -- Media list imports share Operations' claim/recovery/history lifecycle. No baseline edits.
-INSERT INTO "OperationTypes" ("Id", "Key") VALUES (6, 'MediaImport');
+INSERT INTO "OperationTypes" ("Id", "Key") VALUES (7, 'MediaImport');
 
 CREATE UNIQUE INDEX "UX_Operations_ActiveMediaImport" ON "Operations" ("RequestedByAccountId")
-WHERE "OperationTypeId" = 6 AND "OperationStatusTypeId" IN (1, 2);
+WHERE "OperationTypeId" = 7 AND "OperationStatusTypeId" IN (1, 2);
 
 CREATE TABLE "MediaImportJobs" (
     "OperationId" bigint PRIMARY KEY REFERENCES "Operations" ("Id") ON DELETE CASCADE,

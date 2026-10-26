@@ -17,9 +17,9 @@ namespace Jularr.Backend.Logic.Media
                 """
                 WITH queued AS (
                     INSERT INTO "Operations" ("OperationTypeId", "RequestedByAccountId")
-                    VALUES (6, @AccountId)
+                    VALUES (7, @AccountId)
                     ON CONFLICT ("RequestedByAccountId")
-                        WHERE "OperationTypeId" = 6 AND "OperationStatusTypeId" IN (1, 2)
+                        WHERE "OperationTypeId" = 7 AND "OperationStatusTypeId" IN (1, 2)
                     DO UPDATE SET "RequestedByAccountId" = EXCLUDED."RequestedByAccountId"
                     RETURNING "Id"
                 )
@@ -149,7 +149,7 @@ namespace Jularr.Backend.Logic.Media
                 FROM "MediaImportJobs" AS job
                 JOIN "Operations" AS operation ON operation."Id" = job."OperationId"
                 WHERE job."OperationId" = @OperationId
-                  AND operation."OperationTypeId" = 6 AND operation."OperationStatusTypeId" = 2;
+                  AND operation."OperationTypeId" = 7 AND operation."OperationStatusTypeId" = 2;
                 """;
             sql.Parameters.Add(data);
             return ctx.ReadOptionalAsync<MediaImportJobWorkData>(sql, ct);
@@ -206,7 +206,7 @@ namespace Jularr.Backend.Logic.Media
                             "UpdatedAt" = now()
                 )
                 UPDATE "Operations" SET "ProcessedCount" = @RowIndex + 1
-                WHERE "Id" = @OperationId AND "OperationTypeId" = 6 AND "OperationStatusTypeId" = 2
+                WHERE "Id" = @OperationId AND "OperationTypeId" = 7 AND "OperationStatusTypeId" = 2
                   AND EXISTS (SELECT 1 FROM checkpoint);
                 """;
             sql.Parameters.Add(data);
