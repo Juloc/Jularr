@@ -18,15 +18,54 @@ namespace Jularr.Backend.Tests
         {
             using var storage = new TemporaryDirectory();
             var ollama = new FakeOllama();
+            var mozilla = new UnavailableMozilla();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
                 settings: new Dictionary<string, string> { ["LocalTranslation:Endpoint"] = "http://ollama:11434" },
-                services: services => services.AddHttpClient<OllamaLocalModels>()
-                    .ConfigurePrimaryHttpMessageHandler(() => ollama));
+                services: services =>
+                {
+                    services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => ollama);
+                    services.AddHttpClient<MozillaTranslationsClient>().ConfigurePrimaryHttpMessageHandler(() => mozilla);
+                });
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
             var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
             using var opened = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/assets/" + first + "/open");
             Assert.AreEqual(HttpStatusCode.OK, opened.StatusCode, await opened.Content.ReadAsStringAsync());
             var document = (await opened.Content.ReadFromJsonAsync<ReadingDocumentV1>())!;
+            using var reader = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
+            Assert.AreEqual(HttpStatusCode.OK, reader.StatusCode, await reader.Content.ReadAsStringAsync());
+            var readerHtml = await reader.Content.ReadAsStringAsync();
+            StringAssert.Contains(readerHtml, "data-language-choice=" + (char)34 + "de" + (char)34);
+            StringAssert.Contains(readerHtml, "data-local-model=" + (char)34 + "translategemma:4b" + (char)34);
+            StringAssert.Contains(readerHtml, "reader__footer");
+            StringAssert.Contains(readerHtml, "data-role=" + (char)34 + "seek" + (char)34);
+            StringAssert.Contains(readerHtml, "data-role=" + (char)34 + "turn-tools" + (char)34);
+            // The administration view must expose model management and the live status
+            // without changing the ordinary Reader's permissions.
+            using var adminPage = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation");
+            Assert.AreEqual(HttpStatusCode.OK, adminPage.StatusCode, await adminPage.Content.ReadAsStringAsync());
+            var adminHtml = await adminPage.Content.ReadAsStringAsync();
+            StringAssert.Contains(adminHtml, "data-translation-download");
+            StringAssert.Contains(adminHtml, "translategemma:4b");
+
+            ollama.Unavailable = true;
+            using var offlineAdmin = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation");
+            Assert.AreEqual(HttpStatusCode.OK, offlineAdmin.StatusCode, await offlineAdmin.Content.ReadAsStringAsync());
+            var offlineHtml = await offlineAdmin.Content.ReadAsStringAsync();
+            StringAssert.Contains(offlineHtml, "data-translation-download");
+            StringAssert.Contains(offlineHtml, "translategemma:4b", "Model choices must stay visible when Ollama is offline.");
+            ollama.Unavailable = false;
+
+            // An empty Mozilla catalogue still reports English as a bridge; a German book
+            // must not offer that as a usable browser route without a de->en model.
+            mozilla.EmptyCatalogue = true;
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'de' WHERE \"Id\" = " + document.DocumentId);
+            using var germanReader = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
+            Assert.AreEqual(HttpStatusCode.OK, germanReader.StatusCode, await germanReader.Content.ReadAsStringAsync());
+            var germanHtml = await germanReader.Content.ReadAsStringAsync();
+            StringAssert.Contains(germanHtml, "data-browser-translation-targets=\"\"");
+            StringAssert.Contains(germanHtml, "reader__footer");
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en' WHERE \"Id\" = " + document.DocumentId);
+
             var baseUrl = "/api/v1/reading/documents/" + document.DocumentId + "/sections/0/local-translations/de/translategemma:4b";
             var request = baseUrl + "/blocks/0";
 
@@ -64,13 +103,25 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Forbidden, unavailable.StatusCode);
         }
 
+        private sealed class UnavailableMozilla : HttpMessageHandler
+        {
+            public bool EmptyCatalogue { get; set; }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+                Task.FromResult(EmptyCatalogue
+                    ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"data":[]}""") }
+                    : new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        }
+
         private sealed class FakeOllama : HttpMessageHandler
         {
             public string Digest { get; set; } = new string('a', 64);
+            public bool Unavailable { get; set; }
             public int GenerationCount { get; private set; }
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
+                if (Unavailable) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
                 string body;
                 if (request.RequestUri!.AbsolutePath == "/api/tags")
                     body = JsonSerializer.Serialize(new { models = new[] { new { name = "translategemma:4b", digest = Digest } } });

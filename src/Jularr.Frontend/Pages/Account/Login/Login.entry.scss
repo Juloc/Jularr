@@ -2,7 +2,7 @@
     display: grid;
     min-height: 100dvh;
     place-items: center;
-    padding: max(28px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom));
+    padding: max(28px, calc(12px + env(safe-area-inset-top))) max(20px, env(safe-area-inset-right)) max(28px, calc(12px + env(safe-area-inset-bottom))) max(20px, env(safe-area-inset-left));
 }
 .auth-card {
     width: min(100%, 400px);
@@ -22,7 +22,7 @@
 
 // Sign in, request access and approval pending: the owner's login mockup (v2), one 423px card on the soft page glow.
 .auth-main:has(.login-card) {
-    padding: 44px 18px 72px;
+    padding: max(44px, calc(16px + env(safe-area-inset-top))) max(18px, env(safe-area-inset-right)) max(72px, calc(20px + env(safe-area-inset-bottom))) max(18px, env(safe-area-inset-left));
 
     & > .page-screen { width: min(100%, 423px); }
 }
@@ -135,7 +135,7 @@ html:not([data-skin="original"]) body:has(.login-card) {
     gap: 9px;
     width: 100%;
     min-width: 0;
-    height: 42px;
+    min-height: 44px;
     padding: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius-tile);
@@ -245,15 +245,17 @@ html:not([data-skin="original"]) body:has(.login-card) {
 }
 
 @media (max-width: 500px) {
-    .auth-main:has(.login-card) { padding: 24px 13px 82px; }
+    .auth-main:has(.login-card) { padding: max(24px, calc(12px + env(safe-area-inset-top))) max(13px, env(safe-area-inset-right)) max(82px, calc(20px + env(safe-area-inset-bottom))) max(13px, env(safe-area-inset-left)); }
     .login-card { padding: 27px 22px 24px; border-radius: 22px; .auth-brand { margin-bottom: 24px; } .auth-brand-name { font-size: 25px; } }
     .login-card--register { padding-top: 25px; .auth-brand { margin-bottom: 20px; } .auth-brand-name { font-size: 24px; } }
     .auth-providers { gap: 7px; }
     .auth-provider { gap: 5px; font-size: 11px; }
+    // iOS otherwise zooms a 13px login field and hides nearby controls behind the keyboard.
+    .login-card .ui-field__control > input { font-size: 16px; scroll-margin-bottom: 24px; }
     // The tall request form leaves the two round buttons the page's own bottom.
     body:has(.login-card--register) { position: relative; }
-    .auth-main:has(.login-card--register) { padding-bottom: 115px; }
-    body:has(.login-card--register) .appearance-dock { position: absolute; bottom: 18px; }
+    .auth-main:has(.login-card--register) { padding-bottom: calc(115px + env(safe-area-inset-bottom)); }
+    body:has(.login-card--register) .appearance-dock { position: absolute; bottom: calc(18px + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 360px) {
     .login-card { padding: 23px 16px 22px; }

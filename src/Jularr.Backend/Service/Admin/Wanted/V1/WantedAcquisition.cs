@@ -10,6 +10,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Integrations.Data.Newznab;
+using Jularr.Integrations.Data.AnnasArchive;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Sabnzbd;
 using Jularr.Integrations.Data.Qbittorrent;
@@ -77,6 +78,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var budget = SearchBudget.For(depth);
             var offers = new ConcurrentDictionary<string, ReleaseOffer>(StringComparer.Ordinal);
             var failures = 0;
+            var sourceErrors = new ConcurrentBag<string>();
+            using var annaSearch = new AnnasArchiveSearchContext();
             var allNewznab = indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab).ToArray();
             var newznab = allNewznab.Where(indexer => AcquisitionConnectionLogic.CanSearch(indexer, target.MediaTypeId, automatic, now)).ToArray();
             var skipped = allNewznab.Count(indexer => AcquisitionConnectionLogic.Serves(indexer, target.MediaTypeId, automatic)) - newznab.Length;
@@ -122,7 +125,19 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 await Parallel.ForEachAsync(sources, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, sources.Count), CancellationToken = token },
                     async (source, inner) =>
                     {
-                        if (await _direct.SearchAsync(source, wanted, inner, Enough) is not { } answers)
+                        IReadOnlyList<ReleaseOffer>? answers;
+                        try
+                        {
+                            answers = await _direct.SearchAsync(source, wanted, inner, Enough, annaSearch);
+                        }
+                        catch (DirectSourceException exception)
+                        {
+                            sourceErrors.Add(exception.ErrorKey);
+                            Interlocked.Increment(ref failures);
+                            return;
+                        }
+
+                        if (answers is null)
                         {
                             Interlocked.Increment(ref failures);
                             return;
@@ -199,7 +214,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // Indexers left out for backoff or limits count as unavailable, not as empty.
             var sources = catalogs.Length + torrents.Length + newznab.Length + skipped;
             var unavailable = sources > 0 && failures + skipped >= sources && offers.IsEmpty;
-            return new WantedSearchResult(selection, offers, unavailable, AcquisitionSelectionLogic.OutcomeKey(selection.Outcome, unavailable));
+            var errorKey = unavailable && skipped == 0 && sourceErrors.Count == failures && sourceErrors.Distinct().Count() == 1 ? sourceErrors.First() : null;
+            return new WantedSearchResult(selection, offers, unavailable, AcquisitionSelectionLogic.OutcomeKey(selection.Outcome, unavailable), errorKey);
         }
 
         public ReleaseOffer? FindOffer(long wantedItemId, string candidateId) =>
@@ -224,7 +240,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var result = await SearchAsync(context, target, indexers, SearchDepth.Normal, automatic: true, ct, scope, language);
             if (result.IndexersUnavailable)
             {
-                throw new ServiceUnavailableException("acquisition_unavailable");
+                throw new ServiceUnavailableException(result.ErrorKey ?? "acquisition_unavailable");
             }
 
             if (result.Selection.Winner is not { } winner)

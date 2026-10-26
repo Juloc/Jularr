@@ -10,8 +10,15 @@ namespace Jularr.Backend.Data.Logic.Library
     {
         public LibraryRenameFileData(long id, long libraryRootId, string libraryRootName, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string relativePath, DateTime? missingSince,
             long? mediaAssetId, string? canonicalTitle, int? releaseYear, string? author, WorkUnitType? workUnitTypeId, decimal? unitNumber, string? unitTitle, decimal? parentUnitNumber,
-            string? qualityKey, string? releaseGroup, string? edition, int revision, int? width, string providerIds = "{}", string mediaTracks = "[]", string customFormats = "{}", string? releaseName = null, string? collection = null, string localizedTitles = "{}", DateOnly? unitReleasedOn = null, long? workId = null)
+            string? qualityKey, string? releaseGroup, string? edition, int revision, int? width, string providerIds = "{}", string mediaTracks = "[]", string customFormats = "{}", string? releaseName = null, string? collection = null, string localizedTitles = "{}", DateOnly? unitReleasedOn = null, long? workId = null, string? language = null, int? discNumber = null, int? discCount = null, string? platform = null, string episodeNumbers = "[]", decimal? absoluteNumber = null, string absoluteNumbers = "[]")
         {
+            AbsoluteNumber = absoluteNumber;
+            AbsoluteNumbers = absoluteNumbers;
+            EpisodeNumbers = episodeNumbers;
+            Language = language;
+            DiscNumber = discNumber;
+            DiscCount = discCount;
+            Platform = platform;
             WorkId = workId;
             UnitReleasedOn = unitReleasedOn;
             ProviderIds = providerIds;
@@ -89,6 +96,27 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
         public decimal? ParentUnitNumber { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.OriginalLanguage))]
+        public string? Language { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.DiscNumber))]
+        public int? DiscNumber { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.DiscNumber))]
+        public int? DiscCount { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Name), false)]
+        public string? Platform { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalIdentities))]
+        public string EpisodeNumbers { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
+        public decimal? AbsoluteNumber { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalIdentities))]
+        public string AbsoluteNumbers { get; }
 
         // When the episode first aired.
         [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ReleasedOn))]

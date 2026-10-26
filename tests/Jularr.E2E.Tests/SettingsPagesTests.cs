@@ -186,7 +186,7 @@ namespace Jularr.E2E.Tests
 
             // The example is the server's answer to what is typed, before anything is saved.
             await file.FillAsync("{Title} X{Year}");
-            await Assertions.Expect(example).ToContainTextAsync("Example Movie X1999.mkv");
+            await Assertions.Expect(example).ToContainTextAsync("The Movie - Title X2010.mkv");
             await file.FillAsync("{Title} {Nothing}");
             await Assertions.Expect(example).ToHaveTextAsync("The pattern uses an unknown placeholder.");
             await Assertions.Expect(example).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("naming-example--problem"));
@@ -196,7 +196,7 @@ namespace Jularr.E2E.Tests
             await page.GetByRole(AriaRole.Button, new() { Name = "Placeholders", Exact = true }).ClickAsync();
             await page.GetByRole(AriaRole.Button, new() { Name = "{Year}", Exact = true }).ClickAsync();
             await Assertions.Expect(file).ToHaveValueAsync("{Title}{Year}");
-            await Assertions.Expect(example).ToContainTextAsync("Example Movie1999.mkv");
+            await Assertions.Expect(example).ToContainTextAsync("The Movie - Title2010.mkv");
             await Assertions.Expect(page.Locator("[data-save-pill]")).ToContainTextAsync("1 change");
             await Evidence.SaveAsync(page, "naming-page");
         }

@@ -84,6 +84,9 @@ internal fun TvUpdateSection(
                 state.info.apkAsset.sizeBytes.takeIf { it > 0 }?.let { size ->
                     Text(stringResource(R.string.tv_update_available_size, formatMegabytes(size)))
                 }
+                state.info.release.body?.takeIf { it.isNotBlank() }?.let { notes ->
+                    Text(notes, style = MaterialTheme.typography.bodyMedium, maxLines = 5)
+                }
                 Button(onClick = { onStartDownload(state.info) }) {
                     Text(stringResource(R.string.tv_update_action_update_now))
                 }
@@ -150,6 +153,9 @@ internal fun TvUpdatePromptOverlay(
             stringResource(R.string.tv_update_available_title, info.version),
             style = MaterialTheme.typography.titleLarge,
         )
+        info.release.body?.takeIf { it.isNotBlank() }?.let { notes ->
+            Text(notes, style = MaterialTheme.typography.bodyMedium, maxLines = 4)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = onUpdateNow) {
                 Text(stringResource(R.string.tv_update_action_update_now))

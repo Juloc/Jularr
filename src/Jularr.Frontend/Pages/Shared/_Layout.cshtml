@@ -13,28 +13,33 @@
         : ViewData["Title"] as string ?? T["app.name"]);
     ViewData["Title"] = title;
     var pageAssets = currentPage?.Definition.AssetEntries.ToArray() ?? [];
+    var pwaAccent = await Jularr.Frontend.Modules.Pwa.PwaIconRenderer.AccountAccentAsync(Context);
+    var appleIcon = pwaAccent is null ? Assets.ImageUrl("Assets/Shared/apple-touch-icon.png") : Jularr.Frontend.Modules.Pwa.PwaIconRenderer.IconUrl("apple-180", pwaAccent);
+    var faviconSvg = pwaAccent is null ? Assets.ImageUrl("Assets/Shared/favicon.svg") : "/pwa/icons/favicon/" + pwaAccent + ".svg";
+    var faviconPng = pwaAccent is null ? Assets.ImageUrl("Assets/Shared/icon-32.png") : Jularr.Frontend.Modules.Pwa.PwaIconRenderer.IconUrl("favicon-32", pwaAccent);
     // The Reader keeps document-lifetime rendering resources; leaving it is a full navigation.
     var inPlace = (showShell || isPlayer) && !isReader;
     // The hint of an action a page without script answered; a script's request got it in the HX-Trigger header instead.
     var hint = TempData[JularrPage.HintKey] as string;
 }
 <!DOCTYPE html>
-<html lang="@T.Locale" dir="@(T.IsRightToLeft ? "rtl" : "ltr")" data-skin="clean" data-mode="system" data-build="@Assets.BuildId">
+<html lang="@T.Locale" dir="@(T.IsRightToLeft ? "rtl" : "ltr")" data-skin="clean" data-mode="system" data-build="@Assets.BuildId" data-pwa-accent="@(pwaAccent is null ? null : "#" + pwaAccent)">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#17161e" />
     <title>@title · @T.InstanceName</title>
-    <link rel="icon" type="image/svg+xml" sizes="any" href="@Assets.ImageUrl("Assets/Shared/favicon.svg")" />
-    <link rel="icon" type="image/png" sizes="32x32" href="@Assets.ImageUrl("Assets/Shared/icon-32.png")" />
-    <link rel="apple-touch-icon" href="@Assets.ImageUrl("Assets/Shared/apple-touch-icon.png")" />
+    <link rel="icon" type="image/svg+xml" sizes="any" data-pwa-favicon="svg" href="@faviconSvg" />
+    <link rel="icon" type="image/png" sizes="32x32" data-pwa-favicon="png" href="@faviconPng" />
+    <link rel="apple-touch-icon" href="@appleIcon" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="@T.InstanceName" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     @Assets.Styles("Assets/Shared/shell.entry.scss")
+    @Assets.Styles("Modules/Pwa/pwa.entry.scss")
     @if (!showShell)
     {
         @Assets.Styles(pageAssets)
@@ -102,6 +107,12 @@
     {
         <main class="@(isSetup ? "setup-main" : "auth-main")" id="main-content" tabindex="-1">@RenderBody()</main>
     }
+    @* Only made visible after a verified frontend build change, never while the page is active by force. *@
+    <aside class="pwa-update" data-pwa-update hidden role="status" aria-live="polite">
+        <span class="pwa-update__message">@T["pwa.update.available"]</span>
+        <button type="button" class="pwa-update__apply" data-pwa-apply>@T["pwa.update.install"]</button>
+        <button type="button" class="pwa-update__later" data-pwa-later>@T["pwa.update.later"]</button>
+    </aside>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

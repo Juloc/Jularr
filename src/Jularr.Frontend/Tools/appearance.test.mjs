@@ -10,7 +10,7 @@ const script = compile(source);
 const palette = {};
 runInNewContext(compile(readFileSync(new URL("../Modules/Appearance/Palette.ts", import.meta.url), "utf8")), { exports: palette });
 
-function appearance(saved = {}, unavailable = false) {
+function appearance(saved = {}, unavailable = false, accountAccent = "") {
     class Element {
         dataset;
         attributes = {};
@@ -21,7 +21,7 @@ function appearance(saved = {}, unavailable = false) {
     }
 
     const styles = new Map();
-    const root = { dataset: {}, style: { setProperty: (name, value) => styles.set(name, value) } };
+    const root = { dataset: accountAccent ? { pwaAccent: accountAccent } : {}, style: { setProperty: (name, value) => styles.set(name, value) } };
     const buttons = ["original", "clean"].map(setSkin => new Element({ setSkin }))
         .concat(["system", "light", "dark"].map(setMode => new Element({ setMode })));
     const events = {};
@@ -30,12 +30,22 @@ function appearance(saved = {}, unavailable = false) {
     const picker = new Element({ accentInput: "true" });
     const value = {};
     const meta = new Element({});
+    const faviconSvg = new Element({});
+    const faviconPng = new Element({});
+    const appleIcon = new Element({});
+    const error = new Element({});
+    error.hidden = true;
+    const pendingTimers = [];
+    const requests = [];
     const storage = new Map(Object.entries(saved));
     const document = {
         documentElement: root,
         querySelectorAll: selector => selector.includes("data-accent-input") ? [picker] : selector.includes("data-accent-value") ? [value]
             : selector.includes("data-set-accent") ? accentButtons : buttons,
-        querySelector: () => meta,
+        querySelector: selector => selector.includes('data-pwa-favicon="svg"') ? faviconSvg
+            : selector.includes('data-pwa-favicon="png"') ? faviconPng
+            : selector.includes('apple-touch-icon') ? appleIcon
+            : selector.includes('data-accent-save-error') ? error : meta,
         addEventListener: (name, handler) => { events[name] = handler; }
     };
     const localStorage = {
@@ -44,8 +54,21 @@ function appearance(saved = {}, unavailable = false) {
         removeItem: key => { if (unavailable) throw new Error("blocked"); storage.delete(key); }
     };
     const systemMode = { matches: false, addEventListener() {} };
-    runInNewContext(script, { document, localStorage, Element, HTMLInputElement: Element, Set, exports: {}, require: () => palette, window: { matchMedia: () => systemMode } });
+    const fetch = async (url, options) => {
+        requests.push([url, options]);
+        return url === '/api/v1/auth'
+            ? { ok: true, headers: { get: name => name === 'RequestVerificationToken' ? 'csrf-test-token' : null } }
+            : { ok: true };
+    };
+    runInNewContext(script, { document, localStorage, Element, HTMLInputElement: Element, Set,
+        exports: {}, require: () => palette, window: { matchMedia: () => systemMode },
+        fetch, setTimeout: callback => pendingTimers.push(callback), clearTimeout: () => {} });
     return { Element, root, buttons, storage, styles, accentButtons, reset, picker, value, meta,
+        faviconSvg, faviconPng, appleIcon, error, requests,
+        flush: async () => {
+            for (const task of pendingTimers.splice(0)) task();
+            await new Promise(setImmediate);
+        },
         click: button => events.click({ target: button }), input: color => { picker.value = color; events.input({ target: picker }); } };
 }
 
@@ -127,6 +150,26 @@ test("free accents update tokens and artwork without changing semantic colors", 
     assert.equal(ui.styles.get("--art-saturate"), "0");
     ui.input("url(bad)");
     assert.equal(ui.root.dataset.accent, "#808080");
+});
+
+test("signed-in accent starts from main profile and updates favicon and saved main profile", async () => {
+    const ui = appearance({ "jularr-ui-accent": "#c8102e" }, false, "#1b8aa0");
+    assert.equal(ui.root.dataset.accent, "#1b8aa0", "account's persisted main profile wins over old device preference");
+    assert.equal(ui.faviconSvg.attributes.href, "/pwa/icons/favicon/1b8aa0.svg");
+    assert.equal(ui.faviconPng.attributes.href, "/pwa/icons/favicon-32/1b8aa0.png");
+    assert.equal(ui.appleIcon.attributes.href, "/pwa/icons/apple-180/1b8aa0.png");
+
+    ui.input("#336699");
+    await ui.flush();
+    assert.equal(ui.root.dataset.pwaAccent, "#336699");
+    assert.equal(ui.faviconSvg.attributes.href, "/pwa/icons/favicon/336699.svg");
+    assert.equal(ui.requests.length, 2, "auth preflight supplies antiforgery token for the authenticated mutation");
+    assert.equal(ui.requests[0][0], "/api/v1/auth");
+    assert.equal(ui.requests[1][0], "/api/v1/profile/pwa/accent");
+    assert.equal(ui.requests[1][1].headers.RequestVerificationToken, "csrf-test-token");
+    assert.equal(JSON.parse(ui.requests[1][1].body).accentHex, "#336699");
+    assert.equal(ui.storage.get("jularr-ui-accent"), "#c8102e", "the main profile is canonical when signed in");
+    assert.equal(ui.error.hidden, true);
 });
 
 const hueOf = hex => {

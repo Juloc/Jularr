@@ -1,0 +1,23 @@
+.remote-browser {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+
+    &__image {
+        display: block;
+        width: 100%;
+        height: auto;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-inner);
+        touch-action: none;
+        user-select: none;
+        &--disconnected { opacity: .5; cursor: default; }
+        &:focus-visible { outline: 3px solid var(--focus); }
+    }
+
+    &__tools { display: flex; flex-wrap: wrap; gap: 8px; }
+    textarea { width: 100%; }
+}

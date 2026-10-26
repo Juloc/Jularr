@@ -17,13 +17,19 @@ namespace Jularr.Backend.Logic.Library
             var sql = new SqlStatement();
             sql.Statement =
                 """
+                WITH numbered_episodes AS (
+                    SELECT episode."Id", row_number() OVER (PARTITION BY episode."WorkId" ORDER BY season."Number", episode."Number")::numeric AS "AbsoluteNumber"
+                    FROM "WorkUnits" AS episode
+                    JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
+                    WHERE episode."WorkUnitTypeId" = 2 AND season."Number" > 0
+                )
                 SELECT
                     file."Id",
                     work."Id" AS "WorkId",
                     file."LibraryRootId",
                     root."Name" AS "LibraryRootName",
                     root."MediaTypeId",
-                    root."MediaSubtypeId",
+                    CASE WHEN class."WorkId" IS NOT NULL THEN class."MediaSubtypeId" ELSE coalesce(work."MediaSubtypeId", root."MediaSubtypeId") END AS "MediaSubtypeId",
                     file."RelativePath",
                     file."MissingSince",
                     file."MediaAssetId",
@@ -38,8 +44,22 @@ namespace Jularr.Backend.Logic.Library
                             creator."WorkId" = work."Id"
                     ) AS "Author",
                     unit."WorkUnitTypeId",
+                    numbering."AbsoluteNumber",
+                    coalesce((SELECT jsonb_agg(numbered."AbsoluteNumber" ORDER BY covered."Number")::text
+                        FROM "MediaAssetUnitCoverage" AS coverage
+                        JOIN "WorkUnits" AS covered ON covered."Id" = coverage."WorkUnitId"
+                        JOIN numbered_episodes AS numbered ON numbered."Id" = covered."Id"
+                        WHERE coverage."MediaAssetId" = asset."Id"), '[]') AS "AbsoluteNumbers",
+                    coalesce((SELECT jsonb_agg(covered."Number" ORDER BY covered."Number")::text
+                        FROM "MediaAssetUnitCoverage" AS coverage
+                        JOIN "WorkUnits" AS covered ON covered."Id" = coverage."WorkUnitId"
+                        WHERE coverage."MediaAssetId" = asset."Id" AND covered."WorkUnitTypeId" = 2), '[]') AS "EpisodeNumbers",
                     unit."Number" AS "UnitNumber",
                     unit."Title" AS "UnitTitle",
+                    unit."DiscNumber"::integer,
+                    (SELECT max(track."DiscNumber")::integer FROM "WorkUnits" AS track WHERE track."WorkId" = work."Id" AND track."WorkUnitTypeId" = 5) AS "DiscCount",
+                    coalesce(edition."LanguageCode", work."OriginalLanguage") AS "Language",
+                    platform."Name" AS "Platform",
                     unit."ReleasedOn" AS "UnitReleasedOn",
                     parent."Number" AS "ParentUnitNumber",
                     file."QualityKey",
@@ -87,9 +107,15 @@ namespace Jularr.Backend.Logic.Library
                     JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
                     LEFT JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
                     LEFT JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                    LEFT JOIN "WorkClasses" AS class ON class."WorkId" = work."Id"
+                    LEFT JOIN "WorkVersions" AS version ON version."Id" = asset."WorkVersionId"
+                    LEFT JOIN "WorkEditions" AS edition ON edition."Id" = version."WorkEditionId"
+                    LEFT JOIN "GameReleases" AS game ON game."WorkVersionId" = version."Id"
+                    LEFT JOIN "GamePlatforms" AS platform ON platform."Id" = game."GamePlatformId"
                     LEFT JOIN "Franchises" AS franchise ON franchise."Id" = work."FranchiseId"
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
+                    LEFT JOIN numbered_episodes AS numbering ON numbering."Id" = unit."Id"
                 WHERE
                     NOT EXISTS (
                         SELECT
@@ -126,6 +152,10 @@ namespace Jularr.Backend.Logic.Library
                     .ToLookup(subtitle => subtitle.Owner!.Id, subtitle => subtitle.File);
                 foreach (var file in media)
                 {
+                    // A bundled game's relative paths can be referenced by a CUE or playlist.
+                    // Leave such releases intact; a lone ROM has no internal references to invalidate.
+                    if (file.MediaTypeId == MediaType.Game && (present.Any(item => Path.GetExtension(item.RelativePath).ToLowerInvariant() is ".cue" or ".m3u" or ".m3u8")
+                        || present.Count(item => item.RelativePath.StartsWith(Folder(file.RelativePath), StringComparison.OrdinalIgnoreCase)) != 1)) continue;
                     var current = Stem(file.RelativePath);
                     if (Target(file, patterns) is not { } target || IsNamed(current, target))
                     {
@@ -177,7 +207,7 @@ namespace Jularr.Backend.Logic.Library
             return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));
         }
 
-        // Only identities with a fixed layout are renamed; games keep their release folders.
+        // Identified files use the same configured patterns as imports; game bundles remain together.
         private static string? Target(LibraryRenameFileData file, NamingSet patterns)
         {
             if (file.CanonicalTitle is not { } title)
@@ -188,10 +218,11 @@ namespace Jularr.Backend.Logic.Library
             return (file.MediaTypeId, file.WorkUnitTypeId) switch
             {
                 (MediaType.Movie, null) => NamingPattern.Apply(patterns.Pattern(MediaType.Movie, file.MediaSubtypeId), Values(file, title, null, null, patterns)),
-                (MediaType.Series, WorkUnitType.Episode) when file.ParentUnitNumber is { } season => NamingPattern.Apply(patterns.Pattern(MediaType.Series, file.MediaSubtypeId), Values(file, title, season, file.UnitNumber, patterns)),
-                (MediaType.Book, null or WorkUnitType.Volume) when file.MediaSubtypeId == MediaSubtype.Manga => LibraryNaming.Volume(title, file.UnitNumber),
-                (MediaType.Book, null) => LibraryNaming.Book(title, file.ReleaseYear, file.Author),
-                (MediaType.Music, WorkUnitType.Track) when file.UnitTitle is { } name => LibraryNaming.Track(file.Author, title, file.ReleaseYear, file.UnitNumber!.Value, name),
+                (MediaType.Series, WorkUnitType.Episode) when file.ParentUnitNumber is { } season => NamingPattern.Apply(patterns.Pattern(MediaType.Series, file.MediaSubtypeId, Jularr.Backend.Logic.Acquisition.ReleaseParser.TryParse(file.ReleaseName ?? Path.GetFileNameWithoutExtension(file.RelativePath), out var release) && release.AirDate is not null), Values(file, title, season, file.UnitNumber, patterns)),
+                (MediaType.Book, null or WorkUnitType.Volume) when file.MediaSubtypeId == MediaSubtype.Manga => NamingPattern.Apply(patterns.Pattern(MediaType.Book, file.MediaSubtypeId), Values(file, title, null, null, patterns)),
+                (MediaType.Book, null) => NamingPattern.Apply(patterns.Pattern(MediaType.Book, file.MediaSubtypeId), Values(file, title, null, null, patterns)),
+                (MediaType.Music, WorkUnitType.Track) when file.UnitTitle is not null => NamingPattern.Apply(patterns.Pattern(MediaType.Music, file.MediaSubtypeId), Values(file, title, null, null, patterns)),
+                (MediaType.Game, null) => NamingPattern.Apply(patterns.Pattern(MediaType.Game, file.MediaSubtypeId), Values(file, title, null, null, patterns)),
                 _ => null
             };
         }
@@ -199,7 +230,15 @@ namespace Jularr.Backend.Logic.Library
         private static NamingValues Values(LibraryRenameFileData file, string title, decimal? season, decimal? episode, NamingSet patterns) =>
             new NamingValues(title, file.ReleaseYear, season, episode, file.UnitTitle, QualityOf(file), file.ReleaseGroup, file.Edition, file.Revision)
             {
-                MediaTypeId = file.MediaTypeId,
+                MediaTypeId = file.MediaTypeId, MediaSubtypeId = file.MediaSubtypeId, EpisodeNumbers = JsonSerializer.Deserialize<decimal[]>(file.EpisodeNumbers) ?? [],
+                Absolute = file.AbsoluteNumber, AbsoluteNumbers = JsonSerializer.Deserialize<decimal[]>(file.AbsoluteNumbers) ?? [],
+                Author = Jularr.Backend.Logic.Acquisition.BookReleaseJudge.Authors(file.Author).FirstOrDefault(), Artist = file.Author,
+                Track = file.WorkUnitTypeId == WorkUnitType.Track ? file.UnitNumber : null,
+                TrackTitle = file.UnitTitle, Volume = file.WorkUnitTypeId == WorkUnitType.Volume ? file.UnitNumber : null,
+                Language = file.Language, Disc = file.DiscNumber, DiscCount = file.DiscCount, Platform = file.Platform ?? (file.MediaTypeId == MediaType.Game ? "Unknown" : null),
+                Region = file.MediaTypeId == MediaType.Game ? GameFileName.Facts(file.ReleaseName ?? file.RelativePath).Region : null,
+                GameVersion = file.MediaTypeId == MediaType.Game ? GameFileName.Facts(file.ReleaseName ?? file.RelativePath).Version : null,
+                Format = Path.GetExtension(file.RelativePath).TrimStart('.').ToUpperInvariant(),
                 Rules = patterns.Rules(file.MediaTypeId),
                 AirDate = file.UnitReleasedOn,
                 ProviderIds = JsonSerializer.Deserialize<Dictionary<string, string>>(file.ProviderIds),
@@ -271,6 +310,8 @@ namespace Jularr.Backend.Logic.Library
         // A counted alternative is already in place.
         private static bool IsNamed(string current, string target) => current.Equals(target, StringComparison.OrdinalIgnoreCase)
             || current.StartsWith(target, StringComparison.OrdinalIgnoreCase) && Counter().IsMatch(current[target.Length..]);
+
+        private static string Folder(string relativePath) => relativePath.LastIndexOf('/') is var slash and >= 0 ? relativePath[..(slash + 1)] : "";
 
         private static string Stem(string relativePath) => relativePath[..^Path.GetExtension(relativePath).Length];
 

@@ -54,7 +54,7 @@ namespace Jularr.Integrations.Logic.Browser
         // A page of its own, so several addresses can be read at the same time.
         public async Task<(string Target, string Session)> OpenPageAsync(CancellationToken ct)
         {
-            var created = await SendAsync("Target.createTarget", new { url = "about:blank" }, ct);
+            var created = await SendAsync("Target.createTarget", new { url = "about:blank", background = true }, ct);
             using var document = JsonDocument.Parse(created);
             var targetId = document.RootElement.GetProperty("result").GetProperty("targetId").GetString()!;
             var attached = await SendAsync("Target.attachToTarget", new { targetId, flatten = true }, ct);

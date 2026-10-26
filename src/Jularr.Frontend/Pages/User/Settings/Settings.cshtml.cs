@@ -31,6 +31,7 @@ namespace Jularr.Frontend.Pages.User.Settings
     public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, ReadProfileMediaV1 readMedia, UpdateProfileMediaV1 updateMedia,
         UpdateProfilePinV1 updatePin, ChangeAccountPasswordV1 changePassword, RemoveProfilePinV1 removePin, DeleteProfileV1 deleteProfile, ReadUiLocalesV1 readLocales, ReadHomeLayoutV1 readLayout, SaveHomeLayoutV1 saveLayout,
         ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAvailableSpeechModelsV1 readSpeechModels, ReadPlaybackPreferencesV1 readPlayback, SavePlaybackPreferencesV1 savePlayback,
+        ReadPwaAppearanceV1 readPwaAppearance, SavePwaAccentV1 savePwaAccent,
         ReadAniListConnectionV1 readAniList, ConnectAniListV1 connectAniList, DisconnectAniListV1 disconnectAniList, UpdateAniListPushV1 updateAniListPush,
         IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
@@ -43,6 +44,8 @@ namespace Jularr.Frontend.Pages.User.Settings
         private IReadOnlyList<HomeShelfV1> _layout = [];
         private AuthenticationResultV1? _authentication;
         private ReadProfileResultV1? _profile;
+        private PwaAppearanceV1? _pwa;
+        private SavePwaAccentDataV1? _pwaInput;
         private IReadOnlyList<UiLocaleDetailsV1> _locales = [];
         private UpdateProfileDataV1? _input;
         private IReadOnlyList<ProfileMediaV1> _media = [];
@@ -60,6 +63,7 @@ namespace Jularr.Frontend.Pages.User.Settings
             page.Title("settings.title");
             page.Navigation("nav.settings");
             page.Asset("Modules/Appearance/appearance.entry.scss");
+            page.Asset("Pages/User/Settings/PwaAccent.entry.ts");
             page.Asset("Framework/Components/SortableList.entry.ts");
             page.Asset("Framework/Components/PasswordReveal.entry.ts");
             page.Asset("Modules/Speech/settings.entry.ts");
@@ -80,6 +84,19 @@ namespace Jularr.Frontend.Pages.User.Settings
                         form.Select(x => x.UiLocaleId, "profile.field.uiLocale", options);
                         form.Save();
                     }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia || _savingPin || _savingPassword || _savingAniList || _speechInput is not null || _playbackInput is not null ? null : FormError));
+
+                    // The installed app icon follows the main profile's saved accent, not this device's local theme.
+                    content.Add(new Form<SavePwaAccentDataV1>(form =>
+                    {
+                        form.Text(x => x.AccentHex, "pwa.profile.accent", "off");
+                        form.Save();
+                    }, Url.Page("/User/Settings/Settings", "PwaAccent"),
+                        antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                        _pwaInput ?? new SavePwaAccentDataV1(_profile.AccentHex), _pwaInput is not null ? FormError : null));
+                    if (_pwa?.MainProfileId == _profile.Id)
+                        content.Add(new P(new Text("pwa.main.current")).Attribute("role", "status"));
+                    else
+                        content.Add(new A(new Text("pwa.main.manage")).Attribute("href", "/Account/Profiles?returnUrl=%2FSettings"));
 
                     // Hidden types leave the profile's lists; they stay reachable.
                     if (_media.Count > 0)
@@ -340,6 +357,15 @@ namespace Jularr.Frontend.Pages.User.Settings
             return RedirectToPage("/User/Settings/Settings");
         }
 
+        public async Task<IActionResult> OnPostPwaAccentAsync(string? accentHex)
+        {
+            _pwaInput = new SavePwaAccentDataV1(accentHex ?? "");
+            await savePwaAccent.ExecuteAsync<UpdateResult>(
+                new SelectProfileParametersV1((await ActiveProfileAsync()).ProfileId),
+                _pwaInput, HttpContext.RequestAborted);
+            return RedirectToPage("/User/Settings/Settings");
+        }
+
         public async Task<IActionResult> OnPostMediaAsync(string[]? hiddenKeys)
         {
             _savingMedia = true;
@@ -422,6 +448,7 @@ namespace Jularr.Frontend.Pages.User.Settings
             if (_authentication.ProfileId is { } profileId)
             {
                 _profile = await readProfile.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(profileId), token);
+                _pwa = await readPwaAppearance.ExecuteAsync<PwaAppearanceV1>(cancellationToken: token);
                 _speech = await readSpeech.ExecuteAsync<SpeechPreferencesV1>(new ReadProfileParametersV1(profileId), token);
                 if (texts.Can("profile.media.read", "Reading"))
                 {

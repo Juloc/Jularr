@@ -7,7 +7,9 @@ namespace Jularr.Integrations.Data.Common
         Gate,
         TooLarge,
         ForbiddenRedirect,
-        NotFound
+        NotFound,
+        RateLimited,
+        TimedOut
     }
 
     internal sealed class DirectDownloadException : Exception

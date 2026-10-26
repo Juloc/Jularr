@@ -25,6 +25,7 @@ namespace Jularr.E2E.Tests
             var page = browser.Page;
             await Owner.SetUpAndSignInAsync(page);
             await jularr.RunSqlAsync(Seed);
+            await jularr.SeedLibraryFilesAsync();
 
             try
             {

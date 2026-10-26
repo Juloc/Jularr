@@ -611,6 +611,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 )
                 SELECT
                     unit."Id" AS "WorkUnitId",
+                    unit."Title",
                     parent."Number"::integer AS "ParentNumber",
                     unit."Number"::integer AS "Number",
                     COALESCE(unit."ReleasedOn" <= current_date, unit."WorkUnitTypeId" = 3) AS "IsAvailable",
@@ -618,10 +619,11 @@ namespace Jularr.Backend.Logic.Acquisition
                         SELECT
                             1
                         FROM
-                            "MediaAssets" AS asset
+                            "MediaAssetUnitCoverage" AS coverage
+                            JOIN "MediaAssets" AS asset ON asset."Id" = coverage."MediaAssetId"
                         WHERE
-                            asset."WorkId" = unit."WorkId"
-                            AND asset."WorkUnitId" = unit."Id"
+                            coverage."WorkId" = unit."WorkId"
+                            AND coverage."WorkUnitId" = unit."Id"
                             AND EXISTS (
                                 SELECT
                                     1

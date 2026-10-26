@@ -130,6 +130,27 @@ namespace Jularr.E2E.Tests
             await command.ExecuteNonQueryAsync();
         }
 
+        // Present inventory for page tests that seed titles directly without running a library scan.
+        public Task SeedLibraryFilesAsync() => RunSqlAsync("""
+            DO $$ DECLARE mount bigint;
+            BEGIN
+                INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly")
+                VALUES ('Page fixtures', 3, '/page-test-library', FALSE) RETURNING "Id" INTO mount;
+                INSERT INTO "LibraryRoots" ("Name", "MediaTypeId", "StorageMountId", "RelativePath")
+                SELECT 'Type ' || "MediaTypeId", "MediaTypeId", mount, 'type-' || "MediaTypeId" FROM "Works" GROUP BY "MediaTypeId";
+                INSERT INTO "WorkEditions" ("WorkId") SELECT "Id" FROM "Works";
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "WorkId", "WorkId", "Id" FROM "WorkEditions";
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId")
+                SELECT "Id", "Id", "Id", CASE WHEN "MediaTypeId" = 3 THEN 3 ELSE 1 END FROM "Works";
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
+                SELECT root."Id", asset."Id" || CASE WHEN asset."MediaAssetTypeId" = 3 THEN '.epub' ELSE '.mkv' END,
+                    100, now(), now(), asset."Id"
+                FROM "MediaAssets" AS asset
+                    JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                    JOIN "LibraryRoots" AS root ON root."MediaTypeId" = work."MediaTypeId" AND root."StorageMountId" = mount;
+            END $$;
+            """);
+
         public async Task<object?> ScalarAsync(string sql)
         {
             await using var connection = new NpgsqlConnection(ConnectionString);

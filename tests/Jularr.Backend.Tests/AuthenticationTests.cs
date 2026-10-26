@@ -540,7 +540,7 @@ namespace Jularr.Backend.Tests
                 // Catalog baselines are installed together, as in a fresh installation; Razor pages need all of them.
                 library |= media || storage || razor;
                 media = storage = library;
-                var fixture = await Fixture.CreateAsync();
+                var fixture = await Fixture.CreateAsync(appliesAccountMigrations: false);
                 using (var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Instance.sql")!)
                 using (var reader = new StreamReader(schema))
                 {
@@ -609,6 +609,15 @@ namespace Jularr.Backend.Tests
                             VALUES ({migration.Version}, '{migration.Name}', '{DatabaseBaseline.Fingerprint(migration.Version, migrations)}');
                             """);
                     }
+                }
+
+                // Lightweight authentication fixtures install only Account/Instance baselines. Keep
+                // their account/profile columns at the current production version as well; full
+                // library fixtures already apply every migration through their schema ledger above.
+                if (!library)
+                {
+                    var accountAppearanceMigration = DatabaseBaseline.Migrations.Single(migration => migration.Version == 9);
+                    await fixture.RunSqlAsync(accountAppearanceMigration.Statement);
                 }
 
                 var hasher = new PasswordHasher<AccountAuthenticationData>();

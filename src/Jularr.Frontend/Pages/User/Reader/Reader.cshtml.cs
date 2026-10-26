@@ -27,7 +27,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.Reader
 {
     public sealed class ReaderModel(ReadReadingSourceV1 readSource, OpenReadingV1 open, ReadReadingTocV1 toc, ReadReadingSectionV1 section, ReadReadingSectionAnnotationsV1 readMarks, ReadReadingAnnotationsV1 readNotes,
-        ReadReadingBookmarksV1 readBookmarks, DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadTranslationLanguagesV1 readLanguages, ReadWorkV1 readWork,
+        ReadReadingBookmarksV1 readBookmarks, DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadTranslationLanguagesV1 readLanguages, ReadLocalTranslationAvailabilityV1 readLocalAvailability, ReadWorkV1 readWork,
         ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAvailableSpeechModelsV1 readSpeechModels, ReadAuthenticationV1 authentication, IAntiforgery antiforgery, UiText texts, FrontendAssets assets,
         ReadReadingStateV1 readState, ReadReadingPositionV1 readPosition, ReadReadingPageNotesV1 readPageNotes, CreateReadingPageNoteV1 createPageNote, DeleteReadingPageNoteV1 deletePageNote,
         ReadReaderSettingsV1 readSettings, ReadReadingSectionOffsetsV1 readOffsets)
@@ -35,6 +35,8 @@ namespace Jularr.Frontend.Pages.User.Reader
     {
         // The languages this book can be read in: its original first, then the profile's and the other allowed ones Mozilla's models reach.
         private string[] _languages = [];
+        private string[] _browserTranslationTargets = [];
+        private string? _localTranslationModel;
 
         // A PDF without reading text, or whose reading text the profile did not ask for, opens as its original pages and says why, here, in a word.
         private string? _status;
@@ -158,12 +160,14 @@ namespace Jularr.Frontend.Pages.User.Reader
             var settings = Settings(false, _source?.HasPdf == true);
             // Without a configured language the panel says so and leads to where the profile sets it.
             var languages = _languages.Length == 0
-                ? new Div(new P(new Text("reader.language.none")), new A(new Text("reader.language.configure")).Class("button").Attribute("href", "/Settings")).Class("reader__panel")
+                ? new Div(new P(new Text("reader.language.none"))).Class("reader__panel")
                     .Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"])
                 : new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
                     .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false")),
                     new Button(new Text("reader.translation.localQuality")).Class("button")
-                        .Attribute("data-local-quality-toggle", "").Attribute("aria-pressed", "false").Attribute("hidden", "hidden")]).Class("reader__panel reader__choices")
+                        .Attribute("data-local-quality-toggle", "").Attribute("aria-pressed", "false").Attribute("hidden", "hidden"),
+                    new P(new Text("reader.translation.provider.original")).Attribute("data-translation-provider", "")
+                        .Attribute("role", "status")]).Class("reader__panel reader__choices")
                     .Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"]);
 
             var bottom = new Div(Seek(false), new Div(
@@ -269,7 +273,9 @@ namespace Jularr.Frontend.Pages.User.Reader
             {
                 // The section's translations are shared; the files to translate it come with its route.
                 // A book in another language opens in the profile's, unless the profile chose another for it.
-                view.Attribute("data-language", document.Language ?? document.OriginalLanguage ?? "")
+                view.Attribute("data-browser-translation-targets", string.Join(',', _browserTranslationTargets))
+                    .Attribute("data-local-model", _localTranslationModel ?? "")
+                    .Attribute("data-language", document.Language ?? document.OriginalLanguage ?? "")
                     .Attribute("data-reading-language", Chosen(document))
                     .Attribute("data-language-url", "/api/v1/reading/assets/" + asset + "/language")
                     .Attribute("data-local-translation-url", "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/" + index.ToString(CultureInfo.InvariantCulture) + "/local-translations/")
@@ -277,7 +283,11 @@ namespace Jularr.Frontend.Pages.User.Reader
                         + index.ToString(CultureInfo.InvariantCulture) + "/translations/")
                     .Attribute("data-route-url", "/api/v1/translation/routes/")
                     .Attribute("data-translating-label", texts["reader.translating"])
-                    .Attribute("data-translation-failed-label", texts["reader.translationFailed"]);
+                    .Attribute("data-language-saving-label", texts["reader.language.saving"])
+                    .Attribute("data-translation-failed-label", texts["reader.translationFailed"])
+                    .Attribute("data-provider-original-label", texts["reader.translation.provider.original"])
+                    .Attribute("data-provider-browser-label", texts["reader.translation.provider.browser"])
+                    .Attribute("data-provider-local-label", texts["reader.translation.provider.local"]);
             }
 
             page.Content.Add(view);
@@ -675,20 +685,38 @@ namespace Jularr.Frontend.Pages.User.Reader
             return Page();
         }
 
-        // Mozilla's list may be out of reach; then the book reads in its own language.
+        // A local model can offer the profile's languages even when Mozilla is unavailable.
         private async Task<string[]> LanguagesAsync(CancellationToken ct)
         {
+            var allowed = (await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(new ReadUiLocalesParametersV1(), ct))
+                .Select(locale => CultureInfo.GetCultureInfo(locale.Locale).TwoLetterISOLanguageName);
+            var candidates = new[] { ProfileLanguage }.Concat(allowed).Distinct(StringComparer.Ordinal).ToArray();
+
             try
             {
-                var targets = (await readLanguages.ExecuteAsync<TranslationLanguagesV1>(new TranslationLanguagesParametersV1(), ct)).Targets;
-                var allowed = (await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(new ReadUiLocalesParametersV1(), ct))
-                    .Select(locale => CultureInfo.GetCultureInfo(locale.Locale).TwoLetterISOLanguageName);
-                return [.. new[] { ProfileLanguage }.Concat(allowed).Distinct(StringComparer.Ordinal).Where(targets.Contains)];
+                var available = await readLanguages.ExecuteAsync<TranslationLanguagesV1>(new TranslationLanguagesParametersV1(), ct);
+                // A target alone does not make a route: for example, the catalogue always
+                // lists English as a bridge even when no source model is available.
+                var source = (_document?.Language ?? _document?.OriginalLanguage)?.Split('-', '_')[0].ToLowerInvariant();
+                _browserTranslationTargets = source is null || available.Sources.Contains(source, StringComparer.Ordinal)
+                    ? available.Targets : [];
             }
             catch (ServiceUnavailableException)
             {
-                return [];
+                _browserTranslationTargets = [];
             }
+
+            try
+            {
+                _localTranslationModel = (await readLocalAvailability.ExecuteAsync<LocalTranslationAvailabilityV1>(
+                    new LocalTranslationAvailabilityParametersV1(), ct)).Model;
+            }
+            catch (ServiceUnavailableException)
+            {
+                _localTranslationModel = null;
+            }
+
+            return _localTranslationModel is not null ? candidates : [.. candidates.Where(_browserTranslationTargets.Contains)];
         }
 
         protected override async Task LoadDataAsync()

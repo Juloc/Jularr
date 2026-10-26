@@ -66,6 +66,16 @@ erfolgreichem Backup migriert.
 
 ### Browser für Quellen mit Browserprüfung
 
+Anna-Suchen unterscheiden bestätigte Nulltreffer von unlesbaren Seiten, Browserprüfungen,
+Rate-Limits und Zeitüberschreitungen. Erfolgreiche Seiten werden nur innerhalb eines
+Suchlaufs wiederverwendet. Zuletzt erfolgreiche vertrauenswürdige Mirrors werden bevorzugt;
+unlesbare Mirrors pausieren fünf Minuten, andere Verbindungsfehler eine Minute.
+
+Bei der Buchauswahl gelten erkennbare Zusammenfassungen, Kurzfassungen, Workbooks
+und Guides zum angefragten Original als anderes Werk. Autorname oder eine Suche
+nach einer ISBN heben diesen Titelkonflikt nicht auf. Ausdrücklich angefragte
+Zusammenfassungen und Guides bleiben über ihren eigenen Titel oder Alias zulässig.
+
 **Standardmäßig deaktiviert.** Das optionale Modul **Browser** lässt sich im Adminbereich
 unter `/Admin/Instance/Modules` einschalten und wieder ausschalten; es hängt von
 **Acquisition** ab. Jularr benötigt dafür keinen zweiten Container, keine Root-Befehle
@@ -88,11 +98,31 @@ oder eine Container-Neuerstellung behält den Browser unter dem persistenten `/d
 Der Installationsfortschritt und Fehler erscheinen unter `/Admin/Browser`; die
 Modulverwaltung prüft den Zustand ungefähr alle 30 Sekunden.
 
+Das Image enthält die benötigten Chrome-Laufzeitbibliotheken, einschließlich der
+`t64`-Paketnamen neuerer Ubuntu-Versionen. Die Image-CI prüft den verwalteten
+Chrome-Versionsstand als unprivilegierter Anwendungsbenutzer.
+
 Beim Ausschalten wird die Browserbenutzung unterbunden und der eigene Prozess gestoppt.
 Jularr entfernt nur seine verwalteten Browserdateien, temporären Dateien, Cookies und
 sein Browserprofil; Bibliotheken, NAS-Mounts und andere Downloadordner bleiben erhalten.
 Ein vorhandener manuell konfigurierter Browser über `Browser:Path` oder
 `Browser:RemoteAddress` bleibt als Konfigurationsoption erhalten.
+
+Bei einer manuellen Prüfung von Anna’s Archive öffnet „Browser bedienen“ unter
+`/Admin/Browser` oben eine bedienbare Ansicht derselben lokalen Chrome-Sitzung. Die
+Quellenauswahl und der Öffnen-Knopf stehen vor den Diagnoseabschnitten. Zugriff
+haben Owner mit `acquisition.manage`; Bild und Eingaben sind an
+die öffnende Anmeldesitzung gebunden. Solange diese Ansicht aktiv ist, wechselt die
+Automatik die Seite nicht. Nach zwei Minuten ohne Abruf oder Eingabe wird die
+Bedienfreigabe frei; die öffnende Sitzung behält einen direkten Wiederverbinden-Knopf.
+Kurze Bildabruf-Fehler werden begrenzt erneut versucht; das letzte Bild bleibt dabei
+sichtbar und Eingaben sind bis zur Wiederverbindung gesperrt. Wiederöffnen erhält
+die aktuelle Seite derselben Quelle. Die automatische Suche nutzt ebenfalls diesen
+Haupt-Tab und schließt nur ihre zusätzlichen Alternativ-Tabs.
+„Fertig und schließen“ und normales Stoppen erhalten das Profil; nur Zurücksetzen
+oder Ausschalten des verwalteten Browser-Moduls löschen es. Die Ansicht überträgt
+keine beliebigen Debugging-Befehle und erlaubt keine direkten Browser-Downloads.
+Ein zusätzlicher Container oder öffentliches Debugging-Port ist dafür nicht nötig.
 
 **Sicherheit:** Die normale HTTPS-Adressprüfung ist keine vollständige Browser-
 Netzwerkisolierung. Für nicht vertrauenswürdige Seiten muss die ausgehende

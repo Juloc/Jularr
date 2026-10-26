@@ -5,7 +5,10 @@ namespace Jularr.Integrations.Data.AnnasArchive
         Unavailable,
         Refused,
         Gate,
-        InvalidResponse
+        InvalidResponse,
+        RateLimited,
+        TimedOut,
+        UntrustedOrigin
     }
 
     internal sealed class AnnasArchiveException : Exception
@@ -56,5 +59,14 @@ namespace Jularr.Integrations.Data.AnnasArchive
 
         // The file is one part of a work; the whole work is elsewhere.
         public bool IsPart { get; }
+    }
+
+    // One wanted search shares successful answers across its title variants and configured mirrors.
+    internal sealed class AnnasArchiveSearchContext : IDisposable
+    {
+        public SemaphoreSlim Gate { get; } = new(1, 1);
+        public Dictionary<string, IReadOnlyList<AnnasArchiveRecord>> Answers { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> BlockedOrigins { get; } = new(StringComparer.Ordinal);
+        public void Dispose() => Gate.Dispose();
     }
 }

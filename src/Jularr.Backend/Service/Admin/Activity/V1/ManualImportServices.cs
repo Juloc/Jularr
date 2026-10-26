@@ -161,7 +161,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 var members = group.ToArray();
                 var qualities = ReadQualities(members, target);
                 var placements = ImportPlacementLogic.PlanChosen(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle, target.ReleaseYear, files, Numbers(members), loaded.Patterns, loaded.Episodes,
-                    qualities);
+                    qualities, ImportPlacementLogic.KnownValues(target));
                 if (placements.Count(placement => placement.IsMedia) != members.Length)
                 {
                     throw new DataValidationException(nameof(RunManualImportDataV1.Files), "unknown_reference");
@@ -325,7 +325,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             var target = loaded.Target;
             var (_, files, _) = await ManualImport.ReadFolderAsync(Context, _storage, target, Data.StorageMountId, Data.RelativePath, CancellationToken);
             return new ManualImportFolderV1(new BaseDataList<ManualImportFileV1>(ManualImportLogic.Propose(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle, target.ReleaseYear, files,
-                loaded.Patterns, loaded.Episodes).Select(proposal => new ManualImportFileV1(proposal.Path, proposal.SizeBytes, proposal.Season, proposal.Episode, proposal.QualityKey, proposal.TargetName, proposal.Languages))));
+                loaded.Patterns, loaded.Episodes, ImportPlacementLogic.KnownValues(target)).Select(proposal => new ManualImportFileV1(proposal.Path, proposal.SizeBytes, proposal.Season, proposal.Episode, proposal.QualityKey, proposal.TargetName, proposal.Languages))));
         }
     }
 
@@ -348,7 +348,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 var target = loaded.Target;
                 var members = group.ToArray();
                 var named = ManualImportLogic.NameChosen(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle, target.ReleaseYear, ManualImport.Numbers(members),
-                    ManualImport.ReadQualities(members, target), loaded.Patterns, loaded.Episodes);
+                    ManualImport.ReadQualities(members, target), loaded.Patterns, loaded.Episodes, ImportPlacementLogic.KnownValues(target));
                 ManualImport.ReadLanguages(members);
                 names.AddRange(members.Select(member => new ManualImportNameV1(member.Path, group.Key, target.MediaTypeId, target.CanonicalTitle, named.GetValueOrDefault(member.Path))));
             }
@@ -406,7 +406,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             var files = await ManualImport.ListFolderAsync(source, target, reference.Directory, CancellationToken);
             var handled = ImportProposal.ReadHandled(download.AttentionProposal).ToHashSet(StringComparer.Ordinal);
             return new ManualImportDownloadV1(download.WantedItemId, new BaseDataList<ManualImportFileV1>(ManualImportLogic.Propose(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle,
-                target.ReleaseYear, files, loaded.Patterns, loaded.Episodes).Select(proposal => new ManualImportFileV1(proposal.Path, proposal.SizeBytes, proposal.Season, proposal.Episode,
+                target.ReleaseYear, files, loaded.Patterns, loaded.Episodes, ImportPlacementLogic.KnownValues(target)).Select(proposal => new ManualImportFileV1(proposal.Path, proposal.SizeBytes, proposal.Season, proposal.Episode,
                     proposal.QualityKey, proposal.TargetName, proposal.Languages, handled.Contains(proposal.Path)))));
         }
     }

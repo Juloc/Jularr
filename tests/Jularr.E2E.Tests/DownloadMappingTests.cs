@@ -27,7 +27,7 @@ namespace Jularr.E2E.Tests
                 await Owner.SetUpAndSignInAsync(page);
                 await Steps.AddLibraryAsync(page, folders.Library);
                 await page.GotoAsync("/Admin/Acquisition/Downloads");
-                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }));
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }).And(page.Locator("[href*='Type=Sabnzbd']")));
                 var form = page.Locator("dialog#connection-editor form").Filter(new() { Has = page.Locator("[name=BaseUrl]") });
                 await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                 Assert.AreEqual(0d, await page.EvaluateAsync<double>("() => window.jularrLayoutShift"));
@@ -39,7 +39,7 @@ namespace Jularr.E2E.Tests
                 var originalAddress = page.Url;
                 var navigations = 0;
                 page.FrameNavigated += (_, frame) => { if (frame == page.MainFrame) navigations++; };
-                await form.GetByRole(AriaRole.Link, new() { Name = "Browse folders", Exact = true }).ClickAsync();
+                await form.Locator("[data-folder-field=LocalPath]").GetByRole(AriaRole.Link, new() { Name = "Browse folders", Exact = true }).ClickAsync();
                 var dialog = page.GetByRole(AriaRole.Dialog, new() { Name = "Browse folders", Exact = true });
                 await dialog.GetByRole(AriaRole.Link, new() { Name = "Complete & Bücher", Exact = true }).ClickAsync();
                 await dialog.GetByRole(AriaRole.Button, new() { Name = "Use this folder", Exact = true }).ClickAsync();
@@ -54,7 +54,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(form.Locator("[name=LocalPath]")).ToHaveValueAsync("Complete & Bücher");
                 await Assertions.Expect(form.Locator("[name=ApiKey]")).ToHaveValueAsync("");
                 await Assertions.Expect(form).ToContainTextAsync("/downloads");
-                await form.GetByRole(AriaRole.Link, new() { Name = "Browse folders", Exact = true }).ClickAsync();
+                await form.Locator("[data-folder-field=LocalPath]").GetByRole(AriaRole.Link, new() { Name = "Browse folders", Exact = true }).ClickAsync();
                 await dialog.GetByRole(AriaRole.Link, new() { Name = "Connection root", Exact = true }).ClickAsync();
                 await dialog.GetByRole(AriaRole.Button, new() { Name = "Use this folder", Exact = true }).ClickAsync();
                 await Steps.SubmitAsync(page, form);

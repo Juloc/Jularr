@@ -58,6 +58,17 @@ namespace Jularr.Backend.Logic.Acquisition
             return XDocument.Load(reader);
         }
 
+        // Unknown EPUB metadata cannot satisfy a mandatory-language promise.
+        // Preserve the download for manual confirmation; do not invent a language.
+        public static string? StrictEpubAttentionReason(QualityProfile profile, IReadOnlyList<string> languages)
+        {
+            if (!profile.IsBook || profile.LanguageFallback != Data.Enums.Acquisition.LanguageFallbackType.None
+                || profile.LanguageOrder.Length == 0)
+                return null;
+            return languages.Count == 0 ? "import_book_language_unknown"
+                : ContradictsStrictProfile(profile, languages) ? "import_book_language_mismatch" : null;
+        }
+
         public static bool ContradictsStrictProfile(QualityProfile profile, IReadOnlyList<string> verifiedLanguages) =>
             profile.IsBook && profile.LanguageFallback == Data.Enums.Acquisition.LanguageFallbackType.None
                 && profile.LanguageOrder.Length > 0 && verifiedLanguages.Count > 0

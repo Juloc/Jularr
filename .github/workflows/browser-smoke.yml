@@ -46,7 +46,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 10.0.403
       - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
@@ -67,10 +67,10 @@ jobs:
         run: dotnet build tests/Jularr.E2E.Tests --configuration Release
       - name: Install Chromium
         uses: ./.github/actions/install-chromium
-      - name: Check fresh installation, owner setup and sign-in in Chromium
+      - name: Check installation, sign-in, session expiry and timezone in Chromium
         run: |
           dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build \
-            --filter "FullyQualifiedName~FreshInstance_OwnerSetupSignInAndMenuPages_OpenWithoutErrors|FullyQualifiedName~BrowserZone_FormatsUtcInstantsAndCalendarTodayInTwoZones" \
+            --filter "FullyQualifiedName~FreshInstance_OwnerSetupSignInAndMenuPages_OpenWithoutErrors|FullyQualifiedName~BrowserZone_FormatsUtcInstantsAndCalendarTodayInTwoZones|FullyQualifiedName~ExpiredSession_FromBoostedLink_SignsInAndRestoresDeepLink|FullyQualifiedName~InstalledPwa_ShowsUpdateButNeverReloadsUntilUserChooses" \
             --logger "trx;LogFileName=browser-smoke.trx" \
             --results-directory TestResults/ci/browser-smoke
       - name: Keep browser-smoke results
