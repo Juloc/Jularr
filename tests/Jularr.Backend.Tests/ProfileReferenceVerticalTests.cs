@@ -253,6 +253,9 @@ namespace Jularr.Backend.Tests
                 ConnectionString = connectionString;
             }
 
+            // The migrations that change the account and profile tables, for fixtures that install only the account schema.
+            public static IReadOnlyList<DatabaseMigration> AccountMigrations => [.. DatabaseBaseline.Migrations.Where(migration => migration.Name is "0009_pwa_main_profile_accent" or "0011_profile_content_languages")];
+
             public static async Task<ProfileFixture> CreateAsync(bool appliesAccountMigrations = true)
             {
                 var cs = TestPostgres.ResolveConnectionString($"Data Source=profile-vertical-{Guid.NewGuid():N}");
@@ -289,8 +292,10 @@ namespace Jularr.Backend.Tests
                     // Direct profile tests need the current account schema; full-host fixtures apply the complete migration ledger themselves.
                     if (appliesAccountMigrations)
                     {
-                        await fixture.RunSqlAsync(DatabaseBaseline.Migrations.Single(migration => migration.Name == "0009_pwa_main_profile_accent").Statement);
-                        await fixture.RunSqlAsync(DatabaseBaseline.Migrations.Single(migration => migration.Name == "0011_profile_content_languages").Statement);
+                        foreach (var migration in AccountMigrations)
+                        {
+                            await fixture.RunSqlAsync(migration.Statement);
+                        }
                     }
                     return fixture;
                 }
