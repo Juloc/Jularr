@@ -233,12 +233,15 @@ namespace Jularr.E2E.Tests
                 await Steps.FollowAsync(page, page.Locator("#works-filter").GetByRole(AriaRole.Link, new() { Name = "Clear", Exact = true }));
                 await Assertions.Expect(rows).ToHaveCountAsync(2);
 
-                // The search of one row grabs the offered release at once, as on the title's page.
+                // The search of one row queues a background run for that title; its progress finishes and the offered release is grabbed.
                 await Steps.FollowAsync(page, movie.GetByRole(AriaRole.Switch));
                 await Assertions.Expect(movie.GetByRole(AriaRole.Switch)).ToHaveAttributeAsync("aria-label", "Stop monitoring");
                 fakes.Offer(film);
                 await Steps.FollowAsync(page, movie.GetByRole(AriaRole.Button, new() { Name = "Search", Exact = true }));
-                await Assertions.Expect(page.Locator(".works-report")).ToContainTextAsync("Search:");
+                await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("[?&]searchJob=\\d+"));
+                var progress = page.Locator("[data-search-progress]");
+                await Assertions.Expect(progress).ToContainTextAsync("1 of 1 targets checked", new() { Timeout = 30_000 });
+                await Assertions.Expect(progress).ToHaveAttributeAsync("data-running", "false");
                 for (var attempt = 0; attempt < 50 && fakes.Grabbed.Count == 0; attempt++) await Task.Delay(100);
                 CollectionAssert.AreEqual(new[] { fakes.NzbAddress(film).ToString() }, fakes.Grabbed.ToArray());
 
