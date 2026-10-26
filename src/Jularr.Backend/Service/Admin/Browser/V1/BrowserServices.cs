@@ -33,7 +33,7 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
             var status = _browser.Status;
             return new BrowserStatusV1(status.Path, status.RemoteAddress, status.ProfilePath, _browser.IsAvailable, status.IsRunning, status.Version,
                 status.LastUrl, status.LastOutcome, status.LastError, status.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50), _packages.State, _packages.Error, _packages.DownloadedBytes, _packages.TotalBytes,
-                Auth.SessionPublicId is { } owner ? await _assistance.ReadOwnAsync(owner, CancellationToken) : null);
+                _packages.InstalledVersion, _packages.ManagedSizeBytes, Auth.SessionPublicId is { } owner ? await _assistance.ReadOwnAsync(owner, CancellationToken) : null);
         }
 
         private BrowserEventV1[] Events() => [.. _browser.Events.Select(item => new BrowserEventV1(item.At, item.Kind, item.Message))];
@@ -66,13 +66,13 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
             {
                 var status = _browser.Status;
                 return new BrowserStatusV1(status.Path, status.RemoteAddress, status.ProfilePath, _browser.IsAvailable, status.IsRunning, status.Version,
-                    status.LastUrl, status.LastOutcome, status.LastError, status.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50), _packages.State, _packages.Error, _packages.DownloadedBytes, _packages.TotalBytes);
+                    status.LastUrl, status.LastOutcome, status.LastError, status.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50), _packages.State, _packages.Error, _packages.DownloadedBytes, _packages.TotalBytes, _packages.InstalledVersion, _packages.ManagedSizeBytes);
             }
 
             await action;
             var state = _browser.Status;
             return new BrowserStatusV1(state.Path, state.RemoteAddress, state.ProfilePath, _browser.IsAvailable, state.IsRunning, state.Version,
-                state.LastUrl, state.LastOutcome, state.LastError, state.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50), _packages.State, _packages.Error, _packages.DownloadedBytes, _packages.TotalBytes);
+                state.LastUrl, state.LastOutcome, state.LastError, state.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50), _packages.State, _packages.Error, _packages.DownloadedBytes, _packages.TotalBytes, _packages.InstalledVersion, _packages.ManagedSizeBytes);
         }
 
         private async Task ActionAsync()
@@ -87,6 +87,15 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
                     break;
                 case "reset":
                     await _browser.ResetAsync();
+                    break;
+                case "update":
+                case "repair":
+                    if (!_packages.OwnsRuntime || (!_packages.Enabled && _packages.State != "failed"))
+                        throw new DataValidationException(nameof(Data.Action), "not_allowed");
+                    // Prevent a concurrent source request from restarting Chrome during replacement.
+                    await _browser.StopAsync();
+                    _packages.Enabled = false;
+                    _packages.RequestRefresh(repair: Data.Action == "repair");
                     break;
                 case "read":
                     if (!Uri.TryCreate(Data.Url, UriKind.Absolute, out var url))

@@ -43,7 +43,7 @@ jobs:
         run: docker build --tag ghcr.io/juloc/jularr:ci .
       - name: Download the managed Chrome version for the runtime check
         run: |
-          version=$(python3 -c 'import pathlib,re; print(re.search(r"private const string Version = \"([^\"]+)\"", pathlib.Path("src/Jularr.Integrations/Logic/Browser/BrowserPackages.cs").read_text()).group(1))')
+          version=$(curl --fail --silent --show-error --retry 3 https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["channels"]["Stable"]["version"])')
           curl --fail --silent --show-error --location --retry 3 \
             "https://storage.googleapis.com/chrome-for-testing-public/${version}/linux64/chrome-linux64.zip" \
             --output "${RUNNER_TEMP}/chrome-linux64.zip"

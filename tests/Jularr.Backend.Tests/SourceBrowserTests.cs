@@ -40,6 +40,67 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ManagedBrowser_RefreshCanBeQueuedAndCancelledByUninstall()
+        {
+            using var folder = new TemporaryDirectory();
+            var packages = new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path });
+            packages.RequestRefresh(repair: false);
+            Assert.AreEqual("queued", packages.State);
+            packages.RequestRefresh(repair: true);
+            Assert.AreEqual("queued", packages.State);
+            await packages.RemoveAsync(CancellationToken.None);
+            Assert.AreEqual("disabled", packages.State);
+            Assert.IsTrue(packages.CanRetryInstall);
+        }
+
+        [TestMethod]
+        public void ManagedBrowser_ExternalRuntimeCannotBeManaged()
+        {
+            using var folder = new TemporaryDirectory();
+            Assert.IsTrue(new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path }).OwnsRuntime);
+            Assert.IsFalse(new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path, Path = "/usr/bin/chromium" }).OwnsRuntime);
+            Assert.IsFalse(new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path,
+                RemoteAddress = "http://127.0.0.1:9222" }).OwnsRuntime);
+        }
+
+        [TestMethod]
+        public async Task ManagedBrowser_FailedUpdateKeepsPreviousPackageAvailable()
+        {
+            if (!OperatingSystem.IsLinux()) return;
+            using var folder = new TemporaryDirectory();
+            var packages = new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path },
+                _ => Task.FromException<string>(new HttpRequestException("Test-only metadata outage.")));
+            Directory.CreateDirectory(Path.GetDirectoryName(packages.ExecutablePath)!);
+            await File.WriteAllBytesAsync(packages.ExecutablePath, [1, 2, 3]);
+            var marker = Path.Combine(folder.Path, "managed", "current", ".jularr-version");
+            await File.WriteAllTextAsync(marker, "156.0.8078.47");
+            packages.RequestRefresh(repair: false);
+
+            await Assert.ThrowsExactlyAsync<HttpRequestException>(() => packages.InstallAsync(CancellationToken.None));
+            Assert.AreEqual("failed", packages.State);
+            Assert.IsFalse(packages.CanRetryInstall);
+            Assert.IsTrue(packages.IsInstalled);
+            Assert.IsTrue(File.Exists(packages.ExecutablePath));
+            Assert.AreEqual("156.0.8078.47", packages.InstalledVersion);
+        }
+
+        [TestMethod]
+        public void ManagedBrowser_SizeScanCannotFollowSymlinksToUnrelatedFiles()
+        {
+            if (!OperatingSystem.IsLinux()) return;
+            using var folder = new TemporaryDirectory();
+            var managed = Path.Combine(folder.Path, "managed");
+            var outside = Path.Combine(folder.Path, "outside");
+            Directory.CreateDirectory(managed);
+            Directory.CreateDirectory(outside);
+            File.WriteAllBytes(Path.Combine(managed, "owned.dat"), new byte[7]);
+            File.WriteAllBytes(Path.Combine(outside, "foreign.dat"), new byte[29]);
+            Directory.CreateSymbolicLink(Path.Combine(managed, "foreign"), outside);
+            var packages = new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path });
+            Assert.AreEqual(7L, packages.ManagedSizeBytes);
+        }
+
+        [TestMethod]
         [DataRow("https://user:password@annas-archive.gl/search?q=private-title&key=member-secret", "https://annas-archive.gl")]
         [DataRow("https://files.example.org:8443/signed/book-secret.epub?token=download-secret", "https://files.example.org:8443")]
         [DataRow("https://[::1]:9222/json/list?auth=private-secret", "https://[::1]:9222")]

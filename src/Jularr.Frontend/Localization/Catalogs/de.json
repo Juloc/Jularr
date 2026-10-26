@@ -9344,6 +9344,14 @@
    "Browser package",
    "Browser-Paket"
   ],
+  "admin.browser.version": [
+   "Installed version",
+   "Installierte Version"
+  ],
+  "admin.browser.diskUsage": [
+   "Managed storage",
+   "Belegter Speicher"
+  ],
   "admin.browser.installation.disabled": [
    "Disabled / not installed",
    "Deaktiviert / nicht installiert"
@@ -9363,6 +9371,30 @@
   "admin.browser.installation.failed": [
    "Installation failed",
    "Installation fehlgeschlagen"
+  ],
+  "admin.browser.installation.queued": [
+   "Queued for installation or update",
+   "Für die Installation oder Aktualisierung vorgemerkt"
+  ],
+  "admin.browser.install": [
+   "Install browser",
+   "Browser installieren"
+  ],
+  "admin.browser.uninstall": [
+   "Uninstall browser",
+   "Browser deinstallieren"
+  ],
+  "admin.browser.update": [
+   "Check for updates",
+   "Auf Updates prüfen"
+  ],
+  "admin.browser.repair": [
+   "Repair / reinstall",
+   "Reparieren / neu installieren"
+  ],
+  "admin.browser.queuedHint": [
+   "Browser action queued. Refresh the page to see progress.",
+   "Browser-Aktion vorgemerkt. Seite neu laden, um den Fortschritt zu sehen."
   ],
   "admin.browser.moduleHint": [
    "Browser installation and removal follow the optional Browser module switch.",

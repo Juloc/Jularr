@@ -2,13 +2,16 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Jularr.Integrations.Logic.Browser
 {
     // The optional browser lives entirely below DataPath and never needs apt, sudo or the Docker socket.
     internal sealed class BrowserPackages(BrowserOptions options)
     {
-        private const string Version = "156.0.8078.47";
+        private const int MaximumMetadataBytes = 128 * 1024;
+        private const int MaximumSizeScanFiles = 10_000;
         private const long MaximumArchiveBytes = 450L * 1024 * 1024;
         private const long MaximumExpandedBytes = 1_500L * 1024 * 1024;
         private readonly SemaphoreSlim _gate = new(1, 1);
@@ -19,8 +22,16 @@ namespace Jularr.Integrations.Logic.Browser
         private long _total;
         private long _retryAfterTicks;
         private int _installFailures;
+        private int _refreshMode;
         private bool _enabled;
+        private Func<CancellationToken, Task<string>> _stableVersion = LatestStableVersionAsync;
 
+        internal BrowserPackages(BrowserOptions options, Func<CancellationToken, Task<string>> stableVersion) : this(options)
+        {
+            _stableVersion = stableVersion;
+        }
+
+        public bool OwnsRuntime => options.Path is null && string.IsNullOrWhiteSpace(options.RemoteAddress);
         public bool Enabled { get => Volatile.Read(ref _enabled); set => Volatile.Write(ref _enabled, value); }
         public string State => Volatile.Read(ref _state);
         public string? Error => Volatile.Read(ref _error);
@@ -28,6 +39,46 @@ namespace Jularr.Integrations.Logic.Browser
         public long TotalBytes => Interlocked.Read(ref _total);
         public string ExecutablePath => Path.Combine(_root, "current", "chrome-" + Platform(), "chrome");
         public bool IsInstalled => File.Exists(ExecutablePath) && VersionMatches(Path.Combine(_root, "current", ".jularr-version"));
+        public string? InstalledVersion => IsInstalled ? File.ReadAllText(Path.Combine(_root, "current", ".jularr-version")).Trim() : null;
+        public long ManagedSizeBytes
+        {
+            get
+            {
+                if (!Directory.Exists(_root)) return 0;
+                try
+                {
+                    // Admin status reads must stay bounded and must not traverse a
+                    // symbolic link into unrelated DataPath/library directories.
+                    long total = 0;
+                    var files = 0;
+                    var scan = new EnumerationOptions
+                    {
+                        RecurseSubdirectories = true,
+                        IgnoreInaccessible = true,
+                        AttributesToSkip = FileAttributes.ReparsePoint
+                    };
+                    foreach (var file in Directory.EnumerateFiles(_root, "*", scan))
+                    {
+                        if (++files > MaximumSizeScanFiles) return 0; // Unknown, not a misleading partial size.
+                        total = checked(total + new FileInfo(file).Length);
+                    }
+                    return total;
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OverflowException)
+                {
+                    return 0;
+                }
+            }
+        }
+        // 1 checks Stable for updates, 2 forces reinstall even if the version is unchanged.
+        public void RequestRefresh(bool repair)
+        {
+            Interlocked.Exchange(ref _refreshMode, repair ? 2 : 1);
+            Interlocked.Exchange(ref _retryAfterTicks, 0);
+            Interlocked.Exchange(ref _installFailures, 0);
+            Volatile.Write(ref _error, null);
+            Volatile.Write(ref _state, "queued");
+        }
         public bool HasManagedData => Directory.Exists(_root);
         public bool CanRetryInstall => DateTime.UtcNow.Ticks >= Interlocked.Read(ref _retryAfterTicks);
 
@@ -38,16 +89,18 @@ namespace Jularr.Integrations.Logic.Browser
             return File.Exists(path) && VersionMatches(Path.Combine(root, ".jularr-version")) ? path : null;
         }
 
-        private static bool VersionMatches(string path) => File.Exists(path) && File.ReadAllText(path).Trim() == Version;
+        private static bool VersionMatches(string path) => File.Exists(path)
+            && Regex.IsMatch(File.ReadAllText(path).Trim(), @"^\d{2,4}(\.\d{1,5}){3}$", RegexOptions.CultureInvariant);
 
         public async Task InstallAsync(CancellationToken ct)
         {
             await _gate.WaitAsync(ct);
             try
             {
-                if (IsInstalled)
+                var refresh = Volatile.Read(ref _refreshMode);
+                if (IsInstalled && refresh == 0)
                 {
-                    Volatile.Write(ref _state, "installed");
+                    if (State != "failed") Volatile.Write(ref _state, "installed");
                     return;
                 }
 
@@ -59,7 +112,17 @@ namespace Jularr.Integrations.Logic.Browser
                 var stage = Path.Combine(_root, "staging");
                 var archive = Path.Combine(_root, "download.part");
                 var active = Path.Combine(_root, "current");
+                var previous = Path.Combine(_root, "previous");
                 Directory.CreateDirectory(_root);
+                if (!Directory.Exists(active) && Directory.Exists(previous)) Directory.Move(previous, active);
+                if (Directory.Exists(active) && Directory.Exists(previous)) Directory.Delete(previous, recursive: true);
+                var version = await _stableVersion(ct);
+                if (refresh == 1 && IsInstalled && string.Equals(InstalledVersion, version, StringComparison.Ordinal))
+                {
+                    Interlocked.Exchange(ref _refreshMode, 0);
+                    Volatile.Write(ref _state, "installed");
+                    return;
+                }
                 try
                 {
                     if (Directory.Exists(stage)) Directory.Delete(stage, recursive: true);
@@ -70,7 +133,7 @@ namespace Jularr.Integrations.Logic.Browser
                     Volatile.Write(ref _state, "downloading");
                     Interlocked.Exchange(ref _downloaded, 0);
                     Interlocked.Exchange(ref _total, 0);
-                    await DownloadAsync(archive, ct);
+                    await DownloadAsync(archive, version, ct);
 
                     Volatile.Write(ref _state, "extracting");
                     await ExtractAsync(archive, stage, ct);
@@ -81,9 +144,19 @@ namespace Jularr.Integrations.Logic.Browser
                         | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
 
                     await VerifyAsync(binary, ct);
-                    await File.WriteAllTextAsync(Path.Combine(stage, ".jularr-version"), Version, ct);
-                    if (Directory.Exists(active)) Directory.Delete(active, recursive: true);
-                    Directory.Move(stage, active);
+                    await File.WriteAllTextAsync(Path.Combine(stage, ".jularr-version"), version, ct);
+                    if (Directory.Exists(active)) Directory.Move(active, previous);
+                    try
+                    {
+                        Directory.Move(stage, active);
+                    }
+                    catch
+                    {
+                        if (Directory.Exists(previous) && !Directory.Exists(active)) Directory.Move(previous, active);
+                        throw;
+                    }
+                    if (Directory.Exists(previous)) Directory.Delete(previous, recursive: true);
+                    Interlocked.Exchange(ref _refreshMode, 0);
                     Interlocked.Exchange(ref _installFailures, 0);
                     Interlocked.Exchange(ref _retryAfterTicks, 0);
                     Volatile.Write(ref _state, "installed");
@@ -121,6 +194,7 @@ namespace Jularr.Integrations.Logic.Browser
                 // Older/manual profiles outside _root are intentionally left untouched.
                 Interlocked.Exchange(ref _installFailures, 0);
                 Interlocked.Exchange(ref _retryAfterTicks, 0);
+                Interlocked.Exchange(ref _refreshMode, 0);
                 Volatile.Write(ref _error, null);
                 Volatile.Write(ref _state, "disabled");
             }
@@ -130,10 +204,43 @@ namespace Jularr.Integrations.Logic.Browser
             }
         }
 
-        private async Task DownloadAsync(string archive, CancellationToken ct)
+        private static async Task<string> LatestStableVersionAsync(CancellationToken ct)
+        {
+            using var http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false })
+                { Timeout = TimeSpan.FromSeconds(30) };
+            using var response = await http.GetAsync(
+                "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json",
+                HttpCompletionOption.ResponseHeadersRead, ct);
+            if (response.StatusCode != System.Net.HttpStatusCode.OK ||
+                response.Content.Headers.ContentLength is > MaximumMetadataBytes)
+                throw new HttpRequestException("Chrome Stable metadata is unavailable.");
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var limited = new MemoryStream();
+            var buffer = new byte[8192];
+            int count;
+            while ((count = await stream.ReadAsync(buffer, ct)) > 0)
+            {
+                if (limited.Length + count > MaximumMetadataBytes) throw new InvalidDataException("Chrome metadata is too large.");
+                await limited.WriteAsync(buffer.AsMemory(0, count), ct);
+            }
+            limited.Position = 0;
+            using var json = await JsonDocument.ParseAsync(limited, cancellationToken: ct);
+            var stable = json.RootElement.GetProperty("channels").GetProperty("Stable");
+            var version = stable.GetProperty("version").GetString() ?? "";
+            if (!Regex.IsMatch(version, @"^\d{2,4}(\.\d{1,5}){3}$", RegexOptions.CultureInvariant))
+                throw new InvalidDataException("Chrome Stable version is invalid.");
+            var platform = Platform();
+            var expected = "https://storage.googleapis.com/chrome-for-testing-public/" + version + "/" + platform + "/chrome-" + platform + ".zip";
+            if (!stable.GetProperty("downloads").GetProperty("chrome").EnumerateArray().Any(asset =>
+                asset.GetProperty("platform").GetString() == platform && asset.GetProperty("url").GetString() == expected))
+                throw new InvalidDataException("Chrome Stable does not offer a package for this architecture.");
+            return version;
+        }
+
+        private async Task DownloadAsync(string archive, string version, CancellationToken ct)
         {
             var platform = Platform();
-            var url = new Uri("https://storage.googleapis.com/chrome-for-testing-public/" + Version + "/" + platform + "/chrome-" + platform + ".zip");
+            var url = new Uri("https://storage.googleapis.com/chrome-for-testing-public/" + version + "/" + platform + "/chrome-" + platform + ".zip");
             using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false }) { Timeout = TimeSpan.FromMinutes(10) };
             using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
             if (response.StatusCode != System.Net.HttpStatusCode.OK) throw new HttpRequestException("Chrome download was not available.");
@@ -207,13 +314,25 @@ namespace Jularr.Integrations.Logic.Browser
 
         private static async Task VerifyAsync(string binary, CancellationToken ct)
         {
-            using var process = Process.Start(new ProcessStartInfo(binary, "--version") { UseShellExecute = false, RedirectStandardOutput = true })
-                ?? throw new InvalidDataException("Chrome could not start.");
+            using var process = Process.Start(new ProcessStartInfo(binary, "--version")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            }) ?? throw new InvalidDataException("Chrome could not start.");
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
             deadline.CancelAfter(TimeSpan.FromSeconds(20));
+            var output = process.StandardOutput.ReadToEndAsync(deadline.Token);
+            var error = process.StandardError.ReadToEndAsync(deadline.Token);
             await process.WaitForExitAsync(deadline.Token);
-            if (process.ExitCode != 0 || !(await process.StandardOutput.ReadToEndAsync(ct)).Contains("Chrome", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Chrome executable failed the version check.");
+            var version = await output;
+            var diagnostic = await error;
+            if (process.ExitCode != 0 || !version.Contains("Chrome", StringComparison.OrdinalIgnoreCase))
+            {
+                // --version receives no source URL or member key; bounded stderr identifies missing runtime libraries.
+                throw new InvalidDataException("Chrome executable failed the version check (exit "
+                    + process.ExitCode + "): " + (diagnostic.Length > 500 ? diagnostic[..500] : diagnostic));
+            }
         }
 
         private static string Platform() => RuntimeInformation.ProcessArchitecture switch
