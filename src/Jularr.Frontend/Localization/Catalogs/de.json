@@ -4,6 +4,16 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "profile.field.firstContentLanguage": ["First content language", "Erste Inhaltssprache"],
+  "profile.field.secondContentLanguage": ["Second content language", "Zweite Inhaltssprache"],
+  "profile.contentLanguage.none": ["No preference", "Keine Präferenz"],
+  "hint.ProfileFields.ContentLanguage.info": ["Prefer the first content language; the second is also accepted. Applies to text, audio and subtitle availability, independently of the interface language.", "Die erste Inhaltssprache wird bevorzugt, die zweite ebenfalls akzeptiert. Gilt für die Verfügbarkeit von Text, Ton und Untertiteln, unabhängig von der Menüsprache."],
+  "media.availability.PreferredSubtitles": ["Available with subtitles in a preferred language.", "Mit Untertiteln in einer bevorzugten Sprache verfügbar."],
+  "media.availability.PartialPreferredSubtitles": ["{0} of {1} monitored episodes or units are available, with matching subtitles where needed.", "{0} von {1} überwachten Folgen oder Einheiten sind verfügbar, bei Bedarf mit passenden Untertiteln."],
+  "media.availability.Paused": ["No usable file available; automatic search is paused.", "Keine nutzbare Datei vorhanden; automatische Suche pausiert."],
+  "media.availability.tag.PreferredSubtitles": ["With subtitles", "Mit Untertiteln"],
+  "media.availability.tag.PartialPreferredSubtitles": ["{0}/{1} · subtitles", "{0}/{1} · Untertitel"],
+  "media.availability.tag.Paused": ["Paused", "Pausiert"],
   "pwa.main.choose": ["Use as main profile", "Als Hauptprofil verwenden"],
   "pwa.main.current": ["Main profile for the home screen icon", "Hauptprofil für das Homescreen-Icon"],
   "pwa.main.manage": ["Choose main profile for the home screen icon", "Hauptprofil für das Homescreen-Icon auswählen"],
@@ -3879,8 +3889,8 @@
    "Verfügbar"
   ],
   "media.availability.tag.OtherAudio": [
-   "Other audio",
-   "Anderes Audio"
+   "Other language",
+   "Andere Sprache"
   ],
   "media.availability.tag.Partial": [
    "{0}/{1}",
@@ -3911,16 +3921,16 @@
    "Anfragen"
   ],
   "media.availability.ProfileAudio": [
-   "Local audio is available in the profile language.",
-   "Lokales Audio ist in der Profilsprache verfügbar."
+   "Available in a preferred content language.",
+   "In einer bevorzugten Inhaltssprache verfügbar."
   ],
   "media.availability.OtherAudio": [
-   "Available locally, but only in other audio languages.",
-   "Lokal verfügbar, aber nur in anderen Audiosprachen."
+   "Available, but only in other content languages.",
+   "Verfügbar, aber nur in anderen Inhaltssprachen."
   ],
   "media.availability.PartialOtherAudio": [
-   "{0} of {1} monitored episodes or units are available, but only in other audio languages.",
-   "{0} von {1} überwachten Folgen oder Einheiten sind verfügbar, aber nur in anderen Audiosprachen."
+   "{0} of {1} monitored episodes or units are available; some only in other content languages.",
+   "{0} von {1} überwachten Folgen oder Einheiten sind verfügbar; einige nur in anderen Inhaltssprachen."
   ],
   "media.availability.Requested": [
    "Requested",

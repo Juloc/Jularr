@@ -21,7 +21,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 {
     public sealed class IndexModel(ReadDiscoverScopesV1 readScopes, ReadDiscoverShelvesV1 readShelves, SuggestDiscoverV1 suggest, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search,
         SearchDiscoverCatalogV1 catalogSearch, ReadDiscoverCatalogFeedV1 catalogFeeds, ReadContinueV1 continuation, ReadLibraryV1 library, ReadHomeLayoutV1 readLayout, UiText texts, FrontendAssets assets,
-        IAntiforgery antiforgery, ILogger<IndexModel> log) : JularrPage
+        IAntiforgery antiforgery, ILogger<IndexModel> log, ReadWorkAvailabilityStatesV1 readAvailability) : JularrPage
     {
         // Shelves of providers are asked together, a few at a time, and none holds the page longer than this; slower ones are logged.
         private const int ShelfConcurrency = 6;
@@ -38,6 +38,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IReadOnlyList<ContinueItemV1> _continue = [];
         private IReadOnlyList<HeroSlide> _hero = [];
         private IReadOnlyList<LibraryItemV1> _recent = [];
+        private readonly Dictionary<long, WorkAvailabilityStateV1> _availabilityByWork = [];
         private IReadOnlyList<HomeShelfV1> _layout = [.. Enum.GetValues<HomeShelfType>().Select(type => new HomeShelfV1(type, false))];
         private bool _providerUnavailable;
         private IReadOnlyList<DiscoverScopeV1>? _scopes;
@@ -401,6 +402,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             {
                 return Redirect(canonical);
             }
+            await LoadAvailabilityAsync();
             PreparePage();
             return Page();
         }
@@ -410,6 +412,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             if (!texts.CanReadMedia()) return Forbid();
 
             await LoadDataAsync();
+            await LoadAvailabilityAsync();
             PreparePage();
             return Partial("_UiComponent", Definition.Content[0]);
         }
@@ -450,10 +453,12 @@ namespace Jularr.Frontend.Pages.User.Discover
             if (Request.Headers["X-Jularr-Fragment"] != "recommendations")
             {
                 await LoadDataAsync();
+                await LoadAvailabilityAsync();
                 PreparePage();
                 return Page();
             }
 
+            await LoadAvailabilityAsync();
             var recommendations = new Page();
             DefineRecommendations(recommendations);
             return Partial("_UiComponent", new Div([.. recommendations.Content]).Attribute("id", "discover-recommendations"));
@@ -525,6 +530,20 @@ namespace Jularr.Frontend.Pages.User.Discover
             if (View is null && string.IsNullOrWhiteSpace(Query))
             {
                 await LoadHeroAsync(selected, await keptTask);
+            }
+        }
+
+        // Provider metadata stays cached; current local status is one bounded read for all known cards.
+        private async Task LoadAvailabilityAsync()
+        {
+            var ids = (_results ?? []).Concat(_shelves.SelectMany(shelf => shelf.Items)).Select(item => item.WorkId)
+                .Concat((_catalog ?? []).Select(entry => entry.Item.WorkId))
+                .Concat(_catalogShelves.SelectMany(shelf => shelf.Items).Select(item => item.WorkId))
+                .OfType<long>().Distinct().ToArray();
+            foreach (var batch in ids.Chunk(500))
+            {
+                var states = await readAvailability.ExecuteAsync<BaseDataList<WorkAvailabilityStateV1>>(new ReadWorkAvailabilityStatesParametersV1(batch), HttpContext.RequestAborted);
+                foreach (var state in states) _availabilityByWork[state.Id] = state;
             }
         }
 
@@ -767,6 +786,8 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var (actionKey, actionHref) = Action(item);
             var card = MediaCard.For(assets, item, DetailsHref(item));
+            if (item.WorkId is { } id && _availabilityByWork.TryGetValue(id, out var state))
+                card.Availability(new MediaAvailability(assets, state.AvailabilityStateId, state.AvailableUnits, state.MonitoredUnits));
             if (actionKey is not null && actionHref is not null) card.Action(ShortKey(actionKey)!, actionHref);
             if (item.WorkId is { } workId) card.Bookmark(new MediaBookmark(assets, workId));
             return card;
@@ -780,6 +801,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId), item.Rating)
                 .HoverPreview(item.WorkId is { } held ? MediaPreviewAddress.Work(held) : MediaPreviewAddress.Catalog(scope.Slug, item.Namespace, item.ExternalId));
             if (item.MediaStateTypeId is { } state) card.State(state);
+            if (item.WorkId is { } id && _availabilityByWork.TryGetValue(id, out var availability))
+                card.Availability(new MediaAvailability(assets, availability.AvailabilityStateId, availability.AvailableUnits, availability.MonitoredUnits));
             if (item.WorkId is { } known) return card.Bookmark(new MediaBookmark(assets, known));
             return texts.CanRequest() ? card.Action("discover.action.request", href) : card;
         }

@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.User.Library.V1;
 
@@ -82,6 +83,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 OFFSET @Offset;
                 """;
             sql.Parameters.Add(new FranchiseParametersV1(Parameters.FranchiseId));
+            sql.Parameters.Add(LanguageCodes.Aliases);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
