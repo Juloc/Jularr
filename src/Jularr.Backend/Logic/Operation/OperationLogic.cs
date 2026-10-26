@@ -175,12 +175,12 @@ namespace Jularr.Backend.Logic.Operation
                     "Operations" AS operation
                 SET
                     "OperationStatusTypeId" = @OperationStatusTypeId,
-                    "ProcessedCount" = CASE WHEN operation."OperationTypeId" = 6 AND @OperationStatusTypeId = 4 THEN operation."ProcessedCount" ELSE @ProcessedCount END,
+                    "ProcessedCount" = CASE WHEN operation."OperationTypeId" IN (6, 7) AND @OperationStatusTypeId = 4 THEN operation."ProcessedCount" ELSE @ProcessedCount END,
                     "ErrorKey" = @ErrorKey,
                     "FinishedAt" = CASE WHEN @OperationStatusTypeId IN (3, 4) THEN now() END
                 WHERE
                     operation."Id" = @Id
-                    AND operation."OperationTypeId" IN (1, 3, 5, 6)
+                    AND operation."OperationTypeId" IN (1, 3, 5, 6, 7)
                     AND operation."OperationStatusTypeId" = 2;
                 """;
             sql.Parameters.Add(data);
@@ -312,7 +312,7 @@ namespace Jularr.Backend.Logic.Operation
                     "OperationStatusTypeId" = 1,
                     "StartedAt" = NULL
                 WHERE
-                    operation."OperationTypeId" IN (1, 3, 5, 6)
+                    operation."OperationTypeId" IN (1, 3, 5, 6, 7)
                     AND operation."OperationStatusTypeId" = 2;
                 """;
             return ctx.ExecuteAsyncForAffectedRows(sql, ct);

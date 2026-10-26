@@ -64,6 +64,7 @@ namespace Jularr.Backend.Service.Core
             // The scan, backup and benchmark queues run beside each other, each when work arrives.
             new("operations", WorkerGroupType.Operation, null, TimeSpan.Zero, canRunNow: false),
             new("backupQueue", WorkerGroupType.Operation, null, TimeSpan.Zero, canRunNow: false),
+            new("mediaImportQueue", WorkerGroupType.Operation, null, TimeSpan.Zero, canRunNow: false),
             new("benchmarkQueue", WorkerGroupType.Operation, null, TimeSpan.Zero, canRunNow: false),
             new("searchQueue", WorkerGroupType.Operation, null, TimeSpan.Zero, canRunNow: false),
 

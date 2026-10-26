@@ -14,7 +14,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
 {
     // A list of titles added at once: the file, what each entry is and would do, and what became of each.
     [RequestFormLimits(ValueCountLimit = 20_000, ValueLengthLimit = 4_194_304)]
-    public sealed class MediaImportModel(PreviewMediaImportV1 preview, RunMediaImportV1 run, ReadMediaImportEditionsV1 editions, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
+    public sealed class MediaImportModel(PreviewMediaImportV1 preview, RunMediaImportV1 run, QueueMediaImportJobV1 queueJob, ReadMediaImportJobV1 readJob, LatestMediaImportJobV1 latestJob, ReadMediaImportEditionsV1 editions, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private const string Address = "/Admin/Import";
         private MediaImportDataV1? _input;
@@ -40,6 +40,53 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 Upload(content, csrf);
             }
 
+            // Persisted progress is visible after reopening the page, with or without
+            // its original preview. The worker never depends on this component.
+            content.Add(new Div(
+                new H2(new Text("import.job.title")),
+                new Strong(new Text("import.job.queued")).Attribute("data-import-job-state", "").Attribute("role", "status"),
+                new Span(new ValueText("0 / 0")).Attribute("data-import-job-count", ""),
+                new Progress().Attribute("data-import-job-progress", "").Attribute("max", "1").Attribute("value", "0"),
+                new Ol().Attribute("data-import-job-rows", ""),
+                new Button(new Text("import.downloadReport")).Attribute("type", "button")
+                    .Attribute("data-import-job-report", "").Attribute("hidden", "hidden"))
+                .Class("media-import__job-panel").Attribute("data-import-job-panel", "").Attribute("hidden", "hidden")
+                .TextAttribute("data-job-queued", "import.job.queued")
+                .TextAttribute("data-job-running", "import.job.running")
+                .TextAttribute("data-job-completed", "import.job.completed")
+                .TextAttribute("data-job-failed", "import.job.failed")
+                .TextAttribute("data-job-disconnected", "import.job.disconnected")
+                .TextAttribute("data-job-start-failed", "import.job.startFailed")
+                .TextAttribute("data-job-filter-label", "import.job.filterLabel")
+                .TextAttribute("data-job-filter-all", "import.job.filterAll")
+                .TextAttribute("data-job-filter-queued", "import.job.filterQueued")
+                .TextAttribute("data-job-filter-running", "import.job.filterRunning")
+                .TextAttribute("data-job-filter-done", "import.job.filterDone")
+                .TextAttribute("data-job-filter-review", "import.job.filterReview")
+                .TextAttribute("data-job-filter-problem", "import.job.filterProblem")
+                .TextAttribute("data-job-current", "import.job.current")
+                .TextAttribute("data-job-source", "import.job.source")
+                .TextAttribute("data-job-query", "import.job.query")
+                .TextAttribute("data-job-candidates", "import.job.candidates")
+                .TextAttribute("data-job-attempt", "import.job.attempt")
+                .TextAttribute("data-job-history", "import.job.history")
+                .TextAttribute("data-job-stage-resolving", "import.job.stage.Resolving")
+                .TextAttribute("data-job-stage-candidates", "import.job.stage.Candidates")
+                .TextAttribute("data-job-stage-review", "import.job.stage.Review")
+                .TextAttribute("data-job-stage-no-match", "import.job.stage.NoMatch")
+                .TextAttribute("data-job-stage-retrying", "import.job.stage.Retrying")
+                .TextAttribute("data-job-stage-unavailable", "import.job.stage.Unavailable")
+                .TextAttribute("data-job-reason-checking-library", "import.job.reason.checking_library")
+                .TextAttribute("data-job-reason-isbn-lookup", "import.job.reason.isbn_lookup")
+                .TextAttribute("data-job-reason-catalog-search", "import.job.reason.catalog_search")
+                .TextAttribute("data-job-reason-no-match", "import.job.reason.no_match")
+                .TextAttribute("data-job-reason-isbn-no-match", "import.job.reason.isbn_no_match")
+                .TextAttribute("data-job-reason-match-found", "import.job.reason.match_found")
+                .TextAttribute("data-job-reason-needs-review", "import.job.reason.needs_review")
+                .TextAttribute("data-job-reason-unavailable", "import.job.reason.unavailable")
+                .TextAttribute("data-job-reason-rate-limited", "import.job.reason.rate_limited")
+                .TextAttribute("data-job-reason-provider-retry", "import.job.reason.provider_retry")
+                .TextAttribute("data-job-reason-importing", "import.job.reason.importing"));
             page.Content.Add(new Div([.. content]).Class("media-import"));
         }
 
@@ -53,6 +100,9 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 .TextAttribute("data-phase-searching", "import.phase.searching").TextAttribute("data-phase-candidates", "import.phase.candidates")
                 .TextAttribute("data-phase-no-match", "import.phase.no_match").TextAttribute("data-phase-waiting", "import.phase.waiting")
                 .TextAttribute("data-phase-complete", "import.phase.complete")
+                .TextAttribute("data-phase-reason-rate-limited", "import.job.reason.rate_limited")
+                .TextAttribute("data-phase-reason-unavailable", "import.job.reason.unavailable")
+                .TextAttribute("data-phase-reason-search-budget", "import.phase.waiting")
                 .TextAttribute("data-stage-new", "import.status.New").TextAttribute("data-stage-in-library", "import.status.InLibrary")
                 .TextAttribute("data-stage-duplicate", "import.status.Duplicate").TextAttribute("data-stage-open", "import.status.Open")
                 .TextAttribute("data-stage-invalid", "import.status.Invalid");
@@ -83,6 +133,9 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             var summary = Enum.GetValues<MediaImportStatusType>().Select(status => (Status: status, Count: rows.Count(row => row.StatusTypeId == status))).Where(item => item.Count > 0)
                 .Select(item => (IUiComponent)new Tag(new Strong(new ValueText(item.Count.ToString(CultureInfo.CurrentCulture))), new Text("import.status." + item.Status))).ToList();
             if (listing.Unsearched > 0) summary.Add(new Tag(new Strong(new ValueText(listing.Unsearched.ToString(CultureInfo.CurrentCulture))), new Text("import.unsearched")));
+            // Unsearched due to provider failure is not the same as a planned next search batch.
+            if (listing.ProviderFailure is { } failure) summary.Add(new Span(new Icon("info", assets, 14),
+                new Text("import.providerFailure." + failure)).Class("media-import__provider-warning").Attribute("role", "alert"));
             summary.Add(new A(new Text("import.restart")).Class("button button--compact").Attribute("href", Address));
             content.Add(new Div(new H2(new Text("import.previewTitle")), new Div([.. summary]).Class("media-import__summary")).Class("media-import__head"));
 
@@ -96,6 +149,9 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 .TextAttribute("data-phase-no-match", "import.phase.no_match")
                 .TextAttribute("data-phase-waiting", "import.phase.waiting")
                 .TextAttribute("data-phase-complete", "import.phase.complete")
+                .TextAttribute("data-phase-reason-rate-limited", "import.job.reason.rate_limited")
+                .TextAttribute("data-phase-reason-unavailable", "import.job.reason.unavailable")
+                .TextAttribute("data-phase-reason-search-budget", "import.phase.waiting")
                 .TextAttribute("data-stage-new", "import.status.New")
                 .TextAttribute("data-stage-in-library", "import.status.InLibrary")
                 .TextAttribute("data-stage-duplicate", "import.status.Duplicate")
@@ -157,7 +213,9 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                     form.Note(new Div(all, new Span(new ValueText("")).Class("media-import__count").Attribute("data-import-count", "").Attribute("hidden", "hidden").TextAttribute("data-template", "import.selected")));
                 }
 
-                form.Submit(new Button(new Text(listing.Unsearched > 0 ? "import.searchMore" : "import.refresh")));
+                var refresh = new Button(new Text(listing.Unsearched > 0 ? "import.searchMore" : "import.refresh"));
+                refresh.Attribute("data-import-refresh", "");
+                form.Submit(refresh);
                 var apply = new Button(new Text("import.apply")).Primary();
                 apply.Attribute("formaction", Address + "?handler=Apply");
                 apply.Attribute("data-import-apply", "");
@@ -239,7 +297,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         {
             MediaImportOutcomeType.Added or MediaImportOutcomeType.AddedAndMonitored or MediaImportOutcomeType.Monitored => ("available", "check"),
             MediaImportOutcomeType.Unchanged or MediaImportOutcomeType.Skipped => ("", "check"),
-            MediaImportOutcomeType.Unavailable or MediaImportOutcomeType.Deferred => ("warning", "info"),
+            MediaImportOutcomeType.Unavailable or MediaImportOutcomeType.Deferred or MediaImportOutcomeType.NeedsReview => ("warning", "info"),
             _ => ("danger", "close")
         };
 
@@ -275,7 +333,11 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         {
             MediaImportStatusType.New => true,
             MediaImportStatusType.InLibrary => !row.HasTarget && row.CanMonitor && row.Action != MediaImportActionType.AddOnly,
-            MediaImportStatusType.Open => row.Candidates.Count > 0,
+            // For books without a provider ID, an explicit checkbox requests safe
+            // title+author matching by the durable server job. Ambiguous rows remain for review.
+            MediaImportStatusType.Open => row.Candidates.Count > 0 ||
+                row.TypeKey == "book" && (row.Problem == "no_match" ||
+                    row.Problem is null && !string.IsNullOrWhiteSpace(row.Title) && !string.IsNullOrWhiteSpace(row.Creator)),
             _ => false
         };
 
@@ -452,12 +514,13 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             Read(file, json, action, defaults, choices);
             BeginProgressStream();
             await WriteProgressAsync(new { kind = "started" });
-            preview.OnItemProgressAsync = (index, stage, count) => WriteProgressAsync(new { kind = "row", index, stage, count });
+            preview.OnItemProgressAsync = (index, stage, count, source, query, reason) =>
+                WriteProgressAsync(new { kind = "row", index, stage, count, source, query, reason });
 
             try
             {
                 var result = await preview.ExecuteAsync<MediaImportPreviewV1>(_input!, HttpContext.RequestAborted);
-                await WriteProgressAsync(new { kind = "done", total = result.Rows.Count, unsearched = result.Unsearched });
+                await WriteProgressAsync(new { kind = "done", total = result.Rows.Count, unsearched = result.Unsearched, providerFailure = result.ProviderFailure });
             }
             catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
             {
@@ -469,6 +532,55 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             }
 
             return new EmptyResult();
+        }
+
+        // Queueing only persists an immutable snapshot; actual mutations are
+        // performed by OperationWorker, independently of this HTTP request.
+        public async Task<IActionResult> OnPostStartJobAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
+        {
+            if (!texts.CanImportMedia()) return Forbid();
+            Read(file, json, action, defaults, choices, apply: true);
+            var result = await queueJob.ExecuteAsync<MediaImportJobCreatedV1>(_input!, HttpContext.RequestAborted);
+            return new JsonResult(new { jobId = result.JobId });
+        }
+
+        public async Task<IActionResult> OnGetJobAsync(Guid? jobId)
+        {
+            if (!texts.CanImportMedia()) return Forbid();
+            if (jobId is not { } id || id == Guid.Empty) return BadRequest();
+            var status = await readJob.ExecuteAsync<MediaImportJobStatusV1>(new MediaImportJobParametersV1(id), HttpContext.RequestAborted);
+            return new JsonResult(new
+            {
+                jobId = status.JobId,
+                state = status.StatusTypeId.ToString(),
+                total = status.TotalCount,
+                processed = status.ProcessedCount,
+                sequence = status.Sequence,
+                error = status.ErrorKey,
+                rows = status.Rows.Select(row => new
+                {
+                    index = row.Index,
+                    title = row.Title,
+                    outcome = row.OutcomeTypeId is { } outcome ? texts["import.outcome." + outcome] : null,
+                    stage = texts["import.job.stage." + row.Stage],
+                    stageKey = row.Stage,
+                    outcomeKey = row.OutcomeTypeId?.ToString(),
+                    source = row.Source,
+                    query = row.Query,
+                    detail = row.Detail,
+                    candidateCount = row.CandidateCount,
+                    attempt = row.Attempt,
+                    history = JsonSerializer.Deserialize<JsonElement>(row.HistoryJson),
+                    workId = row.WorkId
+                })
+            });
+        }
+
+        public async Task<IActionResult> OnGetLatestJobAsync()
+        {
+            if (!texts.CanImportMedia()) return Forbid();
+            var latest = await latestJob.ExecuteAsync<MediaImportLatestJobV1>(cancellationToken: HttpContext.RequestAborted);
+            return new JsonResult(new { jobId = latest.JobId });
         }
 
         public async Task<IActionResult> OnPostApplyAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)

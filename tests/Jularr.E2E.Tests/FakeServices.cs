@@ -189,8 +189,8 @@ namespace Jularr.E2E.Tests
                 "tv/99002/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"Beginning","air_date":"2021-01-05"},{"season_number":1,"episode_number":2,"name":"Ending","air_date":"2021-01-12"}]}"""),
                 "movie/10378" => Json(Movie),
 
-                // A hundred more films for lists longer than one import run.
-                _ when path.StartsWith("movie/3", StringComparison.Ordinal) && int.TryParse(path.AsSpan(6), out var bulk) && bulk is >= 30000 and < 30100 =>
+                // Deterministic provider fixtures for large imports and restart recovery.
+                _ when path.StartsWith("movie/3", StringComparison.Ordinal) && int.TryParse(path.AsSpan(6), out var bulk) && bulk is >= 30000 and < 30400 =>
                     Json("{\"id\":" + bulk + ",\"title\":\"Bulk Movie " + bulk + "\",\"original_title\":\"Bulk Movie " + bulk + "\",\"release_date\":\"2010-01-01\",\"overview\":\"A film of the bulk list.\",\"original_language\":\"en\","
                         + "\"genres\":[{\"id\":16,\"name\":\"Animation\"}],\"external_ids\":{\"imdb_id\":\"tt" + bulk.ToString("D7", System.Globalization.CultureInfo.InvariantCulture) + "\"}}"),
                 "tv/99001" => Json(Series),
@@ -230,6 +230,9 @@ namespace Jularr.E2E.Tests
             "trending/weekly.json" => Json("""{"works":[{"key":"/works/OL66554W","title":"Pride and Prejudice","author_name":["Jane Austen"],"first_publish_year":1813}]}"""),
             "works/OL66554W.json" => Json("""{"title":"Pride and Prejudice","first_publish_date":"1813","description":{"value":"A novel of manners."},"authors":[{"author":{"key":"/authors/OL21594A"}}]}"""),
             "works/OL9W.json" => Json("""{"title":"Example Manga","first_publish_date":"2019","authors":[{"author":{"key":"/authors/OL1A"}}]}"""),
+
+            // Without a language the edition is only compared, never saved as a catalog edition on import.
+            "works/OL66554W/editions.json" => Json("""{"entries":[{"key":"/books/OL7353617M","title":"Pride and Prejudice","physical_format":"Paperback","isbn_13":["9780141439518"],"publishers":["Penguin Classics"],"publish_date":"2003"}]}"""),
             "authors/OL21594A.json" => Json("""{"name":"Jane Austen"}"""),
             "authors/OL1A.json" => Json("""{"name":"Mika Example"}"""),
             _ => Results.NotFound()

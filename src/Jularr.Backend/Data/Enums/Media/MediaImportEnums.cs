@@ -30,6 +30,7 @@ namespace Jularr.Backend.Data.Enums.Media
         Unavailable = 7,
         Excluded = 8,
         Deferred = 9,
-        Failed = 10
+        Failed = 10,
+        NeedsReview = 11
     }
 }

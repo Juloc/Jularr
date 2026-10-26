@@ -6766,6 +6766,7 @@
    "Remove identification",
    "Zuordnung entfernen"
   ],
+  "operation.type.MediaImport": ["Media list import", "Medienlistenimport"],
   "operation.type.LibraryScan": [
    "Library scan",
    "Bibliotheksscan"
@@ -9595,6 +9596,47 @@
    "Download import report",
    "Importbericht herunterladen"
   ],
+  "import.job.title": ["Recent media import", "Letzter Medienimport"],
+  "import.job.queued": ["Queued on server", "Auf dem Server eingeplant"],
+  "import.job.stage.Queued": ["Waiting", "Wartet"],
+  "import.job.stage.Matching": ["Matching metadata", "Metadaten werden abgeglichen"],
+  "import.job.stage.Importing": ["Adding work", "Werk wird hinzugefügt"],
+  "import.job.stage.Done": ["Finished", "Abgeschlossen"],
+  "import.job.running": ["Import running on server", "Import läuft auf dem Server"],
+  "import.job.completed": ["Import complete", "Import abgeschlossen"],
+  "import.job.failed": ["Import stopped", "Import angehalten"],
+  "import.job.disconnected": ["Connection lost. The server keeps the saved progress.", "Verbindung unterbrochen. Der Server speichert den Fortschritt weiter."],
+  "import.job.startFailed": ["Could not queue the import. Review the list and try again.", "Import konnte nicht gestartet werden. Liste prüfen und erneut versuchen."],
+  "import.job.filterLabel": ["Filter import results", "Importergebnisse filtern"],
+  "import.job.filterAll": ["All titles", "Alle Titel"],
+  "import.job.filterQueued": ["Waiting", "Wartend"],
+  "import.job.filterRunning": ["In progress", "In Bearbeitung"],
+  "import.job.filterDone": ["Completed", "Abgeschlossen"],
+  "import.job.filterReview": ["Needs review", "Manuell prüfen"],
+  "import.job.filterProblem": ["Problems", "Probleme"],
+  "import.job.current": ["Currently processing", "Wird gerade verarbeitet"],
+  "import.job.source": ["Source", "Quelle"],
+  "import.job.query": ["Search query / ISBN", "Suchbegriff / ISBN"],
+  "import.job.candidates": ["Candidates", "Kandidaten"],
+  "import.job.attempt": ["Retry attempt", "Wiederholungsversuch"],
+  "import.job.history": ["Search history", "Suchverlauf"],
+  "import.job.stage.Resolving": ["Resolving ISBN", "ISBN wird aufgelöst"],
+  "import.job.stage.Candidates": ["Candidates found", "Treffer gefunden"],
+  "import.job.stage.Review": ["Needs review", "Manuelle Prüfung nötig"],
+  "import.job.stage.NoMatch": ["No match", "Kein Treffer"],
+  "import.job.stage.Retrying": ["Retrying provider request", "Quellenanfrage wird erneut versucht"],
+  "import.job.stage.Unavailable": ["Provider unavailable", "Quelle nicht erreichbar"],
+  "import.job.reason.checking_library": ["Checking existing works", "Vorhandene Werke werden geprüft"],
+  "import.job.reason.isbn_lookup": ["Looking up exact ISBN", "Exakte ISBN wird nachgeschlagen"],
+  "import.job.reason.catalog_search": ["Searching the metadata catalog", "Metadatenkatalog wird durchsucht"],
+  "import.job.reason.no_match": ["No matching title found", "Kein passender Titel gefunden"],
+  "import.job.reason.isbn_no_match": ["ISBN could not be safely resolved", "ISBN konnte nicht sicher zugeordnet werden"],
+  "import.job.reason.match_found": ["One strongly matching candidate", "Ein eindeutig passender Kandidat"],
+  "import.job.reason.needs_review": ["Several or unverified candidates", "Mehrere oder unsichere Kandidaten"],
+  "import.job.reason.unavailable": ["Provider unavailable", "Quelle nicht erreichbar"],
+  "import.job.reason.rate_limited": ["Provider rate limit", "Anfragelimit der Quelle erreicht"],
+  "import.job.reason.provider_retry": ["Temporary provider error; retrying", "Vorübergehender Quellenfehler; erneuter Versuch"],
+  "import.job.reason.importing": ["Adding selected work", "Ausgewähltes Werk wird hinzugefügt"],
   "import.phase.partial": [
    "Import paused: some titles are still waiting",
    "Import pausiert: Einige Titel warten noch"
@@ -9822,6 +9864,18 @@
    "not searched yet",
    "noch nicht gesucht"
   ],
+  "import.job.stage.Searching": [
+   "Searching catalog",
+   "Katalog durchsuchen"
+  ],
+  "import.providerFailure.rate_limited": [
+   "Open Library has limited requests. Some books could not be searched. Try again later; existing choices stay intact.",
+   "Open Library begrenzt die Anfragen. Einige Bücher konnten nicht gesucht werden. Später erneut versuchen; die Auswahl bleibt erhalten."
+  ],
+  "import.providerFailure.unavailable": [
+   "The book metadata provider could not be reached. Unsearched books have not been checked; try again when the provider is available.",
+   "Der Buch-Metadatenanbieter ist nicht erreichbar. Die noch nicht gesuchten Bücher wurden nicht geprüft; bitte später erneut versuchen."
+  ],
   "import.searches": [
    "Searching",
    "Suche läuft"
@@ -9946,6 +10000,7 @@
    "Not found",
    "Nicht gefunden"
   ],
+  "import.outcome.NeedsReview": ["Review the match", "Treffer prüfen"],
   "import.outcome.Unavailable": [
    "Provider unavailable",
    "Anbieter nicht erreichbar"
@@ -10570,6 +10625,7 @@
    "The server is busy, so this plays in a lower quality.",
    "Der Server ist ausgelastet, deshalb läuft dies in niedrigerer Qualität."
   ],
+  "jobs.job.mediaImportQueue": ["Media imports", "Medienimporte"],
   "jobs.job.benchmarkQueue": [
    "Transcoding benchmark",
    "Transcoding-Benchmark"
@@ -10813,6 +10869,10 @@
   "jobs.about.backupQueue": [
    "Creates the backups that were asked for.",
    "Erstellt die angeforderten Sicherungen."
+  ],
+  "jobs.about.mediaImportQueue": [
+   "Imports selected media-list titles in the background and resumes unfinished work after a restart.",
+   "Importiert ausgewählte Titel aus Medienlisten im Hintergrund und setzt unterbrochene Aufträge nach einem Neustart fort."
   ],
   "jobs.about.downloads": [
    "Follows the progress of external downloads and starts their import when they finish.",

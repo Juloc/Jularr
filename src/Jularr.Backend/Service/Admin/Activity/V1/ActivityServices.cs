@@ -30,7 +30,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     operation."Id",
                     operation."OperationTypeId",
                     operation."OperationStatusTypeId",
-                    coalesce(release."Title", root."Name", operation."WorkerJobKey", '') AS "Title",
+                    coalesce(release."Title", root."Name", CASE WHEN operation."OperationTypeId" = 7 THEN 'Media import' END, operation."WorkerJobKey", '') AS "Title",
                     work."Id" AS "WorkId",
                     work."CanonicalTitle" AS "WorkTitle",
                     operation."ProgressPercent"::integer AS "ProgressPercent",
