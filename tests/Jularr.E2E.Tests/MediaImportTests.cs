@@ -115,6 +115,9 @@ namespace Jularr.E2E.Tests
                 await book.GetByRole(AriaRole.Button, new() { Name = "Compare editions" }).ClickAsync();
                 await Assertions.Expect(book.Locator("[data-import-edition-details]")).ToContainTextAsync("9780141439518");
                 await Assertions.Expect(book.Locator("[data-import-edition-details]")).ToContainTextAsync("Paperback");
+                // Closed again: its table rows would otherwise count among the list's rows.
+                await book.GetByRole(AriaRole.Button, new() { Name = "Compare editions" }).ClickAsync();
+                await Assertions.Expect(book.Locator("[data-import-edition-details]")).ToHaveCountAsync(0);
                 await Assertions.Expect(book.Locator("input[type=checkbox][name='Choices[2].Include']")).Not.ToBeCheckedAsync();
                 await Assertions.Expect(rows.Nth(0).Locator("input[type=checkbox][name='Choices[0].Include']")).ToBeCheckedAsync();
                 await Assertions.Expect(rows.Nth(0).Locator("select[name='Choices[0].Action']")).ToHaveValueAsync("");
@@ -170,9 +173,9 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "media-import-preview-mobile");
                 await page.SetViewportSizeAsync(1280, 720);
 
-                // The person imports the chosen rows without leaving the page; actual per-row outcomes stream live.
+                // The person imports the chosen rows without leaving the page; the server job reports each row as it goes.
                 await page.Locator("[data-import-apply]").ClickAsync();
-                await Assertions.Expect(page.Locator("[data-import-job-state]")).ToHaveTextAsync("Import complete");
+                await Assertions.Expect(page.Locator("[data-import-job-state]")).ToHaveTextAsync("Import complete", new() { Timeout = 60_000 });
                 await Assertions.Expect(page.Locator("[data-import-job-rows] > li", new() { HasText = "Added, monitored" })).ToHaveCountAsync(4);
                 await Assertions.Expect(page.Locator("[data-import-job-progress]")).ToHaveJSPropertyAsync("value", 6);
                 // The operation has a stable ID and reconnects from the server
@@ -256,9 +259,8 @@ namespace Jularr.E2E.Tests
                 await page.Locator("select[name='Choices[40].Action']").SelectOptionAsync(new SelectOptionValue { Label = "Add only" });
                 await page.Locator("select[name='Choices[41].Action']").SelectOptionAsync(new SelectOptionValue { Label = "Monitor" });
                 await page.Locator("[data-import-apply]").ClickAsync();
-                // Forty provider imports are bounded per server pass, but the browser
-                // continues the remaining two automatically, preserving their per-row actions.
-                await Assertions.Expect(page.Locator("[data-import-job-state]")).ToHaveTextAsync("Import complete");
+                // The server job imports all 42 titles in the background, each with its own action.
+                await Assertions.Expect(page.Locator("[data-import-job-state]")).ToHaveTextAsync("Import complete", new() { Timeout = 60_000 });
                 await Assertions.Expect(page.Locator("[data-import-job-progress]")).ToHaveJSPropertyAsync("value", 42);
                 await Assertions.Expect(page.Locator("[data-import-job-rows] > li")).ToHaveCountAsync(42);
                 await Assertions.Expect(page.Locator("[data-import-job-panel] form")).ToHaveCountAsync(0);

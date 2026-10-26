@@ -216,7 +216,9 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                     form.Note(new Div(all, new Span(new ValueText("")).Class("media-import__count").Attribute("data-import-count", "").Attribute("hidden", "hidden").TextAttribute("data-template", "import.selected")));
                 }
 
-                form.Submit(new Button(new Text(listing.Unsearched > 0 ? "import.searchMore" : "import.refresh")));
+                var refresh = new Button(new Text(listing.Unsearched > 0 ? "import.searchMore" : "import.refresh"));
+                refresh.Attribute("data-import-refresh", "");
+                form.Submit(refresh);
                 var apply = new Button(new Text("import.apply")).Primary();
                 apply.Attribute("formaction", Address + "?handler=Apply");
                 apply.Attribute("data-import-apply", "");

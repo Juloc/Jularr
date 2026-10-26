@@ -244,6 +244,8 @@ export function initializeDurableJobs(): void {
         URL.revokeObjectURL(uri);
     });
 
+    // Capture runs before htmx's boosted-form listener, which a page swap registers first;
+    // otherwise the apply button would also post the synchronous import.
     form?.addEventListener("submit", async event => {
         const submitter = (event as SubmitEvent).submitter;
         if (submitter !== apply || !apply) return;
@@ -273,7 +275,7 @@ export function initializeDurableJobs(): void {
         } finally {
             --pendingEnqueues;
         }
-    });
+    }, { capture: true });
 
     // A new visit uses the same owner-scoped job ID from the database. No local
     // storage or tab lifetime is involved, and an older completed job is visible.

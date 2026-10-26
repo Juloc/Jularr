@@ -119,6 +119,7 @@ function registerPreviewStream(
     form.dataset.importPending = "";
     let useNormalPost = false;
 
+    // Capture: htmx's boosted-form listener must not post the form alongside the stream.
     form.addEventListener("submit", async event => {
         const submitter = (event as SubmitEvent).submitter as HTMLElement | null;
         if (useNormalPost || submitter !== button) return;
@@ -265,7 +266,7 @@ function registerPreviewStream(
             submitButtons.forEach((control, index) => { control.disabled = previousButtonStates[index]; });
             form.requestSubmit(button);
         }
-    });
+    }, { capture: true });
 }
 function initializePendingPreview(): void {
     const form = document.querySelector<HTMLFormElement>(".media-import__upload form");
@@ -284,7 +285,7 @@ function initializeRefreshPreview(): void {
     const form = document.querySelector<HTMLFormElement>(".media-import__preview form");
     registerPreviewStream(
         form,
-        form?.querySelector<HTMLButtonElement>('button[type="submit"]:not([data-import-apply])') ?? null,
+        form?.querySelector<HTMLButtonElement>("[data-import-refresh]") ?? null,
         document.querySelector<HTMLElement>(".media-import [data-import-status]")?.dataset,
         null, null
     );

@@ -120,14 +120,16 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(data);
             var header = await ctx.ReadRequiredAsync<MediaImportJobHeaderData>(sql, ct);
 
+            // Each row is named as the library names its title, as in the direct import.
             sql = new SqlStatement();
             sql.Statement =
                 """
-                SELECT row."RowIndex" AS "Index", row."Title", row."Stage", row."OutcomeTypeId", row."WorkId", row."Searches",
+                SELECT row."RowIndex" AS "Index", COALESCE(work."CanonicalTitle", row."Title") AS "Title", row."Stage", row."OutcomeTypeId", row."WorkId", row."Searches",
                        row."Source", row."Query", row."Detail", row."CandidateCount", row."Attempt",
                        row."History"::text AS "HistoryJson"
                 FROM "MediaImportJobRows" AS row
                 JOIN "MediaImportJobs" AS job ON job."OperationId" = row."OperationId"
+                LEFT JOIN "Works" AS work ON work."Id" = row."WorkId"
                 WHERE job."PublicId" = @JobId AND job."RequestedByAccountId" = @AccountId
                 ORDER BY row."RowIndex";
                 """;

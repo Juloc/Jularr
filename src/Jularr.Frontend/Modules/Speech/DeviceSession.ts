@@ -83,11 +83,8 @@ export class DeviceSession {
             this.boundary = at;
             this.word(item, at, length > 0 ? length : /^\S+/.exec(item.text.slice(at, end))?.[0].length ?? 1);
         };
-        // Some engines deliver the utterance start callback after the first word boundary.
-        // Do not let that delayed start repaint the already more precise spoken word.
-        let receivedBoundary = false;
-        message.onstart = () => { if (current() && !receivedBoundary) highlight(start); };
-        message.onboundary = event => { if (current()) { receivedBoundary = true; highlight(Math.min(end, start + event.charIndex), event.charLength); } };
+        message.onstart = () => { if (current()) highlight(start); };
+        message.onboundary = event => { if (current()) highlight(Math.min(end, start + event.charIndex), event.charLength); };
         message.onend = () => { if (current()) { this.cursor = end; this.advance(); } };
         message.onerror = () => { if (current()) this.stop('failed'); };
         try { this.synth.speak(message); }

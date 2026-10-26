@@ -34,8 +34,7 @@ namespace Jularr.Backend.Service.Core
             {
                 if (_migrations[index].Version != index + 2)
                 {
-                    throw new InvalidDataException("Database migrations must be contiguous, starting at version 2. Embedded: " +
-                        string.Join(", ", _migrations.Select(migration => migration.Name + "=" + migration.Version.ToString(global::System.Globalization.CultureInfo.InvariantCulture))));
+                    throw new InvalidDataException("Database migrations must be contiguous, starting at version 2.");
                 }
             }
         }
