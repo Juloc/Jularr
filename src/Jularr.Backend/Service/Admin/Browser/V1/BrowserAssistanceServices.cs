@@ -28,7 +28,7 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
                 throw new DataValidationException(nameof(Parameters.AcquisitionConnectionId), "invalid_transition");
             }
 
-            return await _assistance.OpenAsync(Auth.SessionPublicId ?? throw new SecurityException(), new Uri(source.HttpAddress), CancellationToken);
+            return await _assistance.OpenAsync(Auth.SessionPublicId ?? throw new SecurityException(), source.Id, new Uri(source.HttpAddress), CancellationToken);
         }
     }
 

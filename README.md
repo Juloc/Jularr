@@ -100,10 +100,16 @@ Ein vorhandener manuell konfigurierter Browser über `Browser:Path` oder
 `Browser:RemoteAddress` bleibt als Konfigurationsoption erhalten.
 
 Bei einer manuellen Prüfung von Anna’s Archive öffnet „Browser bedienen“ unter
-`/Admin/Browser` eine bedienbare Ansicht derselben lokalen Chrome-Sitzung. Zugriff
+`/Admin/Browser` oben eine bedienbare Ansicht derselben lokalen Chrome-Sitzung. Die
+Quellenauswahl und der Öffnen-Knopf stehen vor den Diagnoseabschnitten. Zugriff
 haben Owner mit `acquisition.manage`; Bild und Eingaben sind an
 die öffnende Anmeldesitzung gebunden. Solange diese Ansicht aktiv ist, wechselt die
-Automatik die Seite nicht. Nach zwei Minuten ohne Abruf oder Eingabe wird sie frei.
+Automatik die Seite nicht. Nach zwei Minuten ohne Abruf oder Eingabe wird die
+Bedienfreigabe frei; die öffnende Sitzung behält einen direkten Wiederverbinden-Knopf.
+Kurze Bildabruf-Fehler werden begrenzt erneut versucht; das letzte Bild bleibt dabei
+sichtbar und Eingaben sind bis zur Wiederverbindung gesperrt. Wiederöffnen erhält
+die aktuelle Seite derselben Quelle. Die automatische Suche nutzt ebenfalls diesen
+Haupt-Tab und schließt nur ihre zusätzlichen Alternativ-Tabs.
 „Fertig und schließen“ und normales Stoppen erhalten das Profil; nur Zurücksetzen
 oder Ausschalten des verwalteten Browser-Moduls löschen es. Die Ansicht überträgt
 keine beliebigen Debugging-Befehle und erlaubt keine direkten Browser-Downloads.

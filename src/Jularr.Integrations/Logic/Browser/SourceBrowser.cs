@@ -316,9 +316,13 @@ namespace Jularr.Integrations.Logic.Browser
             {
                 if (HasManualControl) return null;
                 await StartBrowserAsync(ct);
-                foreach (var address in safe)
+                var current = await _client!.EvaluateAsync("location.href", ct);
+                var preferred = Uri.TryCreate(current, UriKind.Absolute, out var currentAddress)
+                    ? safe.FindIndex(address => SameOrigin(currentAddress, address)) : -1;
+                if (preferred > 0) (safe[0], safe[preferred]) = (safe[preferred], safe[0]);
+                for (var index = 0; index < safe.Count; index++)
                 {
-                    var page = await OpenPageAsync(address, ct);
+                    var page = await OpenPageAsync(safe[index], index == 0, ct);
                     if (page is not null)
                     {
                         opened.Add(page);
@@ -355,25 +359,39 @@ namespace Jularr.Integrations.Logic.Browser
 
                 return null;
             }
+            catch (Exception exception) when (exception is SourceBrowserException or JsonException)
+            {
+                Note("error", exception.Message);
+                return null;
+            }
             finally
             {
                 foreach (var page in opened)
                 {
-                    await ClosePageAsync(page.Target, ct);
+                    if (page.Target is { } target) await ClosePageAsync(target, ct);
                 }
 
                 _gate.Release();
             }
         }
 
-        // A page of its own, so several addresses can be read at the same time.
-        private async Task<OpenPage?> OpenPageAsync(Uri address, CancellationToken ct)
+        // Keep the primary page's session; alternative addresses use temporary background pages.
+        private async Task<OpenPage?> OpenPageAsync(Uri address, bool primary, CancellationToken ct)
         {
             try
             {
-                var (target, session) = await _client!.OpenPageAsync(ct);
-                await _client.SendAsync("Page.enable", null, ct, session);
-                await _client.SendAsync("Page.navigate", new { url = address.AbsoluteUri }, ct, session);
+                string? target = null;
+                string? session = null;
+                if (!primary)
+                {
+                    (target, session) = await _client!.OpenPageAsync(ct);
+                    await _client.SendAsync("Page.enable", null, ct, session);
+                }
+                else
+                {
+                    await _client!.SendAsync("Page.bringToFront", null, ct);
+                }
+                await _client!.SendAsync("Page.navigate", new { url = address.AbsoluteUri }, ct, session);
                 return new OpenPage(target, session, address);
             }
             catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException or System.Text.Json.JsonException)
@@ -381,6 +399,9 @@ namespace Jularr.Integrations.Logic.Browser
                 return null;
             }
         }
+
+        private static bool SameOrigin(Uri first, Uri second) =>
+            Uri.Compare(first, second, UriComponents.SchemeAndServer, UriFormat.UriEscaped, StringComparison.OrdinalIgnoreCase) == 0;
 
         private async Task ClosePageAsync(string target, CancellationToken ct)
         {
@@ -893,7 +914,7 @@ namespace Jularr.Integrations.Logic.Browser
         // What one page says about itself.
         private sealed record BrowserState(string Href, string Ready, string Html);
 
-        // A page of its own, for reading several addresses at the same time.
-        private sealed record OpenPage(string Target, string Session, Uri Address);
+        // The primary page has no temporary target or attached session to close.
+        private sealed record OpenPage(string? Target, string? Session, Uri Address);
     }
 }

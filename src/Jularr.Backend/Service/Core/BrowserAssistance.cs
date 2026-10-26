@@ -18,8 +18,9 @@ namespace Jularr.Backend.Service.Core
             await _gate.WaitAsync(ct);
             try
             {
-                return _lease is { } lease && lease.Owner == owner && lease.ExpiresAt > time.GetUtcNow() && browser.HasManualControl
-                    ? new BrowserViewV1(lease.Id, lease.Viewport.Width, lease.Viewport.Height) : null;
+                return _lease is { } lease && lease.Owner == owner
+                    ? new BrowserViewV1(lease.Id, lease.Viewport.Width, lease.Viewport.Height, lease.AcquisitionConnectionId,
+                        lease.ExpiresAt > time.GetUtcNow() && browser.HasManualControl) : null;
             }
             finally
             {
@@ -27,24 +28,24 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        public async Task<BrowserViewV1> OpenAsync(Guid owner, Uri address, CancellationToken ct)
+        public async Task<BrowserViewV1> OpenAsync(Guid owner, long acquisitionConnectionId, Uri address, CancellationToken ct)
         {
             await _gate.WaitAsync(ct);
             try
             {
                 var now = time.GetUtcNow();
+                Guid? continuing = null;
                 if (_lease is { } current && current.ExpiresAt > now && browser.HasManualControl)
                 {
                     if (current.Owner != owner) throw new ServiceUnavailableException("browser_assistance_busy");
-                    return new BrowserViewV1(current.Id, current.Viewport.Width, current.Viewport.Height);
+                    if (current.AcquisitionConnectionId == acquisitionConnectionId) continuing = current.Id;
                 }
 
-                _lease = null;
                 var expires = now.Add(IdleTimeout);
                 var viewport = await browser.BeginManualAsync(address, expires, ct);
-                var lease = new Lease(Guid.NewGuid(), owner, expires, viewport);
+                var lease = new Lease(continuing ?? Guid.NewGuid(), owner, acquisitionConnectionId, expires, viewport);
                 _lease = lease;
-                return new BrowserViewV1(lease.Id, viewport.Width, viewport.Height);
+                return new BrowserViewV1(lease.Id, viewport.Width, viewport.Height, acquisitionConnectionId, true);
             }
             catch (SourceBrowserException exception)
             {
@@ -71,7 +72,6 @@ namespace Jularr.Backend.Service.Core
             }
             catch (SourceBrowserException exception)
             {
-                _lease = null;
                 throw new ServiceUnavailableException("browser_assistance_unavailable", exception);
             }
             finally
@@ -122,7 +122,7 @@ namespace Jularr.Backend.Service.Core
             await _gate.WaitAsync(ct);
             try
             {
-                Require(owner, id);
+                Require(owner, id, active: false);
                 await browser.EndManualAsync(ct);
                 _lease = null;
             }
@@ -132,23 +132,25 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        private Lease Require(Guid owner, Guid id)
+        private Lease Require(Guid owner, Guid id, bool active = true)
         {
-            if (_lease is not { } lease || lease.Id != id || lease.ExpiresAt <= time.GetUtcNow() || !browser.HasManualControl)
+            if (_lease is not { } lease || lease.Id != id)
             {
                 throw new ServiceGoneException("browser_assistance_ended");
             }
 
             if (lease.Owner != owner) throw new SecurityException();
+            if (active && (lease.ExpiresAt <= time.GetUtcNow() || !browser.HasManualControl)) throw new ServiceGoneException("browser_assistance_ended");
             return lease;
         }
 
         public void Dispose() => _gate.Dispose();
 
-        private sealed class Lease(Guid id, Guid owner, DateTimeOffset expiresAt, BrowserViewport viewport)
+        private sealed class Lease(Guid id, Guid owner, long acquisitionConnectionId, DateTimeOffset expiresAt, BrowserViewport viewport)
         {
             public Guid Id { get; } = id;
             public Guid Owner { get; } = owner;
+            public long AcquisitionConnectionId { get; } = acquisitionConnectionId;
             public DateTimeOffset ExpiresAt { get; set; } = expiresAt;
             public BrowserViewport Viewport { get; } = viewport;
             public byte[]? Frame { get; set; }

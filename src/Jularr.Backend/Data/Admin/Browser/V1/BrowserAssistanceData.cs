@@ -10,7 +10,7 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
         public Guid LeaseId { get; } = leaseId;
     }
 
-    public sealed class BrowserViewV1(Guid leaseId, int width, int height) : BaseResponse
+    public sealed class BrowserViewV1(Guid leaseId, int width, int height, long acquisitionConnectionId, bool isActive) : BaseResponse
     {
         [DataField(typeof(BrowserFields), nameof(BrowserFields.LeaseId))]
         public Guid LeaseId { get; } = leaseId;
@@ -18,6 +18,10 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
         public int Width { get; } = width;
         [DataField(typeof(BrowserFields), nameof(BrowserFields.Height))]
         public int Height { get; } = height;
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
+        public long AcquisitionConnectionId { get; } = acquisitionConnectionId;
+        [DataField(typeof(BrowserFields), nameof(BrowserFields.IsActive))]
+        public bool IsActive { get; } = isActive;
     }
 
     public sealed class BrowserInputDataV1(string action, int x = 0, int y = 0, int delta = 0, string? key = null, string? text = null) : BaseData
