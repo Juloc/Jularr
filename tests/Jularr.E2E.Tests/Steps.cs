@@ -118,7 +118,7 @@ namespace Jularr.E2E.Tests
         public static async Task SaveAsync(IPage page)
         {
             await FollowAsync(page, page.Locator("[data-save-pill] [data-save-submit]"));
-            var alert = page.Locator("main [role=alert]");
+            var alert = page.Locator("main [role=alert]:visible");
             if (await alert.CountAsync() > 0)
             {
                 Assert.Fail("The page answered: " + await alert.First.InnerTextAsync());

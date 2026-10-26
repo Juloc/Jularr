@@ -1,15 +1,17 @@
 # Die Ergebnisse
 
-Gemessen am 2026-10-21 und 2026-10-22 auf diesem Rechner (Windows, Docker Desktop, Spielplatz).
-Anbieter der Messung: **ProtonVPN im Gratis-Tarif**, Server `NL-FREE#281` (Niederlande),
+Gemessen am 2026-10-21 und 2026-10-22 in einer lokalen Windows-/Docker-Testumgebung.
+Anbieter der Messung: **ProtonVPN im Gratis-Tarif**, Server in den Niederlanden,
 WireGuard, Konfiguration aus dem Proton-Dashboard.
 
 ## Der Tunnel
 
+Die Messergebnisse sind anonymisiert. Echte öffentliche Host-/VPN-IP-Adressen, private Zugangsdaten und individuelle Verbindungskennungen dürfen nicht in diesem Repository dokumentiert werden.
+
 | Messung | Ergebnis |
 | --- | --- |
-| Adresse im Tunnel | **93.88.156.47**, Nootdorp (Südholland), **AS199218 Proton AG** |
-| Adresse des Hosts | 149.172.64.180, Bietigheim-Bissingen, Vodafone BW – der Tunnel verdeckt sie |
+| Adresse im Tunnel | VPN-Ausgangsadresse verifiziert; konkreter Wert aus Datenschutzgründen nicht veröffentlicht |
+| Adresse des Hosts | Andere öffentliche IP als im Tunnel; echte Anschluss-IP, Standort und Provider nicht veröffentlicht |
 | DNS | der Nameserver des Anbieters im Tunnel (10.2.0.1), keine Anfrage geht daneben vorbei |
 | IPv6 | **kein IPv6** – der Gratis-Tarif gibt keines; der Client bleibt sonst an der IPv6-Adresse eines Trackers hängen |
 | Tunnel nach Abbruch | der Container läuft weiter, die Firewall bleibt zu: **keine Verbindung, kein Download** |
@@ -19,8 +21,8 @@ WireGuard, Konfiguration aus dem Proton-Dashboard.
 
 | Anbieter | Peers | Tempo | Fortschritt in drei Minuten |
 | --- | --- | --- | --- |
-| **Proton Plus** (CH#1086, Port-Forwarding an) | **484** | **12-29 MB/s** | 2,3 % -> **93,8 %** |
-| Proton Free (NL-FREE#281) | 517 | Spitzen 90 kB/s, sonst einzelne kB/s | 0,05 % -> 0,14 % |
+| **Proton Plus** (Schweiz, Port-Forwarding an) | **484** | **12-29 MB/s** | 2,3 % -> **93,8 %** |
+| Proton Free (Niederlande) | 517 | Spitzen 90 kB/s, sonst einzelne kB/s | 0,05 % -> 0,14 % |
 | direkt ohne Tunnel | - | 4-6 MB/s | in Sekunden voll |
 
 **Der Kill-Switch hält.** Mit gestopptem Tunnel scheitern die Anfragen der Probe – sie rutschen

@@ -139,6 +139,37 @@ class GitHubUpdateCheckerTest {
     }
 
     @Test
+    fun refusesTvReleaseWithoutChecksum() = runBlocking {
+        val release = GitHubRelease(
+            tagName = "v0.2.16", name = "Jularr 0.2.16",
+            htmlUrl = "https://github.com/Juloc/Jularr/releases/tag/v0.2.16",
+            draft = false, prerelease = false, body = null,
+            assets = listOf(GitHubReleaseAsset(
+                "Jularr-TV-0.2.16.apk", "https://example.invalid/tv.apk", 123L,
+            )),
+        )
+        val result = GitHubUpdateChecker(api = FakeGitHubReleasesApi(release))
+            .checkForUpdate("0.2.15", AppVariant.Tv)
+        assertTrue("expected Error but was $result", result is UpdateCheckResult.Error)
+    }
+
+    @Test
+    fun acceptsTvReleaseWithChecksum() = runBlocking {
+        val release = GitHubRelease(
+            tagName = "v0.2.16", name = "Jularr 0.2.16",
+            htmlUrl = "https://github.com/Juloc/Jularr/releases/tag/v0.2.16",
+            draft = false, prerelease = false, body = "TV update",
+            assets = listOf(
+                GitHubReleaseAsset("Jularr-TV-0.2.16.apk", "https://example.invalid/tv.apk", 123L),
+                GitHubReleaseAsset("Jularr-TV-0.2.16.apk.sha256", "https://example.invalid/tv.apk.sha256", 87L),
+            ),
+        )
+        val result = GitHubUpdateChecker(api = FakeGitHubReleasesApi(release))
+            .checkForUpdate("0.2.15", AppVariant.Tv)
+        assertTrue("expected UpdateAvailable but was $result", result is UpdateCheckResult.UpdateAvailable)
+    }
+
+    @Test
     fun handlesNoPublishedReleaseGracefully() = runBlocking {
         val checker = GitHubUpdateChecker(api = FakeGitHubReleasesApi(release = null))
 

@@ -1438,11 +1438,11 @@ namespace Jularr.Backend.Tests
                 File(5, MediaType.Movie, "gone.mkv", "Gone", missing: DateTime.UtcNow),
                 File(6, MediaType.Movie, "kept (2019)/KEPT (2019).mkv", "Kept"),
                 File(7, MediaType.Book, "loose.epub", "Book"),
-                File(8, MediaType.Movie, "wide.mkv", "Wide", width: 1920)], NamingPatternTests.Defaults);
+                File(8, MediaType.Movie, "wide.mkv", "Wide", width: 1920)], NamingPatternTests.DefaultSet);
 
             CollectionAssert.AreEqual(new[]
             {
-                "Show/Season 01/Show - S01E02 [WEBDL-1080p].mkv", "Artist A, Artist B/Album (2019)/03 - Song One.flac", "Manga/Manga v01.5.cbz", "Artist A/Book (2019)/Book.epub",
+                "Show/Season 01/Show - S01E02 [WEBDL-1080p].mkv", "Artist A, Artist B/Album (2019)/03 - Song - One.flac", "Manga/Manga v01.5.cbz", "Unknown/Game (2019)/game.sfc", "Artist A/Book (2019)/Book.epub",
                 "Wide (2019)/Wide (2019) [1080p].mkv"
             }, plan.Select(rename => rename.TargetPath).ToArray());
         }

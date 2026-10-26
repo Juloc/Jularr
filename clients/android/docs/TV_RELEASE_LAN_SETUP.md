@@ -12,7 +12,7 @@ A true hardware acceptance run must confirm discovered address -> HTTP(S) connec
 
 ## TV APK signing and updates
 
-The existing `Release` workflow validates the official `vMAJOR.MINOR.PATCH[-prerelease]` tag on `main`, publishes the server image and GitHub Release, then validates the Android TV unit tests and lint on that exact tagged tree before a separate minimal signing job. Android signing is not triggered via a second `release:published` workflow because releases produced by GitHub's automatic `GITHUB_TOKEN` do not reliably emit a follow-on Actions event.
+The `Release` workflow validates the official `vMAJOR.MINOR.PATCH[-prerelease]` tag on `main` and compares the TV source/dependencies with the last signed TV version. If the TV tree changed (or no prior signed APK exists), it tests and lints the tagged TV tree, signs a new APK, and then publishes the server image and GitHub Release. Otherwise it skips TV verification and signing, reuses the existing signed APK and checksum, and publishes the server image normally. The actual APK version stays encoded in its filename even when attached to a newer server release. Android signing is not triggered via a second `release:published` workflow because releases produced by GitHub's automatic `GITHUB_TOKEN` do not reliably emit a follow-on Actions event.
 
 Configure repository secrets before publishing:
 
@@ -21,7 +21,7 @@ Configure repository secrets before publishing:
 - `ANDROID_KEY_ALIAS`: Signing key alias.
 - `ANDROID_KEY_PASSWORD`: Key password.
 
-The signing job outputs `Jularr-TV-<version>.apk` and `Jularr-TV-<version>.apk.sha256` as GitHub release assets, matching `core-update/UpdateAssetResolver`. It verifies the signature and checks the SHA-256 *from the dist directory*, so downloading the APK and checksum side-by-side works without a nested `dist/` directory.
+A new TV signing job outputs `Jularr-TV-<version>.apk` and `Jularr-TV-<version>.apk.sha256` as GitHub release assets, matching `core-update/UpdateAssetResolver`. On server-only releases, those exact assets are copied unchanged from the last signed release, so `/releases/latest` still contains a valid TV package without suggesting a newer TV version. It verifies the signature and checks the SHA-256 *from the dist directory*, so downloading the APK and checksum side-by-side works without a nested `dist/` directory.
 
 **Release gate:** A production Android APK cannot be validated or published without the actual secrets, and a real device must install/update a signed test release to prove PackageInstaller permission, signature continuity, download/checksum, version comparison and settings. Never reset the signing key on a routine update. The phone application is a distinct release track; this workflow publishes **TV only**.
 

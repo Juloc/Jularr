@@ -16,7 +16,8 @@ namespace Jularr.Frontend.Pages.Admin.Browser
 {
     // Temporary: the browser of the instance, what it does and what an administrator can make it do.
     public sealed class BrowserModel(ReadBrowserStatusV1 status, RunBrowserActionV1 run, ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection,
-        TestAcquisitionConnectionV1 test, UpdateAcquisitionConnectionV1 update, ReadWantedV1 wanted, SearchWantedV1 search, IAntiforgery antiforgery, UiText texts) : JularrPage
+        TestAcquisitionConnectionV1 test, UpdateAcquisitionConnectionV1 update, ReadWantedV1 wanted, SearchWantedV1 search, OpenBrowserAssistanceV1 openView,
+        CloseBrowserAssistanceV1 closeView, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private BrowserStatusV1? _status;
         private PageResult<AcquisitionConnectionDetailsV1>? _connections;
@@ -26,6 +27,8 @@ namespace Jularr.Frontend.Pages.Admin.Browser
         {
             page.Title("admin.browser.title");
             page.Navigation("nav.admin");
+            page.Asset("Pages/Admin/Browser/Browser.entry.ts");
+            page.Asset("Pages/Admin/Browser/Browser.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             // The host's browser is optional and never installs privileged packages through the web service.
@@ -46,6 +49,19 @@ namespace Jularr.Frontend.Pages.Admin.Browser
                 page.Content.Add(new P(new Text("admin.browser.moduleHint"),
                     new A(new Text("admin.browser.moduleLink")).Attribute("href", "/Admin/Instance/Modules")));
             }
+
+            var sources = _status is { IsAvailable: true, RemoteAddress: null }
+                ? _connections?.Items.Where(item => item.IsEnabled && item.AcquisitionConnectionTypeId == AcquisitionConnectionType.AnnasArchive).ToArray() ?? [] : [];
+            if (sources.Length > 0)
+            {
+                var selected = _status?.ManualView?.AcquisitionConnectionId ?? sources[0].Id;
+                page.Content.Add(new Form<AcquisitionConnectionParametersV1>(form =>
+                {
+                    form.Select(item => item.AcquisitionConnectionId, "admin.browser.source", [.. sources.Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), new Uri(item.BaseUrl).Host))]);
+                    form.Submit("admin.browser.manualOpen");
+                }, "/Admin/Browser?handler=OpenView", csrf, new AcquisitionConnectionParametersV1(selected)));
+            }
+            if (_status?.ManualView is { } view) page.Content.Add(new RemoteBrowser(view, csrf));
 
             // What the browser is and what it did last.
             page.Content.Add(new H2(new Text("admin.browser.state")));
@@ -76,12 +92,32 @@ namespace Jularr.Frontend.Pages.Admin.Browser
                     "/Admin/Browser?handler=Search&wantedItemId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new BrowserParametersV1())));
         }
 
-        private IUiComponent Actions(AcquisitionConnectionDetailsV1 item, string csrf)
+        private IUiComponent Actions(AcquisitionConnectionDetailsV1 item, string? csrf)
         {
-            var buttons = new Div(
+            var buttons = new List<IUiComponent>
+            {
                 new Form<BrowserParametersV1>(form => form.Submit("admin.browser.test"), "/Admin/Browser?handler=Test&acquisitionConnectionId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new BrowserParametersV1()),
-                new Form<BrowserParametersV1>(form => form.Submit("admin.browser.off"), "/Admin/Browser?handler=Off&acquisitionConnectionId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new BrowserParametersV1()));
-            return buttons;
+                new Form<BrowserParametersV1>(form => form.Submit("admin.browser.off"), "/Admin/Browser?handler=Off&acquisitionConnectionId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new BrowserParametersV1())
+            };
+            return new Div([.. buttons]);
+        }
+
+        public async Task<IActionResult> OnPostOpenViewAsync(long acquisitionConnectionId)
+        {
+            await openView.ExecuteAsync<BrowserViewV1>(new AcquisitionConnectionParametersV1(acquisitionConnectionId), default, HttpContext.RequestAborted);
+            await LoadDataAsync();
+            PreparePage();
+            NoHint();
+            return Page();
+        }
+
+        public async Task<IActionResult> OnPostCloseViewAsync(Guid leaseId)
+        {
+            await closeView.ExecuteAsync<UpdateResult>(new BrowserLeaseParametersV1(leaseId), default, HttpContext.RequestAborted);
+            await LoadDataAsync();
+            PreparePage();
+            Hint("admin.browser.manualClosed");
+            return Page();
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -96,6 +132,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
             var result = await run.ExecuteAsync<BrowserStatusV1>(new BrowserParametersV1(), new RunBrowserActionDataV1(action ?? "start", url), HttpContext.RequestAborted);
             Hint("admin.browser.ran");
             await LoadDataAsync();
+            PreparePage();
             return Page();
         }
 
@@ -104,6 +141,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
             var result = await test.ExecuteAsync<AcquisitionConnectionTestV1>(new AcquisitionConnectionParametersV1(acquisitionConnectionId), default, HttpContext.RequestAborted);
             HintText(result.IsAvailable ? texts["admin.browser.sourceOk"] : texts["admin.browser.sourceFailed"] + " " + (result.ErrorKey ?? "-"));
             await LoadDataAsync();
+            PreparePage();
             return Page();
         }
 
@@ -116,6 +154,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
                 details.MediaTypeIds, details.SearchesAutomatically, details.QueryLimit, details.GrabLimit, details.Host, details.Port, details.UseSsl, details.DownloadStorageMountId), HttpContext.RequestAborted);
             Hint("admin.browser.sourceOff");
             await LoadDataAsync();
+            PreparePage();
             return Page();
         }
 
@@ -125,6 +164,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
             var result = await search.ExecuteAsync<BaseDataList<WantedReleaseCandidateV1>>(new WantedItemParametersV1(wantedItemId), new SearchWantedDataV1(), HttpContext.RequestAborted);
             HintText(texts["admin.browser.searched"] + " " + result.Count);
             await LoadDataAsync();
+            PreparePage();
             return Page();
         }
 

@@ -139,8 +139,8 @@ namespace Jularr.Backend.Tests
             File.WriteAllText(Path.Combine(job, "grp2.nfo"), "release notes");
             igdb.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Game","status":"Completed","storage":"/downloads/Example.Quest.Switch.NSP-GRP2"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
-            var folder = Path.Combine(storage.Path, "1", "Games", "Nintendo Switch", "Example Quest (2017)");
-            CollectionAssert.AreEqual(new[] { "example.quest.nsp" }, Directory.GetFiles(folder).Select(Path.GetFileName).ToArray());
+            var folder = Path.Combine(storage.Path, "1", "Games", "Nintendo Switch", "Example Quest (2017) {igdb-1022}");
+            CollectionAssert.AreEqual(new[] { "Example Quest {igdb-1022}.nsp" }, Directory.GetFiles(folder).Select(Path.GetFileName).ToArray());
             Assert.AreEqual(nsw.Id, (long)(await host.ScalarAsync("SELECT \"GamePlatformId\" FROM \"GameReleases\""))!);
             Assert.AreEqual((short)6, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
 

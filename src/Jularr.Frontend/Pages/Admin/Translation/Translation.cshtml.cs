@@ -46,6 +46,10 @@ namespace Jularr.Frontend.Pages.Admin.Translation
                 download.Attribute("data-state-" + state, texts["translation.local.state." + state]);
             if (_models.DownloadState is "idle") download.Attribute("hidden", "hidden");
             page.Content.Add(download);
+            if (_models.DownloadState is "interrupted")
+                page.Content.Add(new P(new Text("translation.local.retryInfo")).Attribute("role", "status"));
+            if (_models.DownloadState is "failed")
+                page.Content.Add(new P(new Text("translation.local.failureInfo")).Attribute("role", "alert"));
 
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             foreach (var model in _models.Approved)
@@ -65,7 +69,8 @@ namespace Jularr.Frontend.Pages.Admin.Translation
                             new Button(new Text("translation.local.benchmark")).Submit()).Attribute("data-translation-submit", "benchmark")
                         : canPull
                             ? new PostForm(Home + "?handler=Pull&model=" + Uri.EscapeDataString(model), csrf, [],
-                                new Button(new Text("translation.local.pull")).Submit()).Attribute("data-translation-submit", "pull")
+                                new Button(new Text(_models.DownloadModel == model && _models.DownloadState is "interrupted" or "failed"
+                                    ? "translation.local.retry" : "translation.local.pull")).Submit()).Attribute("data-translation-submit", "pull")
                             : new P(new Text("translation.local.pullBlocked"))
                 ).Class("feature-card"));
             }

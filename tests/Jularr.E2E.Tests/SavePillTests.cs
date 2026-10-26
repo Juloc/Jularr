@@ -21,7 +21,7 @@ namespace Jularr.E2E.Tests
             var save = pill.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true });
             var file = page.Locator("form[data-form-kind$=UpdateNamingPatternDataV1] [name=File]").First;
             var replaces = page.Locator("form[data-form-kind$=UpdateNamingSettingsDataV1] [name=ReplacesIllegalCharacters]").First;
-            var toggle = page.Locator("form[data-form-kind$=UpdateNamingSettingsDataV1] .toggle").First;
+            var toggle = replaces.Locator("xpath=ancestor::label");
             await Assertions.Expect(pill).ToBeHiddenAsync();
             await Assertions.Expect(page.Locator("[data-form-save]").First).ToBeHiddenAsync();
 

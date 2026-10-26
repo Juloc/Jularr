@@ -7,11 +7,12 @@ namespace Jularr.Backend.Data.Logic.Library
 {
     internal sealed class NamingPatternData : BaseData
     {
-        public NamingPatternData(MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string pattern)
+        public NamingPatternData(MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string pattern, string? dailyFile = null)
         {
             MediaTypeId = mediaTypeId;
             MediaSubtypeId = mediaSubtypeId;
             Pattern = pattern;
+            DailyFile = dailyFile;
         }
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MediaTypeId))]
@@ -22,15 +23,19 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Pattern))]
         public string Pattern { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.DailyFile))]
+        public string? DailyFile { get; }
     }
 
     internal sealed class NamingPatternSaveData : BaseData
     {
-        public NamingPatternSaveData(MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string pattern, long version)
+        public NamingPatternSaveData(MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string pattern, long version, string? dailyFile = null)
         {
             MediaTypeId = mediaTypeId;
             MediaSubtypeId = mediaSubtypeId;
             Pattern = pattern;
+            DailyFile = dailyFile;
             Version = version;
         }
 
@@ -43,6 +48,9 @@ namespace Jularr.Backend.Data.Logic.Library
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Pattern))]
         public string Pattern { get; }
 
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.DailyFile))]
+        public string? DailyFile { get; }
+
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Version))]
         public long Version { get; }
     }
@@ -50,13 +58,15 @@ namespace Jularr.Backend.Data.Logic.Library
     // How names are made of values for one media type.
     internal sealed class NamingSettingsData : BaseData
     {
-        public NamingSettingsData(MediaType mediaTypeId, bool replacesIllegalCharacters, ColonReplacement colonReplacementId, string? customColonReplacement, string? specialsFolder, long version)
+        public NamingSettingsData(MediaType mediaTypeId, bool replacesIllegalCharacters, ColonReplacement colonReplacementId, string? customColonReplacement, string? specialsFolder, long version, bool renamesFiles = true, MultiEpisodeStyle multiEpisodeStyleId = MultiEpisodeStyle.PrefixedRange)
         {
             MediaTypeId = mediaTypeId;
             ReplacesIllegalCharacters = replacesIllegalCharacters;
             ColonReplacementId = colonReplacementId;
             CustomColonReplacement = customColonReplacement;
             SpecialsFolder = specialsFolder;
+            RenamesFiles = renamesFiles;
+            MultiEpisodeStyleId = multiEpisodeStyleId;
             Version = version;
         }
 
@@ -74,6 +84,12 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.SpecialsFolder))]
         public string? SpecialsFolder { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.RenamesFiles))]
+        public bool RenamesFiles { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MultiEpisodeStyleId))]
+        public MultiEpisodeStyle MultiEpisodeStyleId { get; }
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Version))]
         public long Version { get; }

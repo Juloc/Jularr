@@ -5,16 +5,37 @@ on:
 
   pull_request:
     paths:
-      - "clients/android/**"
+      - "clients/android/app-tv/**"
+      - "clients/android/core-api/**"
+      - "clients/android/core-model/**"
+      - "clients/android/core-player/**"
+      - "clients/android/core-session/**"
+      - "clients/android/core-design/**"
+      - "clients/android/core-update/**"
+      - "clients/android/build.gradle.kts"
+      - "clients/android/settings.gradle.kts"
+      - "clients/android/gradle.properties"
+      - "clients/android/gradle/**"
       - "design/player/**"
       - ".github/workflows/android.yml"
   push:
     branches:
       - "dev"
     paths:
-      - "clients/android/**"
+      - "clients/android/app-tv/**"
+      - "clients/android/core-api/**"
+      - "clients/android/core-model/**"
+      - "clients/android/core-player/**"
+      - "clients/android/core-session/**"
+      - "clients/android/core-design/**"
+      - "clients/android/core-update/**"
+      - "clients/android/build.gradle.kts"
+      - "clients/android/settings.gradle.kts"
+      - "clients/android/gradle.properties"
+      - "clients/android/gradle/**"
       - "design/player/**"
       - ".github/workflows/android.yml"
+
 permissions:
   contents: read
 
@@ -23,9 +44,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Unit tests and lint for every module that ships in the default build. The optional
-  # core-tts-sherpa module stays out: its AAR is not published to Maven Central and CI has
-  # no way to fetch it (see clients/android/settings.gradle.kts).
+  # TV app and only the Android modules it actually uses. Mobile-only changes
+  # are tested in android-mobile.yml, without starting the TV build.
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -58,18 +78,14 @@ jobs:
           :core-player:testDebugUnitTest
           :core-session:testDebugUnitTest
           :core-design:testDebugUnitTest
-          :core-tts:testDebugUnitTest
           :core-update:testDebugUnitTest
-          :app-mobile:testDebugUnitTest
           :app-tv:testDebugUnitTest
-          :app-mobile:lintDebug
           :app-tv:lintDebug
           :core-api:lintDebug
           :core-model:lintDebug
           :core-player:lintDebug
           :core-session:lintDebug
           :core-design:lintDebug
-          :core-tts:lintDebug
           :core-update:lintDebug
 
       - name: Compile unsigned TV release variant

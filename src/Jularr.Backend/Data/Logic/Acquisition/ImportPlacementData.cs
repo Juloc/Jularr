@@ -6,8 +6,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     internal sealed class ImportPlacementData
     {
         public ImportPlacementData(int group, string sourcePath, string targetStem, string extension, bool isMedia, WorkUnitType? workUnitTypeId, decimal? unitNumber,
-            decimal? parentUnitNumber)
+            decimal? parentUnitNumber, IReadOnlyList<decimal>? furtherEpisodes = null)
         {
+            FurtherEpisodes = furtherEpisodes ?? [];
             Group = group;
             SourcePath = sourcePath;
             TargetStem = targetStem;
@@ -18,6 +19,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             ParentUnitNumber = parentUnitNumber;
         }
 
+        public IReadOnlyList<decimal> FurtherEpisodes { get; }
         public int Group { get; }
         public string SourcePath { get; }
         public string TargetStem { get; }

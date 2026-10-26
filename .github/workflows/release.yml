@@ -37,6 +37,8 @@ jobs:
       version: ${{ steps.check.outputs.version }}
       minor: ${{ steps.check.outputs.minor }}
       prerelease: ${{ steps.check.outputs.prerelease }}
+      tv_changed: ${{ steps.check.outputs.tv_changed }}
+      previous_tv_release: ${{ steps.check.outputs.previous_tv_release }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -113,7 +115,55 @@ jobs:
           done
           [[ "${failed}" == "false" ]] || exit 1
 
+          # Compare the tagged tree with the version of the last published
+          # signed TV APK, not with the last server release. Server-only releases
+          # carry forward that APK unchanged and must never rerun TV tests.
+          tv_changed=true
+          previous_tv_release=""
+          if [[ "${DRY_RUN}" != "true" ]]; then
+            release_assets="$(gh api "repos/${GH_REPO}/releases?per_page=100" |
+              jq -r --argjson include_prerelease "${prerelease}" '
+                .[] |
+                select(.draft == false and ($include_prerelease or (.prerelease | not))) |
+                .tag_name as $release_tag |
+                .assets[]? |
+                select(.name | startswith("Jularr-TV-") and endswith(".apk")) |
+                [$release_tag, .name] | @tsv
+              ')"
+
+            while IFS=$'\t' read -r candidate_release candidate_apk; do
+              [[ -n "${candidate_release}" && "${candidate_release}" != "${tag}" ]] || continue
+              candidate_version="${candidate_apk#Jularr-TV-}"
+              candidate_version="${candidate_version%.apk}"
+              baseline="v${candidate_version}"
+
+              if git rev-parse --verify -q "refs/tags/${baseline}^{commit}" > /dev/null &&
+                git merge-base --is-ancestor "refs/tags/${baseline}^{commit}" HEAD; then
+                previous_tv_release="${candidate_release}"
+                if git diff --quiet "refs/tags/${baseline}^{commit}" HEAD -- \
+                  clients/android/app-tv \
+                  clients/android/core-api \
+                  clients/android/core-model \
+                  clients/android/core-player \
+                  clients/android/core-session \
+                  clients/android/core-design \
+                  clients/android/core-update \
+                  clients/android/build.gradle.kts \
+                  clients/android/settings.gradle.kts \
+                  clients/android/gradle.properties \
+                  clients/android/gradle \
+                  design/player; then
+                  tv_changed=false
+                fi
+                break
+              fi
+            done <<< "${release_assets}"
+          fi
+
+          echo "TV changed: ${tv_changed}; prior TV assets: ${previous_tv_release:-none}"
           {
+            echo "tv_changed=${tv_changed}"
+            echo "previous_tv_release=${previous_tv_release}"
             echo "dry_run=${DRY_RUN}"
             echo "tag=${tag}"
             echo "version=${version}"
@@ -123,9 +173,9 @@ jobs:
 
   image:
     needs: [guard, tv-sign]
-    # A failed signing/build cannot publish a server image without its matching
-    # Android TV package. A dry-run may still build the image unsigned.
-    if: ${{ always() && needs.guard.result == 'success' && (needs.guard.outputs.dry_run == 'true' || needs.tv-sign.result == 'success') }}
+    # A changed TV tree must be verified and signed before image publication.
+    # Server-only tags reuse the prior signed APK; dry runs publish nothing.
+    if: ${{ always() && needs.guard.result == 'success' && (needs.guard.outputs.dry_run == 'true' || needs.guard.outputs.tv_changed == 'false' || needs.tv-sign.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -187,7 +237,7 @@ jobs:
 
   release:
     needs: [guard, image, tv-sign]
-    if: needs.guard.outputs.dry_run != 'true'
+    if: ${{ always() && needs.guard.outputs.dry_run != 'true' && needs.guard.result == 'success' && needs.image.result == 'success' && (needs.guard.outputs.tv_changed == 'false' || needs.tv-sign.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -215,11 +265,24 @@ jobs:
             [[ "${PRERELEASE}" == "false" ]] || args+=(--prerelease)
             gh release create "${TAG}" --verify-tag --title "Jularr ${VERSION}" --generate-notes "${args[@]}"
           fi
-      - name: Download previously signed TV package
+      - name: Download newly signed TV package
+        if: needs.guard.outputs.tv_changed == 'true'
         uses: actions/download-artifact@v7
         with:
           name: jularr-tv-release-assets
           path: dist
+      - name: Reuse the last signed TV package without rebuilding
+        if: needs.guard.outputs.tv_changed == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PREVIOUS_TV_RELEASE: ${{ needs.guard.outputs.previous_tv_release }}
+        run: |
+          set -euo pipefail
+          test -n "${PREVIOUS_TV_RELEASE}"
+          mkdir -p dist
+          gh release download "${PREVIOUS_TV_RELEASE}" \
+            --pattern 'Jularr-TV-*.apk*' --dir dist
       - name: Attach verified Android TV assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -227,7 +290,9 @@ jobs:
           TAG: ${{ needs.guard.outputs.tag }}
         run: |
           set -euo pipefail
-          test -n "$(find dist -maxdepth 1 -name 'Jularr-TV-*.apk' -print -quit)"
+          mapfile -t tv_apks < <(find dist -maxdepth 1 -name 'Jularr-TV-*.apk' -type f)
+          test "${#tv_apks[@]}" -eq 1
+          test -f "${tv_apks[0]}.sha256"
           (cd dist && sha256sum -c Jularr-TV-*.apk.sha256)
           gh release upload "$TAG" dist/*.apk dist/*.apk.sha256 --clobber
           # Do not expose a stable update to devices until both assets exist.
@@ -237,7 +302,7 @@ jobs:
   # not dispatch a second release event from the automatic GITHUB_TOKEN.
   tv-verify:
     needs: guard
-    if: needs.guard.outputs.dry_run != 'true'
+    if: ${{ needs.guard.outputs.dry_run != 'true' && needs.guard.outputs.tv_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -281,7 +346,7 @@ jobs:
 
   tv-sign:
     needs: [guard, tv-verify]
-    if: needs.guard.outputs.dry_run != 'true'
+    if: ${{ needs.guard.outputs.dry_run != 'true' && needs.guard.outputs.tv_changed == 'true' && needs.tv-verify.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
