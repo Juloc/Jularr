@@ -211,6 +211,9 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
                     // Local TranslateGemma must receive the original source, not that partial translation.
                     restore();
                     reader.dataset.translationEngine = 'gemma';
+                    const provider = reader.querySelector<HTMLElement>('[data-translation-provider]');
+                    if (provider) provider.textContent =
+                        (reader.dataset.providerLocalLabel ?? 'TranslateGemma') + ' · ' + reader.dataset.localModel;
                     reader.querySelector<HTMLButtonElement>('[data-local-quality-toggle]')?.setAttribute('aria-pressed', 'true');
                     await translateLocal(target, generation);
                     if (current === target && generation === revision) reader.dataset.translationState = 'ready';

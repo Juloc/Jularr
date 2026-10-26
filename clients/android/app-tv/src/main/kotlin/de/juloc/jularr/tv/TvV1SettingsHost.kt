@@ -145,6 +145,13 @@ internal fun TvV1SettingsHost(
 
     fun install() {
         val ready = updateState as? TvUpdateState.ReadyToInstall ?: return
+        if (!UpdateInstall.matchesInstalledPackageAndSigner(context, ready.apkFile)) {
+            ready.apkFile.delete()
+            updateState = TvUpdateState.Failed(
+                "Update abgelehnt: Paketname oder Signatur passen nicht zur installierten Jularr-TV-App.",
+            )
+            return
+        }
         if (UpdateInstall.canInstallPackages(context)) {
             context.startActivity(UpdateInstall.installIntent(
                 context, ready.apkFile, TvUpdateFileProviderAuthority,

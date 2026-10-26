@@ -19,7 +19,7 @@ namespace Jularr.Frontend.Pages.Admin.Naming
         private const string Address = "/Admin/Instance/Naming";
 
         // Why a typed pattern cannot be used, as the preview names it; the page writes each in its language for the script.
-        private static readonly string[] Problems = ["naming_unknown_token", "naming_incomplete", "naming_invalid_path"];
+        private static readonly string[] Problems = ["naming_unknown_token", "naming_incomplete", "naming_invalid_path", "naming_invalid_folder", "required", "invalid_value", "too_long"];
         private IReadOnlyList<NamingPatternV1> _patterns = [];
         private IReadOnlyList<NamingSettingsV1> _settings = [];
         private UpdateNamingPatternDataV1? _patternInput;
@@ -38,6 +38,8 @@ namespace Jularr.Frontend.Pages.Admin.Naming
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var colons = Enum.GetValues<ColonReplacement>().Select(mode => new SelectOption(((byte)mode).ToString(CultureInfo.InvariantCulture), texts["library.naming.colon." + mode]));
 
+            var multiStyles = Enum.GetValues<MultiEpisodeStyle>().Select(mode => new SelectOption(((byte)mode).ToString(CultureInfo.InvariantCulture), texts["library.naming.multi." + mode]));
+
             // One panel per media type: its folders and file name (and its subtypes' own), then how values become names.
             foreach (var type in _patterns.Select(pattern => pattern.MediaTypeId).Distinct())
             {
@@ -46,17 +48,34 @@ namespace Jularr.Frontend.Pages.Admin.Naming
                 {
                     var failed = _failedPattern == (pattern.MediaTypeId, pattern.MediaSubtypeId);
                     if (pattern.MediaSubtypeId is { } subtype) items.Add(new H3(new Text("library.naming." + type + "." + subtype)));
+                    // Keep the combined stored folder compatible with existing clients; expose its season component separately.
+                    var folder = pattern.Folder;
+                    string? seasonFolder = null;
+                    if (type == MediaType.Series && folder?.LastIndexOf('/') is { } slash && slash >= 0)
+                    {
+                        seasonFolder = folder[(slash + 1)..];
+                        folder = folder[..slash];
+                    }
                     items.Add(new Form<UpdateNamingPatternDataV1>(form =>
                     {
                         form.Hidden(item => item.Version);
                         form.Text(item => item.Folder, "library.naming.folder");
+                        if (type == MediaType.Series) form.Text(item => item.SeasonFolder, "library.naming.seasonFolder");
                         form.Text(item => item.File, "library.naming.file");
+                        if (type == MediaType.Series && pattern.MediaSubtypeId is null) form.Text(item => item.DailyFile, "library.naming.dailyFile");
                         form.Save();
                     }, Address + "?handler=Pattern&mediaTypeId=" + pattern.MediaTypeId + (pattern.MediaSubtypeId is { } kind ? "&mediaSubtypeId=" + kind : ""), csrf,
-                        failed && _patternInput is { } input ? input : new UpdateNamingPatternDataV1(pattern.Folder, pattern.File, pattern.Version), failed ? FormError : null));
+                        failed && _patternInput is { } input ? input : new UpdateNamingPatternDataV1(folder, pattern.File, pattern.Version, pattern.DailyFile, seasonFolder), failed ? FormError : null));
                     var example = new Span(new ValueText(pattern.Example)).Class("naming-example").Attribute("data-naming-example", "");
                     foreach (var problem in Problems) example.TextAttribute("data-problem-" + problem, "errors.validation." + problem);
-                    items.Add(new P(new Text("library.naming.example"), new ValueText(" "), example));
+                    var examples = new List<IUiComponent> { new P(new Text("library.naming.example"), new ValueText(" "), example) };
+                    if (type == MediaType.Series)
+                    {
+                        examples.Add(new P(new Text("library.naming.multiExample"), new ValueText(" "), new Span().Class("naming-example").Attribute("data-naming-multi", "")).Attribute("hidden", ""));
+                        if (pattern.MediaSubtypeId is null) examples.Add(new P(new Text("library.naming.dailyExample"), new ValueText(" "), new Span().Class("naming-example").Attribute("data-naming-daily", "")).Attribute("hidden", ""));
+                        examples.Add(new P(new Text("library.naming.specialsExample"), new ValueText(" "), new Span().Class("naming-example").Attribute("data-naming-specials", "")).Attribute("hidden", ""));
+                    }
+                    items.Add(new Div([.. examples]).Class("naming-examples"));
                 }
 
                 if (_settings.FirstOrDefault(settings => settings.MediaTypeId == type) is { } current)
@@ -65,13 +84,18 @@ namespace Jularr.Frontend.Pages.Admin.Naming
                     items.Add(new Form<UpdateNamingSettingsDataV1>(form =>
                     {
                         form.Hidden(item => item.Version);
+                        form.Toggle(item => item.RenamesFiles, "library.naming.renamesFiles");
                         form.Toggle(item => item.ReplacesIllegalCharacters, "library.naming.replacesIllegal");
                         form.Select(item => item.ColonReplacementId, "library.naming.colon", colons);
                         form.Text(item => item.CustomColonReplacement, "library.naming.colonCustom");
-                        if (type == MediaType.Series) form.Text(item => item.SpecialsFolder, "library.naming.specials");
+                        if (type == MediaType.Series)
+                        {
+                            form.Text(item => item.SpecialsFolder, "library.naming.specials");
+                            form.Select(item => item.MultiEpisodeStyleId, "library.naming.multiStyle", multiStyles);
+                        }
                         form.Save();
                     }, Address + "?handler=Settings&mediaTypeId=" + type, csrf, failed && _settingsInput is { } entered ? entered
-                        : new UpdateNamingSettingsDataV1(current.ReplacesIllegalCharacters, current.ColonReplacementId, current.CustomColonReplacement, current.SpecialsFolder, current.Version),
+                        : new UpdateNamingSettingsDataV1(current.ReplacesIllegalCharacters, current.ColonReplacementId, current.CustomColonReplacement, current.SpecialsFolder, current.Version, current.RenamesFiles, current.MultiEpisodeStyleId),
                         failed ? FormError : null));
                 }
 
@@ -99,10 +123,10 @@ namespace Jularr.Frontend.Pages.Admin.Naming
             return Page();
         }
 
-        public async Task<IActionResult> OnPostPatternAsync([BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? folder, string? file, long version)
+        public async Task<IActionResult> OnPostPatternAsync([BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? folder, string? file, long version, string? dailyFile, string? seasonFolder)
         {
             _failedPattern = (mediaTypeId, mediaSubtypeId);
-            _patternInput = new UpdateNamingPatternDataV1(folder, file ?? "", version);
+            _patternInput = new UpdateNamingPatternDataV1(folder, file ?? "", version, dailyFile, seasonFolder);
             if (mediaSubtypeId is { } subtype)
             {
                 await updateSubtypePattern.ExecuteAsync<UpdateResult>(new NamingSubtypePatternParametersV1(mediaTypeId, subtype), _patternInput, HttpContext.RequestAborted);
@@ -116,10 +140,10 @@ namespace Jularr.Frontend.Pages.Admin.Naming
         }
 
         public async Task<IActionResult> OnPostSettingsAsync([BindRequired] MediaType mediaTypeId, bool replacesIllegalCharacters, ColonReplacement colonReplacementId, string? customColonReplacement,
-            string? specialsFolder, long version)
+            string? specialsFolder, long version, bool renamesFiles = true, MultiEpisodeStyle multiEpisodeStyleId = MultiEpisodeStyle.PrefixedRange)
         {
             _failedSettings = mediaTypeId;
-            _settingsInput = new UpdateNamingSettingsDataV1(replacesIllegalCharacters, colonReplacementId, customColonReplacement, specialsFolder, version);
+            _settingsInput = new UpdateNamingSettingsDataV1(replacesIllegalCharacters, colonReplacementId, customColonReplacement, specialsFolder, version, renamesFiles, multiEpisodeStyleId);
             await updateSettings.ExecuteAsync<UpdateResult>(new NamingSettingsParametersV1(mediaTypeId), _settingsInput, HttpContext.RequestAborted);
             return LocalRedirect(Address);
         }

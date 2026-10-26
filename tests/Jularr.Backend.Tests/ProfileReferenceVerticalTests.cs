@@ -224,7 +224,7 @@ namespace Jularr.Backend.Tests
                 ConnectionString = connectionString;
             }
 
-            public static async Task<ProfileFixture> CreateAsync()
+            public static async Task<ProfileFixture> CreateAsync(bool appliesAccountMigrations = true)
             {
                 var cs = TestPostgres.ResolveConnectionString($"Data Source=profile-vertical-{Guid.NewGuid():N}");
                 var isolated = new NpgsqlConnectionStringBuilder(cs) { SearchPath = "\"ProfileReference\"" };
@@ -239,14 +239,6 @@ namespace Jularr.Backend.Tests
                         ?? throw new InvalidOperationException("The account schema is missing.");
                     using var reader = new StreamReader(schema);
                     await fixture.RunBootstrapAsync(await reader.ReadToEndAsync());
-                    // This isolated account schema fixture starts from the frozen
-                    // baseline; bring its columns forward using the real PWA
-                    // migration rather than weakening the schema audit.
-                    using var pwaMigration = typeof(ReadProfileV1).Assembly.GetManifestResourceStream(
-                        "Jularr.Database.Migrations.0009_pwa_main_profile_accent.sql")
-                        ?? throw new InvalidOperationException("The PWA profile migration is missing.");
-                    using var migrationReader = new StreamReader(pwaMigration);
-                    await fixture.RunBootstrapAsync(await migrationReader.ReadToEndAsync());
                     await fixture.RunBootstrapAsync(
                         """
                         BEGIN;
@@ -265,6 +257,11 @@ namespace Jularr.Backend.Tests
                         """,
                         SqlParams.Create().Add("SessionPublicId", fixture.SessionPublicId)
                             .Add("SessionTokenHash", System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(fixture.SessionToken))).ToArray());
+                    // Direct profile tests need the current account schema; full-host fixtures apply the complete migration ledger themselves.
+                    if (appliesAccountMigrations)
+                    {
+                        await fixture.RunSqlAsync(DatabaseBaseline.Migrations.Single(migration => migration.Name == "0009_pwa_main_profile_accent").Statement);
+                    }
                     return fixture;
                 }
                 catch

@@ -15,4 +15,7 @@
     <ProjectReference Include="../../src/Jularr.Frontend/Jularr.Frontend.csproj" />
     <ProjectReference Include="../../src/Jularr.Workers/Jularr.Workers.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Fixtures/Anna/*.html" />
+  </ItemGroup>
 </Project>

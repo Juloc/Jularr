@@ -19,8 +19,9 @@ A tag with a suffix (`v0.3.0-rc.1`) is a prerelease.
 
 - **guard** fails the run unless the tag is `v<MAJOR>.<MINOR>.<PATCH>[-prerelease]`, the tagged commit is reachable from `origin/main` or `origin/main`, and the newest completed Frontend and Backend Full runs of that exact commit succeeded (a missing or red run is named in the error).
   The owner can release past a red **Backend Full** in writing: the annotated tag message carries the line `Gate override by owner: <reason>`; the run then warns instead of failing, names the reason, and Frontend still has to be green.
+- **TV gating** compares `app-tv`, its shared Android dependencies, root Gradle settings and `design/player` against the last published signed TV APK's tag. A server-only or phone-only change skips both TV tests and TV signing; the last signed TV APK and checksum are reused unchanged as release assets so in-app updates keep working. A new TV version must pass TV tests and signing before publication.
 - **image** builds the tagged commit for `linux/amd64`, passes the version into the build (the Admin System page shows it) and pushes `ghcr.io/juloc/jularr:0.2.0`, `:0.2` and `:latest`. A prerelease gets only its exact version tag, so `latest` and the minor tag never move to it. An already published version is never overwritten. The image carries the OCI labels `source`, `revision` and `version`.
-- **release** creates the GitHub release with generated notes (a prerelease is marked as one). Re-run only this job if it failed after the image was pushed.
+- **release** creates the GitHub release with generated notes (a prerelease is marked as one), adds either the newly built or the unchanged previous signed TV APK with its verified checksum, and publishes it. Re-run only this job if it failed after the image was pushed.
 
 Rehearsal: *Actions, Release, Run workflow* with `dry_run` on (the default) runs the guard and builds the image without pushing or creating anything. It may be started from a branch; publishing needs the version tag.
 

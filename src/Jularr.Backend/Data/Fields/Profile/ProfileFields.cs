@@ -1,5 +1,3 @@
-
-
 using NpgsqlTypes;
 
 namespace Jularr.Backend.Data.Fields.Profile
