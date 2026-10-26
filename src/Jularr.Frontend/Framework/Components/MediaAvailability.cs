@@ -12,7 +12,7 @@ namespace Jularr.Frontend.Framework
         private MediaAvailabilityState State { get; } = state;
         private int AvailableUnits { get; } = availableUnits;
         private int MonitoredUnits { get; } = monitoredUnits;
-        private bool IsPartial => State is MediaAvailabilityState.Partial or MediaAvailabilityState.PartialOtherAudio;
+        private bool IsPartial => State is MediaAvailabilityState.Partial or MediaAvailabilityState.PartialOtherAudio or MediaAvailabilityState.PartialPreferredSubtitles;
 
         // One presentation for overlay cards and an optional in-flow chip.
         public IUiComponent Badge(string? href = null, string? previewId = null, bool expanded = false, MediaAvailabilityBadgeStyle style = MediaAvailabilityBadgeStyle.Overlay)
@@ -47,6 +47,8 @@ namespace Jularr.Frontend.Framework
             {
                 MediaAvailabilityState.Available or MediaAvailabilityState.ProfileAudio => "check",
                 MediaAvailabilityState.OtherAudio or MediaAvailabilityState.PartialOtherAudio => "player-volume",
+                MediaAvailabilityState.PreferredSubtitles or MediaAvailabilityState.PartialPreferredSubtitles => "subtitles",
+                MediaAvailabilityState.Paused => "pause",
                 MediaAvailabilityState.Missing => "close",
                 MediaAvailabilityState.Downloading => "download",
                 MediaAvailabilityState.Searching => "search",

@@ -13,6 +13,7 @@ using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,6 +21,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Http;
 using Jularr.Backend.Data.Admin.Media.V1;
+using Jularr.Backend.Data.Common;
 using Npgsql;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
@@ -59,6 +61,7 @@ namespace Jularr.Backend.Tests
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
             await SeedInventoryAsync(host, movies, works, stress);
+            await host.Fixture.RunSqlAsync("""UPDATE "Profiles" SET "FirstContentLanguage" = 'de', "SecondContentLanguage" = 'en' WHERE "Id" = 101;""");
             await host.Fixture.RunSqlAsync("""INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") SELECT "Id", 'Genres', 'Drama', TRUE FROM "Works";""");
             if (Environment.GetEnvironmentVariable("JULARR_TEST_LIBRARY_ANALYZE") != "0")
             {
@@ -126,6 +129,7 @@ namespace Jularr.Backend.Tests
                             if (filter.Contains("subtitleLanguages=", StringComparison.Ordinal)) explain.Parameters.AddWithValue(new[] { "de" });
                             explain.Parameters.AddWithValue(48);
                             explain.Parameters.AddWithValue(filter == "page=2" ? 48 : 0);
+                            explain.Parameters.AddWithValue(LanguageCodes.Aliases.LanguageAliases);
                             var plan = (string)(await explain.ExecuteScalarAsync())!;
                             var planPath = Path.Combine(TestContext.TestResultsDirectory!, "library-" + (filter.Length == 0 ? "default" : Uri.EscapeDataString(filter)) + ".json");
                             await File.WriteAllTextAsync(planPath, plan);
@@ -145,6 +149,23 @@ namespace Jularr.Backend.Tests
                 TestContext.WriteLine($"{filter}: warm HTTP median {httpDurations[httpDurations.Count / 2]:F1} ms, p95 {httpDurations[(int)Math.Ceiling(httpDurations.Count * .95) - 1]:F1} ms");
                 if (p95 >= budget) overBudget.Add($"{filter}: {p95:F1} ms");
             }
+
+            var overlayDurations = new List<double>();
+            var overlayIds = Enumerable.Range(1, 10).Concat(Enumerable.Range(movies + 1, 10)).ToArray();
+            var overlayQuery = string.Join('&', overlayIds.Select(id => "workIds=" + id));
+            for (var iteration = 0; iteration < samples + 2; iteration++)
+            {
+                var started = Stopwatch.GetTimestamp();
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/library/availability?" + overlayQuery);
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                var rows = (await response.Content.ReadFromJsonAsync<BaseDataList<WorkAvailabilityStateV1>>())!;
+                Assert.AreEqual(overlayIds.Length, rows.Count);
+                if (iteration >= 2) overlayDurations.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            }
+            overlayDurations.Sort();
+            var overlayP95 = overlayDurations[(int)Math.Ceiling(overlayDurations.Count * .95) - 1];
+            TestContext.WriteLine($"Availability overlay: warm HTTP p95 {overlayP95:F1} ms");
+            if (overlayP95 >= budget) overBudget.Add($"availability overlay HTTP: {overlayP95:F1} ms");
 
             var optionDurations = new List<double>();
             for (var iteration = 0; iteration < samples + 2; iteration++)
