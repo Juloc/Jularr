@@ -233,6 +233,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             _signals.Scans.Notify();
             _signals.Backups.Notify();
             _signals.Benchmarks.Notify();
+            _signals.Searches.Notify();
         }
     }
 

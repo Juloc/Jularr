@@ -142,6 +142,8 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.invalid_mac_address", "Please enter a MAC address such as 00:11:22:AA:BB:CC."),
             new("errors.validation.overlapping_path", "This path overlaps another library path on the same connection."),
             new("errors.validation.in_use", "This item is still in use."),
+            new("errors.validation.search_in_progress", "A library search is already queued or running. Finish or cancel it before starting a different selection."),
+            new("errors.validation.no_search_targets", "No monitored search targets match this selection. Monitoring was not changed."),
             new("errors.validation.invalid_pin", "The PIN is incorrect."),
             new("errors.validation.request_limit", "You have reached your request limit for now."),
             new("errors.validation.request_media_blocked", "Your request rule does not allow this kind of media."),

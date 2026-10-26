@@ -106,6 +106,8 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         // The quality already present; only an upgrade of it can be taken.
         public string? InstalledQuality { get; init; }
+        public bool InstalledNeedsReplacement { get; init; }
+        public decimal? RuntimeMinutes { get; init; }
 
         // The indexer entry the release came from, for release profiles bound to one.
         public long? IndexerId { get; init; }

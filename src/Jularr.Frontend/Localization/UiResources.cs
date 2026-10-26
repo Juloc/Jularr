@@ -8,6 +8,21 @@ namespace Jularr.Frontend.Localization
     {
         public static IReadOnlyList<UiTextResource> English { get; } =
         [
+            new("works.search.refresh", "Refresh search status"),
+            new("works.outcome.evidence_missing", "Existing file evidence is incomplete; review it manually."),
+            new("works.search.title", "Library search"),
+            new("works.search.all", "Search all"),
+            new("works.search.filtered", "Search filtered"),
+            new("works.search.scope", "Searches all matching monitored titles across every page using their current profiles. Existing downloads continue."),
+            new("works.search.progress", "{0} of {1} targets checked"),
+            new("works.search.cancelled", "Cancelled"),
+            new("works.search.results", "Search results"),
+            new("works.search.notRun", "Not searched (cancelled)"),
+            new("works.outcome.pending", "Waiting"),
+            new("works.outcome.paused", "Monitoring paused"),
+            new("operation.type.AcquisitionSearch", "Library search"),
+            new("jobs.job.searchQueue", "Library search queue"),
+            new("jobs.about.searchQueue", "Searches queued library selections and reassesses upgrades using current profiles."),
             new("pwa.main.choose", "Use as main profile"),
             new("pwa.main.current", "Main profile for the home screen icon"),
             new("pwa.main.manage", "Choose main profile for the home screen icon"),

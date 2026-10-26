@@ -4,6 +4,8 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 
 ## Frontend
 
+- Library Search All: [approved behavior and focused checks](ACQUISITION_SEARCH_ALL.md), [queue/read/cancel services](../src/Jularr.Backend/Service/Admin/Media/V1/WorkSearchRunServices.cs), [System execution](../src/Jularr.Backend/Service/System/Acquisition/V1/WorkSearchRunServices.cs), `WorkSearchRunTests` and `SearchReassessmentTests`.
+
 - [Frontend CODEMAP](../src/Jularr.Frontend/CODEMAP.md): Pages, C# components, split/tabs, Login/Shell ownership, localization, Vite assets and focused UI tests.
 - [Frontend host](../src/Jularr.Frontend/Program.cs): one Razor/API application host.
 
