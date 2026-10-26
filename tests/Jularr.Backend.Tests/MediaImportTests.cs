@@ -160,7 +160,6 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
             var html = await response.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "The book metadata provider could not be reached");
-            StringAssert.Contains(html, "Unresolved books can be selected for server-side matching.");
             StringAssert.Contains(html, "name=\"Choices[0].Include\"");
         }
 

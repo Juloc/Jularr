@@ -158,9 +158,6 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 .TextAttribute("data-stage-open", "import.status.Open")
                 .TextAttribute("data-stage-invalid", "import.status.Invalid"));
 
-            if (rows.Any(row => row.StatusTypeId == MediaImportStatusType.Open && CanInclude(row) && row.Candidates.Count == 0))
-                content.Add(new P(new Text("import.backgroundMatchHelp")).Class("media-import__background-match-help"));
-
             // The defaults of each kind of title the list holds.
             var action = _input?.Action ?? MediaImportActionType.AddOnly;
             var kinds = rows.Where(row => row.MediaTypeId is not null).GroupBy(row => row.TypeKey, StringComparer.Ordinal).Select(group => group.First()).ToDictionary(row => row.TypeKey, StringComparer.Ordinal);
