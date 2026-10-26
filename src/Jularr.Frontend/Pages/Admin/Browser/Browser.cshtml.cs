@@ -2,11 +2,13 @@ using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Browser.V1;
+using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Admin.Browser.V1;
+using Jularr.Backend.Service.Admin.Instance.V1;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
@@ -17,11 +19,12 @@ namespace Jularr.Frontend.Pages.Admin.Browser
     // Temporary: the browser of the instance, what it does and what an administrator can make it do.
     public sealed class BrowserModel(ReadBrowserStatusV1 status, RunBrowserActionV1 run, ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection,
         TestAcquisitionConnectionV1 test, UpdateAcquisitionConnectionV1 update, ReadWantedV1 wanted, SearchWantedV1 search, OpenBrowserAssistanceV1 openView,
-        CloseBrowserAssistanceV1 closeView, IAntiforgery antiforgery, UiText texts) : JularrPage
+        CloseBrowserAssistanceV1 closeView, ReadInstanceModulesV1 readModules, UpdateInstanceModuleV1 updateModule, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private BrowserStatusV1? _status;
         private PageResult<AcquisitionConnectionDetailsV1>? _connections;
         private PageResult<WantedDetailsV1>? _wanted;
+        private InstanceModuleDetailsV1? _browserModule;
 
         protected override void Define(Page page)
         {
@@ -45,7 +48,35 @@ namespace Jularr.Frontend.Pages.Admin.Browser
                     page.Content.Add(new P(new ValueText(browser.DownloadedBytes.ToString(CultureInfo.InvariantCulture)),
                         new ValueText(" / " + browser.TotalBytes.ToString(CultureInfo.InvariantCulture) + " bytes")));
                 }
+                if (browser.InstalledVersion is { } packageVersion)
+                    page.Content.Add(new P(new Text("admin.browser.version"), new ValueText(": " + packageVersion)));
+                if (browser.ManagedSizeBytes > 0)
+                    page.Content.Add(new P(new Text("admin.browser.diskUsage"),
+                        new ValueText(": " + (browser.ManagedSizeBytes / 1048576d).ToString("0.0", CultureInfo.CurrentCulture) + " MiB")));
                 if (browser.InstallationError is { } installError) page.Content.Add(new P(new ValueText(installError)));
+                // Never change externally owned Chrome installations through managed-package actions.
+                var managed = string.IsNullOrWhiteSpace(browser.RemoteAddress) &&
+                    (browser.Path is null || browser.Path.Contains("/managed/current/", StringComparison.Ordinal));
+                if (managed && _browserModule is { } module)
+                {
+                    if (!module.IsEnabled)
+                    {
+                        page.Content.Add(new Form<BrowserParametersV1>(form => form.Submit("admin.browser.install"),
+                            "/Admin/Browser?handler=Install", csrf, new BrowserParametersV1()));
+                    }
+                    else
+                    {
+                        if (browser.InstallationState is "installed" or "failed")
+                        {
+                            page.Content.Add(new Form<BrowserParametersV1>(form => form.Submit("admin.browser.update"),
+                                "/Admin/Browser?handler=Action&action=update", csrf, new BrowserParametersV1()));
+                            page.Content.Add(new Form<BrowserParametersV1>(form => form.Submit("admin.browser.repair"),
+                                "/Admin/Browser?handler=Action&action=repair", csrf, new BrowserParametersV1()));
+                        }
+                        page.Content.Add(new Form<BrowserParametersV1>(form => form.Submit("admin.browser.uninstall"),
+                            "/Admin/Browser?handler=Uninstall", csrf, new BrowserParametersV1()));
+                    }
+                }
                 page.Content.Add(new P(new Text("admin.browser.moduleHint"),
                     new A(new Text("admin.browser.moduleLink")).Attribute("href", "/Admin/Instance/Modules")));
             }
@@ -130,10 +161,32 @@ namespace Jularr.Frontend.Pages.Admin.Browser
         public async Task<IActionResult> OnPostActionAsync(string action, string? url)
         {
             var result = await run.ExecuteAsync<BrowserStatusV1>(new BrowserParametersV1(), new RunBrowserActionDataV1(action ?? "start", url), HttpContext.RequestAborted);
-            Hint("admin.browser.ran");
+            Hint(action is "update" or "repair" ? "admin.browser.queuedHint" : "admin.browser.ran");
             await LoadDataAsync();
             PreparePage();
             return Page();
+        }
+
+        public async Task<IActionResult> OnPostInstallAsync()
+        {
+            await SetBrowserModuleAsync(true);
+            return LocalRedirect("/Admin/Browser");
+        }
+
+        public async Task<IActionResult> OnPostUninstallAsync()
+        {
+            await SetBrowserModuleAsync(false);
+            return LocalRedirect("/Admin/Browser");
+        }
+
+        private async Task SetBrowserModuleAsync(bool enabled)
+        {
+            var modules = await readModules.ExecuteAsync<BaseDataList<InstanceModuleDetailsV1>>(
+                new ReadInstanceModulesParametersV1(), HttpContext.RequestAborted);
+            var module = modules.Single(item => item.Key == "Browser");
+            if (module.IsEnabled != enabled)
+                await updateModule.ExecuteAsync<UpdateResult>(new UpdateInstanceModuleParametersV1(module.Id),
+                    new UpdateInstanceModuleDataV1(enabled, module.Version), HttpContext.RequestAborted);
         }
 
         public async Task<IActionResult> OnPostTestAsync(long acquisitionConnectionId)
@@ -170,6 +223,9 @@ namespace Jularr.Frontend.Pages.Admin.Browser
 
         protected override async Task LoadDataAsync()
         {
+            var modules = await readModules.ExecuteAsync<BaseDataList<InstanceModuleDetailsV1>>(
+                new ReadInstanceModulesParametersV1(), HttpContext.RequestAborted);
+            _browserModule = modules.FirstOrDefault(item => item.Key == "Browser");
             _status = await status.ExecuteAsync<BrowserStatusV1>(new BrowserParametersV1(), HttpContext.RequestAborted);
             _connections = await connections.ExecuteAsync<PageResult<AcquisitionConnectionDetailsV1>>(new ReadAcquisitionConnectionsParametersV1(1, 50), HttpContext.RequestAborted);
             _wanted = await wanted.ExecuteAsync<PageResult<WantedDetailsV1>>(new ReadWantedParametersV1(1, 50, wantedViewTypeId: WantedViewType.Missing), HttpContext.RequestAborted);

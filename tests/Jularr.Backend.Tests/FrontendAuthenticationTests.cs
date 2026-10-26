@@ -123,7 +123,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("", writer.ToString());
 
             // Counts and language remain distinct.
-            foreach (var state in new[] { MediaAvailabilityState.ProfileAudio, MediaAvailabilityState.OtherAudio, MediaAvailabilityState.Partial, MediaAvailabilityState.PartialOtherAudio })
+            foreach (var state in new[] { MediaAvailabilityState.ProfileAudio, MediaAvailabilityState.OtherAudio, MediaAvailabilityState.Partial, MediaAvailabilityState.PartialOtherAudio,
+                MediaAvailabilityState.PreferredSubtitles, MediaAvailabilityState.PartialPreferredSubtitles, MediaAvailabilityState.Paused })
             {
                 writer.GetStringBuilder().Clear();
                 new MediaAvailability(assets, state, 12, 24).Badge("/Details/1").WriteTo(writer, HtmlEncoder.Default, texts);

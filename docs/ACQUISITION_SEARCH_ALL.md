@@ -14,7 +14,7 @@ The original requester must still have Wanted-management permission when a targe
 
 Cancellation is persisted before interrupting the current source request. Completed target outcomes survive restart; interrupted operations resume only pending targets. Cancelled runs stay final. Source failures are recorded per target. A failed operation preserves the progress already acknowledged. Finished operations and their results follow the existing history retention policy.
 
-Schema version 11 adds the search run/target tables and the shared `WorkListEntries` projection, keeping list/filter status and queued selection consistent. The version-1 baseline is unchanged. No live database update is part of this package. PR #1644 independently proposes a different version-11 migration; whichever PR merges second must rebase and renumber its unreleased migration before release.
+Schema version 12 adds the search run/target tables and the shared `WorkListEntries` projection, keeping list/filter status and queued selection consistent. The version-1 baseline is unchanged. No live database update is part of this package. It follows the profile content-language migration (version 11) merged in PR #1644.
 
 ## Focused verification
 
@@ -23,4 +23,4 @@ Schema version 11 adds the search run/target tables and the shared `WorkListEntr
 - Existing `WorkListTests` and `ReleaseSelectionTests` protect filter and selection behavior.
 - E2E `WorkSearchRunTests`: real background worker, all/filtered/selected forms, navigation/reload, cancellation, results, desktop and 390-pixel mobile layout.
 
-Two isolated loopback measurements with 500 targets and 20 warm HTTP samples gave p50 **43.4 / 42.8 ms**, p95 **56.1 / 93.4 ms**, maximum **76.8 / 121.5 ms** for enqueue. This excludes source response time and does not establish a throughput comparison with Sonarr/Radarr. The reproducible latency check is `Queue_500Targets_RecordsWarmHttpLatencyWithoutCallingSources`; hardware, cold start and source response times affect production results.
+Three isolated loopback measurements with 500 targets and 20 warm HTTP samples gave p50 **43.4 / 42.8 / 54.2 ms**, p95 **56.1 / 93.4 / 116.2 ms**, maximum **76.8 / 121.5 / 340.5 ms** for enqueue. The third run includes the integrated main/schema-12 changes. These measurements do not establish a consistent sub-100-ms guarantee or a throughput comparison with Sonarr/Radarr. Source response time is excluded. The reproducible latency check is `Queue_500Targets_RecordsWarmHttpLatencyWithoutCallingSources`; hardware, cold start and source response times affect production results.

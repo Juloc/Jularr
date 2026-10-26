@@ -77,11 +77,19 @@ namespace Jularr.Frontend.Pages.User.Settings
                 if (_authentication!.Permissions.Contains("profile.self.update", StringComparer.Ordinal))
                 {
                     var options = _locales.Select(locale => new SelectOption(locale.Id.ToString(CultureInfo.InvariantCulture), locale.Name));
-                    var data = _input ?? new UpdateProfileDataV1 { DisplayName = _profile.DisplayName, UiLocaleId = _profile.UiLocaleId };
+                    var data = _input ?? new UpdateProfileDataV1
+                    {
+                        DisplayName = _profile.DisplayName, UiLocaleId = _profile.UiLocaleId,
+                        FirstContentLanguage = _profile.FirstContentLanguage, SecondContentLanguage = _profile.SecondContentLanguage
+                    };
                     content.Add(new Form<UpdateProfileDataV1>(form =>
                     {
                         form.Text(x => x.DisplayName, "profile.field.displayName", "nickname");
                         form.Select(x => x.UiLocaleId, "profile.field.uiLocale", options);
+                        IEnumerable<SelectOption> ContentLanguages(string? chosen) => [new SelectOption("", texts["profile.contentLanguage.none"]),
+                            .. Languages.Concat(chosen is null || Languages.Contains(chosen) ? [] : [chosen]).Select(code => new SelectOption(code, LanguageLabel.Name(code) ?? code))];
+                        form.Select(x => x.FirstContentLanguage, "profile.field.firstContentLanguage", ContentLanguages(data.FirstContentLanguage));
+                        form.Select(x => x.SecondContentLanguage, "profile.field.secondContentLanguage", ContentLanguages(data.SecondContentLanguage));
                         form.Save();
                     }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia || _savingPin || _savingPassword || _savingAniList || _speechInput is not null || _playbackInput is not null ? null : FormError));
 
@@ -254,12 +262,12 @@ namespace Jularr.Frontend.Pages.User.Settings
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync(string? displayName, long uiLocaleId)
+        public async Task<IActionResult> OnPostAsync(string? displayName, long uiLocaleId, string? firstContentLanguage, string? secondContentLanguage)
         {
             // Read verified scope only.
             _authentication = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted);
             var profileId = _authentication!.ProfileId ?? throw new UnauthorizedAccessException("An active profile is required.");
-            _input = new UpdateProfileDataV1 { DisplayName = displayName ?? "", UiLocaleId = uiLocaleId };
+            _input = new UpdateProfileDataV1 { DisplayName = displayName ?? "", UiLocaleId = uiLocaleId, FirstContentLanguage = firstContentLanguage, SecondContentLanguage = secondContentLanguage };
 
             // Save through the canonical writer.
             await updateProfile.ExecuteAsync<UpdateResult>(new UpdateProfileParametersV1(profileId), _input, HttpContext.RequestAborted);

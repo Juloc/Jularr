@@ -57,6 +57,29 @@ namespace Jularr.Backend.Tests
             """);
 
         [TestMethod]
+        public async Task ContentLanguages_UpgradePreservesExistingProfilesWithoutInferringTheirPreferences()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(ContentLanguages_UpgradePreservesExistingProfilesWithoutInferringTheirPreferences));
+            var options = Backup(folder.Path, out var backups);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 11).ToArray()).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await ExecuteAsync(cs, """
+                BEGIN;
+                INSERT INTO "Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId")
+                SELECT 501, 41, 'Kept profile', "Id" FROM "UiLocales" ORDER BY "Id" LIMIT 1;
+                INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 501);
+                COMMIT;
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            Assert.AreEqual("Kept profile", await ScalarAsync(cs, """SELECT "DisplayName" FROM "Profiles" WHERE "Id" = 501"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Profiles" WHERE "Id" = 501 AND "FirstContentLanguage" IS NULL AND "SecondContentLanguage" IS NULL"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+            Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
+        }
+
+        [TestMethod]
         public async Task ProductionCompanionMigration_UpgradesTheFrozenBaselineWithBackup()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
@@ -148,7 +171,7 @@ namespace Jularr.Backend.Tests
             var options = Backup(folder.Path, out var backups);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
 
-            Assert.AreEqual(11, DatabaseBaseline.CurrentVersion, "All production migrations must have unique contiguous numbers.");
+            CollectionAssert.AreEqual(Enumerable.Range(2, DatabaseBaseline.Migrations.Count).ToArray(), DatabaseBaseline.Migrations.Select(migration => migration.Version).ToArray(), "All production migrations must have unique contiguous numbers.");
             await new DatabaseBaseline(cs, options, tools, migrations: [DatabaseBaseline.Migrations[0]]).StartAsync(CancellationToken.None);
             Assert.AreEqual("0002_external_work_feeds", await ScalarAsync(cs,
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 2"));

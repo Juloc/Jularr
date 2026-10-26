@@ -77,6 +77,35 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ContentLanguages_AreProfileScoped_PartialAndIndependentOfUiLanguage()
+        {
+            await using var fixture = await ProfileFixture.CreateAsync();
+            var runtime = new ServiceRuntime(fixture.Database, fixture.NewGate(), new ServiceTimings(TimeProvider.System));
+            var update = runtime.Create<UpdateProfileV1>();
+            var read = runtime.Create<ReadProfileV1>();
+            var parameters = new UpdateProfileParametersV1(fixture.ProfileAId);
+            var initial = await read.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileAId));
+            Assert.IsNull(initial.FirstContentLanguage);
+            Assert.IsNull(initial.SecondContentLanguage);
+
+            await update.ExecuteAsync<UpdateResult>(parameters, new UpdateProfileDataV1 { FirstContentLanguage = "EN", SecondContentLanguage = "de" });
+            await update.ExecuteAsync<UpdateResult>(parameters, new UpdateProfileDataV1 { UiLocaleId = 2 });
+            var saved = await read.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileAId));
+            Assert.AreEqual("en", saved.FirstContentLanguage);
+            Assert.AreEqual("de", saved.SecondContentLanguage);
+            Assert.AreEqual(2, saved.UiLocaleId);
+
+            await Assert.ThrowsExactlyAsync<DataValidationException>(() => update.ExecuteAsync<UpdateResult>(parameters, new UpdateProfileDataV1 { SecondContentLanguage = "en" }));
+            await Assert.ThrowsExactlyAsync<DataValidationException>(() => update.ExecuteAsync<UpdateResult>(parameters, new UpdateProfileDataV1 { FirstContentLanguage = null }));
+            await Assert.ThrowsExactlyAsync<DataValidationException>(() => update.ExecuteAsync<UpdateResult>(parameters, new UpdateProfileDataV1 { FirstContentLanguage = "invalid" }));
+            saved = await read.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileAId));
+            Assert.AreEqual("de", saved.SecondContentLanguage);
+
+            await update.ExecuteAsync<UpdateResult>(parameters, new UpdateProfileDataV1 { FirstContentLanguage = null, SecondContentLanguage = null });
+            Assert.IsNull((await read.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileAId))).FirstContentLanguage);
+        }
+
+        [TestMethod]
         public async Task MembershipRevocationAndDisabledAccountBothFailClosed()
         {
             await using var fixture = await ProfileFixture.CreateAsync();
@@ -224,6 +253,9 @@ namespace Jularr.Backend.Tests
                 ConnectionString = connectionString;
             }
 
+            // The migrations that change the account and profile tables, for fixtures that install only the account schema.
+            public static IReadOnlyList<DatabaseMigration> AccountMigrations => [.. DatabaseBaseline.Migrations.Where(migration => migration.Name is "0009_pwa_main_profile_accent" or "0011_profile_content_languages")];
+
             public static async Task<ProfileFixture> CreateAsync(bool appliesAccountMigrations = true)
             {
                 var cs = TestPostgres.ResolveConnectionString($"Data Source=profile-vertical-{Guid.NewGuid():N}");
@@ -260,7 +292,10 @@ namespace Jularr.Backend.Tests
                     // Direct profile tests need the current account schema; full-host fixtures apply the complete migration ledger themselves.
                     if (appliesAccountMigrations)
                     {
-                        await fixture.RunSqlAsync(DatabaseBaseline.Migrations.Single(migration => migration.Name == "0009_pwa_main_profile_accent").Statement);
+                        foreach (var migration in AccountMigrations)
+                        {
+                            await fixture.RunSqlAsync(migration.Statement);
+                        }
                     }
                     return fixture;
                 }

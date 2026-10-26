@@ -1,8 +1,9 @@
 // Shared status palette.
 .media-availability, .media-availability-badge {
     &--available, &--profileaudio { --status-color: light-dark(#16a34a, #22c55e); }
+    &--preferredsubtitles { --status-color: light-dark(#1672e8, #3b82f6); }
     &--otheraudio { --status-color: light-dark(#ac8000, #facc15); }
-    &--partial, &--partialotheraudio { --status-color: light-dark(#e66a0a, #fb923c); }
+    &--partial, &--partialotheraudio, &--partialpreferredsubtitles { --status-color: light-dark(#e66a0a, #fb923c); }
     &--partialotheraudio {
         --status-alternate: light-dark(#ac8000, #facc15);
         --status-dot: linear-gradient(135deg, var(--status-alternate) 50%, var(--status-color) 50%);
@@ -10,7 +11,7 @@
     &--missing { --status-color: light-dark(#dc3545, #fb5969); }
     &--downloading { --status-color: light-dark(#7c3aed, #a855f7); }
     &--searching { --status-color: light-dark(#1672e8, #3b82f6); }
-    &--requested { --status-color: light-dark(#73737e, #a1a1aa); }
+    &--requested, &--paused { --status-color: light-dark(#73737e, #a1a1aa); }
 }
 
 .media-availability {
