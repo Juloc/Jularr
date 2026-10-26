@@ -27,10 +27,10 @@ namespace Jularr.Backend.Data.Logic.Profile
         [DataField(typeof(ProfileFields), nameof(ProfileFields.UiLocaleId))]
         public long UiLocaleId { get; internal set; }
 
-        [DataField(typeof(ProfileFields), nameof(ProfileFields.ContentLanguage))]
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.FirstContentLanguage))]
         public string? FirstContentLanguage { get; internal set; }
 
-        [DataField(typeof(ProfileFields), nameof(ProfileFields.ContentLanguage))]
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.SecondContentLanguage))]
         public string? SecondContentLanguage { get; internal set; }
     }
 }

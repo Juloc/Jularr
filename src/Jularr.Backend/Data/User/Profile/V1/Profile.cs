@@ -57,14 +57,14 @@ namespace Jularr.Backend.Data.User.Profile.V1
             init => SetField(ref _uiLocaleId, value);
         }
 
-        [DataField(typeof(ProfileFields), nameof(ProfileFields.ContentLanguage))]
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.FirstContentLanguage))]
         public string? FirstContentLanguage
         {
             get => _firstContentLanguage;
             init => SetField(ref _firstContentLanguage, value);
         }
 
-        [DataField(typeof(ProfileFields), nameof(ProfileFields.ContentLanguage))]
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.SecondContentLanguage))]
         public string? SecondContentLanguage
         {
             get => _secondContentLanguage;
@@ -106,10 +106,10 @@ namespace Jularr.Backend.Data.User.Profile.V1
         [DataField(typeof(ProfileFields), nameof(ProfileFields.UiLocaleId))]
         public long UiLocaleId { get; }
 
-        [DataField(typeof(ProfileFields), nameof(ProfileFields.ContentLanguage))]
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.FirstContentLanguage))]
         public string? FirstContentLanguage { get; }
 
-        [DataField(typeof(ProfileFields), nameof(ProfileFields.ContentLanguage))]
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.SecondContentLanguage))]
         public string? SecondContentLanguage { get; }
 
         public bool HasPin { get; }
