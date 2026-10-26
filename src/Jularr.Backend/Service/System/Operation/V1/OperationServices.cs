@@ -99,8 +99,8 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            // Only scans, backups and benchmarks are queued work.
-            if (Parameters.OperationTypeId is not (OperationKind.LibraryScan or OperationKind.Backup or OperationKind.TranscodeBenchmark))
+            // Only scans, backups, benchmarks and library searches are queued work.
+            if (Parameters.OperationTypeId is not (OperationKind.LibraryScan or OperationKind.Backup or OperationKind.TranscodeBenchmark or OperationKind.AcquisitionSearch))
             {
                 throw new DataValidationException(nameof(ClaimOperationParametersV1.OperationTypeId), "invalid_value");
             }

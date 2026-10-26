@@ -182,6 +182,7 @@ namespace Jularr.Backend.Tests
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 3"));
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs,
                 "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+            Assert.AreEqual(2L, await ScalarAsync(cs, "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('AcquisitionSearchRuns', 'AcquisitionSearchTargets')"));
             Assert.AreEqual("0004_playback_companion", await ScalarAsync(cs,
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 4"));
             Assert.AreEqual("0005_sabnzbd_incomplete_paths", await ScalarAsync(cs,

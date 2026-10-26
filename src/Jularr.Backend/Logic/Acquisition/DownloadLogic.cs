@@ -138,9 +138,12 @@ namespace Jularr.Backend.Logic.Acquisition
                     platform."IgdbId" AS "PlatformIgdbId",
                     coalesce((
                         SELECT
-                            jsonb_agg(jsonb_build_object('Quality', evidence."QualityKey", 'WorkUnitId', evidence."WorkUnitId", 'Facts', evidence."Evidence"))
+                            jsonb_agg(jsonb_build_object('Quality', evidence."QualityKey", 'WorkUnitId', coalesce(coverage."WorkUnitId", evidence."WorkUnitId"),
+                                'Facts', evidence."Evidence", 'RuntimeMinutes', installed."DurationMs" / 60000.0))
                         FROM
                             "StoredFileFormatEvidence" AS evidence
+                            JOIN "StoredFiles" AS installed ON installed."Id" = evidence."StoredFileId"
+                            LEFT JOIN "MediaAssetUnitCoverage" AS coverage ON coverage."MediaAssetId" = installed."MediaAssetId"
                         WHERE
                             evidence."WorkId" = work."Id"
                             AND evidence."QualityKey" IS NOT NULL

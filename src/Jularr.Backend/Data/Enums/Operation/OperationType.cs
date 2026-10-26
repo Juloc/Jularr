@@ -6,6 +6,7 @@ namespace Jularr.Backend.Data.Enums.Operation
         Download = 2,
         Backup = 3,
         Job = 4,
-        TranscodeBenchmark = 5
+        TranscodeBenchmark = 5,
+        AcquisitionSearch = 6
     }
 }

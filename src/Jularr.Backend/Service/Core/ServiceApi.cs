@@ -183,6 +183,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<AcquisitionSearchSignal>();
             services.TryAddSingleton<LiveChanges>();
             services.TryAddSingleton<WorkSignals>();
+            services.TryAddSingleton<SearchRunCancellation>();
             services.TryAddSingleton<UserActivity>();
             services.TryAddSingleton<WorkerJobs>();
             services.TryAddSingleton<WorkerJobRunner>();

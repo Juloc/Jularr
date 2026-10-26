@@ -5,6 +5,8 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 
 ## Host and framework
 
+- Library Search All: [Works.Search.cs](Pages/Admin/Works/Works.Search.cs), [status/results refresh](Pages/Admin/Works/Works.entry.ts), [behavior and verification](../../docs/ACQUISITION_SEARCH_ALL.md); E2E `WorkSearchRunTests` covers all/filtered/selected, cancellation and mobile layout.
+
 - [Program.cs](Program.cs): single host, service registration, authorization, request culture and Razor/API routing.
 - [UiText.cs](Framework/UiText.cs), [UiResources.cs](Localization/UiResources.cs): service-backed request language pack and English registration inputs; [Catalogs](Localization/Catalogs) hold the shipped languages (`{key: [English, text]}`).
 - [Page.cs](Framework/Page.cs): page definitions, shared read errors and mutation redisplay.

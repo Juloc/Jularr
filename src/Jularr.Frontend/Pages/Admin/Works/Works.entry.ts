@@ -27,4 +27,49 @@ document.addEventListener('submit', event => {
     setTimeout(() => empty.forEach(select => { select.disabled = false; }), 0);
 }, true);
 
-onPage(import.meta.url, initializeDelete);
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+let searchRequest: AbortController | undefined;
+
+// Only the small status fragment refreshes. The list, selected titles and expanded results stay in place.
+function initializeSearchProgress(): void {
+    clearTimeout(searchTimer);
+    searchRequest?.abort();
+    const current = document.querySelector<HTMLElement>('[data-search-progress][data-running="true"]');
+    if (!current) return;
+    searchRequest = new AbortController();
+    const signal = searchRequest.signal;
+    const refresh = async (): Promise<void> => {
+        let root = document.querySelector<HTMLElement>('[data-search-progress]');
+        if (!root || root.dataset.running !== 'true' || signal.aborted) return;
+        try {
+            if (!document.hidden && !root.contains(document.activeElement)) {
+                const response = await fetch(root.dataset.refresh!, { signal, credentials: 'same-origin', headers: { 'Accept': 'text/html' } });
+                if (!response.ok) return;
+                const updated = new DOMParser().parseFromString(await response.text(), 'text/html').querySelector<HTMLElement>('[data-search-progress]');
+                if (!updated || !root.isConnected || signal.aborted) return;
+                root.replaceWith(updated);
+                root = updated;
+                if (root.dataset.running === 'false') await refreshSearchResults(signal);
+            }
+        } catch {
+            // The native Refresh link remains available after a disconnected request.
+            return;
+        }
+        if (root.dataset.running === 'true' && !signal.aborted) searchTimer = setTimeout(() => void refresh(), 2000);
+    };
+    searchTimer = setTimeout(() => void refresh(), 2000);
+}
+
+async function refreshSearchResults(signal: AbortSignal): Promise<void> {
+    const rows = document.querySelector<HTMLElement>('[data-search-result-rows]');
+    if (!rows?.dataset.refresh) return;
+    const response = await fetch(rows.dataset.refresh, { signal, credentials: 'same-origin', headers: { 'Accept': 'text/html' } });
+    if (!response.ok) return;
+    const updated = new DOMParser().parseFromString(await response.text(), 'text/html').querySelector<HTMLElement>('[data-search-result-rows]');
+    if (!updated || !rows.isConnected || signal.aborted) return;
+    const active = document.activeElement instanceof HTMLAnchorElement && rows.contains(document.activeElement) ? document.activeElement.getAttribute('href') : null;
+    rows.replaceWith(updated);
+    if (active) Array.from(updated.querySelectorAll('a')).find(link => link.getAttribute('href') === active)?.focus({ preventScroll: true });
+}
+
+onPage(import.meta.url, () => { initializeDelete(); initializeSearchProgress(); }, { partial: true });

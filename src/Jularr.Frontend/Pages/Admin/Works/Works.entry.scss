@@ -1,5 +1,18 @@
 @use "../../../Framework/Components/MediaCard";
 
+.works-search-controls, .works-search-progress {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+
+    form { margin: 0; }
+    progress { flex: 1 1 160px; max-width: 360px; accent-color: var(--accent); }
+}
+
+.works-search-scope { flex: 1 1 280px; margin: 0; color: var(--muted); font-size: var(--text-small); }
+
 // The library list on the list kit: the grid of its columns at three widths (the script builds the same from the person's choice of columns), the drawers' fields, the report and the dialogs.
 
 .works-list {
