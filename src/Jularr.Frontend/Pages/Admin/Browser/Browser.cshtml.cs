@@ -50,6 +50,17 @@ namespace Jularr.Frontend.Pages.Admin.Browser
                     new A(new Text("admin.browser.moduleLink")).Attribute("href", "/Admin/Instance/Modules")));
             }
 
+            var sources = _status is { IsAvailable: true, RemoteAddress: null }
+                ? _connections?.Items.Where(item => item.IsEnabled && item.AcquisitionConnectionTypeId == AcquisitionConnectionType.AnnasArchive).ToArray() ?? [] : [];
+            if (sources.Length > 0)
+            {
+                var selected = _status?.ManualView?.AcquisitionConnectionId ?? sources[0].Id;
+                page.Content.Add(new Form<AcquisitionConnectionParametersV1>(form =>
+                {
+                    form.Select(item => item.AcquisitionConnectionId, "admin.browser.source", [.. sources.Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), new Uri(item.BaseUrl).Host))]);
+                    form.Submit("admin.browser.manualOpen");
+                }, "/Admin/Browser?handler=OpenView", csrf, new AcquisitionConnectionParametersV1(selected)));
+            }
             if (_status?.ManualView is { } view) page.Content.Add(new RemoteBrowser(view, csrf));
 
             // What the browser is and what it did last.
@@ -88,12 +99,6 @@ namespace Jularr.Frontend.Pages.Admin.Browser
                 new Form<BrowserParametersV1>(form => form.Submit("admin.browser.test"), "/Admin/Browser?handler=Test&acquisitionConnectionId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new BrowserParametersV1()),
                 new Form<BrowserParametersV1>(form => form.Submit("admin.browser.off"), "/Admin/Browser?handler=Off&acquisitionConnectionId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new BrowserParametersV1())
             };
-            if (item.AcquisitionConnectionTypeId == AcquisitionConnectionType.AnnasArchive && item.IsEnabled && _status is { IsAvailable: true, RemoteAddress: null })
-            {
-                buttons.Add(new Form<BrowserParametersV1>(form => form.Submit("admin.browser.manualOpen"),
-                    "/Admin/Browser?handler=OpenView&acquisitionConnectionId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new BrowserParametersV1()));
-            }
-
             return new Div([.. buttons]);
         }
 

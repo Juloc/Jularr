@@ -269,6 +269,56 @@ namespace Jularr.Backend.Tests
                 browser.InputManualAsync(action, x, y, 0, key, text, DateTimeOffset.UtcNow.AddMinutes(2), ct);
         }
 
+        [TestMethod]
+        public async Task Browser_ManualAndAutomaticReadsKeepPrimaryPageSessionAndResumeItsPage()
+        {
+            var executable = Environment.GetEnvironmentVariable("JULARR_BROWSER");
+            if (string.IsNullOrWhiteSpace(executable)) Assert.Inconclusive("JULARR_BROWSER names no browser.");
+            using var folder = new TemporaryDirectory();
+            using var server = new CheckPage();
+            using var browser = new SourceBrowser(new BrowserOptions { Path = executable, ProfilePath = folder.Path, AllowPrivateAddressesForTests = true, PageTimeoutSeconds = 10 });
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            var ct = timeout.Token;
+            await browser.BeginManualAsync(new Uri(server.Address, "/manual"), DateTimeOffset.UtcNow.AddMinutes(2), ct);
+            await Task.Delay(300, ct);
+            await Input("down", 60, 60);
+            await Input("up", 60, 60);
+            await Input("text", text: "page session");
+            await Input("key", key: "Tab");
+            await Input("key", key: "Enter");
+            Assert.AreEqual("page session", await server.ManualInput.Task.WaitAsync(TimeSpan.FromSeconds(5), ct));
+            await browser.EndManualAsync(ct);
+
+            var page = await browser.ReadPagesAsync([new Uri(server.Address, "/session")], ct);
+            Assert.IsNotNull(page);
+            StringAssert.Contains(page.Html, "Primary page session: page session");
+
+            // Reopening the configured source keeps the current page and its form.
+            await browser.BeginManualAsync(server.Address, DateTimeOffset.UtcNow.AddMinutes(2), ct);
+            await Input("down", 60, 60);
+            await Input("up", 60, 60);
+            await Input("key", key: "End");
+            await Input("text", text: " resumed");
+            await Input("key", key: "Tab");
+            await Input("key", key: "Enter");
+            Assert.AreEqual("page session resumed", await server.SecondManualInput.Task.WaitAsync(TimeSpan.FromSeconds(5), ct));
+
+            // A different configured origin starts its own page session.
+            using var other = new CheckPage();
+            await browser.BeginManualAsync(new Uri(other.Address, "/manual"), DateTimeOffset.UtcNow.AddMinutes(2), ct);
+            await Task.Delay(300, ct);
+            await Input("down", 60, 60);
+            await Input("up", 60, 60);
+            await Input("text", text: "other source");
+            await Input("key", key: "Tab");
+            await Input("key", key: "Enter");
+            Assert.AreEqual("other source", await other.ManualInput.Task.WaitAsync(TimeSpan.FromSeconds(5), ct));
+            await browser.StopAsync();
+
+            Task Input(string action, int x = 0, int y = 0, string? key = null, string? text = null) =>
+                browser.InputManualAsync(action, x, y, 0, key, text, DateTimeOffset.UtcNow.AddMinutes(2), ct);
+        }
+
         private static int FreePort()
         {
             var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
@@ -296,6 +346,7 @@ namespace Jularr.Backend.Tests
             public Uri Address { get; }
             public string? LastCookie { get; private set; }
             public TaskCompletionSource<string> ManualInput { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public TaskCompletionSource<string> SecondManualInput { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             public void Dispose()
             {
@@ -319,13 +370,19 @@ namespace Jularr.Backend.Tests
                     }
 
                     LastCookie = context.Request.Headers["Cookie"];
-                    if (context.Request.Url!.AbsolutePath is "/manual" or "/accepted")
+                    if (context.Request.Url!.AbsolutePath is "/manual" or "/accepted" or "/session")
                     {
-                        if (context.Request.Url.AbsolutePath == "/accepted") ManualInput.TrySetResult(context.Request.QueryString["v"] ?? "");
+                        if (context.Request.Url.AbsolutePath == "/accepted")
+                        {
+                            var accepted = context.Request.QueryString["v"] ?? "";
+                            if (!ManualInput.TrySetResult(accepted)) SecondManualInput.TrySetResult(accepted);
+                        }
                         var bytes = Encoding.UTF8.GetBytes("""
                             <html><head><title>Manual browser fixture</title></head><body style="margin:0">
                             <input id="entry" style="position:absolute;left:40px;top:40px;width:250px;height:40px">
-                            <button style="position:absolute;left:40px;top:120px;width:250px;height:40px" onclick="document.cookie='assisted=yes; Max-Age=3600; SameSite=Lax';fetch('/accepted?v='+encodeURIComponent(document.getElementById('entry').value))">Accept fixture</button>
+                            <button style="position:absolute;left:40px;top:120px;width:250px;height:40px" onclick="sessionStorage.setItem('assisted',document.getElementById('entry').value);document.cookie='assisted=yes; Max-Age=3600; SameSite=Lax';fetch('/accepted?v='+encodeURIComponent(document.getElementById('entry').value))">Accept fixture</button>
+                            <p id="proof" style="position:absolute;top:220px"></p>
+                            <script>document.getElementById('entry').value=sessionStorage.getItem('assisted')||'';document.getElementById('proof').textContent='Primary page session: '+(sessionStorage.getItem('assisted')||'');</script>
                             </body></html>
                             """);
                         context.Response.ContentType = "text/html";

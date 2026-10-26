@@ -24,7 +24,12 @@ namespace Jularr.Integrations.Logic.Browser
                 _manualMouseDown = false;
                 Interlocked.Exchange(ref _manualUntil, expiresAt.UtcTicks);
                 await _client!.SendAsync("Browser.setDownloadBehavior", new { behavior = "deny" }, ct);
-                await _client!.SendAsync("Page.navigate", new { url = address.AbsoluteUri }, ct);
+                await _client.SendAsync("Page.bringToFront", null, ct);
+                var current = await _client!.EvaluateAsync("location.href", ct);
+                if (!Uri.TryCreate(current, UriKind.Absolute, out var currentAddress) || !SameOrigin(currentAddress, address))
+                {
+                    await _client.SendAsync("Page.navigate", new { url = address.AbsoluteUri }, ct);
+                }
                 using var metrics = JsonDocument.Parse(await _client.SendAsync("Page.getLayoutMetrics", null, ct));
                 var viewport = metrics.RootElement.GetProperty("result").GetProperty("cssVisualViewport");
                 _viewport = new BrowserViewport((int)viewport.GetProperty("clientWidth").GetDouble(), (int)viewport.GetProperty("clientHeight").GetDouble());
