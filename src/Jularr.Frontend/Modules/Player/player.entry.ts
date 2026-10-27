@@ -109,6 +109,10 @@ async function start(player: HTMLElement): Promise<void> {
     const countdownSeconds = Number(player.dataset.countdown) || 0;
     let autoplay = player.dataset.autoplay === "true";
     let audioIndex: number | null = selectedAudio();
+    // Audio and subtitles moved against the picture, in milliseconds: the audio is delivered by a new conversion, the subtitles are shifted in the browser.
+    let audioOffset = 0;
+    let subtitleOffset = 0;
+    const cueBase = new WeakMap<TextTrackCue, { start: number; end: number }>();
     let quality: number | null = null;
     const initialQuality = player.querySelector<HTMLSelectElement>('select[data-setting=quality]')?.value ?? "";
     let countdown = 0;
@@ -337,7 +341,7 @@ async function start(player: HTMLElement): Promise<void> {
                 method: "POST",
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json", RequestVerificationToken: antiforgery },
-                body: JSON.stringify({ ...capabilities(), audioStreamIndex, quality: qualityChoice })
+                body: JSON.stringify({ ...capabilities(), audioStreamIndex, quality: qualityChoice, audioOffsetMs: audioOffset })
             });
             if (response.ok) {
                 status.hidden = true;
@@ -469,6 +473,8 @@ async function start(player: HTMLElement): Promise<void> {
         });
         video.append(track);
         track.track.mode = "showing";
+        track.addEventListener("load", applySubtitleOffset);
+        applySubtitleOffset();
     }
 
     // The picture element reports a broken stretch as well (decoding, a segment that does not fit): an HLS playback is repaired in place first, like a fatal error of the loader.
@@ -611,6 +617,8 @@ async function start(player: HTMLElement): Promise<void> {
     volume.style.setProperty('--played', `${video.volume * 100}%`);
 
     const actions: Record<string, () => void> = {
+        "audio-offset-reset": () => void setAudioOffset(0),
+        "subtitle-offset-reset": () => setSubtitleOffset(0),
         cast: () => void (casting ? castSender?.stop() : startCastRequest()),
         "copy-info": () => void copyInfo(),
         toggle: () => {
@@ -763,6 +771,7 @@ async function start(player: HTMLElement): Promise<void> {
     mediaSession();
     castSupport();
     infoPane();
+    offsetFields();
     // A mouse leaving the picture hides the controls at once; touch and open panels keep them.
     player.addEventListener("pointerleave", event => {
         if (event.pointerType !== "mouse" || video.paused || seeking || player.classList.contains("player--mini") || player.querySelector(":popover-open")) return;
@@ -810,6 +819,40 @@ async function start(player: HTMLElement): Promise<void> {
     function seek(seconds: number): void {
         if (casting) { castSender?.seek(Math.max(0, Math.min(castState.duration || 0, castState.currentTime + seconds))); return; }
         video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + seconds));
+    }
+
+    // The two offset fields: the audio asks the server for a new conversion that plays on from here, the subtitles move at once.
+    function offsetFields(): void {
+        const value = (input: HTMLInputElement) => Math.max(-10_000, Math.min(10_000, Math.round(Number(input.value) || 0)));
+        const audioInput = player.querySelector<HTMLInputElement>("[data-setting=audio-offset]");
+        const subtitleInput = player.querySelector<HTMLInputElement>("[data-setting=subtitle-offset]");
+        audioInput?.addEventListener("change", () => void setAudioOffset(value(audioInput)));
+        subtitleInput?.addEventListener("input", () => setSubtitleOffset(value(subtitleInput)));
+    }
+
+    async function setAudioOffset(milliseconds: number): Promise<void> {
+        const previous = audioOffset;
+        audioOffset = milliseconds;
+        if (milliseconds !== previous && !await replan(audioIndex, quality)) audioOffset = previous;
+        player.querySelectorAll<HTMLInputElement>("[data-setting=audio-offset]").forEach(input => { input.value = String(audioOffset); });
+    }
+
+    function setSubtitleOffset(milliseconds: number): void {
+        subtitleOffset = milliseconds;
+        player.querySelectorAll<HTMLInputElement>("[data-setting=subtitle-offset]").forEach(input => { if (input !== document.activeElement) input.value = String(milliseconds); });
+        applySubtitleOffset();
+    }
+
+    // Every cue keeps its own times; the offset is added to those, so moving it again never adds up.
+    function applySubtitleOffset(): void {
+        const cues = Array.from(video.textTracks).find(track => track.mode === "showing")?.cues;
+        if (!cues) return;
+        for (const cue of Array.from(cues)) {
+            let base = cueBase.get(cue);
+            if (!base) { base = { start: cue.startTime, end: cue.endTime }; cueBase.set(cue, base); }
+            cue.startTime = Math.max(0, base.start + subtitleOffset / 1000);
+            cue.endTime = Math.max(cue.startTime, base.end + subtitleOffset / 1000);
+        }
     }
 
     // The Info pane: what the server knows of the file and its conversion, and what the player measures meanwhile, refreshed every second while the settings are open.

@@ -22,6 +22,8 @@ namespace Jularr.Backend.Data.Fields.Playback
         public static readonly BoolField IsSupported = new();
         public static readonly BoolField IsSelected = new();
         public static readonly BoolField IsReduced = new();
+        // The audio runs later (positive) or earlier (negative) than the picture by this many milliseconds.
+        public static readonly IntField AudioOffsetMs = new() { Minimum = -10_000, Maximum = 10_000 };
         // The Info pane: what a conversion does with the video and the audio.
         public static readonly BoolField CopyVideo = new() { Required = false };
         public static readonly BoolField CopyAudio = new() { Required = false };

@@ -7299,6 +7299,18 @@
    "Converted",
    "Umgewandelt"
   ],
+  "player.offset.audio": [
+   "Audio delay (ms)",
+   "Ton-Verzögerung (ms)"
+  ],
+  "player.offset.subtitles": [
+   "Subtitle delay (ms)",
+   "Untertitel-Verzögerung (ms)"
+  ],
+  "player.offset.reset": [
+   "Reset",
+   "Zurücksetzen"
+  ],
   "player.cast": [
    "Cast to a device",
    "Auf ein Gerät übertragen"

@@ -191,8 +191,9 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
     public sealed class StartPlaybackDataV1 : BaseData
     {
-        public StartPlaybackDataV1(string[] containers, string[] videoCodecs, string[] audioCodecs, int? audioStreamIndex = null, PlaybackQuality? quality = null)
+        public StartPlaybackDataV1(string[] containers, string[] videoCodecs, string[] audioCodecs, int? audioStreamIndex = null, PlaybackQuality? quality = null, int audioOffsetMs = 0)
         {
+            AudioOffsetMs = audioOffsetMs;
             Quality = quality;
             Containers = containers;
             VideoCodecs = videoCodecs;
@@ -212,6 +213,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
         // An audio track other than the file's default is delivered through a conversion.
         [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.StreamIndex), false)]
         public int? AudioStreamIndex { get; }
+
+        // The audio moved against the picture; any value other than zero is delivered through a conversion.
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.AudioOffsetMs))]
+        public int AudioOffsetMs { get; }
 
         // This playback's own quality; the device's applies without one.
         [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PlaybackQuality), false)]

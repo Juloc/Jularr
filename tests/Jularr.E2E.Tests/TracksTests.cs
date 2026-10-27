@@ -113,6 +113,30 @@ namespace Jularr.E2E.Tests
                 await page.WaitForFunctionAsync("() => [...document.querySelector('video').textTracks].some(track => track.mode === 'showing' && track.cues?.length > 0)");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
 
+                // Subtitles move against the picture in the browser; the audio moves through a new conversion that plays on, and back to zero the same way.
+                await page.Locator("[data-action=settings]").ClickAsync();
+                var panel = page.Locator("#player-settings");
+                await panel.GetByRole(AriaRole.Tab, new() { Name = "Subtitles", Exact = true }).ClickAsync();
+                var cueStart = await page.Locator("video").EvaluateAsync<double>("video => [...video.textTracks].find(track => track.mode === 'showing').cues[0].startTime");
+                await panel.Locator("[data-setting=subtitle-offset]").FillAsync("500");
+                await page.WaitForFunctionAsync("start => [...document.querySelector('video').textTracks].find(track => track.mode === 'showing').cues[0].startTime > start + 0.4", cueStart);
+                await panel.Locator("[data-action=subtitle-offset-reset]").ClickAsync();
+                await page.WaitForFunctionAsync("start => Math.abs([...document.querySelector('video').textTracks].find(track => track.mode === 'showing').cues[0].startTime - start) < 0.01", cueStart);
+                await panel.GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
+                var delayed = await page.RunAndWaitForResponseAsync(async () =>
+                {
+                    await panel.Locator("[data-setting=audio-offset]").FillAsync("250");
+                    await page.Keyboard.PressAsync("Tab");
+                }, response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioOffsetMs\":250", StringComparison.Ordinal) == true, new() { Timeout = Steps.MediaTimeout });
+                Assert.AreEqual(200, delayed.Status);
+                var delayedAt = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
+                await page.WaitForFunctionAsync("at => document.querySelector('video').currentTime > at + 1", delayedAt, new() { Timeout = Steps.MediaTimeout });
+                var restored = await page.RunAndWaitForResponseAsync(() => panel.Locator("[data-action=audio-offset-reset]").ClickAsync(),
+                    response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioOffsetMs\":0", StringComparison.Ordinal) == true, new() { Timeout = Steps.MediaTimeout });
+                Assert.AreEqual(200, restored.Status);
+                await page.Keyboard.PressAsync("Escape");
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+
                 // The file's chapters name its intro and credits: a Skip button while the intro plays (the new plan of the audio choice above kept the markers), then the chapter menu.
                 await page.EvaluateAsync("() => { const video = document.querySelector('video'); video.pause(); video.currentTime = 2.5; }");
                 var skip = page.Locator("[data-action=skip]");

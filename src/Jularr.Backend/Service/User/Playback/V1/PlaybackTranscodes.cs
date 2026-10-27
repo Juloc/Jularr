@@ -31,6 +31,9 @@ namespace Jularr.Backend.Service.User.Playback.V1
 
         public bool HasPriority { get; init; }
         public TranscodeEncoding? Encoding { get; init; }
+
+        // The audio runs later (positive) or earlier (negative) than the picture by this many milliseconds.
+        public int AudioOffsetMs { get; init; }
     }
 
     // One demand-driven FFmpeg job per playback session.
@@ -227,6 +230,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 job.Source.CopyVideo, job.Source.CopyAudio, encoding.VideoArguments, encoding.HardwareArguments)
             {
                 AudioKilobits = job.Source.AudioKilobits ?? 192,
+                AudioOffsetMs = job.Source.AudioOffsetMs,
                 MaxHeight = job.Source.MaxHeight,
                 VideoKilobits = job.Source.VideoKilobits,
                 ScaleFilter = encoding.ScaleFilter

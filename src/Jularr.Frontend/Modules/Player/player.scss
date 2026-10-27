@@ -161,6 +161,13 @@
         dt { color: var(--muted); font-size: .62rem; font-weight: 650; line-height: 1.1; }
         dd { margin: 0; min-height: 1.1em; overflow-wrap: anywhere; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
     }
+    &__offset { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+    &__offset-input {
+        width: 100%; min-width: 0; min-height: 34px; padding: 2px 10px; border: 1px solid var(--border); border-radius: var(--radius-control);
+        background: var(--surface); color: var(--text); text-align: end; font-variant-numeric: tabular-nums;
+        &:focus-visible { outline: none; border-color: var(--accent); }
+    }
+    &__offset-reset { min-height: 34px; padding: 0 12px; }
     &__copy { justify-self: start; min-height: 26px; padding: 0 10px; font-size: .72rem; }
     &__pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     // Slider with its number; the dots below mark the usual speeds.
