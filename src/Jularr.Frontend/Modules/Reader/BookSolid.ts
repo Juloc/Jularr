@@ -66,28 +66,36 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
     gradient('cut', [[0, '#514537', .23], [20, '#514537', .10], [75, '#514537', .17], [100, '#514537', .30]], '0%', '100%');
     const surfaces = [['left', left], ['right', right]] as const;
     const overhang = study.dataset.bookBinding === 'soft' ? .7 : 2.4;
-    // The stack's cut edge hangs below the page. A paperback has no gap behind its pages: each stack keeps its own flat edge, curving up at the fold
-    // exactly as wide as the flare at its outer corner, and the thicker one steps down in a short soft corner on its own side of the fold. A hardcover leaves the space between case and
+    // The stack's cut edge hangs below the page. A paperback has no gap behind its pages: each stack keeps its own flat edge, thins to nothing in a V at the fold
+    // as wide as the flare at its outer corner, and the thicker one steps down in a short soft corner on its own side of the fold. A hardcover leaves the space between case and
     // book block: both stacks meet at the spine, the thicker one flat, the thinner one rising softly to its own level.
     const soft = study.dataset.bookBinding === 'soft';
     const notchWidth = 10;
-    const stackAt = (x: number) => {
+    const stackBase = (x: number) => {
         const thick = Math.max(left.drop, right.drop), thin = Math.min(left.drop, right.drop);
         const onThickSide = (right.drop >= left.drop) === x >= 148;
         if (soft) {
             const near = Math.max(0, Math.min(1, Math.abs(x - 148) / 12));
-            const notch = .55 * Math.max(0, 1 - Math.abs(x - 148) / notchWidth) ** 2;
-            return (1 - notch) * (onThickSide ? thin + (thick - thin) * near * near * (3 - 2 * near) : thin);
+            return onThickSide ? thin + (thick - thin) * near * near * (3 - 2 * near) : thin;
         }
         const own = x < 148 ? left.drop : right.drop;
         const near = 1 - Math.max(0, Math.min(1, Math.abs(x - 148) / Math.min(90, Math.max(30, (thick - own) * 1.6))));
         return own + (thick - own) * near * near * (3 - 2 * near);
     };
-    const along = (from: number, to: number, extra: number, ratio = 1) => {
+    // Every leaf is bound at the spine, so a paperback's stack thins to nothing in a V at the fold.
+    const stackAt = (x: number) => stackBase(x) * (soft ? Math.min(1, Math.abs(x - 148) / notchWidth) : 1);
+    const trace = (shape: (x: number) => number, from: number, to: number, extra: number, ratio = 1) => {
         const steps = Math.max(2, Math.round(Math.abs(to - from) / 6)), low = Math.min(from, to), high = Math.max(from, to);
         const xs = Array.from({ length: steps + 1 }, (_, index) => from + (to - from) * index / steps);
         if (soft) for (const x of [-1, -.75, -.5, -.25, 0, .25, .5, .75, 1].map(step => 148 + step * notchWidth)) if (x > low && x < high) xs.push(x);
-        return xs.sort((a, b) => (a - b) * Math.sign(to - from)).map(x => `L${rounded(x)},${rounded(height + stackAt(x) * ratio + extra)}`).join(' ');
+        return xs.sort((a, b) => (a - b) * Math.sign(to - from)).map(x => `L${rounded(x)},${rounded(height + shape(x) * ratio + extra)}`).join(' ');
+    };
+    const along = (from: number, to: number, extra: number, ratio = 1) => trace(stackAt, from, to, extra, ratio);
+    // A paperback's stack flares out a little at its outer bottom corners, in a soft curve rather than a hard corner.
+    const flareWidth = (outer: number) => soft && stackAt(outer) >= 1 ? Math.min(notchWidth, stackAt(outer) * .5) : 0;
+    const flareEdge = (outer: number, sign: number) => {
+        const drop = stackAt(outer), flare = flareWidth(outer);
+        return `M${outer},${rounded(height)} C${outer},${rounded(height + drop * .5)} ${rounded(outer + sign * flare * .2)},${rounded(height + drop * .85)} ${rounded(outer + sign * flare)},${rounded(height + drop)}`;
     };
     const projectX = (side: string, profile: typeof left, point: { x: number }, ratio = 1) => {
         const depth = side === 'left' ? dimensions.leftMm : dimensions.rightMm;
@@ -113,13 +121,10 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
         V${rounded(height + stackAt(296) + overhang + board)} ${along(296 + overhang, -overhang, overhang + board)} Z`,
         fill: 'color-mix(in srgb,var(--cover) 75%,#302c27)' });
     element('path', { d: `M${-overhang + .6},${-overhang + .6} H${296 + overhang - .6} V${rounded(height + overhang - .6)} H${-overhang + .6} Z`, fill: 'var(--lining)' });
-    // A paperback's stack flares out a little at its outer bottom corners, in a soft curve rather than a hard corner.
-    if (soft) for (const [outer, sign] of [[0, -1], [296, 1]] as const) {
-        const drop = stackAt(outer), flare = Math.min(notchWidth, drop * .5);
-        if (drop < 1) continue;
-        const edge = `M${outer},${rounded(height)} C${outer},${rounded(height + drop * .5)} ${rounded(outer + sign * flare * .2)},${rounded(height + drop * .85)} ${rounded(outer + sign * flare)},${rounded(height + drop)}`;
-        element('path', { d: `${edge} L${outer},${rounded(height + drop)} Z`, fill: 'var(--paper-cut)', 'data-book-cut': `${sign < 0 ? 'left' : 'right'}-flare` });
-        element('path', { d: `${edge} L${outer},${rounded(height + drop)}`, fill: 'none', stroke: '#504639', 'stroke-opacity': .5, 'stroke-width': .3 });
+    for (const [outer, sign] of [[0, -1], [296, 1]] as const) if (flareWidth(outer) > 0) {
+        const edge = flareEdge(outer, sign);
+        element('path', { d: `${edge} L${outer},${rounded(height + stackAt(outer))} Z`, fill: 'var(--paper-cut)', 'data-book-cut': `${sign < 0 ? 'left' : 'right'}-flare` });
+        element('path', { d: `${edge} L${outer},${rounded(height + stackAt(outer))}`, fill: 'none', stroke: '#504639', 'stroke-opacity': .5, 'stroke-width': .3 });
     }
     element('path', { d: `M147,-1 Q145,${height / 2} 147,${height + 1} L149,${height + 1} Q151,${height / 2} 149,-1 Z`,
         fill: 'color-mix(in srgb,var(--cover) 58%,#413a31)' });
@@ -147,11 +152,17 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
         const cut = `M${from},${height} L${to},${height} ${along(to, from, 0)} Z`;
         element('path', { d: cut, fill: 'var(--paper-cut)', 'data-book-cut': `${side}-bottom` });
         element('path', { d: cut, fill: 'url(#book-cut)' });
-        // Optical groups of leaves; density tracks the stack's height, never page count.
+        // Optical groups of leaves; density tracks the stack's height, never page count. The lines stay level and simply end
+        // where the V at the fold and the flared outer corner cut through the stack.
+        const outer = side === 'left' ? 0 : 296, sign = side === 'left' ? -1 : 1;
+        const stackClip = element('clipPath', { id: `book-stack-${side}` }, defs);
+        element('path', { d: cut }, stackClip);
+        element('path', { d: flareWidth(outer) > 0 ? `${flareEdge(outer, sign)} L${outer},${rounded(height + stackAt(outer))} Z` : 'M0,0Z' }, stackClip);
+        const [lineFrom, lineTo] = side === 'left' ? [-flareWidth(0), 148] : [148, 296 + flareWidth(296)];
         const count = Math.min(24, Math.max(1, Math.round(profile.drop * pixelScale / .85)));
         for (let index = 1; index < count; index++) {
             const ratio = index / count;
-            element('path', { d: `M${from},${rounded(height + stackAt(from) * ratio)} ${along(from, to, 0, ratio)}`, fill: 'none', stroke: index % 3 === 0 ? 'color-mix(in srgb,var(--paper-cut) 68%,#514637)' : 'color-mix(in srgb,var(--paper-cut) 78%,#fffdf2)',
+            element('path', { d: `M${rounded(lineFrom)},${rounded(height + stackBase(lineFrom) * ratio)} ${trace(stackBase, lineFrom, lineTo, 0, ratio)}`, 'clip-path': `url(#book-stack-${side})`, fill: 'none', stroke: index % 3 === 0 ? 'color-mix(in srgb,var(--paper-cut) 68%,#514637)' : 'color-mix(in srgb,var(--paper-cut) 78%,#fffdf2)',
                 'stroke-opacity': index % 3 === 0 ? .42 : .55, 'stroke-width': .2 + index % 3 * .04 });
         }
         element('path', { d: `M${from},${rounded(height + stackAt(from))} ${along(from, to, 0)}`, fill: 'none', stroke: '#504639', 'stroke-opacity': .5, 'stroke-width': .3 });
