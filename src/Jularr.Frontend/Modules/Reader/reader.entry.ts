@@ -63,7 +63,8 @@ function openChaptersInPlace(book: string): void {
             const fullscreen = document.fullscreenElement === current;
             const box = current.getBoundingClientRect();
             const incoming = document.adoptNode(next);
-            incoming.style.visibility = 'hidden';
+            // Transparent, not invisible: the book prints only text that is visible.
+            Object.assign(incoming.style, { opacity: '0', pointerEvents: 'none' });
             // The current reader stays on screen, out of the flow, while the next one lays out in its place.
             Object.assign(current.style, { position: 'fixed', left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
             current.before(incoming);
@@ -73,7 +74,7 @@ function openChaptersInPlace(book: string): void {
             start(incoming);
             await ready(incoming);
             current.remove();
-            incoming.style.visibility = '';
+            Object.assign(incoming.style, { opacity: '', pointerEvents: '' });
             regionSwapped();
             if (fullscreen) await incoming.requestFullscreen().catch(() => undefined);
         } catch {
