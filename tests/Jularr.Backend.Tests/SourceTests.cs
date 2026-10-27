@@ -406,7 +406,16 @@ namespace Jularr.Backend.Tests
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
             var sources = new FakeSources { SlowGate = true };
-            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources, new BrowserAssistanceTests.Interaction());
+            using var browserPages = new HttpClient(sources, disposeHandler: false);
+            var browser = new BrowserAssistanceTests.Interaction
+            {
+                ReadHtml = async (address, ct) =>
+                {
+                    using var response = await browserPages.GetAsync(address, ct);
+                    return response.IsSuccessStatusCode ? await response.Content.ReadAsStringAsync(ct) : null;
+                }
+            };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources, browser);
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Browser'");
             using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
                 "https://annas.example.test", null, true, 60, [], null, null, null));
