@@ -68,7 +68,7 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
             const delta = Number(button.dataset.turn);
             button.disabled = delta < 0 ? spread === 0 && !edge(-1) : spread + 1 >= Math.ceil(pages / columns) && !edge(1);
         });
-        const wantsBook = settings.mode === 'paged' && reader.dataset.selecting !== 'true';
+        const wantsBook = settings.mode === 'paged' && settings.paging === 'book' && reader.dataset.selecting !== 'true';
         reader.querySelector<HTMLElement>('[data-role=animation-error]')!.hidden = !failed && !(wantsBook && oversized);
         const active = wantsBook && !failed && !oversized;
         if (book && !book.update({ current: spread, columns, minimum: edge(-1) ? -1 : 0,

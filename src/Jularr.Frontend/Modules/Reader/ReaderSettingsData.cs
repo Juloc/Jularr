@@ -9,8 +9,6 @@ namespace Jularr.Frontend.Modules.Reader
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
         public string Preset { get; } = "book";
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
-        public string Mode { get; } = "paged";
-        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
         public string Layout { get; } = "auto";
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
         public string Direction { get; } = "ltr";
@@ -20,8 +18,6 @@ namespace Jularr.Frontend.Modules.Reader
         public string Binding { get; } = "soft";
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Colour))]
         public string Colour { get; } = "#f7f3ec";
-        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
-        public string Animation { get; } = "system";
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Size))]
         public int Size { get; } = 20;
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Spacing))]

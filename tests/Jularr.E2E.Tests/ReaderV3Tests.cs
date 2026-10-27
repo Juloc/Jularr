@@ -19,7 +19,7 @@ namespace Jularr.E2E.Tests
         ];
 
         // The tools of the header, the longest-staying first.
-        private static readonly string[] ToolOrder = ["language", "text", "speech", "bookmark", "search", "notes", "paper", "select", "chapters"];
+        private static readonly string[] ToolOrder = ["language", "text", "mode", "speech", "bookmark", "search", "notes", "paper", "select", "chapters"];
 
         [TestMethod]
         [Timeout(300_000)]
@@ -114,6 +114,59 @@ namespace Jularr.E2E.Tests
             catch
             {
                 await Evidence.SaveAsync(page, "reader-v3-header-failed");
+                throw;
+            }
+        }
+
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task ModeButton_CyclesBookScrollAndFlatPages_AndTheDeviceKeepsIt()
+        {
+            using var folders = new Folders("Books");
+            WriteReaderEpub(Path.Combine(folders.Library, "Books", "reader-v3.epub"), "The Midnight Archive", "Local fixture", 2, 36);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            try
+            {
+                await ReadingPathTests.AddBookAsync(page, folders, "The Midnight Archive");
+                await OpenReaderAsync(page, 1440, 900);
+                var reader = page.Locator(".reader");
+                var mode = page.Locator(".reader__top [data-reader-mode]");
+                var paper = page.Locator(".reader__paper");
+                await Assertions.Expect(mode).ToHaveAttributeAsync("aria-label", "Reading mode: Book");
+                await Assertions.Expect(mode.Locator("[data-mode-icon=book]")).ToBeVisibleAsync();
+
+                // Book → scroll: the text runs down, the book view is gone.
+                await mode.ClickAsync();
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-mode", "scroll");
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-book-ready", "false");
+                await Assertions.Expect(mode.Locator("[data-mode-icon=scroll]")).ToBeVisibleAsync();
+
+                // Scroll → flat pages: paged text on the plain paper, turned at once without a book.
+                await mode.ClickAsync();
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-mode", "paged");
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-paging", "flat");
+                await Assertions.Expect(mode).ToHaveAttributeAsync("aria-label", "Reading mode: Flat pages");
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-book-ready", "false");
+                await Assertions.Expect(paper).ToHaveCSSAsync("opacity", "1");
+                await page.Locator("[data-turn='1']").ClickAsync();
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-page", "3");
+                Assert.AreEqual(0, await page.Locator(".reader-book__turn").CountAsync(), "Flat pages turn without paper leaves.");
+                await Evidence.SaveAsync(page, "reader-mode-flat");
+
+                // The device keeps the mode; flat → book brings the book view back.
+                await page.ReloadAsync();
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-paging", "flat");
+                await Assertions.Expect(paper).ToHaveCSSAsync("opacity", "1");
+                await mode.ClickAsync();
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-paging", "book");
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-book-ready", "true");
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch
+            {
+                await Evidence.SaveAsync(page, "reader-mode-failed");
                 throw;
             }
         }
@@ -338,10 +391,12 @@ namespace Jularr.E2E.Tests
                 var reader = page.Locator(".reader");
 
                 // A scrolled text: the voice's line stays in view without anybody touching it.
-                await page.Locator("[data-action=settings]").ClickAsync();
-                await page.Locator("[data-panel=settings] [name=Mode]").SelectOptionAsync("scroll");
-                await page.Keyboard.PressAsync("Escape");
+                // The reading-mode button in the bar: book → scrolling, its name says so.
+                var mode = page.Locator(".reader__top [data-reader-mode]");
+                await Assertions.Expect(mode).ToHaveAttributeAsync("aria-label", "Reading mode: Book");
+                await mode.ClickAsync();
                 await Assertions.Expect(reader).ToHaveAttributeAsync("data-mode", "scroll");
+                await Assertions.Expect(mode).ToHaveAttributeAsync("aria-label", "Reading mode: Scroll");
                 var toggle = page.Locator("[data-speech-toggle]");
                 await Assertions.Expect(toggle).ToBeEnabledAsync();
                 await toggle.ClickAsync();
