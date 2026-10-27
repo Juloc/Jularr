@@ -1,4 +1,4 @@
-import { bookDimensions, paperProfile, paperOutline, printPlacement, type Point } from './BookGeometry';
+import { bookDimensions, paperProfile, paperOutline, printPlacement, stackSlope, type Point } from './BookGeometry';
 import { BookLeaf } from './BookLeaf';
 import { paintBookSolid, paperLighting } from './BookSolid';
 import { pagePrint } from './PagePrint';
@@ -37,7 +37,7 @@ export function initializeBookRenderer(reader: HTMLElement) {
     const direction = () => reader.dataset.direction === 'rtl' ? -1 : 1;
     const number = (name: string, fallback: number) => Number(reader.dataset[name] ?? fallback);
     const dimensions = (at: number) => bookDimensions(number('bookPageCount', 0), number('paperMicrons', 100),
-        number('bookPageBefore', 0) + adapter.number(at), number('paperBoard', 22));
+        number('bookPageBefore', 0) + adapter.number(at), number('paperBoard', reader.dataset.paperBinding === 'hard' ? 22 : 3));
     const profile = (at: number, side: string) => {
         const body = dimensions(at);
         return paperProfile(side === 'left' ? body.leftMm : body.rightMm, number('paperCurve', 24), number('paperAngle', 14));
@@ -117,12 +117,13 @@ export function initializeBookRenderer(reader: HTMLElement) {
         root.style.setProperty('--paper-ink', getComputedStyle(reader).getPropertyValue('--reader-ink'));
         root.style.setProperty('--texture', reader.dataset.surface === 'clean' ? '0' : String(number('paperTexture', 30) / 100));
         // The stack hangs below the page, so the body shrinks from its top edge by as much as the whole block can hang (one stable size per book).
-        root.style.setProperty('--book-scale', String(210 / (210 + body.totalMm * Math.sin(number('paperAngle', 14) * Math.PI / 180) + 12)));
+        root.style.setProperty('--book-scale', String(210 / (210 + body.totalMm * stackSlope + 12)));
         root.dataset.bookColumns = String(columns); root.dataset.bookDirection = reader.dataset.direction;
-        root.dataset.bookBinding = reader.dataset.paperBinding ?? 'hard';
+        root.dataset.bookBinding = reader.dataset.paperBinding ?? 'soft';
         root.dataset.paperGrain = reader.dataset.paperGrain ?? 'fine'; root.dataset.paperEdge = reader.dataset.paperEdge ?? 'normal';
-        root.style.setProperty('--cover', reader.dataset.paperCover ?? '#84b6cb');
-        root.style.setProperty('--lining', reader.dataset.paperLining ?? reader.dataset.paperCover ?? '#84b6cb');
+        const cover = reader.dataset.paperCover ?? (root.dataset.bookBinding === 'hard' ? '#84b6cb' : '#efe9dd');
+        root.style.setProperty('--cover', cover);
+        root.style.setProperty('--lining', reader.dataset.paperLining ?? cover);
         root.style.setProperty('--edge-colour', reader.dataset.paperEdgeColour ?? '#9b8054');
         root.style.setProperty('--edge-strength', root.dataset.paperEdge === 'normal' ? '0' : String(number('paperEdgeStrength', 45) / 100));
         paintBookSolid(root, body, number('paperCurve', 24), number('paperAngle', 14), number('paperLight', 75) / 100, width / 148);

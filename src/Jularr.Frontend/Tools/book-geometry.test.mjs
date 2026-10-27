@@ -6,7 +6,7 @@ import ts from 'typescript';
 
 const source = readFileSync(resolve(import.meta.dirname, '../Modules/Reader/BookGeometry.ts'), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
-const { foldPaper, curlPaper, paperSegments, paperShadow, bookDimensions, paperColour, paperProfile, paperOutline, printPlacement, simplifyOutline, shadowPenumbra } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
+const { foldPaper, curlPaper, paperSegments, paperShadow, bookDimensions, paperColour, paperProfile, paperOutline, printPlacement, stackSlope, simplifyOutline, shadowPenumbra } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
 const area = polygon => Math.abs(polygon.reduce((sum, a, i) => {
     const b = polygon[(i + 1) % polygon.length];
     return sum + a.x * b.y - a.y * b.x;
@@ -123,7 +123,7 @@ test('the page stays flat whatever the stack; the stack hangs below it as one cu
         assert.equal(left.height, right.height);
         assert.ok(right.points.every(point => Number.isFinite(point.y) && point.y <= 0 && point.y > -1), 'The page itself never rises with the stack.');
         assert.equal(right.lift, paperProfile(0, 24, angle).lift, 'The page lifts the same at any reading position.');
-        assert.ok(Math.abs(right.drop - dimensions.rightMm * Math.sin(angle * Math.PI / 180)) < 1e-8, 'The cut edge below the page is the stack height.');
+        assert.ok(Math.abs(right.drop - dimensions.rightMm * stackSlope) < 1e-8, 'The cut edge below the page is the stack height.');
         assert.equal(right.points.length, 41, 'Geometry complexity does not grow with leaf count.');
     }
     assert.ok(paperProfile(12, 100, 14).lift > paperProfile(12, 0, 14).lift);

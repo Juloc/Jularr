@@ -70,8 +70,9 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
     // the thicker stack alone steps softly down on its own side, its inner end meeting the thinner level at the fold.
     const stackAt = (x: number) => {
         const thickRight = right.drop >= left.drop;
-        const away = Math.max(0, Math.min(1, (thickRight ? x - 148 : 148 - x) / 30));
         const thin = thickRight ? left.drop : right.drop, thick = thickRight ? right.drop : left.drop;
+        // The thicker the stack, the longer the step, so the slope stays gentle.
+        const away = Math.max(0, Math.min(1, (thickRight ? x - 148 : 148 - x) / Math.min(90, Math.max(30, (thick - thin) * 1.6))));
         const level = thin + (thick - thin) * away * away * (3 - 2 * away);
         return thickRight ? (x <= 148 ? left.drop : level) : (x >= 148 ? right.drop : level);
     };
@@ -156,12 +157,6 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
         const clip = contour.map(point => `${point.x * 100}% ${point.y * 100}%`);
         sheet.style.clipPath = `polygon(${clip.join(',')})`;
         sheet.style.setProperty('--page-lift', `${profile.lift / height * 100}%`);
-    }
-    // A hard cover leaves a dark hollow under the gutter where the rounded back of the case shows.
-    if (study.dataset.bookBinding !== 'soft') {
-        const spine = height + stackAt(148);
-        element('path', { d: `M139,${rounded(height + stackAt(139))} C142,${rounded(spine + 8)} 154,${rounded(spine + 8)} 157,${rounded(height + stackAt(157))} Z`, fill: '#1d1812', 'fill-opacity': .88 });
-        element('path', { d: `M139.5,${rounded(height + stackAt(139.5) + .3)} C142,${rounded(spine + 8.6)} 154,${rounded(spine + 8.6)} 156.5,${rounded(height + stackAt(156.5) + .3)}`, fill: 'none', stroke: 'color-mix(in srgb,var(--paper) 80%,#fff)', 'stroke-width': .5 });
     }
     for (const [parent, count] of cursors) while (parent.children.length > count) parent.lastElementChild!.remove();
     if (svg.parentElement !== host) host.replaceChildren(svg);

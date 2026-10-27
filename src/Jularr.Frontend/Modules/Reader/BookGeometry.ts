@@ -150,6 +150,9 @@ export function paperColour(base: string, warmth: number, brightness: number): s
 // Orthographic, almost-overhead projection of a page, in A5 millimetres. The page itself stays as flat as a
 // bare leaf (only the small inner crown remains, so the text never bends); the thickness of the stack is
 // `drop`, the height of its cut edge below the page. More leaves add physical height, not extra DOM.
+// How much of a millimetre of stack shows below the page: the book is seen from well above its edge, as in a photo of a paperback.
+export const stackSlope = .55;
+
 export function paperProfile(depth: number, curve: number, angle: number) {
     const radians = angle * Math.PI / 180;
     const height = 210 * Math.cos(radians);
@@ -164,7 +167,7 @@ export function paperProfile(depth: number, curve: number, angle: number) {
     const a = points[index - 1], b = points[index];
     const fraction = (74 - projectedX(a)) / (projectedX(b) - projectedX(a));
     const footerLift = -(a.y + (b.y - a.y) * fraction);
-    return { points, height, inset, footerLift, lift: Math.max(...points.map(point => -point.y)), drop: depth * Math.sin(radians) };
+    return { points, height, inset, footerLift, lift: Math.max(...points.map(point => -point.y)), drop: depth * stackSlope };
 }
 
 // Where a page's printed text box sits on its own paper. The stack beside the spine lifts the sheet and pulls the outer
