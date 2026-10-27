@@ -327,6 +327,27 @@ namespace Jularr.Backend.Tests
             using var outside = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, segments + "9.ts"));
             Assert.AreEqual(HttpStatusCode.NotFound, outside.StatusCode);
 
+            // A cast device cannot sign in: it plays from a signed address of this session, fetched from another origin, and from nowhere else.
+            using var castAddress = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, plan.StreamUrl.Replace("playlist.m3u8", "cast", StringComparison.Ordinal)));
+            Assert.AreEqual(HttpStatusCode.OK, castAddress.StatusCode, await castAddress.Content.ReadAsStringAsync());
+            var cast = (await castAddress.Content.ReadFromJsonAsync<PlaybackCastV1>())!;
+            StringAssert.StartsWith(cast.Url, "/api/v1/cast/");
+            StringAssert.EndsWith(cast.Url, "/playlist.m3u8");
+            using var anonymous = ((TestServer)host.Services.GetRequiredService<IServer>()).CreateClient();
+            using var castPlaylist = await anonymous.GetAsync(cast.Url);
+            Assert.AreEqual(HttpStatusCode.OK, castPlaylist.StatusCode);
+            StringAssert.Contains(await castPlaylist.Content.ReadAsStringAsync(), "segments/2.ts");
+            Assert.AreEqual("*", castPlaylist.Headers.GetValues("Access-Control-Allow-Origin").Single());
+            using var castSegment = await anonymous.GetAsync(cast.Url.Replace("playlist.m3u8", "segments/0.ts", StringComparison.Ordinal));
+            Assert.AreEqual(HttpStatusCode.OK, castSegment.StatusCode);
+            Assert.AreEqual("ts0", await castSegment.Content.ReadAsStringAsync());
+            Assert.AreEqual("*", castSegment.Headers.GetValues("Access-Control-Allow-Origin").Single());
+            using var withoutAddress = await anonymous.GetAsync(plan.StreamUrl);
+            Assert.AreEqual(HttpStatusCode.Unauthorized, withoutAddress.StatusCode);
+            var token = cast.Url["/api/v1/cast/".Length..^"/playlist.m3u8".Length];
+            using var forged = await anonymous.GetAsync("/api/v1/cast/" + token[..^3] + "AAA/playlist.m3u8");
+            Assert.AreEqual(HttpStatusCode.NotFound, forged.StatusCode);
+
             // A deferred commit failure must leave the stream and its cache available.
             await host.Fixture.RunSqlAsync(
                 """
@@ -355,6 +376,8 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(Directory.Exists(directory));
             using var gone = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, plan.StreamUrl));
             Assert.AreEqual(HttpStatusCode.NotFound, gone.StatusCode);
+            using var castGone = await anonymous.GetAsync(cast.Url);
+            Assert.AreEqual(HttpStatusCode.NotFound, castGone.StatusCode);
         }
 
         [TestMethod]

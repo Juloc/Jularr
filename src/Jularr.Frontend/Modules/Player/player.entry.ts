@@ -2,6 +2,7 @@ import "./player.scss";
 import { updateRangeValue } from "../../Framework/Components/Range";
 import { progressReporter } from "../Tracking/Progress";
 import { inserted, keepAddress, pushAddress, releaseAddress, visit } from "../Navigation/PageSwap";
+import type { CastSender, CastState } from "./Cast";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
@@ -88,6 +89,11 @@ async function start(player: HTMLElement): Promise<void> {
     let hlsPlayer: { recoverMediaError(): void } | null = null;
     let save: (value: object, leaving?: boolean) => void = () => undefined;
     let switching = false;
+    // A Chromecast showing this playback: its own session, its own position.
+    let casting = false;
+    let castSender: CastSender | null = null;
+    let castState: CastState = { connected: false, paused: true, currentTime: 0, duration: 0, device: "" };
+    let castWasPlaying = false;
     let idle = 0;
     let seeking = false;
     let recoveries = 0;
@@ -169,14 +175,15 @@ async function start(player: HTMLElement): Promise<void> {
     const report = (ended: boolean, completed = ended) => {
         if (!plan || !sourceReady && !ended) return;
         save({
-            positionMs: Math.floor((sourceReady ? video.currentTime : sourcePosition) * 1000),
-            durationMs: Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration * 1000) : null,
+            positionMs: Math.floor((casting ? castState.currentTime : sourceReady ? video.currentTime : sourcePosition) * 1000),
+            durationMs: casting ? (castState.duration > 0 ? Math.round(castState.duration * 1000) : null)
+                : Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration * 1000) : null,
             isEnded: ended,
             isCompleted: completed
         }, ended);
         if (ended) plan = null;
     };
-    const reportTimer = setInterval(() => { if (!video.paused) report(false); }, ReportInterval);
+    const reportTimer = setInterval(() => { if (casting ? !castState.paused : !video.paused) report(false); }, ReportInterval);
     // The pause before an end is no position worth saving.
     video.addEventListener("pause", () => { if (!video.ended) report(false); });
     video.addEventListener("ended", () => {
@@ -585,7 +592,7 @@ async function start(player: HTMLElement): Promise<void> {
         seeking = true;
         timeline.style.setProperty('--played', `${Number(timeline.value) / Math.max(1, Number(timeline.max)) * 100}%`);
     });
-    timeline.addEventListener('change', () => { video.currentTime = Number(timeline.value); seeking = false; wake(); });
+    timeline.addEventListener('change', () => { if (casting) castSender?.seek(Number(timeline.value)); else video.currentTime = Number(timeline.value); seeking = false; wake(); });
     timeline.addEventListener('pointercancel', () => { seeking = false; timeline.value = String(Math.floor(video.currentTime)); wake(); });
     void previews();
     volume.addEventListener("input", () => { video.volume = Number(volume.value); video.muted = video.volume === 0; });
@@ -594,7 +601,9 @@ async function start(player: HTMLElement): Promise<void> {
     volume.style.setProperty('--played', `${video.volume * 100}%`);
 
     const actions: Record<string, () => void> = {
+        cast: () => void (casting ? castSender?.stop() : startCastRequest()),
         toggle: () => {
+            if (casting) { castSender?.playOrPause(); return; }
             if (video.paused) {
                 showTransportFeedback("play");
                 void video.play().catch(() => {
@@ -741,6 +750,7 @@ async function start(player: HTMLElement): Promise<void> {
     player.addEventListener("pointerdown", event => { lastPointerType = event.pointerType; if (event.pointerType === "touch" && event.target !== video) wake(); }, { capture: true });
     touchGestures();
     mediaSession();
+    castSupport();
     // A mouse leaving the picture hides the controls at once; touch and open panels keep them.
     player.addEventListener("pointerleave", event => {
         if (event.pointerType !== "mouse" || video.paused || seeking || player.classList.contains("player--mini") || player.querySelector(":popover-open")) return;
@@ -786,7 +796,100 @@ async function start(player: HTMLElement): Promise<void> {
     }
 
     function seek(seconds: number): void {
+        if (casting) { castSender?.seek(Math.max(0, Math.min(castState.duration || 0, castState.currentTime + seconds))); return; }
         video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + seconds));
+    }
+
+    // The Cast button shows where Chrome and a secure page allow it; Google's library loads only when it is pressed.
+    function castSupport(): void {
+        const button = player.querySelector<HTMLElement>("[data-action=cast]");
+        if (button) button.hidden = !/Chrome\//.test(navigator.userAgent) || !window.isSecureContext;
+    }
+
+    // A device cannot sign in and cannot see this computer's own address.
+    async function startCastRequest(): Promise<void> {
+        if (["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) { show("cast_unreachable"); return; }
+        try {
+            if (!castSender) {
+                const { loadCast } = await import("./Cast");
+                castSender = await loadCast(state => void onCastUpdate(state));
+            }
+            if (!castSender) { show("failed"); return; }
+            await castSender.request();
+        } catch {
+            show("failed");
+        }
+    }
+
+    // A device connected or disconnected, or its player changed: the playback moves there, comes back, or the controls follow it.
+    async function onCastUpdate(state: CastState): Promise<void> {
+        castState = state;
+        if (state.connected && !casting) { await startCasting(); return; }
+        if (!state.connected && casting) { await endCasting(); return; }
+        if (!casting) return;
+        if (state.duration > 0) {
+            timeline.max = String(Math.floor(state.duration));
+            player.querySelector("[data-role=duration]")!.textContent = clock(state.duration);
+        }
+        if (!seeking) timeline.value = String(Math.floor(state.currentTime));
+        timeline.style.setProperty("--played", `${Number(timeline.value) / Math.max(1, Number(timeline.max)) * 100}%`);
+        player.querySelector("[data-role=time]")!.textContent = clock(state.currentTime);
+        setPlaying(!state.paused);
+    }
+
+    async function startCasting(): Promise<void> {
+        if (switching || !plan) { castSender?.stop(); return; }
+        switching = true;
+        casting = true;
+        castWasPlaying = !video.paused;
+        const position = video.currentTime;
+        video.pause();
+        try {
+            // The device plays HLS of H.264 and AAC from an address of its own session.
+            const response = await fetch(player.dataset.startUrl!, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json", RequestVerificationToken: antiforgery },
+                body: JSON.stringify({ containers: ["hls"], videoCodecs: ["h264"], audioCodecs: ["aac"], audioStreamIndex: audioIndex, quality })
+            });
+            if (!response.ok) throw new Error("cast_plan");
+            const planned = await response.json() as PlaybackPlan;
+            const address = await fetch(`/api/v1/playback/sessions/${planned.playbackSessionId}/cast`, { credentials: "same-origin" });
+            if (!address.ok) throw new Error("cast_address");
+            const { url } = await address.json() as { url: string };
+            const title = player.querySelector(".player__title")?.textContent ?? "";
+            const context = player.querySelector(".player__context")?.textContent ?? "";
+            await castSender!.load(location.origin + url, title, context, position);
+            report(true, false);
+            plan = planned;
+            save = progressReporter(player.dataset.sessionUrl + planned.playbackSessionId, antiforgery, failed => {
+                const feedback = player.querySelector<HTMLElement>('[data-role=save-error]');
+                if (feedback) feedback.hidden = !failed;
+            });
+            const panel = player.querySelector<HTMLElement>("[data-role=casting]")!;
+            const label = panel.querySelector<HTMLElement>("[data-role=casting-text]")!;
+            label.textContent = (label.dataset.template ?? "").replace("{0}", castState.device);
+            panel.hidden = false;
+            player.classList.add("player--casting");
+            stopLoading();
+        } catch {
+            casting = false;
+            castSender?.stop();
+            show("failed");
+        } finally {
+            switching = false;
+        }
+    }
+
+    // The device let go: the playback continues here at the place it reached.
+    async function endCasting(): Promise<void> {
+        casting = false;
+        const position = castState.currentTime;
+        report(true, false);
+        player.classList.remove("player--casting");
+        player.querySelector<HTMLElement>("[data-role=casting]")!.hidden = true;
+        video.currentTime = position;
+        if (await replan(audioIndex, quality) && castWasPlaying) void video.play().catch(() => undefined);
     }
 
     // Android and desktop browsers show the playback as media: notification, lock screen and headset keys name the title and carry play, pause, seek and the neighbouring episodes.
@@ -804,11 +907,11 @@ async function start(player: HTMLElement): Promise<void> {
             try { session.setActionHandler(action as MediaSessionAction, handler); } catch { /* The browser does not know this action. */ }
         };
         const neighbour = (direction: "previous" | "next") => player.querySelector<HTMLElement>(`[data-action=${direction}][data-href]`) ? () => go(direction) : null;
-        set("play", () => void video.play());
-        set("pause", () => video.pause());
+        set("play", () => { if (casting) { if (castState.paused) castSender?.playOrPause(); } else void video.play(); });
+        set("pause", () => { if (casting) { if (!castState.paused) castSender?.playOrPause(); } else video.pause(); });
         set("seekbackward", details => seek(-(details.seekOffset ?? 10)));
         set("seekforward", details => seek(details.seekOffset ?? 30));
-        set("seekto", details => { if (details.seekTime !== undefined) video.currentTime = details.seekTime; });
+        set("seekto", details => { if (details.seekTime === undefined) return; if (casting) castSender?.seek(details.seekTime); else video.currentTime = details.seekTime; });
         set("previoustrack", neighbour("previous"));
         set("nexttrack", neighbour("next"));
         // A phone leaving the app with the video running may carry it into the small window.

@@ -247,7 +247,11 @@
     }
     &__gesture-bar { position: relative; width: 140px; height: 4px; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / 30%); }
     &__gesture-fill { position: absolute; inset: 0 auto 0 0; width: calc(var(--level, 0) * 100%); background: #fff; }
-    &--mini &__gesture, &--mini &__seek { display: none; }
+    &--mini &__gesture, &--mini &__seek, &--mini &__casting, &--mini [data-action=cast] { display: none; }
+    // While a device plays, the picture stays dark and says where; the controls drive the device.
+    &__casting { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; background: #000; color: #fff; font-size: 1.05rem; font-weight: 650; text-align: center; pointer-events: none; &[hidden] { display: none; } }
+    &--casting &__video { visibility: hidden; }
+    &--casting [data-action=cast] { color: var(--accent); }
     // Seeking lights up the tapped half with a rounded inner edge, the arrows run toward the direction and the total says how far.
     &__seek {
         position: absolute; top: 0; bottom: 0; z-index: 2; display: grid; align-content: center; justify-items: center; gap: 6px; width: 38%;

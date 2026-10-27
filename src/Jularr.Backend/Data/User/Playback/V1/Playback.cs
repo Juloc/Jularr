@@ -229,6 +229,72 @@ namespace Jularr.Backend.Data.User.Playback.V1
         }
     }
 
+    // The address a cast device plays this session from: HLS only, signed, ending with the session.
+    public sealed class PlaybackCastV1 : BaseResponse
+    {
+        public PlaybackCastV1(string url)
+        {
+            Url = url;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.CastUrl))]
+        public string Url { get; }
+    }
+
+    public sealed class CastPlaylistParametersV1 : BaseParameters
+    {
+        public CastPlaylistParametersV1(string castToken)
+        {
+            CastToken = castToken;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.CastToken))]
+        public string CastToken { get; }
+    }
+
+    public sealed class CastSegmentParametersV1 : BaseParameters
+    {
+        public CastSegmentParametersV1(string castToken, int index)
+        {
+            CastToken = castToken;
+            Index = index;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.CastToken))]
+        public string CastToken { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.SegmentIndex))]
+        public int Index { get; }
+    }
+
+    public sealed class CastPlaylistV1 : BaseResponse, ITextOutput, ICrossOriginOutput
+    {
+        public CastPlaylistV1(string text)
+        {
+            Text = text;
+        }
+
+        [JsonIgnore]
+        public string Text { get; }
+
+        [JsonIgnore]
+        public string ContentType => "application/vnd.apple.mpegurl";
+    }
+
+    public sealed class CastSegmentV1 : BaseResponse, IFileOutput, ICrossOriginOutput
+    {
+        public CastSegmentV1(Stream content)
+        {
+            Content = content;
+        }
+
+        [JsonIgnore]
+        public Stream Content { get; }
+
+        [JsonIgnore]
+        public string ContentType => "video/mp2t";
+    }
+
     public sealed class PlaybackPlanV1 : BaseResponse
     {
         public PlaybackPlanV1(Guid playbackSessionId, PlaybackModeType playbackModeTypeId, string streamUrl, long resumePositionMs, long? durationMs, int? audioStreamIndex,

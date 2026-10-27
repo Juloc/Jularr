@@ -25,7 +25,7 @@ namespace Jularr.Frontend.Framework
 
     public sealed class UiPlayer(PlayerSource source, FrontendAssets assets) : IUiComponent
     {
-        private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "playback_capacity_exhausted", "playback_evicted", "playback_reduced", "not_found", "failed"];
+        private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "playback_capacity_exhausted", "playback_evicted", "playback_reduced", "cast_unreachable", "not_found", "failed"];
         private static readonly string[] Kinds = ["Intro", "Credits", "Recap", "Preview"];
         private static readonly string[] Presets = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "2", "3", "4"];
         private static readonly PlaybackQuality[] Qualities = Enum.GetValues<PlaybackQuality>();
@@ -58,6 +58,8 @@ namespace Jularr.Frontend.Framework
                     .Attribute("data-side", "left").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
                 new Div(new Span(new Span(), new Span(), new Span()).Class("player__seek-arrows"), new Span().Attribute("data-role", "seek-text")).Class("player__seek")
                     .Attribute("data-side", "right").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
+                new Div(new Span().Attribute("data-role", "casting-text").Attribute("data-template", texts["player.casting"])).Class("player__casting")
+                    .Attribute("data-role", "casting").Attribute("aria-live", "polite").Attribute("hidden", "hidden"),
                 new Div(new Span(Icon("volume")).Attribute("data-gesture-icon", "volume"), new Span(Icon("muted")).Attribute("data-gesture-icon", "muted"),
                     new Span(Icon("brightness")).Attribute("data-gesture-icon", "brightness"), new Div(new Div().Class("player__gesture-fill")).Class("player__gesture-bar"),
                     new Span().Attribute("data-role", "gesture-text")).Class("player__gesture").Attribute("data-role", "gesture").Attribute("data-auto", texts["player.brightness.auto"])
@@ -112,6 +114,7 @@ namespace Jularr.Frontend.Framework
                                 new Button(new Icon("settings", assets)).IconOnly(texts["player.settings"]).Class("button button--icon player__button")
                                     .Attribute("data-action", "settings").Attribute("popovertarget", "player-settings"),
                                 Action("theater", "player.theater", "theater").Attribute("aria-pressed", "false"),
+                                Action("cast", "player.cast", "cast").Attribute("hidden", "hidden"),
                                 Action("pip", "player.pip", "pip").Attribute("hidden", "hidden"),
                                 Action("fullscreen", "player.fullscreen", "fullscreen")
                             ]).Class("player__options")
