@@ -35,7 +35,8 @@ export function initializeBookRenderer(reader: HTMLElement) {
     let drag: { id: number; x: number; y: number; scale: number; started: number; flight: Flight } | undefined;
     const clamp = (at: number) => Math.max(adapter.minimum, Math.min(adapter.maximum, at));
     const enabled = () => ready && reader.dataset.mode === 'paged' && reader.dataset.selecting !== 'true';
-    const motion = () => reader.dataset.animation === 'on' || reader.dataset.animation === 'system' && !reduced.matches;
+    // The book turns its pages in motion unless the device asks for reduced motion; flat pages are the reader's other mode.
+    const motion = () => !reduced.matches;
     const direction = () => reader.dataset.direction === 'rtl' ? -1 : 1;
     const number = (name: string, fallback: number) => Number(reader.dataset[name] ?? fallback);
     // The exact count while it is known, else the book's last complete one: the thickness never vanishes while pages are counted.

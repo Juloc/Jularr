@@ -22,14 +22,14 @@ export interface ReaderSettings {
     surface: 'paper' | 'clean';
     binding: 'soft' | 'hard';
     colour: string;
-    animation: 'system' | 'on' | 'off';
+    paging: 'flat' | 'book';
     preset: 'book' | 'novel' | 'manga';
     fit: 'page' | 'width';
 }
 
 const Key = 'jularr.reader';
 export function readerSettings(value: unknown, rtl = false): ReaderSettings {
-    const stored = value && typeof value === 'object' ? value as Partial<ReaderSettings> & { theme?: unknown } : {};
+    const stored = value && typeof value === 'object' ? value as Partial<ReaderSettings> & { theme?: unknown; animation?: unknown } : {};
     const number = (value: unknown, minimum: number, maximum: number, fallback: number) =>
         typeof value === 'number' && Number.isFinite(value) ? Math.min(maximum, Math.max(minimum, value)) : fallback;
     return {
@@ -53,7 +53,8 @@ export function readerSettings(value: unknown, rtl = false): ReaderSettings {
         binding: stored.binding === 'hard' ? 'hard' : 'soft',
         colour: typeof stored.colour === 'string' && /^#[a-f\d]{6}$/i.test(stored.colour) ? stored.colour
             : stored.theme === 'dark' ? '#141414' : stored.theme === 'sepia' ? '#f4ecd8' : '#f7f3ec',
-        animation: stored.animation === 'on' || stored.animation === 'off' ? stored.animation : 'system',
+        // Flat pages or the book view; a device that had turned the page animation off reads flat.
+        paging: stored.paging === 'flat' || stored.paging === 'book' ? stored.paging : stored.animation === 'off' ? 'flat' : 'book',
         preset: stored.preset === 'novel' || stored.preset === 'manga' ? stored.preset : 'book',
         fit: stored.fit === 'width' ? 'width' : 'page'
     };
@@ -107,14 +108,21 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
     signal.addEventListener('abort', () => { if (saving || queued) saveProfile(true); });
     const fields = Array.from(reader.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-panel=settings] input:not([type=hidden]), [data-panel=settings] select'));
     const names: Record<string, keyof ReaderSettings> = { Size: 'size', Spacing: 'spacing', Paragraph: 'paragraph', FontFamily: 'font', TextWidth: 'width', MarginTop: 'marginTop', MarginBottom: 'marginBottom', MarginInner: 'marginInner', MarginOuter: 'marginOuter', Indent: 'indent', Hyphenation: 'hyphenation', Illustrations: 'illustrations',
-        Mode: 'mode', Layout: 'layout', Direction: 'direction', Surface: 'surface', Binding: 'binding', Colour: 'colour', Animation: 'animation', Preset: 'preset', Fit: 'fit' };
+        Layout: 'layout', Direction: 'direction', Surface: 'surface', Binding: 'binding', Colour: 'colour', Preset: 'preset', Fit: 'fit' };
+    // One button cycles flat pages → book → scrolling; its icon and name show the mode the reader is in.
+    const modeButtons = Array.from(reader.querySelectorAll<HTMLElement>('[data-reader-mode]'));
+    const mode = () => settings.mode === 'scroll' ? 'scroll' : settings.paging;
     const apply = (): void => {
         reader.dataset.mode = settings.mode;
         reader.dataset.layout = settings.layout;
         reader.dataset.direction = settings.direction;
         reader.dataset.surface = settings.surface;
         reader.dataset.paperBinding = settings.binding;
-        reader.dataset.animation = settings.animation;
+        reader.dataset.paging = settings.paging;
+        modeButtons.forEach(button => {
+            const name = `${button.dataset.modeLabel}: ${button.getAttribute(`data-label-${mode()}`)}`;
+            button.setAttribute('aria-label', name); button.title = name;
+        });
         reader.dataset.indent = String(settings.indent);
         reader.dataset.hyphenation = String(settings.hyphenation);
         reader.dataset.illustrations = String(settings.illustrations);
@@ -153,6 +161,13 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
         if (ProfileKeys.includes(key) || key === 'preset') saveProfile();
         changed();
     });
+    modeButtons.forEach(button => button.addEventListener('click', () => {
+        const next = ({ flat: { mode: 'paged', paging: 'book' }, book: { mode: 'scroll', paging: 'book' }, scroll: { mode: 'paged', paging: 'flat' } } as const)[mode()];
+        Object.assign(settings, readerSettings({ ...settings, ...next }));
+        apply();
+        try { localStorage.setItem(Key, JSON.stringify(settings)); } catch { /* Controls still work without storage. */ }
+        changed();
+    }));
     reader.querySelector('[data-reader-select]')?.addEventListener('click', event => {
         const selected = reader.dataset.selecting !== 'true';
         reader.dataset.selecting = String(selected);
