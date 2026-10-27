@@ -24,23 +24,19 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import de.juloc.jularr.core.api.AppApiException
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
-import de.juloc.jularr.core.api.catalog.TvDiscoverCatalogEntryV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverItemV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverScopeV1
+import de.juloc.jularr.core.api.catalog.TvWorkDetailsV1
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
-/** External catalog identity; never cast to a TMDB ID or Jularr WorkId. */
-internal data class TvV1CatalogSelection(
-    val mediaTypeId: Int,
-    val namespace: String,
-    val externalId: String,
-    val mediaSubtypeId: Int?,
-)
+/** MediaStateType.Available on the server. */
+internal const val MEDIA_STATE_AVAILABLE = 3
 
 /**
  * Discover results reuse the original TV search input, card artwork and D-pad buttons.
- * Provider-only results never cast TMDB IDs to local Work IDs.
+ * Every title is a Work: titles in the library open the Work page, others show
+ * their Work details with the request action.
  */
 @Composable
 internal fun TvV1DiscoverScreen(
@@ -51,30 +47,23 @@ internal fun TvV1DiscoverScreen(
     onBack: () -> Unit,
     onUnauthorized: () -> Unit,
     canRequest: Boolean = false,
-    initialItem: TvDiscoverItemV1? = null,
-    initialCatalog: TvV1CatalogSelection? = null,
+    initialWorkId: Long? = null,
 ) {
     var scopes by remember(catalog) { mutableStateOf<List<TvDiscoverScopeV1>>(emptyList()) }
     var selectedType by remember(catalog) { mutableStateOf<Int?>(null) }
     var query by remember(catalog) { mutableStateOf("") }
     var results by remember(catalog) { mutableStateOf<List<TvDiscoverItemV1>>(emptyList()) }
-    var selectedExternal by remember(catalog, initialItem) { mutableStateOf(initialItem) }
-    var selectedCatalog by remember(catalog, initialCatalog) { mutableStateOf(initialCatalog) }
-    var catalogDetail by remember(catalog, initialCatalog) {
-        mutableStateOf<TvDiscoverCatalogEntryV1?>(null)
-    }
-    var catalogLoading by remember(catalog, initialCatalog) { mutableStateOf(false) }
-    var catalogError by remember(catalog, initialCatalog) { mutableStateOf<String?>(null) }
+    var selectedWorkId by remember(catalog, initialWorkId) { mutableStateOf(initialWorkId) }
+    var workDetail by remember(catalog, initialWorkId) { mutableStateOf<TvWorkDetailsV1?>(null) }
+    var workLoading by remember(catalog, initialWorkId) { mutableStateOf(false) }
+    var workError by remember(catalog, initialWorkId) { mutableStateOf<String?>(null) }
     fun closeDetails() {
         // A detail opened directly from Home returns to Home. A detail chosen
         // inside Discover returns to that screen's previous result list.
-        if (initialCatalog != null || initialItem != null) onBack()
-        else {
-            selectedCatalog = null
-            selectedExternal = null
-        }
+        if (initialWorkId != null) onBack()
+        else selectedWorkId = null
     }
-    BackHandler(enabled = selectedCatalog != null || selectedExternal != null) {
+    BackHandler(enabled = selectedWorkId != null) {
         closeDetails()
     }
     var loading by remember(catalog) { mutableStateOf(false) }
@@ -93,10 +82,10 @@ internal fun TvV1DiscoverScreen(
             error = failure.message ?: "Discover-Kategorien konnten nicht geladen werden."
         }
     }
-    LaunchedEffect(catalog, query, selectedType, retry, selectedCatalog, selectedExternal) {
-        // Opening a ranked external detail must cancel the background search and
-        // prevent stale search errors from replacing the selected catalog item.
-        if (selectedCatalog != null || selectedExternal != null) {
+    LaunchedEffect(catalog, query, selectedType, retry, selectedWorkId) {
+        // Opening a title must cancel the background search and
+        // prevent stale search errors from replacing the selected Work.
+        if (selectedWorkId != null) {
             loading = false
             return@LaunchedEffect
         }
@@ -113,7 +102,7 @@ internal fun TvV1DiscoverScreen(
             }
             results = loaded.filter { (it.mediaTypeId == 1 || it.mediaTypeId == 2) &&
                 (selectedType == null || it.mediaTypeId == selectedType) }
-                .distinctBy { Triple(it.mediaTypeId, it.tmdbId, it.workId) }
+                .distinctBy { it.workId }
             error = null
         } catch (cancel: CancellationException) {
             throw cancel
@@ -124,104 +113,61 @@ internal fun TvV1DiscoverScreen(
             error = failure.message ?: "Discover konnte nicht geladen werden."
         } finally { loading = false }
     }
-    LaunchedEffect(selectedCatalog, catalog) {
-        val selection = selectedCatalog ?: return@LaunchedEffect
-        catalogLoading = true
-        catalogDetail = null
-        catalogError = null
+    LaunchedEffect(selectedWorkId, catalog) {
+        val workId = selectedWorkId ?: return@LaunchedEffect
+        workLoading = true
+        workDetail = null
+        workError = null
         try {
-            catalogDetail = catalog.discoverCatalogEntry(
-                selection.mediaTypeId, selection.namespace,
-                selection.externalId, selection.mediaSubtypeId,
-            )
+            if (catalog.openWork(workId)) {
+                workError = "Die Details dieses Titels sind derzeit nicht verfügbar."
+            } else {
+                workDetail = catalog.work(workId)
+            }
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (failure: AppApiException) {
             if (failure.statusCode == 401) onUnauthorized()
-            else catalogError = "Katalogdetails: ${failure.code} (HTTP ${failure.statusCode})"
+            else workError = "Titeldetails: ${failure.code} (HTTP ${failure.statusCode})"
         } catch (failure: Exception) {
-            catalogError = failure.message ?: "Katalogdetails konnten nicht geladen werden."
+            workError = failure.message ?: "Titeldetails konnten nicht geladen werden."
         } finally {
-            catalogLoading = false
+            workLoading = false
         }
     }
 
-    if (selectedCatalog != null) {
-        val detail = catalogDetail
+    val openedWorkId = selectedWorkId
+    if (openedWorkId != null) {
+        val detail = workDetail
         TvCenteredPanel(
-            title = detail?.title ?: "Katalogeintrag",
+            title = detail?.canonicalTitle ?: "Titel",
             description = detail?.overview.orEmpty(),
         ) {
             when {
-                catalogLoading -> Text("Katalogdetails werden geladen …")
-                catalogError != null -> {
-                    Text(requireNotNull(catalogError), color = MaterialTheme.colorScheme.error)
+                workLoading -> Text("Titeldetails werden geladen …")
+                workError != null -> {
+                    Text(requireNotNull(workError), color = MaterialTheme.colorScheme.error)
                 }
-                detail == null -> Text("Für diesen Katalogeintrag liegen keine Details vor.")
+                detail == null -> Text("Für diesen Titel liegen keine Details vor.")
                 else -> {
                     Text(
-                        listOfNotNull(detail.releaseYear?.toString(), detail.author)
-                            .joinToString(" · "),
+                        listOfNotNull(
+                            detail.releaseYear?.toString(),
+                            detail.rating?.let { "Bewertung $it" },
+                        ).joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    detail.workId?.let { local ->
-                        Button(onClick = { onLocalWork(local) }) {
-                            Text("In der Bibliothek öffnen")
-                        }
-                    } ?: Text("Noch kein lokales Jularr-Werk.")
-                    if (detail.workId == null) {
+                    Button(onClick = { onLocalWork(openedWorkId) }) {
+                        Text("Details öffnen")
+                    }
+                    if (detail.isRequestable) {
                         TvV1RequestActions(
                             catalog = catalog,
-                            itemKey = "${requireNotNull(selectedCatalog).mediaTypeId}:${requireNotNull(selectedCatalog).namespace}:${requireNotNull(selectedCatalog).externalId}",
+                            workId = openedWorkId,
                             canRequest = canRequest,
                             onUnauthorized = onUnauthorized,
-                            catalogItem = selectedCatalog,
                         )
                     }
-                }
-            }
-            Button(onClick = ::closeDetails) { Text("Zurück") }
-        }
-        return
-    }
-
-    val external = selectedExternal
-    // Provider data is read on demand and replaces search-summary details.
-    LaunchedEffect(external?.mediaTypeId, external?.tmdbId) {
-        val tmdbId = external?.tmdbId
-        if (external != null && external.workId == null && tmdbId != null) {
-            try {
-                selectedExternal = catalog.discoverTmdbItem(external.mediaTypeId, tmdbId)
-            } catch (cancel: CancellationException) {
-                throw cancel
-            } catch (failure: Exception) {
-                if (failure is AppApiException && failure.statusCode == 401) onUnauthorized()
-                else error = failure.message ?: "Externe Details konnten nicht geladen werden."
-            }
-        }
-    }
-    if (external != null) {
-        TvCenteredPanel(title = external.title, description = external.overview.orEmpty()) {
-            Text(
-                listOfNotNull(external.releaseYear?.toString(),
-                    external.rating?.let { "Bewertung $it" }).joinToString(" · "),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            val localWorkId = external.workId
-            if (localWorkId != null) {
-                Button(onClick = { onLocalWork(localWorkId) }) {
-                    Text("In der Bibliothek öffnen")
-                }
-            } else {
-                Text("Dieser Titel ist noch nicht in deiner Bibliothek verfügbar.")
-                if (external.mediaStateTypeId == 1 && external.tmdbId != null) {
-                    TvV1RequestActions(
-                        catalog = catalog,
-                        itemKey = "${external.mediaTypeId}:${external.tmdbId}",
-                        canRequest = canRequest,
-                        onUnauthorized = onUnauthorized,
-                        tmdb = external.mediaTypeId to requireNotNull(external.tmdbId),
-                    )
                 }
             }
             Button(onClick = ::closeDetails) { Text("Zurück") }
@@ -260,18 +206,13 @@ internal fun TvV1DiscoverScreen(
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(results, key = { "${it.mediaTypeId}:${it.tmdbId ?: "local"}:${it.workId ?: it.title}" }) { item ->
+            items(results, key = { it.workId }) { item ->
                 Button(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
-                        val workId = item.workId
-                        if (workId != null) onLocalWork(workId)
-                        else if (item.tmdbId != null) {
-                            // Details must be fetched from the provider route, not /works/TMDB-ID.
-                            selectedExternal = item
-                        }
+                        if (item.mediaStateTypeId == MEDIA_STATE_AVAILABLE) onLocalWork(item.workId)
+                        else selectedWorkId = item.workId
                     },
-                    enabled = item.workId != null || item.tmdbId != null,
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         TvArtwork(
@@ -285,7 +226,7 @@ internal fun TvV1DiscoverScreen(
                             Text(item.title, style = MaterialTheme.typography.titleMedium)
                             Text(
                                 listOfNotNull(item.releaseYear?.toString(),
-                                    if (item.workId != null) "In deiner Bibliothek" else "Externer Katalog",
+                                    if (item.mediaStateTypeId == MEDIA_STATE_AVAILABLE) "In deiner Bibliothek" else "Nicht in deiner Bibliothek",
                                 ).joinToString(" · "),
                                 style = MaterialTheme.typography.bodySmall,
                             )

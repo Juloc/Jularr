@@ -28,7 +28,6 @@ import de.juloc.jularr.core.api.AppApiException
 import de.juloc.jularr.core.api.catalog.HttpTvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvContinueItemV1
 import de.juloc.jularr.core.api.catalog.TvCollectionV1
-import de.juloc.jularr.core.api.catalog.TvDiscoverItemV1
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvWorkAvailabilityV1
 import de.juloc.jularr.core.api.catalog.TvPersonV1
@@ -108,8 +107,7 @@ fun TvV1CatalogHost(
     var showContinueWatching by remember(serverOrigin) { mutableStateOf(true) }
     var homeShelfOrder by remember(serverOrigin) { mutableStateOf(listOf(1, 4, 5)) }
     var discoverHomeFeeds by remember(serverOrigin) { mutableStateOf<List<TvV1HomeVideoFeed>>(emptyList()) }
-    var selectedDiscoverItem by remember(serverOrigin) { mutableStateOf<TvDiscoverItemV1?>(null) }
-    var selectedCatalogEntry by remember(serverOrigin) { mutableStateOf<TvV1CatalogSelection?>(null) }
+    var selectedDiscoverWorkId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
     var watchlist by remember(serverOrigin) { mutableStateOf<List<WatchlistItem>>(emptyList()) }
     var collections by remember(serverOrigin) { mutableStateOf<List<TvCollectionV1>>(emptyList()) }
     var selectedCollectionId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
@@ -349,7 +347,10 @@ fun TvV1CatalogHost(
                     pagingError = null
                 }
                 TvV1CatalogPage.Details -> {
-                    val result = flow.work(requireNotNull(detailWorkId))
+                    val workId = requireNotNull(detailWorkId)
+                    // Like the web Details page: a title without details takes them from its catalog first.
+                    check(!catalog.openWork(workId)) { "Die Details dieses Titels sind derzeit nicht verfügbar." }
+                    val result = flow.work(workId)
                     isWatchlisted = result.isWatchlisted
                     watchlistError = null
                     detailedTitle = result.title
@@ -481,25 +482,18 @@ fun TvV1CatalogHost(
                             shelfOrder = homeShelfOrder,
                             discoverFeeds = discoverHomeFeeds,
                             onDiscoverItem = { item ->
-                                val local = item.workId
-                                if (local != null) {
-                                    openWork(local.toString())
-                                } else if (item.tmdbId != null) {
-                                    selectedCatalogEntry = null
-                                    selectedDiscoverItem = item
+                                if (item.mediaStateTypeId == MEDIA_STATE_AVAILABLE) {
+                                    openWork(item.workId.toString())
+                                } else {
+                                    selectedDiscoverWorkId = item.workId
                                     openPage(TvV1CatalogPage.Discover)
                                 }
                             },
-                            onDiscoverCatalogItem = { feed, item ->
-                                val local = item.workId
-                                if (local != null) {
-                                    openWork(local.toString())
-                                } else if (item.namespace.isNotBlank() && item.externalId.isNotBlank()) {
-                                    selectedDiscoverItem = null
-                                    selectedCatalogEntry = TvV1CatalogSelection(
-                                        feed.mediaTypeId, item.namespace, item.externalId,
-                                        feed.mediaSubtypeId,
-                                    )
+                            onDiscoverCatalogItem = { _, item ->
+                                if (item.mediaStateTypeId == MEDIA_STATE_AVAILABLE) {
+                                    openWork(item.workId.toString())
+                                } else {
+                                    selectedDiscoverWorkId = item.workId
                                     openPage(TvV1CatalogPage.Discover)
                                 }
                             },
@@ -646,8 +640,7 @@ fun TvV1CatalogHost(
                         serverQueryResults = true,
                         pagingError = pagingError,
                         onOpenDiscover = {
-                            selectedDiscoverItem = null
-                            selectedCatalogEntry = null
+                            selectedDiscoverWorkId = null
                             openPage(TvV1CatalogPage.Discover)
                         },
                         onLoadMore = if (searchNextPage != null && !fetchingNextPage) {
@@ -659,8 +652,7 @@ fun TvV1CatalogHost(
         }
         TvV1CatalogPage.Discover -> TvV1DiscoverScreen(
             catalog = catalog,
-            initialItem = selectedDiscoverItem,
-            initialCatalog = selectedCatalogEntry,
+            initialWorkId = selectedDiscoverWorkId,
             serverOrigin = serverOrigin,
             requestHeaders = authorization,
             onLocalWork = { id -> openWork(id.toString()) },

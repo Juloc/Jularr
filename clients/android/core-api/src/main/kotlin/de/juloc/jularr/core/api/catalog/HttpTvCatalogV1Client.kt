@@ -134,51 +134,20 @@ class HttpTvCatalogV1Client(
         ).objects { discoverSuggestion() }
     }
 
-    override suspend fun discoverTmdbItem(mediaTypeId: Int, tmdbId: Int): TvDiscoverItemV1 =
-        readObject(TvCatalogV1Routes.discoverTmdbItem(mediaTypeId, tmdbId), "POST", JSONObject())
-            .discoverItem()
-
-    override suspend fun discoverCatalogEntry(
-        mediaTypeId: Int, namespace: String, externalId: String, mediaSubtypeId: Int?,
-    ): TvDiscoverCatalogEntryV1 {
-        require(mediaTypeId > 0 && namespace.isNotBlank() && externalId.isNotBlank())
-        require(mediaSubtypeId == null || mediaSubtypeId > 0)
-        return readObject(
-            TvCatalogV1Routes.DiscoverCatalogEntry,
-            "POST",
-            JSONObject().put("mediaTypeId", mediaTypeId).put("namespace", namespace)
-                .put("externalId", externalId).apply {
-                    if (mediaSubtypeId != null) put("mediaSubtypeId", mediaSubtypeId)
-                },
-        ).discoverCatalogEntry()
-    }
-
     override suspend fun requestLocales(): List<TvRequestLocaleV1> =
         readArray(TvCatalogV1Routes.RequestLocales).objects {
             TvRequestLocaleV1(getLong("id"), getString("locale"), getString("name"))
         }
 
-    override suspend fun requestDiscoverTmdb(mediaTypeId: Int, tmdbId: Int, localeId: Long): Long {
+    override suspend fun openWork(workId: Long): Boolean =
+        readObject(TvCatalogV1Routes.openWork(workId), "POST", JSONObject()).getBoolean("areDetailsUnavailable")
+
+    override suspend fun requestWork(workId: Long, localeId: Long): Long {
         require(localeId > 0)
         return readObject(
-            TvCatalogV1Routes.discoverTmdbRequest(mediaTypeId, tmdbId),
+            TvCatalogV1Routes.workRequests(workId),
             "POST",
             JSONObject().put("uiLocaleId", localeId),
-        ).getLong("id")
-    }
-
-    override suspend fun requestDiscoverCatalog(
-        mediaTypeId: Int, namespace: String, externalId: String, mediaSubtypeId: Int?, localeId: Long,
-    ): Long {
-        require(mediaTypeId > 0 && namespace.isNotBlank() && externalId.isNotBlank() && localeId > 0)
-        return readObject(
-            TvCatalogV1Routes.DiscoverCatalogRequest,
-            "POST",
-            JSONObject().put("mediaTypeId", mediaTypeId)
-                .put("namespace", namespace)
-                .put("externalId", externalId)
-                .put("uiLocaleId", localeId)
-                .apply { if (mediaSubtypeId != null) put("mediaSubtypeId", mediaSubtypeId) },
         ).getLong("id")
     }
 

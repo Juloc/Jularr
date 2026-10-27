@@ -26,7 +26,7 @@ class TvV1HomeDiscoverFlowTest {
         TvDiscoverScopeV1("anime", 2, 1, false, listOf(1, 2)),
     )
     private fun item(id: Int) = TvDiscoverItemV1(
-        mediaTypeId = 1, tmdbId = id, workId = null, title = "Movie $id",
+        mediaTypeId = 1, tmdbId = id, workId = id.toLong(), title = "Movie $id",
         releaseYear = 2026, overview = null, posterUrl = null, backdropUrl = null,
         mediaStateTypeId = 1, plexUrl = null, rating = null, trailerKey = null,
     )
@@ -63,7 +63,7 @@ class TvV1HomeDiscoverFlowTest {
         assertEquals(listOf(2, 3, 4), called.sorted())
         assertTrue("Missing provider feeds must be loaded in parallel", maximum.get() > 1)
         assertEquals(1001, result.first().items.single().tmdbId)
-        assertEquals(null, result.first().items.single().workId)
+        assertEquals(1001L, result.first().items.single().workId)
         assertEquals(1, result.first().mediaTypeId)
         // No generic movie result can claim to be part of the Anime scope.
         assertFalse(result.any { it.scopeSlug == "anime" })
@@ -73,7 +73,7 @@ class TvV1HomeDiscoverFlowTest {
         val catalogScope = TvDiscoverScopeV1("anime", 2, 1, true, listOf(1, 2))
         val catalogItem = TvDiscoverCatalogItemV1(
             namespace = "anilist", externalId = "456789", title = "Anime title",
-            releaseYear = 2026, author = null, workId = null,
+            releaseYear = 2026, author = null, workId = 900,
             posterUrl = null, rating = null, mediaStateTypeId = null,
         )
         val requested = mutableListOf<Triple<Int, Int, Int?>>()
@@ -127,7 +127,7 @@ class TvV1HomeDiscoverFlowTest {
         val anime = TvDiscoverScopeV1("anime", 2, 1, true, listOf(1))
         val item = TvDiscoverCatalogItemV1(
             namespace = "anilist", externalId = "17", title = "Correct anime",
-            releaseYear = 2026, author = null, workId = null,
+            releaseYear = 2026, author = null, workId = 900,
             posterUrl = null, rating = null, mediaStateTypeId = null,
         )
         val client = object : TvCatalogV1Client by fallback {
