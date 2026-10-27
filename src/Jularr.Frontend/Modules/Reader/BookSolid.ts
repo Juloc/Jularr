@@ -78,9 +78,10 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
         return onThickSide ? thin + (thick - thin) * near * near * (3 - 2 * near) : thin;
     };
     // Every leaf is bound at the spine, so the stack thins to nothing in a V at the fold. A paperback's thin cover follows the
-    // block into that V; a hardcover's case runs straight on below it, so the case shows in the gap between case and block.
+    // block into that V. A hardcover's case is fixed at the block's inner corners and spans the V in a soft curve below them,
+    // so the case shows in the gap between case and block.
     const stackAt = (x: number) => stackBase(x) * Math.min(1, Math.abs(x - 148) / notchWidth);
-    const caseAt = soft ? stackAt : stackBase;
+    const caseAt = soft ? stackAt : (x: number) => stackBase(x) * (1 - .5 * Math.max(0, 1 - ((x - 148) / notchWidth) ** 2) ** 2);
     const trace = (shape: (x: number) => number, from: number, to: number, extra: number, ratio = 1) => {
         const steps = Math.max(2, Math.round(Math.abs(to - from) / 6)), low = Math.min(from, to), high = Math.max(from, to);
         const xs = Array.from({ length: steps + 1 }, (_, index) => from + (to - from) * index / steps);
