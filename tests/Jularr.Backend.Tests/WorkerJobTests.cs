@@ -34,7 +34,7 @@ namespace Jularr.Backend.Tests
             // Fifteen workers and the sampler. Queues and interrupted downloads start at once; other workers have their own offset;
             // a provider of the provider sync has no schedule of its own.
             Assert.AreEqual(16, Enum.GetValues<WorkerGroupType>().Length);
-            foreach (var key in new[] { "operations", "backupQueue", "benchmarkQueue", "downloads", "resources" })
+            foreach (var key in new[] { "operations", "backupQueue", "mediaImportQueue", "benchmarkQueue", "searchQueue", "downloads", "resources" })
             {
                 Assert.AreEqual(TimeSpan.Zero, WorkerJobs.Definition(key).StartDelay, key);
             }
@@ -43,7 +43,7 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEquivalent(new[] { "providerSyncPlex", "providerSyncJellyfin", "providerSyncEmby" }, parts.Select(job => job.Key).ToArray());
             Assert.IsTrue(parts.All(job => job.Group == WorkerGroupType.Provider && job.Interval is null && !job.CanRunNow));
             var delayed = jobs.Where(job => job.StartDelay > TimeSpan.Zero).ToArray();
-            Assert.AreEqual(jobs.Count - 5 - parts.Length, delayed.Length);
+            Assert.AreEqual(jobs.Count - 7 - parts.Length, delayed.Length);
             Assert.IsTrue(delayed.GroupBy(job => job.StartDelay).All(group => group.Select(job => job.Group).Distinct().Count() == 1), "Only jobs sharing a worker may share their start offset.");
             Assert.IsTrue(delayed.All(job => job.StartDelay < TimeSpan.FromMinutes(5)));
 
@@ -53,7 +53,7 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(WorkerJobs.Definition(key).PausesWhileUsedByDefault, key);
             }
 
-            foreach (var key in new[] { "downloads", "usenet", "operations", "backupQueue", "backup", "wantedSearch", "discoverFeeds" })
+            foreach (var key in new[] { "downloads", "usenet", "operations", "backupQueue", "backup", "wantedSearch", "discoverFeeds", "mediaImportQueue" })
             {
                 Assert.IsFalse(WorkerJobs.Definition(key).CanPauseWhileUsed, key);
             }

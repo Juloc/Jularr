@@ -9,6 +9,7 @@ namespace Jularr.Backend.Data.Fields.Library
         public static readonly EnumField MediaTrackTypeId = new(typeof(MediaTrackType));
         public static readonly StringField Codec = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly StringField Language = new(NpgsqlDbType.Varchar) { MaximumLength = 16, Required = false };
+        public static readonly StringField LanguageAliases = new() { AllowBlank = false };
         public static readonly StringField Title = new(NpgsqlDbType.Varchar) { MaximumLength = 256, Required = false };
         public static readonly IntField Width = new() { Minimum = 1, Required = false };
         public static readonly IntField Height = new() { Minimum = 1, Required = false };

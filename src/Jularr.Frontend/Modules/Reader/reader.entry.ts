@@ -161,6 +161,15 @@ function initializeText(reader: HTMLElement): void {
     const quality = reader.querySelector<HTMLButtonElement>('[data-local-quality-toggle]');
     const browserTargets = new Set((reader.dataset.browserTranslationTargets ?? '').split(',').filter(Boolean));
     const localModel = reader.dataset.localModel;
+    const provider = reader.querySelector<HTMLElement>('[data-translation-provider]');
+    const showProvider = () => {
+        if (!provider) return;
+        const language = reader.dataset.readingLanguage ?? 'original';
+        provider.textContent = language === 'original' ? (reader.dataset.providerOriginalLabel ?? '')
+            : reader.dataset.translationEngine === 'gemma'
+                ? (reader.dataset.providerLocalLabel ?? 'TranslateGemma') + ' · ' + (localModel ?? '')
+                : reader.dataset.providerBrowserLabel ?? 'Mozilla/Bergamot';
+    };
     if (quality && translate && localModel) {
         quality.hidden = false;
         const initialLanguage = reader.dataset.readingLanguage ?? 'original';
@@ -174,6 +183,7 @@ function initializeText(reader: HTMLElement): void {
             if (!gemma && readingLanguage !== 'original' && !browserTargets.has(readingLanguage)) return;
             reader.dataset.translationEngine = gemma ? 'gemma' : 'bergamot';
             quality.setAttribute('aria-pressed', String(gemma));
+            showProvider();
             void translate(readingLanguage === 'original' ? '' : readingLanguage);
         });
     }
@@ -208,6 +218,7 @@ function initializeText(reader: HTMLElement): void {
                 quality?.setAttribute('aria-pressed', 'true');
             }
             choices.forEach(choice => choice.setAttribute('aria-pressed', String(choice === button)));
+            showProvider();
             if (translate) void translate(next === 'original' ? '' : next);
             else if (feedback) feedback.hidden = true;
         } catch {
@@ -223,6 +234,7 @@ function initializeText(reader: HTMLElement): void {
         }
     }));
 
+    showProvider();
     // Each chapter is a new document. Honor the persisted reading language on
     // initial load too; previously only clicking a language started translation,
     // so chapter navigation silently showed the original English text.

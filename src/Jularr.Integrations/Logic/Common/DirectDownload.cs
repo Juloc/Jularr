@@ -66,6 +66,12 @@ namespace Jularr.Integrations.Logic.Common
                     continue;
                 }
 
+                if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    response.Dispose();
+                    throw new DirectDownloadException(DirectDownloadFailure.RateLimited, "The source limits requests right now.");
+                }
+
                 if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                 {
                     response.Dispose();
@@ -148,7 +154,8 @@ namespace Jularr.Integrations.Logic.Common
                 }
                 catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
                 {
-                    throw new DirectDownloadException(DirectDownloadFailure.Unavailable, "The source could not be reached.", exception);
+                    throw new DirectDownloadException(exception is TaskCanceledException ? DirectDownloadFailure.TimedOut : DirectDownloadFailure.Unavailable,
+                        "The source could not be reached.", exception);
                 }
 
                 // Gates go to the resolver once; production resolvers never pass them.
@@ -188,7 +195,7 @@ namespace Jularr.Integrations.Logic.Common
             }
         }
 
-        private static async Task<string> ReadPageContentAsync(HttpResponseMessage response, CancellationToken ct)
+        public static async Task<string> ReadPageContentAsync(HttpResponseMessage response, CancellationToken ct)
         {
             if (response.Content.Headers.ContentLength > MaximumPageBytes)
             {

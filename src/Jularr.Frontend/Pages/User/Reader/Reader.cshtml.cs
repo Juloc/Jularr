@@ -165,7 +165,9 @@ namespace Jularr.Frontend.Pages.User.Reader
                 : new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
                     .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false")),
                     new Button(new Text("reader.translation.localQuality")).Class("button")
-                        .Attribute("data-local-quality-toggle", "").Attribute("aria-pressed", "false").Attribute("hidden", "hidden")]).Class("reader__panel reader__choices")
+                        .Attribute("data-local-quality-toggle", "").Attribute("aria-pressed", "false").Attribute("hidden", "hidden"),
+                    new P(new Text("reader.translation.provider.original")).Attribute("data-translation-provider", "")
+                        .Attribute("role", "status")]).Class("reader__panel reader__choices")
                     .Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"]);
 
             var bottom = new Div(Seek(false), new Div(
@@ -282,7 +284,10 @@ namespace Jularr.Frontend.Pages.User.Reader
                     .Attribute("data-route-url", "/api/v1/translation/routes/")
                     .Attribute("data-translating-label", texts["reader.translating"])
                     .Attribute("data-language-saving-label", texts["reader.language.saving"])
-                    .Attribute("data-translation-failed-label", texts["reader.translationFailed"]);
+                    .Attribute("data-translation-failed-label", texts["reader.translationFailed"])
+                    .Attribute("data-provider-original-label", texts["reader.translation.provider.original"])
+                    .Attribute("data-provider-browser-label", texts["reader.translation.provider.browser"])
+                    .Attribute("data-provider-local-label", texts["reader.translation.provider.local"]);
             }
 
             page.Content.Add(view);

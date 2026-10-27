@@ -18,7 +18,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         string? MatchSource, MediaImportId? Import, bool HasTarget, bool CanMonitor, IReadOnlyList<MediaImportCandidateV1> Candidates, bool IsSearched, string? Query, int? DuplicateOf, bool IsIncluded,
         MediaImportActionType Action, long? AcquisitionProfileId, long? LibraryRootId);
 
-    internal sealed record MediaImportPlan(IReadOnlyList<MediaImportPlanRow> Rows, int Unsearched);
+    internal sealed record MediaImportPlan(IReadOnlyList<MediaImportPlanRow> Rows, int Unsearched, string? ProviderFailure);
 
     // Matches a list to the library and the providers without changing anything: reliable identities first, searches only propose candidates.
     internal sealed class MediaImportPlanner(MetadataCatalog catalog, WorkMetadata metadata, BookMetadata books, IMemoryCache cache)
@@ -39,7 +39,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             _ => ["igdb"]
         };
 
-        public async Task<MediaImportPlan> PlanAsync(LogicContext context, IReadOnlyList<MediaImportItem> items, MediaImportDataV1 data, int searches, CancellationToken ct, Func<int, string, int?, Task>? onProgressAsync = null)
+        public async Task<MediaImportPlan> PlanAsync(LogicContext context, IReadOnlyList<MediaImportItem> items, MediaImportDataV1 data, int searches, CancellationToken ct, Func<int, string, int?, string?, string?, string?, Task>? onProgressAsync = null)
         {
             var choices = data.Choices.ToDictionary(choice => choice.Index);
             if (choices.Keys.Any(index => index >= items.Count)) throw new DataValidationException(nameof(data.Choices), "unknown_reference");
@@ -60,9 +60,12 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
 
             var known = await ReadKnownAsync(context, identities.SelectMany(list => list), ct);
-            var lookups = new Budget(LookupsPerPlan);
+            // Large imports finish title/author matching in the server-owned job.
+            // Do not block their preview on hundreds of per-ISBN provider calls.
+            var lookups = new Budget(items.Count >= 100 ? 8 : LookupsPerPlan);
             var conflicts = new HashSet<int>();
             var resolvedAny = false;
+            string? providerFailure = null;
 
             // An edition ISBN can identify a Work even when this Jularr instance has not imported it yet.
             // Provider metadata is checked against the requested title/author before using that Work id.
@@ -75,7 +78,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     continue;
                 }
 
-                if (onProgressAsync is not null) await onProgressAsync(index, "isbn", null);
+                if (onProgressAsync is not null) await onProgressAsync(index, "isbn", null, "openlibrary", isbn.Value, null);
                 var key = "import.isbn." + isbn.Value;
                 if (!cache.TryGetValue(key, out OpenLibraryWork? book))
                 {
@@ -88,8 +91,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     {
                         book = null;
                     }
-                    catch (ServiceUnavailableException)
+                    catch (ServiceUnavailableException exception)
                     {
+                        providerFailure ??= ProviderFailureKey(exception);
                         lookups.Stop();
                         break;
                     }
@@ -139,10 +143,18 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 .OrderBy(index => QueryOf(choices.GetValueOrDefault(index)) is null).ThenBy(index => index).ToArray();
             foreach (var index in open)
             {
-                if (onProgressAsync is not null) await onProgressAsync(index, "searching", null);
-                var results = await SearchAsync(context, items[index], QueryOf(choices.GetValueOrDefault(index)), budget, ct);
+                var item = items[index];
+                var query = QueryOf(choices.GetValueOrDefault(index));
+                var actualQuery = query ?? (item.Type == MediaType.Book && item.Creator is not null
+                    ? item.Title + " " + item.Creator : item.Title!);
+                var source = item.Type == MediaType.Book ? "openlibrary" : "catalog";
+                if (onProgressAsync is not null) await onProgressAsync(index, "searching", null, source, actualQuery, null);
+                var results = await SearchAsync(context, item, query, budget, ct,
+                    error => providerFailure ??= ProviderFailureKey(error));
                 if (results is not null) candidates[index] = results;
-                if (onProgressAsync is not null) await onProgressAsync(index, results is null ? "waiting" : results.Count > 0 ? "candidates" : "no_match", results?.Count);
+                if (onProgressAsync is not null) await onProgressAsync(index,
+                    results is null ? "waiting" : results.Count > 0 ? "candidates" : "no_match",
+                    results?.Count, source, actualQuery, results is null ? providerFailure ?? "search_budget" : null);
             }
 
             var rows = new List<MediaImportPlanRow>(items.Count);
@@ -207,12 +219,15 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
                 row = Decide(row, choice, data, defaults);
                 rows.Add(row);
-                if (onProgressAsync is not null) await onProgressAsync(index, row.Status.ToString(), row.Candidates.Count);
+                if (onProgressAsync is not null) await onProgressAsync(index, row.Status.ToString(), row.Candidates.Count, null, null, row.Problem);
             }
 
             var unsearched = rows.Count(row => row.Status == MediaImportStatusType.Open && !row.IsSearched && (row.Item.Title is not null || row.Query is not null));
-            return new MediaImportPlan(rows, unsearched);
+            return new MediaImportPlan(rows, unsearched, providerFailure);
         }
+
+        private static string ProviderFailureKey(ServiceUnavailableException exception) =>
+            exception.Code == "metadata_rate_limited" ? "rate_limited" : "unavailable";
 
         private static string? QueryOf(MediaImportChoiceV1? choice) => choice?.Query is { } query && !string.IsNullOrWhiteSpace(query) ? query : null;
 
@@ -293,7 +308,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         }
 
         // Candidates for an open row; nothing when the budget of this preview is spent or the provider is out of reach.
-        private async Task<IReadOnlyList<MediaImportCandidateV1>?> SearchAsync(LogicContext context, MediaImportItem item, string? query, Budget budget, CancellationToken ct)
+        private async Task<IReadOnlyList<MediaImportCandidateV1>?> SearchAsync(LogicContext context, MediaImportItem item, string? query, Budget budget, CancellationToken ct,
+            Action<ServiceUnavailableException>? onUnavailable = null)
         {
             var type = item.Type!.Value;
             var text = query ?? (type == MediaType.Book && item.Creator is not null ? item.Title + " " + item.Creator : item.Title!);
@@ -305,8 +321,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 {
                     results = await catalog.SearchAsync(context, type, item.Subtype, text, null, ct);
                 }
-                catch (ServiceUnavailableException)
+                catch (ServiceUnavailableException exception)
                 {
+                    onUnavailable?.Invoke(exception);
                     budget.Stop();
                     return null;
                 }

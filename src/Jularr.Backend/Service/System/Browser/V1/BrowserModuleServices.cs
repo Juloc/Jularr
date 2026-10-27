@@ -48,8 +48,21 @@ namespace Jularr.Backend.Service.System.Browser.V1
 
             if (_options.Path is null && string.IsNullOrWhiteSpace(_options.RemoteAddress))
             {
-                if (!_packages.CanRetryInstall) return new UpdateResult(false);
-                await _packages.InstallAsync(CancellationToken);
+                if (!_packages.CanRetryInstall)
+                {
+                    if (!_packages.IsInstalled) return new UpdateResult(false);
+                }
+                else
+                {
+                    try
+                    {
+                        await _packages.InstallAsync(CancellationToken);
+                    }
+                    catch (Exception exception) when (exception is not OperationCanceledException && _packages.IsInstalled)
+                    {
+                        // A refresh failure remains visible, but its installed predecessor can run.
+                    }
+                }
             }
 
             _packages.Enabled = true;

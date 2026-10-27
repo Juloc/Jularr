@@ -8,6 +8,7 @@ using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
+using Jularr.Backend.Logic.Media;
 
 namespace Jularr.Backend.Service.User.Library.V1
 {
@@ -95,6 +96,7 @@ namespace Jularr.Backend.Service.User.Library.V1
             sql.Parameters.Add(new LibraryPageFilterData(parameters.MediaTypeIds, parameters.MediaSubtypeIds, parameters.ReleaseYearFrom, parameters.ReleaseYearTo,
                 parameters.Query, parameters.AvailabilityTypeIds, parameters.ProgressStateId, parameters.Genres, parameters.AudioLanguages, parameters.SubtitleLanguages, parameters.MinimumRating));
             sql.Parameters.Add(new ProfileParameters(profileId));
+            sql.Parameters.Add(LanguageCodes.Aliases);
             sql.DisableJit = true;
             if (options)
             {

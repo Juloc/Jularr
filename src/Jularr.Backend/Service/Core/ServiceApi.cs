@@ -183,6 +183,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<AcquisitionSearchSignal>();
             services.TryAddSingleton<LiveChanges>();
             services.TryAddSingleton<WorkSignals>();
+            services.TryAddSingleton<SearchRunCancellation>();
             services.TryAddSingleton<UserActivity>();
             services.TryAddSingleton<WorkerJobs>();
             services.TryAddSingleton<WorkerJobRunner>();
@@ -218,6 +219,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<MetadataCatalog>();
             services.TryAddSingleton<ExternalFeedCache>();
             services.TryAddTransient<MediaImportPlanner>();
+            services.TryAddTransient<Jularr.Backend.Service.Admin.Media.V1.MediaImportProcessor>();
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<TvdbMetadata>();
             services.TryAddTransient<PlexServer>();
@@ -245,8 +247,11 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<UsenetJob>();
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
             services.TryAddSingleton(provider => new BrowserPackages(provider.GetRequiredService<IOptions<BrowserOptions>>().Value));
-            services.AddSingleton<ISourceBrowser>(provider => new SourceBrowser(provider.GetRequiredService<IOptions<BrowserOptions>>().Value,
+            services.AddSingleton<SourceBrowser>(provider => new SourceBrowser(provider.GetRequiredService<IOptions<BrowserOptions>>().Value,
                 provider.GetRequiredService<BrowserPackages>()));
+            services.AddSingleton<ISourceBrowser>(provider => provider.GetRequiredService<SourceBrowser>());
+            services.AddSingleton<IBrowserInteraction>(provider => provider.GetRequiredService<SourceBrowser>());
+            services.TryAddSingleton<BrowserAssistance>();
             services.TryAddTransient<ReadingContent>();
             services.TryAddTransient<ReadingDerivation>();
             services.TryAddSingleton<ReadingActivity>();
@@ -335,6 +340,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<OcrModelClient>(services, 600, null, agent: true, baseAddress: providers.OcrModels,
                 handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
             AddClient<OpdsClient>(services, 60, null, agent: true);
+            services.TryAddSingleton<AnnasArchiveMirrors>();
             AddClient<AnnasArchiveClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
             AddClient<OpenLibraryClient>(services, 15, 4, agent: true, baseAddress: providers.OpenLibrary, provider: "openlibrary");
             AddClient<HardcoverClient>(services, 15, 4, agent: true, baseAddress: providers.Hardcover, provider: "hardcover");

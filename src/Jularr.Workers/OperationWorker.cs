@@ -5,6 +5,7 @@ using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Backup.V1;
 using Jularr.Backend.Service.System.Operation.V1;
+using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Backend.Service.System.Transcoding.V1;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -12,7 +13,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Jularr.Workers
 {
-    // Queued scans, backups and transcoding benchmarks, each in its own lane: scans one after another, one backup and one benchmark at a time, both also while a long scan runs.
+    // Scans, backups, benchmarks and library searches run in independent lanes, one operation of each kind at a time.
     // A lane sleeps until work is queued for it and looks again on a slow safety tick; a restart resumes what it interrupted.
     internal sealed class OperationWorker(TimeProvider time, IServiceScopeFactory scopes, WorkerJobRunner runner, WorkSignals signals, ILogger<OperationWorker> logger) : BackgroundService
     {
@@ -26,14 +27,16 @@ namespace Jularr.Workers
                 await RecoverAsync(stoppingToken);
                 await Task.WhenAll(RunLaneAsync("operations", OperationType.LibraryScan, signals.Scans, stoppingToken),
                     RunLaneAsync("backupQueue", OperationType.Backup, signals.Backups, stoppingToken),
-                    RunLaneAsync("benchmarkQueue", OperationType.TranscodeBenchmark, signals.Benchmarks, stoppingToken));
+                    RunLaneAsync("mediaImportQueue", OperationType.MediaImport, signals.Imports, stoppingToken),
+                    RunLaneAsync("benchmarkQueue", OperationType.TranscodeBenchmark, signals.Benchmarks, stoppingToken),
+                    RunLaneAsync("searchQueue", OperationType.AcquisitionSearch, signals.Searches, stoppingToken));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
             }
         }
 
-        // Work a restart interrupted is queued again before either lane starts.
+        // Work a restart interrupted is queued again before the lanes start.
         private async Task RecoverAsync(CancellationToken ct)
         {
             while (true)
@@ -72,13 +75,21 @@ namespace Jularr.Workers
 
             try
             {
-                if (claimed.OperationTypeId == OperationType.Backup)
+                if (claimed.OperationTypeId == OperationType.MediaImport)
+                {
+                    await services.GetRequiredService<ExecuteMediaImportJobV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), default, ct);
+                }
+                else if (claimed.OperationTypeId == OperationType.Backup)
                 {
                     await services.GetRequiredService<ExecuteBackupV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), default, ct);
                 }
                 else if (claimed.OperationTypeId == OperationType.TranscodeBenchmark)
                 {
                     await services.GetRequiredService<ExecuteTranscodeBenchmarkV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), default, ct);
+                }
+                else if (claimed.OperationTypeId == OperationType.AcquisitionSearch)
+                {
+                    await services.GetRequiredService<ExecuteWorksSearchV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), default, ct);
                 }
                 else
                 {

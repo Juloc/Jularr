@@ -23,6 +23,6 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         public static IReadOnlyList<TargetUnit> Episodes(IReadOnlyList<UnitStateData> states) =>
-            [.. states.Where(state => state.ParentNumber is not null).Select(state => new TargetUnit(state.WorkUnitId, state.ParentNumber, state.Number, state.HasMedia, state.AbsoluteNumber, state.ReleasedOn))];
+            [.. states.Where(state => state.ParentNumber is not null).Select(state => new TargetUnit(state.WorkUnitId, state.ParentNumber, state.Number, state.HasMedia, state.AbsoluteNumber, state.ReleasedOn, state.Title))];
     }
 }

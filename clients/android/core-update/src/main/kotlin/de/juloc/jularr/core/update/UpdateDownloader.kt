@@ -37,6 +37,7 @@ class HttpUpdateDownloader : UpdateDownloader {
         destination: File,
         onProgress: (bytesRead: Long, totalBytes: Long) -> Unit,
     ): DownloadOutcome = withContext(Dispatchers.IO) {
+        val tempFile = File(destination.parentFile, "${destination.name}.part")
         val connection = openConnection(url)
         try {
             val status = connection.responseCode
@@ -46,7 +47,7 @@ class HttpUpdateDownloader : UpdateDownloader {
 
             val total = connection.contentLengthLong
             destination.parentFile?.mkdirs()
-            val tempFile = File(destination.parentFile, "${destination.name}.part")
+            tempFile.delete()
 
             connection.inputStream.use { input ->
                 tempFile.outputStream().use { output ->
@@ -58,6 +59,11 @@ class HttpUpdateDownloader : UpdateDownloader {
                         output.write(buffer, 0, read)
                         readTotal += read
                         onProgress(readTotal, total)
+                    }
+                    if (total >= 0 && readTotal != total) {
+                        return@withContext DownloadOutcome.NetworkError(
+                            "The update download ended before all bytes arrived.",
+                        )
                     }
                 }
             }
@@ -74,6 +80,7 @@ class HttpUpdateDownloader : UpdateDownloader {
         } catch (exception: IOException) {
             DownloadOutcome.NetworkError(exception.message ?: "The download could not be completed.")
         } finally {
+            tempFile.delete()
             connection.disconnect()
         }
     }

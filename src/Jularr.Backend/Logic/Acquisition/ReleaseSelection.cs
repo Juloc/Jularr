@@ -78,7 +78,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
             // The score is computed for every parsed candidate so Manual Search can show it, but it is only consulted after identity.
             var score = ReleaseScorer.Score(profile, new ReleaseCandidate(candidate.Parsed, candidate.SizeBytes, candidate.Indexer, candidate.Id)
-                { IndexerId = candidate.IndexerId, IndexerFlags = candidate.IndexerFlags, Languages = candidate.Languages.Count > 0 ? candidate.Languages : null });
+                { IndexerId = candidate.IndexerId, IndexerFlags = candidate.IndexerFlags, Languages = candidate.Languages.Count > 0 ? candidate.Languages : null, RuntimeMinutes = candidate.RuntimeMinutes });
             reasons.Add(new SelectionReason(SelectionReasonKind.Identity, candidate.Identity.Code, candidate.Identity.Value));
             if (candidate.Identity.Confidence == IdentityConfidence.Conflict)
             {
@@ -105,7 +105,7 @@ namespace Jularr.Backend.Logic.Acquisition
             }
 
             // What is no upgrade of the present quality is only taken by hand, as another version.
-            if (candidate.InstalledQuality is { } installed && !UpgradePolicy.IsUpgrade(profile, installed, score.QualityKey, false,
+            if (candidate.InstalledQuality is { } installed && !(candidate.InstalledNeedsReplacement && profile.UpgradeAllowed) && !UpgradePolicy.IsUpgrade(profile, installed, score.QualityKey, false,
                 candidate.InstalledFormatScore, score.FormatScore, candidate.InstalledLanguages, candidate.Languages))
             {
                 reasons.Add(new SelectionReason(SelectionReasonKind.Quality, "NotAnUpgrade", installed));

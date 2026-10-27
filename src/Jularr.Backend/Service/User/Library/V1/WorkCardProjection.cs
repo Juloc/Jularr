@@ -141,16 +141,16 @@ namespace Jularr.Backend.Service.User.Library.V1
         // The joins every card needs; the profile is the one the query reads for.
         public const string Joins = CardJoins + "\n" + ProgressJoin;
 
-        private const string CardJoins =
+        public const string CardJoins =
             """
             JOIN "ProfileWorkStates" AS profileState ON profileState."ProfileId" = @ProfileId AND profileState."WorkId" = work."Id"
             LEFT JOIN LATERAL (
-                -- The language of the profile's locale; the audio of a title is compared with it.
+                -- Content choices are independent of the interface and acquisition settings.
                 SELECT
-                    lower(split_part(locale."Locale", '-', 1)) AS "Language"
+                    profile."FirstContentLanguage" AS "Language",
+                    ARRAY[profile."FirstContentLanguage", profile."SecondContentLanguage"] AS "Languages"
                 FROM
-                    "UiLocales" AS locale
-                    JOIN "Profiles" AS profile ON profile."UiLocaleId" = locale."Id"
+                    "Profiles" AS profile
                 WHERE
                     profile."Id" = @ProfileId
             ) AS profileLanguage ON TRUE
@@ -158,8 +158,9 @@ namespace Jularr.Backend.Service.User.Library.V1
                 SELECT
                     count(*)::integer AS "MonitoredUnits",
                     count(*) FILTER (WHERE present."Present" IS TRUE)::integer AS "AvailableUnits",
-                    coalesce(bool_or(present."ProfileAudio" IS TRUE), FALSE) AS "HasProfileAudio",
-                    coalesce(bool_or(present."ProfileAudio" IS FALSE), FALSE) AS "HasOtherAudio"
+                    coalesce(bool_and(present."HasPreferredLanguage") FILTER (WHERE present."Present"), FALSE) AS "HasProfileAudio",
+                    coalesce(bool_or(present."HasKnownLanguage" AND NOT present."HasPreferredLanguage" AND NOT present."HasUnknownLanguage" AND NOT present."HasPreferredSubtitles"), FALSE) AS "HasOtherAudio",
+                    coalesce(bool_or(present."HasKnownLanguage" AND NOT present."HasPreferredLanguage" AND NOT present."HasUnknownLanguage" AND present."HasPreferredSubtitles"), FALSE) AS "HasPreferredSubtitles"
                 FROM (
                     -- The units the profile monitors; a unit that groups others is no unit of its own.
                     SELECT
@@ -199,47 +200,89 @@ namespace Jularr.Backend.Service.User.Library.V1
                                         child."ParentWorkUnitId" = leaf."Id"
                                 )
                         )
-                        AND EXISTS (
-                            SELECT
-                                1
-                            FROM
-                                "MediaAssets" AS asset
-                            WHERE
-                                asset."WorkId" = work."Id"
-                        )
                 ) AS unitSet
                 LEFT JOIN LATERAL (
                     SELECT
-                        TRUE AS "Present",
-                        (
+                        count(*) > 0 AS "Present",
+                        coalesce(bool_or(language."HasPreferredLanguage"), FALSE) AS "HasPreferredLanguage",
+                        coalesce(bool_or(language."HasKnownLanguage"), FALSE) AS "HasKnownLanguage",
+                        coalesce(bool_or(NOT language."HasKnownLanguage"), FALSE) AS "HasUnknownLanguage",
+                        coalesce(bool_or(subtitles."HasPreferredSubtitles"), FALSE) AS "HasPreferredSubtitles"
+                    FROM (
+                        SELECT
+                            candidate."Id"
+                        FROM
+                            "MediaAssets" AS candidate
+                        WHERE
+                            unitSet."UnitId" IS NULL
+                            AND candidate."WorkId" = work."Id"
+                            AND candidate."WorkUnitId" IS NULL
+                        UNION ALL
+                        SELECT
+                            coverage."MediaAssetId"
+                        FROM
+                            "MediaAssetUnitCoverage" AS coverage
+                        WHERE
+                            unitSet."UnitId" IS NOT NULL
+                            AND coverage."WorkId" = work."Id"
+                            AND coverage."WorkUnitId" = unitSet."UnitId"
+                    ) AS covered
+                        JOIN "MediaAssets" AS asset ON asset."Id" = covered."Id"
+                        JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                        JOIN "WorkVersions" AS version ON version."Id" = asset."WorkVersionId"
+                        JOIN "WorkEditions" AS edition ON edition."Id" = version."WorkEditionId"
+                        LEFT JOIN LATERAL (
                             SELECT
-                                bool_or(track."Language" = profileLanguage."Language")
+                                candidate."Language"
                             FROM
-                                "MediaTracks" AS track
-                                JOIN "StoredFiles" AS file ON file."Id" = track."StoredFileId"
+                                "ReadingDocuments" AS candidate
                             WHERE
-                                file."MediaAssetId" = asset."Id"
-                                AND track."MediaTrackTypeId" = 2
-                                AND track."Language" IS NOT NULL
-                        ) AS "ProfileAudio"
-                    FROM
-                        "MediaAssets" AS asset
-                    WHERE
-                        asset."WorkId" = work."Id"
-                        AND (asset."WorkUnitId" = unitSet."UnitId" OR asset."WorkUnitId" IS NULL AND unitSet."UnitId" IS NULL)
-                        AND EXISTS (
+                                asset."MediaAssetTypeId" IN (3, 4)
+                                AND candidate."StoredFileId" = file."Id"
+                                AND candidate."SourceSizeBytes" = file."SizeBytes"
+                                AND candidate."SourceModifiedAt" = file."ModifiedAt"
+                            ORDER BY
+                                candidate."AnalyzerVersion" DESC,
+                                candidate."Id" DESC
+                            LIMIT 1
+                        ) AS document ON TRUE
+                        CROSS JOIN LATERAL (
                             SELECT
-                                1
-                            FROM
-                                "StoredFiles" AS file
+                                coalesce(bool_or(content."Language" = ANY(profileLanguage."Languages")), FALSE) AS "HasPreferredLanguage",
+                                count(*) > 0 AS "HasKnownLanguage"
+                            FROM (
+                                SELECT
+                                    @LanguageAliases::jsonb ->> lower(split_part(replace(track."Language", '_', '-'), '-', 1)) AS "Language"
+                                FROM
+                                    "MediaTracks" AS track
+                                WHERE
+                                    track."StoredFileId" = file."Id"
+                                    AND track."MediaTrackTypeId" = 2
+                                    AND asset."MediaAssetTypeId" IN (1, 2)
+                                UNION ALL
+                                SELECT
+                                    @LanguageAliases::jsonb ->> lower(split_part(replace(coalesce(nullif(document."Language", 'und'), edition."LanguageCode"), '_', '-'), '-', 1))
+                                WHERE
+                                    asset."MediaAssetTypeId" IN (3, 4)
+                            ) AS content
                             WHERE
-                                file."MediaAssetId" = asset."Id"
-                                AND file."MissingSince" IS NULL
-                                AND NOT file."IsSubtitle"
-                            -- Probe the indexed asset instead of merging the file inventory per unit.
-                            OFFSET 0
-                        )
-                    LIMIT 1
+                                profileLanguage."Language" IS NOT NULL
+                                AND content."Language" IS NOT NULL
+                        ) AS language
+                        CROSS JOIN LATERAL (
+                            SELECT CASE WHEN language."HasKnownLanguage" AND NOT language."HasPreferredLanguage" THEN EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "StoredFiles" AS subtitleFile
+                                    JOIN "MediaTracks" AS track ON track."StoredFileId" = subtitleFile."Id" AND track."MediaTrackTypeId" = 3
+                                WHERE
+                                    subtitleFile."MediaAssetId" = asset."Id"
+                                    AND subtitleFile."MissingSince" IS NULL
+                                    AND NOT track."IsForced"
+                                    AND (@LanguageAliases::jsonb ->> lower(split_part(replace(track."Language", '_', '-'), '-', 1))) = ANY(profileLanguage."Languages")
+                            ) ELSE FALSE END AS "HasPreferredSubtitles"
+                        ) AS subtitles
                 ) AS present ON TRUE
             ) AS availability
             LEFT JOIN (
@@ -259,16 +302,27 @@ namespace Jularr.Backend.Service.User.Library.V1
                 -- a running search, a request that waits.
                 SELECT
                     CASE
-                        WHEN request."RequestStatus" IN (4, 5) OR downloading."IsDownloading" THEN 4
-                        WHEN request."RequestStatus" = 3 THEN 5
-                        WHEN request."RequestStatus" IN (1, 2) THEN 6
-                        WHEN wanted."WantedItemId" IS NOT NULL THEN 5
-                        WHEN availability."AvailableUnits" = 0 THEN 3
+                        WHEN availability."AvailableUnits" = 0 THEN
+                            CASE
+                                WHEN downloading."IsDownloading" THEN 4
+                                WHEN request."RequestStatus" IN (1, 2) THEN 6
+                                WHEN wanted."IsPaused" IS FALSE THEN 5
+                                WHEN wanted."IsPaused" IS TRUE THEN 12
+                                WHEN request."RequestStatus" = 3 THEN 5
+                                WHEN request."RequestStatus" BETWEEN 1 AND 5 THEN 6
+                                ELSE 3
+                            END
                         WHEN availability."AvailableUnits" < availability."MonitoredUnits" THEN
-                            CASE WHEN availability."HasOtherAudio" THEN 9 ELSE 2 END
+                            CASE
+                                WHEN profileLanguage."Language" IS NULL THEN 2
+                                WHEN availability."HasOtherAudio" THEN 9
+                                WHEN availability."HasPreferredSubtitles" THEN 11
+                                ELSE 2
+                            END
                         WHEN profileLanguage."Language" IS NULL THEN 1
-                        WHEN availability."HasProfileAudio" THEN 7
                         WHEN availability."HasOtherAudio" THEN 8
+                        WHEN availability."HasPreferredSubtitles" THEN 10
+                        WHEN availability."HasProfileAudio" THEN 7
                         ELSE 1
                     END::smallint AS "AvailabilityStateId"
                 FROM
@@ -302,12 +356,11 @@ namespace Jularr.Backend.Service.User.Library.V1
                     ) AS request ON TRUE
                     LEFT JOIN LATERAL (
                         SELECT
-                            wanted."Id" AS "WantedItemId"
+                            bool_and(wanted."IsPaused") AS "IsPaused"
                         FROM
                             "WantedItems" AS wanted
                         WHERE
                             wanted."WorkId" = work."Id"
-                        LIMIT 1
                     ) AS wanted ON TRUE
             ) AS acquisition
             """;

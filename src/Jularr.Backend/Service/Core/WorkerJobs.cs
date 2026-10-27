@@ -64,7 +64,9 @@ namespace Jularr.Backend.Service.Core
             // The scan, backup and benchmark queues run beside each other, each when work arrives.
             new("operations", WorkerGroupType.Operation, null, TimeSpan.Zero, canRunNow: false),
             new("backupQueue", WorkerGroupType.Operation, null, TimeSpan.Zero, canRunNow: false),
+            new("mediaImportQueue", WorkerGroupType.Operation, null, TimeSpan.Zero, canRunNow: false),
             new("benchmarkQueue", WorkerGroupType.Operation, null, TimeSpan.Zero, canRunNow: false),
+            new("searchQueue", WorkerGroupType.Operation, null, TimeSpan.Zero, canRunNow: false),
 
             // What a restart interrupts, the queue and the running downloads, is picked up at once; the rest follows one by one.
             // Tracking looks every minute and every 15 seconds while a download runs.

@@ -1,9 +1,6 @@
-# Clean-start completion plan
+# Historical clean-start completion packages
 
-Owner decisions are in [BACKEND_NEXT](BACKEND_NEXT.md); owners and tests in
-[CODEMAP](CODEMAP.md); what is planned, implemented, tested and verified end to end in the
-[feature matrix](FEATURE_MATRIX.md). One branch, bundled commit and PR per package, a module
-audit before integration. Each package lists its acceptance; tests stay focused.
+Status: **historical** acceptance-criteria inventory, not a current delivery schedule, implementation status or new-work approval. Preserve requirements until reconciled with `main` and tracked issues. See [documentation authority](DOCUMENTATION_POLICY.md).
 
 | # | Package | Acceptance |
 | --- | --- | --- |

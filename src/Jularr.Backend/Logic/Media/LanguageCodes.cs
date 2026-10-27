@@ -1,5 +1,7 @@
 using System.Collections.Frozen;
 using System.Globalization;
+using System.Text.Json;
+using Jularr.Backend.Data.Logic.Media;
 
 namespace Jularr.Backend.Logic.Media
 {
@@ -16,5 +18,8 @@ namespace Jularr.Backend.Logic.Media
 
         // "de", "deu", "ger" and "de-AT" are German; anything else is unknown.
         public static string? ToTwoLetter(string? code) => code is null ? null : TwoLetter.GetValueOrDefault(code.Split('-', '_')[0]);
+
+        // Card SQL compares indexed facts without maintaining another ISO mapping.
+        internal static LanguageAliasesData Aliases { get; } = new(JsonSerializer.Serialize(TwoLetter));
     }
 }

@@ -28,13 +28,16 @@ namespace Jularr.Backend.Tests
             Assert.AreNotEqual(HttpStatusCode.OK, offPage.StatusCode);
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Uploads'");
 
-            // A volume takes the import layout and belongs to its unit.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (70, 'anilist', '12345');
+                """);
+            // A volume takes the configured import layout and catalog ID and belongs to its unit.
             using var uploaded = await host.SendAsync(HttpMethod.Post, route, Volume("v3.cbz", "3"));
             Assert.AreEqual(HttpStatusCode.OK, uploaded.StatusCode, await uploaded.Content.ReadAsStringAsync());
-            Assert.AreEqual(9L, new FileInfo(Path.Combine(storage.Path, mountId.ToString(), "Manga", "Blue Sea", "Blue Sea v03.cbz")).Length);
+            Assert.AreEqual(9L, new FileInfo(Path.Combine(storage.Path, mountId.ToString(), "Manga", "Blue Sea {anilist-12345}", "Blue Sea v03 {anilist-12345}.cbz")).Length);
             Assert.AreEqual(3m, await host.ScalarAsync("""
                 SELECT unit."Number" FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId" JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
-                WHERE file."RelativePath" = 'Blue Sea/Blue Sea v03.cbz'
+                WHERE file."RelativePath" = 'Blue Sea {anilist-12345}/Blue Sea v03 {anilist-12345}.cbz'
                 """));
 
             // The same volume again, or another kind of file, is refused.
@@ -56,7 +59,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "data-file-input");
             StringAssert.Contains(html, "data-file-max=\"2000000000\"");
             StringAssert.Contains(html, "CBZ, CBR, CB7, EPUB, PDF");
-            Assert.IsFalse(Directory.EnumerateFiles(Path.Combine(storage.Path, mountId.ToString(), "Manga", "Blue Sea"), "*.partial").Any());
+            Assert.IsFalse(Directory.EnumerateFiles(Path.Combine(storage.Path, mountId.ToString(), "Manga", "Blue Sea {anilist-12345}"), "*.partial").Any());
         }
 
         private static MultipartFormDataContent Volume(string fileName, string volume)

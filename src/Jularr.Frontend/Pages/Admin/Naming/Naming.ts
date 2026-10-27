@@ -6,8 +6,9 @@ export function insertToken(value: string, start: number, end: number, token: st
 }
 
 // The address that asks the Backend what a typed pattern would make of a sample title.
-export function previewAddress(mediaType: string, folder: string, file: string): string {
+export function previewAddress(mediaType: string, folder: string, file: string, options: Record<string, string> = {}): string {
     const query = new URLSearchParams({ mediaTypeId: mediaType, file });
     if (folder.trim() !== "") query.set("folder", folder);
+    for (const [key, value] of Object.entries(options)) if (value !== "") query.set(key, value);
     return "/api/v1/admin/library/naming/preview?" + query.toString();
 }

@@ -1,5 +1,6 @@
 import { onPage } from "../../../Modules/Navigation/PageSwap";
 import { countText, listStatus, summarize } from "./MediaImport";
+import { initializeDurableJobs } from "./MediaImport.jobs";
 
 // Says whether the pasted text or the chosen file reads as a list; a chosen file is the list, as on the server.
 function initializeSource(): void {
@@ -32,8 +33,12 @@ function initializePreview(): void {
     const rows = Array.from(document.querySelectorAll<HTMLInputElement>("[data-import-row]"));
     const form = all?.closest("form") ?? null;
     const intent = form?.querySelector<HTMLElement>("[data-import-intent]");
-    const globalAction = form?.querySelector<HTMLSelectElement>('select[name="Action"]');
-    const previewedAction = globalAction?.value;
+    // Form.Select uses segmented radio inputs for the three import actions.
+    // Other versions render a select: support both without inventing a default.
+    const globalAction = (): string =>
+        form?.querySelector<HTMLInputElement>('input[name="Action"]:checked')?.value ??
+        form?.querySelector<HTMLSelectElement>('select[name="Action"]')?.value ?? "1";
+    const previewedAction = globalAction();
     if (!all || all.dataset.ready !== undefined) return;
     all.dataset.ready = "";
     const update = () => {
@@ -52,7 +57,7 @@ function initializePreview(): void {
                 const match = /^Choices\[(\d+)\]\.Include$/.exec(row.name);
                 if (!match) continue;
                 const own = form?.querySelector<HTMLSelectElement>('select[name="Choices[' + match[1] + '].Action"]');
-                const action = own?.value || globalAction?.value || "1";
+                const action = own?.value || globalAction();
                 if (action === "2" || action === "3") monitored++;
                 if (action === "3") searched++;
             }
@@ -68,7 +73,7 @@ function initializePreview(): void {
         }
         // Existing unmonitored Works become actionable only after the server rerenders
         // the preview for the newly chosen global action.
-        if (apply) apply.disabled = selection.count === 0 || globalAction?.value !== previewedAction;
+        if (apply) apply.disabled = selection.count === 0 || globalAction() !== previewedAction;
     };
 
     all.addEventListener("change", () => {
@@ -76,7 +81,8 @@ function initializePreview(): void {
         update();
     });
     for (const row of rows) row.addEventListener("change", update);
-    globalAction?.addEventListener("change", update);
+    form?.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input[name="Action"],select[name="Action"]')
+        .forEach(control => control.addEventListener("change", update));
     form?.querySelectorAll<HTMLSelectElement>('select[name$=".Action"]').forEach(select => select.addEventListener("change", update));
     update();
 }
@@ -113,6 +119,7 @@ function registerPreviewStream(
     form.dataset.importPending = "";
     let useNormalPost = false;
 
+    // Capture: htmx's boosted-form listener must not post the form alongside the stream.
     form.addEventListener("submit", async event => {
         const submitter = (event as SubmitEvent).submitter as HTMLElement | null;
         if (useNormalPost || submitter !== button) return;
@@ -196,18 +203,34 @@ function registerPreviewStream(
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = "";
-            const handle = (event: { kind: string; index?: number; stage?: string; count?: number; total?: number }): void => {
+            const handle = (event: { kind: string; index?: number; stage?: string; count?: number; total?: number;
+                source?: string | null; query?: string | null; reason?: string | null }): void => {
                 if (event.kind === "row" && event.index !== undefined && event.stage !== undefined) {
                     const state = nodes.get(event.index);
                     if (state) {
                         const label = texts[event.stage] ?? event.stage;
-                        state.textContent = event.stage === "candidates" && event.count !== undefined
-                            ? label + " (" + event.count + ")" : label;
+                        // Only report the actual backend search parameters, never guessed client-side values.
+                        if (event.source) state.dataset.source = event.source;
+                        if (event.query) state.dataset.query = event.query;
+                        if (event.reason) state.dataset.reason = event.reason;
+                        else delete state.dataset.reason;
+                        const source = state.dataset.source === "openlibrary" ? "Open Library" :
+                            state.dataset.source === "catalog" ? "Metadata catalog" : state.dataset.source;
+                        const trace = [source, state.dataset.query].filter(Boolean).join(" · ");
+                        const reason = state.dataset.reason === "search_budget" ? labels?.phaseReasonSearchBudget :
+                            state.dataset.reason === "rate_limited" ? labels?.phaseReasonRateLimited :
+                            state.dataset.reason === "unavailable" ? labels?.phaseReasonUnavailable :
+                            state.dataset.reason === "no_match" ? labels?.phaseNoMatch : state.dataset.reason;
+                        state.textContent = (event.stage === "candidates" && event.count !== undefined
+                            ? label + " (" + event.count + ")" : label) +
+                            (trace ? " · " + trace : "") + (reason ? " · " + reason : "");
                     }
                     if (finishedStages.has(event.stage)) complete.add(event.index);
                     progress.value = complete.size;
                     const title = state?.parentElement?.firstElementChild?.textContent;
-                    heading.textContent = (title ? title + " · " : "") + (texts[event.stage] ?? event.stage) + " · " + complete.size + " / " + progress.max;
+                    heading.textContent = (title ? title + " · " : "") + (texts[event.stage] ?? event.stage) +
+                        (event.source ? " · " + (event.source === "openlibrary" ? "Open Library" : event.source) : "") +
+                        (event.query ? " · " + event.query : "") + " · " + complete.size + " / " + progress.max;
                 } else if (event.kind === "done") {
                     finished = true;
                     heading.textContent = labels?.phaseComplete ?? "Preview ready";
@@ -223,7 +246,8 @@ function registerPreviewStream(
                 while ((cut = buffer.indexOf("\n")) !== -1) {
                     const line = buffer.slice(0, cut).trim();
                     buffer = buffer.slice(cut + 1);
-                    if (line) handle(JSON.parse(line) as { kind: string; index?: number; stage?: string; count?: number; total?: number });
+                    if (line) handle(JSON.parse(line) as { kind: string; index?: number; stage?: string; count?: number; total?: number;
+                        source?: string | null; query?: string | null; reason?: string | null });
                 }
             }
             buffer += decoder.decode();
@@ -242,7 +266,7 @@ function registerPreviewStream(
             submitButtons.forEach((control, index) => { control.disabled = previousButtonStates[index]; });
             form.requestSubmit(button);
         }
-    });
+    }, { capture: true });
 }
 function initializePendingPreview(): void {
     const form = document.querySelector<HTMLFormElement>(".media-import__upload form");
@@ -261,282 +285,13 @@ function initializeRefreshPreview(): void {
     const form = document.querySelector<HTMLFormElement>(".media-import__preview form");
     registerPreviewStream(
         form,
-        form?.querySelector<HTMLButtonElement>('button[type="submit"]:not([data-import-apply])') ?? null,
+        form?.querySelector<HTMLButtonElement>("[data-import-refresh]") ?? null,
         document.querySelector<HTMLElement>(".media-import [data-import-status]")?.dataset,
         null, null
     );
 }
 
 
-type ImportEvent =
-    | { kind: "started" }
-    | { kind: "row"; index: number; title: string | null; outcome: string; status: string; workId: number | null }
-    | { kind: "done"; remaining: string | null }
-    | { kind: "error" };
-
-// When supported, each row is reported as soon as the backend actually processes it.
-// The plain HTML POST remains available if JavaScript or streaming is not supported.
-function initializeLiveImport(): void {
-    const form = document.querySelector<HTMLFormElement>(".media-import__preview form");
-    const apply = form?.querySelector<HTMLButtonElement>("[data-import-apply]");
-    if (!form || !apply || form.dataset.importLive !== undefined) return;
-    form.dataset.importLive = "";
-
-    form.addEventListener("submit", async event => {
-        const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
-        if (form.dataset.importBusy === "true") {
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            return;
-        }
-        if (submitter !== apply) {
-            if (submitter) {
-                submitter.disabled = true;
-                form.setAttribute("aria-busy", "true");
-            }
-            return;
-        }
-
-        event.preventDefault();
-        form.dataset.importBusy = "true";
-        apply.disabled = true;
-        form.setAttribute("aria-busy", "true");
-        const controls = Array.from(form.querySelectorAll<HTMLButtonElement>('button[type="submit"]'));
-        for (const button of controls) button.disabled = true;
-
-        const source = new FormData(form);
-        const editable = Array.from(form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input:not([type=hidden]), select, textarea"));
-        const originalStates = editable.map(control => control.disabled);
-        for (const control of editable) control.disabled = true;
-        ++runningImportRequests;
-        const total = form.querySelectorAll('input[name$=".Index"]').length;
-        const panel = document.createElement("section");
-        panel.className = "media-import__activity";
-        const heading = document.createElement("strong");
-        const progress = document.createElement("progress");
-        progress.max = Math.max(total, 1);
-        progress.value = 0;
-        const history = document.createElement("ol");
-        history.className = "media-import__activity-list";
-        history.setAttribute("aria-live", "off");
-        heading.setAttribute("role", "status");
-        heading.setAttribute("aria-live", "polite");
-        panel.append(heading, progress, history);
-        form.before(panel);
-
-        let processed = 0;
-        let finished = false;
-        const pending = (state: string) => {
-            heading.textContent = state + " · " + processed + " / " + total;
-        };
-        pending((apply.textContent ?? "").trim());
-
-        // The server limits provider imports to 40 new titles per pass. Continue
-        // automatically only while a batch made forward progress, mapping each
-        // deferred row back to its original position and preserving its decisions.
-        // An unavailable provider / stalled run is left for explicit retry.
-        const makeContinuation = (current: FormData, waiting: number[], remaining: string): FormData => {
-            const next = new FormData();
-            current.forEach((value, name) => {
-                if (typeof value !== "string") return;
-                if (name === "__RequestVerificationToken" || name === "Action" || name.startsWith("Defaults[")) {
-                    next.append(name, value);
-                    return;
-                }
-                const match = /^Choices\[(\d+)\]\.(.+)$/.exec(name);
-                if (!match) return;
-                const position = waiting.indexOf(Number(match[1]));
-                if (position !== -1 && match[2] !== "Index") next.append("Choices[" + position + "]." + match[2], value);
-            });
-            for (let index = 0; index < waiting.length; index++) next.append("Choices[" + index + "].Index", String(index));
-            next.set("Json", remaining);
-            return next;
-        };
-
-        const addManualContinuation = (next: FormData, caption?: string): void => {
-            const continuation = document.createElement("form");
-            continuation.method = "post";
-            const target = new URL(form.action, window.location.href);
-            target.searchParams.set("handler", "Preview");
-            continuation.action = target.toString();
-            next.forEach((value, name) => {
-                if (typeof value !== "string") return;
-                const input = document.createElement("input");
-                input.type = "hidden";
-                input.name = name;
-                input.value = value;
-                continuation.append(input);
-            });
-            const button = document.createElement("button");
-            button.type = "submit";
-            button.className = "button button--primary";
-            button.textContent = caption ?? apply.dataset.importContinue ?? "Continue";
-            continuation.append(button);
-            panel.append(continuation);
-        };
-
-        const itemNodes = new Map<number, { name: HTMLElement; status: HTMLElement }>();
-        try {
-            const list = JSON.parse(String(source.get("Json") ?? "")) as { items?: { title?: string }[] };
-            list.items?.forEach((item, index) => {
-                const entry = document.createElement("li");
-                const name = document.createElement("span");
-                name.textContent = item?.title || "#" + String(index + 1);
-                const status = document.createElement("span");
-                status.className = "media-import__activity-outcome";
-                entry.append(name, status);
-                history.append(entry);
-                itemNodes.set(index, { name, status });
-            });
-        } catch {
-            // Server validation still owns the list.
-        }
-
-        let hasRemaining = false;
-        const failedIndexes = new Set<number>();
-        const outcomes = new Map<number, { title: string; status: string; result: string; workId: number | null }>();
-        let current = source;
-        let indices = Array.from({ length: total }, (_, index) => index);
-        const settled = new Set<number>();
-        const maximumWaves = Math.ceil(total / 40) + 2;
-        try {
-            for (let wave = 0; wave < maximumWaves; wave++) {
-                const endpoint = new URL(form.action, window.location.href);
-                endpoint.searchParams.set("handler", "ApplyStream");
-                const response = await fetch(endpoint, { method: "POST", body: current, credentials: "same-origin", headers: { Accept: "application/x-ndjson" } });
-                if (!response.ok || !response.body) throw new Error("Import request failed");
-
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = "";
-                let waveFinished = false;
-                let remaining: string | null = null;
-                let added = 0;
-                let unavailable = false;
-                const waiting: number[] = [];
-
-                const handle = (update: ImportEvent): void => {
-                    if (update.kind === "row") {
-                        const originalIndex = indices[update.index];
-                        if (originalIndex === undefined) throw new Error("Invalid result index");
-                        const node = itemNodes.get(originalIndex);
-                        if (node) {
-                            if (update.title) node.name.textContent = update.title;
-                            node.status.textContent = update.outcome;
-                            if (update.workId !== null && node.name.tagName !== "A") {
-                                const link = document.createElement("a");
-                                link.href = "/Admin/Works/" + String(update.workId);
-                                link.textContent = node.name.textContent;
-                                node.name.replaceWith(link);
-                                node.name = link;
-                            }
-                        }
-                        outcomes.set(originalIndex, {
-                            title: update.title || node?.name.textContent || "#" + String(originalIndex + 1),
-                            status: update.status, result: update.outcome, workId: update.workId
-                        });
-                        if (update.status === "Failed" || update.status === "NotFound") failedIndexes.add(originalIndex);
-                        if (update.status === "Deferred" || update.status === "Unavailable") {
-                            waiting.push(update.index);
-                            if (update.status === "Unavailable") unavailable = true;
-                        } else {
-                            settled.add(originalIndex);
-                        }
-                        if (update.status === "Added" || update.status === "AddedAndMonitored") added++;
-                        processed = settled.size;
-                        progress.value = processed;
-                        pending((apply.textContent ?? "").trim());
-                        // Keep the page position stable while hundreds of rows report outcomes.
-                    } else if (update.kind === "done") {
-                        waveFinished = true;
-                        remaining = update.remaining;
-                    } else if (update.kind === "error") {
-                        throw new Error("Import interrupted");
-                    }
-                };
-
-                for (;;) {
-                    const chunk = await reader.read();
-                    if (chunk.done) break;
-                    buffer += decoder.decode(chunk.value, { stream: true });
-                    let cut: number;
-                    while ((cut = buffer.indexOf("\n")) !== -1) {
-                        const line = buffer.slice(0, cut).trim();
-                        buffer = buffer.slice(cut + 1);
-                        if (line) handle(JSON.parse(line) as ImportEvent);
-                    }
-                }
-                buffer += decoder.decode();
-                if (buffer.trim()) handle(JSON.parse(buffer) as ImportEvent);
-                if (!waveFinished) throw new Error("Import did not finish");
-
-                if (!remaining) {
-                    finished = true;
-                    break;
-                }
-
-                const next = makeContinuation(current, waiting, remaining);
-                if (added === 0 || unavailable || wave === maximumWaves - 1) {
-                    addManualContinuation(next);
-                    hasRemaining = true;
-                    finished = true;
-                    break;
-                }
-
-                indices = waiting.map(index => indices[index]);
-                current = next;
-            }
-
-            if (!finished) throw new Error("Import did not finish");
-            panel.classList.add(hasRemaining ? "media-import__activity--partial" : "media-import__activity--done");
-            pending(hasRemaining ? (apply.dataset.importPartial ?? "Some titles are waiting") : (apply.dataset.importComplete ?? "Completed"));
-            // A failed row is never retried automatically. Offer a preview containing
-            // only those rows, with their original choices mapped to the new indices.
-            if (failedIndexes.size > 0) {
-                const original = JSON.parse(String(source.get("Json") ?? "")) as { version: number; items: unknown[] };
-                if (Array.isArray(original.items)) {
-                    const failed = [...failedIndexes].sort((a, b) => a - b);
-                    const retry = JSON.stringify({ version: 1, items: failed.map(index => original.items[index]) });
-                    addManualContinuation(makeContinuation(source, failed, retry), apply.dataset.importRetryFailed ?? "Review failed titles");
-                }
-            }
-
-            const exportButton = document.createElement("button");
-            exportButton.type = "button";
-            exportButton.className = "button";
-            exportButton.textContent = apply.dataset.importDownloadReport ?? "Download report";
-            exportButton.addEventListener("click", () => {
-                const report = [...outcomes.entries()].sort(([a], [b]) => a - b)
-                    .map(([index, result]) => ({ index, ...result }));
-                const blob = new Blob([JSON.stringify({ version: 1, results: report }, null, 2)], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = "jularr-import-report.json";
-                link.click();
-                URL.revokeObjectURL(url);
-            });
-            panel.append(exportButton);
-
-        } catch {
-            // Some rows may already have committed; never promise a rollback or blindly retry.
-            panel.classList.add("media-import__activity--failed");
-            pending(apply.dataset.importFailed ?? "Failed");
-            // The server may still be committing the last item. Re-preview to
-            // reconcile committed Works before another write; never blindly retry.
-            for (const button of controls) if (button !== apply) button.disabled = false;
-            apply.disabled = true;
-        } finally {
-            editable.forEach((control, index) => { control.disabled = originalStates[index]; });
-            --runningImportRequests;
-            form.dataset.importBusy = "false";
-            form.removeAttribute("aria-busy");
-        }
-    });
-}
-
-// Provider editions are requested only for the selected Open Library Work.
-// Keep the comparison read-only: its ISBNs describe editions, not alternative Works.
 function initializeEditionComparison(): void {
     document.querySelectorAll<HTMLButtonElement>("[data-import-editions]").forEach(button => {
         if (button.dataset.ready !== undefined) return;
@@ -589,6 +344,6 @@ onPage(import.meta.url, () => {
     initializePreview();
     initializePendingPreview();
     initializeRefreshPreview();
-    initializeLiveImport();
+    initializeDurableJobs();
     initializeEditionComparison();
 });

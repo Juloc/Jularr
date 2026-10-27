@@ -31,7 +31,7 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
     {
         public BrowserStatusV1(string? path, string? remoteAddress, string profilePath, bool isAvailable, bool isRunning, string? version, string? lastUrl, string? lastOutcome, string? lastError,
             DateTime? lastAttemptAt, PageResult<BrowserEventV1> events, string installationState = "disabled", string? installationError = null,
-            long downloadedBytes = 0, long totalBytes = 0)
+            long downloadedBytes = 0, long totalBytes = 0, string? installedVersion = null, long managedSizeBytes = 0, BrowserViewV1? manualView = null)
         {
             Path = path;
             RemoteAddress = remoteAddress;
@@ -48,6 +48,9 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
             InstallationError = installationError;
             DownloadedBytes = downloadedBytes;
             TotalBytes = totalBytes;
+            InstalledVersion = installedVersion;
+            ManagedSizeBytes = managedSizeBytes;
+            ManualView = manualView;
         }
 
         [DataField(typeof(BrowserFields), nameof(BrowserFields.InstallationState))]
@@ -61,6 +64,12 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
 
         [DataField(typeof(BrowserFields), nameof(BrowserFields.TotalBytes))]
         public long TotalBytes { get; }
+
+        [DataField(typeof(BrowserFields), nameof(BrowserFields.InstalledVersion), false)]
+        public string? InstalledVersion { get; }
+
+        [DataField(typeof(BrowserFields), nameof(BrowserFields.ManagedSizeBytes))]
+        public long ManagedSizeBytes { get; }
 
         [DataField(typeof(BrowserFields), nameof(BrowserFields.Path), false)]
         public string? Path { get; }
@@ -93,6 +102,7 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
         public DateTime? LastAttemptAt { get; }
 
         public PageResult<BrowserEventV1> Events { get; }
+        public BrowserViewV1? ManualView { get; }
     }
 
     public sealed class RunBrowserActionDataV1 : BaseData

@@ -10,7 +10,6 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         public static IUiComponent Of(WantedDetailsV1 item)
         {
             // Paused and available targets need no further acquisition.
-            if (item.IsPaused) return new Text("wanted.paused");
             if (item.HasMedia) return new Text("wanted.available");
             if (item.IsDownloading)
             {
@@ -18,6 +17,8 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                     ? new Span(new Text("wanted.downloading"), new ValueText(" " + percent.ToString(CultureInfo.InvariantCulture) + "%"))
                     : new Text("wanted.downloading");
             }
+
+            if (item.IsPaused) return new Text("wanted.paused");
 
             return new Text(item.OutcomeKey is { } outcome ? "acquisition.outcome." + outcome : "wanted.requested");
         }

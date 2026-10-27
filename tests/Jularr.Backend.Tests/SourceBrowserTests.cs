@@ -40,6 +40,80 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ManagedBrowser_RefreshCanBeQueuedAndCancelledByUninstall()
+        {
+            using var folder = new TemporaryDirectory();
+            var packages = new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path });
+            packages.RequestRefresh(repair: false);
+            Assert.AreEqual("queued", packages.State);
+            packages.RequestRefresh(repair: true);
+            Assert.AreEqual("queued", packages.State);
+            await packages.RemoveAsync(CancellationToken.None);
+            Assert.AreEqual("disabled", packages.State);
+            Assert.IsTrue(packages.CanRetryInstall);
+        }
+
+        [TestMethod]
+        public void ManagedBrowser_ExternalRuntimeCannotBeManaged()
+        {
+            using var folder = new TemporaryDirectory();
+            Assert.IsTrue(new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path }).OwnsRuntime);
+            Assert.IsFalse(new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path, Path = "/usr/bin/chromium" }).OwnsRuntime);
+            Assert.IsFalse(new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path,
+                RemoteAddress = "http://127.0.0.1:9222" }).OwnsRuntime);
+        }
+
+        [TestMethod]
+        public async Task ManagedBrowser_FailedUpdateKeepsPreviousPackageAvailable()
+        {
+            if (!OperatingSystem.IsLinux()) return;
+            using var folder = new TemporaryDirectory();
+            var packages = new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path },
+                _ => Task.FromException<string>(new HttpRequestException("Test-only metadata outage.")));
+            Directory.CreateDirectory(Path.GetDirectoryName(packages.ExecutablePath)!);
+            await File.WriteAllBytesAsync(packages.ExecutablePath, [1, 2, 3]);
+            var marker = Path.Combine(folder.Path, "managed", "current", ".jularr-version");
+            await File.WriteAllTextAsync(marker, "156.0.8078.47");
+            packages.RequestRefresh(repair: false);
+
+            await Assert.ThrowsExactlyAsync<HttpRequestException>(() => packages.InstallAsync(CancellationToken.None));
+            Assert.AreEqual("failed", packages.State);
+            Assert.IsFalse(packages.CanRetryInstall);
+            Assert.IsTrue(packages.IsInstalled);
+            Assert.IsTrue(File.Exists(packages.ExecutablePath));
+            Assert.AreEqual("156.0.8078.47", packages.InstalledVersion);
+        }
+
+        [TestMethod]
+        public void ManagedBrowser_SizeScanCannotFollowSymlinksToUnrelatedFiles()
+        {
+            if (!OperatingSystem.IsLinux()) return;
+            using var folder = new TemporaryDirectory();
+            var managed = Path.Combine(folder.Path, "managed");
+            var outside = Path.Combine(folder.Path, "outside");
+            Directory.CreateDirectory(managed);
+            Directory.CreateDirectory(outside);
+            File.WriteAllBytes(Path.Combine(managed, "owned.dat"), new byte[7]);
+            File.WriteAllBytes(Path.Combine(outside, "foreign.dat"), new byte[29]);
+            Directory.CreateSymbolicLink(Path.Combine(managed, "foreign"), outside);
+            var packages = new BrowserPackages(new BrowserOptions { ProfilePath = folder.Path });
+            Assert.AreEqual(7L, packages.ManagedSizeBytes);
+        }
+
+        [TestMethod]
+        [DataRow("https://user:password@annas-archive.gl/search?q=private-title&key=member-secret", "https://annas-archive.gl")]
+        [DataRow("https://files.example.org:8443/signed/book-secret.epub?token=download-secret", "https://files.example.org:8443")]
+        [DataRow("https://[::1]:9222/json/list?auth=private-secret", "https://[::1]:9222")]
+        public void BrowserDiagnostics_KeepOnlyPublicOrigin(string address, string expected)
+        {
+            var safe = SourceBrowser.DiagnosticOrigin(new Uri(address));
+            Assert.AreEqual(expected, safe);
+            Assert.IsFalse(safe.Contains("secret", StringComparison.OrdinalIgnoreCase));
+            Assert.IsFalse(safe.Contains("@", StringComparison.Ordinal));
+            Assert.IsFalse(safe.Contains("?", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
         public async Task ManagedBrowser_FailedInstallBacksOffAndTurningOffClearsRetry()
         {
             var packages = new BrowserPackages(new BrowserOptions { ProfilePath = Path.Combine("relative", "nonexistent-root") });
@@ -227,6 +301,98 @@ namespace Jularr.Backend.Tests
                 source.SaveFileAsync(new Uri("https://annas.example.test/book.epub"), Path.Combine(folder.Path, "book.epub"), null, null, CancellationToken.None));
         }
 
+        [TestMethod]
+        public async Task Browser_ManualControlsPauseAutomationAndKeepCookiesUntilExplicitReset()
+        {
+            var executable = Environment.GetEnvironmentVariable("JULARR_BROWSER");
+            if (string.IsNullOrWhiteSpace(executable)) Assert.Inconclusive("JULARR_BROWSER names no browser.");
+            using var folder = new TemporaryDirectory();
+            using var server = new CheckPage();
+            using var browser = new SourceBrowser(new BrowserOptions { Path = executable, ProfilePath = folder.Path, AllowPrivateAddressesForTests = true, PageTimeoutSeconds = 10 });
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+            var ct = timeout.Token;
+            var address = new Uri(server.Address, "/manual");
+            var view = await browser.BeginManualAsync(address, DateTimeOffset.UtcNow.AddMinutes(2), ct);
+            Assert.IsTrue(view.Width > 0 && view.Height > 0);
+            await Task.Delay(500, ct);
+            var frame = await browser.CaptureManualAsync(DateTimeOffset.UtcNow.AddMinutes(2), ct);
+            Assert.IsTrue(frame.Length > 500 && frame[0] == 0xff && frame[1] == 0xd8, "The view must return JPEG bytes.");
+            Assert.IsNull(await browser.ReadPageAsync(address, ct));
+            Assert.IsNull(await browser.ReadPagesAsync([address], ct));
+            await Assert.ThrowsExactlyAsync<Jularr.Integrations.Data.Browser.SourceBrowserException>(() =>
+                browser.SaveFileAsync(new Uri(server.Address, "/book.epub"), Path.Combine(folder.Path, "book.epub"), null, null, ct));
+            await Input("down", 60, 60);
+            await Input("up", 60, 60);
+            await Input("text", text: "manual fixture");
+            await Input("key", key: "Tab");
+            await Input("key", key: "Enter");
+            Assert.AreEqual("manual fixture", await server.ManualInput.Task.WaitAsync(TimeSpan.FromSeconds(5), ct));
+            await browser.EndManualAsync(ct);
+            Assert.IsFalse(browser.HasManualControl);
+            await browser.ReadPageAsync(address, ct);
+            StringAssert.Contains(server.LastCookie ?? "", "assisted=yes");
+            await browser.StopAsync();
+            await browser.ReadPageAsync(address, ct);
+            StringAssert.Contains(server.LastCookie ?? "", "assisted=yes");
+            await browser.ResetAsync();
+            await browser.ReadPageAsync(address, ct);
+            Assert.IsFalse(server.LastCookie?.Contains("assisted=yes", StringComparison.Ordinal) == true);
+            await browser.StopAsync();
+
+            Task Input(string action, int x = 0, int y = 0, string? key = null, string? text = null) =>
+                browser.InputManualAsync(action, x, y, 0, key, text, DateTimeOffset.UtcNow.AddMinutes(2), ct);
+        }
+
+        [TestMethod]
+        public async Task Browser_ManualAndAutomaticReadsKeepPrimaryPageSessionAndResumeItsPage()
+        {
+            var executable = Environment.GetEnvironmentVariable("JULARR_BROWSER");
+            if (string.IsNullOrWhiteSpace(executable)) Assert.Inconclusive("JULARR_BROWSER names no browser.");
+            using var folder = new TemporaryDirectory();
+            using var server = new CheckPage();
+            using var browser = new SourceBrowser(new BrowserOptions { Path = executable, ProfilePath = folder.Path, AllowPrivateAddressesForTests = true, PageTimeoutSeconds = 10 });
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            var ct = timeout.Token;
+            await browser.BeginManualAsync(new Uri(server.Address, "/manual"), DateTimeOffset.UtcNow.AddMinutes(2), ct);
+            await Task.Delay(300, ct);
+            await Input("down", 60, 60);
+            await Input("up", 60, 60);
+            await Input("text", text: "page session");
+            await Input("key", key: "Tab");
+            await Input("key", key: "Enter");
+            Assert.AreEqual("page session", await server.ManualInput.Task.WaitAsync(TimeSpan.FromSeconds(5), ct));
+            await browser.EndManualAsync(ct);
+
+            var page = await browser.ReadPagesAsync([new Uri(server.Address, "/session")], ct);
+            Assert.IsNotNull(page);
+            StringAssert.Contains(page.Html, "Primary page session: page session");
+
+            // Reopening the configured source keeps the current page and its form.
+            await browser.BeginManualAsync(server.Address, DateTimeOffset.UtcNow.AddMinutes(2), ct);
+            await Input("down", 60, 60);
+            await Input("up", 60, 60);
+            await Input("key", key: "End");
+            await Input("text", text: " resumed");
+            await Input("key", key: "Tab");
+            await Input("key", key: "Enter");
+            Assert.AreEqual("page session resumed", await server.SecondManualInput.Task.WaitAsync(TimeSpan.FromSeconds(5), ct));
+
+            // A different configured origin starts its own page session.
+            using var other = new CheckPage();
+            await browser.BeginManualAsync(new Uri(other.Address, "/manual"), DateTimeOffset.UtcNow.AddMinutes(2), ct);
+            await Task.Delay(300, ct);
+            await Input("down", 60, 60);
+            await Input("up", 60, 60);
+            await Input("text", text: "other source");
+            await Input("key", key: "Tab");
+            await Input("key", key: "Enter");
+            Assert.AreEqual("other source", await other.ManualInput.Task.WaitAsync(TimeSpan.FromSeconds(5), ct));
+            await browser.StopAsync();
+
+            Task Input(string action, int x = 0, int y = 0, string? key = null, string? text = null) =>
+                browser.InputManualAsync(action, x, y, 0, key, text, DateTimeOffset.UtcNow.AddMinutes(2), ct);
+        }
+
         private static int FreePort()
         {
             var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
@@ -252,6 +418,9 @@ namespace Jularr.Backend.Tests
             }
 
             public Uri Address { get; }
+            public string? LastCookie { get; private set; }
+            public TaskCompletionSource<string> ManualInput { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public TaskCompletionSource<string> SecondManualInput { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             public void Dispose()
             {
@@ -274,7 +443,27 @@ namespace Jularr.Backend.Tests
                         return;
                     }
 
-                    if (context.Request.Url!.AbsolutePath == "/book.epub")
+                    LastCookie = context.Request.Headers["Cookie"];
+                    if (context.Request.Url!.AbsolutePath is "/manual" or "/accepted" or "/session")
+                    {
+                        if (context.Request.Url.AbsolutePath == "/accepted")
+                        {
+                            var accepted = context.Request.QueryString["v"] ?? "";
+                            if (!ManualInput.TrySetResult(accepted)) SecondManualInput.TrySetResult(accepted);
+                        }
+                        var bytes = Encoding.UTF8.GetBytes("""
+                            <html><head><title>Manual browser fixture</title></head><body style="margin:0">
+                            <input id="entry" style="position:absolute;left:40px;top:40px;width:250px;height:40px">
+                            <button style="position:absolute;left:40px;top:120px;width:250px;height:40px" onclick="sessionStorage.setItem('assisted',document.getElementById('entry').value);document.cookie='assisted=yes; Max-Age=3600; SameSite=Lax';fetch('/accepted?v='+encodeURIComponent(document.getElementById('entry').value))">Accept fixture</button>
+                            <p id="proof" style="position:absolute;top:220px"></p>
+                            <script>document.getElementById('entry').value=sessionStorage.getItem('assisted')||'';document.getElementById('proof').textContent='Primary page session: '+(sessionStorage.getItem('assisted')||'');</script>
+                            </body></html>
+                            """);
+                        context.Response.ContentType = "text/html";
+                        context.Response.ContentLength64 = bytes.Length;
+                        await context.Response.OutputStream.WriteAsync(bytes);
+                    }
+                    else if (context.Request.Url.AbsolutePath == "/book.epub")
                     {
                         var bytes = Encoding.UTF8.GetBytes("the book");
                         context.Response.AddHeader("Content-Disposition", "attachment; filename=\"book.epub\"");

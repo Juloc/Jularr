@@ -138,9 +138,12 @@ namespace Jularr.Backend.Logic.Acquisition
                     platform."IgdbId" AS "PlatformIgdbId",
                     coalesce((
                         SELECT
-                            jsonb_agg(jsonb_build_object('Quality', evidence."QualityKey", 'WorkUnitId', evidence."WorkUnitId", 'Facts', evidence."Evidence"))
+                            jsonb_agg(jsonb_build_object('Quality', evidence."QualityKey", 'WorkUnitId', coalesce(coverage."WorkUnitId", evidence."WorkUnitId"),
+                                'Facts', evidence."Evidence", 'RuntimeMinutes', installed."DurationMs" / 60000.0))
                         FROM
                             "StoredFileFormatEvidence" AS evidence
+                            JOIN "StoredFiles" AS installed ON installed."Id" = evidence."StoredFileId"
+                            LEFT JOIN "MediaAssetUnitCoverage" AS coverage ON coverage."MediaAssetId" = installed."MediaAssetId"
                         WHERE
                             evidence."WorkId" = work."Id"
                             AND evidence."QualityKey" IS NOT NULL
@@ -611,6 +614,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 )
                 SELECT
                     unit."Id" AS "WorkUnitId",
+                    unit."Title",
                     parent."Number"::integer AS "ParentNumber",
                     unit."Number"::integer AS "Number",
                     COALESCE(unit."ReleasedOn" <= current_date, unit."WorkUnitTypeId" = 3) AS "IsAvailable",
@@ -618,10 +622,11 @@ namespace Jularr.Backend.Logic.Acquisition
                         SELECT
                             1
                         FROM
-                            "MediaAssets" AS asset
+                            "MediaAssetUnitCoverage" AS coverage
+                            JOIN "MediaAssets" AS asset ON asset."Id" = coverage."MediaAssetId"
                         WHERE
-                            asset."WorkId" = unit."WorkId"
-                            AND asset."WorkUnitId" = unit."Id"
+                            coverage."WorkId" = unit."WorkId"
+                            AND coverage."WorkUnitId" = unit."Id"
                             AND EXISTS (
                                 SELECT
                                     1

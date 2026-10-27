@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.User.Library.V1;
 
@@ -139,6 +140,7 @@ namespace Jularr.Backend.Service.User.Media.V1
             sql = new SqlStatement();
             sql.Statement = WorkCardProjection.Page("SELECT unnest(@WorkIds)", "FALSE");
             sql.Parameters.Add(new WorkRelationWorksData(workIds));
+            sql.Parameters.Add(LanguageCodes.Aliases);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             var cards = (await Context.ReadSql.ReadListAsync<LibraryItemV1>(sql, CancellationToken)).ToDictionary(card => card.Id);
             return new BaseDataList<WorkRelationV1>([.. relations.Select(relation => relation.RelatedWorkId is { } workId && cards.TryGetValue(workId, out var card)

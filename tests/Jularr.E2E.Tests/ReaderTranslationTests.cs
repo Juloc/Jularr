@@ -57,8 +57,14 @@ namespace Jularr.E2E.Tests
             await page.Locator("[data-action=language]").ClickAsync();
             await Assertions.Expect(page.Locator("[data-language-choice=de]")).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator("[data-local-quality-toggle]")).ToBeVisibleAsync();
-
+            // A German profile immediately applies its default reading language.
+            // Confirm the engine, then deliberately switch to Original and back.
+            await Assertions.Expect(page.Locator("[data-translation-provider]")).ToContainTextAsync("TranslateGemma");
+            await page.Locator("[data-language-choice=original]").ClickAsync();
+            await Assertions.Expect(page.Locator("[data-translation-provider]")).ToContainTextAsync("Original");
+            await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Chapter One");
             await page.Locator("[data-language-choice=de]").ClickAsync();
+            await Assertions.Expect(page.Locator("[data-translation-provider]")).ToContainTextAsync("TranslateGemma");
             await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Kapitel Eins", new() { Timeout = 60_000 });
             // Visible text is progressive; do not switch away after the first block and
             // then mistake the remaining work for a cache miss.

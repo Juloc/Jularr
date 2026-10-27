@@ -1,9 +1,41 @@
-﻿{
+{
  "locale": "de",
  "name": "Deutsch",
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "errors.validation.search_in_progress": ["A library search is already queued or running. Finish or cancel it before starting a different selection.", "Eine Bibliothekssuche läuft bereits oder wartet. Beende sie oder brich sie ab, bevor du eine andere Auswahl startest."],
+  "errors.validation.no_search_targets": ["No monitored search targets match this selection. Monitoring was not changed.", "Die Auswahl enthält keine passenden überwachten Suchziele. Die Überwachung wurde nicht geändert."],
+  "works.outcome.evidence_missing": ["Existing file evidence is incomplete; review it manually.", "Die vorhandene Datei ist nicht ausreichend erkannt; bitte manuell prüfen."],
+  "works.search.refresh": ["Refresh search status", "Suchstatus aktualisieren"],
+  "works.search.title": ["Library search","Bibliothek durchsuchen"],
+  "works.search.all": ["Search all","Alle durchsuchen"],
+  "works.search.filtered": ["Search filtered","Gefilterte durchsuchen"],
+  "works.search.scope": ["Searches all matching monitored titles across every page using their current profiles. Existing downloads continue.","Durchsucht alle passenden überwachten Titel über sämtliche Seiten mit ihren aktuellen Profilen. Laufende Downloads bleiben bestehen."],
+  "works.search.progress": ["{0} of {1} targets checked","{0} von {1} Suchzielen geprüft"],
+  "works.search.cancelled": ["Cancelled","Abgebrochen"],
+  "works.search.results": ["Search results","Suchverlauf"],
+  "works.search.notRun": ["Not searched (cancelled)","Nicht gesucht (abgebrochen)"],
+  "works.outcome.pending": ["Waiting","Wartet"],
+  "works.outcome.paused": ["Monitoring paused","Überwachung pausiert"],
+  "operation.type.AcquisitionSearch": ["Library search","Bibliothekssuche"],
+  "jobs.job.searchQueue": ["Library search queue","Bibliothekssuche"],
+  "jobs.about.searchQueue": ["Searches queued library selections and reassesses upgrades using current profiles.","Durchsucht vorgemerkte Bibliothekstitel und bewertet Upgrades nach aktuellen Profilen."],
+  "profile.field.firstContentLanguage": ["First content language", "Erste Inhaltssprache"],
+  "profile.field.secondContentLanguage": ["Second content language", "Zweite Inhaltssprache"],
+  "profile.contentLanguage.none": ["No preference", "Keine Präferenz"],
+  "hint.ProfileFields.FirstContentLanguage.info": ["Prefer this content language; it applies to text, audio and subtitle availability, independently of the interface language.", "Diese Inhaltssprache wird bevorzugt; sie gilt für die Verfügbarkeit von Text, Ton und Untertiteln, unabhängig von der Menüsprache."],
+  "hint.ProfileFields.SecondContentLanguage.info": ["This content language is also accepted; it needs a first content language.", "Diese Inhaltssprache wird ebenfalls akzeptiert; sie braucht eine erste Inhaltssprache."],
+  "media.availability.PreferredSubtitles": ["Available with subtitles in a preferred language.", "Mit Untertiteln in einer bevorzugten Sprache verfügbar."],
+  "media.availability.PartialPreferredSubtitles": ["{0} of {1} monitored episodes or units are available, with matching subtitles where needed.", "{0} von {1} überwachten Folgen oder Einheiten sind verfügbar, bei Bedarf mit passenden Untertiteln."],
+  "media.availability.Paused": ["No usable file available; automatic search is paused.", "Keine nutzbare Datei vorhanden; automatische Suche pausiert."],
+  "media.availability.tag.PreferredSubtitles": ["With subtitles", "Mit Untertiteln"],
+  "media.availability.tag.PartialPreferredSubtitles": ["{0}/{1} · subtitles", "{0}/{1} · Untertitel"],
+  "media.availability.tag.Paused": ["Paused", "Pausiert"],
+  "pwa.main.choose": ["Use as main profile", "Als Hauptprofil verwenden"],
+  "pwa.main.current": ["Main profile for the home screen icon", "Hauptprofil für das Homescreen-Icon"],
+  "pwa.main.manage": ["Choose main profile for the home screen icon", "Hauptprofil für das Homescreen-Icon auswählen"],
+  "pwa.profile.accent": ["Profile accent (e.g. #8040f7)", "Profil-Akzentfarbe (z. B. #8040f7)"],
   "pwa.update.available": ["An update is available.", "Eine Aktualisierung ist verfügbar."],
   "pwa.update.install": ["Update", "Aktualisieren"],
   "pwa.update.later": ["Later", "Später"],
@@ -219,8 +251,12 @@
    "Standard des Stils verwenden"
   ],
   "appearance.devicePreference": [
-   "Appearance choices are stored in this browser.",
-   "Die Darstellungsauswahl wird in diesem Browser gespeichert."
+   "Style and brightness are stored on this device; signed-in accent is stored on the main profile.",
+   "Stil und Helligkeit bleiben auf diesem Gerät; die Akzentfarbe wird beim Hauptprofil gespeichert."
+  ],
+  "appearance.accentSaveFailed": [
+   "The main profile color could not be saved. The previous color was restored.",
+   "Die Hauptprofilfarbe konnte nicht gespeichert werden. Die bisherige Farbe wurde wiederhergestellt."
   ],
   "design.title": [
    "Design lab",
@@ -3871,8 +3907,8 @@
    "Verfügbar"
   ],
   "media.availability.tag.OtherAudio": [
-   "Other audio",
-   "Anderes Audio"
+   "Other language",
+   "Andere Sprache"
   ],
   "media.availability.tag.Partial": [
    "{0}/{1}",
@@ -3903,16 +3939,16 @@
    "Anfragen"
   ],
   "media.availability.ProfileAudio": [
-   "Local audio is available in the profile language.",
-   "Lokales Audio ist in der Profilsprache verfügbar."
+   "Available in a preferred content language.",
+   "In einer bevorzugten Inhaltssprache verfügbar."
   ],
   "media.availability.OtherAudio": [
-   "Available locally, but only in other audio languages.",
-   "Lokal verfügbar, aber nur in anderen Audiosprachen."
+   "Available, but only in other content languages.",
+   "Verfügbar, aber nur in anderen Inhaltssprachen."
   ],
   "media.availability.PartialOtherAudio": [
-   "{0} of {1} monitored episodes or units are available, but only in other audio languages.",
-   "{0} von {1} überwachten Folgen oder Einheiten sind verfügbar, aber nur in anderen Audiosprachen."
+   "{0} of {1} monitored episodes or units are available; some only in other content languages.",
+   "{0} von {1} überwachten Folgen oder Einheiten sind verfügbar; einige nur in anderen Inhaltssprachen."
   ],
   "media.availability.Requested": [
    "Requested",
@@ -6403,8 +6439,8 @@
    "Platzhalter"
   ],
   "library.naming.rules": [
-   "Formats of Sonarr and Radarr work as they are, for example {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} or {series title}. Empty placeholders leave with their brackets; the file name always names the film or the episode.",
-   "Formate von Sonarr und Radarr funktionieren unverändert, zum Beispiel {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} oder {series title}. Leere Platzhalter verschwinden samt ihren Klammern; der Dateiname nennt immer den Film oder die Folge."
+   "Use placeholders such as {Title}, {anilist-{AnilistId}}, {olid-{OpenLibraryId}} or {[Quality Full]}. Empty placeholders disappear with their decoration. Saving changes import names; existing files move only after a confirmed rename preview. Multi-file game releases keep their internal paths.",
+   "Verwende Platzhalter wie {Title}, {anilist-{AnilistId}}, {olid-{OpenLibraryId}} oder {[Quality Full]}. Leere Platzhalter verschwinden samt ihren Zusätzen. Speichern ändert Importnamen; vorhandene Dateien werden erst nach einer bestätigten Umbenennungsvorschau verschoben. Mehrteilige Spiel-Releases behalten ihre internen Pfade."
   ],
   "library.naming.token.ImdbId": [
    "IMDb ID",
@@ -6730,6 +6766,7 @@
    "Remove identification",
    "Zuordnung entfernen"
   ],
+  "operation.type.MediaImport": ["Media list import", "Medienlistenimport"],
   "operation.type.LibraryScan": [
    "Library scan",
    "Bibliotheksscan"
@@ -8754,6 +8791,22 @@
    "The indexer or download client returned an invalid response.",
    "Der Indexer oder Download-Client hat eine ungültige Antwort geliefert."
   ],
+  "errors.source_gate": [
+   "The source needs a browser confirmation.",
+   "Die Quelle benötigt eine Bestätigung im Browser."
+  ],
+  "errors.source_markup_changed": [
+   "The source page could not be read. Its layout may have changed.",
+   "Die Quellenseite konnte nicht gelesen werden. Ihr Aufbau hat sich möglicherweise geändert."
+  ],
+  "errors.source_untrusted_origin": [
+   "The source returned an address outside its trusted mirrors.",
+   "Die Quelle hat eine Adresse außerhalb ihrer vertrauenswürdigen Mirrors geliefert."
+  ],
+  "errors.source_timeout": [
+   "The source did not answer in time.",
+   "Die Quelle hat nicht rechtzeitig geantwortet."
+  ],
   "errors.acquisition_download_path_unconfigured": [
    "Download workspace is not configured or is unavailable",
    "Download-Zwischenspeicher nicht eingerichtet oder nicht verfügbar"
@@ -8921,6 +8974,14 @@
   "errors.validation.invalid_value": [
    "This value cannot be used here.",
    "Dieser Wert kann hier nicht verwendet werden."
+  ],
+  "errors.validation.not_allowed": [
+   "This action is not available for this item.",
+   "Diese Aktion ist für diesen Eintrag nicht verfügbar."
+  ],
+  "errors.validation.invalid_wireguard_configuration": [
+   "The WireGuard configuration cannot be used. It needs one interface, one peer and only supported keys.",
+   "Die WireGuard-Konfiguration kann nicht verwendet werden. Sie braucht genau eine Schnittstelle, einen Peer und nur unterstützte Schlüssel."
   ],
   "errors.validation.unknown_language": [
    "Use two-letter language codes such as de or en.",
@@ -9310,6 +9371,14 @@
    "Browser package",
    "Browser-Paket"
   ],
+  "admin.browser.version": [
+   "Installed version",
+   "Installierte Version"
+  ],
+  "admin.browser.diskUsage": [
+   "Managed storage",
+   "Belegter Speicher"
+  ],
   "admin.browser.installation.disabled": [
    "Disabled / not installed",
    "Deaktiviert / nicht installiert"
@@ -9329,6 +9398,30 @@
   "admin.browser.installation.failed": [
    "Installation failed",
    "Installation fehlgeschlagen"
+  ],
+  "admin.browser.installation.queued": [
+   "Queued for installation or update",
+   "Für die Installation oder Aktualisierung vorgemerkt"
+  ],
+  "admin.browser.install": [
+   "Install browser",
+   "Browser installieren"
+  ],
+  "admin.browser.uninstall": [
+   "Uninstall browser",
+   "Browser deinstallieren"
+  ],
+  "admin.browser.update": [
+   "Check for updates",
+   "Auf Updates prüfen"
+  ],
+  "admin.browser.repair": [
+   "Repair / reinstall",
+   "Reparieren / neu installieren"
+  ],
+  "admin.browser.queuedHint": [
+   "Browser action queued. Refresh the page to see progress.",
+   "Browser-Aktion vorgemerkt. Seite neu laden, um den Fortschritt zu sehen."
   ],
   "admin.browser.moduleHint": [
    "Browser installation and removal follow the optional Browser module switch.",
@@ -9390,6 +9483,27 @@
    "Do it",
    "Ausführen"
   ],
+  "admin.browser.manualOpen": ["Control browser", "Browser bedienen"],
+  "admin.browser.manualHint": ["Complete the source's check, then close this view and retry the search. Your browser session is kept; downloads continue through Jularr.", "Schließe die Prüfung der Quelle ab, schließe dann diese Ansicht und wiederhole die Suche. Die Browser-Sitzung bleibt erhalten; Downloads laufen weiterhin über Jularr."],
+  "admin.browser.manualImage": ["Interactive view of the source browser", "Bedienbare Ansicht des Quellen-Browsers"],
+  "admin.browser.manualLoading": ["Connecting to the source browser…", "Verbindung zum Quellen-Browser wird hergestellt…"],
+  "admin.browser.manualText": ["Text for the selected field in the source browser", "Text für das ausgewählte Feld im Quellen-Browser"],
+  "admin.browser.manualSend": ["Send text", "Text senden"],
+  "admin.browser.manualTab": ["Tab", "Tabulator"],
+  "admin.browser.manualEnter": ["Enter", "Eingabe"],
+  "admin.browser.manualUp": ["Scroll up", "Nach oben scrollen"],
+  "admin.browser.manualDown": ["Scroll down", "Nach unten scrollen"],
+  "admin.browser.manualClose": ["Done and close", "Fertig und schließen"],
+  "admin.browser.manualFailed": ["The browser view is disconnected. Reconnect to resume the current source page.", "Die Browseransicht ist getrennt. Verbinde sie erneut, um auf der aktuellen Quellenseite fortzufahren."],
+  "admin.browser.manualReconnect": ["Reconnect", "Wiederverbinden"],
+  "admin.browser.manualRetrying": ["The browser image is temporarily unavailable. Reconnecting…", "Das Browserbild ist vorübergehend nicht erreichbar. Die Verbindung wird wiederhergestellt…"],
+  "admin.browser.manualDenied": ["Browser access has ended. Sign in again or check your permissions.", "Der Browserzugriff wurde beendet. Melde dich erneut an oder prüfe deine Berechtigungen."],
+  "admin.browser.manualReady": ["Browser ready. Click the image to control the source.", "Browser bereit. Klicke auf das Bild, um die Quelle zu bedienen."],
+  "admin.browser.manualClosed": ["Browser view closed. The session is kept.", "Browseransicht geschlossen. Die Sitzung bleibt erhalten."],
+  "admin.browser.manualJavascript": ["Enable JavaScript to control this browser view.", "Aktiviere JavaScript, um diese Browseransicht zu bedienen."],
+  "errors.browser_assistance_busy": ["Another sign-in session currently controls the source browser. Try again when it is closed or becomes idle.", "Eine andere Anmeldesitzung bedient gerade den Quellen-Browser. Versuche es erneut, sobald die Ansicht geschlossen oder inaktiv ist."],
+  "errors.browser_assistance_ended": ["This browser view has ended. Open it again to continue.", "Diese Browseransicht wurde beendet. Öffne sie erneut, um fortzufahren."],
+  "errors.browser_assistance_unavailable": ["The source browser could not be controlled. Check that the browser module is enabled and installed, then open the view again.", "Der Quellen-Browser konnte nicht bedient werden. Prüfe, ob das Browser-Modul aktiviert und installiert ist, und öffne die Ansicht erneut."],
   "admin.browser.sources": [
    "The sources of the instance",
    "Die Quellen der Instanz"
@@ -9482,6 +9596,47 @@
    "Download import report",
    "Importbericht herunterladen"
   ],
+  "import.job.title": ["Recent media import", "Letzter Medienimport"],
+  "import.job.queued": ["Queued on server", "Auf dem Server eingeplant"],
+  "import.job.stage.Queued": ["Waiting", "Wartet"],
+  "import.job.stage.Matching": ["Matching metadata", "Metadaten werden abgeglichen"],
+  "import.job.stage.Importing": ["Adding work", "Werk wird hinzugefügt"],
+  "import.job.stage.Done": ["Finished", "Abgeschlossen"],
+  "import.job.running": ["Import running on server", "Import läuft auf dem Server"],
+  "import.job.completed": ["Import complete", "Import abgeschlossen"],
+  "import.job.failed": ["Import stopped", "Import angehalten"],
+  "import.job.disconnected": ["Connection lost. The server keeps the saved progress.", "Verbindung unterbrochen. Der Server speichert den Fortschritt weiter."],
+  "import.job.startFailed": ["Could not queue the import. Review the list and try again.", "Import konnte nicht gestartet werden. Liste prüfen und erneut versuchen."],
+  "import.job.filterLabel": ["Filter import results", "Importergebnisse filtern"],
+  "import.job.filterAll": ["All titles", "Alle Titel"],
+  "import.job.filterQueued": ["Waiting", "Wartend"],
+  "import.job.filterRunning": ["In progress", "In Bearbeitung"],
+  "import.job.filterDone": ["Completed", "Abgeschlossen"],
+  "import.job.filterReview": ["Needs review", "Manuell prüfen"],
+  "import.job.filterProblem": ["Problems", "Probleme"],
+  "import.job.current": ["Currently processing", "Wird gerade verarbeitet"],
+  "import.job.source": ["Source", "Quelle"],
+  "import.job.query": ["Search query / ISBN", "Suchbegriff / ISBN"],
+  "import.job.candidates": ["Candidates", "Kandidaten"],
+  "import.job.attempt": ["Retry attempt", "Wiederholungsversuch"],
+  "import.job.history": ["Search history", "Suchverlauf"],
+  "import.job.stage.Resolving": ["Resolving ISBN", "ISBN wird aufgelöst"],
+  "import.job.stage.Candidates": ["Candidates found", "Treffer gefunden"],
+  "import.job.stage.Review": ["Needs review", "Manuelle Prüfung nötig"],
+  "import.job.stage.NoMatch": ["No match", "Kein Treffer"],
+  "import.job.stage.Retrying": ["Retrying provider request", "Quellenanfrage wird erneut versucht"],
+  "import.job.stage.Unavailable": ["Provider unavailable", "Quelle nicht erreichbar"],
+  "import.job.reason.checking_library": ["Checking existing works", "Vorhandene Werke werden geprüft"],
+  "import.job.reason.isbn_lookup": ["Looking up exact ISBN", "Exakte ISBN wird nachgeschlagen"],
+  "import.job.reason.catalog_search": ["Searching the metadata catalog", "Metadatenkatalog wird durchsucht"],
+  "import.job.reason.no_match": ["No matching title found", "Kein passender Titel gefunden"],
+  "import.job.reason.isbn_no_match": ["ISBN could not be safely resolved", "ISBN konnte nicht sicher zugeordnet werden"],
+  "import.job.reason.match_found": ["One strongly matching candidate", "Ein eindeutig passender Kandidat"],
+  "import.job.reason.needs_review": ["Several or unverified candidates", "Mehrere oder unsichere Kandidaten"],
+  "import.job.reason.unavailable": ["Provider unavailable", "Quelle nicht erreichbar"],
+  "import.job.reason.rate_limited": ["Provider rate limit", "Anfragelimit der Quelle erreicht"],
+  "import.job.reason.provider_retry": ["Temporary provider error; retrying", "Vorübergehender Quellenfehler; erneuter Versuch"],
+  "import.job.reason.importing": ["Adding selected work", "Ausgewähltes Werk wird hinzugefügt"],
   "import.phase.partial": [
    "Import paused: some titles are still waiting",
    "Import pausiert: Einige Titel warten noch"
@@ -9709,6 +9864,18 @@
    "not searched yet",
    "noch nicht gesucht"
   ],
+  "import.job.stage.Searching": [
+   "Searching catalog",
+   "Katalog durchsuchen"
+  ],
+  "import.providerFailure.rate_limited": [
+   "Open Library has limited requests. Some books could not be searched. Try again later; existing choices stay intact.",
+   "Open Library begrenzt die Anfragen. Einige Bücher konnten nicht gesucht werden. Später erneut versuchen; die Auswahl bleibt erhalten."
+  ],
+  "import.providerFailure.unavailable": [
+   "The book metadata provider could not be reached. Unsearched books have not been checked; try again when the provider is available.",
+   "Der Buch-Metadatenanbieter ist nicht erreichbar. Die noch nicht gesuchten Bücher wurden nicht geprüft; bitte später erneut versuchen."
+  ],
   "import.searches": [
    "Searching",
    "Suche läuft"
@@ -9833,6 +10000,7 @@
    "Not found",
    "Nicht gefunden"
   ],
+  "import.outcome.NeedsReview": ["Review the match", "Treffer prüfen"],
   "import.outcome.Unavailable": [
    "Provider unavailable",
    "Anbieter nicht erreichbar"
@@ -10457,6 +10625,7 @@
    "The server is busy, so this plays in a lower quality.",
    "Der Server ist ausgelastet, deshalb läuft dies in niedrigerer Qualität."
   ],
+  "jobs.job.mediaImportQueue": ["Media imports", "Medienimporte"],
   "jobs.job.benchmarkQueue": [
    "Transcoding benchmark",
    "Transcoding-Benchmark"
@@ -10700,6 +10869,10 @@
   "jobs.about.backupQueue": [
    "Creates the backups that were asked for.",
    "Erstellt die angeforderten Sicherungen."
+  ],
+  "jobs.about.mediaImportQueue": [
+   "Imports selected media-list titles in the background and resumes unfinished work after a restart.",
+   "Importiert ausgewählte Titel aus Medienlisten im Hintergrund und setzt unterbrochene Aufträge nach einem Neustart fort."
   ],
   "jobs.about.downloads": [
    "Follows the progress of external downloads and starts their import when they finish.",
@@ -13937,6 +14110,18 @@
    "Download model",
    "Modell herunterladen"
   ],
+  "translation.local.retry": [
+   "Retry / resume download",
+   "Download erneut starten / fortsetzen"
+  ],
+  "translation.local.retryInfo": [
+   "This model download was interrupted. Select Retry to resume using the partial files saved by Ollama; nothing restarts automatically.",
+   "Der Modelldownload wurde unterbrochen. Mit erneutem Start werden bereits von Ollama gespeicherte Teile weiterverwendet. Nach einem Neustart wird nichts automatisch heruntergeladen."
+  ],
+  "translation.local.failureInfo": [
+   "Model download failed. Check Ollama and available storage, then retry.",
+   "Modelldownload fehlgeschlagen. Prüfe Ollama und den verfügbaren Speicher und starte ihn erneut."
+  ],
   "translation.local.pullBlocked": [
    "Download not available: verify free space or finish the active download.",
    "Download nicht möglich: Prüfe den freien Speicherplatz oder warte, bis der aktive Download abgeschlossen ist."
@@ -13976,6 +14161,18 @@
   "reader.translation.localQuality": [
    "TranslateGemma · local",
    "TranslateGemma · lokal"
+  ],
+  "reader.translation.provider.original": [
+   "Original text — no translation",
+   "Originaltext – keine Übersetzung"
+  ],
+  "reader.translation.provider.browser": [
+   "Engine: Mozilla/Bergamot · browser",
+   "Engine: Mozilla/Bergamot · Browser"
+  ],
+  "reader.translation.provider.local": [
+   "Engine: TranslateGemma · local",
+   "Engine: TranslateGemma · lokal"
   ],
   "errors.validation.password_incorrect": [
    "The current password is not correct.",
@@ -14024,6 +14221,258 @@
   "admin.accounts.passwordLinkShown": [
    "Give this link to the person. It sets a new password, works once and is valid for 24 hours. It is shown only now.",
    "Diesen Link der Person geben. Er setzt ein neues Passwort, funktioniert einmal und ist 24 Stunden gültig. Er wird nur jetzt angezeigt."
+  ],
+  "library.naming.Book": [
+   "Book files",
+   "Buchdateien"
+  ],
+  "library.naming.Book.Manga": [
+   "Manga files",
+   "Manga-Dateien"
+  ],
+  "library.naming.Book.LightNovel": [
+   "Light novel files",
+   "Light-Novel-Dateien"
+  ],
+  "library.naming.Music": [
+   "Music files",
+   "Musikdateien"
+  ],
+  "library.naming.Game": [
+   "Game files",
+   "Spieldateien"
+  ],
+  "library.naming.seasonFolder": [
+   "Season folder format",
+   "Staffelordnerformat"
+  ],
+  "library.naming.dailyFile": [
+   "Daily episode file format",
+   "Dateiformat für tägliche Folgen"
+  ],
+  "library.naming.renamesFiles": [
+   "Rename imported files",
+   "Importierte Dateien umbenennen"
+  ],
+  "library.naming.multiStyle": [
+   "Multi-episode style",
+   "Benennung mehrerer Folgen"
+  ],
+  "library.naming.multiExample": [
+   "Multiple episodes:",
+   "Mehrere Folgen:"
+  ],
+  "library.naming.dailyExample": [
+   "Daily episode:",
+   "Tägliche Folge:"
+  ],
+  "library.naming.specialsExample": [
+   "Special episode:",
+   "Spezialfolge:"
+  ],
+  "library.naming.multi.Extend": [
+   "Extend (S01E01-02-03)",
+   "Erweitert (S01E01-02-03)"
+  ],
+  "library.naming.multi.Duplicate": [
+   "Duplicate (S01E01 - S01E02 - S01E03)",
+   "Wiederholt (S01E01 - S01E02 - S01E03)"
+  ],
+  "library.naming.multi.Repeat": [
+   "Repeat (S01E01E02E03)",
+   "Aneinander (S01E01E02E03)"
+  ],
+  "library.naming.multi.Scene": [
+   "Scene (S01E01-E02-E03)",
+   "Scene-Stil (S01E01-E02-E03)"
+  ],
+  "library.naming.multi.Range": [
+   "Range (S01E01-03)",
+   "Bereich (S01E01-03)"
+  ],
+  "library.naming.multi.PrefixedRange": [
+   "Prefixed range (S01E01-E03)",
+   "Bereich mit Präfix (S01E01-E03)"
+  ],
+  "library.naming.token.Author": [
+   "The first author",
+   "Der erste Autor"
+  ],
+  "library.naming.token.AuthorName": [
+   "The author name",
+   "Der Autorenname"
+  ],
+  "library.naming.token.AuthorCleanName": [
+   "The author without punctuation",
+   "Der Autor ohne Satzzeichen"
+  ],
+  "library.naming.token.AuthorSortName": [
+   "The author name for sorting",
+   "Der Autorenname zur Sortierung"
+  ],
+  "library.naming.token.BookTitle": [
+   "The book title",
+   "Der Buchtitel"
+  ],
+  "library.naming.token.BookCleanTitle": [
+   "The book title without punctuation",
+   "Der Buchtitel ohne Satzzeichen"
+  ],
+  "library.naming.token.BookSeries": [
+   "The book series",
+   "Die Buchreihe"
+  ],
+  "library.naming.token.BookSeriesPosition": [
+   "The position in the book series",
+   "Die Position in der Buchreihe"
+  ],
+  "library.naming.token.BookYear": [
+   "The book release year",
+   "Das Erscheinungsjahr des Buchs"
+  ],
+  "library.naming.token.BookLanguage": [
+   "The known book language",
+   "Die bekannte Buchsprache"
+  ],
+  "library.naming.token.Artist": [
+   "The album artist",
+   "Der Albuminterpret"
+  ],
+  "library.naming.token.ArtistName": [
+   "The artist name",
+   "Der Interpretenname"
+  ],
+  "library.naming.token.AlbumArtist": [
+   "The album artist name",
+   "Der Name des Albuminterpreten"
+  ],
+  "library.naming.token.Album": [
+   "The album title",
+   "Der Albumtitel"
+  ],
+  "library.naming.token.AlbumTitle": [
+   "The title of the album",
+   "Der Titel des Albums"
+  ],
+  "library.naming.token.AlbumCleanTitle": [
+   "The album title without punctuation",
+   "Der Albumtitel ohne Satzzeichen"
+  ],
+  "library.naming.token.AlbumReleaseYear": [
+   "The album release year",
+   "Das Erscheinungsjahr des Albums"
+  ],
+  "library.naming.token.Track": [
+   "The track number",
+   "Die Titelnummer"
+  ],
+  "library.naming.token.TrackTitle": [
+   "The track title",
+   "Der Musiktitel"
+  ],
+  "library.naming.token.TrackCleanTitle": [
+   "The track title without punctuation",
+   "Der Musiktitel ohne Satzzeichen"
+  ],
+  "library.naming.token.DiscPrefix": [
+   "The disc prefix for multi-disc albums, empty for one disc",
+   "Das Disc-Präfix bei mehreren Discs, leer bei einer Disc"
+  ],
+  "library.naming.token.Disc": [
+   "The disc number",
+   "Die Discnummer"
+  ],
+  "library.naming.token.DiscCount": [
+   "The number of discs",
+   "Die Anzahl der Discs"
+  ],
+  "library.naming.token.Volume": [
+   "The volume number",
+   "Die Bandnummer"
+  ],
+  "library.naming.token.VolumeLabel": [
+   "The volume number prefixed with v",
+   "Die Bandnummer mit vorangestelltem v"
+  ],
+  "library.naming.token.Language": [
+   "The known language",
+   "Die bekannte Sprache"
+  ],
+  "library.naming.token.Format": [
+   "The file format",
+   "Das Dateiformat"
+  ],
+  "library.naming.token.Platform": [
+   "The game platform",
+   "Die Spielplattform"
+  ],
+  "library.naming.token.Region": [
+   "The game region",
+   "Die Spielregion"
+  ],
+  "library.naming.token.Version": [
+   "The game version",
+   "Die Spielversion"
+  ],
+  "library.naming.token.GameTitle": [
+   "The game title",
+   "Der Spieltitel"
+  ],
+  "library.naming.token.GameYear": [
+   "The game release year",
+   "Das Erscheinungsjahr des Spiels"
+  ],
+  "library.naming.token.GamePlatform": [
+   "The platform of the game",
+   "Die Plattform des Spiels"
+  ],
+  "library.naming.token.PrimaryId": [
+   "The main catalog ID for this media type",
+   "Die Hauptkatalog-ID für diesen Medientyp"
+  ],
+  "library.naming.token.ProviderId": [
+   "Any known provider ID, for example {ProviderId:anilist}",
+   "Eine bekannte Anbieter-ID, zum Beispiel {ProviderId:anilist}"
+  ],
+  "library.naming.token.TmdbId": [
+   "TMDB ID",
+   "TMDB-ID"
+  ],
+  "library.naming.token.TvdbId": [
+   "TVDB ID",
+   "TVDB-ID"
+  ],
+  "library.naming.token.TvMazeId": [
+   "TVmaze ID",
+   "TVmaze-ID"
+  ],
+  "library.naming.token.AnilistId": [
+   "AniList ID",
+   "AniList-ID"
+  ],
+  "library.naming.token.MusicBrainzId": [
+   "MusicBrainz ID",
+   "MusicBrainz-ID"
+  ],
+  "library.naming.token.OpenLibraryId": [
+   "OpenLibrary ID",
+   "OpenLibrary-ID"
+  ],
+  "library.naming.token.IgdbId": [
+   "IGDB ID",
+   "IGDB-ID"
+  ],
+  "library.naming.token.GutenbergId": [
+   "Gutenberg ID",
+   "Gutenberg-ID"
+  ],
+  "library.naming.token.IsbnId": [
+   "ISBN ID",
+   "ISBN-ID"
+  ],
+  "library.naming.token.PlexId": [
+   "Plex ID",
+   "Plex-ID"
   ]
  }
 }
