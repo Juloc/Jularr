@@ -66,15 +66,12 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
     gradient('cut', [[0, '#514537', .23], [20, '#514537', .10], [75, '#514537', .17], [100, '#514537', .30]], '0%', '100%');
     const surfaces = [['left', left], ['right', right]] as const;
     const overhang = study.dataset.bookBinding === 'soft' ? .7 : 2.4;
-    // The stack's cut edge hangs below the page. The thinner stack stays flat right up to the fold and the leaves never cross it:
-    // the thicker stack alone steps softly down on its own side, its inner end meeting the thinner level at the fold.
+    // The stack's cut edge hangs below the page and is one body: at the fold both stacks meet at the spine, which has the full
+    // thickness of the thicker one. From there the thicker stack stays flat and the thinner one rises softly to its own level.
     const stackAt = (x: number) => {
-        const thickRight = right.drop >= left.drop;
-        const thin = thickRight ? left.drop : right.drop, thick = thickRight ? right.drop : left.drop;
-        // The thicker the stack, the longer the step, so the slope stays gentle.
-        const away = Math.max(0, Math.min(1, (thickRight ? x - 148 : 148 - x) / Math.min(90, Math.max(30, (thick - thin) * 1.6))));
-        const level = thin + (thick - thin) * away * away * (3 - 2 * away);
-        return thickRight ? (x <= 148 ? left.drop : level) : (x >= 148 ? right.drop : level);
+        const spine = Math.max(left.drop, right.drop), own = x < 148 ? left.drop : right.drop;
+        const near = 1 - Math.max(0, Math.min(1, Math.abs(x - 148) / Math.min(90, Math.max(30, (spine - own) * 1.6))));
+        return own + (spine - own) * near * near * (3 - 2 * near);
     };
     const along = (from: number, to: number, extra: number, ratio = 1) => {
         const steps = Math.max(2, Math.round(Math.abs(to - from) / 6));
@@ -158,6 +155,8 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
         sheet.style.clipPath = `polygon(${clip.join(',')})`;
         sheet.style.setProperty('--page-lift', `${profile.lift / height * 100}%`);
     }
+    // The fold runs on into the stack down to the spine, where both stacks are bound.
+    element('path', { d: `M148,${rounded(height)} V${rounded(height + stackAt(148))}`, fill: 'none', stroke: '#30271e', 'stroke-opacity': .42, 'stroke-width': .45 });
     for (const [parent, count] of cursors) while (parent.children.length > count) parent.lastElementChild!.remove();
     if (svg.parentElement !== host) host.replaceChildren(svg);
     preview.style.setProperty('--page-height', String(height));
