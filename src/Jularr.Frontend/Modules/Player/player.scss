@@ -153,6 +153,15 @@
     }
     &__settings-body { min-height: 0; overflow: hidden; padding: 6px 12px 10px; }
     &__settings-pane { display: grid; gap: 8px; align-content: start; }
+    // Info for the curious: the facts side by side in two columns, one column on a phone where the settings fill the screen.
+    &__info { display: grid; gap: 6px; align-content: start; }
+    &__facts {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 2px 14px; margin: 0; font-size: .7rem;
+        > div { display: grid; gap: 0; min-width: 0; }
+        dt { color: var(--muted); font-size: .62rem; font-weight: 650; line-height: 1.1; }
+        dd { margin: 0; min-height: 1.1em; overflow-wrap: anywhere; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+    }
+    &__copy { justify-self: start; min-height: 26px; padding: 0 10px; font-size: .72rem; }
     &__pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     // Slider with its number; the dots below mark the usual speeds.
     &__speed {
@@ -186,11 +195,6 @@
             &[aria-pressed=true] { color: var(--accent-text); &::before { top: 5px; left: 5px; width: 6px; height: 6px; } }
             @each $value in (0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4) { &[data-speed="#{$value}"] { --p: #{math.div($value - 0.25, 3.75)}; } }
         }
-    }
-    &__facts {
-        display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 16px; margin: 0; padding-top: 4px;
-        dt { color: var(--muted); font-size: 12px; font-weight: 650; }
-        dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
     }
     &__option { width: 100%; justify-content: start; text-align: start; overflow-wrap: anywhere; }
     &__sidebar { contain: size; min-height: 0; overflow: auto; padding: 12px; border-radius: var(--radius-panel); background: var(--surface); border: 1px solid var(--accent-line); color: var(--text); }

@@ -7247,6 +7247,58 @@
    "Picture in picture",
    "Bild-in-Bild"
   ],
+  "player.info.container": [
+   "Container",
+   "Container"
+  ],
+  "player.info.bitrate": [
+   "File bit rate",
+   "Datei-Bitrate"
+  ],
+  "player.info.video": [
+   "Video (file)",
+   "Video (Datei)"
+  ],
+  "player.info.audiofile": [
+   "Audio (file)",
+   "Ton (Datei)"
+  ],
+  "player.info.videopath": [
+   "Video path",
+   "Videoweg"
+  ],
+  "player.info.audiopath": [
+   "Audio path",
+   "Tonweg"
+  ],
+  "player.info.frames": [
+   "Frames (decoded / dropped \u00b7 fps)",
+   "Bilder (dekodiert / verworfen \u00b7 fps)"
+  ],
+  "player.info.buffer": [
+   "Buffer ahead",
+   "Puffer voraus"
+  ],
+  "player.info.network": [
+   "Network (bandwidth \u00b7 segment)",
+   "Netzwerk (Bandbreite \u00b7 Segment)"
+  ],
+  "player.info.codecs": [
+   "Stream codecs",
+   "Stream-Codecs"
+  ],
+  "player.info.copy": [
+   "Copy details",
+   "Details kopieren"
+  ],
+  "player.info.copied": [
+   "Copied",
+   "Kopiert"
+  ],
+  "player.info.converted": [
+   "Converted",
+   "Umgewandelt"
+  ],
   "player.cast": [
    "Cast to a device",
    "Auf ein Gerät übertragen"

@@ -260,11 +260,26 @@ namespace Jularr.Frontend.Framework
             }
 
             // What plays right now; the client fills in the delivery and the picture size.
-            IUiComponent Facts() => new Dl(
-                new Dt(new Text("player.delivery")), new Dd().Attribute("data-role", "mode"),
-                new Dt(new Text("player.picture")), new Dd().Attribute("data-role", "resolution"),
-                new Dt(new Text("player.audio")), new Dd(new ValueText(Audio.FirstOrDefault(track => track.IsSelected)?.Label ?? Audio.FirstOrDefault()?.Label ?? "")).Attribute("data-role", "fact-audio"),
-                new Dt(new Text("playback.quality")), new Dd(new Text("playback.quality." + (source.Preferences?.QualityKey ?? "Automatic"))).Attribute("data-role", "fact-quality")).Class("player__facts");
+            // The file as probed and what the server does with it come from the server, the rest is measured while the pane is open.
+            IUiComponent Fact(string key, string role, IUiComponent? value = null) => new Div(new Dt(new Text(key)), (value is null ? new Dd() : new Dd(value)).Attribute("data-role", role));
+            IUiComponent Facts() => new Div(
+                new Dl(
+                    Fact("player.delivery", "mode"),
+                    Fact("player.picture", "resolution"),
+                    Fact("player.info.container", "fact-container"),
+                    Fact("player.info.bitrate", "fact-bitrate"),
+                    Fact("player.info.video", "fact-video"),
+                    Fact("player.info.audiofile", "fact-audiofile"),
+                    Fact("player.audio", "fact-audio", new ValueText(Audio.FirstOrDefault(track => track.IsSelected)?.Label ?? Audio.FirstOrDefault()?.Label ?? "")),
+                    Fact("playback.quality", "fact-quality", new Text("playback.quality." + (source.Preferences?.QualityKey ?? "Automatic"))),
+                    Fact("player.info.videopath", "fact-videopath"),
+                    Fact("player.info.audiopath", "fact-audiopath"),
+                    Fact("player.info.frames", "fact-frames"),
+                    Fact("player.info.buffer", "fact-buffer"),
+                    Fact("player.info.codecs", "fact-codecs"),
+                    Fact("player.info.network", "fact-network")).Class("player__facts"),
+                new Button(new Text("player.info.copy")).Class("button player__copy").Attribute("data-action", "copy-info").Attribute("hidden", "hidden"))
+                .Class("player__info").Attribute("data-copied", texts["player.info.copied"]).Attribute("data-converted", texts["player.info.converted"]);
 
             IUiComponent Settings()
             {

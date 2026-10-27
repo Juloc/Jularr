@@ -241,6 +241,10 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(settings.Locator("[data-panel=basic] select[data-setting=quality]")).ToHaveValueAsync("2");
             await settings.GetByRole(AriaRole.Tab, new() { Name = "Info", Exact = true }).ClickAsync();
             await Assertions.Expect(settings.Locator("[data-role=fact-quality]")).ToHaveTextAsync("Original");
+            // The Info pane tells what the file is and what plays: probed streams from the server, measured values from the player.
+            await Assertions.Expect(settings.Locator("[data-role=fact-video]")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex(@"\d+\u00d7\d+"));
+            await Assertions.Expect(settings.Locator("[data-role=fact-frames]")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex(@"^\d+ / \d+( · [\d.]+)?$"));
+            await Assertions.Expect(settings.Locator("[data-role=fact-buffer]")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex(@"^\d+\.\d s$"));
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(settings).ToBeHiddenAsync();
 

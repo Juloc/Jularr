@@ -313,6 +313,16 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, playlist.StatusCode);
             StringAssert.Contains(await playlist.Content.ReadAsStringAsync(), "segments/2.ts");
 
+            // The Info pane asks what the playback is made of: the probed streams and what the server does with them.
+            using var factsResponse = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, plan.StreamUrl.Replace("playlist.m3u8", "facts", StringComparison.Ordinal)));
+            Assert.AreEqual(HttpStatusCode.OK, factsResponse.StatusCode, await factsResponse.Content.ReadAsStringAsync());
+            var facts = (await factsResponse.Content.ReadFromJsonAsync<PlaybackFactsV1>())!;
+            Assert.AreEqual(PlaybackModeType.Remux, facts.PlaybackModeTypeId);
+            Assert.AreEqual("h264", facts.VideoCodec);
+            Assert.AreEqual("aac", facts.AudioCodec);
+            Assert.AreEqual(true, facts.CopyVideo);
+            Assert.AreEqual(true, facts.CopyAudio);
+
             // Finished segments stream; missing ones need FFmpeg.
             var directory = Path.Combine(cache.Path, plan.PlaybackSessionId.ToString("N"));
             Directory.CreateDirectory(directory);

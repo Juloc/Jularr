@@ -94,6 +94,10 @@ async function start(player: HTMLElement): Promise<void> {
     let castSender: CastSender | null = null;
     let castState: CastState = { connected: false, paused: true, currentTime: 0, duration: 0, device: "" };
     let castWasPlaying = false;
+    // What the Info pane shows besides the server's facts: measured while it is open.
+    let hlsCodecs = "";
+    let hlsSegmentMs = 0;
+    let hlsBandwidth: () => number = () => 0;
     let idle = 0;
     let seeking = false;
     let recoveries = 0;
@@ -359,6 +363,9 @@ async function start(player: HTMLElement): Promise<void> {
         hls?.destroy();
         hls = null;
         hlsPlayer = null;
+        hlsCodecs = "";
+        hlsSegmentMs = 0;
+        hlsBandwidth = () => 0;
         player.querySelector<HTMLElement>("[data-role=mode]")!.textContent = text("data-mode", Modes[next.playbackModeTypeId] ?? "");
         save = progressReporter(player.dataset.sessionUrl + next.playbackSessionId, antiforgery, failed => {
             const feedback = player.querySelector<HTMLElement>('[data-role=save-error]');
@@ -393,6 +400,9 @@ async function start(player: HTMLElement): Promise<void> {
                 }
                 void failure();
             });
+            instance.on(Hls.Events.BUFFER_CODECS, (_, data) => { hlsCodecs = [data.video?.codec, data.audio?.codec].filter(Boolean).join(" \u00b7 "); });
+            instance.on(Hls.Events.FRAG_LOADED, (_, data) => { hlsSegmentMs = data.frag.stats.loading.end - data.frag.stats.loading.start; });
+            hlsBandwidth = () => instance.bandwidthEstimate;
             instance.loadSource(next.streamUrl);
             instance.attachMedia(video);
             hls = instance;
@@ -602,6 +612,7 @@ async function start(player: HTMLElement): Promise<void> {
 
     const actions: Record<string, () => void> = {
         cast: () => void (casting ? castSender?.stop() : startCastRequest()),
+        "copy-info": () => void copyInfo(),
         toggle: () => {
             if (casting) { castSender?.playOrPause(); return; }
             if (video.paused) {
@@ -751,6 +762,7 @@ async function start(player: HTMLElement): Promise<void> {
     touchGestures();
     mediaSession();
     castSupport();
+    infoPane();
     // A mouse leaving the picture hides the controls at once; touch and open panels keep them.
     player.addEventListener("pointerleave", event => {
         if (event.pointerType !== "mouse" || video.paused || seeking || player.classList.contains("player--mini") || player.querySelector(":popover-open")) return;
@@ -798,6 +810,81 @@ async function start(player: HTMLElement): Promise<void> {
     function seek(seconds: number): void {
         if (casting) { castSender?.seek(Math.max(0, Math.min(castState.duration || 0, castState.currentTime + seconds))); return; }
         video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + seconds));
+    }
+
+    // The Info pane: what the server knows of the file and its conversion, and what the player measures meanwhile, refreshed every second while the settings are open.
+    function infoPane(): void {
+        const info = player.querySelector<HTMLElement>(".player__info");
+        if (!info) return;
+        const set = (role: string, value: string) => { const target = player.querySelector(`[data-role=${role}]`); if (target) target.textContent = value; };
+        const rate = (bits: number) => (bits / 1_000_000).toFixed(1) + " Mbit/s";
+        const copyText = info.dataset.copied ?? "";
+        const convertedText = info.dataset.converted ?? "";
+        let factsFor = "";
+        let sample: { at: number; frames: number } | null = null;
+        let measured = "";
+        let timer = 0;
+
+        const loadFacts = async () => {
+            if (!plan || factsFor === plan.playbackSessionId) return;
+            const id = plan.playbackSessionId;
+            factsFor = id;
+            try {
+                const response = await fetch(`/api/v1/playback/sessions/${id}/facts`, { credentials: "same-origin" });
+                if (!response.ok) { factsFor = ""; return; }
+                const facts = await response.json() as {
+                    container: string | null; bitRate: number | null; videoCodec: string | null; videoWidth: number | null; videoHeight: number | null; bitDepth: number | null; dynamicRange: string | null;
+                    audioCodec: string | null; audioChannels: number | null; audioLanguage: string | null; copyVideo: boolean | null; copyAudio: boolean | null;
+                    targetHeight: number | null; videoKilobits: number | null; audioKilobits: number | null; encoder: string | null;
+                };
+                const join = (...parts: (string | number | null | undefined | false)[]) => parts.filter(part => part !== null && part !== undefined && part !== false && part !== "").join(" \u00b7 ") || "\u2013";
+                set("fact-container", facts.container ?? "\u2013");
+                set("fact-bitrate", facts.bitRate ? rate(facts.bitRate) : "\u2013");
+                set("fact-video", join(facts.videoCodec?.toUpperCase(), facts.videoWidth && facts.videoHeight && `${facts.videoWidth}\u00d7${facts.videoHeight}`, facts.bitDepth && `${facts.bitDepth}-bit`, facts.dynamicRange));
+                set("fact-audiofile", join(facts.audioCodec?.toUpperCase(), facts.audioChannels && `${facts.audioChannels} ch`, facts.audioLanguage));
+                set("fact-videopath", facts.copyVideo === null ? "\u2013" : facts.copyVideo ? copyText
+                    : join(convertedText, facts.encoder, facts.targetHeight && `${facts.targetHeight}p`, facts.videoKilobits && `${facts.videoKilobits} kbit/s`));
+                set("fact-audiopath", facts.copyAudio === null ? "\u2013" : facts.copyAudio ? copyText : join(convertedText, facts.audioKilobits && `${facts.audioKilobits} kbit/s`));
+            } catch {
+                factsFor = "";
+            }
+        };
+
+        const refresh = () => {
+            const quality = video.getVideoPlaybackQuality?.();
+            if (quality && !video.paused) {
+                const now = performance.now();
+                if (sample && now > sample.at) measured = ((quality.totalVideoFrames - sample.frames) / ((now - sample.at) / 1000)).toFixed(2);
+                sample = { at: now, frames: quality.totalVideoFrames };
+            } else {
+                sample = null;
+            }
+            set("fact-frames", quality ? `${quality.totalVideoFrames} / ${quality.droppedVideoFrames}${measured ? " \u00b7 " + measured : ""}` : "\u2013");
+            let ahead = 0;
+            for (let index = 0; index < video.buffered.length; index++) {
+                if (video.buffered.start(index) <= video.currentTime && video.buffered.end(index) >= video.currentTime) ahead = video.buffered.end(index) - video.currentTime;
+            }
+            set("fact-buffer", `${ahead.toFixed(1)} s`);
+            set("fact-codecs", hlsCodecs || "\u2013");
+            set("fact-network", [hlsBandwidth() > 0 ? rate(hlsBandwidth()) : "", hlsSegmentMs > 0 ? `${Math.round(hlsSegmentMs)} ms` : ""].filter(Boolean).join(" \u00b7 ") || "\u2013");
+            if (video.videoWidth > 0) set("resolution", `${video.videoWidth} \u00d7 ${video.videoHeight}`);
+        };
+
+        settings.addEventListener("toggle", () => {
+            clearInterval(timer);
+            if (!settings.matches(":popover-open")) { sample = null; return; }
+            void loadFacts();
+            refresh();
+            timer = window.setInterval(refresh, 1000);
+        }, { signal });
+        const copy = info.querySelector<HTMLElement>("[data-action=copy-info]");
+        if (copy && navigator.clipboard) copy.hidden = false;
+    }
+
+    // The facts as plain text for a bug report.
+    async function copyInfo(): Promise<void> {
+        const lines = Array.from(player.querySelectorAll(".player__facts > div")).map(row => `${row.querySelector("dt")?.textContent}: ${row.querySelector("dd")?.textContent}`);
+        try { await navigator.clipboard.writeText(lines.join("\n")); } catch { /* The browser refused the clipboard. */ }
     }
 
     // The Cast button shows where Chrome and a secure page allow it; Google's library loads only when it is pressed.
