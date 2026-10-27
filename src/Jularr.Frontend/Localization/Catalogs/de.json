@@ -3450,6 +3450,10 @@
    "Media details",
    "Mediendetails"
   ],
+  "details.unavailable": [
+   "Details can't be loaded right now",
+   "Details gerade nicht ladbar"
+  ],
   "details.units": [
    "Episodes / editions",
    "Folgen / Editionen"

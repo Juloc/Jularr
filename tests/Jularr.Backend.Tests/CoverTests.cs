@@ -34,7 +34,7 @@ namespace Jularr.Backend.Tests
             var root = host.Services.GetRequiredService<IOptions<MediaOptions>>().Value.CoversPath;
 
             // Adding the title keeps its poster and backdrop; the facts name Jularr's own address from then on.
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            using var requested = await RequestMatrixAsync(host);
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
             var poster = (string)(await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster'"))!;
@@ -91,7 +91,7 @@ namespace Jularr.Backend.Tests
             var images = new FakeImages { Payload = Convert.FromBase64String(OnePixelPng) };
             await using var host = await CreateHostAsync(images, new Dictionary<string, string> { ["Media:FfmpegPath"] = ffmpeg, ["Media:CjxlPath"] = "" });
             var root = host.Services.GetRequiredService<IOptions<MediaOptions>>().Value.CoversPath;
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            using var requested = await RequestMatrixAsync(host);
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
             var folder = Path.Combine(root, workId.ToString());
@@ -136,7 +136,7 @@ namespace Jularr.Backend.Tests
             var images = new FakeImages();
             await using var host = await CreateHostAsync(images);
             var root = host.Services.GetRequiredService<IOptions<MediaOptions>>().Value.CoversPath;
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            using var requested = await RequestMatrixAsync(host);
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
             var poster = (string)(await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster'"))!;
@@ -182,7 +182,7 @@ namespace Jularr.Backend.Tests
             var images = new FakeImages { Payload = Convert.FromBase64String(OnePixelPng) };
             await using var host = await CreateHostAsync(images, new Dictionary<string, string> { ["Media:FfmpegPath"] = ffmpeg, ["Media:CjxlPath"] = cjxl });
             var root = host.Services.GetRequiredService<IOptions<MediaOptions>>().Value.CoversPath;
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            using var requested = await RequestMatrixAsync(host);
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
             var folder = Path.Combine(root, workId.ToString());
@@ -323,7 +323,7 @@ namespace Jularr.Backend.Tests
         {
             var images = new FakeImages();
             await using var host = await CreateHostAsync(images);
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            using var requested = await RequestMatrixAsync(host);
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
             var before = (string)(await host.ScalarAsync("SELECT \"LocalUrl\" FROM \"WorkCovers\" WHERE \"CoverKindId\" = 1"))!;
@@ -353,7 +353,7 @@ namespace Jularr.Backend.Tests
             var images = new FakeImages();
             await using var host = await CreateHostAsync(images);
             var root = host.Services.GetRequiredService<IOptions<MediaOptions>>().Value.CoversPath;
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            using var requested = await RequestMatrixAsync(host);
             var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
 
             // A deleted Work's folder and a replaced image's leftover, both older than an hour.
@@ -528,7 +528,7 @@ namespace Jularr.Backend.Tests
             var missing = Path.Combine(Path.GetTempPath(), "jularr-no-tool-" + Guid.NewGuid().ToString("N"));
             await using var host = await CreateHostAsync(new FakeImages(), new Dictionary<string, string> { ["Media:FfmpegPath"] = missing, ["Media:CjxlPath"] = missing });
             var root = host.Services.GetRequiredService<IOptions<MediaOptions>>().Value.CoversPath;
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            using var requested = await RequestMatrixAsync(host);
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
             var folder = Path.Combine(root, workId.ToString());
@@ -583,7 +583,7 @@ namespace Jularr.Backend.Tests
         public async Task CoverBackfill_WithoutFfmpeg_ChangesNothing_AndIsAnOwnerVisibleJob()
         {
             await using var host = await CreateHostAsync(new FakeImages(), new Dictionary<string, string> { ["Media:FfmpegPath"] = "" });
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            using var requested = await RequestMatrixAsync(host);
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
             await host.ScalarAsync("UPDATE \"WorkCovers\" SET \"FormatId\" = NULL");
             Assert.IsFalse((await ConvertAsync(host)).Success);
@@ -629,7 +629,18 @@ namespace Jularr.Backend.Tests
             await action(scope);
         }
 
-        private static async Task<Host> CreateHostAsync(FakeImages images, IReadOnlyDictionary<string, string>? settings = null)
+        // The catalog title is a Work already; the normal request imports its details (poster, backdrop) into it.
+        private static async Task<HttpResponseMessage> RequestMatrixAsync(Host host)
+        {
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (1, 'The Matrix', 1999, 'tmdb_movie');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "Id", 'tmdb_movie', '603' FROM "Works";
+                """);
+            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+            return await host.SendAsync(HttpMethod.Post, $"/api/v1/works/{workId}/requests", new CreateRequestDataV1(1));
+        }
+
+        private static async Task<Host> CreateHostAsync(FakeImages images,IReadOnlyDictionary<string, string>? settings = null)
         {
             var tmdb = new FakeTmdb();
             var host = await Host.CreateAsync(library: true, settings: settings, services: services =>

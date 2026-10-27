@@ -1372,6 +1372,7 @@ namespace Jularr.Frontend.Localization
             new("details.related", "Related works"),
             new("details.structure", "Seasons / structure"),
             new("details.title", "Media details"),
+            new("details.unavailable", "Details can't be loaded right now"),
             new("details.units", "Episodes / editions"),
             new("details.versions", "Versions & languages"),
             new("details.seasons", "Seasons"),

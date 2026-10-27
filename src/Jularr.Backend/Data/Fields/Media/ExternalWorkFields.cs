@@ -34,5 +34,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly TimeField EndsAt = new();
         public static readonly LongField Entries = new() { Minimum = 0 };
         public static readonly LongField Pending = new() { Minimum = 0 };
+        public static readonly BoolField IsDetailed = new();
+        public static readonly BoolField AreDetailsUnavailable = new();
     }
 }
