@@ -116,8 +116,9 @@ export function initializeBookRenderer(reader: HTMLElement) {
         root.style.setProperty('--paper', getComputedStyle(reader).getPropertyValue('--reader-paper'));
         root.style.setProperty('--paper-ink', getComputedStyle(reader).getPropertyValue('--reader-ink'));
         root.style.setProperty('--texture', reader.dataset.surface === 'clean' ? '0' : String(number('paperTexture', 30) / 100));
-        // The stack hangs below the page, so the body shrinks from its top edge by as much as the whole block can hang (one stable size per book).
-        root.style.setProperty('--book-scale', String(210 / (210 + body.totalMm * stackSlope + 12)));
+        // The stack hangs below the page, so the body shrinks from its top edge by as much as a thick book's block hangs. The size is
+        // fixed: the page count arriving or changing never resizes the book under the reader.
+        root.style.setProperty('--book-scale', String(210 / (210 + 50 * stackSlope + 12)));
         root.dataset.bookColumns = String(columns); root.dataset.bookDirection = reader.dataset.direction;
         root.dataset.bookBinding = reader.dataset.paperBinding ?? 'soft';
         root.dataset.paperGrain = reader.dataset.paperGrain ?? 'fine'; root.dataset.paperEdge = reader.dataset.paperEdge ?? 'normal';
