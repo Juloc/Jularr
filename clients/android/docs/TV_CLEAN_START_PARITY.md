@@ -35,7 +35,7 @@ Do not replace the original TV screens or add a backend endpoint without owner d
 | Work credits, people and filmography | Actual catalog `/api/v1/works/{id}/credits`, `/api/v1/people/{id}` and person Works; movie/series filters |
 | TV navigation and Back | Stack-aware V1 state machine for Search → Discover → Work → Episode/Player → Back, preserving original focus surfaces |
 | Movie media choices | Work availability; only real playable MediaAssetId entries |
-| Discover movie/series | Server discover scopes/shelves/search; every card carries a required `workId`, opened via `POST /api/v1/works/{id}/open` and requested via `POST /api/v1/works/{id}/requests` |
+| Discover movie/series | Server discover scopes/shelves/search; every card carries a required `workId`, opened on the Work page via `POST /api/v1/works/{id}/open` and requested there via `POST /api/v1/works/{id}/requests` |
 | Video | Server playback sessions, authenticated Media3 Direct/HLS, heartbeat/final progress |
 | Profile PIN selection | `/api/v1/profiles`, `auth/profile/{id}`, PIN endpoint; bearer revalidated |
 | Server sign-out | `DELETE /api/v1/auth/session` then locally clears bearer |
@@ -250,9 +250,10 @@ subtype. Items carry `namespace` and `externalId`, not a TMDB ID.
 - The original Home uses D-Pad focusable catalog and TMDB rows with different
   stable keys. Every card, catalog or TMDB, carries a required `workId`
   (catalog cards also an optional `seasonNumber` for mapped anime seasons).
-  A title that is available opens the Work page; any other opens its Work
-  details with the request action. Both first call `POST /api/v1/works/{id}/open`
-  and show an error when it reports `areDetailsUnavailable`. Since #1651 the
+  Every card opens the Work page (a catalog card with `seasonNumber` opens on
+  that season). The Work page first calls `POST /api/v1/works/{id}/open` and
+  shows an error when it reports `areDetailsUnavailable`; when the Work is
+  requestable it offers the request action (`POST /api/v1/works/{id}/requests`). Since #1651 the
   `discover/catalog/entry`, `discover/{type}/{tmdbId}` and `discover/*/requests`
   endpoints no longer exist and the client no longer uses them.
 - New tests cover Anime catalog scope and subtype, correct focus identity,
@@ -271,8 +272,7 @@ subtype. Items carry `namespace` and `externalId`, not a TMDB ID.
 - The Hero advances every 9 seconds only while in the visible viewport,
   and pauses while remote-control focus is on it. It remains the original
   focusable 16:9 TV banner rather than introducing a desktop redesign.
-- Clicking opens the card's `workId` (Work page when available, otherwise the
-  Work details with the request action).
+- Clicking opens the card's `workId` on the Work page.
   No fake MediaAssetId, WorkId or mandatory Playback permission is assumed.
 - When catalog providers have no valid banner or poster, the existing
   library Hero is retained. The list and navigation never claim a media item

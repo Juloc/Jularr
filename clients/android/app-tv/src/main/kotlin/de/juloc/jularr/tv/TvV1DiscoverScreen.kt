@@ -26,7 +26,6 @@ import de.juloc.jularr.core.api.AppApiException
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvDiscoverItemV1
 import de.juloc.jularr.core.api.catalog.TvDiscoverScopeV1
-import de.juloc.jularr.core.api.catalog.TvWorkDetailsV1
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
@@ -35,8 +34,7 @@ internal const val MEDIA_STATE_AVAILABLE = 3
 
 /**
  * Discover results reuse the original TV search input, card artwork and D-pad buttons.
- * Every title is a Work: titles in the library open the Work page, others show
- * their Work details with the request action.
+ * Every title is a Work and opens the Work page, which also offers the request.
  */
 @Composable
 internal fun TvV1DiscoverScreen(
@@ -47,25 +45,11 @@ internal fun TvV1DiscoverScreen(
     onBack: () -> Unit,
     onUnauthorized: () -> Unit,
     canRequest: Boolean = false,
-    initialWorkId: Long? = null,
 ) {
     var scopes by remember(catalog) { mutableStateOf<List<TvDiscoverScopeV1>>(emptyList()) }
     var selectedType by remember(catalog) { mutableStateOf<Int?>(null) }
     var query by remember(catalog) { mutableStateOf("") }
     var results by remember(catalog) { mutableStateOf<List<TvDiscoverItemV1>>(emptyList()) }
-    var selectedWorkId by remember(catalog, initialWorkId) { mutableStateOf(initialWorkId) }
-    var workDetail by remember(catalog, initialWorkId) { mutableStateOf<TvWorkDetailsV1?>(null) }
-    var workLoading by remember(catalog, initialWorkId) { mutableStateOf(false) }
-    var workError by remember(catalog, initialWorkId) { mutableStateOf<String?>(null) }
-    fun closeDetails() {
-        // A detail opened directly from Home returns to Home. A detail chosen
-        // inside Discover returns to that screen's previous result list.
-        if (initialWorkId != null) onBack()
-        else selectedWorkId = null
-    }
-    BackHandler(enabled = selectedWorkId != null) {
-        closeDetails()
-    }
     var loading by remember(catalog) { mutableStateOf(false) }
     var error by remember(catalog) { mutableStateOf<String?>(null) }
     var retry by remember(catalog) { mutableStateOf(0) }
@@ -82,13 +66,7 @@ internal fun TvV1DiscoverScreen(
             error = failure.message ?: "Discover-Kategorien konnten nicht geladen werden."
         }
     }
-    LaunchedEffect(catalog, query, selectedType, retry, selectedWorkId) {
-        // Opening a title must cancel the background search and
-        // prevent stale search errors from replacing the selected Work.
-        if (selectedWorkId != null) {
-            loading = false
-            return@LaunchedEffect
-        }
+    LaunchedEffect(catalog, query, selectedType, retry) {
         loading = true
         try {
             if (query.isNotBlank()) delay(350)
@@ -113,68 +91,6 @@ internal fun TvV1DiscoverScreen(
             error = failure.message ?: "Discover konnte nicht geladen werden."
         } finally { loading = false }
     }
-    LaunchedEffect(selectedWorkId, catalog) {
-        val workId = selectedWorkId ?: return@LaunchedEffect
-        workLoading = true
-        workDetail = null
-        workError = null
-        try {
-            if (catalog.openWork(workId)) {
-                workError = "Die Details dieses Titels sind derzeit nicht verfügbar."
-            } else {
-                workDetail = catalog.work(workId)
-            }
-        } catch (cancel: CancellationException) {
-            throw cancel
-        } catch (failure: AppApiException) {
-            if (failure.statusCode == 401) onUnauthorized()
-            else workError = "Titeldetails: ${failure.code} (HTTP ${failure.statusCode})"
-        } catch (failure: Exception) {
-            workError = failure.message ?: "Titeldetails konnten nicht geladen werden."
-        } finally {
-            workLoading = false
-        }
-    }
-
-    val openedWorkId = selectedWorkId
-    if (openedWorkId != null) {
-        val detail = workDetail
-        TvCenteredPanel(
-            title = detail?.canonicalTitle ?: "Titel",
-            description = detail?.overview.orEmpty(),
-        ) {
-            when {
-                workLoading -> Text("Titeldetails werden geladen …")
-                workError != null -> {
-                    Text(requireNotNull(workError), color = MaterialTheme.colorScheme.error)
-                }
-                detail == null -> Text("Für diesen Titel liegen keine Details vor.")
-                else -> {
-                    Text(
-                        listOfNotNull(
-                            detail.releaseYear?.toString(),
-                            detail.rating?.let { "Bewertung $it" },
-                        ).joinToString(" · "),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Button(onClick = { onLocalWork(openedWorkId) }) {
-                        Text("Details öffnen")
-                    }
-                    if (detail.isRequestable) {
-                        TvV1RequestActions(
-                            catalog = catalog,
-                            workId = openedWorkId,
-                            canRequest = canRequest,
-                            onUnauthorized = onUnauthorized,
-                        )
-                    }
-                }
-            }
-            Button(onClick = ::closeDetails) { Text("Zurück") }
-        }
-        return
-    }
-
     Column(
         modifier = Modifier.fillMaxSize().padding(28.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -209,10 +125,7 @@ internal fun TvV1DiscoverScreen(
             items(results, key = { it.workId }) { item ->
                 Button(
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        if (item.mediaStateTypeId == MEDIA_STATE_AVAILABLE) onLocalWork(item.workId)
-                        else selectedWorkId = item.workId
-                    },
+                    onClick = { onLocalWork(item.workId) },
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         TvArtwork(
