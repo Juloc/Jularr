@@ -1,0 +1,1093 @@
+<!doctype html>
+<html lang="de">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Jularr TV – Mockup</title>
+    <style>
+        /* Die Farben, die Radien und die Schrift der Desktop-Oberfläche (Shared tokens). */
+        :root {
+            --background: #f6f5f9;
+            --surface: #ffffff;
+            --field: #faf9fc;
+            --border: #dedbe7;
+            --text: #25202f;
+            --muted: #696174;
+            --accent: #7c3aed;
+            --accent-contrast: #ffffff;
+            --accent-text: #7041c9;
+            --focus: #7041c9;
+            --radius-control: 999px;
+            --radius-panel: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            background: #141319;
+            color: var(--text);
+            font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+        }
+
+        /* Der Bildschirm des Fernsehers: 1920 zu 1080, skaliert auf den Fenster. */
+        .stage {
+            width: 1920px;
+            height: 1080px;
+            flex: 0 0 auto;
+            transform-origin: center center;
+            display: flex;
+            overflow: hidden;
+            background: var(--background);
+            border-radius: 8px;
+        }
+
+        .hint {
+            color: #b2aaba;
+            font-size: 14px;
+        }
+
+        .hint kbd {
+            background: #262330;
+            border: 1px solid #393441;
+            border-radius: 6px;
+            padding: 1px 6px;
+            font-family: inherit;
+        }
+
+        /* Die Rail links: die Flächen, unten der Profilwechsel und die Einstellungen. */
+        .rail {
+            width: 220px;
+            flex: 0 0 220px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 18px 10px;
+            background: var(--surface);
+        }
+
+        .rail__brand {
+            font-size: 26px;
+            font-weight: 800;
+            padding: 0 12px 10px;
+        }
+
+        .rail__spacer {
+            flex: 1 1 auto;
+        }
+
+        .rail__item {
+            min-height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 18px;
+            border: 3px solid transparent;
+            border-radius: var(--radius-control);
+            font-size: 20px;
+            color: var(--muted);
+            cursor: pointer;
+        }
+
+        .rail__item--active {
+            background: var(--accent);
+            color: var(--accent-contrast);
+            font-weight: 700;
+        }
+
+        .main {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        /* Die Top-Row: die Brotkrume, die Suche und das Profil. */
+        .top {
+            height: 92px;
+            flex: 0 0 92px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 0 24px;
+            margin: 8px 8px 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+        }
+
+        .top__crumb {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .top__spacer {
+            flex: 1 1 auto;
+        }
+
+        .icon-button {
+            width: 56px;
+            height: 56px;
+            display: grid;
+            place-items: center;
+            border: 3px solid transparent;
+            border-radius: var(--radius-control);
+            color: var(--muted);
+            font-size: 26px;
+            cursor: pointer;
+        }
+
+        .content {
+            flex: 1 1 auto;
+            overflow: hidden;
+            padding: 18px 24px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        /* Die Kapseln der Medienarten. */
+        .capsules {
+            display: flex;
+            gap: 10px;
+        }
+
+        .capsule {
+            height: 56px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 22px;
+            border: 3px solid transparent;
+            border-radius: var(--radius-control);
+            background: var(--surface);
+            font-size: 20px;
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        .capsule--chosen {
+            background: var(--accent);
+            color: var(--accent-contrast);
+            font-weight: 700;
+        }
+
+        /* Der Hero: das Breitbild, der Titel, der Text und die Punkte der Folgen. */
+        .hero {
+            height: 340px;
+            flex: 0 0 340px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+            border-radius: 20px;
+            background: linear-gradient(120deg, #241f3a, #3b2f5c);
+            color: #f4f0f8;
+            overflow: hidden;
+        }
+
+        .hero__meta {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-width: 900px;
+        }
+
+        .hero__year {
+            font-size: 20px;
+            color: #cfc6dd;
+        }
+
+        .hero__title {
+            font-size: 41px;
+            font-weight: 800;
+            line-height: 1.1;
+        }
+
+        .hero__text {
+            font-size: 20px;
+            color: #cfc6dd;
+        }
+
+        .hero__dots {
+            position: absolute;
+            right: 40px;
+            bottom: 28px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .hero__dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 999px;
+            background: #7c7a86;
+        }
+
+        .hero__dot--active {
+            background: var(--accent);
+            width: 44px;
+        }
+
+        /* Die Chips der Listen unter dem Hero. */
+        .chips {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .chip {
+            height: 48px;
+            display: flex;
+            align-items: center;
+            padding: 0 22px;
+            border: 3px solid transparent;
+            border-radius: var(--radius-control);
+            background: var(--surface);
+            font-size: 20px;
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        .chip--chosen {
+            color: var(--accent-text);
+            font-weight: 700;
+        }
+
+        .chips__count {
+            margin-left: auto;
+            font-size: 18px;
+            color: var(--muted);
+        }
+
+        /* Die Regale mit ihren Zeilen. */
+        .shelf__head {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .shelf__title {
+            font-size: 29px;
+            font-weight: 700;
+        }
+
+        .shelf__count {
+            font-size: 18px;
+            color: var(--muted);
+        }
+
+        .shelf__chevrons {
+            display: none;
+            gap: 10px;
+            color: var(--accent-text);
+            font-size: 22px;
+        }
+
+        .shelf__head--focused .shelf__chevrons {
+            display: flex;
+        }
+
+        .row {
+            display: flex;
+            gap: 18px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 340px);
+            gap: 24px 18px;
+        }
+
+        /* Die Karte des Desktops: 340 breit, 2 zu 3, mit der Aktion in der Mitte. */
+        .card {
+            width: 340px;
+            flex: 0 0 340px;
+            cursor: pointer;
+        }
+
+        .card__surface {
+            position: relative;
+            width: 340px;
+            height: 510px;
+            border-radius: 32px;
+            background: var(--field);
+            border: 3px solid transparent;
+            overflow: hidden;
+        }
+
+        .card--focused .card__surface {
+            border-color: var(--focus);
+        }
+
+        .card--focused {
+            transform: scale(1.04);
+            transform-origin: top center;
+        }
+
+        .card__art {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            color: #f4f0f8;
+            font-size: 34px;
+            font-weight: 700;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .card__badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 16px;
+            height: 16px;
+            border-radius: 6px;
+        }
+
+        .card__state {
+            position: absolute;
+            top: 10px;
+            left: 34px;
+            padding: 4px 12px;
+            border-radius: 999px;
+            background: rgb(0 0 0 / 55%);
+            color: #f4f0f8;
+            font-size: 16px;
+        }
+
+        .card__action {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            opacity: 0;
+        }
+
+        .card--focused .card__action {
+            opacity: 1;
+        }
+
+        .card__play {
+            width: 72px;
+            height: 72px;
+            display: grid;
+            place-items: center;
+            border-radius: 999px;
+            background: rgb(255 255 255 / 80%);
+            color: #25202f;
+            font-size: 30px;
+        }
+
+        .card__progress {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            height: 12px;
+            background: var(--accent);
+        }
+
+        .card__title {
+            margin-top: 9px;
+            font-size: 20px;
+            line-height: 26px;
+            height: 52px;
+            overflow: hidden;
+            color: var(--text);
+        }
+
+        .card__meta {
+            margin-top: 4px;
+            font-size: 17px;
+            color: var(--muted);
+        }
+
+        /* Die Listen: die Einstellungen, die Sammlungen, das Profil. */
+        .list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .list__row {
+            min-height: 64px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 0 22px;
+            border: 3px solid transparent;
+            border-radius: var(--radius-control);
+            background: var(--surface);
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .list__value {
+            margin-left: auto;
+            color: var(--muted);
+        }
+
+        .list__head {
+            font-size: 29px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        /* Die Details eines Titels. */
+        .details {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .details__hero {
+            height: 340px;
+            border-radius: 20px;
+            background: linear-gradient(120deg, #241f3a, #3b2f5c);
+        }
+
+        .details__title {
+            font-size: 41px;
+            font-weight: 800;
+        }
+
+        .details__meta {
+            font-size: 20px;
+            color: var(--muted);
+        }
+
+        .details__text {
+            font-size: 20px;
+            max-width: 1100px;
+        }
+
+        .button {
+            height: 60px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 26px;
+            border: 3px solid transparent;
+            border-radius: var(--radius-control);
+            background: var(--accent);
+            color: var(--accent-contrast);
+            font-size: 20px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .button--plain {
+            background: var(--surface);
+            color: var(--text);
+        }
+
+        /* Die Suche: das Feld, die Vorschläge und die Titel der Instanz. */
+        .search {
+            display: flex;
+            gap: 24px;
+            height: 100%;
+        }
+
+        .search__left {
+            width: 460px;
+            flex: 0 0 460px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .search__field {
+            height: 72px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 20px;
+            background: var(--surface);
+            border: 3px solid var(--focus);
+            border-radius: var(--radius-control);
+            font-size: 22px;
+        }
+
+        .search__field input {
+            flex: 1 1 auto;
+            border: 0;
+            outline: 0;
+            background: transparent;
+            font: inherit;
+            color: var(--text);
+        }
+
+        .search__suggestion {
+            min-height: 56px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border: 3px solid transparent;
+            border-radius: var(--radius-control);
+            background: var(--surface);
+            font-size: 20px;
+            color: var(--muted);
+            cursor: pointer;
+        }
+
+        .search__right {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .search__head {
+            font-size: 29px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        /* Der Fokus: der Ring der Desktop-Oberfläche, drei Pixel in der Akzentfarbe. */
+        [data-focused] {
+            outline: 3px solid var(--focus);
+            outline-offset: 3px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="stage" id="stage"></div>
+    <p class="hint">
+        <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> navigieren ·
+        <kbd>Enter</kbd> ist OK · <kbd>Backspace</kbd> geht zurück
+    </p>
+
+    <script>
+        // Die Daten des Mockups: die Flächen, die Kapseln, der Hero, die Listen und die Titel.
+        const rail = [
+            { id: "home", label: "Home" },
+            { id: "watchlist", label: "Watchlist" },
+            { id: "library", label: "Library" },
+            { id: "collections", label: "Collections" },
+            { id: "profile", label: "Owner" },
+            { id: "settings", label: "Settings of the television" },
+        ];
+
+        const capsules = ["All", "Watch", "Read", "Hear", "Game"];
+        const chips = ["All", "Trending", "Top", "New", "Upcoming"];
+
+        const art = ["#3b2f5c", "#1f4a45", "#4a2a3b", "#2a3b4a", "#4a412a", "#2f4a2a"];
+
+        function title(index) {
+            const names = [
+                "Frieren: Nach dem Ende der Reise",
+                "Your Name.",
+                "Das Life of Pi",
+                "Der Fremde",
+                "Der letzte Sommer",
+                "Maboroshi",
+            ];
+            return names[index % names.length];
+        }
+
+        function card(index, options = {}) {
+            const name = title(index);
+            return {
+                id: "card-" + index,
+                title: name,
+                meta: options.meta ?? "Available",
+                state: options.state ?? null,
+                progress: options.progress ?? null,
+                playable: options.playable ?? false,
+                art: art[index % art.length],
+            };
+        }
+
+        const shelves = [
+            {
+                id: "continue",
+                title: "Continue watching",
+                count: 2,
+                cards: [card(0, { state: "Continue", progress: 0.42, playable: true }), card(1, { state: "Continue", progress: 0.18, playable: true })],
+            },
+            {
+                id: "trending",
+                title: "Trending now",
+                count: 4,
+                cards: [card(2), card(3), card(4), card(5)],
+            },
+            {
+                id: "because",
+                title: "Because you watched Frieren",
+                count: 4,
+                cards: [card(4, { meta: "Requested" }), card(1), card(5), card(0)],
+            },
+        ];
+
+        const screens = {
+            home: { crumb: "Home", title: "Home" },
+            watchlist: { crumb: "Watchlist", title: "Watchlist" },
+            library: { crumb: "Library", title: "Library" },
+            collections: { crumb: "Collections", title: "Collections" },
+            profile: { crumb: "Profile", title: "Profiles" },
+            settings: { crumb: "Settings of the television", title: "Settings of the television" },
+            details: { crumb: "Details", title: "Details" },
+            search: { crumb: "Search", title: "Search" },
+        };
+
+        // Der Zustand: die Fläche, der Fokus je Fläche und der Weg zurück.
+        const state = {
+            screen: "home",
+            focus: { home: "rail:home" },
+            history: [],
+            capsule: 0,
+            chip: 0,
+            heroSlide: 0,
+            query: "",
+        };
+
+        const stage = document.getElementById("stage");
+
+        function element(tag, className, text) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text !== undefined) node.textContent = text;
+            return node;
+        }
+
+        function focusable(node, zone, id) {
+            node.dataset.focus = zone + "|" + id;
+            node.tabIndex = -1;
+            return node;
+        }
+
+        // Der Rail mit den Flächen.
+        function renderRail() {
+            const nav = element("nav", "rail");
+            nav.appendChild(element("div", "rail__brand", "Jularr"));
+            for (const entry of rail) {
+                const item = element("div", "rail__item", entry.label);
+                if (state.screen === entry.id) item.classList.add("rail__item--active");
+                focusable(item, "rail", entry.id);
+                nav.appendChild(item);
+            }
+            nav.appendChild(element("div", "rail__spacer"));
+            return nav;
+        }
+
+        // Die Top-Row: die Brotkrume, die Suche und das Profil.
+        function renderTop() {
+            const top = element("header", "top");
+            top.appendChild(element("div", "top__crumb", screens[state.screen].crumb));
+            top.appendChild(element("div", "top__spacer"));
+            const search = element("div", "icon-button", "⌕");
+            focusable(search, "top", "search");
+            top.appendChild(search);
+            const profile = element("div", "icon-button", "◍");
+            focusable(profile, "top", "profile");
+            top.appendChild(profile);
+            return top;
+        }
+
+        // Die Karte des Desktops mit der Aktion in der Mitte des Covers.
+        function renderCard(item, zone) {
+            const cardNode = element("div", "card");
+            const surface = element("div", "card__surface");
+            const artNode = element("div", "card__art", item.title);
+            artNode.style.background = item.art;
+            surface.appendChild(artNode);
+            const badge = element("div", "card__badge");
+            badge.style.background = item.playable ? "#4ade80" : "#f87171";
+            surface.appendChild(badge);
+            if (item.state) surface.appendChild(element("div", "card__state", item.state));
+            const action = element("div", "card__action");
+            action.appendChild(element("div", "card__play", "▶"));
+            surface.appendChild(action);
+            if (item.progress) {
+                const progress = element("div", "card__progress");
+                progress.style.width = Math.round(item.progress * 340) + "px";
+                surface.appendChild(progress);
+            }
+            focusable(surface, zone, item.id);
+            cardNode.appendChild(surface);
+            cardNode.appendChild(element("div", "card__title", item.title));
+            cardNode.appendChild(element("div", "card__meta", item.meta));
+            return cardNode;
+        }
+
+        // Das Regal mit der Überschrift, der Anzahl und den Zeilen.
+        function renderShelf(shelf) {
+            const box = element("section", "shelf");
+            const head = element("div", "shelf__head");
+            const headButton = element("div", "shelf__title", shelf.title);
+            focusable(headButton, "shelf:" + shelf.id, "head");
+            head.appendChild(headButton);
+            head.appendChild(element("div", "shelf__count", String(shelf.count)));
+            const chevrons = element("div", "shelf__chevrons", "‹ ›");
+            head.appendChild(chevrons);
+            box.appendChild(head);
+            const row = element("div", "row");
+            for (const item of shelf.cards) row.appendChild(renderCard(item, "shelf:" + shelf.id));
+            box.appendChild(row);
+            return box;
+        }
+
+        function renderHome() {
+            const content = element("div", "content");
+
+            const capsuleRow = element("div", "capsules");
+            capsules.forEach((label, index) => {
+                const capsule = element("div", "capsule", label);
+                if (index === state.capsule) capsule.classList.add("capsule--chosen");
+                focusable(capsule, "capsules", String(index));
+                capsuleRow.appendChild(capsule);
+            });
+            content.appendChild(capsuleRow);
+
+            const hero = element("div", "hero");
+            const meta = element("div", "hero__meta");
+            meta.appendChild(element("div", "hero__year", "2023"));
+            meta.appendChild(element("div", "hero__title", "Frieren: Nach dem Ende der Reise"));
+            meta.appendChild(element("div", "hero__text", "Ein kurzer Text über den Titel."));
+            hero.appendChild(meta);
+            const dots = element("div", "hero__dots");
+            for (let index = 0; index < 5; index++) {
+                const dot = element("div", "hero__dot");
+                if (index === state.heroSlide) dot.classList.add("hero__dot--active");
+                dots.appendChild(dot);
+            }
+            hero.appendChild(dots);
+            focusable(hero, "hero", "hero");
+            content.appendChild(hero);
+
+            const chipRow = element("div", "chips");
+            chips.forEach((label, index) => {
+                const chip = element("div", "chip", label);
+                if (index === state.chip) chip.classList.add("chip--chosen");
+                focusable(chip, "chips", String(index));
+                chipRow.appendChild(chip);
+            });
+            chipRow.appendChild(element("div", "chips__count", "Titles 12"));
+            const filter = element("div", "chip", "Filter");
+            focusable(filter, "chips", "filter");
+            chipRow.appendChild(filter);
+            content.appendChild(chipRow);
+
+            for (const shelf of shelves) content.appendChild(renderShelf(shelf));
+            return content;
+        }
+
+        function renderGrid(items) {
+            const grid = element("div", "grid");
+            for (const item of items) grid.appendChild(renderCard(item, "grid"));
+            return grid;
+        }
+
+        function renderList(head, rows) {
+            const content = element("div", "content");
+            content.appendChild(element("div", "list__head", head));
+            const list = element("div", "list");
+            rows.forEach((row, index) => {
+                const node = element("div", "list__row", row.label);
+                if (row.value) node.appendChild(element("div", "list__value", row.value));
+                focusable(node, "list", "row-" + index);
+                list.appendChild(node);
+            });
+            content.appendChild(list);
+            return content;
+        }
+
+        function renderDetails() {
+            const content = element("div", "content");
+            const box = element("div", "details");
+            box.appendChild(element("div", "details__hero"));
+            const actions = element("div", "list__row");
+            const play = element("div", "button", "▶  Play");
+            focusable(play, "details", "play");
+            actions.appendChild(play);
+            const more = element("div", "button button--plain", "Details");
+            focusable(more, "details", "more");
+            actions.appendChild(more);
+            box.appendChild(actions);
+            box.appendChild(element("div", "details__title", "Frieren: Nach dem Ende der Reise"));
+            box.appendChild(element("div", "details__meta", "2023   Abenteuer, Drama   Studio"));
+            box.appendChild(element("div", "details__text", "Ein kurzer Text über den Titel."));
+            content.appendChild(box);
+            return content;
+        }
+
+        function renderSearch() {
+            const content = element("div", "content");
+            const search = element("div", "search");
+            const left = element("div", "search__left");
+            const field = element("div", "search__field");
+            const input = document.createElement("input");
+            input.value = state.query;
+            input.placeholder = "Search the instance";
+            input.addEventListener("input", (event) => {
+                state.query = event.target.value;
+            });
+            input.addEventListener("keydown", (event) => {
+                event.stopPropagation();
+            });
+            field.appendChild(input);
+            field.appendChild(element("div", "icon-button", "🎤"));
+            focusable(field, "search", "field");
+            left.appendChild(field);
+            const suggestion = element("div", "search__suggestion", "Frieren: Nach dem Ende der Reise");
+            focusable(suggestion, "search", "suggestion");
+            left.appendChild(suggestion);
+            search.appendChild(left);
+            const right = element("div", "search__right");
+            right.appendChild(element("div", "search__head", "Trending now"));
+            right.appendChild(renderGrid([card(0), card(1), card(2), card(3)]));
+            search.appendChild(right);
+            content.appendChild(search);
+            return content;
+        }
+
+        // Der Zustand der Oberfläche: der Bildschirm zeichnet sich aus den Daten.
+        function render() {
+            stage.replaceChildren();
+            if (state.screen !== "search") stage.appendChild(renderRail());
+            const main = element("main", "main");
+            if (state.screen !== "search") main.appendChild(renderTop());
+            let content;
+            switch (state.screen) {
+                case "home":
+                    content = renderHome();
+                    break;
+                case "watchlist":
+                    content = element("div", "content");
+                    content.appendChild(element("div", "list__head", "Watchlist"));
+                    content.appendChild(renderGrid([card(0), card(1), card(2), card(3), card(4), card(5)]));
+                    break;
+                case "library":
+                    content = element("div", "content");
+                    content.appendChild(element("div", "list__head", "Library"));
+                    content.appendChild(renderGrid([card(2), card(3), card(4), card(5)]));
+                    break;
+                case "collections":
+                    content = renderList("Collections", [
+                        { label: "Favorites", value: "4" },
+                        { label: "Watch later", value: "2" },
+                        { label: "Create", value: "" },
+                    ]);
+                    break;
+                case "profile":
+                    content = renderList("Profiles", [
+                        { label: "Owner", value: "" },
+                        { label: "Family", value: "" },
+                    ]);
+                    break;
+                case "settings":
+                    content = renderList("Settings of the television", [
+                        { label: "Skin", value: "clean" },
+                        { label: "Brightness", value: "no" },
+                        { label: "Language", value: "Deutsch" },
+                        { label: "Autoplay", value: "yes" },
+                        { label: "Speed", value: "1x" },
+                    ]);
+                    break;
+                case "details":
+                    content = renderDetails();
+                    break;
+                default:
+                    content = renderSearch();
+            }
+            main.appendChild(content);
+            stage.appendChild(main);
+            applyFocus();
+        }
+
+        // Die Zonen der Fläche in der Lesereihenfolge: der Rail, dann der Inhalt von oben
+        // nach unten. Eine Zone hat eine Richtung: der Rail und die Listen laufen senkrecht,
+        // die Zeilen des Inhalts waagerecht.
+        function zones() {
+            switch (state.screen) {
+                case "home":
+                    return [
+                        { name: "rail", direction: "down" },
+                        { name: "top", direction: "right" },
+                        { name: "capsules", direction: "right" },
+                        { name: "hero", direction: "right" },
+                        { name: "chips", direction: "right" },
+                        { name: "shelf:continue", direction: "right" },
+                        { name: "shelf:trending", direction: "right" },
+                        { name: "shelf:because", direction: "right" },
+                    ];
+                case "details":
+                    return [
+                        { name: "rail", direction: "down" },
+                        { name: "top", direction: "right" },
+                        { name: "details", direction: "right" },
+                    ];
+                case "search":
+                    return [
+                        { name: "search", direction: "down" },
+                        { name: "grid", direction: "right", columns: 4 },
+                    ];
+                default:
+                    return [
+                        { name: "rail", direction: "down" },
+                        { name: "top", direction: "right" },
+                        { name: state.screen === "collections" || state.screen === "profile" || state.screen === "settings" ? "list" : "grid", direction: state.screen === "collections" || state.screen === "profile" || state.screen === "settings" ? "down" : "right", columns: 4 },
+                    ];
+            }
+        }
+
+        function itemsOf(zone) {
+            return Array.from(stage.querySelectorAll('[data-focus^="' + zone + '|"]'));
+        }
+
+        // Der Fokus: die Speicherung je Fläche und der Ring.
+        function applyFocus() {
+            clearFocus();
+            const wanted = state.focus[state.screen];
+            let target = wanted ? stage.querySelector('[data-focus="' + wanted + '"]') : null;
+            if (!target) {
+                // Eine neue Oberfläche legt den Fokus in den Inhalt; die Fläche, aus der
+                // man kam, behält ihn.
+                const content = zones().find((zone) => zone.name !== "rail" && zone.name !== "top");
+                target = (content ? itemsOf(content.name)[0] : null) ?? itemsOf(zones()[0].name)[0];
+                if (target) state.focus[state.screen] = target.dataset.focus;
+            }
+            if (!target) return;
+            target.setAttribute("data-focused", "true");
+            const card = target.closest(".card");
+            if (card) card.classList.add("card--focused");
+            const head = target.closest(".shelf__head");
+            if (head) head.classList.add("shelf__head--focused");
+        }
+
+        function clearFocus() {
+            for (const node of stage.querySelectorAll("[data-focused]")) {
+                node.removeAttribute("data-focused");
+            }
+            for (const node of stage.querySelectorAll(".card--focused")) node.classList.remove("card--focused");
+            for (const node of stage.querySelectorAll(".shelf__head--focused")) node.classList.remove("shelf__head--focused");
+        }
+
+        function focusOf(zone) {
+            const current = state.focus[state.screen] ?? "";
+            const [currentZone, currentId] = current.split(":");
+            if (currentZone === zone) return itemsOf(zone).find((node) => node.dataset.focus === current);
+            return null;
+        }
+
+        function move(direction) {
+            const order = zones();
+            const current = state.focus[state.screen] ?? "";
+            const [zoneName] = current.split("|");
+            const index = order.findIndex((zone) => zone.name === zoneName);
+            if (index < 0) return;
+            const zone = order[index];
+            const items = itemsOf(zone.name);
+            const at = items.findIndex((node) => node.dataset.focus === current);
+            if (at < 0) return;
+
+            // Waagerecht laufen die Zeilen, senkrecht die Spalten; ein Raster hat beide.
+            const horizontal = zone.direction === "right" || zone.columns;
+            let next = at;
+            if (horizontal) {
+                if (direction === "left") next = at - 1;
+                else if (direction === "right") next = at + 1;
+                else if (zone.columns) next = direction === "up" ? at - zone.columns : at + zone.columns;
+            } else {
+                if (direction === "up") next = at - 1;
+                else if (direction === "down") next = at + 1;
+            }
+
+            let target = null;
+            if (next >= 0 && next < items.length && next !== at) {
+                target = items[next];
+            } else {
+                // Am Rand der Zone wandert der Fokus in die Nachbarzone.
+                const neighbour = direction === "left" || direction === "up" ? index - 1 : index + 1;
+                if (neighbour < 0 || neighbour >= order.length) return;
+                target = itemsOf(order[neighbour].name)[0] ?? null;
+            }
+            // Bewegt sich der Fokus nicht, bleibt er, wo er ist.
+            if (!target) return;
+            clearFocus();
+            state.focus[state.screen] = target.dataset.focus;
+            render();
+        }
+
+        // OK: die Fläche, der Titel, die Aktion.
+        function activate() {
+            const current = state.focus[state.screen] ?? "";
+            const [zone, id] = current.split("|");
+            if (zone === "rail") {
+                state.history.push({ screen: state.screen, focus: state.focus[state.screen] });
+                state.screen = id;
+                state.focus[id] = state.focus[id] ?? "";
+                render();
+                return;
+            }
+            if (zone === "top" && id === "search") {
+                state.history.push({ screen: state.screen, focus: state.focus[state.screen] });
+                state.screen = "search";
+                render();
+                return;
+            }
+            if (zone === "cards" || zone.startsWith("shelf:") || zone === "grid" || zone === "search") {
+                state.history.push({ screen: state.screen, focus: state.focus[state.screen] });
+                state.screen = "details";
+                state.focus.details = "details:play";
+                render();
+                return;
+            }
+            if (zone === "hero") {
+                state.heroSlide = (state.heroSlide + 1) % 5;
+                render();
+                return;
+            }
+            // Die Kapseln und die Chips wählen die Medienart und die Liste.
+            if (zone === "capsules") {
+                state.capsule = Number(id);
+                render();
+                return;
+            }
+            if (zone === "chips") {
+                state.chip = id === "filter" ? state.chip : Number(id);
+                render();
+            }
+        }
+
+        // Backspace: zurück zur Fläche, aus der man kam, mit dem Fokus dort.
+        function back() {
+            const previous = state.history.pop();
+            if (!previous) return;
+            state.screen = previous.screen;
+            state.focus[state.screen] = previous.focus;
+            render();
+        }
+
+        document.addEventListener("keydown", (event) => {
+            const key = event.key;
+            if (key === "ArrowLeft") { move("left"); event.preventDefault(); return; }
+            if (key === "ArrowRight") { move("right"); event.preventDefault(); return; }
+            if (key === "ArrowUp") { move("up"); event.preventDefault(); return; }
+            if (key === "ArrowDown") { move("down"); event.preventDefault(); return; }
+            if (key === "Enter") { activate(); event.preventDefault(); return; }
+            if (key === "Backspace") { back(); event.preventDefault(); return; }
+        });
+
+        // Der Bildschirm skaliert auf das Fenster.
+        function fit() {
+            const scale = Math.min(window.innerWidth / 1920, (window.innerHeight - 60) / 1080, 1);
+            stage.style.transform = "scale(" + scale + ")";
+        }
+
+        window.addEventListener("resize", fit);
+        fit();
+        render();
+    </script>
+</body>
+
+</html>
