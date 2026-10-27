@@ -13570,6 +13570,18 @@
    "Paper",
    "Papier"
   ],
+  "reader.binding": [
+   "Binding",
+   "Einband"
+  ],
+  "reader.binding.soft": [
+   "Paperback",
+   "Taschenbuch"
+  ],
+  "reader.binding.hard": [
+   "Hardcover",
+   "Hardcover"
+  ],
   "reader.colour": [
    "Paper colour",
    "Papierfarbe"
@@ -13617,6 +13629,22 @@
   "reader.textWidth": [
    "Text width (characters)",
    "Textbreite (Zeichen)"
+  ],
+  "reader.margin.top": [
+   "Top margin (% of page width)",
+   "Oberer Rand (% der Seitenbreite)"
+  ],
+  "reader.margin.bottom": [
+   "Bottom margin (% of page width)",
+   "Unterer Rand (% der Seitenbreite)"
+  ],
+  "reader.margin.inner": [
+   "Inner margin at the spine (% of page width)",
+   "Innerer Rand am Falz (% der Seitenbreite)"
+  ],
+  "reader.margin.outer": [
+   "Outer margin (% of page width)",
+   "Äußerer Rand (% der Seitenbreite)"
   ],
   "reader.indent": [
    "Indent paragraphs",

@@ -2,10 +2,12 @@ import type { BookGroup, initializeBookRenderer } from './BookRenderer';
 import type { ReaderSettings } from './Settings';
 import { paperPageCount } from './PaperMeasure';
 import { initializeBookPages } from './BookPages';
+import { readerLifetime } from './Lifetime';
 import { pageAt, pageFraction } from './ProgressMath';
 
 // Canonical CSS columns own pagination; decorative faces never own progress.
 export function initializePaperPages(reader: HTMLElement, content: HTMLElement, settings: ReaderSettings, changed: () => void, painted: () => void = () => {}) {
+    const signal = readerLifetime();
     const paper = reader.querySelector<HTMLElement>('.reader__paper')!;
     const canvas = reader.querySelector<HTMLElement>('.reader__canvas')!;
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -72,6 +74,8 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
         if (book && !book.update({ current: spread, columns, minimum: edge(-1) ? -1 : 0,
             maximum: Math.ceil(pages / columns) - (edge(1) ? 0 : 1), group,
             next: (at, delta) => at + delta, number: at => at * columns + 1, commit }, active)) failed = true;
+        // Without the book view the flat page shows; it stays hidden only while the book is still to come.
+        if (!active && !book && reader.dataset.bookReady !== 'false') reader.dataset.bookReady = 'false';
         if (active && !book && !loading) loading = import('./BookRenderer').then(module => {
             book = module.initializeBookRenderer(reader);
             paint();
@@ -92,6 +96,8 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
     };
     const turn = (delta: number): void => {
         if (settings.mode !== 'paged') { edge(delta)?.click(); return; }
+        // Before the first layout the chapter counts as one page, so a quick click would leave it for the next one.
+        if (!measured) return;
         if (!book?.turn(delta)) commit(spread + delta);
     };
     const reveal = (element: HTMLElement | Range): void => {
@@ -120,6 +126,8 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
     content.addEventListener('scroll', () => { if (settings.mode === 'scroll') painted(); }, { passive: true });
     const layout = (): void => {
         cancelAnimationFrame(frame);
+        // A reader replaced by another chapter keeps observing its removed elements; it must no longer lay out or report.
+        if (signal.aborted) return;
         const anchor = current(), version = navigation;
         frame = requestAnimationFrame(() => {
             // A pending view resize must not restore an anchor superseded by a seek/turn.
@@ -130,6 +138,17 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
             reader.style.setProperty('--reader-columns', String(columns));
             // The single-page text inset must be active before calculating CSS-column pagination.
             reader.dataset.columns = String(columns);
+            // Margins are a share of the page's width, so they follow the book's size; the inner ones form the gap between the two pages.
+            const paperWidth = paper.getBoundingClientRect().width, page = paperWidth / columns;
+            const margin = (share: number) => `${Math.round(page * share / 100)}px`;
+            // The text box gets a whole-pixel width: pages are counted and turned in whole pixels, and a fraction of a pixel per
+            // column would add up across a chapter to a blank last page.
+            const outer = (paperWidth - Math.floor(paperWidth - 2 * Math.round(page * settings.marginOuter / 100))) / 2;
+            reader.style.setProperty('--reader-margin-top', margin(settings.marginTop));
+            reader.style.setProperty('--reader-margin-bottom', margin(settings.marginBottom));
+            reader.style.setProperty('--reader-margin-outer', `${outer}px`);
+            reader.style.setProperty('--reader-margin-inner', margin(settings.marginInner));
+            reader.style.setProperty('--reader-margin-gap', margin(settings.marginInner * 2));
             content.removeAttribute('data-pad');
             const gap = parseFloat(getComputedStyle(content).columnGap) || 0;
             step = content.clientWidth + gap;
@@ -155,8 +174,8 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
         if (event.target instanceof HTMLElement) reveal(event.target);
     });
     document.fonts.ready.then(layout);
-    document.fonts.addEventListener('loadingdone', () => { bookPages.invalidate(); layout(); });
-    window.addEventListener('pageshow', event => { if (event.persisted) layout(); });
+    document.fonts.addEventListener('loadingdone', () => { bookPages.invalidate(); layout(); }, { signal });
+    window.addEventListener('pageshow', event => { if (event.persisted) layout(); }, { signal });
     motion.addEventListener('change', layout);
     reader.querySelectorAll<HTMLElement>('[data-turn]').forEach(button => button.addEventListener('click', () => turn(Number(button.dataset.turn))));
     reader.addEventListener('keydown', event => {

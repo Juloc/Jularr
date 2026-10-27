@@ -1,6 +1,7 @@
 import { contrast } from '../Appearance/Palette';
 import { initializeRanges } from '../../Framework/Components/Range';
 import { initializeOverflow } from './Overflow';
+import { readerLifetime } from './Lifetime';
 
 export interface ReaderSettings {
     size: number;
@@ -8,6 +9,10 @@ export interface ReaderSettings {
     paragraph: number;
     font: 'serif' | 'sans';
     width: number;
+    marginTop: number;
+    marginBottom: number;
+    marginInner: number;
+    marginOuter: number;
     indent: boolean;
     hyphenation: boolean;
     illustrations: boolean;
@@ -15,6 +20,7 @@ export interface ReaderSettings {
     layout: 'auto' | 'single' | 'spread';
     direction: 'ltr' | 'rtl';
     surface: 'paper' | 'clean';
+    binding: 'soft' | 'hard';
     colour: string;
     animation: 'system' | 'on' | 'off';
     preset: 'book' | 'novel' | 'manga';
@@ -33,6 +39,10 @@ export function readerSettings(value: unknown, rtl = false): ReaderSettings {
         paragraph: number(stored.paragraph, 0, 200, 100),
         font: stored.font === 'sans' ? 'sans' : 'serif',
         width: number(stored.width, 40, 90, 68),
+        marginTop: number(stored.marginTop, 0, 20, 6),
+        marginBottom: number(stored.marginBottom, 0, 20, 6),
+        marginInner: number(stored.marginInner, 0, 20, 8),
+        marginOuter: number(stored.marginOuter, 0, 20, 7),
         indent: stored.indent === true,
         hyphenation: stored.hyphenation !== false,
         illustrations: stored.illustrations !== false,
@@ -40,6 +50,7 @@ export function readerSettings(value: unknown, rtl = false): ReaderSettings {
         layout: stored.layout === 'single' || stored.layout === 'spread' ? stored.layout : 'auto',
         direction: stored.direction === 'ltr' || stored.direction === 'rtl' ? stored.direction : rtl ? 'rtl' : 'ltr',
         surface: stored.surface === 'clean' ? 'clean' : 'paper',
+        binding: stored.binding === 'hard' ? 'hard' : 'soft',
         colour: typeof stored.colour === 'string' && /^#[a-f\d]{6}$/i.test(stored.colour) ? stored.colour
             : stored.theme === 'dark' ? '#141414' : stored.theme === 'sepia' ? '#f4ecd8' : '#f7f3ec',
         animation: stored.animation === 'on' || stored.animation === 'off' ? stored.animation : 'system',
@@ -91,15 +102,18 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
         saving = now ? 0 : window.setTimeout(() => { saving = 0; void flushProfile(); }, 600);
         if (now) void flushProfile();
     };
-    window.addEventListener('pagehide', () => { if (saving || queued) saveProfile(true); });
+    const signal = readerLifetime();
+    window.addEventListener('pagehide', () => { if (saving || queued) saveProfile(true); }, { signal });
+    signal.addEventListener('abort', () => { if (saving || queued) saveProfile(true); });
     const fields = Array.from(reader.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-panel=settings] input:not([type=hidden]), [data-panel=settings] select'));
-    const names: Record<string, keyof ReaderSettings> = { Size: 'size', Spacing: 'spacing', Paragraph: 'paragraph', FontFamily: 'font', TextWidth: 'width', Indent: 'indent', Hyphenation: 'hyphenation', Illustrations: 'illustrations',
-        Mode: 'mode', Layout: 'layout', Direction: 'direction', Surface: 'surface', Colour: 'colour', Animation: 'animation', Preset: 'preset', Fit: 'fit' };
+    const names: Record<string, keyof ReaderSettings> = { Size: 'size', Spacing: 'spacing', Paragraph: 'paragraph', FontFamily: 'font', TextWidth: 'width', MarginTop: 'marginTop', MarginBottom: 'marginBottom', MarginInner: 'marginInner', MarginOuter: 'marginOuter', Indent: 'indent', Hyphenation: 'hyphenation', Illustrations: 'illustrations',
+        Mode: 'mode', Layout: 'layout', Direction: 'direction', Surface: 'surface', Binding: 'binding', Colour: 'colour', Animation: 'animation', Preset: 'preset', Fit: 'fit' };
     const apply = (): void => {
         reader.dataset.mode = settings.mode;
         reader.dataset.layout = settings.layout;
         reader.dataset.direction = settings.direction;
         reader.dataset.surface = settings.surface;
+        reader.dataset.paperBinding = settings.binding;
         reader.dataset.animation = settings.animation;
         reader.dataset.indent = String(settings.indent);
         reader.dataset.hyphenation = String(settings.hyphenation);
@@ -126,7 +140,7 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
         const key = names[field.name];
         if (!key) return;
         const value = field instanceof HTMLInputElement && field.type === 'checkbox' ? field.checked
-            : key === 'size' || key === 'spacing' || key === 'paragraph' || key === 'width' ? Number(field.value) : field.value;
+            : key === 'size' || key === 'spacing' || key === 'paragraph' || key === 'width' || key.startsWith('margin') ? Number(field.value) : field.value;
         const next = { ...settings, [key]: value };
         if (key === 'preset') {
             next.spacing = next.preset === 'novel' ? 175 : 165;
@@ -297,7 +311,7 @@ export function initializeReaderChrome(reader: HTMLElement): void {
             view(previous);
             (fullscreen.getClientRects().length ? fullscreen : reader.querySelector<HTMLElement>('[data-action=more]') ?? reader.querySelector<HTMLElement>('.reader__canvas'))?.focus({ preventScroll: true });
         }
-    });
+    }, { signal: readerLifetime() });
     reveal.forEach(button => button.addEventListener('click', () => chrome(reader.dataset.chrome !== 'visible')));
     initializeOverflow(reader);
     reader.addEventListener('keydown', event => {
