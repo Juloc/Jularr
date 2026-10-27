@@ -26,6 +26,8 @@ The design source is UiDesigner's `Projects/Jularr/Player/PlayerDesign.cs` and
   where the profile chose Automatic the player jumps on arrival and shows a short note with Undo, and credits that run to the end of the file open the next episode after that note when autoplay is on.
 - Hovering or dragging the timeline always names the target time and the chapter there; thumbnails are added where the server rendered them. The chapter playing is named under the
   timeline. A mouse leaving the picture hides the controls at once. The loading ring ends as soon as frames are ready, and a dropped connection or broken segment of a conversion is retried in place up to five times before the player reports a failure.
+- Touch: a single tap shows or hides the controls, a double tap on the left or right third seeks back 10 or forward 30 seconds (more taps add up), a swipe up or down on the right half changes the volume and on the left half the picture's brightness (a filter on the video, not the device), and holding plays at 2x until release. A double tap never toggles fullscreen; only a double click of the mouse does.
+- Fullscreen belongs to the page's main element: choosing the next episode (button, countdown or credits) replaces the player inside it, so fullscreen and the page stay; outside fullscreen the page changes as before. On a phone fullscreen also turns to landscape and leaving releases it, where the browser allows it (Android; iOS does not).
 - The speaker shows three, two, one or no wave; the timeline is white-thumbed, played in the accent, buffered more opaque.
 - The page composes a sidebar using authorized Work details and the current
   season's existing episode service. Compact rows reuse `EpisodeCard`; the current

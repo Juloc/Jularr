@@ -252,6 +252,7 @@ async function start(player: HTMLElement): Promise<void> {
         video.pause();
         hls?.destroy();
         hls = null;
+        hlsPlayer = null;
         video.removeAttribute("src");
         video.load();
     }

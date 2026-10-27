@@ -243,7 +243,7 @@ namespace Jularr.E2E.Tests
 
                 // The next episode opens inside the same page and fullscreen stays on.
                 await page.GotoAsync(details);
-                await pilot.ClickAsync();
+                await page.Locator(".episode-card", new() { HasText = "Pilot" }).Locator("a[href^='/Player/']").First.ClickAsync();
                 await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 1", null, new() { Timeout = Steps.MediaTimeout });
                 await page.Locator("[data-action=fullscreen]").ClickAsync();
                 await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player-main')");
