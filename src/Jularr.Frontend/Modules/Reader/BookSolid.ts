@@ -66,17 +66,17 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
     gradient('cut', [[0, '#514537', .23], [20, '#514537', .10], [75, '#514537', .17], [100, '#514537', .30]], '0%', '100%');
     const surfaces = [['left', left], ['right', right]] as const;
     const overhang = study.dataset.bookBinding === 'soft' ? .7 : 2.4;
-    // The stack's cut edge hangs below the page. A paperback has no gap behind its pages: each stack keeps its own flat edge, pinching up to the page line in a narrow V at the fold, and the
-    // thicker one steps down in a short soft corner on its own side of the fold. A hardcover leaves the space between case and
+    // The stack's cut edge hangs below the page. A paperback has no gap behind its pages: each stack keeps its own flat edge, curving up at the fold
+    // exactly as wide as the flare at its outer corner, and the thicker one steps down in a short soft corner on its own side of the fold. A hardcover leaves the space between case and
     // book block: both stacks meet at the spine, the thicker one flat, the thinner one rising softly to its own level.
     const soft = study.dataset.bookBinding === 'soft';
-    const notchWidth = 13;
+    const notchWidth = 10;
     const stackAt = (x: number) => {
         const thick = Math.max(left.drop, right.drop), thin = Math.min(left.drop, right.drop);
         const onThickSide = (right.drop >= left.drop) === x >= 148;
         if (soft) {
             const near = Math.max(0, Math.min(1, Math.abs(x - 148) / 12));
-            const notch = Math.max(0, 1 - Math.abs(x - 148) / notchWidth);
+            const notch = .55 * Math.max(0, 1 - Math.abs(x - 148) / notchWidth) ** 2;
             return (1 - notch) * (onThickSide ? thin + (thick - thin) * near * near * (3 - 2 * near) : thin);
         }
         const own = x < 148 ? left.drop : right.drop;
@@ -86,7 +86,7 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
     const along = (from: number, to: number, extra: number, ratio = 1) => {
         const steps = Math.max(2, Math.round(Math.abs(to - from) / 6)), low = Math.min(from, to), high = Math.max(from, to);
         const xs = Array.from({ length: steps + 1 }, (_, index) => from + (to - from) * index / steps);
-        if (soft) for (const x of [148 - notchWidth, 148, 148 + notchWidth]) if (x > low && x < high) xs.push(x);
+        if (soft) for (const x of [-1, -.75, -.5, -.25, 0, .25, .5, .75, 1].map(step => 148 + step * notchWidth)) if (x > low && x < high) xs.push(x);
         return xs.sort((a, b) => (a - b) * Math.sign(to - from)).map(x => `L${rounded(x)},${rounded(height + stackAt(x) * ratio + extra)}`).join(' ');
     };
     const projectX = (side: string, profile: typeof left, point: { x: number }, ratio = 1) => {
@@ -115,7 +115,7 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
     element('path', { d: `M${-overhang + .6},${-overhang + .6} H${296 + overhang - .6} V${rounded(height + overhang - .6)} H${-overhang + .6} Z`, fill: 'var(--lining)' });
     // A paperback's stack flares out a little at its outer bottom corners, in a soft curve rather than a hard corner.
     if (soft) for (const [outer, sign] of [[0, -1], [296, 1]] as const) {
-        const drop = stackAt(outer), flare = Math.min(6, drop * .35);
+        const drop = stackAt(outer), flare = Math.min(notchWidth, drop * .5);
         if (drop < 1) continue;
         const edge = `M${outer},${rounded(height)} C${outer},${rounded(height + drop * .5)} ${rounded(outer + sign * flare * .2)},${rounded(height + drop * .85)} ${rounded(outer + sign * flare)},${rounded(height + drop)}`;
         element('path', { d: `${edge} L${outer},${rounded(height + drop)} Z`, fill: 'var(--paper-cut)', 'data-book-cut': `${sign < 0 ? 'left' : 'right'}-flare` });
