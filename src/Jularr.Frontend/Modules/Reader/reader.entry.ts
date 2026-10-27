@@ -19,6 +19,14 @@ import { handleChapters } from './ChapterNavigation';
 import { hasNewBuild } from '../Navigation/Navigation';
 import { regionSwapped } from '../Navigation/PageSwap';
 
+// What the browser really shows, for browsers without dynamic viewport units (their 100vh includes the toolbars).
+if (!CSS.supports('height', '100dvh')) {
+    const viewport = () => document.documentElement.style.setProperty('--reader-viewport', `${window.innerHeight}px`);
+    viewport();
+    window.addEventListener('resize', viewport);
+    window.visualViewport?.addEventListener('resize', viewport);
+}
+
 const first = document.querySelector<HTMLElement>('.reader');
 if (first) start(first);
 if (first && !first.dataset.format && first.querySelector('[data-role=content]')) openChaptersInPlace(location.pathname);
