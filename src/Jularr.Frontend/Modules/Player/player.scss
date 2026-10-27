@@ -24,7 +24,7 @@
 }
 
 .player-page { background: var(--background); color: var(--text); }
-.player-main { width: 100%; min-height: 100dvh; }
+.player-main { width: 100%; min-height: 100dvh; &:fullscreen { background: #000; } }
 .player {
     display: grid;
     align-content: start;
@@ -231,8 +231,21 @@
     &__status { inset: 50% auto auto 50%; transform: translate(-50%, -50%); }
     &__save-error { top: 64px; left: 0; }
     [hidden] { display: none; }
-    &--theater, &:fullscreen { max-width: none; padding: 0; height: 100dvh; grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); .player__stage { aspect-ratio: auto; height: 100%; border-radius: 0; } }
-    &:fullscreen { background: #000; }
+    &--theater, &:fullscreen, &--fullscreen { max-width: none; padding: 0; height: 100dvh; grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); .player__stage { aspect-ratio: auto; height: 100%; border-radius: 0; } }
+    &:fullscreen, &--fullscreen { background: #000; }
+    // The video takes the touches itself: tap, double tap, hold and swipe are the player's gestures, not the browser's.
+    &__video { touch-action: none; }
+    &__gesture {
+        position: absolute; top: 50%; z-index: 2; display: grid; justify-items: center; gap: 8px; padding: 10px 16px; border-radius: 14px;
+        background: rgb(0 0 0 / 60%); color: #fff; font-size: 1.1rem; font-weight: 650; font-variant-numeric: tabular-nums; pointer-events: none; transform: translateY(-50%);
+        &[data-side=left] { left: 12%; }
+        &[data-side=right] { right: 12%; }
+        &[data-side=center] { left: 50%; transform: translate(-50%, -50%); }
+        &:not(.player__gesture--bar) .player__gesture-bar { display: none; }
+    }
+    &__gesture-bar { position: relative; width: 6px; height: 120px; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / 30%); }
+    &__gesture-fill { position: absolute; inset: auto 0 0 0; height: calc(var(--level, 0) * 100%); background: #fff; }
+    &--mini &__gesture { display: none; }
     &__mini-only { display: none; }
     &--mini &__loading, &--mini &__feedback { display: none; }
 }

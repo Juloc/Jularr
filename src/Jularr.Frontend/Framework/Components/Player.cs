@@ -53,6 +53,9 @@ namespace Jularr.Frontend.Framework
                     .Attribute("data-role", "loading").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
                 new Div(Icon("play"), Icon("pause")).Class("player__feedback")
                     .Attribute("data-role", "transport-feedback").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
+                // Touch gestures name what they do: the seek step, the speed, or the volume and brightness level.
+                new Div(new Span().Attribute("data-role", "gesture-text"), new Div(new Div().Class("player__gesture-fill")).Class("player__gesture-bar")).Class("player__gesture")
+                    .Attribute("data-role", "gesture").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
                 new Div(
                     new Div(
                         new A(Icon("close")).Class("button button--icon player__button").Attribute("href", source.BackHref).Attribute("aria-label", texts["common.back"]).Attribute("data-action", "close"),
