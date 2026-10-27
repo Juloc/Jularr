@@ -34,5 +34,10 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly TimeField EndsAt = new();
         public static readonly LongField Entries = new() { Minimum = 0 };
         public static readonly LongField Pending = new() { Minimum = 0 };
+        // Cache tier of a catalog: 1 lean, 2 standard, 3 full catalog.
+        public static readonly IntField CacheTier = new() { Minimum = 1, Maximum = 3 };
+        public static readonly IntField MaximumTier = new() { Minimum = 1, Maximum = 3 };
+        public static readonly BoolField DetailsTrending = new();
+        public static readonly IntField KeepDays = new() { Minimum = 1, Maximum = 365 };
     }
 }

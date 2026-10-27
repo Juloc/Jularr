@@ -45,6 +45,10 @@ namespace Jularr.Backend.Tests
             await Assert.ThrowsExactlyAsync<SecurityException>(() => RunAsync(host));
             Assert.AreEqual(0, tmdb.Requests.Count);
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'LocalDiscovery'");
+            // The default tier 2 keeps no full catalog: nothing is fetched until a catalog is set to tier 3.
+            await RunAsync(host);
+            Assert.AreEqual(0, tmdb.Requests.Count);
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"CacheTier\" = 3");
 
             // The id list adds titles without adult ones and video extras; entries are read and gone ones leave.
             await RunAsync(host);
@@ -89,6 +93,7 @@ namespace Jularr.Backend.Tests
                 services.AddSingleton<TimeProvider>(time);
             });
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'LocalDiscovery'");
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"CacheTier\" = 3");
 
             // While someone uses Jularr the walk waits.
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
@@ -117,15 +122,65 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void Windows_AndUse_DecideWhetherACatalogSyncs()
         {
-            var sync = new ExternalWorkSyncData("anilist", true, 20, true, null, null, null);
+            var sync = new ExternalWorkSyncData("anilist", true, 20, true, null, null, null, 3);
             IReadOnlyList<ExternalWorkSyncWindowData> night = [new("anilist", new TimeOnly(22, 0), new TimeOnly(6, 0)), new("tmdb_movie", new TimeOnly(12, 0), new TimeOnly(13, 0))];
             Assert.IsTrue(ExternalWorkLogic.MaySync(sync, [], new TimeOnly(15, 0), false), "Without windows a catalog syncs any time.");
             Assert.IsTrue(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(23, 30), false));
             Assert.IsTrue(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(5, 59), false), "A window past midnight ends the next day.");
             Assert.IsFalse(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(12, 30), false), "Another catalog's window does not count.");
             Assert.IsFalse(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(23, 30), true), "It waits while Jularr is used.");
-            Assert.IsTrue(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", true, 20, false, null, null, null), night, new TimeOnly(23, 30), true));
-            Assert.IsFalse(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", false, 20, false, null, null, null), [], new TimeOnly(23, 30), false));
+            Assert.IsTrue(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", true, 20, false, null, null, null, 3), night, new TimeOnly(23, 30), true));
+            Assert.IsFalse(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", false, 20, false, null, null, null, 3), [], new TimeOnly(23, 30), false));
+            Assert.IsFalse(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", true, 20, false, null, null, null, 2), [], new TimeOnly(23, 30), false), "Only tier 3 runs the full sync.");
+        }
+
+        [TestMethod]
+        public async Task CacheSettings_ReadDefaults_SaveWithinRanges_AndRefuseWhatIsNotAllowed()
+        {
+            await using var host = await Host.CreateAsync(library: true);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/cache");
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            var current = (await read.Content.ReadFromJsonAsync<CatalogCacheV1>())!;
+            Assert.AreEqual(14, current.KeepDays);
+            CollectionAssert.AreEqual(new[] { "anilist", "tmdb_movie", "tmdb_tv" }, current.Providers.Select(provider => provider.Namespace).ToArray());
+            Assert.IsTrue(current.Providers.All(provider => provider.CacheTier == 2 && provider.MaximumTier == 3 && !provider.DetailsTrending));
+
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(30,
+                new([new("anilist", 3, true), new("tmdb_movie", 1, false), new("tmdb_tv", 2, true)])));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            Assert.AreEqual("anilist:3:true,tmdb_movie:1:false,tmdb_tv:2:true", await host.ScalarAsync(
+                "SELECT string_agg(\"Namespace\" || ':' || \"CacheTier\" || ':' || \"DetailsTrending\", ',' ORDER BY \"Namespace\") FROM \"ExternalWorkSyncs\""));
+            Assert.AreEqual((short)30, await host.ScalarAsync("SELECT \"CatalogDetailKeepDays\" FROM \"InstanceSettings\" WHERE \"Id\" = 1"));
+
+            // Out of range tier or days, an unknown catalog and a tier a catalog cannot keep are refused; nothing changes.
+            using var tier = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(10, new([new("anilist", 4, false)])));
+            Assert.AreEqual(HttpStatusCode.BadRequest, tier.StatusCode);
+            using var days = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(366, new([new("anilist", 2, false)])));
+            Assert.AreEqual(HttpStatusCode.BadRequest, days.StatusCode);
+            using var none = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(0, new([new("anilist", 2, false)])));
+            Assert.AreEqual(HttpStatusCode.BadRequest, none.StatusCode);
+            using var unknown = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(10, new([new("tvdb_series", 2, false)])));
+            Assert.AreEqual(HttpStatusCode.BadRequest, unknown.StatusCode);
+            Assert.AreEqual(2, ExternalWorkLogic.MaximumCacheTier("tvdb_series"), "A catalog without a full sync stays at tier 2 at most.");
+            Assert.AreEqual((short)30, await host.ScalarAsync("SELECT \"CatalogDetailKeepDays\" FROM \"InstanceSettings\" WHERE \"Id\" = 1"));
+        }
+
+        [TestMethod]
+        public async Task CacheSettings_RefuseAnyoneButTheOwner()
+        {
+            await using var host = await Host.CreateAsync(library: true);
+            using var anonymous = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/cache");
+            Assert.AreEqual(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/cache");
+            Assert.AreEqual(HttpStatusCode.Forbidden, read.StatusCode);
+            using var write = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(10, new([new("anilist", 1, false)])));
+            Assert.AreEqual(HttpStatusCode.Forbidden, write.StatusCode);
+            Assert.AreEqual(2, await host.ScalarAsync("SELECT \"CacheTier\"::integer FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist'"));
         }
 
         [TestMethod]

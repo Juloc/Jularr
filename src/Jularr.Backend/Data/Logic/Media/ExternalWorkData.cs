@@ -306,9 +306,10 @@ namespace Jularr.Backend.Data.Logic.Media
     // A catalog's full-sync settings and progress.
     internal sealed class ExternalWorkSyncData : BaseData
     {
-        public ExternalWorkSyncData(string @namespace, bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, int? cursor, DateTime? changesReadAt)
+        public ExternalWorkSyncData(string @namespace, bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, int? cursor, DateTime? changesReadAt, int cacheTier)
         {
             Namespace = @namespace;
+            CacheTier = cacheTier;
             IsEnabled = isEnabled;
             RequestsPerMinute = requestsPerMinute;
             PausesWhileUsed = pausesWhileUsed;
@@ -337,6 +338,42 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.ChangesReadAt))]
         public DateTime? ChangesReadAt { get; }
+
+        // Only tier 3 keeps the whole provider catalog.
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.CacheTier))]
+        public int CacheTier { get; }
+    }
+
+    // A catalog's cache tier as saved, with its trending switch.
+    internal sealed class CatalogCacheProviderData : BaseData
+    {
+        public CatalogCacheProviderData(string @namespace, int cacheTier, bool detailsTrending)
+        {
+            Namespace = @namespace;
+            CacheTier = cacheTier;
+            DetailsTrending = detailsTrending;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.CacheTier))]
+        public int CacheTier { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.DetailsTrending))]
+        public bool DetailsTrending { get; }
+    }
+
+    // How long unused catalog details and minimal rows are kept.
+    internal sealed class CatalogKeepDaysData : BaseData
+    {
+        public CatalogKeepDaysData(int keepDays)
+        {
+            KeepDays = keepDays;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.KeepDays))]
+        public int KeepDays { get; }
     }
 
     internal sealed class ExternalWorkSyncProgressData : BaseData
