@@ -30,28 +30,18 @@ namespace Jularr.Backend.Service.Core
 
         public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string query, int? year, CancellationToken ct)
         {
-            // Books come from Open Library, Manga and Light Novels also from AniList, albums from MusicBrainz, games from IGDB, video from TMDB.
+            // Books come from Open Library, Manga and Light Novels from AniList only, albums from MusicBrainz, games from IGDB, video from TMDB.
             var results = new List<MetadataSearchResultV1>();
             if (BookMetadata.Handles(mediaType))
             {
-                // One unreachable provider leaves the other's results.
-                ServiceUnavailableException? failure = null;
-                try
-                {
-                    results.AddRange((await books.SearchAsync(query, year, ct)).Select(Book));
-                }
-                catch (ServiceUnavailableException exception)
-                {
-                    failure = exception;
-                }
-
+                // Manga and Light Novels are AniList data only; other books come from Open Library.
                 if (subtype is MediaSubtype.Manga or MediaSubtype.LightNovel)
                 {
                     results.AddRange((await aniList.SearchBooksAsync(subtype.Value, query, year, ct)).Select(AniListBook));
                 }
-                else if (failure is not null)
+                else
                 {
-                    throw failure;
+                    results.AddRange((await books.SearchAsync(query, year, ct)).Select(Book));
                 }
             }
             else if (GameMetadata.Handles(mediaType))

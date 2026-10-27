@@ -8,6 +8,7 @@ using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.User.Request.V1
@@ -272,6 +273,7 @@ namespace Jularr.Backend.Service.User.Request.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             // A catalog title first takes its details, an anime season no series holds yet becomes its series; the request is saved even while the catalog cannot answer.
+            await Context.ExecuteBatchAsync(async (ctx, ct) => { await ctx.RequireWorkNotExcludedAsync(Parameters.WorkId, ct); return true; }, CancellationToken);
             var workId = await _catalog.PrepareRequestAsync(Context, Parameters.WorkId, Auth.ProfileId!.Value, CancellationToken);
             var (request, newlyApproved) = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value,
                 Auth.AccountId!.Value, Data.UiLocaleId, Data.GamePlatformId, Data.AcquisitionProfileId, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct), CancellationToken);

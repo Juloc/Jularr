@@ -107,6 +107,8 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "ExternalWorkFeedItems" ("FeedId", "Position", "WorkId") VALUES (1, 1, 40);
                 INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId")
                 SELECT 40, "ActiveProfileId", 41, 1 FROM "AccountSessions" WHERE "ActiveProfileId" IS NOT NULL ORDER BY "CreatedAt" DESC LIMIT 1;
+                INSERT INTO "Notifications" ("ProfileId", "NotificationTypeId", "WorkId", "Subject")
+                SELECT "ActiveProfileId", 3, 40, 'Example Quest 2' FROM "AccountSessions" WHERE "ActiveProfileId" IS NOT NULL ORDER BY "CreatedAt" DESC LIMIT 1;
                 """);
             await RunAsync(host);
 
@@ -117,6 +119,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("30:10:3", await host.ScalarAsync("""SELECT string_agg("WorkId" || ':' || "RelatedWorkId" || ':' || "WorkRelationTypeId", ',') FROM "WorkRelations" """));
             Assert.AreEqual("10:2", await host.ScalarAsync("""SELECT "WorkId" || ':' || "SeasonNumber" FROM "ExternalWorkFeedItems" WHERE "FeedId" = 1 AND "Position" = 1"""));
             Assert.AreEqual(10L, await host.ScalarAsync("""SELECT "WorkId" FROM "AcquisitionRequests" """));
+            Assert.AreEqual(10L, await host.ScalarAsync("""SELECT "WorkId" FROM "Notifications" """));
         }
 
         private static async Task RunAsync(Host host)

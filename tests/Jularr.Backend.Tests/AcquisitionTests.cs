@@ -875,7 +875,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("Example Movie", exclusions.Items.Single().Title);
 
             // A request through the same provider identity is refused before anything is imported.
-            using var refused = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/" + (byte)MediaType.Movie + "/4242/requests", new CreateRequestDataV1(1));
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (1, 'Example Movie', 2020, 'tmdb_movie');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "Id", 'tmdb_movie', '4242' FROM "Works";
+                """);
+            var catalogWorkId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+            using var refused = await host.SendAsync(HttpMethod.Post, "/api/v1/works/" + catalogWorkId + "/requests", new CreateRequestDataV1(1));
             Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode, await refused.Content.ReadAsStringAsync());
             StringAssert.Contains(await refused.Content.ReadAsStringAsync(), "excluded");
 

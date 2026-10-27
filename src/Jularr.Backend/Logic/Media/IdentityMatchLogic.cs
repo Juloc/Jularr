@@ -107,7 +107,7 @@ namespace Jularr.Backend.Logic.Media
 
         // An anime season no series held yet was a Work of its own: a series, anime, with only its AniList entry and nothing of its own.
         // Once a season of the series holds that entry, favorites, collections, relations, list places, requests, wanted entries and progress
-        // move to the series (a list place at that season), what the series already has stays, and the season's Work goes.
+        // notifications move to the series (a list place at that season), what the series already has stays, and the season's Work goes.
         public static async Task<int> MergeAnimePlaceholdersAsync(this LogicContext ctx, long seriesWorkId, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -437,6 +437,47 @@ namespace Jularr.Backend.Logic.Media
                     "WantedItems" AS wanted
                 WHERE
                     wanted."WorkId" = ANY(@PlaceholderWorkIds);
+
+                DELETE FROM
+                    "Notifications" AS notification
+                WHERE
+                    notification."Id" IN (
+                        SELECT
+                            duplicate."Id"
+                        FROM
+                            (
+                                SELECT
+                                    unread."Id",
+                                    row_number() OVER (PARTITION BY unread."ProfileId", unread."NotificationTypeId", unread."Subject" ORDER BY unread."CreatedAt", unread."Id") AS "Place",
+                                    EXISTS (
+                                        SELECT
+                                            1
+                                        FROM
+                                            "Notifications" AS kept
+                                        WHERE
+                                            kept."WorkId" = @SeriesWorkId
+                                            AND kept."ProfileId" = unread."ProfileId"
+                                            AND kept."NotificationTypeId" = unread."NotificationTypeId"
+                                            AND kept."Subject" = unread."Subject"
+                                            AND kept."ReadAt" IS NULL
+                                    ) AS "IsKept"
+                                FROM
+                                    "Notifications" AS unread
+                                WHERE
+                                    unread."WorkId" = ANY(@PlaceholderWorkIds)
+                                    AND unread."ReadAt" IS NULL
+                            ) AS duplicate
+                        WHERE
+                            duplicate."Place" > 1
+                            OR duplicate."IsKept"
+                    );
+
+                UPDATE
+                    "Notifications" AS notification
+                SET
+                    "WorkId" = @SeriesWorkId
+                WHERE
+                    notification."WorkId" = ANY(@PlaceholderWorkIds);
 
                 DELETE FROM
                     "Works" AS work
