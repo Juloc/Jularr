@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Logic.Instance;
 using Jularr.Backend.Infrastructure.Sql;
 
@@ -892,6 +893,49 @@ namespace Jularr.Backend.Logic.Media
                 """;
             sql.Parameters.Add(data);
             return await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // Opening a Work the profile may see counts once a day; null when the profile may not open it.
+        public static Task<WorkDetailStateData?> MarkWorkViewedAsync(this LogicContext ctx, long workId, long profileId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH visible AS (
+                    SELECT
+                        work."Id",
+                        work."MediaTypeId",
+                        work."MediaSubtypeId",
+                        work."DetailedAt" IS NOT NULL AS "IsDetailed"
+                    FROM
+                        "ProfileWorks" AS visible
+                        JOIN "Works" AS work ON work."Id" = visible."WorkId"
+                    WHERE
+                        visible."ProfileId" = @ProfileId
+                        AND work."Id" = @Id
+                ), viewed AS (
+                    UPDATE
+                        "Works" AS work
+                    SET
+                        "ViewedAt" = now()
+                    FROM
+                        visible
+                    WHERE
+                        work."Id" = visible."Id"
+                        AND (work."ViewedAt" < now() - interval '1 day' OR work."ViewedAt" IS NULL)
+                )
+                SELECT
+                    visible."Id",
+                    visible."MediaTypeId",
+                    visible."MediaSubtypeId",
+                    visible."IsDetailed",
+                    NULL::text AS "AniListValue"
+                FROM
+                    visible;
+                """;
+            sql.Parameters.Add(new WorkIdData(workId));
+            sql.Parameters.Add(new ProfileParameters(profileId));
+            return ctx.ReadOptionalAsync<WorkDetailStateData>(sql, ct);
         }
     }
 }

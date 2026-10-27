@@ -18,6 +18,7 @@ using Jularr.Backend.Service.System.Media.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.Tmdb;
+using Jularr.Integrations.Logic.Tvdb;
 using Jularr.Integrations.Data.Tmdb;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.TestHost;
@@ -560,7 +561,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task RelatedWork_RequestedFromItsRow_IsTheNormalRequestWithoutLeavingThePage()
         {
-            await using var host = await CreateHostAsync(razor: true);
+            await using var host = await CreateHostAsync(razor: true, anime: new FakeAniList { FindsFirstSeason = true }, tvdb: new FakeTvdb());
 
             // A Work names a season of an anime that is only a catalog title.
             await host.Fixture.RunSqlAsync("""
@@ -589,12 +590,15 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.NotFound, foreign.StatusCode);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
 
-            // The request is the normal one of the related Work; the answer is the page again with the hint and no redirect, and the row shows the Work's state instead of the button.
+            // The request is the normal one of the related Work, an anime season of its own is requested as its series, which takes the season in; the answer is the page
+            // again with the hint and no redirect, and the row shows the series' state instead of the button.
             using var requested = await browser.PostAsync("/Details/700?handler=RequestRelated&tab=related", new FormUrlEncodedContent(form));
             var answer = await requested.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, answer);
             StringAssert.Contains(string.Join(' ', requested.Headers.GetValues("HX-Trigger")), "Requested");
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"WorkId\" = 800"));
+            var series = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"))!;
+            Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"WorkId\" = {series}"));
+            Assert.AreEqual(series, await host.ScalarAsync("SELECT \"RelatedWorkId\" FROM \"WorkRelations\" WHERE \"WorkId\" = 700"));
             Assert.IsFalse(answer.Contains("state-chip__label\">Not in library<", StringComparison.Ordinal));
             Assert.IsFalse(answer.Contains("name=\"relatedWorkId\" value=\"800\"", StringComparison.Ordinal));
 
@@ -644,11 +648,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(browseHtml, "class=\"capsule-bar__areas\"").Count);
             Assert.AreEqual(0, System.Text.RegularExpressions.Regex.Matches(browseHtml, "class=\"navigation-tabs[ \"]").Count);
 
-            // The title's page is the Work's; it shows what the catalog keeps and requests the title as any Work.
+            // The title's page is the Work's; its first open brings the details from the catalog, and it requests the title as any Work.
             using var title = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
             html = await title.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, title.StatusCode, html);
-            StringAssert.Contains(html, "A hacker learns the truth.");
+            StringAssert.Contains(html, "Keanu Reeves");
             StringAssert.Contains(html, "handler=Request\"");
             using var requested = await host.SendAsync(HttpMethod.Post, "/Details/" + workId + "?handler=Request", new Dictionary<string, string>
             {
@@ -883,7 +887,121 @@ namespace Jularr.Backend.Tests
             }
         }
 
-        private static async Task<Host> CreateHostAsync(bool razor = false, FakeTmdb? fake = null, FakeAniList? anime = null)
+        [TestMethod]
+        public async Task Details_FirstOpen_ImportsOnceIntoTheSameWork_ProviderDownShowsTheCatalogRow_AndStaleDetailsRefreshLater()
+        {
+            var tmdb = new FakeTmdb();
+            await using var host = await CreateHostAsync(razor: true, fake: tmdb);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "Overview", "CatalogNamespace") VALUES (960, 1, 'The Matrix', 1999, 'Catalog text.', 'tmdb_movie');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (960, 'tmdb_movie', '603');
+                """);
+            int Imports() => tmdb.Requests.Count(request => request.AbsolutePath == "/3/movie/603");
+
+            // While the catalog cannot answer the page shows the catalog row and says so; nothing is stored and nothing is retried.
+            tmdb.IsUnavailable = true;
+            var offline = WebUtility.HtmlDecode(await PageAsync(host, "/Details/960"));
+            StringAssert.Contains(offline, "Details can't be loaded right now");
+            StringAssert.Contains(offline, "Catalog text.");
+            Assert.AreEqual(1, Imports());
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"DetailedAt\" FROM \"Works\" WHERE \"Id\" = 960"));
+
+            // The next open takes the details into the same Work and renders them from the database.
+            tmdb.IsUnavailable = false;
+            var opened = WebUtility.HtmlDecode(await PageAsync(host, "/Details/960"));
+            Assert.IsFalse(opened.Contains("Details can't be loaded right now", StringComparison.Ordinal));
+            StringAssert.Contains(opened, "Keanu Reeves");
+            Assert.AreEqual(2, Imports());
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"DetailedAt\" IS NOT NULL AND \"ViewedAt\" IS NOT NULL FROM \"Works\" WHERE \"Id\" = 960"));
+            Assert.AreEqual(960L, await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'imdb' AND \"Value\" = 'tt0133093'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CanonicalTitle\" = 'The Matrix'"));
+
+            // A second open asks no provider; two opens at once of a title without details import it once.
+            var asked = tmdb.Requests.Count;
+            await PageAsync(host, "/Details/960");
+            Assert.AreEqual(asked, tmdb.Requests.Count);
+            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"DetailedAt\" = NULL WHERE \"Id\" = 960");
+            await Task.WhenAll(PageAsync(host, "/Details/960"), PageAsync(host, "/Details/960"));
+            Assert.AreEqual(3, Imports());
+
+            // Details older than a day are shown at once without a provider; the metadata job reads them again.
+            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"DetailedAt\" = now() - interval '2 days', \"ViewedAt\" = NULL WHERE \"Id\" = 960");
+            asked = tmdb.Requests.Count;
+            StringAssert.Contains(await PageAsync(host, "/Details/960"), "Keanu Reeves");
+            Assert.AreEqual(asked, tmdb.Requests.Count);
+            await FillAsync(host);
+            Assert.AreEqual(4, Imports());
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"DetailedAt\" > now() - interval '1 hour' FROM \"Works\" WHERE \"Id\" = 960"));
+        }
+
+        [TestMethod]
+        public async Task Request_OnACatalogTitle_ImportsItsDetailsFirst_AndWhileTheCatalogIsDownTheRequestStaysAndTheJobFillsIt()
+        {
+            var tmdb = new FakeTmdb();
+            await using var host = await CreateHostAsync(fake: tmdb, tvdb: new FakeTvdb());
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (970, 2, 'The Matrix Show', 2020, 'tmdb_tv'), (971, 1, 'The Matrix', 1999, 'tmdb_movie');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (970, 'tmdb_tv', '1399'), (971, 'tmdb_movie', '603');
+                """);
+
+            // The series' request brings its seasons and episodes into the same Work before the request exists.
+            using var series = await host.SendAsync(HttpMethod.Post, "/api/v1/works/970/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, series.StatusCode, await series.Content.ReadAsStringAsync());
+            var requestId = (await series.Content.ReadFromJsonAsync<CreateRequestResultV1>())!.Id;
+            Assert.AreEqual(970L, await host.ScalarAsync($"SELECT \"WorkId\" FROM \"AcquisitionRequests\" WHERE \"Id\" = {requestId}"));
+            Assert.AreEqual(24L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkId\" = 970 AND \"WorkUnitTypeId\" = 2"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"DetailedAt\" IS NOT NULL FROM \"Works\" WHERE \"Id\" = 970"));
+
+            // While the catalog cannot answer the film's request is still saved as it is; the metadata job brings its details afterwards.
+            tmdb.IsUnavailable = true;
+            using var film = await host.SendAsync(HttpMethod.Post, "/api/v1/works/971/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, film.StatusCode, await film.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"WorkId\" = 971"));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"DetailedAt\" FROM \"Works\" WHERE \"Id\" = 971"));
+            tmdb.IsUnavailable = false;
+            await FillAsync(host);
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"DetailedAt\" IS NOT NULL FROM \"Works\" WHERE \"Id\" = 971"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkMetadataFacts\" WHERE \"WorkId\" = 971 AND \"FactKey\" = 'Overview' AND \"Value\" = 'A hacker learns the truth.'"));
+        }
+
+        [TestMethod]
+        public async Task Request_OnAnAnimeSeasonOfItsOwn_RequestsItsSeries_WhichTakesTheSeasonsWorkIn()
+        {
+            var aniList = new FakeAniList { FindsFirstSeason = true };
+            await using var host = await CreateHostAsync(anime: aniList, tvdb: new FakeTvdb());
+
+            // A season no series held yet is a Work of its own, a favorite of the profile.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (800, 2, 1, 'The Matrix Show Season 2', 2021, 'anilist');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (800, 'anilist', '21');
+                INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId") SELECT "ActiveProfileId", 800 FROM "AccountSessions" WHERE "ActiveProfileId" IS NOT NULL ORDER BY "CreatedAt" DESC LIMIT 1;
+                """);
+
+            // The request is the series': it comes from its catalog with its episodes, AniList maps its seasons, and the season's Work goes into it.
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/works/800/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            var series = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"))!;
+            Assert.AreEqual(series, await host.ScalarAsync("SELECT \"WorkId\" FROM \"AcquisitionRequests\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"Id\" = 800"));
+            Assert.AreEqual(2m, await host.ScalarAsync("""SELECT season."Number" FROM "WorkUnitExternalIdentities" AS mapped JOIN "WorkUnits" AS season ON season."Id" = mapped."WorkUnitId" WHERE mapped."Value" = '21'"""));
+            Assert.AreEqual(series, await host.ScalarAsync("SELECT \"WorkId\" FROM \"WatchlistEntries\""));
+        }
+
+        private static async Task<string> PageAsync(Host host, string path)
+        {
+            using var page = await host.SendAsync(HttpMethod.Get, path);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            return html;
+        }
+
+        private static async Task FillAsync(Host host)
+        {
+            await using var scope = host.Services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<FillWorkMetadataV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default);
+        }
+
+        private static async Task<Host> CreateHostAsync(bool razor = false, FakeTmdb? fake = null, FakeAniList? anime = null, FakeTvdb? tvdb = null)
         {
             var tmdb = fake ?? new FakeTmdb();
             var aniList = anime ?? new FakeAniList();
@@ -896,21 +1014,26 @@ namespace Jularr.Backend.Tests
                 }
                 services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => tmdb);
                 services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList);
+                if (tvdb is not null) services.AddHttpClient<TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => tvdb);
             });
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode, await login.Content.ReadAsStringAsync());
-            var provider = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
-            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1(Token));
-            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            foreach (var key in tvdb is null ? new[] { "tmdb" } : new[] { "tmdb", "tvdb" })
+            {
+                var provider = (long)(await host.ScalarAsync($"SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = '{key}'"))!;
+                using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1(Token));
+                Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            }
             return host;
         }
 
-        // The Matrix Show on AniList: a first season and a second with its own trailer and cover but no banner.
+        // The Matrix Show on AniList: a first season and a second with its own trailer and cover but no banner. A search finds the second, or the first when asked to.
         private sealed class FakeAniList : HttpMessageHandler
         {
             public int Requests { get; private set; }
             public bool IsUnavailable { get; set; }
+            public bool FindsFirstSeason { get; init; }
             private const string First = """{"id":20,"type":"ANIME","format":"TV","title":{"romaji":"The Matrix Show"},"synonyms":[],"startDate":{"year":2020},"episodes":12,"relations":{"edges":[{"relationType":"SEQUEL","node":{"id":21,"type":"ANIME"}}]}}""";
             private const string Second = """{"id":21,"type":"ANIME","format":"TV","title":{"romaji":"The Matrix Show Season 2"},"synonyms":[],"startDate":{"year":2021},"episodes":12,"description":"Season two.","coverImage":{"large":"https://img.anili.st/second.jpg"},"trailer":{"id":"abcdefghijk","site":"youtube"},"relations":{"edges":[{"relationType":"PREQUEL","node":{"id":20,"type":"ANIME"}}]}}""";
 
@@ -920,8 +1043,27 @@ namespace Jularr.Backend.Tests
                 if (IsUnavailable) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
                 using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
                 var variables = body.RootElement.GetProperty("variables");
-                var json = variables.TryGetProperty("id", out var id) ? "{\"data\":{\"Media\":" + (id.GetInt32() == 20 ? First : Second) + "}}" : "{\"data\":{\"Page\":{\"media\":[" + Second + "]}}}";
+                var found = FindsFirstSeason && variables.TryGetProperty("search", out _) ? First : Second;
+                var json = variables.TryGetProperty("id", out var id) ? "{\"data\":{\"Media\":" + (id.GetInt32() == 20 ? First : Second) + "}}" : "{\"data\":{\"Page\":{\"media\":[" + found + "]}}}";
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+            }
+        }
+
+        // TheTVDB knows The Matrix Show (81189) with two seasons of twelve episodes.
+        private sealed class FakeTvdb : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                var episodes = string.Join(',', Enumerable.Range(0, 24).Select(index => $$"""{"id":{{100 + index}},"seasonNumber":{{1 + index / 12}},"number":{{1 + index % 12}},"name":"Episode {{1 + index}}"}"""));
+                var json = request.RequestUri!.AbsolutePath switch
+                {
+                    "/v4/login" => """{"data":{"token":"tvdb-test-token"}}""",
+                    "/v4/series/81189/extended" => """{"data":{"id":81189,"name":"The Matrix Show","remoteIds":[]}}""",
+                    "/v4/series/81189/episodes/default" => "{\"data\":{\"episodes\":[" + episodes + "]},\"links\":{\"next\":null}}",
+                    _ => null
+                };
+                return Task.FromResult(json is null ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                    : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") });
             }
         }
 

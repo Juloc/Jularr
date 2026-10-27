@@ -25,7 +25,7 @@ namespace Jularr.Frontend.Pages.User.Details
 {
     // A title's own page: the hero, one row of tabs and the blocks of the Overview, each of which is also a tab of its own ([hero](Details.Hero.cs),
     // [tabs and blocks](Details.Blocks.cs), [units](Details.Units.cs), [versions](Details.Versions.cs)).
-    public sealed partial class DetailsModel(ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, ReadWorkEditionsV1 readEditions, UpdateWatchlistV1 update, CreateRequestV1 request,
+    public sealed partial class DetailsModel(OpenWorkV1 open, ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, ReadWorkEditionsV1 readEditions, UpdateWatchlistV1 update, CreateRequestV1 request,
         ReadUiLocalesV1 locales, ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
         RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits,
         ReadWorkRecommendationsV1 readRecommendations, ReadWorkRelationsV1 readRelations, AdminServices.CreateWorkRelationV1 createRelation, AdminServices.DeleteWorkRelationV1 deleteRelation, SuggestDiscoverV1 suggest,
@@ -43,6 +43,7 @@ namespace Jularr.Frontend.Pages.User.Details
         private BaseDataList<GamePlatformV1>? _platforms;
         private BaseDataList<RequestProfileOptionV1>? _requestProfiles;
         private CreateRequestDataV1? _requestInput;
+        private bool _detailsUnavailable;
         private string _csrf = "";
 
         [BindProperty(SupportsGet = true)]
@@ -93,6 +94,9 @@ namespace Jularr.Frontend.Pages.User.Details
 
                 // A refused action of the page that no form of it shows (a relation added twice) says why above the page.
                 if (FormError is { } refused && _requestInput is null && _relationSearch is null) page.Content.Add(new P(ErrorText.Of(refused)).Class("ui-page-error").Attribute("role", "alert"));
+
+                // A title whose catalog could not give its details now shows its catalog row and says so; the next open asks again.
+                if (_detailsUnavailable) page.Content.Add(new P(new Text("details.unavailable")).Class("ui-page-error").Attribute("role", "alert"));
                 page.Content.Add(Hero(work, page));
                 page.Content.Add(new Div(new NavigationTabs([new NavigationTab("details.tab.overview", Address(query => query["tab"] = null), shown is null),
                     .. blocks.Select(block => new NavigationTab(block.LabelKey, Address(query => query["tab"] = block.TabKey), block == shown, false, block.Count))], "details.tabs")).Class("details-tabs"));
@@ -122,6 +126,8 @@ namespace Jularr.Frontend.Pages.User.Details
 
         public async Task<IActionResult> OnGetAsync()
         {
+            // Opening the page brings a catalog title's details first, so everything below reads them locally.
+            _detailsUnavailable = (await open.ExecuteAsync<OpenedWorkV1>(new WorkParametersV1(Id), default(NoData), HttpContext.RequestAborted)).AreDetailsUnavailable;
             await LoadDataAsync();
             PreparePage();
             return Page();

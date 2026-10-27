@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Media.V1;
@@ -17,11 +18,15 @@ using Microsoft.Extensions.Caching.Memory;
 namespace Jularr.Backend.Service.Core
 {
     // Provider search and import of every media type, for the Works page and for Discover.
-    internal sealed class MetadataCatalog(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games, IMemoryCache cache, ExternalFeedCache feeds)
+    internal sealed class MetadataCatalog(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games, AniListMatcher matcher, IMemoryCache cache,
+        ExternalFeedCache feeds)
     {
         // Ranked lists of one provider are read one after the other.
         private static readonly SemaphoreSlim BooksGate = new(1, 1);
         private static readonly SemaphoreSlim AniListGate = new(1, 1);
+
+        // The details of one Work are read by one caller at a time; a caller that waited finds them stored.
+        private static readonly SemaphoreSlim[] DetailGates = [.. Enumerable.Range(0, 64).Select(_ => new SemaphoreSlim(1, 1))];
 
         public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string query, int? year, CancellationToken ct)
         {
@@ -325,5 +330,130 @@ namespace Jularr.Backend.Service.Core
 
             return await metadata.ImportAsync(context, await metadata.ConnectAsync(context, ct), mediaType, subtype, int.Parse(externalId, CultureInfo.InvariantCulture), ct);
         }
+
+        // A Work the profile may open that has no details yet takes them from its catalog entry once, into the same Work. False while the catalog cannot give them now;
+        // nothing is retried, the next open asks again. A Work no catalog entry describes, such as an anime season no series holds yet, keeps its row.
+        public async Task<bool> DetailAsync(LogicContext context, long workId, long profileId, CancellationToken ct)
+        {
+            var gate = DetailGates[(int)(workId % DetailGates.Length)];
+            await gate.WaitAsync(ct);
+            try
+            {
+                var (work, identity) = await ReadDetailStateAsync(context, workId, profileId, ct);
+                if (work is not { IsDetailed: false } || identity is null)
+                {
+                    return true;
+                }
+
+                try
+                {
+                    await ImportAsync(context, work.MediaTypeId, work.MediaSubtypeId, identity.Namespace, identity.Value, ct);
+                    return true;
+                }
+                catch (Exception exception) when (exception is ServiceUnavailableException or KeyNotFoundException or DataValidationException)
+                {
+                    return false;
+                }
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        // The Work a request names. A catalog title takes its details first, so the request knows its episodes, volumes or platforms; an anime season no series holds yet
+        // is requested as its series, which then takes the season's Work in. While the catalog cannot answer, the request names the Work as it is and its details follow later.
+        public async Task<long> PrepareRequestAsync(LogicContext context, long workId, long profileId, CancellationToken ct)
+        {
+            var (work, identity) = await ReadDetailStateAsync(context, workId, profileId, ct);
+            if (work is not { IsDetailed: false })
+            {
+                return workId;
+            }
+
+            if (identity is null && work.AniListValue is { } season)
+            {
+                try
+                {
+                    return await ResolveAnimeSeasonAsync(context, season, ct);
+                }
+                catch (Exception exception) when (exception is ServiceUnavailableException or KeyNotFoundException or DataValidationException)
+                {
+                    return workId;
+                }
+            }
+
+            await DetailAsync(context, workId, profileId, ct);
+            return workId;
+        }
+
+        // The series comes from its catalog and, if it was never matched, gets its seasons' AniList entries; the season's Work goes into the series once a season holds its entry.
+        private async Task<long> ResolveAnimeSeasonAsync(LogicContext context, string aniListId, CancellationToken ct)
+        {
+            var seriesId = await ImportAsync(context, MediaType.Series, MediaSubtype.Anime, AniListMetadata.Namespace, aniListId, ct);
+            var target = await context.ExecuteBatchAsync((ctx, token) => AniListMatcher.ReadUnmatchedSeriesAsync(ctx, seriesId, token), ct, mode: SqlAccessMode.ReadOnly);
+            IdentityMatchResultData? match = null;
+            if (target is not null)
+            {
+                try
+                {
+                    var seasons = await context.ExecuteBatchAsync((ctx, token) => AniListMatcher.ReadSeasonsAsync(ctx, seriesId, token), ct, mode: SqlAccessMode.ReadOnly);
+                    match = await matcher.MatchAsync(target, seasons, null, ct);
+                }
+                catch (ServiceUnavailableException)
+                {
+                    // The matching job maps the seasons later and the season's Work goes then.
+                }
+            }
+
+            await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                if (match is not null)
+                {
+                    await ctx.SaveIdentityMatchAsync(match, token);
+                }
+                else
+                {
+                    await ctx.MergeAnimePlaceholdersAsync(seriesId, token);
+                }
+
+                return true;
+            }, ct);
+            return seriesId;
+        }
+
+        private static Task<(WorkDetailStateData? Work, WorkIdentityData? Identity)> ReadDetailStateAsync(LogicContext context, long workId, long profileId, CancellationToken ct) =>
+            context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        work."Id",
+                        work."MediaTypeId",
+                        work."MediaSubtypeId",
+                        work."DetailedAt" IS NOT NULL AS "IsDetailed",
+                        (
+                            SELECT
+                                identity."Value"
+                            FROM
+                                "WorkExternalIdentities" AS identity
+                            WHERE
+                                identity."WorkId" = work."Id"
+                                AND identity."Namespace" = 'anilist'
+                                AND work."MediaTypeId" = 2
+                        ) AS "AniListValue"
+                    FROM
+                        "ProfileWorks" AS visible
+                        JOIN "Works" AS work ON work."Id" = visible."WorkId"
+                    WHERE
+                        visible."ProfileId" = @ProfileId
+                        AND work."Id" = @Id;
+                    """;
+                sql.Parameters.Add(new WorkIdData(workId));
+                sql.Parameters.Add(new ProfileParameters(profileId));
+                var work = await ctx.ReadSql.ReadOptionalAsync<WorkDetailStateData>(sql, token);
+                return (work, work is null ? null : await WorkMetadataQueries.ReadProviderIdentityAsync(ctx, workId, token));
+            }, ct, mode: SqlAccessMode.ReadOnly);
     }
 }

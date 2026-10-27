@@ -84,6 +84,41 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(3, aniList.Searches);
         }
 
+        [TestMethod]
+        public async Task Matching_SeasonOfAPlaceholder_MovesItsFavoriteRelationsListPlaceAndRequestToTheSeries()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var aniList = new FakeAniList();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, services: services => services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList));
+
+            // The series with two seasons, a favorite; its second season was a Work of its own until now: a favorite too, named by relations, on a list and requested.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "DetailedAt") VALUES (10, 2, 1, 'Example Quest', 2019, now()), (30, 1, NULL, 'Example Quest Movie', 2021, now());
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (100, 10, 1, 1), (200, 10, 1, 2);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") SELECT 10, 100, 2, n FROM generate_series(1, 12) AS n;
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") SELECT 10, 200, 2, n FROM generate_series(1, 24) AS n;
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (40, 2, 1, 'Example Quest 2', 2020, 'anilist');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (40, 'anilist', '2');
+                INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId")
+                SELECT profile."Id", work."Id"
+                FROM (SELECT "ActiveProfileId" AS "Id" FROM "AccountSessions" WHERE "ActiveProfileId" IS NOT NULL ORDER BY "CreatedAt" DESC LIMIT 1) AS profile CROSS JOIN (VALUES (10), (40)) AS work ("Id");
+                INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey") VALUES (30, 40, 3, 'anilist'), (10, 40, 1, 'anilist');
+                INSERT INTO "ExternalWorkFeeds" ("Id", "Key", "Namespace", "MediaTypeId", "MediaSubtypeId", "DiscoverFeedTypeId", "Page") VALUES (1, 'anime-trending', 'anilist', 2, 1, 1, 1);
+                INSERT INTO "ExternalWorkFeedItems" ("FeedId", "Position", "WorkId") VALUES (1, 1, 40);
+                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId")
+                SELECT 40, "ActiveProfileId", 41, 1 FROM "AccountSessions" WHERE "ActiveProfileId" IS NOT NULL ORDER BY "CreatedAt" DESC LIMIT 1;
+                """);
+            await RunAsync(host);
+
+            // The mapping puts the entry on the second season, and everything of the season's Work is the series' now, at that season; the season's Work is gone.
+            Assert.AreEqual(200L, await host.ScalarAsync("""SELECT "WorkUnitId" FROM "WorkUnitExternalIdentities" WHERE "Value" = '2'"""));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" WHERE "Id" = 40"""));
+            Assert.AreEqual("10", await host.ScalarAsync("""SELECT string_agg(DISTINCT "WorkId"::text, ',') FROM "WatchlistEntries" """));
+            Assert.AreEqual("30:10:3", await host.ScalarAsync("""SELECT string_agg("WorkId" || ':' || "RelatedWorkId" || ':' || "WorkRelationTypeId", ',') FROM "WorkRelations" """));
+            Assert.AreEqual("10:2", await host.ScalarAsync("""SELECT "WorkId" || ':' || "SeasonNumber" FROM "ExternalWorkFeedItems" WHERE "FeedId" = 1 AND "Position" = 1"""));
+            Assert.AreEqual(10L, await host.ScalarAsync("""SELECT "WorkId" FROM "AcquisitionRequests" """));
+        }
+
         private static async Task RunAsync(Host host)
         {
             await using var scope = host.Services.CreateAsyncScope();

@@ -47,6 +47,31 @@ namespace Jularr.Backend.Service.User.Media.V1
         }
     }
 
+    // The Work page opens a title: the visit counts once a day, and a title without details takes them from its catalog now, so the page reads them locally.
+    // Details older than a day are shown as they are; the metadata job reads them again.
+    [ServiceEndpoint("POST", "/api/v1/works/{workId:long}/open")]
+    public sealed class OpenWorkV1 : UserService<WorkParametersV1, NoData>
+    {
+        private readonly MetadataCatalog _catalog;
+
+        internal OpenWorkV1(MetadataCatalog catalog)
+        {
+            _catalog = catalog;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<OpenedWorkV1>()];
+        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(WorkParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var opened = await Context.ExecuteBatchAsync((ctx, ct) => ctx.MarkWorkViewedAsync(Parameters.WorkId, Auth.ProfileId!.Value, ct), CancellationToken)
+                ?? throw new KeyNotFoundException("The work was not found.");
+            return new OpenedWorkV1(!opened.IsDetailed && !await _catalog.DetailAsync(Context, Parameters.WorkId, Auth.ProfileId!.Value, CancellationToken));
+        }
+    }
+
     [ServiceEndpoint("GET", "/api/v1/works/{workId:long}")]
     public sealed class ReadWorkV1 : UserService<WorkParametersV1>
     {
