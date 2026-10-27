@@ -78,6 +78,7 @@ async function start(player: HTMLElement): Promise<void> {
     const antiforgery = player.dataset.antiforgery ?? "";
     let plan: PlaybackPlan | null = null;
     let hls: { destroy(): void } | null = null;
+    let hlsPlayer: { recoverMediaError(): void } | null = null;
     let save: (value: object, leaving?: boolean) => void = () => undefined;
     let switching = false;
     let idle = 0;
@@ -306,6 +307,7 @@ async function start(player: HTMLElement): Promise<void> {
         const rate = video.playbackRate;
         hls?.destroy();
         hls = null;
+        hlsPlayer = null;
         player.querySelector<HTMLElement>("[data-role=mode]")!.textContent = text("data-mode", Modes[next.playbackModeTypeId] ?? "");
         save = progressReporter(player.dataset.sessionUrl + next.playbackSessionId, antiforgery, failed => {
             const feedback = player.querySelector<HTMLElement>('[data-role=save-error]');
@@ -343,6 +345,7 @@ async function start(player: HTMLElement): Promise<void> {
             instance.loadSource(next.streamUrl);
             instance.attachMedia(video);
             hls = instance;
+            hlsPlayer = instance;
         } else {
             // Metadata loads at once so the position applies before the first frame.
             video.preload = "metadata";
@@ -407,7 +410,11 @@ async function start(player: HTMLElement): Promise<void> {
         track.track.mode = "showing";
     }
 
-    video.addEventListener("error", () => void failure());
+    // The picture element reports a broken stretch as well (decoding, a segment that does not fit): an HLS playback is repaired in place first, like a fatal error of the loader.
+    video.addEventListener("error", () => {
+        if (hlsPlayer && recoveries < MaxRecoveries) { recoveries++; hlsPlayer.recoverMediaError(); return; }
+        void failure();
+    });
     video.addEventListener("waiting", () => { if (!video.paused) showLoading(); });
     video.addEventListener("stalled", () => { if (!video.paused) showLoading(); });
     video.addEventListener("seeking", () => { if (!video.paused) showLoading(); });
