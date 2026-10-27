@@ -66,12 +66,20 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
     gradient('cut', [[0, '#514537', .23], [20, '#514537', .10], [75, '#514537', .17], [100, '#514537', .30]], '0%', '100%');
     const surfaces = [['left', left], ['right', right]] as const;
     const overhang = study.dataset.bookBinding === 'soft' ? .7 : 2.4;
-    // The stack's cut edge hangs below the page and is one body: at the fold both stacks meet at the spine, which has the full
-    // thickness of the thicker one. From there the thicker stack stays flat and the thinner one rises softly to its own level.
+    // The stack's cut edge hangs below the page. A paperback has no gap behind its pages: each stack keeps its own flat edge and the
+    // thicker one steps down in a short soft corner on its own side of the fold. A hardcover leaves the space between case and
+    // book block: both stacks meet at the spine, the thicker one flat, the thinner one rising softly to its own level.
+    const soft = study.dataset.bookBinding === 'soft';
     const stackAt = (x: number) => {
-        const spine = Math.max(left.drop, right.drop), own = x < 148 ? left.drop : right.drop;
-        const near = 1 - Math.max(0, Math.min(1, Math.abs(x - 148) / Math.min(90, Math.max(30, (spine - own) * 1.6))));
-        return own + (spine - own) * near * near * (3 - 2 * near);
+        const thick = Math.max(left.drop, right.drop), thin = Math.min(left.drop, right.drop);
+        const onThickSide = (right.drop >= left.drop) === x >= 148;
+        if (soft) {
+            const near = Math.max(0, Math.min(1, Math.abs(x - 148) / 12));
+            return onThickSide ? thin + (thick - thin) * near * near * (3 - 2 * near) : thin;
+        }
+        const own = x < 148 ? left.drop : right.drop;
+        const near = 1 - Math.max(0, Math.min(1, Math.abs(x - 148) / Math.min(90, Math.max(30, (thick - own) * 1.6))));
+        return own + (thick - own) * near * near * (3 - 2 * near);
     };
     const along = (from: number, to: number, extra: number, ratio = 1) => {
         const steps = Math.max(2, Math.round(Math.abs(to - from) / 6));
