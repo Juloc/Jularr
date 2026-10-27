@@ -60,7 +60,7 @@ function harness(fetchChapter, cached = new Map(), section = 1, storage = undefi
     runInNewContext(compile('BookPages'), { exports, window, document, AbortController, TextDecoder, ...storage ? { localStorage: storage } : {},
         performance: { now: () => clock }, clearTimeout: id => tasks.delete(id), fetch: fetchChapter,
         getComputedStyle: () => ({ font, letterSpacing: 'normal', getPropertyValue: () => '68ch' }),
-        require: name => name === './PaperMeasure' ? { paperPageCount: () => Number(measuring) } : {
+        require: name => name === './PaperMeasure' ? { paperPageCount: () => Number(measuring) } : name === './Lifetime' ? { readerLifetime: () => new AbortController().signal } : {
             readBookPageCounts: async key => cached.get(key)?.slice(),
             writeBookPageCounts: async (key, counts) => { cached.set(key, counts.slice()); }
         }

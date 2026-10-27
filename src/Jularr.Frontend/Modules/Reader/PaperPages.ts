@@ -2,10 +2,12 @@ import type { BookGroup, initializeBookRenderer } from './BookRenderer';
 import type { ReaderSettings } from './Settings';
 import { paperPageCount } from './PaperMeasure';
 import { initializeBookPages } from './BookPages';
+import { readerLifetime } from './Lifetime';
 import { pageAt, pageFraction } from './ProgressMath';
 
 // Canonical CSS columns own pagination; decorative faces never own progress.
 export function initializePaperPages(reader: HTMLElement, content: HTMLElement, settings: ReaderSettings, changed: () => void, painted: () => void = () => {}) {
+    const signal = readerLifetime();
     const paper = reader.querySelector<HTMLElement>('.reader__paper')!;
     const canvas = reader.querySelector<HTMLElement>('.reader__canvas')!;
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -124,6 +126,8 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
     content.addEventListener('scroll', () => { if (settings.mode === 'scroll') painted(); }, { passive: true });
     const layout = (): void => {
         cancelAnimationFrame(frame);
+        // A reader replaced by another chapter keeps observing its removed elements; it must no longer lay out or report.
+        if (signal.aborted) return;
         const anchor = current(), version = navigation;
         frame = requestAnimationFrame(() => {
             // A pending view resize must not restore an anchor superseded by a seek/turn.
@@ -166,8 +170,8 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
         if (event.target instanceof HTMLElement) reveal(event.target);
     });
     document.fonts.ready.then(layout);
-    document.fonts.addEventListener('loadingdone', () => { bookPages.invalidate(); layout(); });
-    window.addEventListener('pageshow', event => { if (event.persisted) layout(); });
+    document.fonts.addEventListener('loadingdone', () => { bookPages.invalidate(); layout(); }, { signal });
+    window.addEventListener('pageshow', event => { if (event.persisted) layout(); }, { signal });
     motion.addEventListener('change', layout);
     reader.querySelectorAll<HTMLElement>('[data-turn]').forEach(button => button.addEventListener('click', () => turn(Number(button.dataset.turn))));
     reader.addEventListener('keydown', event => {

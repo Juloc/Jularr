@@ -1,11 +1,13 @@
 import { paperPageCount } from './PaperMeasure';
 import { readBookPageCounts, writeBookPageCounts } from './BookPageCache';
+import { readerLifetime } from './Lifetime';
 
 interface Layout { width: number; height: number; columns: number; gap: number; pages: number; rtl: boolean }
 const MaximumBytes = 2 * 1024 * 1024;
 
 // One additional chapter, one request and one inert ruler. Only numeric counts survive a job.
 export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
+    const signal = readerLifetime();
     const section = Number(reader.dataset.section), sections = Number(reader.dataset.sections);
     const status = reader.querySelector<HTMLElement>('[data-role=book-pages]')!;
     const measurement = document.createElement('div');
@@ -193,19 +195,20 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
         schedule();
     };
     reader.addEventListener('pointerdown', event => { pointers.add(event.pointerId); interact(); }, { passive: true });
-    window.addEventListener('pointerup', event => { if (pointers.delete(event.pointerId)) interact(); }, { passive: true });
-    window.addEventListener('pointercancel', event => { if (pointers.delete(event.pointerId)) interact(); }, { passive: true });
+    window.addEventListener('pointerup', event => { if (pointers.delete(event.pointerId)) interact(); }, { passive: true, signal });
+    window.addEventListener('pointercancel', event => { if (pointers.delete(event.pointerId)) interact(); }, { passive: true, signal });
     reader.addEventListener('pointermove', event => { if (pointers.has(event.pointerId)) interact(); }, { passive: true });
     reader.addEventListener('wheel', interact, { passive: true });
     reader.addEventListener('keydown', interact, { passive: true });
     reader.addEventListener('input', interact, { passive: true });
-    document.addEventListener('visibilitychange', () => { cancel(); schedule(); });
-    window.addEventListener('blur', () => { pointers.clear(); interact(); });
+    document.addEventListener('visibilitychange', () => { cancel(); schedule(); }, { signal });
+    window.addEventListener('blur', () => { pointers.clear(); interact(); }, { signal });
     window.addEventListener('pagehide', event => {
         suspended = true; cancel();
         if (!event.persisted) { disposed = true; measurement.remove(); }
-    });
-    window.addEventListener('pageshow', event => { if (event.persisted) { suspended = false; cachePending = false; schedule(); } });
+    }, { signal });
+    window.addEventListener('pageshow', event => { if (event.persisted) { suspended = false; cachePending = false; schedule(); } }, { signal });
+    signal.addEventListener('abort', () => { suspended = true; disposed = true; cancel(); measurement.remove(); });
     const update = (next: Layout): void => {
         const chosen = reader.querySelector<HTMLElement>('[data-language-choice][aria-pressed=true]')?.dataset.languageChoice ?? reader.dataset.readingLanguage;
         const original = reader.dataset.language?.toLowerCase().split(/[-_]/)[0];

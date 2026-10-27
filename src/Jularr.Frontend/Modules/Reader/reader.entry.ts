@@ -14,14 +14,87 @@ import { initializeOriginalPages } from './OriginalPages';
 import { initializeViewChoice } from './ViewChoice';
 import { initializeProgressBar } from './ProgressBar';
 import { initializeNotes } from './Notes';
+import { endReaderLifetime, readerLifetime } from './Lifetime';
+import { handleChapters } from './ChapterNavigation';
+import { hasNewBuild } from '../Navigation/Navigation';
+import { regionSwapped } from '../Navigation/PageSwap';
 
-const reader = document.querySelector<HTMLElement>('.reader');
-if (reader) {
+const first = document.querySelector<HTMLElement>('.reader');
+if (first) start(first);
+if (first && !first.dataset.format && first.querySelector('[data-role=content]')) openChaptersInPlace(location.pathname);
+
+function start(reader: HTMLElement): void {
     if (reader.dataset.format === 'pdf') initializeReaderChrome(reader);
     else if (reader.dataset.format === 'pages') initializeOriginalPages(reader);
     else if (reader.dataset.format === 'comic') initializeComicPages(reader);
     else if (reader.querySelector('[data-role=content]')) initializeText(reader);
     initializeNotes(reader);
+}
+
+// Another chapter of this book opens in place: its reader is built hidden behind the current one and takes its place once the
+// book view has decided, so the page neither reloads nor flashes. Whatever cannot open this way loads as a page.
+function openChaptersInPlace(book: string): void {
+    let opening = 0;
+    const sameBook = (address: string) => {
+        const url = new URL(address, location.href);
+        return url.origin === location.origin && url.pathname === book;
+    };
+    const ready = (reader: HTMLElement) => new Promise<void>(resolve => {
+        const started = performance.now();
+        const check = () => {
+            const decided = reader.dataset.mode !== 'paged' || reader.dataset.bookReady !== undefined;
+            if (decided || performance.now() - started > 2000) window.setTimeout(resolve, 50);
+            else window.setTimeout(check, 16);
+        };
+        check();
+    });
+    const open = async (address: string, push: boolean): Promise<void> => {
+        const url = new URL(address, location.href);
+        const ticket = ++opening;
+        try {
+            const response = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/html' } });
+            const html = await response.text();
+            if (!response.ok || new URL(response.url).pathname !== url.pathname || hasNewBuild(document.documentElement.dataset.build, html)) throw new Error('Not a chapter of this book.');
+            const page = new DOMParser().parseFromString(html, 'text/html');
+            const next = page.querySelector<HTMLElement>('.reader');
+            const current = document.querySelector<HTMLElement>('.reader');
+            if (!current || !next || next.dataset.format || !next.querySelector('[data-role=content]')) throw new Error('Not a text chapter.');
+            if (ticket !== opening) return;
+            const fullscreen = document.fullscreenElement === current;
+            const box = current.getBoundingClientRect();
+            const incoming = document.adoptNode(next);
+            incoming.style.visibility = 'hidden';
+            // The current reader stays on screen, out of the flow, while the next one lays out in its place.
+            Object.assign(current.style, { position: 'fixed', left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
+            current.before(incoming);
+            if (push) history.pushState({ readerChapter: true }, '', url);
+            document.title = page.title;
+            endReaderLifetime();
+            start(incoming);
+            await ready(incoming);
+            current.remove();
+            incoming.style.visibility = '';
+            regionSwapped();
+            if (fullscreen) await incoming.requestFullscreen().catch(() => undefined);
+        } catch {
+            location.assign(url);
+        }
+    };
+    handleChapters(address => { if (sameBook(address)) void open(address, true); else location.assign(address); });
+    document.addEventListener('click', event => {
+        const link = (event.target as Element | null)?.closest?.<HTMLAnchorElement>('a[href]');
+        if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        if (link.target && link.target !== '_self' || link.hasAttribute('download') || !sameBook(link.href)) return;
+        if (!document.querySelector('.reader')?.contains(link)) return;
+        const url = new URL(link.href);
+        // A place in this very chapter is not another chapter.
+        if (url.search === location.search && url.hash) return;
+        event.preventDefault();
+        void open(link.href, true);
+    });
+    // Back and Forward between chapters are the reader's own; the app navigation must not restore an old copy of the page.
+    document.addEventListener('htmx:before:history:restore', event => { if (location.pathname === book) event.preventDefault(); });
+    window.addEventListener('popstate', () => { if (location.pathname === book) void open(location.href, false); });
 }
 
 // The page of the PDF a block stands on: its own anchor, the nearest one before it, or where its section begins; none for a book that is no PDF.
@@ -42,6 +115,7 @@ function initializeText(reader: HTMLElement): void {
     const characters = Number(reader.dataset.characters);
     const total = Math.max(1, Number(reader.dataset.total));
     const sections = Number(reader.dataset.sections);
+    const signal = readerLifetime();
     let timer = 0;
     let paging: ReturnType<typeof initializePaperPages> | undefined;
     let progress = before / total;
@@ -155,13 +229,17 @@ function initializeText(reader: HTMLElement): void {
     reader.addEventListener('click', event => {
         if ((event.target as Element).closest('a[href]')) report(true);
     });
-    window.addEventListener('pagehide', () => report(true));
-    document.addEventListener('visibilitychange', () => { if (document.hidden) report(true); });
+    window.addEventListener('pagehide', () => report(true), { signal });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) report(true); }, { signal });
+    // Opening another chapter in place leaves this one as a page would: its place is saved once, then it stays silent.
+    signal.addEventListener('abort', () => { window.clearTimeout(timer); report(true); });
     function schedule(): void {
         window.clearTimeout(timer);
+        if (signal.aborted) return;
         timer = window.setTimeout(() => report(false), 1500);
     }
     function report(leaving: boolean): void {
+        if (signal.aborted && !leaving) return;
         const block = Number(paging?.current()?.dataset.b ?? 0);
         const atEnd = settings.mode === 'paged' ? paging?.end() : content.scrollTop + content.clientHeight >= content.scrollHeight - 4;
         const completed = section === sections - 1 && Boolean(atEnd);

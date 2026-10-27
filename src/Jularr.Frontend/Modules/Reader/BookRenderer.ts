@@ -2,6 +2,7 @@ import { bookDimensions, paperProfile, paperOutline, printPlacement, stackSlope,
 import { BookLeaf } from './BookLeaf';
 import { paintBookSolid, paperLighting } from './BookSolid';
 import { pagePrint } from './PagePrint';
+import { readerLifetime } from './Lifetime';
 
 export interface BookGroup { source: HTMLElement; page: number; count: number }
 export interface BookAdapter {
@@ -20,6 +21,7 @@ interface Flight {
 // One decorative renderer for prose and images. The adapters alone commit
 // pagination/progress. Idle/held paper schedules no frames; live leaves <= 3.
 export function initializeBookRenderer(reader: HTMLElement) {
+    const signal = readerLifetime();
     const root = reader.querySelector<HTMLElement>('.reader-book')!;
     const paper = reader.querySelector<HTMLElement>('.reader__paper')!;
     const host = root.querySelector<HTMLElement>('[data-book-leaves]')!;
@@ -278,8 +280,9 @@ export function initializeBookRenderer(reader: HTMLElement) {
     root.addEventListener('pointercancel', restore);
     root.addEventListener('lostpointercapture', () => { if (drag) restore(); });
     reader.addEventListener('keydown', event => { if (event.key === 'Escape') restore(); });
-    document.addEventListener('visibilitychange', () => { if (document.hidden) restore(); });
-    window.addEventListener('pagehide', cancel);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) restore(); }, { signal });
+    window.addEventListener('pagehide', cancel, { signal });
+    signal.addEventListener('abort', cancel);
     new MutationObserver(() => {
         if (!ready || flights.length) return;
         prints.clear(); root.querySelectorAll<HTMLElement>('[data-book-page]').forEach(element => delete element.dataset.print);

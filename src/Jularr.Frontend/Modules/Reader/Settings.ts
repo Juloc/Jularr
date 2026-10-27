@@ -1,6 +1,7 @@
 import { contrast } from '../Appearance/Palette';
 import { initializeRanges } from '../../Framework/Components/Range';
 import { initializeOverflow } from './Overflow';
+import { readerLifetime } from './Lifetime';
 
 export interface ReaderSettings {
     size: number;
@@ -101,7 +102,9 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
         saving = now ? 0 : window.setTimeout(() => { saving = 0; void flushProfile(); }, 600);
         if (now) void flushProfile();
     };
-    window.addEventListener('pagehide', () => { if (saving || queued) saveProfile(true); });
+    const signal = readerLifetime();
+    window.addEventListener('pagehide', () => { if (saving || queued) saveProfile(true); }, { signal });
+    signal.addEventListener('abort', () => { if (saving || queued) saveProfile(true); });
     const fields = Array.from(reader.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-panel=settings] input:not([type=hidden]), [data-panel=settings] select'));
     const names: Record<string, keyof ReaderSettings> = { Size: 'size', Spacing: 'spacing', Paragraph: 'paragraph', FontFamily: 'font', TextWidth: 'width', MarginTop: 'marginTop', MarginBottom: 'marginBottom', MarginInner: 'marginInner', MarginOuter: 'marginOuter', Indent: 'indent', Hyphenation: 'hyphenation', Illustrations: 'illustrations',
         Mode: 'mode', Layout: 'layout', Direction: 'direction', Surface: 'surface', Binding: 'binding', Colour: 'colour', Animation: 'animation', Preset: 'preset', Fit: 'fit' };
@@ -308,7 +311,7 @@ export function initializeReaderChrome(reader: HTMLElement): void {
             view(previous);
             (fullscreen.getClientRects().length ? fullscreen : reader.querySelector<HTMLElement>('[data-action=more]') ?? reader.querySelector<HTMLElement>('.reader__canvas'))?.focus({ preventScroll: true });
         }
-    });
+    }, { signal: readerLifetime() });
     reveal.forEach(button => button.addEventListener('click', () => chrome(reader.dataset.chrome !== 'visible')));
     initializeOverflow(reader);
     reader.addEventListener('keydown', event => {
