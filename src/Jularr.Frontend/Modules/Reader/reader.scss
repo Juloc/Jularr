@@ -2,11 +2,13 @@
 @use './Figures';
 
 // Reuse the regular app navigation, with the document header as the only top bar.
-// The page is as tall as what the browser really shows (kept by the reader script): some phone browsers count their own
-// toolbars into 100dvh, which pushed the bottom bar below the screen. The reader fills what the page leaves it.
+// The page is as tall as what the browser shows; a browser without dynamic viewport units gets the height the reader script
+// measures, as 100vh there includes the browser's own toolbars and pushed the bottom bar below the screen. The reader fills
+// what the page leaves it, so nothing above it can push the bar down either.
 .reader-page {
     overflow: hidden;
-    .app-layout { grid-template-rows: minmax(0, 1fr); height: var(--reader-viewport, 100dvh); }
+    .app-layout { grid-template-rows: minmax(0, 1fr); height: 100dvh; }
+    @supports not (height: 100dvh) { .app-layout { height: var(--reader-viewport, 100vh); } }
     .app-header { display: none; }
     .app-main { grid-row: 1; padding: 0; min-height: 0; }
     .app-main > .page-screen { display: flex; flex-direction: column; gap: 0; height: 100%; }

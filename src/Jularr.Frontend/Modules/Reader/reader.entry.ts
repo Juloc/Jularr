@@ -19,10 +19,13 @@ import { handleChapters } from './ChapterNavigation';
 import { hasNewBuild } from '../Navigation/Navigation';
 import { regionSwapped } from '../Navigation/PageSwap';
 
-// What the browser really shows: phone browsers can count their own toolbars into 100dvh.
-const viewport = () => document.documentElement.style.setProperty('--reader-viewport', `${window.innerHeight}px`);
-viewport();
-window.addEventListener('resize', viewport);
+// What the browser really shows, for browsers without dynamic viewport units (their 100vh includes the toolbars).
+if (!CSS.supports('height', '100dvh')) {
+    const viewport = () => document.documentElement.style.setProperty('--reader-viewport', `${window.innerHeight}px`);
+    viewport();
+    window.addEventListener('resize', viewport);
+    window.visualViewport?.addEventListener('resize', viewport);
+}
 
 const first = document.querySelector<HTMLElement>('.reader');
 if (first) start(first);
