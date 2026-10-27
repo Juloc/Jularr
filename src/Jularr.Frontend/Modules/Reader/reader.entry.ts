@@ -42,7 +42,8 @@ function openChaptersInPlace(book: string): void {
     const ready = (reader: HTMLElement) => new Promise<void>(resolve => {
         const started = performance.now();
         const check = () => {
-            const decided = reader.dataset.mode !== 'paged' || reader.dataset.bookReady !== undefined;
+            // Shown once the book view has decided and the chapter stands where it was asked to open, never on its first page first.
+            const decided = (reader.dataset.mode !== 'paged' || reader.dataset.bookReady !== undefined) && reader.dataset.placed === 'true';
             if (decided || performance.now() - started > 2000) window.setTimeout(resolve, 50);
             else window.setTimeout(check, 16);
         };
@@ -145,13 +146,15 @@ function initializeText(reader: HTMLElement): void {
     const fraction = query.has('f') ? Number(query.get('f')) : NaN;
     const match = /^s(\d+)\/b(\d+)$/.exec(reader.dataset.locator ?? '');
     const block = requested && /^\d+$/.test(requested) ? requested : match && Number(match[1]) === section ? match[2] : null;
+    const placed = () => requestAnimationFrame(() => { reader.dataset.placed = 'true'; });
     requestAnimationFrame(() => {
         const target = location.hash ? document.getElementById(decodeURIComponent(location.hash.slice(1)))
             : block !== null ? content.querySelector<HTMLElement>(`[data-b="${block}"]`) : null;
         if (target && content.contains(target)) paging!.reveal(target);
+        if (!Number.isFinite(fraction)) placed();
     });
     // The progress slider sends a share of the chapter, which is a page the same way as its own seek, once the fonts have settled the pages.
-    if (Number.isFinite(fraction)) void document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(() => paging!.seek(Math.min(1, Math.max(0, fraction))))));
+    if (Number.isFinite(fraction)) void document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(() => { paging!.seek(Math.min(1, Math.max(0, fraction))); placed(); })));
 
     // Existing translation and annotation services remain the only data owners.
     const translate = reader.dataset.translationUrl ? translator(reader, content, createTranslationWorker) : undefined;
@@ -246,8 +249,8 @@ function initializeText(reader: HTMLElement): void {
         const completed = section === sections - 1 && Boolean(atEnd);
         const progression = completed ? 1 : Math.min(1, (before + characters * (block / blocks)) / total);
         progress = progression;
-        marks?.refresh();
-        bar?.refresh();
+        // A reader that is leaving for another chapter only saves; its slider keeps showing where the reader asked to go.
+        if (!signal.aborted) { marks?.refresh(); bar?.refresh(); }
         save({ locator: `s${section}/b${block}`, progression: Number(progression.toFixed(4)), isCompleted: completed }, leaving);
     }
 }
