@@ -12,10 +12,9 @@ Die bestehenden Host-Registrierungen bleiben unverändert. SMB-Freigaben
 erreicht Jularr selbst oder Docker bindet sie als Volume ein, NFS immer als Volume;
 dazu Synology API und per Docker Compose freigegebene Pfade. Konfiguration erfolgt über Services und Frontend.
 
-Regeln: [AGENTS.md](AGENTS.md), [CONVENTIONS.md](docs/CONVENTIONS.md).
-Navigation: [CODEMAP.md](docs/CODEMAP.md).
-Nächste fachliche Schritte: [Backend-Slices](docs/BACKEND_NEXT.md) (Plan, keine Implementierung).
-Instanz-Einrichtung: [vier Schritte, Presets und Owner](docs/INSTANCE_SETUP.md).
+Regeln: [AGENTS.md](AGENTS.md), [Konventionen](docs/CONVENTIONS.md), [Dokumentationsstatus](docs/DOCUMENTATION_POLICY.md).
+Code-Navigation: [CODEMAP.md](docs/CODEMAP.md). Offene Arbeit steht in GitHub-Issues und PRs; [Backend-Slices](docs/BACKEND_NEXT.md) sind historische Referenzen.
+Instanz-Einrichtung: [aktueller Setup-Ablauf](docs/INSTANCE_SETUP.md).
 Lokale Vorschau auf D: [Testserver und Aktualisierung](docs/LOCAL_PREVIEW.md).
 
 ## Reader und Vorlesen

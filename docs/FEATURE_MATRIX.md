@@ -1,9 +1,6 @@
-# Feature matrix
+# Historical feature verification matrix
 
-Binding scope of the owner mandate of 14 October 2026 ("Vollständige Basisfunktionen und
-Arr+"): full Arr+ management (Radarr, Sonarr, Lidarr, Readarr, Bazarr, Prowlarr and Seerr
-features, none of them needed at runtime) and every basic user function. Packages and order
-are in the [completion plan](COMPLETION_PLAN.md); owners in [CODEMAP](CODEMAP.md).
+Status: **snapshot** of the 14 October 2026 recovery mandate and later recorded tests. Rows below are not live `main` status. Recheck owners, test names and gaps against current code and GitHub issues; [completion packages](COMPLETION_PLAN.md) are historical. See [documentation authority](DOCUMENTATION_POLICY.md).
 
 Status, strictly: **planned** (documented or absent), **implemented** (code without a focused
 test), **tested** (Backend or Frontend tests assert it), **e2e** (a Playwright test drives it

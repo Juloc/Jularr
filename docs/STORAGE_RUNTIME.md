@@ -174,7 +174,9 @@ References: [Docker volume options](https://docs.docker.com/reference/compose-fi
 [kernel CIFS usage](https://www.kernel.org/doc/html/latest/admin-guide/cifs/usage.html).
 
 
-## SABnzbd completed category folders (first release)
+## SABnzbd completed category folders (compatibility behavior)
+
+> This section documents the existing category/path compatibility in `main`, not the desired final shared-download workspace design. Pending PRs [#1554](https://github.com/Juloc/Jularr/pull/1554) and [#1572](https://github.com/Juloc/Jularr/pull/1572) propose changes; recheck after merge rather than claiming an unmerged feature is already active.
 
 When saving a SAB connection through the regular Admin form, Jularr reads the resolved Complete directory from SAB's status API and the selected category's directory from SAB's config API (including the default '*' category, which can have its own directory). The Owner chooses the exact corresponding category Complete folder visible to Jularr (local mount or direct SMB), not its parent download folder. A missing category, unsafe parent traversal, disabled per-job folder, or unavailable SAB API prevents an automatic mapping; Jularr must not guess. Existing API clients with explicit RemotePath/LocalPath mapping stay compatible. Jularr does not change SAB's folders or cleanup settings.
 

@@ -18,6 +18,7 @@ and, as class totals, in [`tests/ci-durations.json`](../tests/ci-durations.json)
 | `Browser Smoke / smoke` | Frontend, E2E tests or schema changed | No | Fresh owner setup and sign-in in real Chromium |
 | `Image / minimal-compose` | Docker/Compose/packaging or database schema changed | Yes, including source changes | Build the shipped container and start the supplied Compose stack |
 | `Backend Full` (`smoke`, `backend (n/4)`, `e2e (n/4)`, `gate`) | Only as opted-in reusable `Backend / full-regression` job | Every push to `main` | Entire backend and browser suite, real FFmpeg, JPEG XL and backup-tool regression |
+| `Documentation / links-and-status` | Docs or checker/workflow changed | Yes, matching paths | Verify authoritative relative links and historical/snapshot status labels |
 
 PR checks are scoped to PRs targeting `main` or `dev`; ordinary feature-branch pushes do not start Actions. Draft PRs retain the lightweight `Backend / test` and authorship checks, while builds, browser smoke, image smoke and full regression wait until `ready_for_review`. Pure frontend/E2E changes no longer run the backend compilation; dedicated frontend/browser jobs cover those areas. `Backend Full` is a reusable job within `Backend` for opt-in PRs, so ordinary PRs create no separate skipped full workflow run.
 
