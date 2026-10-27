@@ -146,7 +146,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                 page.Content.Add(new P(new Text("discover.providerUnavailable")).Attribute("role", "status"));
             }
 
-            // Catalog titles become Works only through a request.
+            // Every result is a Work and opens its page.
             if (_catalog is not null || _results is not null)
             {
                 var cards = new List<IUiComponent>();
@@ -417,7 +417,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             return Partial("_UiComponent", Definition.Content[0]);
         }
 
-        // Titles Discover keeps, while typing; a known title opens its Work.
+        // Titles Discover keeps, while typing; each opens its Work.
         public async Task<IActionResult> OnGetSuggestionsAsync()
         {
             if (!texts.CanReadMedia()) return Forbid();
@@ -432,9 +432,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IUiComponent Suggestion(DiscoverSuggestionV1 item)
         {
             var scope = Listed.First(scope => scope.Slug == item.ScopeSlug);
-            var href = item.WorkId is { } workId ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
-                : scope.IsCatalog ? "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId)
-                : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.ExternalId);
+            var href = "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture);
             var meta = texts["discover.type." + scope.Slug] + (item.ReleaseYear is { } year ? " · " + year.ToString(CultureInfo.InvariantCulture) : "");
             IUiComponent poster = item.PosterUrl is { } url
                 ? new Img().Class("discover-suggestion__poster").Attribute("data-no-cover", "poster").Attribute("src", CoverPaths.Sized(url, 96)).Attribute("alt", "").Attribute("loading", "lazy")
@@ -533,13 +531,13 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
         }
 
-        // Provider metadata stays cached; current local status is one bounded read for all known cards.
+        // Provider metadata stays cached; current local status is one bounded read for all cards.
         private async Task LoadAvailabilityAsync()
         {
             var ids = (_results ?? []).Concat(_shelves.SelectMany(shelf => shelf.Items)).Select(item => item.WorkId)
                 .Concat((_catalog ?? []).Select(entry => entry.Item.WorkId))
                 .Concat(_catalogShelves.SelectMany(shelf => shelf.Items).Select(item => item.WorkId))
-                .OfType<long>().Distinct().ToArray();
+                .Distinct().ToArray();
             foreach (var batch in ids.Chunk(500))
             {
                 var states = await readAvailability.ExecuteAsync<BaseDataList<WorkAvailabilityStateV1>>(new ReadWorkAvailabilityStatesParametersV1(batch), HttpContext.RequestAborted);
@@ -667,13 +665,11 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         private string Overline(DiscoverScopeV1? scope, string feedKey) => scope is null ? texts[feedKey] : texts["discover.type." + scope.Slug] + " · " + texts[feedKey];
 
-        // A known title opens its Work; any other opens its request.
+        // The title opens its Work, where one nobody asked for yet is requested.
         private HeroSlide CatalogSlide(DiscoverScopeV1 scope, DiscoverCatalogItemV1 item, DiscoverFeedType feed, int rank)
         {
-            var href = item.WorkId is { } workId
-                ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
-                : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
-            var requestable = item.WorkId is null && texts.CanRequest();
+            var href = CatalogHref(item);
+            var requestable = item.MediaStateTypeId == MediaStateType.NotRequested && texts.CanRequest();
             return new HeroSlide(item.Title, null, item.PosterUrl, Overline(scope, "discover.feed." + feed), item.Author, requestable ? "discover.action.request" : "media.details", href,
                 requestable ? "plus" : null, requestable ? href : null, scope.Slug, rank);
         }
@@ -767,7 +763,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         private IEnumerable<(DiscoverScopeV1 Scope, DiscoverCatalogItemV1 Item)> Filtered(IEnumerable<(DiscoverScopeV1 Scope, DiscoverCatalogItemV1 Item)> items)
         {
-            var narrowed = items.Where(entry => Fits(entry.Item.WorkId is not null, entry.Item.WorkId is null, entry.Item.ReleaseYear));
+            var narrowed = items.Where(entry => Fits(entry.Item.MediaStateTypeId == MediaStateType.Available, entry.Item.MediaStateTypeId == MediaStateType.NotRequested, entry.Item.ReleaseYear));
             return Sort switch
             {
                 "newest" => narrowed.OrderByDescending(entry => entry.Item.ReleaseYear),
@@ -786,26 +782,27 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var (actionKey, actionHref) = Action(item);
             var card = MediaCard.For(assets, item, DetailsHref(item));
-            if (item.WorkId is { } id && _availabilityByWork.TryGetValue(id, out var state))
+            if (_availabilityByWork.TryGetValue(item.WorkId, out var state))
                 card.Availability(new MediaAvailability(assets, state.AvailabilityStateId, state.AvailableUnits, state.MonitoredUnits));
             if (actionKey is not null && actionHref is not null) card.Action(ShortKey(actionKey)!, actionHref);
-            if (item.WorkId is { } workId) card.Bookmark(new MediaBookmark(assets, workId));
-            return card;
+            return card.Bookmark(new MediaBookmark(assets, item.WorkId));
         }
 
-        // A known title opens its Work; any other opens its request.
+        // The title opens its Work, where one nobody asked for yet is requested.
         private IUiComponent CatalogCard(DiscoverScopeV1 scope, DiscoverCatalogItemV1 item)
         {
-            var href = item.WorkId is { } workId ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
-                : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
+            var href = CatalogHref(item);
             var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId), item.Rating)
-                .HoverPreview(item.WorkId is { } held ? MediaPreviewAddress.Work(held) : MediaPreviewAddress.Catalog(scope.Slug, item.Namespace, item.ExternalId));
-            if (item.MediaStateTypeId is { } state) card.State(state);
-            if (item.WorkId is { } id && _availabilityByWork.TryGetValue(id, out var availability))
+                .HoverPreview(MediaPreviewAddress.Work(item.WorkId)).State(item.MediaStateTypeId);
+            if (_availabilityByWork.TryGetValue(item.WorkId, out var availability))
                 card.Availability(new MediaAvailability(assets, availability.AvailabilityStateId, availability.AvailableUnits, availability.MonitoredUnits));
-            if (item.WorkId is { } known) return card.Bookmark(new MediaBookmark(assets, known));
-            return texts.CanRequest() ? card.Action("discover.action.request", href) : card;
+            if (item.MediaStateTypeId == MediaStateType.NotRequested && texts.CanRequest()) card.Action("discover.action.request", href);
+            return card.Bookmark(new MediaBookmark(assets, item.WorkId));
         }
+
+        // An anime entry opens its series at its season.
+        private static string CatalogHref(DiscoverCatalogItemV1 item) =>
+            "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture) + (item.SeasonNumber is { } season ? "?season=" + season.ToString(CultureInfo.InvariantCulture) : "");
 
         // The word on an action is short: the icon and the verb.
         private static string? ShortKey(string? key) => key switch
@@ -824,9 +821,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             _ => (null, null)
         };
 
-        private string DetailsHref(DiscoverItemV1 item) => item.WorkId is { } workId
-            ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
-            : "/Discover/" + Listed.First(scope => scope.MediaTypeId == item.MediaTypeId && !scope.IsCatalog).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture);
+        private static string DetailsHref(DiscoverItemV1 item) => "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture);
 
         // Everything the address holds; links change one part and keep the rest.
         private sealed record State(IReadOnlyList<string> Types, string? Feed, string? Sort, string? Availability, string? Year, string? Query, DiscoverFeedType? View, int Page);

@@ -106,7 +106,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 TextLimit.Cut(title, 500)!, TextLimit.Cut(media.EnglishTitle is null ? media.NativeTitle : media.RomajiTitle, 500), media.Year is >= 1800 and <= 2200 ? media.Year : null, "[]",
                 JsonSerializer.Serialize(volumes), JsonSerializer.Serialize(facts), Namespace, null) { OriginalLanguage = media.OriginalLanguage };
             var people = WorkPeopleLogic.Rows(media.People).ToArray();
-            var relations = JsonSerializer.Serialize(WorkRelationLogic.AniListTargets(media));
+            var relations = WorkRelationLogic.AniListTargets(media);
             var saved = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 var workId = await ctx.SaveWorkMetadataAsync(data, token);

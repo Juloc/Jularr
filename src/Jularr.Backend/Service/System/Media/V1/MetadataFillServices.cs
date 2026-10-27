@@ -41,7 +41,7 @@ namespace Jularr.Backend.Service.System.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Works with an identity a catalog knows and neither a description nor a cover.
+            // Works with an identity a catalog knows and neither a description nor a cover; a catalog title nobody opened is no such Work.
             var waiting = await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
@@ -53,6 +53,7 @@ namespace Jularr.Backend.Service.System.Media.V1
                         "Works" AS work
                     WHERE
                         work."MediaTypeId" IN (1, 2, 3, 6, 7)
+                        AND (work."DetailedAt" IS NOT NULL OR EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id"))
                         AND NOT EXISTS (
                             SELECT
                                 1

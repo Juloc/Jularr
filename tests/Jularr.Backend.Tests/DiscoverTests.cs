@@ -45,22 +45,26 @@ namespace Jularr.Backend.Tests
             {
                 using var first = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, ranking, MediaSubtype.Anime));
                 Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
-                Assert.IsNull((await first.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().WorkId);
+                var shown = (await first.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single();
+                Assert.AreEqual(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '21'"), shown.WorkId,
+                    "Both rankings list the one catalog Work of the season.");
+                Assert.AreEqual(MediaStateType.NotRequested, shown.MediaStateTypeId);
             }
             var requests = provider.Requests;
             provider.IsUnavailable = true;
-            await host.Fixture.RunSqlAsync("""
-                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (700, 2, 1, 'Imported series');
-                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (700, 'anilist', '21');
-                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (700, 'Poster', '/api/v1/covers/works/700/poster?v=1', TRUE);
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '21'"))!;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES ({workId}, 'Poster', '/api/v1/covers/works/{workId}/poster?v=1', TRUE);
+                INSERT INTO "WantedItems" ("WorkId") VALUES ({workId});
                 """);
             foreach (var ranking in new[] { DiscoverFeedType.Top, DiscoverFeedType.New })
             {
                 using var cached = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, ranking, MediaSubtype.Anime));
                 Assert.AreEqual(HttpStatusCode.OK, cached.StatusCode, await cached.Content.ReadAsStringAsync());
                 var item = (await cached.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single();
-                Assert.AreEqual(700L, item.WorkId);
-                Assert.AreEqual("/api/v1/covers/works/700/poster?v=1", item.PosterUrl);
+                Assert.AreEqual(workId, item.WorkId);
+                Assert.AreEqual(MediaStateType.Requested, item.MediaStateTypeId, "The state is the library's of now, not the one the list was kept with.");
+                Assert.AreEqual($"/api/v1/covers/works/{workId}/poster?v=1", item.PosterUrl);
             }
             Assert.AreEqual(requests, provider.Requests, "Warm rankings must not ask the unavailable provider.");
             await host.Fixture.RunSqlAsync("INSERT INTO \"ProfileMediaRules\" (\"ProfileId\", \"MediaSubtypeId\", \"IsBlocked\") VALUES (101, 1, TRUE)");
@@ -77,7 +81,7 @@ namespace Jularr.Backend.Tests
             var input = new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime);
             using var first = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", input);
             Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
-            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorks\" SET \"FetchedAt\" = now() - interval '7 hours', \"Title\" = 'Kept stale season' WHERE \"Namespace\" = 'anilist'");
+            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"FetchedAt\" = now() - interval '7 hours', \"CanonicalTitle\" = 'Kept stale season' WHERE \"CatalogNamespace\" = 'anilist'");
             provider.IsUnavailable = true;
             using var stale = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", input);
             Assert.AreEqual(HttpStatusCode.OK, stale.StatusCode, await stale.Content.ReadAsStringAsync());
@@ -104,20 +108,23 @@ namespace Jularr.Backend.Tests
             using var upcomingSeries = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Series, DiscoverFeedType.Upcoming));
             Assert.AreEqual(HttpStatusCode.BadRequest, upcomingSeries.StatusCode);
 
-            // Requesting a provider title creates the Work once and the request.
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            // The title shown is a Work already; the normal request asks for it, and its import fills the same Work.
+            using var requested = await host.SendAsync(HttpMethod.Post, $"/api/v1/works/{trending.WorkId}/requests", new CreateRequestDataV1(1));
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
-            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            using var again = await host.SendAsync(HttpMethod.Post, $"/api/v1/works/{trending.WorkId}/requests", new CreateRequestDataV1(1));
             Assert.AreEqual(HttpStatusCode.OK, again.StatusCode);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new AdminMedia.ImportMetadataWorkDataV1(MediaType.Movie, "603"));
+            Assert.AreEqual(trending.WorkId, (await imported.Content.ReadFromJsonAsync<AdminMedia.WorkDetailsV1>())!.Id);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
             Assert.AreEqual("A hacker learns the truth.", await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Overview'"));
             Assert.AreEqual("1999-03-31", await host.ScalarAsync("SELECT \"ReleasedOn\"::text FROM \"Works\""));
 
-            using var item = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603");
-            var details = (await item.Content.ReadFromJsonAsync<DiscoverItemV1>())!;
+            using var item = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
+            var details = (await item.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single();
             Assert.AreEqual(MediaStateType.Requested, details.MediaStateTypeId);
-            Assert.IsNotNull(details.WorkId);
+            Assert.AreEqual(trending.WorkId, details.WorkId);
 
             // Search finds the local Work first and does not repeat it from TMDB.
             using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("Matrix"));
@@ -146,27 +153,27 @@ namespace Jularr.Backend.Tests
             // A trending list is kept in its order; searches keep their titles too.
             using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
             Assert.AreEqual(HttpStatusCode.OK, feed.StatusCode, await feed.Content.ReadAsStringAsync());
-            Assert.AreEqual(1, await host.ScalarAsync("SELECT \"TrendingRank\" FROM \"ExternalWorks\" WHERE \"Namespace\" = 'tmdb_movie' AND \"Value\" = '603'"));
-            Assert.AreEqual("https://image.tmdb.org/t/p/w1280/backdrop.jpg", await host.ScalarAsync("SELECT \"BackdropUrl\" FROM \"ExternalWorks\" WHERE \"Value\" = '603'"));
+            Assert.AreEqual(1, await host.ScalarAsync("SELECT work.\"TrendingRank\" FROM \"Works\" AS work JOIN \"WorkExternalIdentities\" AS identity ON identity.\"WorkId\" = work.\"Id\" WHERE identity.\"Namespace\" = 'tmdb_movie' AND identity.\"Value\" = '603'"));
+            Assert.AreEqual("https://image.tmdb.org/t/p/w1280/backdrop.jpg", await host.ScalarAsync("SELECT work.\"BackdropUrl\" FROM \"Works\" AS work JOIN \"WorkExternalIdentities\" AS identity ON identity.\"WorkId\" = work.\"Id\" WHERE identity.\"Namespace\" = 'tmdb_movie' AND identity.\"Value\" = '603'"));
             using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("Matrix"));
             Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode);
-            Assert.AreEqual("The Matrix Show", await host.ScalarAsync("SELECT \"Title\" FROM \"ExternalWorks\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"));
-            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"TrendingRank\" FROM \"ExternalWorks\" WHERE \"Value\" = '1399'"));
+            Assert.AreEqual("The Matrix Show", await host.ScalarAsync("SELECT work.\"CanonicalTitle\" FROM \"Works\" AS work JOIN \"WorkExternalIdentities\" AS identity ON identity.\"WorkId\" = work.\"Id\" WHERE identity.\"Namespace\" = 'tmdb_tv' AND identity.\"Value\" = '1399'"));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT work.\"TrendingRank\" FROM \"Works\" AS work JOIN \"WorkExternalIdentities\" AS identity ON identity.\"WorkId\" = work.\"Id\" WHERE identity.\"Namespace\" = 'tmdb_tv' AND identity.\"Value\" = '1399'"));
 
             // While the list is fresh the catalog answers, also for a catalog of its own (AniList).
-            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorks\" SET \"Title\" = 'The Matrix (kept)' WHERE \"Value\" = '603'");
+            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"CanonicalTitle\" = 'The Matrix (kept)' WHERE \"Id\" = (SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_movie' AND \"Value\" = '603')");
             using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
             Assert.AreEqual("The Matrix (kept)", (await again.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().Title);
             using var anime = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime));
             Assert.AreEqual(HttpStatusCode.OK, anime.StatusCode, await anime.Content.ReadAsStringAsync());
-            Assert.AreEqual(1, await host.ScalarAsync("SELECT \"TrendingRank\" FROM \"ExternalWorks\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '21' AND \"MediaSubtypeId\" IS NOT NULL"));
-            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorks\" SET \"Title\" = 'Season 2 (kept)' WHERE \"Namespace\" = 'anilist'");
+            Assert.AreEqual(1, await host.ScalarAsync("SELECT work.\"TrendingRank\" FROM \"Works\" AS work JOIN \"WorkExternalIdentities\" AS identity ON identity.\"WorkId\" = work.\"Id\" WHERE identity.\"Namespace\" = 'anilist' AND identity.\"Value\" = '21' AND work.\"MediaSubtypeId\" IS NOT NULL"));
+            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"CanonicalTitle\" = 'Season 2 (kept)' WHERE \"CatalogNamespace\" = 'anilist'");
             using var animeAgain = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime));
             Assert.AreEqual("Season 2 (kept)", (await animeAgain.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().Title);
             await TimeWarmReadsAsync("AniList trending; 0 local Works, 1 result", () => host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime)));
 
             // Existing catalog entries remain usable without any provider call, regardless of age.
-            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorks\" SET \"FetchedAt\" = now() - interval '7 hours', \"TrendingRank\" = 1 WHERE \"Namespace\" = 'tmdb_tv'");
+            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"FetchedAt\" = now() - interval '7 hours', \"TrendingRank\" = 1 WHERE \"CatalogNamespace\" = 'tmdb_tv'");
             tmdb.IsUnavailable = true;
             using var stale = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Series, DiscoverFeedType.Trending));
             Assert.AreEqual(HttpStatusCode.OK, stale.StatusCode, await stale.Content.ReadAsStringAsync());
@@ -175,20 +182,28 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Catalog_WithoutTheDiscoverCacheModule_KeepsNothingAndAsksTheProviders()
+        public async Task Catalog_WithoutTheDiscoverCacheModule_KeepsNoListsAndAsksTheProviders()
         {
             var tmdb = new FakeTmdb();
             await using var host = await CreateHostAsync(fake: tmdb);
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'DiscoverCache'");
             using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
-            Assert.AreEqual("The Matrix", (await feed.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().Title);
+            var shown = (await feed.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single();
+            Assert.AreEqual("The Matrix", shown.Title);
             using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("Matrix"));
+            Assert.IsTrue((await searched.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Any(item => item.Title == "The Matrix Show"));
             using var anime = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime));
             Assert.AreEqual(HttpStatusCode.OK, anime.StatusCode, await anime.Content.ReadAsStringAsync());
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorks\""));
+
+            // Every title shown is a catalog Work its card opens; no list, order or trending rank is kept, and none of them is a library title.
+            Assert.AreEqual(shown.WorkId, await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_movie' AND \"Value\" = '603'"));
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"DetailedAt\" IS NULL AND \"TrendingRank\" IS NULL"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkLibraryRelations\""));
             using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
             Assert.AreEqual(HttpStatusCode.OK, again.StatusCode, await again.Content.ReadAsStringAsync());
+            Assert.AreEqual(shown.WorkId, (await again.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().WorkId);
             Assert.AreEqual(2, tmdb.Requests.Count(request => request.AbsolutePath == "/3/trending/movie/week"));
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkFeeds\""));
         }
 
@@ -198,9 +213,11 @@ namespace Jularr.Backend.Tests
             var tmdb = new FakeTmdb();
             await using var host = await CreateHostAsync(fake: tmdb);
             await host.Fixture.RunSqlAsync("UPDATE \"MediaTypes\" SET \"IsEnabled\" = FALSE WHERE \"Id\" <> 1");
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new AdminMedia.ImportMetadataWorkDataV1(MediaType.Movie, "603"));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var workId = (await imported.Content.ReadFromJsonAsync<AdminMedia.WorkDetailsV1>())!.Id;
+            using var requested = await host.SendAsync(HttpMethod.Post, $"/api/v1/works/{workId}/requests", new CreateRequestDataV1(1));
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
-            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\" WHERE \"CanonicalTitle\" = 'The Matrix'"))!;
 
             async Task Refresh()
             {
@@ -215,20 +232,22 @@ namespace Jularr.Backend.Tests
 
             using var recommendations = await host.SendAsync(HttpMethod.Post, $"/api/v1/works/{workId}/recommendations");
             Assert.AreEqual(HttpStatusCode.OK, recommendations.StatusCode, await recommendations.Content.ReadAsStringAsync());
-            Assert.IsNull((await recommendations.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().WorkId);
-            using var next = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/604/requests", new CreateRequestDataV1(1));
+            var recommended = (await recommendations.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single();
+            Assert.AreEqual(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_movie' AND \"Value\" = '604'"), recommended.WorkId);
+            Assert.AreEqual(MediaStateType.NotRequested, recommended.MediaStateTypeId);
+            using var next = await host.SendAsync(HttpMethod.Post, $"/api/v1/works/{recommended.WorkId}/requests", new CreateRequestDataV1(1));
             Assert.AreEqual(HttpStatusCode.OK, next.StatusCode, await next.Content.ReadAsStringAsync());
-            var afterImport = tmdb.Requests.Count;
+            var afterRequest = tmdb.Requests.Count;
             using var updated = await host.SendAsync(HttpMethod.Post, $"/api/v1/works/{workId}/recommendations");
             Assert.AreEqual(HttpStatusCode.OK, updated.StatusCode, await updated.Content.ReadAsStringAsync());
             var item = (await updated.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single();
-            Assert.IsNotNull(item.WorkId, "Private viewer state must be read again, not persisted with public recommendations.");
-            Assert.AreEqual(MediaStateType.Requested, item.MediaStateTypeId);
-            Assert.AreEqual(afterImport, tmdb.Requests.Count);
+            Assert.AreEqual(recommended.WorkId, item.WorkId);
+            Assert.AreEqual(MediaStateType.Requested, item.MediaStateTypeId, "Private viewer state must be read again, not persisted with public recommendations.");
+            Assert.AreEqual(afterRequest, tmdb.Requests.Count);
 
             await TimeWarmReadsAsync("Recommendations; 2 local Works, 1 result", () => host.SendAsync(HttpMethod.Post, $"/api/v1/works/{workId}/recommendations"));
             await TimeWarmReadsAsync("TMDB top; 2 local Works, 1 result", () => host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top)));
-            Assert.AreEqual(afterImport, tmdb.Requests.Count);
+            Assert.AreEqual(afterRequest, tmdb.Requests.Count);
 
             await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkFeeds\" SET \"RefreshedAt\" = now() - interval '13 hours'");
             tmdb.IsUnavailable = true;
@@ -240,33 +259,31 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Preview_AnswersFromTheLocalCatalog_AndTheTmdbItemNamesItsTrailer()
+        public async Task Work_ACatalogTitleWithoutDetails_ShowsWhatItsCatalogKeeps()
         {
-            await using var host = await CreateHostAsync(fake: new FakeTmdb());
+            var tmdb = new FakeTmdb();
+            await using var host = await CreateHostAsync(fake: tmdb);
             await host.Fixture.RunSqlAsync("""
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear", "Overview", "ImageUrl", "BackdropUrl", "IsAdult") VALUES
-                    ('openlibrary', 'OL1W', 3, 'A Book', 1965, 'A long description of the book.', 'https://img.test/book.jpg', NULL, FALSE),
-                    ('openlibrary', 'OL2W', 3, 'Adult Book', NULL, 'Not for the preview.', NULL, NULL, TRUE);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "Overview", "ImageUrl", "BackdropUrl", "IsAdult", "CatalogNamespace") VALUES
+                    (901, 3, 'A Book', 1965, 'A long description of the book.', 'https://img.test/book.jpg', 'https://img.test/book-wide.jpg', FALSE, 'openlibrary');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (901, 'openlibrary', 'OL1W');
                 """);
 
-            // No provider is asked: the description is what the catalog keeps; unknown and adult titles have none.
-            using var local = await host.SendAsync(HttpMethod.Get, "/api/v1/discover/preview?namespace=openlibrary&externalId=OL1W");
+            // No provider is asked: the Work, which also answers its hover preview, shows what the catalog keeps; a Work that does not exist has nothing.
+            using var local = await host.SendAsync(HttpMethod.Get, "/api/v1/works/901");
             Assert.AreEqual(HttpStatusCode.OK, local.StatusCode, await local.Content.ReadAsStringAsync());
-            var preview = (await local.Content.ReadFromJsonAsync<DiscoverPreviewV1>())!;
-            Assert.AreEqual("A Book", preview.Title);
-            Assert.AreEqual(1965, preview.ReleaseYear);
-            Assert.AreEqual("A long description of the book.", preview.Overview);
-            Assert.AreEqual("https://img.test/book.jpg", preview.PosterUrl);
-            using var unknown = await host.SendAsync(HttpMethod.Get, "/api/v1/discover/preview?namespace=openlibrary&externalId=missing");
+            var work = (await local.Content.ReadFromJsonAsync<Jularr.Backend.Data.User.Media.V1.WorkDetailsV1>())!;
+            Assert.AreEqual(("A Book", (int?)1965), (work.CanonicalTitle, work.ReleaseYear));
+            Assert.AreEqual("A long description of the book.", work.Overview);
+            Assert.AreEqual(("https://img.test/book.jpg", "https://img.test/book-wide.jpg"), (work.PosterUrl, work.BackdropUrl));
+            using var unknown = await host.SendAsync(HttpMethod.Get, "/api/v1/works/999999");
             Assert.AreEqual(HttpStatusCode.NotFound, unknown.StatusCode);
-            using var adult = await host.SendAsync(HttpMethod.Get, "/api/v1/discover/preview?namespace=openlibrary&externalId=OL2W");
-            Assert.AreEqual(HttpStatusCode.NotFound, adult.StatusCode);
+            Assert.AreEqual(0, tmdb.Requests.Count);
 
-            // A single TMDB title names its trailer; the lists do not carry one.
-            using var item = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603");
-            Assert.AreEqual("vKQi3bBA1y8", (await item.Content.ReadFromJsonAsync<DiscoverItemV1>())!.TrailerKey);
-            using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
-            Assert.IsNull((await feed.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().TrailerKey);
+            // A fact of the Work's own comes before the catalog's text.
+            await host.Fixture.RunSqlAsync("INSERT INTO \"WorkMetadataFacts\" (\"WorkId\", \"FactKey\", \"Value\", \"IsManual\") VALUES (901, 'Overview', 'Written by a person.', TRUE)");
+            using var edited = await host.SendAsync(HttpMethod.Get, "/api/v1/works/901");
+            Assert.AreEqual("Written by a person.", (await edited.Content.ReadFromJsonAsync<Jularr.Backend.Data.User.Media.V1.WorkDetailsV1>())!.Overview);
         }
 
         [TestMethod]
@@ -293,9 +310,10 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("""
                 UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
                 UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'tmdb_movie';
-                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "Title", "ImageUrl", "TrendingRank")
-                SELECT 1000 + n, 'tmdb_movie', n::text, 1, 'Tied title ' || n, 'https://img.test/' || n || '.jpg', CASE WHEN n <= 30 THEN 1 ELSE 2 END
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ImageUrl", "TrendingRank", "CatalogNamespace")
+                SELECT 1000 + n, 1, 'Tied title ' || n, 'https://img.test/' || n || '.jpg', CASE WHEN n <= 30 THEN 1 ELSE 2 END, 'tmdb_movie'
                 FROM generate_series(1, 45) n ORDER BY n DESC;
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT 1000 + n, 'tmdb_movie', n::text FROM generate_series(1, 45) n;
                 """);
             for (var page = 1; page <= 4; page++)
             {
@@ -325,34 +343,27 @@ namespace Jularr.Backend.Tests
                     (102, 'Poster', '/api/v1/covers/works/102/poster?v=1', TRUE), (103, 'Poster', '/api/v1/covers/works/103/poster?v=1', TRUE);
                 INSERT INTO "WantedItems" ("WorkId") VALUES (100), (102), (103);
                 INSERT INTO "ProfileMediaRules" ("ProfileId", "MediaSubtypeId", "IsBlocked") VALUES (101, 3, TRUE);
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "MediaSubtypeId", "Title", "ImageUrl", "TrendingRank") VALUES
-                    ('openlibrary', 'owned', 3, NULL, 'Owned catalog book', 'https://img.test/owned.jpg', 1),
-                    ('openlibrary', 'blocked', 3, NULL, 'Public catalog book', 'https://img.test/blocked.jpg', 2),
-                    ('openlibrary', 'unknown', 3, NULL, 'Unknown book', 'https://img.test/unknown.jpg', 3),
-                    ('anilist', 'direct', 2, 1, 'Direct anime', 'https://img.test/direct.jpg', 1),
-                    ('anilist', 'season', 2, 1, 'Season anime', 'https://img.test/season.jpg', 2);
+                UPDATE "Works" SET "CatalogNamespace" = 'openlibrary', "ImageUrl" = 'https://img.test/owned.jpg', "TrendingRank" = 1 WHERE "Id" = 100;
+                UPDATE "Works" SET "CatalogNamespace" = 'openlibrary', "ImageUrl" = 'https://img.test/blocked.jpg', "TrendingRank" = 2 WHERE "Id" = 101;
+                UPDATE "Works" SET "CatalogNamespace" = 'anilist', "ImageUrl" = 'https://img.test/direct.jpg', "TrendingRank" = 1 WHERE "Id" = 102;
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ImageUrl", "TrendingRank", "CatalogNamespace") VALUES (104, 3, 'Unknown book', 'https://img.test/unknown.jpg', 3, 'openlibrary');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (104, 'openlibrary', 'unknown');
                 """);
             using var books = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Book, DiscoverFeedType.Trending));
             Assert.AreEqual(HttpStatusCode.OK, books.StatusCode, await books.Content.ReadAsStringAsync());
             var bookItems = (await books.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!;
-            Assert.AreEqual(3, bookItems.Count);
-            Assert.AreEqual(100L, bookItems[0].WorkId);
+            CollectionAssert.AreEqual(new long?[] { 100, 104 }, bookItems.Select(item => item.WorkId).ToArray(), "The blocked light novel is no book of the profile's shelf.");
             Assert.AreEqual(MediaStateType.Requested, bookItems[0].MediaStateTypeId);
             Assert.AreEqual("/api/v1/covers/works/100/poster?v=1", bookItems[0].PosterUrl);
-            Assert.IsNull(bookItems[1].WorkId);
-            Assert.IsNull(bookItems[1].MediaStateTypeId);
-            Assert.AreEqual("https://img.test/blocked.jpg", bookItems[1].PosterUrl);
-            Assert.IsNull(bookItems[2].WorkId);
+            Assert.AreEqual(MediaStateType.NotRequested, bookItems[1].MediaStateTypeId);
+            Assert.AreEqual("https://img.test/unknown.jpg", bookItems[1].PosterUrl);
 
             using var anime = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime));
             Assert.AreEqual(HttpStatusCode.OK, anime.StatusCode, await anime.Content.ReadAsStringAsync());
             var animeItems = (await anime.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!;
-            Assert.AreEqual(2, animeItems.Count, "A Work and its season carrying the same provider identity must not duplicate the card.");
-            Assert.AreEqual(102L, animeItems[0].WorkId);
+            Assert.AreEqual(102L, animeItems[0].WorkId, "A Work and its season carrying the same provider identity must not duplicate the card.");
+            Assert.AreEqual(1, animeItems.Count(item => item.WorkId == 102));
             Assert.AreEqual("/api/v1/covers/works/102/poster?v=1", animeItems[0].PosterUrl);
-            Assert.AreEqual(103L, animeItems[1].WorkId);
-            Assert.AreEqual(MediaStateType.Requested, animeItems[1].MediaStateTypeId);
-            Assert.AreEqual("https://img.test/season.jpg", animeItems[1].PosterUrl, "A season keeps its own provider cover rather than its containing Work's cover.");
         }
 
         [TestMethod]
@@ -363,15 +374,18 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("""
                 UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
                 UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" IN ('tmdb_movie', 'anilist');
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "MediaSubtypeId", "Title", "ReleasedOn", "ImageUrl", "ImdbId", "Popularity", "Rating", "Votes", "TrendingRank", "IsAdult") VALUES
-                    ('tmdb_movie', '603', 1, NULL, 'The Matrix', '1999-03-31', 'https://img.test/603.jpg', 'tt0133093', 80, 8.7, 25000, 1, FALSE),
-                    ('tmdb_movie', '604', 1, NULL, 'The Matrix Reloaded', '2003-05-15', 'https://img.test/604.jpg', 'tt0234215', 60, 7.0, 10000, NULL, FALSE),
-                    ('tmdb_movie', '700', 1, NULL, 'Rated By Five', '2020-01-01', 'https://img.test/700.jpg', NULL, 1, 9.9, 5, NULL, FALSE),
-                    ('tmdb_movie', '701', 1, NULL, 'Out Now', current_date - 10, 'https://img.test/701.jpg', NULL, 50, NULL, NULL, NULL, FALSE),
-                    ('tmdb_movie', '702', 1, NULL, 'Out Soon', current_date + 30, 'https://img.test/702.jpg', NULL, 40, NULL, NULL, NULL, FALSE),
-                    ('tmdb_movie', '703', 1, NULL, 'Matrix Adult', '2001-01-01', 'https://img.test/703.jpg', NULL, 90, 9.0, 9000, 2, TRUE),
-                    ('tmdb_movie', '704', 1, NULL, 'Matrix Unread', NULL, NULL, NULL, 99, NULL, NULL, 3, FALSE),
-                    ('anilist', '21', 2, 1, 'The Matrix Anime', '2021-04-01', 'https://img.test/21.jpg', NULL, 5000, 8.0, 5000, 1, FALSE);
+                INSERT INTO "Works" ("Id", "CatalogNamespace", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleasedOn", "ImageUrl", "Popularity", "Rating", "Votes", "TrendingRank", "IsAdult") VALUES
+                    (603, 'tmdb_movie', 1, NULL, 'The Matrix', '1999-03-31', 'https://img.test/603.jpg', 80, 8.7, 25000, 1, FALSE),
+                    (604, 'tmdb_movie', 1, NULL, 'The Matrix Reloaded', '2003-05-15', 'https://img.test/604.jpg', 60, 7.0, 10000, NULL, FALSE),
+                    (700, 'tmdb_movie', 1, NULL, 'Rated By Five', '2020-01-01', 'https://img.test/700.jpg', 1, 9.9, 5, NULL, FALSE),
+                    (701, 'tmdb_movie', 1, NULL, 'Out Now', current_date - 10, 'https://img.test/701.jpg', 50, NULL, NULL, NULL, FALSE),
+                    (702, 'tmdb_movie', 1, NULL, 'Out Soon', current_date + 30, 'https://img.test/702.jpg', 40, NULL, NULL, NULL, FALSE),
+                    (703, 'tmdb_movie', 1, NULL, 'Matrix Adult', '2001-01-01', 'https://img.test/703.jpg', 90, 9.0, 9000, 2, TRUE),
+                    (704, 'tmdb_movie', 1, NULL, 'Matrix Unread', NULL, NULL, 99, NULL, NULL, 3, FALSE),
+                    (9021, 'anilist', 2, 1, 'The Matrix Anime', '2021-04-01', 'https://img.test/21.jpg', 5000, 8.0, 5000, 1, FALSE);
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES
+                    (603, 'tmdb_movie', '603'), (604, 'tmdb_movie', '604'), (700, 'tmdb_movie', '700'), (701, 'tmdb_movie', '701'), (702, 'tmdb_movie', '702'), (703, 'tmdb_movie', '703'),
+                    (704, 'tmdb_movie', '704'), (9021, 'anilist', '21'), (603, 'imdb', 'tt0133093'), (604, 'imdb', 'tt0234215');
                 """);
 
             // The whole catalogs answer all their shelves at once; series still come from TMDB and are not among them.
@@ -394,14 +408,14 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(tmdb.Requests.Any(request => request.AbsolutePath.StartsWith("/3/trending/movie", StringComparison.Ordinal)));
 
             // A browse page goes on in the catalog; a requested title carries its state.
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/works/603/requests", new CreateRequestDataV1(1));
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
             using var top = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top));
             var topItems = (await top.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.ToArray();
             Assert.AreEqual(MediaStateType.Requested, topItems[0].MediaStateTypeId);
             Assert.AreEqual(8.7m, topItems[0].Rating);
             Assert.AreEqual(7.0m, topItems[1].Rating);
-            Assert.IsNotNull(topItems[0].WorkId);
+            CollectionAssert.AreEqual(new long[] { 603, 604 }, topItems.Select(item => item.WorkId).ToArray());
             using var nextPage = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top, 2));
             Assert.AreEqual(0, (await nextPage.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Count);
 
@@ -411,7 +425,7 @@ namespace Jularr.Backend.Tests
             var suggestions = (await suggested.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.ToArray();
             Assert.AreEqual("The Matrix|The Matrix Anime|The Matrix Reloaded", string.Join("|", suggestions.Select(item => item.Title)));
             Assert.AreEqual("movies", suggestions[0].ScopeSlug);
-            Assert.IsNotNull(suggestions[0].WorkId);
+            CollectionAssert.AreEqual(new long[] { 603, 9021, 604 }, suggestions.Select(item => item.WorkId).ToArray());
             Assert.AreEqual("anime", suggestions[1].ScopeSlug);
             using var narrowed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("matrix rel", "movies"));
             Assert.AreEqual("The Matrix Reloaded", (await narrowed.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.Single().Title);
@@ -429,9 +443,11 @@ namespace Jularr.Backend.Tests
         public async Task Franchise_TmdbCollection_ListsTheVisibleTitles()
         {
             await using var host = await CreateHostAsync(razor: true);
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new AdminMedia.ImportMetadataWorkDataV1(MediaType.Movie, "603"));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var workId = (await imported.Content.ReadFromJsonAsync<AdminMedia.WorkDetailsV1>())!.Id;
+            using var requested = await host.SendAsync(HttpMethod.Post, $"/api/v1/works/{workId}/requests", new CreateRequestDataV1(1));
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
-            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
             var franchiseId = (long)(await host.ScalarAsync("SELECT \"FranchiseId\" FROM \"Works\" WHERE \"Id\" = " + workId))!;
             Assert.AreEqual("The Matrix Collection", await host.ScalarAsync("SELECT franchise.\"Name\" FROM \"Franchises\" AS franchise JOIN \"FranchiseExternalIdentities\" AS identity ON identity.\"FranchiseId\" = franchise.\"Id\" WHERE identity.\"Namespace\" = 'tmdb' AND identity.\"Value\" = '2344'"));
 
@@ -463,9 +479,9 @@ namespace Jularr.Backend.Tests
         public async Task Details_TmdbMovie_ShowsLengthGenresTrailerAndPeople()
         {
             await using var host = await CreateHostAsync(razor: true);
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
-            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
-            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new AdminMedia.ImportMetadataWorkDataV1(MediaType.Movie, "603"));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var workId = (await imported.Content.ReadFromJsonAsync<AdminMedia.WorkDetailsV1>())!.Id;
 
             // Cast before crew; crew keeps only key jobs.
             using var credits = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + workId + "/credits");
@@ -491,13 +507,15 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "Neo");
             StringAssert.Contains(html, "Director");
 
-            // Similar titles from TMDB lead to their request.
+            // Similar titles from TMDB are catalog Works and lead to their page.
             StringAssert.Contains(html, "The Matrix Reloaded");
-            StringAssert.Contains(html, "/Discover/movies/604");
+            var similar = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_movie' AND \"Value\" = '604'"))!;
+            StringAssert.Contains(html, "href=\"/Details/" + similar + "\"");
+            Assert.IsFalse(html.Contains("/Discover/movies/", StringComparison.Ordinal));
         }
 
         [TestMethod]
-        public async Task Anime_AniListSeason_IsShownAsItselfAndRequestedAsItsTmdbSeries()
+        public async Task Anime_AniListSeason_IsItsOwnWorkUntilASeriesMapsIt_ThenOpensTheSeriesAtThatSeason()
         {
             await using var host = await CreateHostAsync(razor: true);
 
@@ -507,82 +525,89 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((MediaType.Series, (MediaSubtype?)MediaSubtype.Anime, true), (anime.MediaTypeId, anime.MediaSubtypeId, anime.IsCatalog));
             CollectionAssert.AreEqual(new[] { DiscoverFeedType.Trending, DiscoverFeedType.Top, DiscoverFeedType.New }, anime.Feeds);
 
-            // The anime tab ranks AniList seasons.
+            // The anime tab ranks AniList seasons; a season no series holds yet is a catalog Work of its own and opens its page and preview.
             using var tab = await host.SendAsync(HttpMethod.Get, "/?type=anime&handler=Recommendations");
             var html = await tab.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
             StringAssert.Contains(html, "The Matrix Show Season 2");
-            StringAssert.Contains(html, "/Discover/anime/anilist/21");
+            var season = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '21'"))!;
+            StringAssert.Contains(html, "href=\"/Details/" + season + "\"");
+            StringAssert.Contains(html, "data-preview-src=\"/MediaPreview?work=" + season + "\"");
+            Assert.IsFalse(html.Contains("/Discover/anime/", StringComparison.Ordinal));
+            using var own = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + season);
+            var shown = (await own.Content.ReadFromJsonAsync<Jularr.Backend.Data.User.Media.V1.WorkDetailsV1>())!;
+            Assert.AreEqual(("The Matrix Show Season 2", "Season two.", "https://img.anili.st/second.jpg"), (shown.CanonicalTitle, shown.Overview, shown.PosterUrl));
 
-            // The season keeps its own trailer and cover; the missing banner comes from the TMDB series of its first season.
-            using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/entry", new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
-            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
-            var season = (await read.Content.ReadFromJsonAsync<DiscoverCatalogEntryV1>())!;
-            Assert.AreEqual("abcdefghijk", season.TrailerKey);
-            Assert.AreEqual("https://img.anili.st/second.jpg", season.PosterUrl);
-            Assert.AreEqual("https://image.tmdb.org/t/p/w1280/show-backdrop.jpg", season.BackdropUrl);
-            Assert.IsNull(season.WorkId);
-            using var page = await host.SendAsync(HttpMethod.Get, "/Discover/anime/anilist/21");
-            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "https://www.youtube.com/watch?v=abcdefghijk");
-
-            // The request creates the TMDB series as Anime; the season then leads to it.
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/requests", new RequestDiscoverCatalogDataV1(MediaType.Series, "anilist", "21", 1, MediaSubtype.Anime));
-            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
-            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"))!;
-            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"MediaSubtypeId\" FROM \"Works\" WHERE \"Id\" = " + workId));
-            using var known = await host.SendAsync(HttpMethod.Get, "/Discover/anime/anilist/21");
-            Assert.AreEqual(HttpStatusCode.Redirect, known.StatusCode);
-            Assert.AreEqual("/Details/" + workId, known.Headers.Location!.OriginalString);
+            // Once the series maps the season, the season is that series, opened at the season.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "DetailedAt") VALUES (950, 2, 1, 'The Matrix Show', 2020, now());
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (950, 'tmdb_tv', '1399');
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (950, 950, 1, 1), (951, 950, 1, 2);
+                INSERT INTO "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value") VALUES (951, 'anilist', '21');
+                """);
+            using var found = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/search", new SearchDiscoverCatalogDataV1(MediaType.Series, "Matrix", MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
+            var series = (await found.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single();
+            Assert.AreEqual((950L, (int?)2, "21"), (series.WorkId, series.SeasonNumber, series.ExternalId));
+            using var search = await host.SendAsync(HttpMethod.Get, "/?type=anime&q=Matrix");
+            html = await search.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, search.StatusCode, html);
+            StringAssert.Contains(html, "href=\"/Details/950?season=2\"");
+            using var opened = await host.SendAsync(HttpMethod.Get, "/Details/950?season=2");
+            Assert.AreEqual(HttpStatusCode.OK, opened.StatusCode, await opened.Content.ReadAsStringAsync());
         }
 
         [TestMethod]
-        public async Task RelatedWork_RequestedFromItsRow_IsTheDiscoverRequestWithoutLeavingThePage()
+        public async Task RelatedWork_RequestedFromItsRow_IsTheNormalRequestWithoutLeavingThePage()
         {
             await using var host = await CreateHostAsync(razor: true);
 
-            // A Work names a season of an anime that is no Work yet.
+            // A Work names a season of an anime that is only a catalog title.
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (700, 1, 'Source Film', 2001);
-                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "MediaSubtypeId", "Title", "ReleaseYear") VALUES (800, 'anilist', '21', 2, 1, 'The Matrix Show Season 2', 2021);
-                INSERT INTO "WorkRelations" ("WorkId", "ExternalWorkId", "WorkRelationTypeId", "SourceKey") VALUES (700, 800, 1, 'anilist');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (800, 2, 1, 'The Matrix Show Season 2', 2021, 'anilist');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (800, 'anilist', '21');
+                INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey") VALUES (700, 800, 1, 'anilist');
                 """);
             using var browser = ((TestServer)host.Services.GetRequiredService<IServer>()).CreateClient();
             browser.DefaultRequestHeaders.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
             browser.DefaultRequestHeaders.Add("HX-Request", "true");
 
-            // The row offers the request itself, not a link to Discover.
+            // The row leads to the Work and offers the request itself.
             using var shown = await browser.GetAsync("/Details/700?tab=related");
             var html = await shown.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, shown.StatusCode, html);
+            StringAssert.Contains(html, "href=\"/Details/800\"");
+            StringAssert.Contains(html, "state-chip__label\">Not in library<");
             StringAssert.Contains(html, "handler=RequestRelated");
-            StringAssert.Contains(html, "name=\"externalId\" value=\"21\"");
+            StringAssert.Contains(html, "name=\"relatedWorkId\" value=\"800\"");
             var token = WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
-            var form = new Dictionary<string, string> { ["__RequestVerificationToken"] = token, ["namespace"] = "anilist", ["externalId"] = "21" };
+            var form = new Dictionary<string, string> { ["__RequestVerificationToken"] = token, ["relatedWorkId"] = "800" };
 
             // A title this Work does not name is not requested through it.
-            using var foreign = await browser.PostAsync("/Details/700?handler=RequestRelated&tab=related", new FormUrlEncodedContent(new Dictionary<string, string>(form) { ["externalId"] = "999" }));
+            using var foreign = await browser.PostAsync("/Details/700?handler=RequestRelated&tab=related", new FormUrlEncodedContent(new Dictionary<string, string>(form) { ["relatedWorkId"] = "999" }));
             Assert.AreEqual(HttpStatusCode.NotFound, foreign.StatusCode);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
 
-            // The request is made as Discover makes it; the answer is the page again with the hint and no redirect, and the row says Requested instead of offering the button.
+            // The request is the normal one of the related Work; the answer is the page again with the hint and no redirect, and the row shows the Work's state instead of the button.
             using var requested = await browser.PostAsync("/Details/700?handler=RequestRelated&tab=related", new FormUrlEncodedContent(form));
             var answer = await requested.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, answer);
             StringAssert.Contains(string.Join(' ', requested.Headers.GetValues("HX-Trigger")), "Requested");
-            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"))!;
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"WorkId\" = " + workId));
-            StringAssert.Contains(answer, "state-chip__label\">Requested<");
-            Assert.IsFalse(answer.Contains("name=\"externalId\" value=\"21\"", StringComparison.Ordinal));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"WorkId\" = 800"));
+            Assert.IsFalse(answer.Contains("state-chip__label\">Not in library<", StringComparison.Ordinal));
+            Assert.IsFalse(answer.Contains("name=\"relatedWorkId\" value=\"800\"", StringComparison.Ordinal));
 
             // Without Requests there is no button and no way to post one.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Requests';");
             await host.Fixture.RunSqlAsync("""
-                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "MediaSubtypeId", "Title", "ReleaseYear") VALUES (801, 'anilist', '22', 2, 1, 'Another Season', 2022);
-                INSERT INTO "WorkRelations" ("WorkId", "ExternalWorkId", "WorkRelationTypeId", "SourceKey") VALUES (700, 801, 2, 'anilist');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (801, 2, 1, 'Another Season', 2022, 'anilist');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (801, 'anilist', '22');
+                INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey") VALUES (700, 801, 2, 'anilist');
                 """);
             using var disabled = await browser.GetAsync("/Details/700?tab=related");
             Assert.IsFalse((await disabled.Content.ReadAsStringAsync()).Contains("handler=RequestRelated", StringComparison.Ordinal));
-            using var refused = await browser.PostAsync("/Details/700?handler=RequestRelated&tab=related", new FormUrlEncodedContent(new Dictionary<string, string>(form) { ["externalId"] = "22" }));
+            using var refused = await browser.PostAsync("/Details/700?handler=RequestRelated&tab=related", new FormUrlEncodedContent(new Dictionary<string, string>(form) { ["relatedWorkId"] = "801" }));
             Assert.AreNotEqual(HttpStatusCode.OK, refused.StatusCode);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
         }
@@ -605,7 +630,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, recommendations.StatusCode, html);
             StringAssert.Contains(html, "The Matrix");
             StringAssert.Contains(html, "class=\"hero-carousel");
-            StringAssert.Contains(html, "/Discover/movies/603");
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_movie' AND \"Value\" = '603'"))!;
+            StringAssert.Contains(html, "href=\"/Details/" + workId + "\"");
+            Assert.IsFalse(html.Contains("/Discover/movies/", StringComparison.Ordinal));
 
             using var browse = await host.SendAsync(HttpMethod.Get, "/?type=series&view=Top");
             var browseHtml = await browse.Content.ReadAsStringAsync();
@@ -617,15 +644,18 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(browseHtml, "class=\"capsule-bar__areas\"").Count);
             Assert.AreEqual(0, System.Text.RegularExpressions.Regex.Matches(browseHtml, "class=\"navigation-tabs[ \"]").Count);
 
-            using var title = await host.SendAsync(HttpMethod.Get, "/Discover/movies/603");
+            // The title's page is the Work's; it shows what the catalog keeps and requests the title as any Work.
+            using var title = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
             html = await title.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, title.StatusCode, html);
             StringAssert.Contains(html, "A hacker learns the truth.");
-            using var requested = await host.SendAsync(HttpMethod.Post, "/Discover/movies/603", new Dictionary<string, string>
+            StringAssert.Contains(html, "handler=Request\"");
+            using var requested = await host.SendAsync(HttpMethod.Post, "/Details/" + workId + "?handler=Request", new Dictionary<string, string>
             {
                 ["__RequestVerificationToken"] = LibraryTests.Token(html), ["UiLocaleId"] = "1"
             });
             Assert.AreEqual(HttpStatusCode.Redirect, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"WorkId\" = " + workId));
 
             using var library = await host.SendAsync(HttpMethod.Get, "/Library?type=movies");
             Assert.AreEqual(HttpStatusCode.OK, library.StatusCode);
@@ -647,14 +677,26 @@ namespace Jularr.Backend.Tests
             var tmdb = new FakeTmdb();
             await using var host = await CreateHostAsync(razor: true, fake: tmdb);
 
-            // A card names where its delayed hover preview comes from, and nothing is requested before the hover.
+            // A card names the Work its delayed hover preview comes from, and nothing is requested before the hover.
             using var recommendations = await host.SendAsync(HttpMethod.Get, "/?handler=Recommendations");
             var html = await recommendations.Content.ReadAsStringAsync();
-            StringAssert.Contains(html, "data-preview-src=\"/MediaPreview?type=Movie&amp;tmdb=603\"");
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_movie' AND \"Value\" = '603'"))!;
+            StringAssert.Contains(html, "data-preview-src=\"/MediaPreview?work=" + workId + "\"");
             Assert.IsFalse(html.Contains("youtube", StringComparison.OrdinalIgnoreCase));
 
-            // The fragment brings the description and the trailer the provider names; a malformed key is never embedded.
-            using var preview = await host.SendAsync(HttpMethod.Get, "/MediaPreview?type=Movie&tmdb=603");
+            // A catalog title without details describes itself from its catalog entry; no provider is asked.
+            var asked = tmdb.Requests.Count;
+            using var described = await host.SendAsync(HttpMethod.Get, "/MediaPreview?work=" + workId);
+            html = await described.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, described.StatusCode, html);
+            StringAssert.Contains(html, "data-preview-mode=\"description\"");
+            StringAssert.Contains(html, "A hacker learns the truth.");
+            StringAssert.Contains(html, "href=\"/Details/" + workId + "\"");
+            Assert.AreEqual(asked, tmdb.Requests.Count);
+
+            // The fragment brings the description and the Work's trailer; a malformed key is never embedded.
+            await host.Fixture.RunSqlAsync($"INSERT INTO \"WorkMetadataFacts\" (\"WorkId\", \"FactKey\", \"Value\", \"IsManual\") VALUES ({workId}, 'Trailer', 'vKQi3bBA1y8', TRUE)");
+            using var preview = await host.SendAsync(HttpMethod.Get, "/MediaPreview?work=" + workId);
             html = await preview.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, preview.StatusCode, html);
             StringAssert.Contains(html, "class=\"media-card__preview\"");
@@ -663,15 +705,17 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "data-trailer-action=\"toggle\"");
             StringAssert.Contains(html, "data-trailer-action=\"mute\"");
             StringAssert.Contains(html, "A hacker learns the truth.");
-            StringAssert.Contains(html, "href=\"/Discover/movies/603\"");
+            await host.Fixture.RunSqlAsync($"UPDATE \"WorkMetadataFacts\" SET \"Value\" = 'not a key\"' WHERE \"WorkId\" = {workId} AND \"FactKey\" = 'Trailer'");
+            using var malformed = await host.SendAsync(HttpMethod.Get, "/MediaPreview?work=" + workId);
+            StringAssert.Contains(await malformed.Content.ReadAsStringAsync(), "data-preview-mode=\"description\"");
 
-            // While the provider cannot answer the catalog's own description remains; a title nobody knows needs none.
+            // While the provider cannot answer the Work's own description remains; a Work that does not exist has no preview.
             tmdb.IsUnavailable = true;
-            using var offline = await host.SendAsync(HttpMethod.Get, "/MediaPreview?type=Movie&tmdb=603");
+            using var offline = await host.SendAsync(HttpMethod.Get, "/MediaPreview?work=" + workId);
             Assert.AreEqual(HttpStatusCode.OK, offline.StatusCode);
             StringAssert.Contains(await offline.Content.ReadAsStringAsync(), "A hacker learns the truth.");
-            using var unknown = await host.SendAsync(HttpMethod.Get, "/MediaPreview?type=Movie&tmdb=999999");
-            Assert.AreEqual(HttpStatusCode.NoContent, unknown.StatusCode);
+            using var unknown = await host.SendAsync(HttpMethod.Get, "/MediaPreview?work=999999");
+            Assert.AreEqual(HttpStatusCode.NotFound, unknown.StatusCode);
             using var invalid = await host.SendAsync(HttpMethod.Get, "/MediaPreview");
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
 

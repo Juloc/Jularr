@@ -4,7 +4,7 @@ The approved scope is to reduce the remaining slow local Discover reads without 
 
 `ExternalWorkLogic.ReadExternalWorkShelvesAsync` serves both feed endpoints and the batched shelves endpoint. It now resolves the indexed Work/season identities before consulting the canonical `ProfileWorks` and `ProfileWorkStates` views. Lateral `OFFSET 0` barriers keep those lookups parameterized. A union preserves the previous membership semantics when both identity routes resolve the same Work. The statement and `ReadWorkV1` disable JIT only within their transactions using the existing SQL-context option. `ReadDiscoverShelvesV1` reads module state, scopes and shelves in one centrally authorized local batch, reducing commands from 15 to 11. There are no schema, index, contract or visibility-rule changes.
 
-The first successful `CompleteExternalWorkSyncAsync` now prepares `ExternalWorks` planner statistics with `ANALYZE` before its transaction exposes the completed catalog. The atomic update's affected-row count ensures this happens only on initial completion, not each worker pass. This work belongs to the background import; user reads do not run maintenance. The benchmark publishes its seeded catalogs through that same completion owner.
+The first successful `CompleteExternalWorkSyncAsync` now prepares the catalog's planner statistics (`Works` since the catalog lives there) with `ANALYZE` before its transaction exposes the completed catalog. The atomic update's affected-row count ensures this happens only on initial completion, not each worker pass. This work belongs to the background import; user reads do not run maintenance. The benchmark publishes its seeded catalogs through that same completion owner.
 
 ## Evidence, 23–24 October 2026
 

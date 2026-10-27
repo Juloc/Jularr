@@ -2,7 +2,7 @@ using NpgsqlTypes;
 
 namespace Jularr.Backend.Data.Fields.Media
 {
-    // Titles known from a provider's catalog (ExternalWorks).
+    // Titles known from a provider's catalog, kept as catalog Works.
     public static class ExternalWorkFields
     {
         public static readonly StringField Namespace = new(NpgsqlDbType.Varchar) { AllowBlank = false, MaximumLength = 16 };

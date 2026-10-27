@@ -56,7 +56,7 @@ namespace Jularr.Backend.Service.User.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Persisted metadata of a Work the profile may open.
+            // Persisted metadata of a Work the profile may open; a catalog title without details shows what its catalog entry says.
             var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 $$"""
@@ -67,9 +67,9 @@ namespace Jularr.Backend.Service.User.Media.V1
                     visible."Title" AS "CanonicalTitle",
                     (entry."WorkId" IS NOT NULL) AS "IsWatchlisted",
                     work."ReleaseYear"::integer AS "ReleaseYear",
-                    visible."Overview",
-                    facts."PosterUrl",
-                    facts."BackdropUrl",
+                    coalesce(visible."Overview", work."Overview") AS "Overview",
+                    coalesce(facts."PosterUrl", work."ImageUrl") AS "PosterUrl",
+                    coalesce(facts."BackdropUrl", work."BackdropUrl") AS "BackdropUrl",
                     (
                         SELECT
                             'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"
@@ -143,9 +143,9 @@ namespace Jularr.Backend.Service.User.Media.V1
                     availability."MonitoredUnits",
                     workProgress."ProgressStateId",
                     workProgress."ProgressPercent",
-                    catalog."Rating",
-                    catalog."Namespace" AS "RatingSource",
-                    catalog."OriginalTitle",
+                    work."Rating",
+                    CASE WHEN work."Rating" IS NOT NULL THEN work."CatalogNamespace" END AS "RatingSource",
+                    work."OriginalTitle",
                     work."ReleasedOn",
                     work."OriginalLanguage",
                     CASE WHEN franchise."Id" IS NOT NULL THEN work."FranchisePosition" END AS "FranchisePosition"
@@ -153,22 +153,6 @@ namespace Jularr.Backend.Service.User.Media.V1
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
                     {{WorkCardProjection.Joins}}
-                    LEFT JOIN LATERAL (
-                        -- The catalog entry the title came from: the one with a rating, the best known one first.
-                        SELECT
-                            catalogEntry."Rating",
-                            catalogEntry."Namespace",
-                            catalogEntry."OriginalTitle"
-                        FROM
-                            "WorkExternalIdentities" AS identity
-                            JOIN "ExternalWorks" AS catalogEntry ON catalogEntry."Namespace" = identity."Namespace" AND catalogEntry."Value" = identity."Value"
-                        WHERE
-                            identity."WorkId" = work."Id"
-                        ORDER BY
-                            catalogEntry."Rating" IS NOT NULL DESC,
-                            catalogEntry."Votes" DESC NULLS LAST
-                        LIMIT 1
-                    ) AS catalog ON TRUE
                     LEFT JOIN "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = @ProfileId
                     LEFT JOIN LATERAL (
                         SELECT

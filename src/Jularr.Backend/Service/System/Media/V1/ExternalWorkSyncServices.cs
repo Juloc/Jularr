@@ -140,7 +140,7 @@ namespace Jularr.Backend.Service.System.Media.V1
                 var list = new ExternalWorkListData(AniListMetadata.Namespace, group.Key.Type, group.Key.Subtype);
                 var works = group.Select(item => new ExternalWorkData(AniListMetadata.Namespace, item.entry.Id.ToString(CultureInfo.InvariantCulture), TextLimit.Cut(item.entry.Title, 500)!,
                     TextLimit.Cut(item.entry.OriginalTitle, 500), item.entry.Year is >= 1800 and <= 2200 ? item.entry.Year : null, TextLimit.Cut(item.entry.Description, 4000), null,
-                    item.entry.CoverUrl, null, DateTime.MinValue)).ToArray();
+                    item.entry.CoverUrl, null, null)).ToArray();
                 var details = JsonSerializer.Serialize(group.Select(item => new
                 {
                     Value = item.entry.Id.ToString(CultureInfo.InvariantCulture),

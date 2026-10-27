@@ -5,19 +5,13 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Media;
-using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Integrations.Data.AniList;
-using Jularr.Integrations.Data.Igdb;
-using Jularr.Integrations.Data.MusicBrainz;
 using Jularr.Integrations.Data.OpenLibrary;
 using Jularr.Integrations.Data.Tmdb;
-using Jularr.Integrations.Logic.Igdb;
-using Jularr.Integrations.Logic.MusicBrainz;
 using Jularr.Integrations.Logic.OpenLibrary;
-using Jularr.Integrations.Logic.Tmdb;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace Jularr.Backend.Service.Core
@@ -79,66 +73,8 @@ namespace Jularr.Backend.Service.Core
         }
 
         // Discover's anime: AniList finds and shows seasons; Works, requests and every action use the TMDB series.
-        public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAnimeAsync(LogicContext context, string query, CancellationToken ct) =>
-            await MarkKnownAsync(context, [.. (await aniList.SearchAsync(AniListMediaType.Anime, AniListMatching.Formats(MediaType.Series, MediaSubtype.Anime), query, ct)).Select(AniListAnime)], ct);
-
-        // One catalog title as its catalog describes it; its page never trusts what a link says.
-        public async Task<DiscoverCatalogEntryV1> ReadEntryAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string @namespace, string externalId, CancellationToken ct)
-        {
-            if (mediaType == MediaType.Series && subtype == MediaSubtype.Anime && @namespace == AniListMetadata.Namespace)
-            {
-                return await ReadAnimeAsync(context, AniListId(externalId), ct);
-            }
-
-            var key = $"metadata.catalog.entry.{@namespace}.{externalId}";
-            if (!cache.TryGetValue(key, out MetadataSearchResultV1? entry))
-            {
-                entry = (mediaType, @namespace) switch
-                {
-                    (MediaType.Book, BookMetadata.Namespace) => Book(await books.ReadAsync(externalId, ct)),
-                    (MediaType.Book, AniListMetadata.Namespace) when subtype is MediaSubtype.Manga or MediaSubtype.LightNovel =>
-                        AniListBook(await aniList.ReadAsync(AniListMediaType.Manga, AniListId(externalId), ct)),
-                    (MediaType.Music, MusicMetadata.Namespace) => Album((await music.ReadAsync(externalId, ct)).Album),
-                    (MediaType.Game, GameMetadata.Namespace) => Game(await games.ReadAsync(await games.ConnectAsync(context, ct), externalId, ct)),
-                    _ => throw new KeyNotFoundException("The catalog does not hold this media type.")
-                };
-                cache.Set(key, entry, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(6), Size = 1 });
-            }
-
-            var known = (await MarkKnownAsync(context, [entry!], ct))[0];
-            return new DiscoverCatalogEntryV1(known.Title, known.ReleaseYear, known.Overview, known.PosterUrl, null, null, known.WorkId) { Author = known.Author };
-        }
-
-        private static int AniListId(string externalId) =>
-            int.TryParse(externalId, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : throw new KeyNotFoundException("Invalid AniList id.");
-
-        private async Task<DiscoverCatalogEntryV1> ReadAnimeAsync(LogicContext context, int id, CancellationToken ct)
-        {
-            var media = await ReadAnimeEntryAsync(id, ct);
-
-            // What AniList lacks for this season comes from the series.
-            TmdbWork? series = null;
-            if (media.BannerUrl is null || media.TrailerKey is null || media.Description is null || media.CoverUrl is null)
-            {
-                try
-                {
-                    var connection = await metadata.ConnectAsync(context, ct);
-                    if (await FindAnimeSeriesAsync(connection, media, ct) is { } tmdbId)
-                    {
-                        series = await metadata.ReadWorkAsync(connection, MediaType.Series, tmdbId, ct);
-                    }
-                }
-                catch (ServiceUnavailableException)
-                {
-                    // AniList alone still describes the season.
-                }
-            }
-
-            var known = (await MarkKnownAsync(context, [AniListAnime(media)], ct))[0].WorkId;
-            return new DiscoverCatalogEntryV1(TextLimit.Cut(AniListMetadata.Title(media), 500)!, media.Year is >= 1800 and <= 2200 ? media.Year : null,
-                TextLimit.Cut(media.Description ?? series?.Overview, 4000), media.CoverUrl ?? TmdbClient.PosterUrl(series?.PosterPath), media.BannerUrl ?? TmdbClient.BackdropUrl(series?.BackdropPath),
-                media.TrailerKey ?? series?.Details.TrailerKey, known);
-        }
+        public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAnimeAsync(string query, CancellationToken ct) =>
+            [.. (await aniList.SearchAsync(AniListMediaType.Anime, AniListMatching.Formats(MediaType.Series, MediaSubtype.Anime), query, ct)).Select(AniListAnime)];
 
         private async Task<AniListMedia> ReadAnimeEntryAsync(int id, CancellationToken ct)
         {
@@ -203,8 +139,8 @@ namespace Jularr.Backend.Service.Core
             TextLimit.Cut(AniListMetadata.Title(result), 500)!, TextLimit.Cut(result.RomajiTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null,
             TextLimit.Cut(result.Description, 4000), null, null, result.CoverUrl);
 
-        // Ranked catalog lists: Open Library trends books, AniList ranks manga, light novels and anime.
-        public async Task<IReadOnlyList<MetadataSearchResultV1>?> ReadCachedFeedInBatchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, CancellationToken ct)
+        // Ranked catalog lists: Open Library trends books, AniList ranks manga, light novels and anime. A kept list already names its Works.
+        public async Task<IReadOnlyList<ExternalWorkData>?> ReadCachedFeedInBatchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, CancellationToken ct)
         {
             var ranking = Ranking(mediaType, subtype, feed);
             if (!await context.KeepsDiscoverTitlesAsync(ct))
@@ -212,17 +148,21 @@ namespace Jularr.Backend.Service.Core
                 return null;
             }
             var descriptor = new ExternalFeedData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype, feed, 1, null, null);
-            var snapshot = await ExternalFeedCache.ReadAsync(context, descriptor, ct);
-            return snapshot.Items is { } items ? await MarkKnownInBatchAsync(context, [.. items.Select(Catalog)], ct) : null;
+            return (await ExternalFeedCache.ReadAsync(context, descriptor, ct)).Items;
         }
 
-        public async Task<IReadOnlyList<MetadataSearchResultV1>> ReadFeedAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, CancellationToken ct)
+        // Without kept lists the titles shown still become Works, so each card opens one.
+        public async Task<IReadOnlyList<ExternalWorkData>> ReadFeedAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, CancellationToken ct)
         {
             var ranking = Ranking(mediaType, subtype, feed);
             var descriptor = new ExternalFeedData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype, feed, 1, null, null);
             var keeps = await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverTitlesAsync(token), ct, mode: SqlAccessMode.ReadOnly);
-            var works = keeps ? await feeds.LoadAsync(context, descriptor, FetchExternalFeedAsync, ct) : await FetchExternalFeedAsync(descriptor, ct);
-            return await MarkKnownAsync(context, [.. works.Select(Catalog)], ct);
+            if (keeps)
+            {
+                return await feeds.LoadAsync(context, descriptor, FetchExternalFeedAsync, ct);
+            }
+
+            return await KeepWorksAsync(context, new ExternalWorkListData(descriptor.Namespace, mediaType, subtype), await FetchExternalFeedAsync(descriptor, ct), ct);
         }
 
         public async Task<IReadOnlyList<ExternalWorkData>> FetchExternalFeedAsync(ExternalFeedData feed, CancellationToken ct)
@@ -268,33 +208,33 @@ namespace Jularr.Backend.Service.Core
             _ => throw new DataValidationException("DiscoverFeedTypeId", "unknown_catalog_value")
         };
 
-        // Every catalog title a search or list showed stays in the catalog, each catalog under its own name.
-        public async Task KeepAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, IReadOnlyList<MetadataSearchResultV1> results, CancellationToken ct)
+        // Every catalog title a search showed is kept as a Work, each catalog under its own name; the titles come back in their order with their Works.
+        public static async Task<IReadOnlyList<ExternalWorkData>> KeepAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, IReadOnlyList<MetadataSearchResultV1> results,
+            CancellationToken ct)
         {
-            if (!await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverTitlesAsync(token), ct, mode: SqlAccessMode.ReadOnly)) return;
+            var kept = new Dictionary<(string Namespace, string Value), ExternalWorkData>();
             foreach (var group in results.GroupBy(result => result.Namespace))
             {
-                var list = new ExternalWorkListData(group.Key, mediaType, subtype);
-                await context.ExecuteBatchAsync((ctx, token) => ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, [.. group.Select(ExternalWork)], false), token), ct);
+                foreach (var work in await KeepWorksAsync(context, new ExternalWorkListData(group.Key, mediaType, subtype), [.. group.Select(ExternalWork)], ct))
+                {
+                    kept[(work.Namespace, work.Value)] = work;
+                }
             }
+
+            return [.. results.Select(result => kept.GetValueOrDefault((result.Namespace, result.ExternalId))).OfType<ExternalWorkData>()];
+        }
+
+        // Titles a provider showed become catalog Works, found again by their identity; each comes back with its Work, an anime season with its series and the season.
+        public static async Task<IReadOnlyList<ExternalWorkData>> KeepWorksAsync(LogicContext context, ExternalWorkListData list, IReadOnlyList<ExternalWorkData> works, CancellationToken ct)
+        {
+            var saved = (await context.ExecuteBatchAsync((ctx, token) => ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, works, false), token), ct))
+                .ToDictionary(work => work.Value, StringComparer.Ordinal);
+            return [.. works.Where(work => saved.ContainsKey(work.Value)).Select(work => new ExternalWorkData(work.Namespace, work.Value, work.Title, work.OriginalTitle, work.ReleaseYear,
+                work.Overview, work.Creator, work.ImageUrl, work.BackdropUrl, work.FetchedAt, work.Rating, saved[work.Value].WorkId, saved[work.Value].SeasonNumber))];
         }
 
         private static ExternalWorkData ExternalWork(MetadataSearchResultV1 result) => new(result.Namespace, result.ExternalId, result.Title, result.OriginalTitle, result.ReleaseYear,
-            result.Overview, result.Author, result.PosterUrl, null, DateTime.MinValue);
-
-        private static MetadataSearchResultV1 Catalog(ExternalWorkData work) => new(work.Namespace, work.Value, work.Title, work.OriginalTitle, work.ReleaseYear, work.Overview, null,
-            work.Creator, work.ImageUrl);
-
-        private static MetadataSearchResultV1 Game(IgdbGame game) => new(GameMetadata.Namespace, game.Id.ToString(CultureInfo.InvariantCulture), game.Name, null,
-            game.Year is >= 1950 and <= 2200 ? game.Year : null, TextLimit.Cut(game.Summary, 4000), null, TextLimit.Cut(string.Join(", ", game.Developers), 4000),
-            game.CoverImageId is { } cover ? IgdbClient.CoverUrl(cover) : null);
-
-        private static MetadataSearchResultV1 Album(MusicBrainzAlbum album) => new(MusicMetadata.Namespace, album.Id, album.Title, null,
-            album.Year is >= 1800 and <= 2200 ? album.Year : null, null, null, album.Artist, MusicBrainzClient.CoverUrl(album.Id));
-
-        private static MetadataSearchResultV1 Book(OpenLibraryWork work) => new(BookMetadata.Namespace, work.WorkId, TextLimit.Cut(work.Title, 500)!, null,
-            work.Year is >= 1800 and <= 2200 ? work.Year : null, TextLimit.Cut(work.Description, 4000), null, TextLimit.Cut(string.Join(", ", work.Authors), 4000),
-            OpenLibraryClient.CoverUrl(work.CoverId));
+            result.Overview, result.Author, result.PosterUrl, null, null);
 
         private static MetadataSearchResultV1 Book(OpenLibraryResult result) => new(BookMetadata.Namespace, result.WorkId, TextLimit.Cut(result.Title, 500)!, null,
             result.Year is >= 1800 and <= 2200 ? result.Year : null, null, null, TextLimit.Cut(string.Join(", ", result.Authors), 4000), OpenLibraryClient.CoverUrl(result.CoverId));
@@ -303,61 +243,56 @@ namespace Jularr.Backend.Service.Core
             TextLimit.Cut(AniListMetadata.Title(result), 500)!, TextLimit.Cut(result.RomajiTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null,
             TextLimit.Cut(result.Description, 4000), null, TextLimit.Cut(string.Join(", ", result.Authors), 4000), result.CoverUrl);
 
-        // Results that already are Works carry their id.
-        private Task<IReadOnlyList<MetadataSearchResultV1>> MarkKnownAsync(LogicContext context, IReadOnlyList<MetadataSearchResultV1> results, CancellationToken ct) =>
-            context.ExecuteBatchAsync((ctx, token) => MarkKnownInBatchAsync(ctx, results, token), ct, mode: SqlAccessMode.ReadOnly);
-
-        private async Task<IReadOnlyList<MetadataSearchResultV1>> MarkKnownInBatchAsync(LogicContext context, IReadOnlyList<MetadataSearchResultV1> results, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    identity."Namespace",
-                    identity."Value",
-                    identity."WorkId",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = identity."WorkId"
-                            AND fact."FactKey" = 'Poster'
-                            AND fact."Value" LIKE '/api/v1/covers/%'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "PosterUrl"
-                FROM
-                    "WorkExternalIdentities" AS identity
-                    JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = identity."Namespace" AND item."Value" = identity."Value"
-                UNION
-                SELECT
-                    identity."Namespace",
-                    identity."Value",
-                    unit."WorkId",
-                    NULL::text
-                FROM
-                    "WorkUnitExternalIdentities" AS identity
-                    JOIN "WorkUnits" AS unit ON unit."Id" = identity."WorkUnitId"
-                    JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = identity."Namespace" AND item."Value" = identity."Value";
-                """;
-            sql.Parameters.Add(new WorkIdentityLookupData(JsonSerializer.Serialize(results.Select(result => new { result.Namespace, Value = result.ExternalId })
-                .Concat(results.Select(result => (Result: result, Series: AnimeSeries(result))).Where(item => item.Series is not null)
-                    .Select(item => new { Namespace = WorkMetadata.Namespace(MediaType.Series), Value = item.Series!.Value.ToString(CultureInfo.InvariantCulture) })))));
-            var known = await context.ReadSql.ReadListAsync<WorkIdentityPosterData>(sql, ct);
-            var works = known.DistinctBy(identity => (identity.Namespace, identity.Value)).ToDictionary(identity => (identity.Namespace, identity.Value), identity => identity.WorkId);
-            var posters = known.Where(identity => identity.PosterUrl is not null).GroupBy(identity => (identity.Namespace, identity.Value)).ToDictionary(group => group.Key, group => group.First().PosterUrl);
-            return [.. results.Select(result => new MetadataSearchResultV1(result.Namespace, result.ExternalId, result.Title, result.OriginalTitle,
-                result.ReleaseYear, result.Overview, works.TryGetValue((result.Namespace, result.ExternalId), out var workId) ? workId
-                    : AnimeSeries(result) is { } series && works.TryGetValue((WorkMetadata.Namespace(MediaType.Series), series.ToString(CultureInfo.InvariantCulture)), out var seriesWork) ? seriesWork : null,
-                result.Author, posters.GetValueOrDefault((result.Namespace, result.ExternalId)) ?? result.PosterUrl))];
-        }
-
-        // The TMDB series an anime entry was already resolved to.
-        private int? AnimeSeries(MetadataSearchResultV1 result) =>
-            result.Namespace == AniListMetadata.Namespace && cache.TryGetValue("metadata.anime.series." + result.ExternalId, out int? series) ? series : null;
+        // Results that already are Works of the library carry their id, a season's through its series; a catalog title nobody opened is imported like a new one.
+        private static Task<IReadOnlyList<MetadataSearchResultV1>> MarkKnownAsync(LogicContext context, IReadOnlyList<MetadataSearchResultV1> results, CancellationToken ct) =>
+            context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        identity."Namespace",
+                        identity."Value",
+                        identity."WorkId",
+                        (
+                            SELECT
+                                fact."Value"
+                            FROM
+                                "WorkMetadataFacts" AS fact
+                            WHERE
+                                fact."WorkId" = identity."WorkId"
+                                AND fact."FactKey" = 'Poster'
+                                AND fact."Value" LIKE '/api/v1/covers/%'
+                            ORDER BY
+                                fact."IsManual" DESC
+                            LIMIT 1
+                        ) AS "PosterUrl"
+                    FROM
+                        "WorkExternalIdentities" AS identity
+                        JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = identity."Namespace" AND item."Value" = identity."Value"
+                        JOIN "Works" AS work ON work."Id" = identity."WorkId"
+                    WHERE
+                        work."DetailedAt" IS NOT NULL
+                        OR EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id")
+                    UNION
+                    SELECT
+                        identity."Namespace",
+                        identity."Value",
+                        unit."WorkId",
+                        NULL::text
+                    FROM
+                        "WorkUnitExternalIdentities" AS identity
+                        JOIN "WorkUnits" AS unit ON unit."Id" = identity."WorkUnitId"
+                        JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = identity."Namespace" AND item."Value" = identity."Value";
+                    """;
+                sql.Parameters.Add(new WorkIdentityLookupData(JsonSerializer.Serialize(results.Select(result => new { result.Namespace, Value = result.ExternalId }))));
+                var known = await ctx.ReadSql.ReadListAsync<WorkIdentityPosterData>(sql, token);
+                var works = known.DistinctBy(identity => (identity.Namespace, identity.Value)).ToDictionary(identity => (identity.Namespace, identity.Value), identity => identity.WorkId);
+                var posters = known.Where(identity => identity.PosterUrl is not null).GroupBy(identity => (identity.Namespace, identity.Value)).ToDictionary(group => group.Key, group => group.First().PosterUrl);
+                return (IReadOnlyList<MetadataSearchResultV1>)[.. results.Select(result => new MetadataSearchResultV1(result.Namespace, result.ExternalId, result.Title, result.OriginalTitle,
+                    result.ReleaseYear, result.Overview, works.TryGetValue((result.Namespace, result.ExternalId), out var workId) ? workId : null, result.Author,
+                    posters.GetValueOrDefault((result.Namespace, result.ExternalId)) ?? result.PosterUrl))];
+            }, ct, mode: SqlAccessMode.ReadOnly);
 
         public async Task<long> ImportAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string? @namespace, string externalId, CancellationToken ct)
         {

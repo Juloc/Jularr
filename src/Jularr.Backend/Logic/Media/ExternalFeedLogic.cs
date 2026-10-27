@@ -37,9 +37,12 @@ namespace Jularr.Backend.Logic.Media
                         identity."Value"
                     FROM
                         "WorkExternalIdentities" AS identity
+                        JOIN "Works" AS work ON work."Id" = identity."WorkId"
                     WHERE
                         identity."Namespace" IN ('tmdb_movie', 'tmdb_tv')
                         AND CASE WHEN identity."Value" ~ '^[1-9][0-9]{0,9}$' THEN identity."Value"::bigint BETWEEN 1 AND 2147483647 ELSE FALSE END
+                        -- Recommendations are prepared for Works with details or a tie to the library, not for every catalog title.
+                        AND (work."DetailedAt" IS NOT NULL OR EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id"))
                 ), localized AS (
                     SELECT
                         candidate."Namespace",
@@ -165,27 +168,58 @@ namespace Jularr.Backend.Logic.Media
                 return null;
             }
 
+            // Each Work under the feed's own identity of it; an anime season under the entry of that season. A Work's own cover comes before the catalog's.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
-                    work."Namespace",
-                    work."Value",
-                    work."Title",
+                    feed."Namespace",
+                    coalesce(season."Value", identity."Value") AS "Value",
+                    work."CanonicalTitle" AS "Title",
                     work."OriginalTitle",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     work."Overview",
                     work."Creator",
-                    work."ImageUrl",
-                    work."BackdropUrl",
+                    coalesce(cover."PosterUrl", work."ImageUrl") AS "ImageUrl",
+                    coalesce(work."BackdropUrl", cover."BackdropUrl") AS "BackdropUrl",
                     work."FetchedAt",
-                    work."Rating"
+                    work."Rating",
+                    work."Id" AS "WorkId",
+                    item."SeasonNumber"::integer AS "SeasonNumber"
                 FROM
                     "ExternalWorkFeeds" AS feed
                     JOIN "ExternalWorkFeedItems" AS item ON item."FeedId" = feed."Id"
-                    JOIN "ExternalWorks" AS work ON work."Id" = item."ExternalWorkId"
+                    JOIN "Works" AS work ON work."Id" = item."WorkId"
+                    LEFT JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = work."Id" AND identity."Namespace" = feed."Namespace"
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            mapped."Value"
+                        FROM
+                            "WorkUnits" AS unit
+                            JOIN "WorkUnitExternalIdentities" AS mapped ON mapped."WorkUnitId" = unit."Id" AND mapped."Namespace" = feed."Namespace"
+                        WHERE
+                            item."SeasonNumber" IS NOT NULL
+                            AND unit."WorkId" = work."Id"
+                            AND unit."WorkUnitTypeId" = 1
+                            AND unit."Number" = item."SeasonNumber"
+                        ORDER BY
+                            mapped."EpisodeOffset",
+                            mapped."Id"
+                        LIMIT 1
+                    ) AS season ON TRUE
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            (array_agg(fact."Value" ORDER BY fact."Value" LIKE '/api/v1/covers/%' DESC, fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Poster'))[1] AS "PosterUrl",
+                            (array_agg(fact."Value" ORDER BY fact."Value" LIKE '/api/v1/covers/%' DESC, fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Backdrop'))[1] AS "BackdropUrl"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" IN ('Poster', 'Backdrop')
+                    ) AS cover ON TRUE
                 WHERE
                     feed."Key" = @Key
+                    AND coalesce(season."Value", identity."Value") IS NOT NULL
                 ORDER BY
                     item."Position";
                 """;
@@ -202,8 +236,8 @@ namespace Jularr.Backend.Logic.Media
             }
 
             var list = new ExternalWorkListData(feed.Namespace, feed.MediaTypeId, feed.MediaSubtypeId);
-            await ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, works, feed.DiscoverFeedTypeId == DiscoverFeedType.Trending && feed.Page == 1 && feed.SourceValue is null), ct);
-            var data = new ExternalFeedUpdateData(feed, works);
+            var saved = await ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, works, feed.DiscoverFeedTypeId == DiscoverFeedType.Trending && feed.Page == 1 && feed.SourceValue is null), ct);
+            var data = new ExternalFeedUpdateData(feed, works, saved);
 
             var upsert = new SqlStatement();
             upsert.Statement =
@@ -257,21 +291,22 @@ namespace Jularr.Backend.Logic.Media
                 INSERT INTO "ExternalWorkFeedItems" (
                     "FeedId",
                     "Position",
-                    "ExternalWorkId"
+                    "WorkId",
+                    "SeasonNumber"
                 )
                 SELECT
                     feed."Id",
-                    entry."Position"::integer,
-                    work."Id"
+                    entry."Position",
+                    entry."WorkId",
+                    entry."SeasonNumber"
                 FROM
                     "ExternalWorkFeeds" AS feed
-                    CROSS JOIN unnest(@Values::varchar[]) WITH ORDINALITY AS entry ("Value", "Position")
-                    JOIN "ExternalWorks" AS work ON work."Namespace" = @Namespace AND work."Value" = entry."Value"
+                    CROSS JOIN jsonb_to_recordset(@Items::jsonb) AS entry ("Position" integer, "WorkId" bigint, "SeasonNumber" smallint)
                 WHERE
                     feed."Key" = @Key;
                 """;
             insert.Parameters.Add(data);
-            if (await ctx.ExecuteAsyncForAffectedRows(insert, ct) != data.Values.Length)
+            if (await ctx.ExecuteAsyncForAffectedRows(insert, ct) != data.Count)
             {
                 throw new InvalidOperationException("The feed contains an unknown provider identity.");
             }

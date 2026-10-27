@@ -186,7 +186,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         public static ExternalWorkData ExternalWork(string @namespace, TmdbSearchResult result) => new(@namespace, result.Id.ToString(CultureInfo.InvariantCulture),
             TextLimit.Cut(result.Title, 500)!, TextLimit.Cut(result.OriginalTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(result.Overview, 4000), null,
-            TmdbClient.PosterUrl(result.PosterPath), TmdbClient.BackdropUrl(result.BackdropPath), DateTime.MinValue,
+            TmdbClient.PosterUrl(result.PosterPath), TmdbClient.BackdropUrl(result.BackdropPath), null,
             result.VoteAverage is > 0 and <= 10 ? Math.Round((decimal)result.VoteAverage.Value, 2) : null);
 
         public async Task<TmdbWork> ReadWorkAsync(TmdbConnection connection, MediaType mediaType, int tmdbId, CancellationToken ct)

@@ -276,21 +276,29 @@ namespace Jularr.Backend.Data.Logic.Media
         public string Values { get; }
     }
 
-    // Viewer state of a provider title that already is a Work.
-    internal sealed class DiscoverOverlayData : BaseData
+    // The Works a Discover list names.
+    internal sealed class DiscoverWorksData : BaseData
     {
-        public DiscoverOverlayData(string value, long workId, MediaStateType mediaStateTypeId, string? plexUrl, string? posterUrl, string? backdropUrl)
+        public DiscoverWorksData(long[] workIds)
         {
-            Value = value;
+            WorkIds = workIds;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Ids))]
+        public long[] WorkIds { get; }
+    }
+
+    // What a Discover card of a Work the profile may see shows of its library state.
+    internal sealed class DiscoverCardStateData : BaseData
+    {
+        public DiscoverCardStateData(long workId, MediaStateType mediaStateTypeId, string? plexUrl, string? posterUrl, string? backdropUrl)
+        {
             WorkId = workId;
             MediaStateTypeId = mediaStateTypeId;
             PlexUrl = plexUrl;
             PosterUrl = posterUrl;
             BackdropUrl = backdropUrl;
         }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
-        public string Value { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }

@@ -97,7 +97,7 @@ namespace Jularr.Backend.Service.System.Media.V1
                     return new UpdateResult(false);
                 }
 
-                var relations = JsonSerializer.Serialize(WorkRelationLogic.AniListTargets(entries, target.ProviderIds));
+                var relations = WorkRelationLogic.AniListTargets(entries, target.ProviderIds);
                 await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 {
                     if (entries.Count > 0)

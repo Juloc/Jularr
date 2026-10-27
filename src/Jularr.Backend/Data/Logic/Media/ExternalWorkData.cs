@@ -7,11 +7,11 @@ using Jularr.Backend.Data.Fields.Provider;
 
 namespace Jularr.Backend.Data.Logic.Media
 {
-    // One provider title as Discover shows it.
+    // One provider title as Discover shows it; read back from the catalog it carries its Work and, for an anime season, the season of that series.
     internal sealed class ExternalWorkData : BaseData
     {
         public ExternalWorkData(string @namespace, string value, string title, string? originalTitle, int? releaseYear, string? overview, string? creator, string? imageUrl,
-            string? backdropUrl, DateTime fetchedAt, decimal? rating = null)
+            string? backdropUrl, DateTime? fetchedAt, decimal? rating = null, long? workId = null, int? seasonNumber = null)
         {
             Rating = rating;
             Namespace = @namespace;
@@ -24,6 +24,8 @@ namespace Jularr.Backend.Data.Logic.Media
             ImageUrl = imageUrl;
             BackdropUrl = backdropUrl;
             FetchedAt = fetchedAt;
+            WorkId = workId;
+            SeasonNumber = seasonNumber;
         }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
@@ -53,12 +55,39 @@ namespace Jularr.Backend.Data.Logic.Media
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.BackdropUrl))]
         public string? BackdropUrl { get; }
 
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.FetchedAt))]
-        public DateTime FetchedAt { get; }
+        // When the catalog's own entry of the title was read; none while only lists named it.
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.FetchedAt), false)]
+        public DateTime? FetchedAt { get; }
 
         // On a scale of ten; null while the catalog has none.
         [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
         public decimal? Rating { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.SeasonNumber), false)]
+        public int? SeasonNumber { get; }
+    }
+
+    // The Work a saved catalog title is; an anime season is its series with the season.
+    internal sealed class ExternalWorkSavedData : BaseData
+    {
+        public ExternalWorkSavedData(string value, long workId, int? seasonNumber)
+        {
+            Value = value;
+            WorkId = workId;
+            SeasonNumber = seasonNumber;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Value))]
+        public string Value { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.SeasonNumber), false)]
+        public int? SeasonNumber { get; }
     }
 
     // A catalog's list of one type: Namespace, type and subtype name it, trending ones are ranked in their order.
@@ -188,7 +217,7 @@ namespace Jularr.Backend.Data.Logic.Media
     internal sealed class ExternalWorkShelfItemData : BaseData
     {
         public ExternalWorkShelfItemData(int shelf, string @namespace, string value, string title, int? releaseYear, string? overview, string? creator, string? imageUrl,
-            string? backdropUrl, decimal? rating, long? workId, MediaStateType? mediaStateTypeId, string? plexUrl)
+            string? backdropUrl, decimal? rating, long workId, MediaStateType? mediaStateTypeId, string? plexUrl)
         {
             Rating = rating;
             Shelf = shelf;
@@ -235,9 +264,10 @@ namespace Jularr.Backend.Data.Logic.Media
         [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
         public decimal? Rating { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
-        public long? WorkId { get; }
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
 
+        // The profile's state of the Work; none while the profile may not see it.
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId), false)]
         public MediaStateType? MediaStateTypeId { get; }
 

@@ -18,11 +18,13 @@ namespace Jularr.E2E.Tests
             await jularr.RunSqlAsync("""
                 UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
                 UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" IN ('tmdb_movie', 'tmdb_tv');
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "ReleasedOn", "ImageUrl", "Popularity", "Rating", "Votes", "TrendingRank") VALUES
-                    ('tmdb_movie', '603', 1, 'The Matrix', '1999-03-31', 'https://127.0.0.1/603.jpg', 80, 8.7, 25000, 1),
-                    ('tmdb_movie', '604', 1, 'The Matrix Reloaded', '2003-05-15', 'https://127.0.0.1/604.jpg', 60, 7.0, 10000, 2),
-                    ('tmdb_tv', '1396', 2, 'Breaking Bad', '2008-01-20', 'https://127.0.0.1/1396.jpg', 90, 9.0, 20000, 1),
-                    ('tmdb_tv', '1399', 2, 'Game of Thrones', '2011-04-17', 'https://127.0.0.1/1399.jpg', 70, 8.4, 30000, 2);
+                INSERT INTO "Works" ("Id", "CatalogNamespace", "MediaTypeId", "CanonicalTitle", "ReleasedOn", "ImageUrl", "Popularity", "Rating", "Votes", "TrendingRank") VALUES
+                    (9603, 'tmdb_movie', 1, 'The Matrix', '1999-03-31', 'https://127.0.0.1/603.jpg', 80, 8.7, 25000, 1),
+                    (9604, 'tmdb_movie', 1, 'The Matrix Reloaded', '2003-05-15', 'https://127.0.0.1/604.jpg', 60, 7.0, 10000, 2),
+                    (9396, 'tmdb_tv', 2, 'Breaking Bad', '2008-01-20', 'https://127.0.0.1/1396.jpg', 90, 9.0, 20000, 1),
+                    (9399, 'tmdb_tv', 2, 'Game of Thrones', '2011-04-17', 'https://127.0.0.1/1399.jpg', 70, 8.4, 30000, 2);
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES
+                    (9603, 'tmdb_movie', '603'), (9604, 'tmdb_movie', '604'), (9396, 'tmdb_tv', '1396'), (9399, 'tmdb_tv', '1399');
                 """);
 
             try

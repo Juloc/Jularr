@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Media;
@@ -110,7 +109,7 @@ namespace Jularr.Backend.Data.User.Discover.V1
     // A title found while typing, in the scope it opens in.
     public sealed class DiscoverSuggestionV1 : BaseResponse
     {
-        public DiscoverSuggestionV1(string scopeSlug, string @namespace, string externalId, string title, int? releaseYear, string? posterUrl, long? workId)
+        public DiscoverSuggestionV1(string scopeSlug, string @namespace, string externalId, string title, int? releaseYear, string? posterUrl, long workId)
         {
             ScopeSlug = scopeSlug;
             Namespace = @namespace;
@@ -139,8 +138,8 @@ namespace Jularr.Backend.Data.User.Discover.V1
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
         public string? PosterUrl { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
-        public long? WorkId { get; }
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
     }
 
     public sealed class SearchDiscoverDataV1 : BaseData
@@ -182,9 +181,11 @@ namespace Jularr.Backend.Data.User.Discover.V1
         public MediaSubtype? MediaSubtypeId { get; }
     }
 
+    // A catalog title as the Work it is; an anime season is its series, opened at that season.
     public sealed class DiscoverCatalogItemV1 : BaseResponse
     {
-        public DiscoverCatalogItemV1(string @namespace, string externalId, string title, int? releaseYear, string? author, long? workId, string? posterUrl, decimal? rating, MediaStateType? mediaStateTypeId)
+        public DiscoverCatalogItemV1(string @namespace, string externalId, string title, int? releaseYear, string? author, long workId, string? posterUrl, decimal? rating, MediaStateType mediaStateTypeId,
+            int? seasonNumber = null)
         {
             PosterUrl = posterUrl;
             Rating = rating;
@@ -195,6 +196,7 @@ namespace Jularr.Backend.Data.User.Discover.V1
             ReleaseYear = releaseYear;
             Author = author;
             WorkId = workId;
+            SeasonNumber = seasonNumber;
         }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
@@ -212,9 +214,8 @@ namespace Jularr.Backend.Data.User.Discover.V1
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Author))]
         public string? Author { get; }
 
-        // Set when the title already is a Work.
-        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
-        public long? WorkId { get; }
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
         public string? PosterUrl { get; }
@@ -223,73 +224,12 @@ namespace Jularr.Backend.Data.User.Discover.V1
         [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
         public decimal? Rating { get; }
 
-        // What the profile can do with the title once it is a Work; null for a title that is none.
-        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId), false)]
-        public MediaStateType? MediaStateTypeId { get; }
-    }
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId))]
+        public MediaStateType MediaStateTypeId { get; }
 
-    public sealed class ReadDiscoverCatalogEntryDataV1 : BaseData
-    {
-        public ReadDiscoverCatalogEntryDataV1(MediaType mediaTypeId, string @namespace, string externalId, MediaSubtype? mediaSubtypeId = null)
-        {
-            MediaTypeId = mediaTypeId;
-            Namespace = @namespace;
-            ExternalId = externalId;
-            MediaSubtypeId = mediaSubtypeId;
-        }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
-        public string Namespace { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
-        public string ExternalId { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
-        public MediaSubtype? MediaSubtypeId { get; }
-    }
-
-    // A catalog title as its catalog shows it; an anime season fills what AniList lacks from its TMDB series.
-    public sealed class DiscoverCatalogEntryV1 : BaseResponse
-    {
-        public DiscoverCatalogEntryV1(string title, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl, string? trailerKey, long? workId)
-        {
-            Title = title;
-            ReleaseYear = releaseYear;
-            Overview = overview;
-            PosterUrl = posterUrl;
-            BackdropUrl = backdropUrl;
-            TrailerKey = trailerKey;
-            WorkId = workId;
-        }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
-        public string Title { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
-        public int? ReleaseYear { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Overview))]
-        public string? Overview { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
-        public string? PosterUrl { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
-        public string? BackdropUrl { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.TrailerKey))]
-        public string? TrailerKey { get; }
-
-        // The Work once it is one; for an anime season its series.
-        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
-        public long? WorkId { get; }
-
-        // Author, artist or developer.
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Author))]
-        public string? Author { get; init; }
+        // The season of the series an anime entry is.
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.SeasonNumber), false)]
+        public int? SeasonNumber { get; }
     }
 
     public sealed class ReadDiscoverCatalogFeedDataV1 : BaseData
@@ -311,62 +251,12 @@ namespace Jularr.Backend.Data.User.Discover.V1
         public MediaSubtype? MediaSubtypeId { get; }
     }
 
-    public sealed class RequestDiscoverCatalogDataV1 : BaseData
-    {
-        public RequestDiscoverCatalogDataV1(MediaType mediaTypeId, string @namespace, string externalId, long uiLocaleId, MediaSubtype? mediaSubtypeId = null)
-        {
-            MediaTypeId = mediaTypeId;
-            Namespace = @namespace;
-            ExternalId = externalId;
-            UiLocaleId = uiLocaleId;
-            MediaSubtypeId = mediaSubtypeId;
-        }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
-        public string Namespace { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
-        public string ExternalId { get; }
-
-        [DataField(typeof(Fields.Localization.UiLocaleFields), nameof(Fields.Localization.UiLocaleFields.Id))]
-        public long UiLocaleId { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
-        public MediaSubtype? MediaSubtypeId { get; }
-    }
-
-    public sealed class DiscoverItemParametersV1 : BaseParameters
-    {
-        public DiscoverItemParametersV1(MediaType mediaTypeId, int tmdbId)
-        {
-            MediaTypeId = mediaTypeId;
-            TmdbId = tmdbId;
-        }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.TmdbId))]
-        public int TmdbId { get; }
-    }
-
+    // A film or series of a list as the Work it is.
     public sealed class DiscoverItemV1 : BaseResponse
     {
-        // A title of a list: the lists carry no trailer.
-        public DiscoverItemV1(MediaType mediaTypeId, int? tmdbId, long? workId, string title, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
+        public DiscoverItemV1(MediaType mediaTypeId, int? tmdbId, long workId, string title, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
             MediaStateType mediaStateTypeId, string? plexUrl, decimal? rating)
-            : this(mediaTypeId, tmdbId, workId, title, releaseYear, overview, posterUrl, backdropUrl, mediaStateTypeId, plexUrl, rating, null)
         {
-        }
-
-        [JsonConstructor]
-        public DiscoverItemV1(MediaType mediaTypeId, int? tmdbId, long? workId, string title, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
-            MediaStateType mediaStateTypeId, string? plexUrl, decimal? rating, string? trailerKey)
-        {
-            TrailerKey = trailerKey;
             Rating = rating;
             MediaTypeId = mediaTypeId;
             TmdbId = tmdbId;
@@ -386,8 +276,8 @@ namespace Jularr.Backend.Data.User.Discover.V1
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.TmdbId), false)]
         public int? TmdbId { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
-        public long? WorkId { get; }
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string Title { get; }
@@ -414,53 +304,6 @@ namespace Jularr.Backend.Data.User.Discover.V1
         // The catalog's rating on a scale of ten; null while it has none.
         [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
         public decimal? Rating { get; }
-
-        // The YouTube key of the title's trailer, where the provider names one (a single title read, not the lists).
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.TrailerKey), false)]
-        public string? TrailerKey { get; }
-    }
-
-    public sealed class ReadDiscoverPreviewParametersV1 : BaseParameters
-    {
-        public ReadDiscoverPreviewParametersV1(string @namespace, string externalId)
-        {
-            Namespace = @namespace;
-            ExternalId = externalId;
-        }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
-        public string Namespace { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
-        public string ExternalId { get; }
-    }
-
-    // What the local catalog keeps of a title for the description of a card's hover preview.
-    public sealed class DiscoverPreviewV1 : BaseResponse
-    {
-        public DiscoverPreviewV1(string title, string? overview, string? posterUrl, string? backdropUrl, int? releaseYear = null)
-        {
-            ReleaseYear = releaseYear;
-            Title = title;
-            Overview = overview;
-            PosterUrl = posterUrl;
-            BackdropUrl = backdropUrl;
-        }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
-        public string Title { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Overview))]
-        public string? Overview { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
-        public string? PosterUrl { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
-        public string? BackdropUrl { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
-        public int? ReleaseYear { get; }
     }
 
     public sealed class ReadContinueParametersV1 : BaseParameters

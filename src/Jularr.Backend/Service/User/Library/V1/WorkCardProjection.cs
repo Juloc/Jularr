@@ -7,20 +7,15 @@ namespace Jularr.Backend.Service.User.Library.V1
     // A query aliases "visible" (the profile's Work) and "work" (the Work itself).
     internal static class WorkCardProjection
     {
+        // The rating of the catalog the title came from; needs only the Work's id as "work"."Id".
         public const string Rating =
             """
-                -- The rating of the catalog entry the title came from; the best known one when several exist.
                 SELECT
-                    catalogEntry."Rating"
+                    rated."Rating"
                 FROM
-                    "WorkExternalIdentities" AS identity
-                    JOIN "ExternalWorks" AS catalogEntry ON catalogEntry."Namespace" = identity."Namespace" AND catalogEntry."Value" = identity."Value"
+                    "Works" AS rated
                 WHERE
-                    identity."WorkId" = work."Id"
-                    AND catalogEntry."Rating" IS NOT NULL
-                ORDER BY
-                    catalogEntry."Votes" DESC NULLS LAST
-                LIMIT 1
+                    rated."Id" = work."Id"
             """;
 
         // The columns every card carries.
@@ -31,8 +26,8 @@ namespace Jularr.Backend.Service.User.Library.V1
             visible."MediaSubtypeId",
             visible."Title" AS "Title",
             work."ReleaseYear"::integer AS "ReleaseYear",
-            ({{Rating}}) AS "Rating",
-            (
+            work."Rating",
+            coalesce((
                 SELECT
                     fact."Value"
                 FROM
@@ -43,7 +38,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                 ORDER BY
                     fact."IsManual" DESC
                 LIMIT 1
-            ) AS "PosterUrl",
+            ), work."ImageUrl") AS "PosterUrl",
             profileState."MediaStateTypeId",
             acquisition."AvailabilityStateId",
             availability."AvailableUnits",

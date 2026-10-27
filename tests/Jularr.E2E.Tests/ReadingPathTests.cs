@@ -694,8 +694,8 @@ namespace Jularr.E2E.Tests
 
                 // The novel is added from Open Library on the Works page; the manga and the light novel are found on Discover in AniList.
                 await Steps.ImportAndRequestAsync(page, "Book", null, FakeServices.BookTitle);
-                await Steps.RequestFromCatalogAsync(page, "manga", FakeServices.MangaTitle, "anilist");
-                await Steps.RequestFromCatalogAsync(page, "lightnovels", FakeServices.NovelTitle, "anilist");
+                await Steps.RequestFromCatalogAsync(page, "manga", FakeServices.MangaTitle);
+                await Steps.RequestFromCatalogAsync(page, "lightnovels", FakeServices.NovelTitle);
 
                 // Each search finds its release, offered just before; the chosen one is downloaded.
                 fakes.Offer(book);

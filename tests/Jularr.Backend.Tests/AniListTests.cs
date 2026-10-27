@@ -52,9 +52,10 @@ namespace Jularr.Backend.Tests
             var aniList = new FakeAniList();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, services: services => services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList));
 
-            // An anime series with two seasons, a second one with two candidates and a Manga without any.
+            // An anime series with two seasons, a second one with two candidates and a Manga without any, all with their details.
             await host.Fixture.RunSqlAsync("""
-                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear") VALUES (10, 2, 1, 'Example Quest', 2019), (20, 2, 1, 'Twin Title', 2020), (30, 3, 2, 'Nowhere Manga', 2001);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "DetailedAt") VALUES
+                    (10, 2, 1, 'Example Quest', 2019, now()), (20, 2, 1, 'Twin Title', 2020, now()), (30, 3, 2, 'Nowhere Manga', 2001, now());
                 INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (100, 10, 1, 1), (200, 10, 1, 2), (300, 20, 1, 1);
                 INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") SELECT 20, 300, 2, n FROM generate_series(1, 12) AS n;
                 INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") SELECT 10, 100, 2, n FROM generate_series(1, 12) AS n;

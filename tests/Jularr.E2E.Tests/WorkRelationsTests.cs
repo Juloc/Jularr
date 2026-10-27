@@ -6,11 +6,11 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class WorkRelationsTests
     {
-        // A Work with a sequel in the library and an adaptation that is only a catalog title: the first row opens its Work, the second its Discover page and says it is not in the library.
+        // A Work with a sequel in the library and an adaptation that is only a catalog title: both rows open their Work, the second says it is not in the library and offers the request.
         // The Owner adds and removes a relation without the page reloading; the other Work shows the inverse.
         [TestMethod]
         [Timeout(300_000)]
-        public async Task Relations_WorkRowAndDiscoverRow_AddRemoveAndInverse_WorkOnTheTitlesPage()
+        public async Task Relations_LibraryRowAndCatalogRow_AddRemoveAndInverse_WorkOnTheTitlesPage()
         {
             await using var jularr = await JularrInstance.StartAsync();
             await using var session = await BrowserSession.StartAsync(jularr);
@@ -18,15 +18,16 @@ namespace Jularr.E2E.Tests
             await Owner.SetUpAndSignInAsync(page);
 
             await jularr.RunSqlAsync("""
-                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (8001, 1, 'Source Film', 2001), (8002, 1, 'Linked Sequel', 2004);
-                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear", "ImageUrl") VALUES
-                    (8101, 'tmdb_movie', '555', 1, 'Outside Remake', 2020, NULL),
-                    (8102, 'tmdb_movie', '556', 1, 'Third Film', 2010, 'https://image.tmdb.org/t/p/w342/third.jpg'),
-                    (8103, 'tmdb_movie', '557', 1, 'Linked Sequel', 2004, 'https://image.tmdb.org/t/p/w342/linked.jpg');
-                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (8002, 'tmdb_movie', '557');
-                INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "ExternalWorkId", "WorkRelationTypeId", "SourceKey") VALUES
-                    (8001, 8002, NULL, 1, 'tmdb'),
-                    (8001, NULL, 8101, 8, 'anilist');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "ImageUrl", "CatalogNamespace") VALUES
+                    (8001, 1, 'Source Film', 2001, NULL, NULL),
+                    (8002, 1, 'Linked Sequel', 2004, 'https://image.tmdb.org/t/p/w342/linked.jpg', 'tmdb_movie'),
+                    (8101, 1, 'Outside Remake', 2020, NULL, 'tmdb_movie'),
+                    (8102, 1, 'Third Film', 2010, 'https://image.tmdb.org/t/p/w342/third.jpg', 'tmdb_movie');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (8002, 'tmdb_movie', '557'), (8101, 'tmdb_movie', '555'), (8102, 'tmdb_movie', '556');
+                INSERT INTO "WantedItems" ("WorkId", "IsPaused") VALUES (8002, TRUE);
+                INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey") VALUES
+                    (8001, 8002, 1, 'tmdb'),
+                    (8001, 8101, 8, 'anilist');
                 """);
 
             // The Overview previews the block; its own tab lists both rows with the relation, its type and what the library has.
@@ -43,7 +44,7 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(catalog.Locator(".state-chip").First).ToContainTextAsync("Alternative version");
             await Assertions.Expect(catalog.Locator(".state-chip").First).ToHaveAttributeAsync("title", "Source: AniList");
             await Assertions.Expect(catalog.Locator(".state-chip", new() { HasText = "Not in library" }).First).ToBeVisibleAsync();
-            await Assertions.Expect(catalog.Locator(".relation__title")).ToHaveAttributeAsync("href", "/Discover/movies/555");
+            await Assertions.Expect(catalog.Locator(".relation__title")).ToHaveAttributeAsync("href", "/Details/8101");
             await Assertions.Expect(catalog.GetByRole(AriaRole.Button, new() { Name = "Request", Exact = true })).ToBeVisibleAsync();
             await Assertions.Expect(work.GetByRole(AriaRole.Button, new() { Name = "Request", Exact = true })).ToHaveCountAsync(0);
             await Evidence.SaveAsync(page, "relations-list");
@@ -115,7 +116,7 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(page.Locator(".relation-list .relation__title")).ToHaveAttributeAsync("href", "/Details/8002");
         }
 
-        // A related title that is no Work is requested from its row: the same request as Discover's, the page stays (no navigation), a hint says so and the row now leads to the Work.
+        // A related catalog title is requested from its row with the Work's normal request: the page stays (no navigation), a hint says so and the row shows the Work's state.
         // Without the Requests module the row has no button.
         [TestMethod]
         [Timeout(300_000)]
@@ -137,9 +138,9 @@ namespace Jularr.E2E.Tests
             await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Movies", "Movie"));
 
             await jularr.RunSqlAsync("""
-                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (8201, 1, 'Source Film', 2001);
-                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear") VALUES (8301, 'tmdb_movie', '10378', 1, 'Big Buck Bunny', 2008);
-                INSERT INTO "WorkRelations" ("WorkId", "ExternalWorkId", "WorkRelationTypeId", "SourceKey") VALUES (8201, 8301, 1, 'tmdb');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (8201, 1, 'Source Film', 2001, NULL), (8301, 1, 'Big Buck Bunny', 2008, 'tmdb_movie');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (8301, 'tmdb_movie', '10378');
+                INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey") VALUES (8201, 8301, 1, 'tmdb');
                 """);
             await page.GotoAsync("/Details/8201?tab=related");
             await page.EvaluateAsync("window.__kept = 'same page'");
@@ -153,18 +154,19 @@ namespace Jularr.E2E.Tests
             // The row swaps in place: no button, the title opens the new Work, and the quiet hint confirms it.
             await Assertions.Expect(page.Locator("[data-action-toast] .action-toast__text")).ToHaveTextAsync("Requested");
             await Assertions.Expect(row.GetByRole(AriaRole.Button, new() { Name = "Request", Exact = true })).ToHaveCountAsync(0);
-            await Assertions.Expect(row.Locator(".relation__title")).ToHaveAttributeAsync("href", new Regex("^/Details/\\d+$"));
+            await Assertions.Expect(row.Locator(".relation__title")).ToHaveAttributeAsync("href", "/Details/8301");
             await Assertions.Expect(row.Locator(".state-chip", new() { HasText = "Not in library" })).ToHaveCountAsync(0);
             Assert.AreEqual(url, page.Url);
             Assert.AreEqual("same page", await page.EvaluateAsync<string>("window.__kept"));
-            Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+            Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"WorkId\" = 8301"));
             Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_movie' AND \"Value\" = '10378'"));
             await Evidence.SaveAsync(page, "relation-request-after");
 
             // Requests switched off: the row offers nothing to request.
             await jularr.RunSqlAsync("""
-                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear") VALUES (8302, 'tmdb_movie', '556', 1, 'Third Film', 2010);
-                INSERT INTO "WorkRelations" ("WorkId", "ExternalWorkId", "WorkRelationTypeId", "SourceKey") VALUES (8201, 8302, 3, 'tmdb');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (8302, 1, 'Third Film', 2010, 'tmdb_movie');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (8302, 'tmdb_movie', '556');
+                INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey") VALUES (8201, 8302, 3, 'tmdb');
                 """);
             await page.GotoAsync("/Details/8201?tab=related");
             await Assertions.Expect(page.Locator(".relation-list .list-row").Filter(new() { HasText = "Third Film" }).GetByRole(AriaRole.Button, new() { Name = "Request", Exact = true })).ToBeVisibleAsync();

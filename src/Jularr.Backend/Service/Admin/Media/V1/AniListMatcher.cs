@@ -144,6 +144,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                             identity."WorkId" = work."Id"
                             AND identity."Namespace" = 'anilist'
                     )
+                    AND (work."DetailedAt" IS NOT NULL OR EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id"))
                 ORDER BY
                     match."CheckedAt" NULLS FIRST,
                     work."Id"

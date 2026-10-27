@@ -1,8 +1,11 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text;
+using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.System.Media.V1;
+using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Media.V1;
 using Jularr.Integrations.Logic.Tmdb;
@@ -23,7 +26,7 @@ namespace Jularr.Backend.Tests
                 WITH work AS (
                     INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (1, 'The Matrix', 1999) RETURNING "Id"
                 )
-                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "Id", 'tmdb_movie', '603' FROM work;
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "Id", namespace, value FROM work, (VALUES ('tmdb_movie', '603'), ('plex', '11')) AS id (namespace, value);
                 """);
 
             var more = await FillAsync(host);
@@ -47,7 +50,7 @@ namespace Jularr.Backend.Tests
                 WITH work AS (
                     INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (1, 'The Matrix', 1999) RETURNING "Id"
                 )
-                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "Id", 'imdb', 'tt0133093' FROM work;
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "Id", namespace, value FROM work, (VALUES ('imdb', 'tt0133093'), ('plex', '11')) AS id (namespace, value);
                 """);
 
             await FillAsync(host);
@@ -66,6 +69,34 @@ namespace Jularr.Backend.Tests
 
             Assert.IsFalse((await FillAsync(host)).Success);
             Assert.AreEqual(0, catalog.Requests);
+        }
+
+        [TestMethod]
+        public async Task CatalogTitle_NobodyOpened_StaysOutOfTheLibraryAndIsNotFilled()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var catalog = new FakeCatalog();
+            await using var host = await CreateHostAsync(storage.Path, catalog);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "ReleaseYear", "Overview", "ImageUrl", "CatalogNamespace")
+                    VALUES (1, 'The Matrix', 1999, 'A hacker learns the truth.', 'https://image.tmdb.org/t/p/w500/poster.jpg', 'tmdb_movie') RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "Id", 'tmdb_movie', '603' FROM work;
+                """);
+
+            // The library lists what the profile has or asked for; a catalog title without either is none of it.
+            foreach (var filter in new[] { "", "?availabilityTypeIds=MyRequests", "?availabilityTypeIds=Available&availabilityTypeIds=MyRequests&availabilityTypeIds=OtherRequests" })
+            {
+                using var library = await host.SendAsync(HttpMethod.Get, "/api/v1/library" + filter);
+                Assert.AreEqual(HttpStatusCode.OK, library.StatusCode, await library.Content.ReadAsStringAsync());
+                Assert.AreEqual(0, (await library.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items.Count, filter);
+            }
+
+            // The fill job asks no provider for it.
+            Assert.IsFalse((await FillAsync(host)).Success);
+            Assert.AreEqual(0, catalog.Requests);
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WorkMetadataFacts" """));
         }
 
         [TestMethod]

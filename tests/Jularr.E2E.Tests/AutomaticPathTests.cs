@@ -187,7 +187,7 @@ namespace Jularr.E2E.Tests
                 // The user asks for both; the Owner approves them; nobody searches by hand.
                 fakes.Offer(english, german, opening, ending);
                 await Steps.RequestAsync(user, "Bunny", FakeServices.MovieTitle);
-                await Steps.RequestFromCatalogAsync(user, "anime", FakeServices.AnimeTitle, "anilist");
+                await Steps.RequestFromCatalogAsync(user, "anime", FakeServices.AnimeTitle);
                 await ApproveAsync(page, FakeServices.MovieTitle);
                 await ApproveAsync(page, FakeServices.AnimeTitle);
                 await WaitForGrabsAsync(fakes, german, opening, ending);
@@ -255,7 +255,7 @@ namespace Jularr.E2E.Tests
 
                 // The user asks for the novel; once approved, nobody searches by hand.
                 fakes.Offer(pdf);
-                await Steps.RequestFromCatalogAsync(user, "books", FakeServices.BookTitle, "openlibrary");
+                await Steps.RequestFromCatalogAsync(user, "books", FakeServices.BookTitle);
                 await ApproveAsync(page, FakeServices.BookTitle);
                 await WaitForGrabsAsync(fakes, pdf);
 

@@ -38,10 +38,10 @@ namespace Jularr.Frontend.Framework
             return item.ProgressStateId == ProgressStateType.InProgress ? card.Progress(item.ProgressPercent) : card;
         }
 
-        // A title a catalog or TMDB found; one the profile already holds shows what its state says.
+        // A title TMDB found, as the Work it is; one the profile already holds shows what its state says.
         public static MediaCard For(FrontendAssets assets, DiscoverItemV1 item, string href) =>
             new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, MediaTypeLabel.Key(item.MediaTypeId, null), item.Rating).State(item.MediaStateTypeId)
-                .HoverPreview(item.WorkId is { } workId ? MediaPreviewAddress.Work(workId) : item.TmdbId is { } tmdbId ? MediaPreviewAddress.Tmdb(item.MediaTypeId, tmdbId) : null);
+                .HoverPreview(MediaPreviewAddress.Work(item.WorkId));
 
         // The year, the type and the rating; whatever is unknown is left out.
         public MediaCard Facts(int? year, string? typeKey, decimal? rating)

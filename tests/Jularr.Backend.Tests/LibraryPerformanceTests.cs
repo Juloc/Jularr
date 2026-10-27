@@ -215,20 +215,36 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('DiscoverCache', TRUE), ('LocalDiscovery', TRUE)
                     ON CONFLICT ("Key") DO UPDATE SET "IsEnabled" = TRUE;
                 INSERT INTO "ExternalWorkSyncs" ("Namespace", "RequestsPerMinute") VALUES ('openlibrary', 20);
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear", "ReleasedOn", "ImageUrl", "Rating", "Votes", "TrendingRank", "Popularity")
-                SELECT 'tmdb_movie', n::text, 1, 'Catalog ' || lpad(n::text, 5, '0'), 2026,
-                    current_date + (n % 100) - 50, 'https://image.tmdb.org/t/p/w500/' || n || '.jpg',
-                    (n % 100) / 10.0, 1000 + (n % 10000), {(cachedOnly ? "CASE WHEN n <= 20 THEN n END" : "n")}, n % 1000
-                FROM generate_series(1, 50000) n;
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "MediaSubtypeId", "Title", "ReleaseYear", "ReleasedOn", "ImageUrl", "Rating", "Votes", "TrendingRank", "Popularity")
-                SELECT 'anilist', "Value", 2, 1, "Title", "ReleaseYear", "ReleasedOn", "ImageUrl", "Rating", "Votes", "TrendingRank", "Popularity" FROM "ExternalWorks" WHERE "Namespace" = 'tmdb_movie';
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "ImageUrl", "TrendingRank")
-                SELECT 'openlibrary', n::text, 3, 'Book ' || n, 'https://covers.openlibrary.org/b/id/' || n || '.jpg', {(cachedOnly ? "CASE WHEN n <= 20 THEN n END" : "n")} FROM generate_series(1, 10000) n;
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
                 SELECT "Id", 'tmdb_movie', "Id"::text FROM "Works" WHERE "MediaTypeId" = 1;
                 UPDATE "Works" SET "MediaSubtypeId" = 1 WHERE "MediaTypeId" = 2;
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "Id", 'anilist', ("Id" - 300)::text FROM "Works" WHERE "MediaTypeId" = 2;
                 UPDATE "StoredFiles" f SET "MissingSince" = NULL FROM "MediaAssets" a WHERE a."Id" = f."MediaAssetId" AND a."WorkId" = 1;
+                SELECT setval(pg_get_serial_sequence('"Works"', 'Id'), (SELECT max("Id") FROM "Works"));
+                -- The catalogs as catalog Works: a library title is its own catalog entry, the others are minimal Works.
+                CREATE TEMPORARY TABLE "CatalogSeed" AS
+                SELECT 'tmdb_movie'::varchar(16) AS "Namespace", n::text AS "Value", 1::smallint AS "MediaTypeId", NULL::smallint AS "MediaSubtypeId", 'Catalog ' || lpad(n::text, 5, '0') AS "Title",
+                    2026::smallint AS "ReleaseYear", current_date + (n % 100) - 50 AS "ReleasedOn", 'https://image.tmdb.org/t/p/w500/' || n || '.jpg' AS "ImageUrl",
+                    (n % 100) / 10.0 AS "Rating", 1000 + (n % 10000) AS "Votes", {(cachedOnly ? "CASE WHEN n <= 20 THEN n END" : "n")} AS "TrendingRank", (n % 1000)::real AS "Popularity"
+                FROM generate_series(1, 50000) n;
+                INSERT INTO "CatalogSeed"
+                SELECT 'anilist', "Value", 2, 1, "Title", "ReleaseYear", "ReleasedOn", "ImageUrl", "Rating", "Votes", "TrendingRank", "Popularity" FROM "CatalogSeed" WHERE "Namespace" = 'tmdb_movie';
+                INSERT INTO "CatalogSeed" ("Namespace", "Value", "MediaTypeId", "Title", "ImageUrl", "TrendingRank")
+                SELECT 'openlibrary', n::text, 3, 'Book ' || n, 'https://covers.openlibrary.org/b/id/' || n || '.jpg', {(cachedOnly ? "CASE WHEN n <= 20 THEN n END" : "n")} FROM generate_series(1, 10000) n;
+                UPDATE "Works" AS work
+                SET "CatalogNamespace" = seed."Namespace", "ReleasedOn" = seed."ReleasedOn", "ImageUrl" = seed."ImageUrl", "Rating" = seed."Rating", "Votes" = seed."Votes",
+                    "TrendingRank" = seed."TrendingRank", "Popularity" = seed."Popularity", "FetchedAt" = now()
+                FROM "CatalogSeed" AS seed
+                    JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = seed."Namespace" AND identity."Value" = seed."Value"
+                WHERE work."Id" = identity."WorkId";
+                ALTER TABLE "CatalogSeed" ADD COLUMN "WorkId" bigint;
+                UPDATE "CatalogSeed" AS seed SET "WorkId" = nextval(pg_get_serial_sequence('"Works"', 'Id'))
+                WHERE NOT EXISTS (SELECT 1 FROM "WorkExternalIdentities" AS identity WHERE identity."Namespace" = seed."Namespace" AND identity."Value" = seed."Value");
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "ReleasedOn", "ImageUrl", "Rating", "Votes", "TrendingRank", "Popularity", "CatalogNamespace", "FetchedAt")
+                SELECT "WorkId", "MediaTypeId", "MediaSubtypeId", "Title", "ReleaseYear", "ReleasedOn", "ImageUrl", "Rating", "Votes", "TrendingRank", "Popularity", "Namespace", now()
+                FROM "CatalogSeed" WHERE "WorkId" IS NOT NULL;
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "WorkId", "Namespace", "Value" FROM "CatalogSeed" WHERE "WorkId" IS NOT NULL;
+                DROP TABLE "CatalogSeed";
                 """);
             // Publish the catalog through its canonical completion owner, including its one-time statistics preparation.
             if (!cachedOnly)
@@ -249,7 +265,7 @@ namespace Jularr.Backend.Tests
                 {
                     var results = Enumerable.Range(1, 20).Select(n => new ExternalWorkData("anilist", n.ToString(System.Globalization.CultureInfo.InvariantCulture),
                         "Catalog " + n.ToString("D5", System.Globalization.CultureInfo.InvariantCulture), null, 2026, null, null,
-                        "https://image.tmdb.org/t/p/w500/" + n + ".jpg", null, DateTime.MinValue)).ToArray();
+                        "https://image.tmdb.org/t/p/w500/" + n + ".jpg", null, null)).ToArray();
                     await new LogicContext(write).SaveExternalFeedAsync(new ExternalFeedData("anilist", MediaType.Series, MediaSubtype.Anime, feed, 1, null, null), results, default);
                 }
                 await write.CommitAsync();

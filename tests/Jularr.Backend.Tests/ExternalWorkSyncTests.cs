@@ -48,32 +48,34 @@ namespace Jularr.Backend.Tests
 
             // The id list adds titles without adult ones and video extras; entries are read and gone ones leave.
             await RunAsync(host);
-            Assert.AreEqual("Matrix", await host.ScalarAsync("SELECT \"Title\" FROM \"ExternalWorks\" WHERE \"Namespace\" = 'tmdb_movie' AND \"Value\" = '603'"));
-            Assert.AreEqual("tt0133093", await host.ScalarAsync("SELECT \"ImdbId\" FROM \"ExternalWorks\" WHERE \"Value\" = '603'"));
-            Assert.AreEqual(8.2m, await host.ScalarAsync("SELECT \"Rating\" FROM \"ExternalWorks\" WHERE \"Value\" = '603'"));
-            Assert.AreEqual(1999, await host.ScalarAsync("SELECT \"ReleaseYear\"::integer FROM \"ExternalWorks\" WHERE \"Value\" = '603'"));
-            Assert.AreEqual("https://image.tmdb.org/t/p/w500/matrix.jpg", await host.ScalarAsync("SELECT \"ImageUrl\" FROM \"ExternalWorks\" WHERE \"Value\" = '603'"));
-            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"Rating\" FROM \"ExternalWorks\" WHERE \"Value\" = '604'"));
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorks\" WHERE \"Value\" IN ('9', '10', '999')"));
-            Assert.AreEqual("tt0944947", await host.ScalarAsync("SELECT \"ImdbId\" FROM \"ExternalWorks\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"));
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorks\" WHERE \"DetailedAt\" IS NULL"));
+            Assert.AreEqual("Matrix", await host.ScalarAsync(Catalog("tmdb_movie", "603", "\"CanonicalTitle\"")));
+            Assert.AreEqual("tt0133093", await host.ScalarAsync(Catalog("tmdb_movie", "603", "(SELECT imdb.\"Value\" FROM \"WorkExternalIdentities\" AS imdb WHERE imdb.\"WorkId\" = work.\"Id\" AND imdb.\"Namespace\" = 'imdb')")));
+            Assert.AreEqual(8.2m, await host.ScalarAsync(Catalog("tmdb_movie", "603", "\"Rating\"")));
+            Assert.AreEqual(1999, await host.ScalarAsync(Catalog("tmdb_movie", "603", "\"ReleaseYear\"::integer")));
+            Assert.AreEqual("https://image.tmdb.org/t/p/w500/matrix.jpg", await host.ScalarAsync(Catalog("tmdb_movie", "603", "\"ImageUrl\"")));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync(Catalog("tmdb_movie", "604", "\"Rating\"")));
+            Assert.AreEqual(true, await host.ScalarAsync(Catalog("tmdb_movie", "604", "\"CatalogNamespace\" = 'tmdb_movie' AND \"DetailedAt\" IS NULL")),
+                "A catalog title is a minimal Work without details.");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Value\" IN ('9', '10', '999')"));
+            Assert.AreEqual("tt0944947", await host.ScalarAsync(Catalog("tmdb_tv", "1399", "(SELECT imdb.\"Value\" FROM \"WorkExternalIdentities\" AS imdb WHERE imdb.\"WorkId\" = work.\"Id\" AND imdb.\"Namespace\" = 'imdb')")));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CatalogNamespace\" IS NOT NULL AND \"FetchedAt\" IS NULL"));
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncs\" WHERE \"ListedOn\" = '2026-10-19'"));
             // The following pass finds no pending details and publishes the complete catalogs.
             await RunAsync(host);
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncs\" WHERE \"CompletedAt\" IS NOT NULL"));
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM pg_stats WHERE schemaname = current_schema() AND tablename = 'ExternalWorks' AND attname = 'TrendingRank'"),
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM pg_stats WHERE schemaname = current_schema() AND tablename = 'Works' AND attname = 'TrendingRank'"),
                 "Completing the initial catalog must prepare its ranking statistics before local discovery uses it.");
             Assert.IsFalse(tmdb.Requests.Any(request => request.AbsolutePath.EndsWith("/changes", StringComparison.Ordinal)), "The first pass reads everything anyway.");
 
             // The same day the list is not read again; six hours later the changed entries are read again.
             var listed = tmdb.Requests.Count(request => request.Host == "files.tmdb.org");
             time.Now = time.Now.AddHours(7);
-            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorks\" SET \"Title\" = 'Stale' WHERE \"Value\" IN ('603', '604')");
+            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"CanonicalTitle\" = 'Stale' WHERE \"Id\" IN (SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_movie' AND \"Value\" IN ('603', '604'))");
             await RunAsync(host);
             Assert.AreEqual(listed, tmdb.Requests.Count(request => request.Host == "files.tmdb.org"));
             Assert.IsTrue(tmdb.Requests.Any(request => request.AbsolutePath == "/3/movie/changes" && request.Query.Contains("start_date=2026-10-19", StringComparison.Ordinal)));
-            Assert.AreEqual("Matrix", await host.ScalarAsync("SELECT \"Title\" FROM \"ExternalWorks\" WHERE \"Value\" = '603'"));
-            Assert.AreEqual("Stale", await host.ScalarAsync("SELECT \"Title\" FROM \"ExternalWorks\" WHERE \"Value\" = '604'"));
+            Assert.AreEqual("Matrix", await host.ScalarAsync(Catalog("tmdb_movie", "603", "\"CanonicalTitle\"")));
+            Assert.AreEqual("Stale", await host.ScalarAsync(Catalog("tmdb_movie", "604", "\"CanonicalTitle\"")));
         }
 
         [TestMethod]
@@ -98,13 +100,13 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"PausesWhileUsed\" = FALSE WHERE \"Namespace\" = 'anilist'");
             await RunAsync(host);
             CollectionAssert.AreEqual(new[] { 0, 3 }, aniList.Pages.ToArray());
-            Assert.AreEqual("2:1", await host.ScalarAsync("SELECT \"MediaTypeId\" || ':' || \"MediaSubtypeId\" FROM \"ExternalWorks\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '1'"));
-            Assert.AreEqual(8.4m, await host.ScalarAsync("SELECT \"Rating\" FROM \"ExternalWorks\" WHERE \"Value\" = '1'"));
-            Assert.AreEqual("Frieren", await host.ScalarAsync("SELECT \"Title\" FROM \"ExternalWorks\" WHERE \"Value\" = '1'"));
-            Assert.AreEqual("2023-09-29", await host.ScalarAsync("SELECT \"ReleasedOn\"::text FROM \"ExternalWorks\" WHERE \"Value\" = '1'"));
-            Assert.AreEqual("3:3", await host.ScalarAsync("SELECT \"MediaTypeId\" || ':' || \"MediaSubtypeId\" FROM \"ExternalWorks\" WHERE \"Value\" = '3'"));
-            Assert.AreEqual("3:2", await host.ScalarAsync("SELECT \"MediaTypeId\" || ':' || \"MediaSubtypeId\" FROM \"ExternalWorks\" WHERE \"Value\" = '5'"));
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorks\" WHERE \"Value\" = '2'"), "A music video is no Discover title.");
+            Assert.AreEqual("2:1", await host.ScalarAsync(Catalog("anilist", "1", "\"MediaTypeId\" || ':' || \"MediaSubtypeId\"")));
+            Assert.AreEqual(8.4m, await host.ScalarAsync(Catalog("anilist", "1", "\"Rating\"")));
+            Assert.AreEqual("Frieren", await host.ScalarAsync(Catalog("anilist", "1", "\"CanonicalTitle\"")));
+            Assert.AreEqual("2023-09-29", await host.ScalarAsync(Catalog("anilist", "1", "\"ReleasedOn\"::text")));
+            Assert.AreEqual("3:3", await host.ScalarAsync(Catalog("anilist", "3", "\"MediaTypeId\" || ':' || \"MediaSubtypeId\"")));
+            Assert.AreEqual("3:2", await host.ScalarAsync(Catalog("anilist", "5", "\"MediaTypeId\" || ':' || \"MediaSubtypeId\"")));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '2'"), "A music video is no Discover title.");
             Assert.AreEqual("2026-10-19", await host.ScalarAsync("SELECT \"ListedOn\"::text FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist' AND \"Cursor\" IS NULL"));
 
             // A finished walk rests for a week.
@@ -152,6 +154,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncWindows\""));
             Assert.AreEqual(15, await host.ScalarAsync("SELECT \"RequestsPerMinute\"::integer FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist'"));
         }
+
+        // One column of the catalog Work a provider identity names.
+        private static string Catalog(string @namespace, string value, string column) =>
+            $"SELECT {column} FROM \"Works\" AS work JOIN \"WorkExternalIdentities\" AS identity ON identity.\"WorkId\" = work.\"Id\" WHERE identity.\"Namespace\" = '{@namespace}' AND identity.\"Value\" = '{value}'";
 
         private static async Task RunAsync(Host host)
         {

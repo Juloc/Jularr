@@ -37,7 +37,7 @@ namespace Jularr.E2E.Tests
                 await Steps.AddUsenetAsync(page, fakes, "3000,3040");
 
                 // The album is found on Discover in MusicBrainz and requested there.
-                await Steps.RequestFromCatalogAsync(page, "music", FakeServices.AlbumTitle, "musicbrainz");
+                await Steps.RequestFromCatalogAsync(page, "music", FakeServices.AlbumTitle);
 
                 // Only the requested artist's release is eligible.
                 fakes.Offer(album, otherArtist);

@@ -29,10 +29,9 @@ namespace Jularr.Frontend.Pages.User.Details
         ReadUiLocalesV1 locales, ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
         RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits,
         ReadWorkRecommendationsV1 readRecommendations, ReadWorkRelationsV1 readRelations, AdminServices.CreateWorkRelationV1 createRelation, AdminServices.DeleteWorkRelationV1 deleteRelation, SuggestDiscoverV1 suggest,
-        ReadDiscoverScopesV1 readScopes, RequestDiscoverCatalogItemV1 requestCatalog, RequestDiscoverItemV1 requestTmdb, UpdateWorkProgressV1 updateProgress, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
+        UpdateWorkProgressV1 updateProgress, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         private IReadOnlyList<DiscoverItemV1> _recommendations = [];
-        private IReadOnlyList<DiscoverScopeV1> _scopes = [];
         private IReadOnlyList<WorkCreditV1> _credits = [];
         private IReadOnlyList<WorkSeasonV1> _seasons = [];
         private IReadOnlyList<WorkEpisodeV1> _episodes = [];
@@ -151,9 +150,9 @@ namespace Jularr.Frontend.Pages.User.Details
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAddRelationAsync([BindRequired] WorkRelationType workRelationTypeId, long? relatedWorkId, string? @namespace, string? externalId)
+        public async Task<IActionResult> OnPostAddRelationAsync([BindRequired] WorkRelationType workRelationTypeId, [BindRequired] long relatedWorkId)
         {
-            await createRelation.ExecuteAsync<UpdateResult>(new AdminMedia.WorkParametersV1(Id), new AdminMedia.CreateWorkRelationDataV1(workRelationTypeId, relatedWorkId, @namespace, externalId),
+            await createRelation.ExecuteAsync<UpdateResult>(new AdminMedia.WorkParametersV1(Id), new AdminMedia.CreateWorkRelationDataV1(workRelationTypeId, relatedWorkId, null, null),
                 HttpContext.RequestAborted);
             Hint("details.relation.added");
             return LocalRedirect(Address(query => query["tab"] = "related"));
@@ -166,25 +165,17 @@ namespace Jularr.Frontend.Pages.User.Details
             return LocalRedirect(Address(query => query["tab"] = "related"));
         }
 
-        // A related title that is no Work is requested from its row as Discover would, in the profile's language; the row then shows the Work with its state.
-        public async Task<IActionResult> OnPostRequestRelatedAsync([BindRequired] string @namespace, [BindRequired] string externalId)
+        // A related catalog title the library has nothing of is requested from its row with the normal request, in the profile's language; the row then shows its state.
+        public async Task<IActionResult> OnPostRequestRelatedAsync([BindRequired] long relatedWorkId)
         {
             var ct = HttpContext.RequestAborted;
             var related = (await readRelations.ExecuteAsync<BaseDataList<WorkRelationV1>>(new WorkParametersV1(Id), ct))
-                .FirstOrDefault(relation => relation.RelatedWorkId is null && relation.Namespace == @namespace && relation.ExternalId == externalId) ?? throw new KeyNotFoundException("The relation was not found.");
+                .FirstOrDefault(relation => relation.RelatedWorkId == relatedWorkId && relation.AvailabilityStateId is null) ?? throw new KeyNotFoundException("The relation was not found.");
             var languages = await locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: ct);
             var language = languages.FirstOrDefault(locale => string.Equals(locale.Locale, texts.Locale, StringComparison.OrdinalIgnoreCase)) ?? languages.First();
-            if (@namespace is "tmdb_movie" or "tmdb_tv" && int.TryParse(externalId, NumberStyles.None, CultureInfo.InvariantCulture, out var tmdbId))
-            {
-                await requestTmdb.ExecuteAsync<CreateRequestResultV1>(new DiscoverItemParametersV1(related.MediaTypeId, tmdbId), new CreateRequestDataV1(language.Id), ct);
-            }
-            else
-            {
-                await requestCatalog.ExecuteAsync<CreateRequestResultV1>(new DiscoverParametersV1(), new RequestDiscoverCatalogDataV1(related.MediaTypeId, @namespace, externalId, language.Id, related.MediaSubtypeId), ct);
-            }
+            await request.ExecuteAsync<CreateRequestResultV1>(new CreateRequestParametersV1(related.RelatedWorkId), new CreateRequestDataV1(language.Id), ct);
 
             Hint("details.relation.requested");
-            _requestedRelation = (@namespace, externalId);
             await LoadDataAsync();
             PreparePage();
             return Page();
@@ -238,16 +229,9 @@ namespace Jularr.Frontend.Pages.User.Details
                 _relations = await readRelations.ExecuteAsync<BaseDataList<WorkRelationV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
             }
 
-            // The Discover pages of titles that are no Work.
-            if (_relations.Any(relation => relation.RelatedWorkId is null))
-            {
-                _scopes = await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
-            }
-
             try
             {
                 _recommendations = await readRecommendations.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new WorkParametersV1(Id), default(NoData), HttpContext.RequestAborted);
-                if (_recommendations.Count > 0 && _scopes.Count == 0) _scopes = await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
             }
             catch (ServiceUnavailableException)
             {
