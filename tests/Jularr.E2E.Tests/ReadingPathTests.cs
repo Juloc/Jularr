@@ -535,6 +535,9 @@ namespace Jularr.E2E.Tests
                 await page.SetViewportSizeAsync(390, 844);
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '1'");
                 Assert.AreEqual(1, await page.Locator(".reader-book__print img").CountAsync());
+                // The resize lays the book out again; a drag starts on the settled book, not on one a late layout replaces.
+                await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return r.dataset.bookState === 'idle' && r.dataset.bookPendingFrame === 'false'; }");
+                await page.WaitForTimeoutAsync(400);
                 var box = (await page.Locator("[data-book-sheet=right]").BoundingBoxAsync())!;
                 await page.Mouse.MoveAsync(box.X + box.Width * .75f, box.Y + box.Height / 2);
                 await page.Mouse.DownAsync();
