@@ -22,18 +22,24 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
     let cachePending = false, cacheTimer = 0;
     let running = false, failed = false, disposed = false, suspended = false, busyUntil = performance.now() + 450;
     let timer = 0, idle = 0, request: AbortController | undefined;
-    // The book's drawn thickness keeps the last complete count of this book, also across chapters and while a new layout is
-    // counted: it only needs to look right, never to be exact, so the book never loses its thickness while pages turn.
+    // The last complete count of this book, kept synchronously with its layout key: the next chapter of the same layout is
+    // counted at once, before the first paint, so page numbers and the book's thickness never fall back while pages turn.
+    // The drawn thickness keeps it even while a new layout is counted: it only needs to look right, never to be exact.
     const thicknessKey = 'jularr.reader.thickness:' + reader.dataset.sectionsUrl;
-    let rememberedCounts = '';
+    let rememberedCounts = '', remembered: { key: string; counts: number[] } | undefined;
     const thickness = (values: number[]): void => {
         const total = values.reduce((sum, value) => sum + value, 0), before = values.slice(0, section).reduce((sum, value) => sum + value, 0);
         if (reader.dataset.bookThickPages !== String(total)) reader.dataset.bookThickPages = String(total);
         if (reader.dataset.bookThickBefore !== String(before)) reader.dataset.bookThickBefore = String(before);
     };
     try {
-        const remembered: unknown = JSON.parse(localStorage.getItem(thicknessKey) ?? 'null');
-        if (Array.isArray(remembered) && remembered.length === sections && remembered.every(value => Number.isSafeInteger(value) && value > 0)) thickness(remembered);
+        const stored: unknown = JSON.parse(localStorage.getItem(thicknessKey) ?? 'null');
+        const values: unknown = stored && typeof stored === 'object' && 'counts' in stored ? stored.counts : undefined;
+        if (stored && typeof stored === 'object' && 'key' in stored && typeof stored.key === 'string' && Array.isArray(values) && values.length === sections
+            && values.every(value => Number.isSafeInteger(value) && value > 0)) {
+            remembered = { key: stored.key, counts: values as number[] };
+            thickness(remembered.counts);
+        }
     } catch { /* Without storage the book shows its thickness once counted. */ }
     const clearTotal = () => {
         delete reader.dataset.bookPageCount;
@@ -84,10 +90,11 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
             savedKey = key;
             void writeBookPageCounts(key, counts as number[]);
         }
-        const remembered = JSON.stringify(counts);
-        if (remembered !== rememberedCounts) {
-            rememberedCounts = remembered; thickness(counts as number[]);
-            try { localStorage.setItem(thicknessKey, remembered); } catch { /* Storage is optional. */ }
+        const complete = JSON.stringify({ key, counts });
+        if (key && complete !== rememberedCounts) {
+            rememberedCounts = complete; thickness(counts as number[]);
+            remembered = { key, counts: counts as number[] };
+            try { localStorage.setItem(thicknessKey, complete); } catch { /* Storage is optional. */ }
         }
         return true;
     };
@@ -222,7 +229,12 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
         const nextKey = JSON.stringify(['book-page-layout-v4', reader.dataset.sectionsUrl, reader.dataset.documentRevision, sections, next.width, next.height, next.columns, next.gap, next.rtl, style.font, style.letterSpacing,
             style.getPropertyValue('--reader-text-width'), style.getPropertyValue('--reader-paragraph'),
             style.getPropertyValue('--reader-margin-top'), style.getPropertyValue('--reader-margin-bottom'), style.getPropertyValue('--reader-margin-outer'), style.getPropertyValue('--reader-margin-inner'), reader.dataset.indent, reader.dataset.hyphenation, reader.dataset.illustrations, document.documentElement.lang]);
-        if (key !== nextKey) {
+        if (key !== nextKey && remembered?.key === nextKey) {
+            // Same layout as the last complete count: take it at once; this chapter's own count follows from the live layout.
+            cancel(); key = nextKey; failed = false; resetCounts();
+            remembered.counts.forEach((value, index) => { if (index !== section) count(index, value); });
+            savedKey = key;
+        } else if (key !== nextKey) {
             cancel(); key = nextKey; failed = false; resetCounts(); clearTotal();
             cachePending = true;
             const version = generation;

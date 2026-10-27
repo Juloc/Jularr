@@ -203,6 +203,9 @@ test('the drawn thickness keeps the last complete count across chapters and whil
     assert.equal(first.reader.dataset.bookThickPages, '11');
     const next = harness(fetchChapter, new Map(), 2, storage);
     assert.deepEqual([next.reader.dataset.bookThickPages, next.reader.dataset.bookThickBefore], ['11', '7'], 'a new chapter draws the book at once');
+    next.counter.update({ ...next.layout, pages: 4 });
+    assert.deepEqual([next.reader.dataset.bookPageState, next.reader.dataset.bookPageCount, next.reader.dataset.bookPageBefore], ['ready', '11', '7'],
+        'the same layout counts the next chapter synchronously, without a paused or chapter-only state');
     first.setFont('26px sans-serif');
     first.counter.update(first.layout);
     assert.equal(first.reader.dataset.bookPageCount, undefined);
