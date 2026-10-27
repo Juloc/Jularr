@@ -57,6 +57,26 @@ namespace Jularr.Backend.Tests
             """);
 
         [TestMethod]
+        public async Task WorkCatalogColumns_UpgradeKeepsWorksMarksThemDetailedAndAddsDefaults()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(WorkCatalogColumns_UpgradeKeepsWorksMarksThemDetailedAndAddsDefaults));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 14).ToArray()).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 501 AND "CanonicalTitle" = 'Kept Film' AND "DetailedAt" = "UpdatedAt" AND "ViewedAt" IS NOT NULL"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 501 AND "IsAdult" = FALSE AND "CatalogNamespace" IS NULL AND "FetchedAt" IS NULL AND "OriginalTitle" IS NULL AND "Overview" IS NULL AND "Creator" IS NULL AND "ImageUrl" IS NULL AND "BackdropUrl" IS NULL AND "Popularity" IS NULL AND "Rating" IS NULL AND "Votes" IS NULL AND "TrendingRank" IS NULL"""));
+            await ExecuteAsync(cs, """UPDATE "Works" SET "OriginalTitle" = 'Gehaltener Film' WHERE "Id" = 501""");
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 501 AND "SearchText" @@ to_tsquery('simple', 'gehaltener') AND "SearchText" @@ to_tsquery('simple', 'kept')"""));
+            Assert.AreEqual(3L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkSyncs" WHERE "CacheTier" = 2 AND "DetailsTrending" = FALSE"""));
+            Assert.AreEqual((short)14, await ScalarAsync(cs, """SELECT "CatalogDetailKeepDays" FROM "InstanceSettings" WHERE "Id" = 1"""));
+            Assert.AreEqual(14, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0014_work_catalog_columns'"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+        }
+
+        [TestMethod]
         public async Task ContentLanguages_UpgradePreservesExistingProfilesWithoutInferringTheirPreferences()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
