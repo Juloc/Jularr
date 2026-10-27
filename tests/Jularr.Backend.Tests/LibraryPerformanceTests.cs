@@ -226,6 +226,26 @@ namespace Jularr.Backend.Tests
                 SELECT "Id", "CatalogNamespace", ("Id" - 1000000)::text FROM "Works" WHERE "Id" BETWEEN {1000000 + from} AND {1000000 + to};
                 """);
             }
+            // Two hundred catalog ids, evenly spread through the catalog range, are library series with 35 episodes each: 7,000 progress rows (two thirds unfinished), files for the first twelve episodes.
+            var spread = Math.Max(catalogWorks / 200, 1);
+            await host.Fixture.RunSqlAsync($"""
+                CREATE TEMPORARY TABLE "Interleaved" AS SELECT "Id" FROM "Works" WHERE "Id" > 1000000 AND ("Id" - 1000000) % {spread} = 0 AND "MediaTypeId" = 1 ORDER BY "Id" LIMIT 200;
+                UPDATE "Works" SET "MediaTypeId" = 2 WHERE "Id" IN (SELECT "Id" FROM "Interleaved");
+                INSERT INTO "WorkTitles" ("WorkId", "UiLocaleId", "Title", "IsManual") SELECT "Id", 1, "CanonicalTitle", TRUE FROM "Works" WHERE "Id" IN (SELECT "Id" FROM "Interleaved");
+                INSERT INTO "WorkEditions" ("WorkId") SELECT "Id" FROM "Interleaved";
+                INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId") SELECT "WorkId", "Id" FROM "WorkEditions" WHERE "WorkId" IN (SELECT "Id" FROM "Interleaved");
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number") SELECT interleaved."Id", 2, number FROM "Interleaved" AS interleaved CROSS JOIN generate_series(1, 35) AS number;
+                INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId")
+                SELECT unit."WorkId", version."Id", unit."Id", 1
+                FROM "WorkUnits" AS unit JOIN "WorkVersions" AS version ON version."WorkId" = unit."WorkId" WHERE unit."WorkId" IN (SELECT "Id" FROM "Interleaved");
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
+                SELECT (SELECT min("Id") FROM "LibraryRoots"), 'interleaved/' || asset."Id" || '.mkv', 1000000, now(), now(), asset."Id"
+                FROM "MediaAssets" AS asset JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId" WHERE asset."WorkId" IN (SELECT "Id" FROM "Interleaved") AND unit."Number" <= 12;
+                INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "WorkUnitId", "ProgressPositionTypeId", "PositionMs", "DurationMs", "IsCompleted", "CompletedAt", "UpdatedAt")
+                SELECT 101, "WorkId", "Id", 1, 500, 1000, "Number" % 3 = 0, CASE WHEN "Number" % 3 = 0 THEN now() END, now() - ("Id" % 5000) * interval '1 minute'
+                FROM "WorkUnits" WHERE "WorkId" IN (SELECT "Id" FROM "Interleaved");
+                DROP TABLE "Interleaved";
+                """);
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "ExternalWorkFeeds" ("Key", "Namespace", "MediaTypeId", "DiscoverFeedTypeId", "Page") VALUES ('scale', 'tmdb_movie', 1, 2, 1);
                 INSERT INTO "ExternalWorkFeedItems" ("FeedId", "Position", "WorkId") SELECT (SELECT "Id" FROM "ExternalWorkFeeds" WHERE "Key" = 'scale'), n, 1000000 + n * 10 FROM generate_series(1, 500) AS n;
@@ -233,6 +253,8 @@ namespace Jularr.Backend.Tests
             TestContext.WriteLine($"Seeded {catalogWorks} catalog Works in {Stopwatch.GetElapsedTime(started).TotalSeconds:F1} s.");
             await host.Fixture.RunSqlAsync("ANALYZE");
 
+            var budget = double.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_LIBRARY_MAX_MS"), System.Globalization.CultureInfo.InvariantCulture, out var maximum) ? maximum : double.PositiveInfinity;
+            var overBudget = new List<string>();
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
             foreach (var (name, path) in new[]
             {
@@ -242,6 +264,7 @@ namespace Jularr.Backend.Tests
                 ("admin-works", "/api/v1/admin/works?pageSize=25"),
                 ("admin-works-search", "/api/v1/admin/works?pageSize=25&query=Title%20003"),
                 ("admin-works-summary", "/api/v1/admin/works/summary"),
+                ("continue", "/api/v1/continue"),
                 ("system-health", "/api/v1/admin/system")
             })
             {
@@ -252,7 +275,17 @@ namespace Jularr.Backend.Tests
                     var begin = Stopwatch.GetTimestamp();
                     using var response = await host.SendAsync(HttpMethod.Get, path);
                     Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, name + await response.Content.ReadAsStringAsync());
+                    if (name == "continue") Assert.AreEqual(20, (await response.Content.ReadFromJsonAsync<BaseDataList<ContinueItemV1>>())!.Count);
                     if (iteration >= 2) durations.Add(Stopwatch.GetElapsedTime(begin).TotalMilliseconds);
+                    if (iteration == 3 && name == "continue" && Environment.GetEnvironmentVariable("JULARR_TEST_CATALOG_PLANS") == "1"
+                        && commands.Executions.FirstOrDefault(command => command.Sql.Contains("WITH started AS MATERIALIZED", StringComparison.Ordinal)).Sql is { } continueSql)
+                    {
+                        await using var connection = await host.Fixture.Database.OpenConnectionAsync();
+                        await using var explain = new NpgsqlCommand("EXPLAIN (ANALYZE, BUFFERS) " + continueSql, connection);
+                        explain.Parameters.AddWithValue(101L);
+                        await using var reader = await explain.ExecuteReaderAsync();
+                        while (await reader.ReadAsync()) TestContext.WriteLine("PLAN " + reader.GetString(0));
+                    }
                     if (iteration == 3)
                         foreach (var command in commands.Executions.OrderByDescending(command => command.Milliseconds).Take(3))
                         {
@@ -262,6 +295,7 @@ namespace Jularr.Backend.Tests
                 }
                 durations.Sort();
                 TestContext.WriteLine($"PERF {name}: median {durations[durations.Count / 2]:F1} ms, p95 {durations[(int)Math.Ceiling(durations.Count * .95) - 1]:F1} ms, max {durations[^1]:F1} ms");
+                if (name != "system-health" && durations[(int)Math.Ceiling(durations.Count * .95) - 1] >= budget) overBudget.Add($"{name}: {durations[^1]:F1} ms");
             }
 
             // One cleanup statement of a thousand titles, never committed: reset the details, delete the rows.
@@ -282,6 +316,7 @@ namespace Jularr.Backend.Tests
                 durations.Sort();
                 TestContext.WriteLine($"PERF cleanup-{step} (batch of 1000, {changed} changed): median {durations[durations.Count / 2]:F1} ms, max {durations[^1]:F1} ms");
             }
+            Assert.IsEmpty(overBudget, "Warm P95 exceeded the configured budget: " + string.Join("; ", overBudget));
         }
 
         [TestMethod]

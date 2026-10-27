@@ -22,7 +22,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         {
             // One bounded read: only titles with a tie to the library (catalog titles are not listed), filtered and ordered first, only the page gets its cover. A title is monitored while one of its targets is not paused;
             // it is filed when it has a file and no monitored aired unit still lacks one, and downloading while one of its releases is on its way.
-            var sql = new SqlStatement();
+            var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 """
                 WITH listed AS (
@@ -151,7 +151,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            var sql = new SqlStatement();
+            var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 """
                 WITH listed AS (

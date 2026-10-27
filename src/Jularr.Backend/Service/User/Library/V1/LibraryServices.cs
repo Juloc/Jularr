@@ -190,16 +190,79 @@ namespace Jularr.Backend.Service.User.Library.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Started, unfinished items with a file that can be played now.
-            var sql = new SqlStatement();
+            // Started, unfinished items with a file that can be played now. Set-based over the profile's started Works alone: its view and the assets are never read for the catalog, and no per-item lookup runs.
+            var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 """
+                WITH started AS MATERIALIZED (
+                    SELECT
+                        progress."Id",
+                        progress."WorkId",
+                        progress."WorkUnitId",
+                        progress."PositionMs",
+                        progress."DurationMs",
+                        progress."Progression",
+                        progress."UpdatedAt"
+                    FROM
+                        "MediaProgress" AS progress
+                    WHERE
+                        progress."ProfileId" = @ProfileId
+                        AND NOT progress."IsCompleted"
+                        AND (progress."PositionMs" > 0 OR progress."Locator" IS NOT NULL)
+                ), startedWorks AS MATERIALIZED (
+                    SELECT
+                        visible."WorkId",
+                        visible."MediaSubtypeId",
+                        visible."Title"
+                    FROM
+                        "ProfileWorks" AS visible
+                    WHERE
+                        visible."ProfileId" = @ProfileId
+                        AND NOT visible."IsHidden"
+                        AND visible."WorkId" = ANY(ARRAY(SELECT started."WorkId" FROM started))
+                ), playable AS MATERIALIZED (
+                    SELECT DISTINCT ON (candidate."WorkId", candidate."WorkUnitId")
+                        candidate."Id",
+                        candidate."WorkId",
+                        startedWorks."MediaSubtypeId",
+                        startedWorks."Title",
+                        candidate."WorkUnitId",
+                        candidate."MediaAssetTypeId"
+                    FROM
+                        startedWorks
+                        JOIN "MediaAssets" AS candidate ON candidate."WorkId" = startedWorks."WorkId"
+                        JOIN "StoredFiles" AS available ON available."MediaAssetId" = candidate."Id" AND available."MissingSince" IS NULL
+                        JOIN "InstanceModules" AS module ON module."Key" = CASE
+                            WHEN candidate."MediaAssetTypeId" IN (3, 4) THEN 'Reading'
+                            WHEN candidate."MediaAssetTypeId" IN (1, 2) THEN 'Playback'
+                        END AND module."IsEnabled"
+                    ORDER BY
+                        candidate."WorkId",
+                        candidate."WorkUnitId",
+                        candidate."Id"
+                ), playableStarted AS MATERIALIZED (
+                    SELECT
+                        progress."Id",
+                        progress."WorkId",
+                        progress."PositionMs",
+                        progress."DurationMs",
+                        progress."Progression",
+                        progress."UpdatedAt",
+                        progress."WorkUnitId",
+                        asset."MediaSubtypeId",
+                        asset."Title",
+                        asset."Id" AS "AssetId",
+                        asset."MediaAssetTypeId"
+                    FROM
+                        started AS progress
+                        JOIN playable AS asset ON asset."WorkId" = progress."WorkId" AND coalesce(asset."WorkUnitId", 0) = coalesce(progress."WorkUnitId", 0)
+                )
                 SELECT
                     progress."WorkId",
-                    asset."Id" AS "MediaAssetId",
+                    progress."AssetId" AS "MediaAssetId",
                     work."MediaTypeId",
-                    visible."MediaSubtypeId",
-                    visible."Title" AS "Title",
+                    progress."MediaSubtypeId",
+                    progress."Title" AS "Title",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     (
                         SELECT
@@ -219,35 +282,12 @@ namespace Jularr.Backend.Service.User.Library.V1
                     coalesce(progress."PositionMs", 0) AS "PositionMs",
                     progress."DurationMs",
                     progress."Progression",
-                    asset."MediaAssetTypeId"
+                    progress."MediaAssetTypeId"
                 FROM
-                    "MediaProgress" AS progress
-                    JOIN "ProfileWorks" AS visible ON visible."ProfileId" = progress."ProfileId" AND visible."WorkId" = progress."WorkId" AND NOT visible."IsHidden"
+                    playableStarted AS progress
                     JOIN "Works" AS work ON work."Id" = progress."WorkId"
-                    JOIN LATERAL (
-                        SELECT
-                            candidate."Id",
-                            candidate."MediaAssetTypeId"
-                        FROM
-                            "MediaAssets" AS candidate
-                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = candidate."Id" AND available."MissingSince" IS NULL
-                            JOIN "InstanceModules" AS module ON module."Key" = CASE
-                                WHEN candidate."MediaAssetTypeId" IN (3, 4) THEN 'Reading'
-                                WHEN candidate."MediaAssetTypeId" IN (1, 2) THEN 'Playback'
-                            END AND module."IsEnabled"
-                        WHERE
-                            candidate."WorkId" = progress."WorkId"
-                            AND candidate."WorkUnitId" IS NOT DISTINCT FROM progress."WorkUnitId"
-                        ORDER BY
-                            candidate."Id"
-                        LIMIT 1
-                    ) AS asset ON TRUE
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = progress."WorkUnitId"
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
-                WHERE
-                    progress."ProfileId" = @ProfileId
-                    AND NOT progress."IsCompleted"
-                    AND (progress."PositionMs" > 0 OR progress."Locator" IS NOT NULL)
                 ORDER BY
                     progress."UpdatedAt" DESC,
                     progress."Id" DESC

@@ -98,18 +98,23 @@ Since every catalog title is a row in `Works`, the reads of the library must nev
 `EXPLAIN (ANALYZE, BUFFERS)` causes:
 - Library and its search: the scope read `ProfileWorks` for all Works and dropped those without a present file or open request afterwards (500,411 rows through the view, 2.4 s). The planner estimates the view's category join at one percent of its rows, so it hashes the whole view even beside a small outer side. The scope now limits `visible."WorkId"` to the ids with a present file or open request (`= ANY(ARRAY(...))`), which becomes an index condition inside the view. Two card costs that grow with catalog details are bounded too: the "no monitored unit" check ran as a sequential scan of all `WorkUnits` per card (0.9 ms each) and is now an outer join on the indexed leaf units; unit progress is counted only for Works with progress of the profile.
 - Calendar: the part for Works without units read every Work through `ProfileWorks` and 37,500 catalog release dates. Both parts now read only the tied Works (watchlist, own requests, assets); the unit availability check also matches the asset's Work, so it uses `IX_MediaAssets_Work`.
-- Admin list and summary: JIT compilation of 194 and 433 functions (1.0–2.0 s) dominates the unfiltered list and the summary at every catalog size, and the search from 500,000 on; execution itself took about 80 ms. Of that, two parts of `WorkLibraryRelations` were parallel sequential scans of every identity and Work (about 50 ms at 500,000); migration [0016](../database/migrations/0016_library_tie_indexes.sql) adds partial indexes for them. JIT is unchanged.
+- Admin list and summary: JIT compilation of 194 and 433 functions (1.0–2.0 s) dominated the unfiltered list and the summary at every catalog size, and the search from 500,000 on; execution itself took about 80 ms. Of that, two parts of `WorkLibraryRelations` were parallel sequential scans of every identity and Work (about 50 ms at 500,000); migration [0016](../database/migrations/0016_library_tie_indexes.sql) adds partial indexes for them. The three statements now disable JIT (`SqlStatement.DisableJit`, as the Library read does).
+- Continue: the join with `ProfileWorks` read the view for all 500,411 Works (1.5 s), then a lateral per started item (12,237 rows) looked its asset up, filtering all assets of the Work. The view is now read for the started Works alone (`= ANY(ARRAY(...))`), the playable assets of those Works are read once and joined by hash, and the statement disables JIT. The result is the same rows in the same order.
 
 | Read, warm HTTP ms (median / P95) | 5,000 before | 500,000 before | 5,000 after | 500,000 after | 1,500,000 after |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Library | 115 / 146 | 1971 / 2357 | 37 / 52 | 41 / 51 | 42 / 46 |
-| Library search | 58 / 74 | 1795 / 2006 | 40 / 52 | 41 / 57 | 38 / 40 |
-| Calendar | 31 / 35 | 1835 / 1977 | 18 / 27 | 20 / 21 | 19 / 22 |
-| Admin Works list | 1254 / 1369 | 1724 / 1813 | 856 / 919 | 859 / 912 | 838 / 887 |
-| Admin Works search | 139 / 163 | 1629 / 1973 | 87 / 97 | 877 / 1039 | 849 / 889 |
-| Admin Works summary | 1469 / 1584 | 2377 / 2450 | 1092 / 1302 | 1142 / 1585 | 1119 / 1165 |
+| Library | 115 / 146 | 1971 / 2357 | 37 / 52 | 84 / 100 | 95 / 119 |
+| Library search | 58 / 74 | 1795 / 2006 | 40 / 52 | 61 / 84 | 76 / 128 |
+| Calendar | 31 / 35 | 1835 / 1977 | 18 / 27 | 30 / 34 | 29 / 35 |
+| Admin Works list | 1254 / 1369 | 1724 / 1813 | 856 / 919 | 143 / 173 | 158 / 239 |
+| Admin Works search | 139 / 163 | 1629 / 1973 | 87 / 97 | 30 / 35 | 30 / 44 |
+| Admin Works summary | 1469 / 1584 | 2377 / 2450 | 1092 / 1302 | 165 / 205 | 144 / 190 |
+| Continue | not measured | 1354 / 1546 | not measured | 70 / 77 | 58 / 74 |
 | System health | 16 / 23 | 315 / 353 | 12 / 13 | 174 / 201 | 293 / 343 |
 
-The Library, Calendar, WorkList, Statistics, Collection, Media, WorkRelation and migration tests are the contract for unchanged results. Open: the Admin list and summary stay above 100 ms through JIT (with `jit = off` the same statements took 30–45 ms at 500,000), and System health counts every catalog Work by design.
+The Library, Calendar, WorkList, Statistics, Collection, Media, WorkRelation and migration tests are the contract for unchanged results. The 500,000 and 1,500,000 columns come from the extended fixture: 200 library series with 35 episodes each (7,000 progress rows, files for twelve episodes each), their ids spread evenly through the catalog id range instead of below it. The 5,000 columns are from the earlier fixture without them, and the "500,000 before" Continue figure is the unchanged statement on the extended fixture. The sequential runs share the machine with other work, so single figures vary by about a third.
+
+Open: the Admin list and summary stay at 140–240 ms. The remaining time does not grow with the catalog: `WorkListEntries` computes file counts and sizes per library-tied Work (611 here) with a merge join that scans `IX_StoredFiles_Asset` from the start for every Work (about 0.3 ms each); changing it needs a new migration. System health counts every catalog Work by design.
 
 Reproduce with `$env:JULARR_TEST_CATALOG_SCALE = '500000'` and `dotnet test tests/Jularr.Backend.Tests --configuration Release --filter 'FullyQualifiedName~CatalogScale_' --logger 'console;verbosity=detailed'`.
+`JULARR_TEST_CATALOG_PLANS=1` prints the Continue statement's `EXPLAIN (ANALYZE, BUFFERS)`; `JULARR_TEST_LIBRARY_MAX_MS` fails the run when a read's P95 reaches that many milliseconds.
