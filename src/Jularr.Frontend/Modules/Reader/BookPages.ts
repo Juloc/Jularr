@@ -22,6 +22,19 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
     let cachePending = false, cacheTimer = 0;
     let running = false, failed = false, disposed = false, suspended = false, busyUntil = performance.now() + 450;
     let timer = 0, idle = 0, request: AbortController | undefined;
+    // The book's drawn thickness keeps the last complete count of this book, also across chapters and while a new layout is
+    // counted: it only needs to look right, never to be exact, so the book never loses its thickness while pages turn.
+    const thicknessKey = 'jularr.reader.thickness:' + reader.dataset.sectionsUrl;
+    let rememberedCounts = '';
+    const thickness = (values: number[]): void => {
+        const total = values.reduce((sum, value) => sum + value, 0), before = values.slice(0, section).reduce((sum, value) => sum + value, 0);
+        if (reader.dataset.bookThickPages !== String(total)) reader.dataset.bookThickPages = String(total);
+        if (reader.dataset.bookThickBefore !== String(before)) reader.dataset.bookThickBefore = String(before);
+    };
+    try {
+        const remembered: unknown = JSON.parse(localStorage.getItem(thicknessKey) ?? 'null');
+        if (Array.isArray(remembered) && remembered.length === sections && remembered.every(value => Number.isSafeInteger(value) && value > 0)) thickness(remembered);
+    } catch { /* Without storage the book shows its thickness once counted. */ }
     const clearTotal = () => {
         delete reader.dataset.bookPageCount;
         delete reader.dataset.bookPageBefore;
@@ -70,6 +83,11 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
         if (key && reader.dataset.documentRevision && savedKey !== key) {
             savedKey = key;
             void writeBookPageCounts(key, counts as number[]);
+        }
+        const remembered = JSON.stringify(counts);
+        if (remembered !== rememberedCounts) {
+            rememberedCounts = remembered; thickness(counts as number[]);
+            try { localStorage.setItem(thicknessKey, remembered); } catch { /* Storage is optional. */ }
         }
         return true;
     };

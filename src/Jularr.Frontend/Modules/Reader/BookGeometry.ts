@@ -150,8 +150,8 @@ export function paperColour(base: string, warmth: number, brightness: number): s
 // Orthographic, almost-overhead projection of a page, in A5 millimetres. The page itself stays as flat as a
 // bare leaf (only the small inner crown remains, so the text never bends); the thickness of the stack is
 // `drop`, the height of its cut edge below the page. More leaves add physical height, not extra DOM.
-// How much of a millimetre of stack shows below the page: the book is seen from well above its edge, as in a photo of a paperback.
-export const stackSlope = .55;
+// How much of a millimetre of stack shows below the page: the same 14° view main's raised pages had.
+export const stackSlope = Math.sin(14 * Math.PI / 180);
 
 export function paperProfile(depth: number, curve: number, angle: number) {
     const radians = angle * Math.PI / 180;

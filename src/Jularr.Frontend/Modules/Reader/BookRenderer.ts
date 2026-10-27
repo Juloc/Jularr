@@ -36,8 +36,9 @@ export function initializeBookRenderer(reader: HTMLElement) {
     const motion = () => reader.dataset.animation === 'on' || reader.dataset.animation === 'system' && !reduced.matches;
     const direction = () => reader.dataset.direction === 'rtl' ? -1 : 1;
     const number = (name: string, fallback: number) => Number(reader.dataset[name] ?? fallback);
-    const dimensions = (at: number) => bookDimensions(number('bookPageCount', 0), number('paperMicrons', 100),
-        number('bookPageBefore', 0) + adapter.number(at), number('paperBoard', reader.dataset.paperBinding === 'hard' ? 22 : 3));
+    // The exact count while it is known, else the book's last complete one: the thickness never vanishes while pages are counted.
+    const dimensions = (at: number) => bookDimensions(number('bookPageCount', number('bookThickPages', 0)), number('paperMicrons', 100),
+        number('bookPageBefore', number('bookThickBefore', 0)) + adapter.number(at), number('paperBoard', reader.dataset.paperBinding === 'hard' ? 22 : 3));
     const profile = (at: number, side: string) => {
         const body = dimensions(at);
         return paperProfile(side === 'left' ? body.leftMm : body.rightMm, number('paperCurve', 24), number('paperAngle', 14));
@@ -283,6 +284,6 @@ export function initializeBookRenderer(reader: HTMLElement) {
         if (!ready || flights.length) return;
         prints.clear(); root.querySelectorAll<HTMLElement>('[data-book-page]').forEach(element => delete element.dataset.print);
         try { paintBook(); } catch { fail(); }
-    }).observe(reader, { attributes: true, attributeFilter: ['data-book-page-count', 'data-book-page-before', 'data-paper-binding'] });
+    }).observe(reader, { attributes: true, attributeFilter: ['data-book-page-count', 'data-book-page-before', 'data-book-thick-pages', 'data-book-thick-before', 'data-paper-binding'] });
     return { update, turn, enabled };
 }

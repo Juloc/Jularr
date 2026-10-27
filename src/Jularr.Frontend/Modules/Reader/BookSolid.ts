@@ -126,34 +126,34 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
         const x = (point: { x: number }, ratio = 1) => projectX(side, profile, point, ratio);
         const line = (base: number, ratio: number) => profile.points.map((point, index) => `${index ? 'L' : 'M'}${rounded(x(point, ratio))},${rounded(base + point.y * ratio)}`).join(' ');
         const outside = profile.points[40], outsideX = x(outside, 0);
-        // The block's outer side: a straight strip from the page's top edge down to the bottom of the hanging stack.
+        // The block's outer side and bottom, as on main: the block lies as far below the page as its stack hangs and a little
+        // outward, so its side and its bottom meet the page's corners in a short diagonal edge.
         const outer = side === 'left' ? 0 : 296, drop = stackAt(outer), pageEdge = x(outside);
-        const sideCut = `M${rounded(pageEdge)},${rounded(outside.y)} H${rounded(outsideX)} V${rounded(height + drop)} H${rounded(pageEdge)} Z`;
+        const sideCut = `M${rounded(pageEdge)},${rounded(outside.y)} L${rounded(outsideX)},${rounded(drop)} V${rounded(height + drop)} L${rounded(pageEdge)},${rounded(height + outside.y)} Z`;
         element('path', { d: facePath(side, profile), fill: 'none', stroke: '#30271e', 'stroke-width': .9, 'stroke-opacity': .12, transform: 'translate(.15,.25)' });
         element('path', { d: sideCut, fill: 'var(--paper-cut)', 'data-book-cut': `${side}-outside` });
         element('path', { d: sideCut, fill: 'url(#book-cut)' });
         const sideCount = Math.min(12, Math.max(1, Math.round(profile.inset * pixelScale / .7)));
         for (let index = 1; index < sideCount; index++) {
             const ratio = index / sideCount;
-            element('path', { d: `M${x(outside, ratio)},${rounded(outside.y * ratio)} V${rounded(height + drop)}`, fill: 'none',
+            element('path', { d: `M${x(outside, ratio)},${rounded(outside.y * ratio + drop * (1 - ratio))} V${rounded(height + outside.y * ratio + drop * (1 - ratio))}`, fill: 'none',
                 stroke: index % 3 === 0 ? 'color-mix(in srgb,var(--paper-cut) 68%,#514637)' : 'color-mix(in srgb,var(--paper-cut) 78%,#fffdf2)', 'stroke-opacity': .4, 'stroke-width': .16 });
         }
-        const [from, to] = side === 'left' ? [pageEdge, 148] : [148, pageEdge];
-        const cut = `M${from},${height} L${to},${height} ${along(to, from, 0)} Z`;
+        const cut = `M${rounded(pageEdge)},${rounded(height)} L${rounded(outsideX)},${rounded(height + drop)} ${along(pageEdge, 148, 0)} L148,${rounded(height)} Z`;
         element('path', { d: cut, fill: 'var(--paper-cut)', 'data-book-cut': `${side}-bottom` });
         element('path', { d: cut, fill: 'url(#book-cut)' });
-        // Optical groups of leaves; density tracks the stack's height, never page count. The lines stay level and simply end
-        // where the V at the fold cuts through the stack.
+        // Optical groups of leaves; density tracks the stack's height, never page count. The lines stay level and end on the
+        // diagonal corner edge and where the V at the fold cuts through the stack.
         const stackClip = element('clipPath', { id: `book-stack-${side}` }, defs);
         element('path', { d: cut }, stackClip);
-        const [lineFrom, lineTo] = [from, to];
         const count = Math.min(24, Math.max(1, Math.round(profile.drop * pixelScale / .85)));
         for (let index = 1; index < count; index++) {
             const ratio = index / count;
-            element('path', { d: `M${rounded(lineFrom)},${rounded(height + stackBase(lineFrom) * ratio)} ${trace(stackBase, lineFrom, lineTo, 0, ratio)}`, 'clip-path': `url(#book-stack-${side})`, fill: 'none', stroke: index % 3 === 0 ? 'color-mix(in srgb,var(--paper-cut) 68%,#514637)' : 'color-mix(in srgb,var(--paper-cut) 78%,#fffdf2)',
-                'stroke-opacity': index % 3 === 0 ? .42 : .55, 'stroke-width': .2 + index % 3 * .04 });
+            const start = pageEdge + (outsideX - pageEdge) * ratio;
+            element('path', { d: `M${rounded(start)},${rounded(height + stackBase(start) * ratio)} ${trace(stackBase, start, 148, 0, ratio)}`, 'clip-path': `url(#book-stack-${side})`, fill: 'none', stroke: index % 3 === 0 ? 'color-mix(in srgb,var(--paper-cut) 68%,#514637)' : 'color-mix(in srgb,var(--paper-cut) 78%,#fffdf2)',
+                'stroke-opacity': index % 3 === 0 ? .19 : .27, 'stroke-width': .12 + index % 3 * .035 });
         }
-        element('path', { d: `M${rounded(side === 'left' ? outsideX : from)},${rounded(height + stackAt(from))} ${along(from, to, 0)}${side === 'left' ? '' : ` L${rounded(outsideX)},${rounded(height + drop)}`}`, fill: 'none', stroke: '#504639', 'stroke-opacity': .5, 'stroke-width': .3 });
+        element('path', { d: `M${rounded(outsideX)},${rounded(height + drop)} ${along(pageEdge, 148, 0)}`, fill: 'none', stroke: '#504639', 'stroke-opacity': .5, 'stroke-width': .3 });
         element('path', { d: line(height, 1), fill: 'none', stroke: '#504639', 'stroke-opacity': .22, 'stroke-width': .18 });
         const outline = facePath(side, profile);
         element('path', { d: outline, fill: 'var(--paper)' });
