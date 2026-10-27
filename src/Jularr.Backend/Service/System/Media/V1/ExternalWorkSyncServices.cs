@@ -33,7 +33,7 @@ namespace Jularr.Backend.Service.System.Media.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(SyncExternalWorksParametersV1 parameters) => ModuleRequirement.All("Library", "DiscoverCache", "LocalDiscovery");
+        protected override ModuleRequirement GetInstanceModules(SyncExternalWorksParametersV1 parameters) => ModuleRequirement.All("Library", "LocalDiscovery");
         protected override ServicePermission GetPermission(SyncExternalWorksParametersV1 parameters, Type resultType) => new("system.media");
 
         protected override async Task<IServiceOutput> OnExecute()

@@ -21,7 +21,8 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(Array.Empty<string>(), modules.Single(module => module.Key == "Library").Requires);
             CollectionAssert.AreEqual(new[] { "Library" }, modules.Single(module => module.Key == "Playback").Requires);
             CollectionAssert.AreEqual(new[] { "Playback" }, modules.Single(module => module.Key == "Trickplay").Requires);
-            CollectionAssert.AreEqual(new[] { "DiscoverCache" }, modules.Single(module => module.Key == "LocalDiscovery").Requires);
+            CollectionAssert.AreEqual(Array.Empty<string>(), modules.Single(module => module.Key == "LocalDiscovery").Requires);
+            Assert.IsFalse(modules.Any(module => module.Key == "DiscoverCache"), "Each catalog's cache tier replaced the module.");
 
             // AniList is its own module on top of the library alone (its account part also needs the progress sync when called), and off until the Owner switches it on.
             CollectionAssert.AreEqual(new[] { "Library" }, modules.Single(module => module.Key == "AniList").Requires);

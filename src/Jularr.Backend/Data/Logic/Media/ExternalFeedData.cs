@@ -69,9 +69,10 @@ namespace Jularr.Backend.Data.Logic.Media
         public string Items { get; }
     }
 
-    internal sealed class ExternalFeedStateData(bool isEnabled, long? feedId)
+    // Whether the feed's catalog keeps its Discover lists (not on the lean tier), and the feed once it was filled.
+    internal sealed class ExternalFeedStateData(bool isKept, long? feedId)
     {
-        public bool IsEnabled { get; } = isEnabled;
+        public bool IsKept { get; } = isKept;
         public long? FeedId { get; } = feedId;
     }
 

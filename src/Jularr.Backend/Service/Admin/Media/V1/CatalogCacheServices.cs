@@ -7,6 +7,7 @@ using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
+    // The catalog choices of the whole instance; each catalog's own tier is saved with its card (UpdateExternalWorkSyncV1).
     [ServiceEndpoint("GET", "/api/v1/admin/catalog/cache")]
     public sealed class ReadCatalogCacheV1 : AdminService<ReadCatalogCacheParametersV1>
     {
@@ -16,10 +17,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            var providers = await Context.ReadCatalogCacheProvidersAsync(CancellationToken);
-            var keep = await Context.ReadCatalogKeepDaysAsync(CancellationToken);
-            return new CatalogCacheV1(keep.KeepDays, new BaseDataList<CatalogCacheProviderV1>([.. providers.Select(provider =>
-                new CatalogCacheProviderV1(provider.Namespace, provider.CacheTier, ExternalWorkLogic.MaximumCacheTier(provider.Namespace), provider.DetailsTrending))]));
+            var settings = await Context.ReadCatalogCacheSettingsAsync(CancellationToken);
+            return new CatalogCacheV1(settings.KeepDays, settings.DetailsDiscoverAhead);
         }
     }
 
@@ -33,8 +32,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.UpdateCatalogCacheAsync([.. Data.Providers.Select(provider => new CatalogCacheProviderData(provider.Namespace, provider.CacheTier, provider.DetailsTrending))],
-                new CatalogKeepDaysData(Data.KeepDays), CancellationToken);
+            await Context.UpdateCatalogCacheSettingsAsync(new CatalogCacheSettingsData(Data.KeepDays, Data.DetailsDiscoverAhead), CancellationToken);
             return new UpdateResult(true);
         }
     }

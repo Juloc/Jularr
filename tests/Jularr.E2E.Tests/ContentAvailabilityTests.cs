@@ -20,6 +20,8 @@ namespace Jularr.E2E.Tests
                     (7803, 3, 'Accepted book', NULL, NULL, NULL, NULL, NULL, NULL, NULL);
                 UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
                 UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'tmdb_movie';
+                -- Only the films are a whole catalog here; the other catalogs keep Discover's lists and walk no provider.
+                UPDATE "ExternalWorkSyncs" SET "CacheTier" = 2 WHERE "Namespace" <> 'tmdb_movie';
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES
                     (7801, 'tmdb_movie', '7801'), (7802, 'tmdb_movie', '7802');
                 """);

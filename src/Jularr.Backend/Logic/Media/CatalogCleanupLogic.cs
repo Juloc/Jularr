@@ -7,8 +7,9 @@ namespace Jularr.Backend.Logic.Media
     // A title is used when something ties it to the library (WorkLibraryRelations), a file record exists, or it is trending.
     internal static class CatalogCleanupLogic
     {
-        // Drops the details (child rows) of titles without a library tie that nobody opened for CatalogDetailKeepDays and that are not trending;
-        // the minimal row, its identities and incoming relations stay. A title without an identity a provider can read again keeps its details.
+        // Drops the details (child rows) of titles without a library tie that nobody opened for CatalogDetailKeepDays and that are not trending; while Discover's lists
+        // are detailed in advance (DetailsDiscoverAhead), every title of a Discover list keeps them too. The minimal row, its identities and incoming relations stay.
+        // A title without an identity a provider can read again keeps its details.
         // Returns how many titles were reset; the caller repeats while a statement fills its limit.
         public static async Task<int> ResetUnusedCatalogDetailsAsync(this LogicContext ctx, CatalogCleanupData data, CancellationToken ct)
         {
@@ -31,9 +32,12 @@ namespace Jularr.Backend.Logic.Media
                             SELECT 1
                             FROM
                                 "ExternalWorkFeedItems" AS item
-                                JOIN "ExternalWorkFeeds" AS feed ON feed."Id" = item."FeedId" AND feed."DiscoverFeedTypeId" = 1
+                                JOIN "ExternalWorkFeeds" AS feed ON feed."Id" = item."FeedId" AND feed."SourceValue" IS NULL
+                                CROSS JOIN "InstanceSettings" AS settings
                             WHERE
-                                item."WorkId" = work."Id")
+                                item."WorkId" = work."Id"
+                                AND settings."Id" = 1
+                                AND (feed."DiscoverFeedTypeId" = 1 OR settings."DetailsDiscoverAhead"))
                     ORDER BY
                         work."Id"
                     LIMIT @Limit

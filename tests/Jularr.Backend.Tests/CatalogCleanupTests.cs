@@ -23,7 +23,7 @@ namespace Jularr.Backend.Tests
             await using var host = await LibraryTests.CreateHostAsync(storage.Path);
             var mountId = await LibraryTests.CreateMountAsync(host);
             var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Films", MediaType.Movie);
-            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"CacheTier\" = 3 WHERE \"Namespace\" = 'anilist'; UPDATE \"ExternalWorkSyncs\" SET \"CacheTier\" = 1 WHERE \"Namespace\" = 'tmdb_tv';");
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"CacheTier\" = CASE \"Namespace\" WHEN 'anilist' THEN 3 WHEN 'tmdb_tv' THEN 1 ELSE 2 END;");
 
             // Details: every one of these has an old ViewedAt, a title, a fact, a unit and a cover, so only a protection keeps it.
             var ids = "ARRAY[1,2,3,4,5,6,7,8,20,21,22,23,24]";
@@ -126,6 +126,33 @@ namespace Jularr.Backend.Tests
             var health = (await system.Content.ReadFromJsonAsync<SystemHealthV1>())!;
             Assert.AreEqual(10L, health.CatalogWorks, "Works 20 to 24, 31, 32, 33, 34 and 37 are catalog only.");
             Assert.AreEqual(1L, health.Library.Single(item => item.MediaTypeId == MediaType.Movie).Count);
+        }
+
+        [TestMethod]
+        public async Task Cleanup_WhileDiscoverIsDetailedAhead_KeepsTheDetailsOfEveryDiscoverListTitle()
+        {
+            await using var host = await AuthenticationTests.Host.CreateAsync(library: true);
+
+            // Old, unused titles with details: one in a top list, one only in a Work's recommendations, one in no list.
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "CatalogNamespace", "FetchedAt", "DetailedAt", "ViewedAt")
+                SELECT id, 1, 'Title ' || id, 'tmdb_movie', {Old}, {Old}, {Old} FROM unnest(ARRAY[40, 41, 42]) AS id;
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT id, 'tmdb_movie', 'm' || id FROM unnest(ARRAY[40, 41, 42]) AS id;
+                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual", "ProviderId") SELECT id, 'Alt ' || id, FALSE, (SELECT min("Id") FROM "Providers") FROM unnest(ARRAY[40, 41, 42]) AS id;
+                INSERT INTO "ExternalWorkFeeds" ("Key", "Namespace", "MediaTypeId", "DiscoverFeedTypeId", "Page", "SourceValue") VALUES ('top', 'tmdb_movie', 1, 2, 1, NULL), ('similar', 'tmdb_movie', 1, NULL, 1, '603');
+                INSERT INTO "ExternalWorkFeedItems" ("FeedId", "Position", "WorkId") VALUES ((SELECT "Id" FROM "ExternalWorkFeeds" WHERE "Key" = 'top'), 1, 40), ((SELECT "Id" FROM "ExternalWorkFeeds" WHERE "Key" = 'similar'), 1, 41);
+                UPDATE "InstanceSettings" SET "DetailsDiscoverAhead" = TRUE;
+                """);
+
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<CleanCatalogTitlesV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default);
+            }
+
+            Assert.AreEqual("40:true,41:false,42:false", await host.ScalarAsync("""
+                SELECT string_agg(work."Id" || ':' || (work."DetailedAt" IS NOT NULL AND EXISTS (SELECT 1 FROM "WorkTitles" AS title WHERE title."WorkId" = work."Id")), ',' ORDER BY work."Id")
+                FROM "Works" AS work WHERE work."Id" IN (40, 41, 42)
+                """), "A title of a Discover list keeps its details; recommendations and other titles do not.");
         }
     }
 }

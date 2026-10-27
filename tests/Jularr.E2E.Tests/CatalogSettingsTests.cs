@@ -2,7 +2,7 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // The Discover catalog page: the catalogs are cards with their mode, counts and inputs; a sync window is added as a draft in the card, typed in the desktop time fields and saved by the page's pill.
+    // The Discover catalog page: the catalogs are cards with their tier, mode, counts and inputs; a sync window is added as a draft in the card, typed in the desktop time fields and saved by the page's pill.
     [TestClass]
     public sealed class CatalogSettingsTests
     {
@@ -46,12 +46,29 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(aniList.Locator("[name='Windows[0].StartsAt']")).ToHaveValueAsync("22:30");
             await Assertions.Expect(aniList.Locator("[name='Windows[0].EndsAt']")).ToHaveValueAsync("01:00");
 
-            // The cache of images of other titles is sized here and saved through the page's pill.
-            var covers = page.Locator(".ui-section", new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Images of other titles", Exact = true }) }).Locator("form[data-save]");
+            // The card's tier replaces its old switch: kept whole before the update, the lean tier asks for Discover's lists each time.
+            await Assertions.Expect(aniList.GetByRole(AriaRole.Radio, new() { Name = "3 Full", Exact = true })).ToBeCheckedAsync();
+            Assert.AreEqual(0, await aniList.GetByText("Keep whole", new() { Exact = true }).CountAsync());
+            await aniList.GetByRole(AriaRole.Radio, new() { Name = "1 Lean", Exact = true }).CheckAsync(new() { Force = true });
+            await Steps.SaveAsync(page);
+            await page.ReloadAsync();
+            await Assertions.Expect(aniList.GetByRole(AriaRole.Radio, new() { Name = "1 Lean", Exact = true })).ToBeCheckedAsync();
+            await Assertions.Expect(aniList).ToContainTextAsync("Live");
+            await Assertions.Expect(aniList.Locator("[name='Windows[0].StartsAt']")).ToHaveValueAsync("22:30");
+
+            // One section keeps the instance's choices beside the images of other titles, each saved through the page's pill.
+            var section = page.Locator(".ui-section", new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Cache", Exact = true }) });
+            var details = section.Locator("form[action='/Admin/Catalog?handler=Cache']");
+            var covers = section.Locator("form[action='/Admin/Catalog?handler=Covers']");
+            await Assertions.Expect(details.GetByLabel("Keep details for")).ToHaveValueAsync("14");
+            await details.GetByLabel("Keep details for").FillAsync("30");
+            await details.GetByRole(AriaRole.Switch, new() { Name = "Detail Discover in advance", Exact = true }).CheckAsync(new() { Force = true });
             await Assertions.Expect(covers.GetByLabel("Keep unused images for")).ToHaveValueAsync("14");
             await covers.GetByLabel("Largest size, 0 keeps none").FillAsync("120");
             await Steps.SaveAsync(page);
             await page.ReloadAsync();
+            await Assertions.Expect(details.GetByLabel("Keep details for")).ToHaveValueAsync("30");
+            await Assertions.Expect(details.GetByRole(AriaRole.Switch, new() { Name = "Detail Discover in advance", Exact = true })).ToBeCheckedAsync();
             await Assertions.Expect(covers.GetByLabel("Largest size, 0 keeps none")).ToHaveValueAsync("120");
         }
 
@@ -77,6 +94,10 @@ namespace Jularr.E2E.Tests
             }
 
             await Assertions.Expect(catalogRows.Locator(".icon-tile .ui-icon")).ToHaveCountAsync(7);
+
+            // Only a catalog with a full sync may keep the whole catalog.
+            await Assertions.Expect(catalogRows.Filter(new() { HasText = "TVDB" }).GetByRole(AriaRole.Radio, new() { Name = "3 Full", Exact = true })).ToBeDisabledAsync();
+            await Assertions.Expect(catalogRows.Filter(new() { HasText = "TMDB films" }).GetByRole(AriaRole.Radio, new() { Name = "3 Full", Exact = true })).ToBeEnabledAsync();
             var text = await page.Locator("#app-content").InnerTextAsync();
             foreach (var key in new[] { "tmdb_movie", "tmdb_tv", "tvdb", "openlibrary", "musicbrainz", "igdb", "anilist", "admin.catalog." })
             {

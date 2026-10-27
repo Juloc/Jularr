@@ -1,9 +1,7 @@
 using System.Security;
 using Jularr.Backend.Data.Enums.Media;
-using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
-using Jularr.Backend.Logic.Instance;
 
 namespace Jularr.Backend.Logic.Media
 {
@@ -64,6 +62,8 @@ namespace Jularr.Backend.Logic.Media
                         AND provider."IsEnabled"
                         AND (provider."Key" <> 'tmdb' OR provider."ProtectedSecret" IS NOT NULL)
                         AND (candidate."SourceValue" IS NOT NULL OR candidate."Namespace" <> ALL(@WholeCatalogs))
+                        -- A catalog on the lean tier keeps no lists.
+                        AND NOT EXISTS (SELECT 1 FROM "ExternalWorkSyncs" AS sync WHERE sync."Namespace" = candidate."Namespace" AND sync."CacheTier" = 1)
                 )
                 SELECT
                     candidate."Namespace",
@@ -125,6 +125,7 @@ namespace Jularr.Backend.Logic.Media
                     AND (provider."Key" <> 'tmdb' OR provider."ProtectedSecret" IS NOT NULL)
                     AND (provider."Key" <> 'tmdb' OR feed."Language" = locale."Locale")
                     AND (feed."SourceValue" IS NOT NULL OR feed."Namespace" <> ALL(@WholeCatalogs))
+                    AND NOT EXISTS (SELECT 1 FROM "ExternalWorkSyncs" AS sync WHERE sync."Namespace" = feed."Namespace" AND sync."CacheTier" = 1)
                     AND feed."RetryAfter" <= @Now
                     AND (
                         feed."RefreshedAt" IS NULL
@@ -149,19 +150,14 @@ namespace Jularr.Backend.Logic.Media
             state.Statement =
                 """
                 SELECT
-                    module."IsEnabled",
-                    CASE WHEN feed."RefreshedAt" IS NOT NULL THEN feed."Id" END AS "FeedId"
-                FROM
-                    "InstanceModules" AS module
-                    LEFT JOIN "ExternalWorkFeeds" AS feed ON feed."Key" = @Key
-                WHERE
-                    module."Key" = 'DiscoverCache';
+                    NOT EXISTS (SELECT 1 FROM "ExternalWorkSyncs" AS sync WHERE sync."Namespace" = @Namespace AND sync."CacheTier" = 1) AS "IsKept",
+                    (SELECT feed."Id" FROM "ExternalWorkFeeds" AS feed WHERE feed."Key" = @Key AND feed."RefreshedAt" IS NOT NULL) AS "FeedId";
                 """;
             state.Parameters.Add(feed);
             var current = await ctx.ReadSql.ReadOptionalAsync<ExternalFeedStateData>(state, ct);
-            if (current is not { IsEnabled: true })
+            if (current is not { IsKept: true })
             {
-                throw new SecurityException("The Discover cache is unavailable.");
+                throw new SecurityException("The catalog keeps no Discover lists.");
             }
             if (current.FeedId is null)
             {
@@ -229,10 +225,9 @@ namespace Jularr.Backend.Logic.Media
 
         public static async Task SaveExternalFeedAsync(this LogicContext ctx, ExternalFeedData feed, IReadOnlyList<ExternalWorkData> works, CancellationToken ct)
         {
-            var modules = await ctx.ReadInstanceModulesAsync(new InstanceModuleParameters(["DiscoverCache"]), ct);
-            if (modules.Count != 1 || !modules[0].IsEnabled)
+            if (!await ctx.KeepsDiscoverListsAsync(feed.Namespace, ct))
             {
-                throw new SecurityException("The Discover cache is unavailable.");
+                throw new SecurityException("The catalog keeps no Discover lists.");
             }
 
             var list = new ExternalWorkListData(feed.Namespace, feed.MediaTypeId, feed.MediaSubtypeId);
@@ -314,10 +309,9 @@ namespace Jularr.Backend.Logic.Media
 
         public static async Task PostponeExternalFeedAsync(this LogicContext ctx, ExternalFeedRetryData data, CancellationToken ct)
         {
-            var modules = await ctx.ReadInstanceModulesAsync(new InstanceModuleParameters(["DiscoverCache"]), ct);
-            if (modules.Count != 1 || !modules[0].IsEnabled)
+            if (!await ctx.KeepsDiscoverListsAsync(data.Namespace, ct))
             {
-                throw new SecurityException("The Discover cache is unavailable.");
+                throw new SecurityException("The catalog keeps no Discover lists.");
             }
             var sql = new SqlStatement();
             sql.Statement =
@@ -351,6 +345,73 @@ namespace Jularr.Backend.Logic.Media
             {
                 throw new InvalidOperationException("The feed retry was not saved.");
             }
+        }
+
+        // With the instance's switch on, the catalogs whose Discover lists get their details in advance, each with its own request budget; none while it is off.
+        // A catalog on the lean tier keeps no lists, and one without settings of its own has no budget.
+        public static async Task<IReadOnlyList<CatalogPrefetchData>> ReadCatalogPrefetchesAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    sync."Namespace",
+                    sync."RequestsPerMinute"::integer AS "RequestsPerMinute",
+                    sync."PausesWhileUsed"
+                FROM
+                    "ExternalWorkSyncs" AS sync
+                    JOIN "InstanceSettings" AS settings ON settings."Id" = 1 AND settings."DetailsDiscoverAhead"
+                WHERE
+                    sync."CacheTier" > 1
+                ORDER BY
+                    sync."Namespace";
+                """;
+            return await ctx.ReadSql.ReadListAsync<CatalogPrefetchData>(sql, ct);
+        }
+
+        // The next titles of a catalog's Discover lists that have no details yet and a catalog entry that can give them, in the lists' order.
+        // Recommendations of a Work are no Discover list.
+        public static async Task<IReadOnlyList<WorkIdData>> ReadUndetailedDiscoverWorksAsync(this LogicContext ctx, CatalogPrefetchQueryData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    listed."Id"
+                FROM (
+                    SELECT DISTINCT ON (work."Id")
+                        work."Id",
+                        item."Position",
+                        feed."Id" AS "FeedId"
+                    FROM
+                        "ExternalWorkFeeds" AS feed
+                        JOIN "ExternalWorkFeedItems" AS item ON item."FeedId" = feed."Id"
+                        JOIN "Works" AS work ON work."Id" = item."WorkId"
+                    WHERE
+                        feed."Namespace" = @Namespace
+                        AND feed."SourceValue" IS NULL
+                        AND work."DetailedAt" IS NULL
+                        AND work."Id" <> ALL(@Skipped)
+                        AND EXISTS (
+                            SELECT 1
+                            FROM
+                                "WorkExternalIdentities" AS identity
+                            WHERE
+                                identity."WorkId" = work."Id"
+                                AND (identity."Namespace" IN ('tmdb_movie', 'tmdb_tv', 'openlibrary', 'musicbrainz', 'igdb') OR identity."Namespace" = 'anilist' AND work."MediaTypeId" = 3))
+                    ORDER BY
+                        work."Id",
+                        item."Position",
+                        feed."Id"
+                ) AS listed
+                ORDER BY
+                    listed."Position",
+                    listed."FeedId",
+                    listed."Id"
+                LIMIT @Limit;
+                """;
+            sql.Parameters.Add(data);
+            return await ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
         }
     }
 }

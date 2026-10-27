@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Profile;
@@ -11,9 +12,40 @@ namespace Jularr.Backend.Logic.Media
     // The provider catalog Discover keeps: every title it loaded once, the current trending lists in their order.
     internal static class ExternalWorkLogic
     {
-        // With the DiscoverCache module Discover keeps what it loaded and answers from it; without it Discover only asks the providers.
-        public static async Task<bool> KeepsDiscoverTitlesAsync(this LogicContext ctx, CancellationToken ct) =>
-            (await ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["DiscoverCache"]), ct)).Any(module => module.IsEnabled);
+        // A catalog above the lean tier keeps Discover's lists and answers from them; on the lean tier Discover asks the provider each time.
+        // A catalog without settings of its own keeps them like the standard tier.
+        public static async Task<bool> KeepsDiscoverListsAsync(this LogicContext ctx, string @namespace, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    sync."Namespace"
+                FROM
+                    "ExternalWorkSyncs" AS sync
+                WHERE
+                    sync."Namespace" = @Namespace
+                    AND sync."CacheTier" = 1;
+                """;
+            sql.Parameters.Add(new ExternalWorkNamespaceData(@namespace));
+            return await ctx.ReadSql.ReadOptionalAsync<ExternalWorkNamespaceData>(sql, ct) is null;
+        }
+
+        // The catalogs on the lean tier, whose Discover lists are not kept.
+        public static async Task<IReadOnlySet<string>> ReadLeanCatalogsAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    sync."Namespace"
+                FROM
+                    "ExternalWorkSyncs" AS sync
+                WHERE
+                    sync."CacheTier" = 1;
+                """;
+            return (await ctx.ReadSql.ReadListAsync<ExternalWorkNamespaceData>(sql, ct)).Select(row => row.Namespace).ToHashSet(StringComparer.Ordinal);
+        }
 
         // The one owner of catalog rows: every title a list, search or relation names is a Work with its identity, found again by that identity.
         // An anime entry AniList knows as a season of a series is that series with the season, also while an earlier entry of its own still waits to be merged into it.
@@ -237,17 +269,15 @@ namespace Jularr.Backend.Logic.Media
         public static bool AreChangesDue(ExternalWorkSyncData sync, DateTimeOffset now) =>
             sync.ChangesReadAt is not { } read || now - new DateTimeOffset(read, TimeSpan.Zero) >= ChangesInterval;
 
-        public const int FullCatalogTier = 3;
-
-        // Catalogs with a full sync may keep the whole catalog (tier 3); every other one stays at tier 2 at most.
+        // Catalogs with a full sync may keep the whole catalog; every other one keeps Discover's lists at most.
         public static readonly IReadOnlySet<string> FullSyncCatalogs = new HashSet<string>(StringComparer.Ordinal) { "tmdb_movie", "tmdb_tv", "anilist" };
 
-        public static int MaximumCacheTier(string @namespace) => FullSyncCatalogs.Contains(@namespace) ? FullCatalogTier : 2;
+        public static CatalogCacheTier MaximumCacheTier(string @namespace) => FullSyncCatalogs.Contains(@namespace) ? CatalogCacheTier.Full : CatalogCacheTier.Standard;
 
-        // A catalog syncs when the Owner kept it on, chose tier 3, inside one of its windows (none: any time) and, if it waits, while nobody uses Jularr.
+        // A catalog syncs on the full tier, inside one of its windows (none: any time) and, if it waits, while nobody uses Jularr.
         public static bool MaySync(ExternalWorkSyncData sync, IReadOnlyList<ExternalWorkSyncWindowData> windows, TimeOnly localTime, bool isUsed)
         {
-            if (!sync.IsEnabled || sync.CacheTier < FullCatalogTier || sync.PausesWhileUsed && isUsed) return false;
+            if (sync.CacheTier != CatalogCacheTier.Full || sync.PausesWhileUsed && isUsed) return false;
             var own = windows.Where(window => window.Namespace == sync.Namespace).ToArray();
             return own.Length == 0 || own.Any(window => window.StartsAt < window.EndsAt
                 ? localTime >= window.StartsAt && localTime < window.EndsAt
@@ -265,8 +295,8 @@ namespace Jularr.Backend.Logic.Media
         // With full local discovery a catalog read whole answers Discover itself.
         public static async Task<IReadOnlySet<string>> ReadWholeExternalWorkCatalogsAsync(this LogicContext ctx, CancellationToken ct)
         {
-            var modules = await ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["DiscoverCache", "LocalDiscovery"]), ct);
-            if (modules.Count(module => module.IsEnabled) < 2) return new HashSet<string>(StringComparer.Ordinal);
+            var modules = await ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["LocalDiscovery"]), ct);
+            if (!modules.Any(module => module.IsEnabled)) return new HashSet<string>(StringComparer.Ordinal);
 
             var sql = new SqlStatement();
             sql.Statement =
@@ -276,7 +306,7 @@ namespace Jularr.Backend.Logic.Media
                 FROM
                     "ExternalWorkSyncs" AS sync
                 WHERE
-                    sync."IsEnabled"
+                    sync."CacheTier" = 3
                     AND sync."CompletedAt" IS NOT NULL;
                 """;
             return (await ctx.ReadSql.ReadListAsync<ExternalWorkNamespaceData>(sql, ct)).Select(row => row.Namespace).ToHashSet(StringComparer.Ordinal);
@@ -526,13 +556,12 @@ namespace Jularr.Backend.Logic.Media
                 """
                 SELECT
                     sync."Namespace",
-                    sync."IsEnabled",
+                    sync."CacheTier",
                     sync."RequestsPerMinute"::integer AS "RequestsPerMinute",
                     sync."PausesWhileUsed",
                     sync."ListedOn",
                     sync."Cursor",
-                    sync."ChangesReadAt",
-                    sync."CacheTier"::integer AS "CacheTier"
+                    sync."ChangesReadAt"
                 FROM
                     "ExternalWorkSyncs" AS sync
                 WHERE
@@ -542,79 +571,40 @@ namespace Jularr.Backend.Logic.Media
             return await ctx.ReadSql.ReadOptionalAsync<ExternalWorkSyncData>(sql, ct);
         }
 
-        public static async Task<IReadOnlyList<CatalogCacheProviderData>> ReadCatalogCacheProvidersAsync(this LogicContext ctx, CancellationToken ct)
+        public static Task<CatalogCacheSettingsData> ReadCatalogCacheSettingsAsync(this LogicContext ctx, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
-                    sync."Namespace",
-                    sync."CacheTier"::integer AS "CacheTier",
-                    sync."DetailsTrending"
-                FROM
-                    "ExternalWorkSyncs" AS sync
-                ORDER BY
-                    sync."Namespace";
-                """;
-            return await ctx.ReadSql.ReadListAsync<CatalogCacheProviderData>(sql, ct);
-        }
-
-        public static Task<CatalogKeepDaysData> ReadCatalogKeepDaysAsync(this LogicContext ctx, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    settings."CatalogDetailKeepDays"::integer AS "KeepDays"
+                    settings."CatalogDetailKeepDays"::integer AS "KeepDays",
+                    settings."DetailsDiscoverAhead"
                 FROM
                     "InstanceSettings" AS settings
                 WHERE
                     settings."Id" = 1;
                 """;
-            return ctx.ReadSql.ReadRequiredAsync<CatalogKeepDaysData>(sql, ct);
+            return ctx.ReadSql.ReadRequiredAsync<CatalogCacheSettingsData>(sql, ct);
         }
 
-        // A tier above what the catalog can keep is refused; lowering a tier deletes nothing, the cleanup drops old rows later.
-        public static async Task UpdateCatalogCacheAsync(this LogicContext ctx, IReadOnlyList<CatalogCacheProviderData> providers, CatalogKeepDaysData keep, CancellationToken ct)
+        public static async Task UpdateCatalogCacheSettingsAsync(this LogicContext ctx, CatalogCacheSettingsData data, CancellationToken ct)
         {
-            foreach (var provider in providers)
-            {
-                if (provider.CacheTier > ExternalWorkLogic.MaximumCacheTier(provider.Namespace))
-                {
-                    throw new DataValidationException(nameof(provider.CacheTier), "invalid_value");
-                }
-
-                var sql = new SqlStatement();
-                sql.Statement =
-                    """
-                    UPDATE
-                        "ExternalWorkSyncs" AS sync
-                    SET
-                        "CacheTier" = @CacheTier,
-                        "DetailsTrending" = @DetailsTrending,
-                        "UpdatedAt" = now()
-                    WHERE
-                        sync."Namespace" = @Namespace;
-                    """;
-                sql.Parameters.Add(provider);
-                if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
-                {
-                    throw new DataValidationException(nameof(provider.Namespace), "invalid_value");
-                }
-            }
-
-            var keepSql = new SqlStatement();
-            keepSql.Statement =
+            var sql = new SqlStatement();
+            sql.Statement =
                 """
                 UPDATE
                     "InstanceSettings" AS settings
                 SET
-                    "CatalogDetailKeepDays" = @KeepDays
+                    "CatalogDetailKeepDays" = @KeepDays,
+                    "DetailsDiscoverAhead" = @DetailsDiscoverAhead
                 WHERE
                     settings."Id" = 1;
                 """;
-            keepSql.Parameters.Add(keep);
-            await ctx.ExecuteAsyncForAffectedRows(keepSql, ct);
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new InvalidOperationException("The instance settings are missing.");
+            }
         }
 
         public static async Task<IReadOnlyList<ExternalWorkSyncWindowData>> ReadExternalWorkSyncWindowsAsync(this LogicContext ctx, CancellationToken ct)
@@ -643,7 +633,7 @@ namespace Jularr.Backend.Logic.Media
                 """
                 SELECT
                     sync."Namespace",
-                    sync."IsEnabled",
+                    sync."CacheTier",
                     sync."RequestsPerMinute"::integer AS "RequestsPerMinute",
                     sync."PausesWhileUsed",
                     sync."ListedOn",
@@ -700,16 +690,22 @@ namespace Jularr.Backend.Logic.Media
             return changed;
         }
 
-        // The Owner's choices replace the old ones and their windows, if nobody changed them in between.
+        // The Owner's choices replace the old ones and their windows, if nobody changed them in between. A tier above what the catalog can keep is refused;
+        // a lower tier deletes nothing at once, the cleanup lets unused rows go later.
         public static async Task UpdateExternalWorkSyncSettingsAsync(this LogicContext ctx, ExternalWorkSyncSettingsData data, CancellationToken ct)
         {
+            if (data.CacheTier > MaximumCacheTier(data.Namespace))
+            {
+                throw new DataValidationException(nameof(data.CacheTier), "invalid_value");
+            }
+
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 UPDATE
                     "ExternalWorkSyncs" AS sync
                 SET
-                    "IsEnabled" = @IsEnabled,
+                    "CacheTier" = @CacheTier,
                     "RequestsPerMinute" = @RequestsPerMinute,
                     "PausesWhileUsed" = @PausesWhileUsed,
                     "Version" = sync."Version" + 1,

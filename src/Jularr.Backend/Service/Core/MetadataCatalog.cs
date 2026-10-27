@@ -138,11 +138,11 @@ namespace Jularr.Backend.Service.Core
         public async Task<IReadOnlyList<ExternalWorkData>?> ReadCachedFeedInBatchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, CancellationToken ct)
         {
             var ranking = Ranking(mediaType, subtype, feed);
-            if (!await context.KeepsDiscoverTitlesAsync(ct))
+            var descriptor = new ExternalFeedData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype, feed, 1, null, null);
+            if (!await context.KeepsDiscoverListsAsync(descriptor.Namespace, ct))
             {
                 return null;
             }
-            var descriptor = new ExternalFeedData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype, feed, 1, null, null);
             return (await ExternalFeedCache.ReadAsync(context, descriptor, ct)).Items;
         }
 
@@ -151,7 +151,7 @@ namespace Jularr.Backend.Service.Core
         {
             var ranking = Ranking(mediaType, subtype, feed);
             var descriptor = new ExternalFeedData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype, feed, 1, null, null);
-            var keeps = await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverTitlesAsync(token), ct, mode: SqlAccessMode.ReadOnly);
+            var keeps = await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverListsAsync(descriptor.Namespace, token), ct, mode: SqlAccessMode.ReadOnly);
             if (keeps)
             {
                 return await feeds.LoadAsync(context, descriptor, FetchExternalFeedAsync, ct);
@@ -321,9 +321,10 @@ namespace Jularr.Backend.Service.Core
             return await metadata.ImportAsync(context, await metadata.ConnectAsync(context, ct), mediaType, subtype, int.Parse(externalId, CultureInfo.InvariantCulture), ct);
         }
 
-        // A Work the profile may open that has no details yet takes them from its catalog entry once, into the same Work. False while the catalog cannot give them now;
-        // nothing is retried, the next open asks again. A Work no catalog entry describes, such as an anime season no series holds yet, keeps its row.
-        public async Task<bool> DetailAsync(LogicContext context, long workId, long profileId, CancellationToken ct)
+        // A Work the profile may open (any Work for a background pass without a profile) that has no details yet takes them from its catalog entry once, into the same Work.
+        // False while the catalog cannot give them now; nothing is retried, the next open asks again. A Work no catalog entry describes, such as an anime season no series
+        // holds yet, keeps its row.
+        public async Task<bool> DetailAsync(LogicContext context, long workId, long? profileId, CancellationToken ct)
         {
             var gate = DetailGates[(int)(workId % DetailGates.Length)];
             await gate.WaitAsync(ct);
@@ -412,7 +413,7 @@ namespace Jularr.Backend.Service.Core
             return seriesId;
         }
 
-        private static Task<(WorkDetailStateData? Work, WorkIdentityData? Identity)> ReadDetailStateAsync(LogicContext context, long workId, long profileId, CancellationToken ct) =>
+        private static Task<(WorkDetailStateData? Work, WorkIdentityData? Identity)> ReadDetailStateAsync(LogicContext context, long workId, long? profileId, CancellationToken ct) =>
             context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 var sql = new SqlStatement();
@@ -434,14 +435,12 @@ namespace Jularr.Backend.Service.Core
                                 AND work."MediaTypeId" = 2
                         ) AS "AniListValue"
                     FROM
-                        "ProfileWorks" AS visible
-                        JOIN "Works" AS work ON work."Id" = visible."WorkId"
+                        "Works" AS work
                     WHERE
-                        visible."ProfileId" = @ProfileId
-                        AND work."Id" = @Id;
+                        work."Id" = @Id
+                        AND (@ProfileId::bigint IS NULL OR EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = work."Id"));
                     """;
-                sql.Parameters.Add(new WorkIdData(workId));
-                sql.Parameters.Add(new ProfileParameters(profileId));
+                sql.Parameters.Add(new WorkDetailLookupData(workId, profileId));
                 var work = await ctx.ReadSql.ReadOptionalAsync<WorkDetailStateData>(sql, token);
                 return (work, work is null ? null : await WorkMetadataQueries.ReadProviderIdentityAsync(ctx, workId, token));
             }, ct, mode: SqlAccessMode.ReadOnly);

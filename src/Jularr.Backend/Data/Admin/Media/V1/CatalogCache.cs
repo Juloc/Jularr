@@ -7,74 +7,34 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     {
     }
 
-    // One catalog's cache tier, the highest tier it can keep and its trending switch.
-    public sealed class CatalogCacheProviderV1 : BaseData
-    {
-        public CatalogCacheProviderV1(string @namespace, int cacheTier, int maximumTier, bool detailsTrending)
-        {
-            Namespace = @namespace;
-            CacheTier = cacheTier;
-            MaximumTier = maximumTier;
-            DetailsTrending = detailsTrending;
-        }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
-        public string Namespace { get; }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.CacheTier))]
-        public int CacheTier { get; }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.MaximumTier))]
-        public int MaximumTier { get; }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.DetailsTrending))]
-        public bool DetailsTrending { get; }
-    }
-
+    // The catalog choices of the whole instance: how long unused details and catalog rows are kept, and whether every Discover list is detailed in advance.
     public sealed class CatalogCacheV1 : BaseResponse
     {
-        public CatalogCacheV1(int keepDays, BaseDataList<CatalogCacheProviderV1> providers)
+        public CatalogCacheV1(int keepDays, bool detailsDiscoverAhead)
         {
             KeepDays = keepDays;
-            Providers = providers;
+            DetailsDiscoverAhead = detailsDiscoverAhead;
         }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.KeepDays))]
         public int KeepDays { get; }
 
-        public BaseDataList<CatalogCacheProviderV1> Providers { get; }
-    }
-
-    public sealed class UpdateCatalogCacheProviderDataV1 : BaseData
-    {
-        public UpdateCatalogCacheProviderDataV1(string @namespace, int cacheTier, bool detailsTrending)
-        {
-            Namespace = @namespace;
-            CacheTier = cacheTier;
-            DetailsTrending = detailsTrending;
-        }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
-        public string Namespace { get; }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.CacheTier))]
-        public int CacheTier { get; }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.DetailsTrending))]
-        public bool DetailsTrending { get; }
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.DetailsDiscoverAhead))]
+        public bool DetailsDiscoverAhead { get; }
     }
 
     public sealed class UpdateCatalogCacheDataV1 : BaseData
     {
-        public UpdateCatalogCacheDataV1(int keepDays, BaseDataList<UpdateCatalogCacheProviderDataV1> providers)
+        public UpdateCatalogCacheDataV1(int keepDays, bool detailsDiscoverAhead)
         {
             KeepDays = keepDays;
-            Providers = providers;
+            DetailsDiscoverAhead = detailsDiscoverAhead;
         }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.KeepDays))]
         public int KeepDays { get; }
 
-        public BaseDataList<UpdateCatalogCacheProviderDataV1> Providers { get; }
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.DetailsDiscoverAhead))]
+        public bool DetailsDiscoverAhead { get; }
     }
 }

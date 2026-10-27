@@ -71,9 +71,40 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 501 AND "IsAdult" = FALSE AND "CatalogNamespace" IS NULL AND "FetchedAt" IS NULL AND "OriginalTitle" IS NULL AND "Overview" IS NULL AND "Creator" IS NULL AND "ImageUrl" IS NULL AND "BackdropUrl" IS NULL AND "Popularity" IS NULL AND "Rating" IS NULL AND "Votes" IS NULL AND "TrendingRank" IS NULL"""));
             await ExecuteAsync(cs, """UPDATE "Works" SET "OriginalTitle" = 'Gehaltener Film' WHERE "Id" = 501""");
             Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 501 AND "SearchText" @@ to_tsquery('simple', 'gehaltener') AND "SearchText" @@ to_tsquery('simple', 'kept')"""));
-            Assert.AreEqual(3L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkSyncs" WHERE "CacheTier" = 2 AND "DetailsTrending" = FALSE"""));
             Assert.AreEqual((short)14, await ScalarAsync(cs, """SELECT "CatalogDetailKeepDays" FROM "InstanceSettings" WHERE "Id" = 1"""));
             Assert.AreEqual(14, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0014_work_catalog_columns'"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+        }
+
+        [TestMethod]
+        [DataRow(true, "anilist:2,tmdb_movie:3,tmdb_tv:2")]
+        [DataRow(false, "anilist:1,tmdb_movie:3,tmdb_tv:1")]
+        public async Task CatalogCacheTiers_UpgradeMapsKeptWholeAndDiscoverCache_AndDropsTheOldSwitches(bool keepsDiscoverLists, string tiers)
+        {
+            // A catalog kept whole is the full tier; otherwise the DiscoverCache module decides between standard (on) and lean (off).
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(CatalogCacheTiers_UpgradeMapsKeptWholeAndDiscoverCache_AndDropsTheOldSwitches) + keepsDiscoverLists);
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 17).ToArray()).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs, $"""
+                UPDATE "ExternalWorkSyncs" SET "IsEnabled" = "Namespace" = 'tmdb_movie', "DetailsTrending" = TRUE, "CacheTier" = 2;
+                UPDATE "InstanceModules" SET "IsEnabled" = {(keepsDiscoverLists ? "TRUE" : "FALSE")} WHERE "Key" = 'DiscoverCache';
+                INSERT INTO "ExternalWorkSyncWindows" ("Namespace", "StartsAt", "EndsAt") VALUES ('anilist', '02:00', '06:00');
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            Assert.AreEqual(tiers, await ScalarAsync(cs, """SELECT string_agg("Namespace" || ':' || "CacheTier", ',' ORDER BY "Namespace") FROM "ExternalWorkSyncs" """));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkSyncWindows" WHERE "Namespace" = 'anilist'"""), "The Owner's windows stay.");
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM information_schema.columns WHERE table_name = 'ExternalWorkSyncs' AND column_name IN ('IsEnabled', 'DetailsTrending')"""));
+            Assert.AreEqual(false, await ScalarAsync(cs, """SELECT "DetailsDiscoverAhead" FROM "InstanceSettings" WHERE "Id" = 1"""));
+
+            // The module is gone with what built on it; it cannot come back.
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "InstanceModules" WHERE "Key" = 'DiscoverCache'"""));
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "InstanceModuleDependencies" WHERE 'DiscoverCache' IN ("ModuleKey", "RequiredKey")"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "InstanceModules" WHERE "Key" = 'LocalDiscovery'"""));
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "InstanceModules" ("Key") VALUES ('DiscoverCache')"""));
+            Assert.AreEqual(17, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0017_catalog_cache_tiers'"""));
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
         }
 

@@ -8,6 +8,7 @@ using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Service.System.Media.V1;
@@ -45,7 +46,8 @@ namespace Jularr.Backend.Tests
             await Assert.ThrowsExactlyAsync<SecurityException>(() => RunAsync(host));
             Assert.AreEqual(0, tmdb.Requests.Count);
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'LocalDiscovery'");
-            // The default tier 2 keeps no full catalog: nothing is fetched until a catalog is set to tier 3.
+            // The standard tier keeps no full catalog: nothing is fetched until a catalog is on the full tier.
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"CacheTier\" = 2");
             await RunAsync(host);
             Assert.AreEqual(0, tmdb.Requests.Count);
             await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"CacheTier\" = 3");
@@ -122,16 +124,16 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void Windows_AndUse_DecideWhetherACatalogSyncs()
         {
-            var sync = new ExternalWorkSyncData("anilist", true, 20, true, null, null, null, 3);
+            var sync = new ExternalWorkSyncData("anilist", CatalogCacheTier.Full, 20, true, null, null, null);
             IReadOnlyList<ExternalWorkSyncWindowData> night = [new("anilist", new TimeOnly(22, 0), new TimeOnly(6, 0)), new("tmdb_movie", new TimeOnly(12, 0), new TimeOnly(13, 0))];
             Assert.IsTrue(ExternalWorkLogic.MaySync(sync, [], new TimeOnly(15, 0), false), "Without windows a catalog syncs any time.");
             Assert.IsTrue(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(23, 30), false));
             Assert.IsTrue(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(5, 59), false), "A window past midnight ends the next day.");
             Assert.IsFalse(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(12, 30), false), "Another catalog's window does not count.");
             Assert.IsFalse(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(23, 30), true), "It waits while Jularr is used.");
-            Assert.IsTrue(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", true, 20, false, null, null, null, 3), night, new TimeOnly(23, 30), true));
-            Assert.IsFalse(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", false, 20, false, null, null, null, 3), [], new TimeOnly(23, 30), false));
-            Assert.IsFalse(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", true, 20, false, null, null, null, 2), [], new TimeOnly(23, 30), false), "Only tier 3 runs the full sync.");
+            Assert.IsTrue(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", CatalogCacheTier.Full, 20, false, null, null, null), night, new TimeOnly(23, 30), true));
+            Assert.IsFalse(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", CatalogCacheTier.Standard, 20, false, null, null, null), [], new TimeOnly(23, 30), false), "Only the full tier runs the full sync.");
+            Assert.IsFalse(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", CatalogCacheTier.Lean, 20, false, null, null, null), [], new TimeOnly(23, 30), false));
         }
 
         [TestMethod]
@@ -143,28 +145,19 @@ namespace Jularr.Backend.Tests
             using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/cache");
             Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
             var current = (await read.Content.ReadFromJsonAsync<CatalogCacheV1>())!;
-            Assert.AreEqual(14, current.KeepDays);
-            CollectionAssert.AreEqual(new[] { "anilist", "tmdb_movie", "tmdb_tv" }, current.Providers.Select(provider => provider.Namespace).ToArray());
-            Assert.IsTrue(current.Providers.All(provider => provider.CacheTier == 2 && provider.MaximumTier == 3 && !provider.DetailsTrending));
+            Assert.AreEqual((14, false), (current.KeepDays, current.DetailsDiscoverAhead));
 
-            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(30,
-                new([new("anilist", 3, true), new("tmdb_movie", 1, false), new("tmdb_tv", 2, true)])));
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(30, true));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
-            Assert.AreEqual("anilist:3:true,tmdb_movie:1:false,tmdb_tv:2:true", await host.ScalarAsync(
-                "SELECT string_agg(\"Namespace\" || ':' || \"CacheTier\" || ':' || \"DetailsTrending\", ',' ORDER BY \"Namespace\") FROM \"ExternalWorkSyncs\""));
-            Assert.AreEqual((short)30, await host.ScalarAsync("SELECT \"CatalogDetailKeepDays\" FROM \"InstanceSettings\" WHERE \"Id\" = 1"));
+            Assert.AreEqual("30:true", await host.ScalarAsync("SELECT \"CatalogDetailKeepDays\" || ':' || \"DetailsDiscoverAhead\" FROM \"InstanceSettings\" WHERE \"Id\" = 1"));
 
-            // Out of range tier or days, an unknown catalog and a tier a catalog cannot keep are refused; nothing changes.
-            using var tier = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(10, new([new("anilist", 4, false)])));
-            Assert.AreEqual(HttpStatusCode.BadRequest, tier.StatusCode);
-            using var days = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(366, new([new("anilist", 2, false)])));
-            Assert.AreEqual(HttpStatusCode.BadRequest, days.StatusCode);
-            using var none = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(0, new([new("anilist", 2, false)])));
-            Assert.AreEqual(HttpStatusCode.BadRequest, none.StatusCode);
-            using var unknown = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(10, new([new("tvdb_series", 2, false)])));
-            Assert.AreEqual(HttpStatusCode.BadRequest, unknown.StatusCode);
-            Assert.AreEqual(2, ExternalWorkLogic.MaximumCacheTier("tvdb_series"), "A catalog without a full sync stays at tier 2 at most.");
-            Assert.AreEqual((short)30, await host.ScalarAsync("SELECT \"CatalogDetailKeepDays\" FROM \"InstanceSettings\" WHERE \"Id\" = 1"));
+            // Days out of range are refused; nothing changes.
+            foreach (var days in new[] { 0, 366 })
+            {
+                using var refused = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(days, false));
+                Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode, days.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+            Assert.AreEqual("30:true", await host.ScalarAsync("SELECT \"CatalogDetailKeepDays\" || ':' || \"DetailsDiscoverAhead\" FROM \"InstanceSettings\" WHERE \"Id\" = 1"));
         }
 
         [TestMethod]
@@ -175,39 +168,97 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Unauthorized, anonymous.StatusCode);
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist'"))!;
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
             using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/cache");
             Assert.AreEqual(HttpStatusCode.Forbidden, read.StatusCode);
-            using var write = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(10, new([new("anilist", 1, false)])));
+            using var write = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/cache", new UpdateCatalogCacheDataV1(10, true));
             Assert.AreEqual(HttpStatusCode.Forbidden, write.StatusCode);
-            Assert.AreEqual(2, await host.ScalarAsync("SELECT \"CacheTier\"::integer FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist'"));
+            using var tier = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1(CatalogCacheTier.Lean, 20, true, version));
+            Assert.AreEqual(HttpStatusCode.Forbidden, tier.StatusCode);
+            Assert.AreEqual("3:14:false", await host.ScalarAsync(
+                "SELECT sync.\"CacheTier\" || ':' || settings.\"CatalogDetailKeepDays\" || ':' || settings.\"DetailsDiscoverAhead\" FROM \"ExternalWorkSyncs\" AS sync CROSS JOIN \"InstanceSettings\" AS settings WHERE sync.\"Namespace\" = 'anilist'"));
         }
 
         [TestMethod]
-        public async Task Settings_SaveChoicesAndWindows_WithTheirVersion()
+        public async Task Settings_SaveTierChoicesAndWindows_WithTheirVersion()
         {
             await using var host = await Host.CreateAsync(library: true);
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            await host.Fixture.RunSqlAsync("INSERT INTO \"ExternalWorkSyncs\" (\"Namespace\", \"RequestsPerMinute\") VALUES ('openlibrary', 30)");
             using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/syncs");
             Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
-            var aniList = (await read.Content.ReadFromJsonAsync<BaseDataList<ExternalWorkSyncV1>>())!.Single(sync => sync.Namespace == "anilist");
-            Assert.AreEqual(20, aniList.RequestsPerMinute);
-            Assert.IsTrue(aniList.PausesWhileUsed);
+            var syncs = (await read.Content.ReadFromJsonAsync<BaseDataList<ExternalWorkSyncV1>>())!;
+            var aniList = syncs.Single(sync => sync.Namespace == "anilist");
+            Assert.AreEqual((CatalogCacheTier.Full, CatalogCacheTier.Full, 20, true), (aniList.CacheTier, aniList.MaximumCacheTier, aniList.RequestsPerMinute, aniList.PausesWhileUsed));
+            var books = syncs.Single(sync => sync.Namespace == "openlibrary");
+            Assert.AreEqual((CatalogCacheTier.Standard, CatalogCacheTier.Standard), (books.CacheTier, books.MaximumCacheTier), "A catalog without a full sync keeps Discover's lists at most.");
 
             var windows = new BaseDataList<ExternalWorkSyncWindowV1>([new(new TimeOnly(2, 0), new TimeOnly(6, 0)), new(new TimeOnly(22, 30), new TimeOnly(1, 0))]);
-            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1(true, 15, true, aniList.Version, windows));
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1(CatalogCacheTier.Lean, 15, true, aniList.Version, windows));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             Assert.AreEqual("02:00:00-06:00:00,22:30:00-01:00:00", await host.ScalarAsync("SELECT string_agg(\"StartsAt\"::text || '-' || \"EndsAt\"::text, ',' ORDER BY \"StartsAt\") FROM \"ExternalWorkSyncWindows\""));
+            Assert.AreEqual("1:15", await host.ScalarAsync("SELECT \"CacheTier\" || ':' || \"RequestsPerMinute\" FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist'"));
 
-            // An old version and a window without length are refused; the saved windows stay.
-            using var stale = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1(true, 10, true, aniList.Version));
+            // An old version, a window without length, an unknown tier and the full tier of a catalog without a full sync are refused; nothing changes.
+            using var stale = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1(CatalogCacheTier.Full, 10, true, aniList.Version));
             Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
             using var empty = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist",
-                new UpdateExternalWorkSyncDataV1(true, 10, true, aniList.Version + 1, new([new(new TimeOnly(3, 0), new TimeOnly(3, 0))])));
+                new UpdateExternalWorkSyncDataV1(CatalogCacheTier.Full, 10, true, aniList.Version + 1, new([new(new TimeOnly(3, 0), new TimeOnly(3, 0))])));
             Assert.AreEqual(HttpStatusCode.BadRequest, empty.StatusCode);
+            using var unknown = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1((CatalogCacheTier)4, 10, true, aniList.Version + 1));
+            Assert.AreEqual(HttpStatusCode.BadRequest, unknown.StatusCode);
+            using var full = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/openlibrary", new UpdateExternalWorkSyncDataV1(CatalogCacheTier.Full, 30, false, books.Version));
+            Assert.AreEqual(HttpStatusCode.BadRequest, full.StatusCode);
+            StringAssert.Contains(await full.Content.ReadAsStringAsync(), "CacheTier");
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncWindows\""));
-            Assert.AreEqual(15, await host.ScalarAsync("SELECT \"RequestsPerMinute\"::integer FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist'"));
+            Assert.AreEqual("anilist:1:15,openlibrary:2:30,tmdb_movie:3:120,tmdb_tv:3:120", await host.ScalarAsync(
+                "SELECT string_agg(\"Namespace\" || ':' || \"CacheTier\" || ':' || \"RequestsPerMinute\", ',' ORDER BY \"Namespace\") FROM \"ExternalWorkSyncs\""));
+            using var lower = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/openlibrary", new UpdateExternalWorkSyncDataV1(CatalogCacheTier.Lean, 30, false, books.Version));
+            Assert.AreEqual(HttpStatusCode.OK, lower.StatusCode, await lower.Content.ReadAsStringAsync());
+        }
+
+        [TestMethod]
+        public async Task CatalogPage_ShowsEachCatalogsTierChoice_AndTheInstanceChoicesBesideTheImages()
+        {
+            await using var host = await Host.CreateAsync(library: true, razor: true);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "ExternalWorkSyncs" ("Namespace", "RequestsPerMinute") VALUES ('openlibrary', 30);
+                UPDATE "ExternalWorkSyncs" SET "CacheTier" = 1 WHERE "Namespace" = 'tmdb_tv';
+                UPDATE "InstanceSettings" SET "CatalogDetailKeepDays" = 21, "DetailsDiscoverAhead" = TRUE;
+                """);
+            using var response = await host.SendAsync(HttpMethod.Get, "/Admin/Catalog");
+            var html = await response.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, html);
+
+            // Every card chooses its tier among three; only a catalog with a full sync may take the full one. The old switch is gone.
+            string Card(string @namespace) => html[html.IndexOf("id=\"catalog-" + @namespace + "\"", StringComparison.Ordinal)..] is var rest
+                ? rest[..(rest.IndexOf("</article>", StringComparison.Ordinal) + 10)] : "";
+            foreach (var (@namespace, tier, mode) in new[] { ("anilist", "3", "Kept"), ("tmdb_movie", "3", "Kept"), ("tmdb_tv", "1", "Live"), ("openlibrary", "2", "Kept") })
+            {
+                var card = Card(@namespace);
+                Assert.AreEqual(3, System.Text.RegularExpressions.Regex.Matches(card, "type=\"radio\"[^>]*name=\"CacheTier\"").Count, @namespace);
+                StringAssert.Matches(card, new System.Text.RegularExpressions.Regex("name=\"CacheTier\" value=\"" + tier + "\" checked=\"checked\""), @namespace);
+                StringAssert.Contains(card, ">" + mode + "<", @namespace);
+                foreach (var label in new[] { "1 Lean", "2 Standard", "3 Full" }) StringAssert.Contains(card, label, @namespace);
+            }
+            Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(Card("anilist"), "name=\"CacheTier\" value=\"3\"[^>]*disabled"));
+            StringAssert.Matches(Card("openlibrary"), new System.Text.RegularExpressions.Regex("name=\"CacheTier\" value=\"3\"[^>]*disabled=\"disabled\""));
+            Assert.IsFalse(html.Contains("name=\"IsEnabled\"", StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains("Keep whole", StringComparison.Ordinal));
+
+            // One section holds the instance's choices and the images: the days details are kept and the one switch for every Discover list.
+            var section = html[html.IndexOf("<h2>Cache</h2>", StringComparison.Ordinal)..];
+            StringAssert.Contains(section, "action=\"/Admin/Catalog?handler=Cache\"");
+            StringAssert.Matches(section, new System.Text.RegularExpressions.Regex("name=\"KeepDays\"[^>]*value=\"21\""));
+            StringAssert.Matches(section, new System.Text.RegularExpressions.Regex("checked=\"checked\"[^>]*name=\"DetailsDiscoverAhead\""));
+            StringAssert.Contains(section, "Detail Discover in advance");
+            StringAssert.Contains(section, "Keep details for");
+            StringAssert.Contains(section, "action=\"/Admin/Catalog?handler=Covers\"");
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "<h2>").Count, "No other heading.");
         }
 
         // One column of the catalog Work a provider identity names.

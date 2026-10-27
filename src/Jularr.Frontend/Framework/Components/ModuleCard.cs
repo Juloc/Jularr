@@ -36,7 +36,6 @@ namespace Jularr.Frontend.Framework
             ["Translation"] = "globe",
             ["Ocr"] = "text-select",
             ["SmartPdf"] = "document",
-            ["DiscoverCache"] = "drive",
             ["LocalDiscovery"] = "network"
         };
 

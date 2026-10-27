@@ -183,11 +183,11 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Catalog_WithoutTheDiscoverCacheModule_KeepsNoListsAndAsksTheProviders()
+        public async Task Catalog_OnTheLeanTier_KeepsNoListsAndAsksTheProviders()
         {
             var tmdb = new FakeTmdb();
             await using var host = await CreateHostAsync(fake: tmdb);
-            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'DiscoverCache'");
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"CacheTier\" = 1");
             using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
             var shown = (await feed.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single();
             Assert.AreEqual("The Matrix", shown.Title);
@@ -257,6 +257,50 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, old.StatusCode, await old.Content.ReadAsStringAsync());
             Assert.AreEqual("The Matrix", (await old.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().Title);
             Assert.AreEqual(5L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkFeeds\" WHERE \"RefreshedAt\" IS NOT NULL"));
+        }
+
+        [TestMethod]
+        public async Task FeedRefresh_DetailsTheTitlesOfEveryDiscoverListAhead_OnlyWhileTheSwitchIsOn()
+        {
+            var tmdb = new FakeTmdb();
+            await using var host = await CreateHostAsync(fake: tmdb);
+            await host.Fixture.RunSqlAsync("UPDATE \"MediaTypes\" SET \"IsEnabled\" = FALSE WHERE \"Id\" <> 1");
+            async Task Refresh()
+            {
+                await using var scope = host.Services.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<RefreshDiscoverFeedsV1>().ExecuteAsync<UpdateResult>(new RefreshDiscoverFeedsParametersV1(), default);
+            }
+            int Details(string id) => tmdb.Requests.Count(request => request.AbsolutePath == "/3/movie/" + id);
+
+            // Off: the four film lists are kept and their title stays a catalog row without details.
+            await Refresh();
+            Assert.AreEqual(4L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkFeeds\" WHERE \"RefreshedAt\" IS NOT NULL AND \"SourceValue\" IS NULL"));
+            const string Matrix = "SELECT work.\"DetailedAt\" IS NOT NULL FROM \"Works\" AS work JOIN \"WorkExternalIdentities\" AS identity ON identity.\"WorkId\" = work.\"Id\" WHERE identity.\"Namespace\" = 'tmdb_movie' AND identity.\"Value\" = '603'";
+            Assert.AreEqual(false, await host.ScalarAsync(Matrix));
+            Assert.AreEqual(0, Details("603"));
+
+            // On: the next pass details it once through the one detail path, although someone uses Jularr (TMDB does not wait).
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"DetailsDiscoverAhead\" = TRUE");
+            await Refresh();
+            Assert.AreEqual(true, await host.ScalarAsync(Matrix));
+            Assert.AreEqual(1, Details("603"));
+            Assert.AreEqual("A hacker learns the truth.", await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Overview'"));
+
+            // The detailed title now has recommendations; they are no Discover list and stay without details.
+            await Refresh();
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkFeeds\" WHERE \"RefreshedAt\" IS NOT NULL AND \"SourceValue\" = '603'"));
+            Assert.AreEqual(1, Details("603"));
+            Assert.AreEqual(0, Details("604"));
+
+            // A catalog that waits while Jularr is used details nothing while it is used.
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "ExternalWorkSyncs" SET "PausesWhileUsed" = TRUE WHERE "Namespace" = 'tmdb_movie';
+                UPDATE "Works" SET "DetailedAt" = NULL WHERE "Id" = (SELECT "WorkId" FROM "WorkExternalIdentities" WHERE "Namespace" = 'tmdb_movie' AND "Value" = '603');
+                """);
+            using var used = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/syncs");
+            await Refresh();
+            Assert.AreEqual(false, await host.ScalarAsync(Matrix));
+            Assert.AreEqual(1, Details("603"));
         }
 
         [TestMethod]
@@ -333,7 +377,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("""
                 UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
                 UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'anilist';
-                INSERT INTO "ExternalWorkSyncs" ("Namespace", "RequestsPerMinute", "CompletedAt") VALUES ('openlibrary', 20, now());
+                INSERT INTO "ExternalWorkSyncs" ("Namespace", "RequestsPerMinute", "CompletedAt", "CacheTier") VALUES ('openlibrary', 20, now(), 3);
                 INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES
                     (100, 3, NULL, 'Owned book'), (101, 3, 3, 'Blocked novel'), (102, 2, 1, 'Anime work'), (103, 2, 1, 'Anime season');
                 INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (100, 102, 1, 1), (101, 103, 1, 1);
@@ -431,11 +475,11 @@ namespace Jularr.Backend.Tests
             using var narrowed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("matrix rel", "movies"));
             Assert.AreEqual("The Matrix Reloaded", (await narrowed.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.Single().Title);
 
-            // Without full local discovery the shelves come from the providers again; without DiscoverCache nothing is suggested.
+            // Without full local discovery the shelves come from the providers again; catalogs on the lean tier suggest nothing.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'LocalDiscovery'");
             using var off = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/shelves", new ReadDiscoverShelvesDataV1());
             Assert.AreEqual(0, (await off.Content.ReadFromJsonAsync<BaseDataList<DiscoverShelfV1>>())!.Count);
-            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'DiscoverCache'");
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"CacheTier\" = 1");
             using var none = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("matr"));
             Assert.AreEqual(0, (await none.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.Count);
         }

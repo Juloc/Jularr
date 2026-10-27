@@ -30,7 +30,7 @@ namespace Jularr.Frontend.Pages.Setup.Instance
             ("setup.modules.watch", "play", ["Trickplay", "Subtitles", "AniList"]),
             ("setup.modules.reading", "book", ["Translation", "Ocr", "SmartPdf", "Uploads"]),
             ("setup.modules.games", "gamepad", ["Emulation"]),
-            ("setup.modules.discovery", "search", ["DiscoverCache", "LocalDiscovery", "Franchises"]),
+            ("setup.modules.discovery", "search", ["LocalDiscovery", "Franchises"]),
             ("setup.modules.personal", "bookmark", ["Notifications", "Collections", "Calendar", "Statistics", "UnitGroups", "HomeLayout"]),
             ("setup.modules.accounts", "users", ["Profiles", "ProgressSync", "Devices", "Registration"]),
             ("setup.modules.operations", "settings", ["Diagnostics"])

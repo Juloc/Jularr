@@ -106,7 +106,7 @@ namespace Jularr.Frontend.Framework
                 [
                     new("admin.providers.title", "/Admin/Providers", Right("providers.read")),
                     new("admin.mediaServers.title", "/Admin/Providers", Right("providers.read"), ["ProgressSync", "Library"], "servers", false, "view"),
-                    new("admin.catalog.title", "/Admin/Catalog", Admin, ["Library", "DiscoverCache"])
+                    new("admin.catalog.title", "/Admin/Catalog", Admin, ["Library"])
                 ]),
                 new("storage", "storage.title", "drive",
                 [
