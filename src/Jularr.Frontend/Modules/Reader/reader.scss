@@ -2,17 +2,22 @@
 @use './Figures';
 
 // Reuse the regular app navigation, with the document header as the only top bar.
+// The page is as tall as what the browser really shows (kept by the reader script): some phone browsers count their own
+// toolbars into 100dvh, which pushed the bottom bar below the screen. The reader fills what the page leaves it.
 .reader-page {
     overflow: hidden;
-    .app-layout { grid-template-rows: minmax(0, 1fr); height: 100dvh; }
+    .app-layout { grid-template-rows: minmax(0, 1fr); height: var(--reader-viewport, 100dvh); }
     .app-header { display: none; }
     .app-main { grid-row: 1; padding: 0; min-height: 0; }
+    .app-main > .page-screen { display: flex; flex-direction: column; gap: 0; height: 100%; }
+    .reader:not(:fullscreen) { flex: 1 1 0; min-height: 0; }
     &:has(.reader[data-view=theater]) {
         .app-layout { grid-template-columns: minmax(0, 1fr); }
         .app-sidebar { display: none; }
         .app-main { grid-column: 1; }
     }
     @media (max-width: 780px) { .app-main { width: 100%; flex: 1; } }
+    @media (max-width: 640px) { .app-layout { display: flex; flex-direction: column; } .app-main { min-height: 0; } }
 }
 
 .reader {
@@ -24,7 +29,7 @@
     position: relative;
     display: grid;
     grid-template: auto minmax(0, 1fr) auto / minmax(0, 1fr);
-    height: 100dvh;
+    height: 100%;
     container-type: inline-size;
     background: var(--surface);
     color: var(--text);
@@ -223,8 +228,9 @@
         .reader__top { top: 0; padding-top: max(14px, env(safe-area-inset-top)); }
         .reader__footer { bottom: 0; padding-bottom: max(14px, env(safe-area-inset-bottom)); }
         .reader__reveal { position: absolute; z-index: 6; left: calc(50% - 24px); display: grid; place-items: center; width: 48px; min-width: 0; min-height: 24px; height: 24px; padding: 2px 12px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
-        .reader__reveal--top { top: 0; border-top: 0; border-radius: 0 0 12px 12px; .ui-icon { transform: rotate(-90deg); } }
-        .reader__reveal--bottom { bottom: 0; border-bottom: 0; border-radius: 12px 12px 0 0; .ui-icon { transform: rotate(90deg); } }
+        // The handles stay clear of a notch and the gesture bar.
+        .reader__reveal--top { top: env(safe-area-inset-top); border-top: 0; border-radius: 0 0 12px 12px; .ui-icon { transform: rotate(-90deg); } }
+        .reader__reveal--bottom { bottom: env(safe-area-inset-bottom); border-bottom: 0; border-radius: 12px 12px 0 0; .ui-icon { transform: rotate(90deg); } }
         &[data-chrome=visible] {
             .reader__top { padding-top: max(28px, env(safe-area-inset-top)); }
             .reader__footer { padding-bottom: max(28px, env(safe-area-inset-bottom)); }
