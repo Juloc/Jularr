@@ -16,6 +16,8 @@ namespace Jularr.Frontend.Modules.Reader
         public string Direction { get; } = "ltr";
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
         public string Surface { get; } = "paper";
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
+        public string Binding { get; } = "soft";
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Colour))]
         public string Colour { get; } = "#f7f3ec";
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]

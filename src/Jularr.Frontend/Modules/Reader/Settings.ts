@@ -19,6 +19,7 @@ export interface ReaderSettings {
     layout: 'auto' | 'single' | 'spread';
     direction: 'ltr' | 'rtl';
     surface: 'paper' | 'clean';
+    binding: 'soft' | 'hard';
     colour: string;
     animation: 'system' | 'on' | 'off';
     preset: 'book' | 'novel' | 'manga';
@@ -48,6 +49,7 @@ export function readerSettings(value: unknown, rtl = false): ReaderSettings {
         layout: stored.layout === 'single' || stored.layout === 'spread' ? stored.layout : 'auto',
         direction: stored.direction === 'ltr' || stored.direction === 'rtl' ? stored.direction : rtl ? 'rtl' : 'ltr',
         surface: stored.surface === 'clean' ? 'clean' : 'paper',
+        binding: stored.binding === 'hard' ? 'hard' : 'soft',
         colour: typeof stored.colour === 'string' && /^#[a-f\d]{6}$/i.test(stored.colour) ? stored.colour
             : stored.theme === 'dark' ? '#141414' : stored.theme === 'sepia' ? '#f4ecd8' : '#f7f3ec',
         animation: stored.animation === 'on' || stored.animation === 'off' ? stored.animation : 'system',
@@ -102,12 +104,13 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
     window.addEventListener('pagehide', () => { if (saving || queued) saveProfile(true); });
     const fields = Array.from(reader.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-panel=settings] input:not([type=hidden]), [data-panel=settings] select'));
     const names: Record<string, keyof ReaderSettings> = { Size: 'size', Spacing: 'spacing', Paragraph: 'paragraph', FontFamily: 'font', TextWidth: 'width', MarginTop: 'marginTop', MarginBottom: 'marginBottom', MarginInner: 'marginInner', MarginOuter: 'marginOuter', Indent: 'indent', Hyphenation: 'hyphenation', Illustrations: 'illustrations',
-        Mode: 'mode', Layout: 'layout', Direction: 'direction', Surface: 'surface', Colour: 'colour', Animation: 'animation', Preset: 'preset', Fit: 'fit' };
+        Mode: 'mode', Layout: 'layout', Direction: 'direction', Surface: 'surface', Binding: 'binding', Colour: 'colour', Animation: 'animation', Preset: 'preset', Fit: 'fit' };
     const apply = (): void => {
         reader.dataset.mode = settings.mode;
         reader.dataset.layout = settings.layout;
         reader.dataset.direction = settings.direction;
         reader.dataset.surface = settings.surface;
+        reader.dataset.paperBinding = settings.binding;
         reader.dataset.animation = settings.animation;
         reader.dataset.indent = String(settings.indent);
         reader.dataset.hyphenation = String(settings.hyphenation);

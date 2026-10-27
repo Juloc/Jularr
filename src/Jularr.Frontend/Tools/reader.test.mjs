@@ -26,6 +26,7 @@ test('Reader validates optional device settings without trusting saved shapes or
     assert.deepEqual([margins.marginTop, margins.marginBottom, margins.marginInner, margins.marginOuter], [6, 6, 8, 7]);
     const limited = exports.readerSettings({marginTop:-5, marginBottom:99, marginInner:'wide', marginOuter:12});
     assert.deepEqual([limited.marginTop, limited.marginBottom, limited.marginInner, limited.marginOuter], [0, 20, 8, 12]);
+    assert.deepEqual([margins.binding, exports.readerSettings({binding:'hard'}).binding, exports.readerSettings({binding:'cloth'}).binding], ['soft', 'hard', 'soft']);
     assert.equal(exports.readerSettings({animation:'on'}).animation, 'on');
     assert.equal(exports.readerSettings({size:1.1, theme:'dark'}).size, 18);
     assert.equal(exports.readerSettings({theme:'dark'}).colour, '#141414');

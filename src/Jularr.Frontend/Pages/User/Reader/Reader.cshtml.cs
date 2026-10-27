@@ -566,6 +566,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                     .TextAttribute("data-ready-label", "reader.bookPages.ready").TextAttribute("data-unavailable-label", "reader.bookPages.unavailable"))),
             pages ? new Span() : SettingsGroup("paper", "reader.settings.paper", group => group
                 .Select(data => data.Surface, "reader.surface", [new("clean", texts["reader.surface.clean"]), new("paper", texts["reader.surface.paper"])])
+                .Select(data => data.Binding, "reader.binding", [new("soft", texts["reader.binding.soft"]), new("hard", texts["reader.binding.hard"])])
                 .Color(data => data.Colour, "reader.colour")),
             pages ? new Span() : SettingsGroup("motion", "reader.settings.motion", group => group
                 .Select(data => data.Animation, "reader.animation", [new("system", texts["reader.animation.system"]), new("on", texts["reader.animation.on"]), new("off", texts["reader.animation.off"])])

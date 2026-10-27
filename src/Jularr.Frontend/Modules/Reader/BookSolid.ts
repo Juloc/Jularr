@@ -65,33 +65,30 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
     };
     gradient('cut', [[0, '#514537', .23], [20, '#514537', .10], [75, '#514537', .17], [100, '#514537', .30]], '0%', '100%');
     const surfaces = [['left', left], ['right', right]] as const;
-    const overhang = study.dataset.bookBinding === 'soft' ? .7 : 2.4;
-    // The stack's cut edge hangs below the page and shows beside its outer side. A paperback has no gap behind its pages: each
-    // stack keeps its own flat edge, thins to nothing in a V at the fold, and the thicker one steps down in a short soft corner
-    // on its own side of the fold. A hardcover leaves the space between case and
-    // book block: both stacks meet at the spine, the thicker one flat, the thinner one rising softly to its own level.
+    // The stack's cut edge hangs below the page and shows beside its outer side. Each stack keeps its own flat edge, the
+    // thicker one stepping down in a short soft corner on its own side of the fold.
     const soft = study.dataset.bookBinding === 'soft';
+    // A paperback's cover is flush with its pages; a hardcover's case stands out around the block.
+    const overhang = soft ? .7 : 2.4;
     const notchWidth = 10;
     const stackBase = (x: number) => {
         const thick = Math.max(left.drop, right.drop), thin = Math.min(left.drop, right.drop);
         const onThickSide = (right.drop >= left.drop) === x >= 148;
-        if (soft) {
-            const near = Math.max(0, Math.min(1, Math.abs(x - 148) / 12));
-            return onThickSide ? thin + (thick - thin) * near * near * (3 - 2 * near) : thin;
-        }
-        const own = x < 148 ? left.drop : right.drop;
-        const near = 1 - Math.max(0, Math.min(1, Math.abs(x - 148) / Math.min(90, Math.max(30, (thick - own) * 1.6))));
-        return own + (thick - own) * near * near * (3 - 2 * near);
+        const near = Math.max(0, Math.min(1, Math.abs(x - 148) / 12));
+        return onThickSide ? thin + (thick - thin) * near * near * (3 - 2 * near) : thin;
     };
-    // Every leaf is bound at the spine, so a paperback's stack thins to nothing in a V at the fold.
-    const stackAt = (x: number) => stackBase(x) * (soft ? Math.min(1, Math.abs(x - 148) / notchWidth) : 1);
+    // Every leaf is bound at the spine, so the stack thins to nothing in a V at the fold. A paperback's thin cover follows the
+    // block into that V; a hardcover's case runs straight on below it, so the case shows in the gap between case and block.
+    const stackAt = (x: number) => stackBase(x) * Math.min(1, Math.abs(x - 148) / notchWidth);
+    const caseAt = soft ? stackAt : stackBase;
     const trace = (shape: (x: number) => number, from: number, to: number, extra: number, ratio = 1) => {
         const steps = Math.max(2, Math.round(Math.abs(to - from) / 6)), low = Math.min(from, to), high = Math.max(from, to);
         const xs = Array.from({ length: steps + 1 }, (_, index) => from + (to - from) * index / steps);
-        if (soft) for (const x of [-1, -.75, -.5, -.25, 0, .25, .5, .75, 1].map(step => 148 + step * notchWidth)) if (x > low && x < high) xs.push(x);
+        for (const x of [-1, -.75, -.5, -.25, 0, .25, .5, .75, 1].map(step => 148 + step * notchWidth)) if (x > low && x < high) xs.push(x);
         return xs.sort((a, b) => (a - b) * Math.sign(to - from)).map(x => `L${rounded(x)},${rounded(height + shape(x) * ratio + extra)}`).join(' ');
     };
     const along = (from: number, to: number, extra: number, ratio = 1) => trace(stackAt, from, to, extra, ratio);
+    const caseAlong = (from: number, to: number, extra: number) => trace(caseAt, from, to, extra);
     const projectX = (side: string, profile: typeof left, point: { x: number }, ratio = 1) => {
         const depth = side === 'left' ? dimensions.leftMm : dimensions.rightMm;
         const fan = depth > 0 ? Math.min(overhang * .65, .35 + depth * .025) : 0;
@@ -106,14 +103,14 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
         element('path', { d: facePath(side, profile), fill: 'none', stroke: '#30271e', 'stroke-width': width, 'stroke-opacity': opacity,
             'stroke-linejoin': 'round', transform: 'translate(.6,.8)' });
     // One chosen cover colour by default; a separate endpaper colour is optional.
-    const cover = `M${-overhang},${-overhang} H143 Q148,${-overhang + .8} 153,${-overhang} H${296 + overhang} V${rounded(height + stackAt(296) + overhang)}
-        ${along(296 + overhang, -overhang, overhang)} Z`;
+    const cover = `M${-overhang},${-overhang} H143 Q148,${-overhang + .8} 153,${-overhang} H${296 + overhang} V${rounded(height + caseAt(296) + overhang)}
+        ${caseAlong(296 + overhang, -overhang, overhang)} Z`;
     // The hanging stack casts its own soft shadow along the silhouette; the box behind only covers the page area.
     if (Math.max(left.drop, right.drop) > 1) for (const [width, opacity] of [[9, .014], [5, .024], [2.6, .04]])
         element('path', { d: cover, fill: 'none', stroke: '#30271e', 'stroke-width': width, 'stroke-opacity': opacity, 'stroke-linejoin': 'round', transform: 'translate(1.2,3)' });
     element('path', { d: cover, fill: 'var(--cover)', stroke: 'color-mix(in srgb,var(--cover) 74%,#302c27)', 'stroke-width': .35 });
-    element('path', { d: `M${-overhang},${rounded(height + stackAt(0) + overhang)} ${along(-overhang, 296 + overhang, overhang)}
-        V${rounded(height + stackAt(296) + overhang + board)} ${along(296 + overhang, -overhang, overhang + board)} Z`,
+    element('path', { d: `M${-overhang},${rounded(height + caseAt(0) + overhang)} ${caseAlong(-overhang, 296 + overhang, overhang)}
+        V${rounded(height + caseAt(296) + overhang + board)} ${caseAlong(296 + overhang, -overhang, overhang + board)} Z`,
         fill: 'color-mix(in srgb,var(--cover) 75%,#302c27)' });
     element('path', { d: `M${-overhang + .6},${-overhang + .6} H${296 + overhang - .6} V${rounded(height + overhang - .6)} H${-overhang + .6} Z`, fill: 'var(--lining)' });
     element('path', { d: `M147,-1 Q145,${height / 2} 147,${height + 1} L149,${height + 1} Q151,${height / 2} 149,-1 Z`,

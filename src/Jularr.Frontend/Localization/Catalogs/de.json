@@ -13397,6 +13397,18 @@
    "Paper",
    "Papier"
   ],
+  "reader.binding": [
+   "Binding",
+   "Einband"
+  ],
+  "reader.binding.soft": [
+   "Paperback",
+   "Taschenbuch"
+  ],
+  "reader.binding.hard": [
+   "Hardcover",
+   "Hardcover"
+  ],
   "reader.colour": [
    "Paper colour",
    "Papierfarbe"

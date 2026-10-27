@@ -282,6 +282,6 @@ export function initializeBookRenderer(reader: HTMLElement) {
         if (!ready || flights.length) return;
         prints.clear(); root.querySelectorAll<HTMLElement>('[data-book-page]').forEach(element => delete element.dataset.print);
         try { paintBook(); } catch { fail(); }
-    }).observe(reader, { attributes: true, attributeFilter: ['data-book-page-count', 'data-book-page-before'] });
+    }).observe(reader, { attributes: true, attributeFilter: ['data-book-page-count', 'data-book-page-before', 'data-paper-binding'] });
     return { update, turn, enabled };
 }
