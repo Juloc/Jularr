@@ -16,6 +16,7 @@ interface PlaybackPlan {
 const Modes = ["", "DirectPlay", "Remux", "Transcode"];
 const ReportInterval = 15_000;
 const IdleDelay = 3_000;
+const MaxRecoveries = 5;
 const WakeRetries = 6;
 
 const element = document.querySelector<HTMLElement>('.player[data-start-url]:not([data-start-url=""])');
@@ -52,7 +53,10 @@ async function start(player: HTMLElement): Promise<void> {
     function showLoading(): void {
         clearTimeout(loadingTimer);
         loadingTimer = window.setTimeout(() => {
-            if (status.hidden && !video.error && !video.ended) loading.hidden = false;
+            // A transient waiting/seek event is not buffering while future frames are ready.
+            if (status.hidden && !video.error && !video.ended
+                && (video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA)
+                && (!video.paused || !video.currentSrc)) loading.hidden = false;
         }, 220);
     }
 
@@ -74,10 +78,12 @@ async function start(player: HTMLElement): Promise<void> {
     const antiforgery = player.dataset.antiforgery ?? "";
     let plan: PlaybackPlan | null = null;
     let hls: { destroy(): void } | null = null;
+    let hlsPlayer: { recoverMediaError(): void } | null = null;
     let save: (value: object, leaving?: boolean) => void = () => undefined;
     let switching = false;
     let idle = 0;
     let seeking = false;
+    let recoveries = 0;
     let sourceReady = false;
     let sourcePosition = 0;
     let lastSubtitle: { key: string; language: string | undefined } | undefined;
@@ -207,37 +213,60 @@ async function start(player: HTMLElement): Promise<void> {
         location.assign(href);
     }
 
-    // Seek thumbnails over the timeline where the server has rendered them.
+    // Always show the target time while hovering or dragging; trickplay images are optional.
     async function previews(): Promise<void> {
-        const url = player.dataset.trickplayUrl;
         const preview = player.querySelector<HTMLElement>("[data-role=preview]");
-        if (!url || !preview) return;
-        const response = await fetch(url, { credentials: "same-origin" }).catch(() => null);
-        if (!response?.ok) return;
-        const layout = await (response.json() as Promise<{ intervalSeconds: number; frames: number; columns: number; rows: number; tileWidth: number; tileHeight: number }>).catch(() => null);
-        if (!layout || layout.frames < 1) return;
-        preview.style.width = `${layout.tileWidth}px`;
-        preview.style.height = `${layout.tileHeight}px`;
+        if (!preview) return;
+        const url = player.dataset.trickplayUrl;
+        type Layout = { intervalSeconds: number; frames: number; columns: number; rows: number; tileWidth: number; tileHeight: number };
+        let layout: Layout | null = null;
+        let dragging = false;
+        const time = document.createElement("span");
+        time.className = "player__preview-time";
+        const chapterName = document.createElement("span");
+        chapterName.className = "player__preview-chapter";
+        preview.append(time, chapterName);
+
         const show = (seconds: number, x: number) => {
-            const frame = Math.min(layout.frames - 1, Math.max(0, Math.floor(seconds / layout.intervalSeconds)));
-            const perSheet = layout.columns * layout.rows;
-            const tile = frame % perSheet;
-            preview.style.backgroundImage = `url("${url}/${Math.floor(frame / perSheet) + 1}")`;
-            preview.style.backgroundPosition = `-${(tile % layout.columns) * layout.tileWidth}px -${Math.floor(tile / layout.columns) * layout.tileHeight}px`;
-            // A hidden element has no offset parent; it is shown before it is placed.
+            const duration = Number(timeline.max);
+            if (!Number.isFinite(duration) || duration <= 0) return;
+            const target = Math.min(duration, Math.max(0, seconds));
+            time.textContent = clock(target);
+            const title = chapterTitleAt(target);
+            chapterName.textContent = title;
+            chapterName.hidden = title === "";
+            if (url && layout && layout.frames > 0 && layout.intervalSeconds > 0 && layout.columns > 0 && layout.rows > 0) {
+                const frame = Math.min(layout.frames - 1, Math.max(0, Math.floor(target / layout.intervalSeconds)));
+                const perSheet = layout.columns * layout.rows;
+                const tile = frame % perSheet;
+                preview.style.backgroundImage = `url("${url}/${Math.floor(frame / perSheet) + 1}")`;
+                preview.style.backgroundPosition = `-${(tile % layout.columns) * layout.tileWidth}px -${Math.floor(tile / layout.columns) * layout.tileHeight}px`;
+            }
             preview.hidden = false;
             const area = (preview.offsetParent ?? timeline).getBoundingClientRect();
-            preview.style.left = `${Math.max(0, Math.min(x - area.left - layout.tileWidth / 2, area.width - layout.tileWidth))}px`;
+            preview.style.left = `${Math.max(0, Math.min(x - area.left - preview.offsetWidth / 2, area.width - preview.offsetWidth))}px`;
         };
-        timeline.addEventListener("pointermove", event => {
+        const showAtPointer = (clientX: number) => {
             const bounds = timeline.getBoundingClientRect();
-            show(Number(timeline.max) * Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)), event.clientX);
-        });
+            show(Number(timeline.max) * Math.min(1, Math.max(0, (clientX - bounds.left) / Math.max(bounds.width, 1))), clientX);
+        };
+        timeline.addEventListener("pointermove", event => showAtPointer(event.clientX));
+        timeline.addEventListener("pointerdown", event => { dragging = true; showAtPointer(event.clientX); });
         timeline.addEventListener("input", () => {
             const bounds = timeline.getBoundingClientRect();
             show(Number(timeline.value), bounds.left + bounds.width * (Number(timeline.value) / Math.max(1, Number(timeline.max))));
         });
-        for (const name of ["pointerleave", "change"]) timeline.addEventListener(name, () => { preview.hidden = true; });
+        timeline.addEventListener("pointerleave", () => { if (!dragging) preview.hidden = true; });
+        for (const name of ["pointerup", "pointercancel", "change"]) timeline.addEventListener(name, () => { dragging = false; preview.hidden = true; });
+        if (!url) return;
+        const response = await fetch(url, { credentials: "same-origin" }).catch(() => null);
+        if (!response?.ok) return;
+        const result = await (response.json() as Promise<Layout>).catch(() => null);
+        if (!result || result.frames < 1 || result.intervalSeconds <= 0 || result.columns <= 0 || result.rows <= 0) return;
+        layout = result;
+        preview.classList.add("player__preview--image");
+        preview.style.width = `${result.tileWidth}px`;
+        preview.style.height = `${result.tileHeight}px`;
     }
 
     // The audio track the profile's preferences picked, where the server marked one.
@@ -278,6 +307,7 @@ async function start(player: HTMLElement): Promise<void> {
         const rate = video.playbackRate;
         hls?.destroy();
         hls = null;
+        hlsPlayer = null;
         player.querySelector<HTMLElement>("[data-role=mode]")!.textContent = text("data-mode", Modes[next.playbackModeTypeId] ?? "");
         save = progressReporter(player.dataset.sessionUrl + next.playbackSessionId, antiforgery, failed => {
             const feedback = player.querySelector<HTMLElement>('[data-role=save-error]');
@@ -301,12 +331,21 @@ async function start(player: HTMLElement): Promise<void> {
             });
             instance.on(Hls.Events.ERROR, (_, data) => {
                 // A conversion stopped for room answers Gone; the server says which.
-                if (data.response?.code === 410) instance.destroy();
-                if (data.fatal || data.response?.code === 410) void failure();
+                if (data.response?.code === 410) { instance.destroy(); void failure(); return; }
+                if (!data.fatal) return;
+                // A dropped connection or a broken segment in the middle of the film is retried in place a few times before the player gives up,
+                // so the page needs no reload; a picture that plays again resets the count.
+                if (recoveries < MaxRecoveries) {
+                    recoveries++;
+                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { instance.startLoad(); return; }
+                    if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { instance.recoverMediaError(); return; }
+                }
+                void failure();
             });
             instance.loadSource(next.streamUrl);
             instance.attachMedia(video);
             hls = instance;
+            hlsPlayer = instance;
         } else {
             // Metadata loads at once so the position applies before the first frame.
             video.preload = "metadata";
@@ -371,11 +410,17 @@ async function start(player: HTMLElement): Promise<void> {
         track.track.mode = "showing";
     }
 
-    video.addEventListener("error", () => void failure());
+    // The picture element reports a broken stretch as well (decoding, a segment that does not fit): an HLS playback is repaired in place first, like a fatal error of the loader.
+    video.addEventListener("error", () => {
+        if (hlsPlayer && recoveries < MaxRecoveries) { recoveries++; hlsPlayer.recoverMediaError(); return; }
+        void failure();
+    });
     video.addEventListener("waiting", () => { if (!video.paused) showLoading(); });
     video.addEventListener("stalled", () => { if (!video.paused) showLoading(); });
     video.addEventListener("seeking", () => { if (!video.paused) showLoading(); });
-    video.addEventListener("playing", stopLoading);
+    video.addEventListener("canplay", stopLoading);
+    video.addEventListener("seeked", () => { if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) stopLoading(); });
+    video.addEventListener("playing", () => { recoveries = 0; stopLoading(); });
     video.addEventListener("pause", stopLoading);
     video.addEventListener("ended", stopLoading);
 
@@ -383,6 +428,7 @@ async function start(player: HTMLElement): Promise<void> {
     video.addEventListener("play", () => setPlaying(true));
     video.addEventListener("pause", () => setPlaying(false));
     video.addEventListener("timeupdate", () => {
+        if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) stopLoading();
         if (!seeking) timeline.value = String(Math.floor(video.currentTime));
         timeline.style.setProperty('--played', `${Number(timeline.value) / Math.max(1, Number(timeline.max)) * 100}%`);
         player.querySelector("[data-role=time]")!.textContent = clock(video.currentTime);
@@ -466,12 +512,21 @@ async function start(player: HTMLElement): Promise<void> {
         if (position !== null) video.currentTime = position;
     }
 
-    // The chapter playing is marked in the menu.
+    // The chapter at a position; the hover preview names it.
+    function chapterTitleAt(seconds: number): string {
+        if (chapters.length === 0) return "";
+        const index = chapterIndexAt(chapters.map(chapter => ({ start: Number(chapter.dataset.chapter) })), seconds);
+        return index < 0 ? "" : chapters[index].dataset.title ?? "";
+    }
+
+    // The chapter playing is marked in the menu and named under the timeline.
     function markChapter(): void {
         if (chapters.length === 0) return;
         const index = chapterIndexAt(chapters.map(chapter => ({ start: Number(chapter.dataset.chapter) })), video.currentTime);
         if (index === currentChapter) return;
         currentChapter = index;
+        const now = player.querySelector<HTMLElement>("[data-role=chapter-now]");
+        if (now) { now.textContent = chapterTitleAt(video.currentTime); now.hidden = index < 0; }
         chapters.forEach((chapter, position) => chapter.setAttribute("aria-pressed", String(position === index)));
     }
 
@@ -638,6 +693,12 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Chrome hides only while playing without an open panel.
     player.addEventListener("pointermove", wake);
+    // A mouse leaving the picture hides the controls at once; touch and open panels keep them.
+    player.addEventListener("pointerleave", event => {
+        if (event.pointerType !== "mouse" || video.paused || seeking || player.classList.contains("player--mini") || player.querySelector(":popover-open")) return;
+        clearTimeout(idle);
+        player.classList.add("player--idle");
+    });
     player.addEventListener("focusin", wake);
     wake();
 

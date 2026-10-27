@@ -94,7 +94,23 @@
         &:is(:hover, :focus-visible)::after { opacity: 1; }
         &:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     }
-    &__preview { position: absolute; bottom: calc(100% + 10px); z-index: 3; border-radius: 8px; background-repeat: no-repeat; background-color: #000; pointer-events: none; }
+    &__preview {
+        position: absolute; bottom: calc(100% + 10px); z-index: 3; display: grid; place-items: center;
+        border: 1px solid rgb(255 255 255 / 22%); border-radius: 8px; background-repeat: no-repeat;
+        background-color: #17181b; pointer-events: none; box-shadow: 0 4px 18px rgb(0 0 0 / 40%);
+        &[hidden] { display: none; }
+    }
+    // Without a thumbnail the preview is a small label: the target time and the chapter there.
+    &__preview:not(.player__preview--image) { width: max-content; max-width: 240px; padding: 6px 10px; gap: 2px; text-align: center; }
+    &__preview-chapter { max-width: 100%; overflow: hidden; color: #fff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; &[hidden] { display: none; } }
+    // On a thumbnail the chapter name sits at the top edge, the time at the bottom.
+    &__preview--image &__preview-chapter { position: absolute; top: 4px; left: 4px; max-width: calc(100% - 8px); padding: 2px 6px; border-radius: 5px; background: rgb(0 0 0 / 78%); }
+    &__chapter-now { min-height: 1.2em; padding: 0 2px; font-size: .8rem; opacity: .85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; &[hidden] { display: none; } }
+    &__preview-time {
+        padding: 4px 7px; border-radius: 5px; background: rgb(0 0 0 / 78%);
+        color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 650;
+    }
+    &__preview--image { place-items: end center; padding-bottom: 4px; box-sizing: border-box; }
     &__actions { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
     &__audio, &__transport, &__options { display: flex; align-items: center; gap: 2px; }
     &__transport { justify-content: center; }

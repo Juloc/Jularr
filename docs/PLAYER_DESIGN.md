@@ -24,6 +24,8 @@ The design source is UiDesigner's `Projects/Jularr/Player/PlayerDesign.cs` and
 - Episodes (where the list is not beside the picture: Wide, Fullscreen, narrow) is the first button of the bottom bar's right group; a file with chapters adds a Chapters button beside it
   that opens the chapter list, and ticks on the timeline seek to them. A Skip button (Skip intro, Skip credits and so on) sits above the timeline's right edge while playback is inside a marked stretch;
   where the profile chose Automatic the player jumps on arrival and shows a short note with Undo, and credits that run to the end of the file open the next episode after that note when autoplay is on.
+- Hovering or dragging the timeline always names the target time and the chapter there; thumbnails are added where the server rendered them. The chapter playing is named under the
+  timeline. A mouse leaving the picture hides the controls at once. The loading ring ends as soon as frames are ready, and a dropped connection or broken segment of a conversion is retried in place up to five times before the player reports a failure.
 - The speaker shows three, two, one or no wave; the timeline is white-thumbed, played in the accent, buffered more opaque.
 - The page composes a sidebar using authorized Work details and the current
   season's existing episode service. Compact rows reuse `EpisodeCard`; the current

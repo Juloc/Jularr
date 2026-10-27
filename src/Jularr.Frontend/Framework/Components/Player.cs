@@ -75,6 +75,7 @@ namespace Jularr.Frontend.Framework
                             new Div().Class("player__preview").Attribute("data-role", "preview").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
                             new Span(new ValueText("0:00")).Attribute("data-role", "duration")
                         ).Class("player__progress"),
+                        Chapters.Count == 0 ? new Span() : new Span().Class("player__chapter-now").Attribute("data-role", "chapter-now").Attribute("hidden", "hidden"),
                         new Div(
                             new Div(
                                 new Button(new Span(Icon("volume")).Attribute("data-volume-icon", "3"), new Span(Icon("volume-medium")).Attribute("data-volume-icon", "2"),
@@ -180,7 +181,7 @@ namespace Jularr.Frontend.Framework
                 new Header(new Span(new Text("player.tab.chapters")),
                     new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("popovertarget", "player-chapters").Attribute("popovertargetaction", "hide")),
                 new Div([.. Chapters.Select((chapter, index) => new Button(new Span(new ValueText(ChapterName(chapter, index))), new Span(new ValueText(Clock(chapter.Start))).Class("player__chapter-time"))
-                    .Class("button player__option player__chapter").Attribute("data-chapter", Seconds(chapter.Start)).Attribute("aria-pressed", "false"))]).Class("player__chapter-list")
+                    .Class("button player__option player__chapter").Attribute("data-chapter", Seconds(chapter.Start)).Attribute("data-title", ChapterName(chapter, index)).Attribute("aria-pressed", "false"))]).Class("player__chapter-list")
             ).Class("player__chapters").Attribute("id", "player-chapters").Attribute("popover", "auto").Attribute("role", "dialog").Attribute("aria-label", texts["player.tab.chapters"]);
 
             // Compact fields from the shared form surface: the label sits in the outline.
