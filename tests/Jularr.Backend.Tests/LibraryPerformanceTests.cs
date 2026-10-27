@@ -186,6 +186,101 @@ namespace Jularr.Backend.Tests
             Assert.IsEmpty(overBudget, "Service p95 exceeded the configured budget: " + string.Join("; ", overBudget));
         }
 
+        // Opt-in: a large catalog next to the library fixture. Reports warm latencies of the library, the calendar, the Admin list and the cleanup's selects.
+        [TestMethod]
+        [TestCategory("Performance")]
+        public async Task CatalogScale_LibraryCalendarAdminListAndCleanup_ReportLatency()
+        {
+            if (!int.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_CATALOG_SCALE"), out var catalogWorks) || catalogWorks <= 0)
+                Assert.Inconclusive("Opt in with JULARR_TEST_CATALOG_SCALE=<number of catalog Works> on the isolated test server.");
+
+            var commands = new CommandLog();
+            using var logs = LoggerFactory.Create(logging => logging.SetMinimumLevel(LogLevel.Information).AddProvider(commands));
+            await using var host = await Host.CreateAsync(media: true, services: services =>
+            {
+                services.Replace(ServiceDescriptor.Singleton(provider =>
+                {
+                    var configuration = provider.GetRequiredService<IConfiguration>();
+                    var connection = new NpgsqlConnectionStringBuilder(configuration["JULARR_DB"]!) { Pooling = true };
+                    return new SqlDatabase(new NpgsqlDataSourceBuilder(connection.ConnectionString).UseLoggerFactory(logs).Build());
+                }));
+            });
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
+            await SeedInventoryAsync(host, 300, 411, false);
+            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" f SET \"MissingSince\" = NULL FROM \"MediaAssets\" a WHERE a.\"Id\" = f.\"MediaAssetId\" AND a.\"WorkId\" = 1;");
+            var started = Stopwatch.GetTimestamp();
+            // Most catalog Works are minimal rows read 0 to 60 days ago; one in fifty has old details; 100 are trending; a feed lists 500.
+            for (var from = 1; from <= catalogWorks; from += 20000)
+            {
+                var to = Math.Min(from + 19999, catalogWorks);
+                await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "ReleasedOn", "CatalogNamespace", "FetchedAt", "Popularity", "Rating", "Votes", "TrendingRank", "DetailedAt", "ViewedAt")
+                SELECT 1000000 + n, CASE WHEN n % 10 < 7 THEN 1 ELSE 2 END, 'Catalog ' || lpad(n::text, 7, '0'), 1980 + n % 45, current_date + (n % 400) - 200,
+                    CASE WHEN n % 10 < 7 THEN 'tmdb_movie' WHEN n % 10 < 9 THEN 'tmdb_tv' ELSE 'anilist' END,
+                    now() - (n % 60) * interval '1 day', (n % 1000)::real, (n % 100) / 10.0, n % 5000, CASE WHEN n <= 100 THEN n END,
+                    CASE WHEN n % 50 = 0 THEN now() - interval '40 days' END, CASE WHEN n % 50 = 0 THEN now() - interval '40 days' END
+                FROM generate_series({from}, {to}) AS n;
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", "CatalogNamespace", ("Id" - 1000000)::text FROM "Works" WHERE "Id" BETWEEN {1000000 + from} AND {1000000 + to};
+                """);
+            }
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "ExternalWorkFeeds" ("Key", "Namespace", "MediaTypeId", "DiscoverFeedTypeId", "Page") VALUES ('scale', 'tmdb_movie', 1, 2, 1);
+                INSERT INTO "ExternalWorkFeedItems" ("FeedId", "Position", "WorkId") SELECT (SELECT "Id" FROM "ExternalWorkFeeds" WHERE "Key" = 'scale'), n, 1000000 + n * 10 FROM generate_series(1, 500) AS n;
+                """);
+            TestContext.WriteLine($"Seeded {catalogWorks} catalog Works in {Stopwatch.GetElapsedTime(started).TotalSeconds:F1} s.");
+            await host.Fixture.RunSqlAsync("ANALYZE");
+
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            foreach (var (name, path) in new[]
+            {
+                ("library", "/api/v1/library?pageSize=48"),
+                ("library-search", "/api/v1/library?pageSize=48&query=Title%20003"),
+                ("calendar", $"/api/v1/calendar?from={today:yyyy-MM-dd}&days=30"),
+                ("admin-works", "/api/v1/admin/works?pageSize=25"),
+                ("admin-works-search", "/api/v1/admin/works?pageSize=25&query=Title%20003"),
+                ("admin-works-summary", "/api/v1/admin/works/summary"),
+                ("system-health", "/api/v1/admin/system")
+            })
+            {
+                var durations = new List<double>();
+                for (var iteration = 0; iteration < 12; iteration++)
+                {
+                    commands.Executions.Clear();
+                    var begin = Stopwatch.GetTimestamp();
+                    using var response = await host.SendAsync(HttpMethod.Get, path);
+                    Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, name + await response.Content.ReadAsStringAsync());
+                    if (iteration >= 2) durations.Add(Stopwatch.GetElapsedTime(begin).TotalMilliseconds);
+                    if (iteration == 3)
+                        foreach (var command in commands.Executions.OrderByDescending(command => command.Milliseconds).Take(3))
+                            TestContext.WriteLine($"PERF   SQL {command.Milliseconds:F1} ms: " + command.Sql.Replace('\n', ' ').Replace("  ", " ")[..Math.Min(400, command.Sql.Length)]);
+                }
+                durations.Sort();
+                TestContext.WriteLine($"PERF {name}: median {durations[durations.Count / 2]:F1} ms, p95 {durations[(int)Math.Ceiling(durations.Count * .95) - 1]:F1} ms, max {durations[^1]:F1} ms");
+            }
+
+            // One cleanup statement of a thousand titles, never committed: reset the details, delete the rows.
+            foreach (var step in new[] { "reset", "delete" })
+            {
+                var durations = new List<double>();
+                var changed = 0;
+                for (var iteration = 0; iteration < 5; iteration++)
+                {
+                    await using var context = new SqlContext(host.Services.GetRequiredService<SqlDatabase>().DataSource);
+                    await context.BeginAsync(SqlAccessMode.ReadWrite);
+                    var begin = Stopwatch.GetTimestamp();
+                    changed = step == "reset"
+                        ? await new LogicContext(context).ResetUnusedCatalogDetailsAsync(new CatalogCleanupData(1000), default)
+                        : await new LogicContext(context).DeleteUnusedCatalogTitlesAsync(new CatalogCleanupData(1000), default);
+                    durations.Add(Stopwatch.GetElapsedTime(begin).TotalMilliseconds);
+                }
+                durations.Sort();
+                TestContext.WriteLine($"PERF cleanup-{step} (batch of 1000, {changed} changed): median {durations[durations.Count / 2]:F1} ms, max {durations[^1]:F1} ms");
+            }
+        }
+
         [TestMethod]
         [TestCategory("Performance")]
         public async Task DiscoverAndWork_MixedInventory_ReportsWarmReadLatency()

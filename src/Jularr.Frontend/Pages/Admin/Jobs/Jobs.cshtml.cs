@@ -42,6 +42,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             ["wantedTargets"] = ("search", UiTone.Accent),
             ["covers"] = ("grid", UiTone.Accent),
             ["coverBackfill"] = ("grid", UiTone.Accent),
+            ["catalogCleanup"] = ("layers", UiTone.Accent),
             ["storage"] = ("drive", UiTone.Success),
             ["scanScheduling"] = ("calendar", UiTone.Success),
             ["backup"] = ("shield", UiTone.Success),

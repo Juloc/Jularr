@@ -20,7 +20,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // One bounded read: the titles are filtered and ordered first, only the page gets its cover. A title is monitored while one of its targets is not paused;
+            // One bounded read: only titles with a tie to the library (catalog titles are not listed), filtered and ordered first, only the page gets its cover. A title is monitored while one of its targets is not paused;
             // it is filed when it has a file and no monitored aired unit still lacks one, and downloading while one of its releases is on its way.
             var sql = new SqlStatement();
             sql.Statement =
@@ -46,7 +46,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     FROM
                         "WorkListEntries" AS listed
                     WHERE
-                        (@MediaTypeId::smallint IS NULL OR listed."MediaTypeId" = @MediaTypeId)
+                        EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS tie WHERE tie."WorkId" = listed."Id")
+                        AND (@MediaTypeId::smallint IS NULL OR listed."MediaTypeId" = @MediaTypeId)
                         AND (@Query::text IS NULL OR strpos(lower(listed."CanonicalTitle"), lower(@Query)) > 0)
                         AND (@AcquisitionProfileId::bigint IS NULL OR listed."AcquisitionProfileId" = @AcquisitionProfileId)
                         AND (
@@ -158,7 +159,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     FROM
                         "WorkListEntries" AS listed
                     WHERE
-                        (@MediaTypeId::smallint IS NULL OR listed."MediaTypeId" = @MediaTypeId)
+                        EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS tie WHERE tie."WorkId" = listed."Id")
+                        AND (@MediaTypeId::smallint IS NULL OR listed."MediaTypeId" = @MediaTypeId)
                         AND (@Query::text IS NULL OR strpos(lower(listed."CanonicalTitle"), lower(@Query)) > 0)
                         AND (@AcquisitionProfileId::bigint IS NULL OR listed."AcquisitionProfileId" = @AcquisitionProfileId)
                         AND (

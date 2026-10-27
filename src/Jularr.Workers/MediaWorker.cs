@@ -32,6 +32,10 @@ namespace Jularr.Workers
             await Runner.RunWhileBusyAsync("wantedTargets", async (services, token) =>
                 (await services.GetRequiredService<EnsureWantedTargetsV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(2), Time, ct);
 
+            // Catalog titles nobody uses lose their details, then their rows; once a day.
+            await Runner.RunAsync("catalogCleanup", (services, token) =>
+                services.GetRequiredService<CleanCatalogTitlesV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token), ct);
+
             // Covers still named by a provider, a pass of twenty at a time with a short pause.
             await Runner.RunWhileBusyAsync("covers", async (services, token) =>
                 (await services.GetRequiredService<StoreCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(2), Time, ct);
