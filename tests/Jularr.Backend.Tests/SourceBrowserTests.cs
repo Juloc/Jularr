@@ -170,6 +170,14 @@ namespace Jularr.Backend.Tests
             var destination = Path.Combine(folder.Path, "book.epub");
             await source.SaveFileAsync(new Uri(server.Address, "/book.epub"), destination, null, null, CancellationToken.None);
             Assert.AreEqual("the book", await File.ReadAllTextAsync(destination));
+
+            // Subsequent search and download pages keep the same browser and its source cookie.
+            var search = await source.ReadPagesAsync([new Uri(server.Address, "/search?q=next")], default);
+            Assert.IsNotNull(search);
+            StringAssert.Contains(server.LastCookie ?? "", "passed");
+            Assert.IsNotNull(await source.ReadPageAsync(new Uri(server.Address, "/slow_download/next/0/0"), default));
+            StringAssert.Contains(server.LastCookie ?? "", "passed");
+            Assert.AreEqual(1, source.Events.Count(item => item.Kind == "started"));
         }
 
         [TestMethod]
