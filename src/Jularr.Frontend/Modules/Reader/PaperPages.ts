@@ -72,6 +72,8 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
         if (book && !book.update({ current: spread, columns, minimum: edge(-1) ? -1 : 0,
             maximum: Math.ceil(pages / columns) - (edge(1) ? 0 : 1), group,
             next: (at, delta) => at + delta, number: at => at * columns + 1, commit }, active)) failed = true;
+        // Without the book view the flat page shows; it stays hidden only while the book is still to come.
+        if (!active && !book && reader.dataset.bookReady !== 'false') reader.dataset.bookReady = 'false';
         if (active && !book && !loading) loading = import('./BookRenderer').then(module => {
             book = module.initializeBookRenderer(reader);
             paint();

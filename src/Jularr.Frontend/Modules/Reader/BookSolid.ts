@@ -139,7 +139,8 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
             element('path', { d: `M${x(outside, ratio)},${rounded(outside.y * ratio + drop * (1 - ratio))} V${rounded(height + outside.y * ratio + drop * (1 - ratio))}`, fill: 'none',
                 stroke: index % 3 === 0 ? 'color-mix(in srgb,var(--paper-cut) 68%,#514637)' : 'color-mix(in srgb,var(--paper-cut) 78%,#fffdf2)', 'stroke-opacity': .4, 'stroke-width': .16 });
         }
-        const cut = `M${rounded(pageEdge)},${rounded(height)} L${rounded(outsideX)},${rounded(height + drop)} ${along(pageEdge, 148, 0)} L148,${rounded(height)} Z`;
+        // Starts on the page's own bottom edge (its crown lifts it a little), so no cover shows between page and stack.
+        const cut = `${line(height, 1)} L${rounded(outsideX)},${rounded(height + drop)} ${along(pageEdge, 148, 0)} Z`;
         element('path', { d: cut, fill: 'var(--paper-cut)', 'data-book-cut': `${side}-bottom` });
         element('path', { d: cut, fill: 'url(#book-cut)' });
         // Optical groups of leaves; density tracks the stack's height, never page count. The lines stay level and end on the

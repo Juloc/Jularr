@@ -167,6 +167,8 @@
     &[data-mode=scroll] &__images { display: block; }
     &__page-print { position: absolute; height: 100%; overflow: hidden; pointer-events: none; }
     &[data-book-ready=true] &__paper { opacity: 0; pointer-events: none; }
+    // Each chapter is a new document: until the book view has decided, the flat page must not flash up before the book.
+    &[data-mode=paged]:not([data-format]):not([data-book-ready]) &__paper { opacity: 0; }
     &[data-selecting=true] &__paper { user-select: text; cursor: text; }
     &[data-selecting=true] [data-reader-select] { background: var(--accent-soft); color: var(--accent-text); }
     &[data-direction=rtl] &__page-controls { flex-direction: row-reverse; }
