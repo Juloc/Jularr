@@ -1,4 +1,4 @@
-import { bookDimensions, paperProfile, paperOutline, printPlacement, paperInkPose, type Point } from './BookGeometry';
+import { bookDimensions, paperProfile, paperOutline, printPlacement, type Point } from './BookGeometry';
 import { BookLeaf } from './BookLeaf';
 import { paintBookSolid, paperLighting } from './BookSolid';
 import { pagePrint } from './PagePrint';
@@ -40,7 +40,7 @@ export function initializeBookRenderer(reader: HTMLElement) {
         number('bookPageBefore', 0) + adapter.number(at), number('paperBoard', 22));
     const profile = (at: number, side: string) => {
         const body = dimensions(at);
-        return paperProfile(side === 'left' ? body.leftMm : body.rightMm, body.centreMm, number('paperCurve', 24), number('paperAngle', 14));
+        return paperProfile(side === 'left' ? body.leftMm : body.rightMm, number('paperCurve', 24), number('paperAngle', 14));
     };
     const state = () => {
         for (const [key, value] of Object.entries({ bookState: drag ? 'holding' : flights.length ? 'settling' : 'idle',
@@ -93,14 +93,6 @@ export function initializeBookRenderer(reader: HTMLElement) {
             const printWidth = parseFloat(print.style.width) || width;
             footer.style.left = `${direction() * ((width - printWidth) / 2 - place.shift - margin)}px`;
         }
-        // Bend the native text ink along the physical paper while preserving
-        // the existing page number's centered sheet coordinates and text flow.
-        const section = profile(at, side);
-        for (const ink of Array.from(print.querySelectorAll<HTMLElement>('[data-paper-ink]'))) {
-            const x = Number(ink.dataset.paperX), spanWidth = Number(ink.dataset.paperWidth);
-            const pose = paperInkPose(section, side === 'left' ? 'left' : 'right', width, place.shift + margin + x, spanWidth);
-            ink.style.transform = `translateY(${pose.y.toFixed(3)}px) rotate(${pose.angle.toFixed(3)}deg)`;
-        }
         return print;
     };
     const exposure = () => {
@@ -124,7 +116,8 @@ export function initializeBookRenderer(reader: HTMLElement) {
         root.style.setProperty('--paper', getComputedStyle(reader).getPropertyValue('--reader-paper'));
         root.style.setProperty('--paper-ink', getComputedStyle(reader).getPropertyValue('--reader-ink'));
         root.style.setProperty('--texture', reader.dataset.surface === 'clean' ? '0' : String(number('paperTexture', 30) / 100));
-        root.style.setProperty('--book-scale', String(210 / (210 + body.totalMm * .45)));
+        // The stack hangs below the page, so the body shrinks from its top edge by as much as the whole block can hang (one stable size per book).
+        root.style.setProperty('--book-scale', String(210 / (210 + body.totalMm * Math.sin(number('paperAngle', 14) * Math.PI / 180) + 12)));
         root.dataset.bookColumns = String(columns); root.dataset.bookDirection = reader.dataset.direction;
         root.dataset.bookBinding = reader.dataset.paperBinding ?? 'hard';
         root.dataset.paperGrain = reader.dataset.paperGrain ?? 'fine'; root.dataset.paperEdge = reader.dataset.paperEdge ?? 'normal';

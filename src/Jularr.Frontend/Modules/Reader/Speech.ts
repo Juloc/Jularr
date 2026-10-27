@@ -86,26 +86,10 @@ export function initializeReadAloud(reader: HTMLElement, content: HTMLElement, r
                 const start = Number(ink.dataset.printStart), end = Number(ink.dataset.printEnd);
                 if (end <= from || start >= to || !ink.firstChild) continue;
                 const normalize = (value: string) => ink.dataset.printPreserved === 'true' ? value : value.replace(/\s+/g, ' ');
-                const first = Math.min(ink.textContent!.length, normalize(text.slice(start, Math.max(start, from))).length);
-                const last = Math.min(ink.textContent!.length, normalize(text.slice(start, Math.min(end, to))).length);
-                const fragments = Array.from(ink.querySelectorAll<HTMLElement>('[data-paper-ink]'));
-                if (fragments.length) {
-                    // CSS Highlights must use the actual native text nodes that
-                    // have been curved on the page, not a hidden flat surrogate.
-                    for (const fragment of fragments) {
-                        const begin = Number(fragment.dataset.paperStart), finish = Number(fragment.dataset.paperEnd);
-                        if (finish <= first || begin >= last || fragment.firstChild?.nodeType !== Node.TEXT_NODE) continue;
-                        const selection = document.createRange();
-                        selection.setStart(fragment.firstChild, Math.max(0, first - begin));
-                        selection.setEnd(fragment.firstChild, Math.min(finish - begin, last - begin));
-                        ranges.push(selection);
-                    }
-                } else if (ink.firstChild.nodeType === Node.TEXT_NODE) {
-                    const range = document.createRange();
-                    range.setStart(ink.firstChild, first);
-                    range.setEnd(ink.firstChild, last);
-                    ranges.push(range);
-                }
+                const range = document.createRange();
+                range.setStart(ink.firstChild, Math.min(ink.textContent!.length, normalize(text.slice(start, Math.max(start, from))).length));
+                range.setEnd(ink.firstChild, Math.min(ink.textContent!.length, normalize(text.slice(start, Math.min(end, to))).length));
+                ranges.push(range);
             }
         }
         return ranges;

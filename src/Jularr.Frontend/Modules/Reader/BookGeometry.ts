@@ -147,28 +147,24 @@ export function paperColour(base: string, warmth: number, brightness: number): s
         (value + ([0, -14, -39][index] * warmth / 100)) * brightness / 100))).toString(16).padStart(2, '0')).join('');
 }
 
-// Orthographic, almost-overhead projection of a cross-section, in A5 millimetres.
-// Surface and cut edge MUST share these samples. More leaves add physical height,
-// not extra DOM. The small inner crown represents paper relaxing over the binding.
-export function paperProfile(depth: number, centre: number, curve: number, angle: number) {
+// Orthographic, almost-overhead projection of a page, in A5 millimetres. The page itself stays as flat as a
+// bare leaf (only the small inner crown remains, so the text never bends); the thickness of the stack is
+// `drop`, the height of its cut edge below the page. More leaves add physical height, not extra DOM.
+export function paperProfile(depth: number, curve: number, angle: number) {
     const radians = angle * Math.PI / 180;
     const height = 210 * Math.cos(radians);
     const points = Array.from({ length: 41 }, (_, index) => {
         const u = index / 40;
-        const shoulder = (1 - Math.exp(-u * 11)) / (1 - Math.exp(-11));
-        // A stronger inner shoulder, not a broad sinusoidal dome across all text.
-        // The crown relaxes back to the physical block thickness at the outer edge.
         const crown = 4 * u * (1 - u) * Math.exp(-3 * u) / .3557 * curve / 100 * 8;
-        const z = centre + (depth - centre) * shoulder + crown;
-        return { x: u * 148, y: -z * Math.sin(radians) };
+        return { x: u * 148, y: -crown * Math.sin(radians) };
     });
-    const inset = .25 + depth * .12;
+    const inset = .25;
     const projectedX = (p: Point) => p.x - inset * (p.x / 148) ** 3;
     const index = points.findIndex(p => projectedX(p) >= 74);
     const a = points[index - 1], b = points[index];
     const fraction = (74 - projectedX(a)) / (projectedX(b) - projectedX(a));
     const footerLift = -(a.y + (b.y - a.y) * fraction);
-    return { points, height, inset, footerLift, lift: Math.max(...points.map(point => -point.y)) };
+    return { points, height, inset, footerLift, lift: Math.max(...points.map(point => -point.y)), drop: depth * Math.sin(radians) };
 }
 
 // Where a page's printed text box sits on its own paper. The stack beside the spine lifts the sheet and pulls the outer
@@ -179,32 +175,6 @@ export function paperProfile(depth: number, centre: number, curve: number, angle
 export function printPlacement(profile: ReturnType<typeof paperProfile>, side: string, pixelScale: number) {
     return { top: (profile.lift - profile.footerLift) * pixelScale,
         shift: (side === 'left' ? 1 : -1) * profile.inset * pixelScale / 2 };
-}
-
-// Keep the canonical typesetting flat; only the decorative native text ink
-// follows the static cross-section of a physical page. For the left page X is
-// mirrored, just like BookSolid's clip path. No bitmap or glyph scaling.
-export function paperInkPose(profile: ReturnType<typeof paperProfile>, side: 'left' | 'right',
-    width: number, x: number, spanWidth: number) {
-    const contour = paperOutline(profile).slice(0, 41);
-    const paperX = (screenX: number) => Math.max(0, Math.min(width, side === 'left' ? width - screenX : screenX));
-    const yAt = (screenX: number) => {
-        const u = paperX(screenX) / width;
-        let index = 1;
-        while (index < contour.length - 1 && contour[index].x < u) index++;
-        const a = contour[index - 1], b = contour[index];
-        const t = b.x > a.x ? Math.max(0, Math.min(1, (u - a.x) / (b.x - a.x))) : 0;
-        // Offset is relative to the original centre-height printPlacement.
-        return ((a.y + (b.y - a.y) * t) * (profile.height + profile.lift) -
-            profile.lift + profile.footerLift) * width / 148;
-    };
-    const middle = Math.max(0, Math.min(width, x + spanWidth / 2));
-    const step = Math.max(0.5, width / 300);
-    const left = Math.max(0, middle - step), right = Math.min(width, middle + step);
-    const slope = right > left ? (yAt(right) - yAt(left)) / (right - left) : 0;
-    // Excessive stack thickness must not turn short words upright.
-    const angle = Math.atan(slope) * 180 / Math.PI;
-    return { y: yAt(middle), angle: Math.max(-12, Math.min(12, angle)) };
 }
 
 export function paperOutline(profile: ReturnType<typeof paperProfile>): Point[] {
