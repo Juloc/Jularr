@@ -161,7 +161,8 @@ export function paperProfile(depth: number, curve: number, angle: number) {
         const crown = 4 * u * (1 - u) * Math.exp(-3 * u) / .3557 * curve / 100 * 8;
         return { x: u * 148, y: -crown * Math.sin(radians) };
     });
-    const inset = .25;
+    // The block's outer side shows beside the page, as wide as main's 3D view had it.
+    const inset = .25 + depth * .12;
     const projectedX = (p: Point) => p.x - inset * (p.x / 148) ** 3;
     const index = points.findIndex(p => projectedX(p) >= 74);
     const a = points[index - 1], b = points[index];

@@ -66,8 +66,9 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
     gradient('cut', [[0, '#514537', .23], [20, '#514537', .10], [75, '#514537', .17], [100, '#514537', .30]], '0%', '100%');
     const surfaces = [['left', left], ['right', right]] as const;
     const overhang = study.dataset.bookBinding === 'soft' ? .7 : 2.4;
-    // The stack's cut edge hangs below the page. A paperback has no gap behind its pages: each stack keeps its own flat edge, thins to nothing in a V at the fold
-    // as wide as the flare at its outer corner, and the thicker one steps down in a short soft corner on its own side of the fold. A hardcover leaves the space between case and
+    // The stack's cut edge hangs below the page and shows beside its outer side. A paperback has no gap behind its pages: each
+    // stack keeps its own flat edge, thins to nothing in a V at the fold, and the thicker one steps down in a short soft corner
+    // on its own side of the fold. A hardcover leaves the space between case and
     // book block: both stacks meet at the spine, the thicker one flat, the thinner one rising softly to its own level.
     const soft = study.dataset.bookBinding === 'soft';
     const notchWidth = 10;
@@ -91,12 +92,6 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
         return xs.sort((a, b) => (a - b) * Math.sign(to - from)).map(x => `L${rounded(x)},${rounded(height + shape(x) * ratio + extra)}`).join(' ');
     };
     const along = (from: number, to: number, extra: number, ratio = 1) => trace(stackAt, from, to, extra, ratio);
-    // A paperback's stack flares out a little at its outer bottom corners, in a soft curve rather than a hard corner.
-    const flareWidth = (outer: number) => soft && stackAt(outer) >= 1 ? Math.min(notchWidth, stackAt(outer) * .5) : 0;
-    const flareEdge = (outer: number, sign: number) => {
-        const drop = stackAt(outer), flare = flareWidth(outer);
-        return `M${outer},${rounded(height)} C${outer},${rounded(height + drop * .5)} ${rounded(outer + sign * flare * .2)},${rounded(height + drop * .85)} ${rounded(outer + sign * flare)},${rounded(height + drop)}`;
-    };
     const projectX = (side: string, profile: typeof left, point: { x: number }, ratio = 1) => {
         const depth = side === 'left' ? dimensions.leftMm : dimensions.rightMm;
         const fan = depth > 0 ? Math.min(overhang * .65, .35 + depth * .025) : 0;
@@ -121,11 +116,6 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
         V${rounded(height + stackAt(296) + overhang + board)} ${along(296 + overhang, -overhang, overhang + board)} Z`,
         fill: 'color-mix(in srgb,var(--cover) 75%,#302c27)' });
     element('path', { d: `M${-overhang + .6},${-overhang + .6} H${296 + overhang - .6} V${rounded(height + overhang - .6)} H${-overhang + .6} Z`, fill: 'var(--lining)' });
-    for (const [outer, sign] of [[0, -1], [296, 1]] as const) if (flareWidth(outer) > 0) {
-        const edge = flareEdge(outer, sign);
-        element('path', { d: `${edge} L${outer},${rounded(height + stackAt(outer))} Z`, fill: 'var(--paper-cut)', 'data-book-cut': `${sign < 0 ? 'left' : 'right'}-flare` });
-        element('path', { d: `${edge} L${outer},${rounded(height + stackAt(outer))}`, fill: 'none', stroke: '#504639', 'stroke-opacity': .5, 'stroke-width': .3 });
-    }
     element('path', { d: `M147,-1 Q145,${height / 2} 147,${height + 1} L149,${height + 1} Q151,${height / 2} 149,-1 Z`,
         fill: 'color-mix(in srgb,var(--cover) 58%,#413a31)' });
     element('path', { d: `M147,${height + .2} Q148,${height + 1.8} 149,${height + .2}`, fill: 'none', stroke: 'var(--cover)', 'stroke-width': .65 });
@@ -138,14 +128,16 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
         const x = (point: { x: number }, ratio = 1) => projectX(side, profile, point, ratio);
         const line = (base: number, ratio: number) => profile.points.map((point, index) => `${index ? 'L' : 'M'}${rounded(x(point, ratio))},${rounded(base + point.y * ratio)}`).join(' ');
         const outside = profile.points[40], outsideX = x(outside, 0);
-        const sideCut = `M${x(outside)},${outside.y} L${outsideX},0 V${height} L${x(outside)},${height + outside.y}Z`;
+        // The block's outer side: from the page edge out to the stack's own edge, which sits as far down as the stack hangs.
+        const outer = side === 'left' ? 0 : 296, drop = stackAt(outer);
+        const sideCut = `M${x(outside)},${outside.y} L${outsideX},${rounded(drop)} V${rounded(height + drop)} L${x(outside)},${height + outside.y}Z`;
         element('path', { d: facePath(side, profile), fill: 'none', stroke: '#30271e', 'stroke-width': .9, 'stroke-opacity': .12, transform: 'translate(.15,.25)' });
         element('path', { d: sideCut, fill: 'var(--paper-cut)', 'data-book-cut': `${side}-outside` });
         element('path', { d: sideCut, fill: 'url(#book-cut)' });
         const sideCount = Math.min(12, Math.max(1, Math.round(profile.inset * pixelScale / .7)));
         for (let index = 1; index < sideCount; index++) {
             const ratio = index / sideCount;
-            element('path', { d: `M${x(outside, ratio)},${outside.y * ratio} V${height + outside.y * ratio}`, fill: 'none',
+            element('path', { d: `M${x(outside, ratio)},${rounded(outside.y * ratio + drop * (1 - ratio))} V${rounded(height + outside.y * ratio + drop * (1 - ratio))}`, fill: 'none',
                 stroke: index % 3 === 0 ? 'color-mix(in srgb,var(--paper-cut) 68%,#514637)' : 'color-mix(in srgb,var(--paper-cut) 78%,#fffdf2)', 'stroke-opacity': .4, 'stroke-width': .16 });
         }
         const [from, to] = side === 'left' ? [0, 148] : [148, 296];
@@ -153,12 +145,10 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
         element('path', { d: cut, fill: 'var(--paper-cut)', 'data-book-cut': `${side}-bottom` });
         element('path', { d: cut, fill: 'url(#book-cut)' });
         // Optical groups of leaves; density tracks the stack's height, never page count. The lines stay level and simply end
-        // where the V at the fold and the flared outer corner cut through the stack.
-        const outer = side === 'left' ? 0 : 296, sign = side === 'left' ? -1 : 1;
+        // where the V at the fold cuts through the stack.
         const stackClip = element('clipPath', { id: `book-stack-${side}` }, defs);
         element('path', { d: cut }, stackClip);
-        element('path', { d: flareWidth(outer) > 0 ? `${flareEdge(outer, sign)} L${outer},${rounded(height + stackAt(outer))} Z` : 'M0,0Z' }, stackClip);
-        const [lineFrom, lineTo] = side === 'left' ? [-flareWidth(0), 148] : [148, 296 + flareWidth(296)];
+        const [lineFrom, lineTo] = side === 'left' ? [0, 148] : [148, 296];
         const count = Math.min(24, Math.max(1, Math.round(profile.drop * pixelScale / .85)));
         for (let index = 1; index < count; index++) {
             const ratio = index / count;

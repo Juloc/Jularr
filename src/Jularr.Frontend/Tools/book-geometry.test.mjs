@@ -173,8 +173,8 @@ test('the text box follows each page\'s lifted paper: equal padding above, below
         assert.ok(Math.abs(left.centre) < 1e-6 && Math.abs(right.centre) < 1e-6, 'The print is centred on its paper whatever the width the stack leaves.');
     }
     const start = bookDimensions(1500, 100, 1, 22);
-    assert.ok(Math.abs(printOnPaper(start, 'left', 380).paperWidth - printOnPaper(start, 'right', 380).paperWidth) < .01, 'A thick stack does not narrow its page.');
-    assert.ok(Math.abs(printOnPaper(start, 'right', 380).above - printOnPaper(bookDimensions(1500, 100, 1500, 22), 'right', 380).above) < .01, 'The text stays where it is while the stack moves.');
+    assert.ok(printOnPaper(start, 'right', 380).paperWidth < printOnPaper(start, 'left', 380).paperWidth, 'The thicker stack shows more of its block beside the page.');
+    assert.ok(Math.abs(printOnPaper(start, 'right', 380).above - printOnPaper(bookDimensions(1500, 100, 1500, 22), 'right', 380).above) < .25, 'The text stays where it is (within a fraction of a pixel) while the stack moves.');
 });
 test('rounded bend partitions the leaf and joins every projected patch without a hinge gap', () => {
     const width = 430, height = 610;
