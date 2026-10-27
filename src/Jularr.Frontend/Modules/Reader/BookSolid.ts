@@ -66,10 +66,14 @@ export function paintBookSolid(study: HTMLElement, dimensions: Dimensions, curve
     gradient('cut', [[0, '#514537', .23], [20, '#514537', .10], [75, '#514537', .17], [100, '#514537', .30]], '0%', '100%');
     const surfaces = [['left', left], ['right', right]] as const;
     const overhang = study.dataset.bookBinding === 'soft' ? .7 : 2.4;
-    // The stack's cut edge hangs below the page: each side keeps its own level and one soft step joins them at the spine.
+    // The stack's cut edge hangs below the page. The thinner stack stays flat right up to the fold and the leaves never cross it:
+    // the thicker stack alone steps softly down on its own side, its inner end meeting the thinner level at the fold.
     const stackAt = (x: number) => {
-        const t = Math.max(0, Math.min(1, (x - 136) / 24));
-        return left.drop + (right.drop - left.drop) * t * t * (3 - 2 * t);
+        const thickRight = right.drop >= left.drop;
+        const away = Math.max(0, Math.min(1, (thickRight ? x - 148 : 148 - x) / 30));
+        const thin = thickRight ? left.drop : right.drop, thick = thickRight ? right.drop : left.drop;
+        const level = thin + (thick - thin) * away * away * (3 - 2 * away);
+        return thickRight ? (x <= 148 ? left.drop : level) : (x >= 148 ? right.drop : level);
     };
     const along = (from: number, to: number, extra: number, ratio = 1) => {
         const steps = Math.max(2, Math.round(Math.abs(to - from) / 6));
