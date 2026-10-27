@@ -78,6 +78,28 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task LibraryTieIndexes_UpgradeKeepsTiesAndIndexesTheirMarkedRows()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(LibraryTieIndexes_UpgradeKeepsTiesAndIndexesTheirMarkedRows));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 16).ToArray()).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await ExecuteAsync(cs,
+                """
+                UPDATE "Works" SET "MediaSubtypeId" = 1, "IsMediaSubtypeManual" = TRUE WHERE "Id" = 501;
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "CatalogNamespace") VALUES (502, 1, 'Plex Film', NULL), (503, 1, 'Catalog Film', 'tmdb_movie');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (502, 'plex', '42'), (503, 'tmdb_movie', '603');
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            Assert.AreEqual(2L, await ScalarAsync(cs, """SELECT count(*) FROM pg_indexes WHERE indexname IN ('IX_WorkExternalIdentities_LibraryTie', 'IX_Works_ManualClass')"""));
+            CollectionAssert.AreEqual(new long[] { 501, 502 }, (long[])(await ScalarAsync(cs, """SELECT array_agg(DISTINCT "WorkId" ORDER BY "WorkId") FROM "WorkLibraryRelations" """))!);
+            Assert.AreEqual(16, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0016_library_tie_indexes'"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+        }
+
+        [TestMethod]
         public async Task MergeExternalWorks_UpgradeKeepsWhatPeopleMadeAsWorksAndDropsTheCache()
         {
             using var folder = new LibraryTests.TemporaryDirectory();

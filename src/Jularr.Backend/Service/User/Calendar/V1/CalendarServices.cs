@@ -17,9 +17,17 @@ namespace Jularr.Backend.Service.User.Calendar.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             // Episodes, volumes and tracks, or the Work itself without units, of the profile's Works: watchlisted, requested by it or already in the library.
+            // Both parts read only those Works (tied), so units and release dates of catalog titles are never scanned.
             var sql = new SqlStatement();
             sql.Statement =
                 """
+                WITH tied AS MATERIALIZED (
+                    SELECT entry."WorkId" FROM "WatchlistEntries" AS entry WHERE entry."ProfileId" = @ProfileId
+                    UNION
+                    SELECT request."WorkId" FROM "AcquisitionRequests" AS request WHERE request."RequestedByProfileId" = @ProfileId
+                    UNION
+                    SELECT asset."WorkId" FROM "MediaAssets" AS asset
+                )
                 (
                 SELECT
                     unit."ReleasedOn" AS "Day",
@@ -50,7 +58,8 @@ namespace Jularr.Backend.Service.User.Calendar.V1
                             "MediaAssets" AS asset
                             JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                         WHERE
-                            asset."WorkUnitId" = unit."Id"
+                            asset."WorkId" = work."Id"
+                            AND asset."WorkUnitId" = unit."Id"
                     ) AS "IsAvailable",
                     entry."WorkId" IS NOT NULL AS "IsWatchlisted",
                     EXISTS (SELECT 1 FROM "AcquisitionRequests" AS asked WHERE asked."WorkId" = work."Id" AND asked."RequestedByProfileId" = @ProfileId) AS "IsRequested"
@@ -61,7 +70,9 @@ namespace Jularr.Backend.Service.User.Calendar.V1
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                     LEFT JOIN "WatchlistEntries" AS entry ON entry."ProfileId" = @ProfileId AND entry."WorkId" = work."Id"
                 WHERE
-                    unit."ReleasedOn" >= @From
+                    unit."WorkId" = ANY(ARRAY(SELECT tied."WorkId" FROM tied))
+                    AND visible."WorkId" = ANY(ARRAY(SELECT tied."WorkId" FROM tied))
+                    AND unit."ReleasedOn" >= @From
                     AND unit."ReleasedOn" < @From + @Days
                     AND NOT EXISTS (SELECT 1 FROM "WorkUnits" AS child WHERE child."ParentWorkUnitId" = unit."Id")
                     AND (
@@ -110,7 +121,8 @@ namespace Jularr.Backend.Service.User.Calendar.V1
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = @ProfileId AND visible."WorkId" = work."Id" AND NOT visible."IsHidden"
                     LEFT JOIN "WatchlistEntries" AS entry ON entry."ProfileId" = @ProfileId AND entry."WorkId" = work."Id"
                 WHERE
-                    work."ReleasedOn" >= @From
+                    visible."WorkId" = ANY(ARRAY(SELECT tied."WorkId" FROM tied))
+                    AND work."ReleasedOn" >= @From
                     AND work."ReleasedOn" < @From + @Days
                     AND NOT EXISTS (SELECT 1 FROM "WorkUnits" AS unit WHERE unit."WorkId" = work."Id")
                     AND (

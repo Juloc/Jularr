@@ -255,7 +255,10 @@ namespace Jularr.Backend.Tests
                     if (iteration >= 2) durations.Add(Stopwatch.GetElapsedTime(begin).TotalMilliseconds);
                     if (iteration == 3)
                         foreach (var command in commands.Executions.OrderByDescending(command => command.Milliseconds).Take(3))
-                            TestContext.WriteLine($"PERF   SQL {command.Milliseconds:F1} ms: " + command.Sql.Replace('\n', ' ').Replace("  ", " ")[..Math.Min(400, command.Sql.Length)]);
+                        {
+                            var text = command.Sql.Replace('\n', ' ').Replace("  ", " ");
+                            TestContext.WriteLine($"PERF   SQL {command.Milliseconds:F1} ms: " + text[..Math.Min(400, text.Length)]);
+                        }
                 }
                 durations.Sort();
                 TestContext.WriteLine($"PERF {name}: median {durations[durations.Count / 2]:F1} ms, p95 {durations[(int)Math.Ceiling(durations.Count * .95) - 1]:F1} ms, max {durations[^1]:F1} ms");

@@ -47,6 +47,25 @@ namespace Jularr.Backend.Service.User.Library.V1
                 WHERE
                     visible."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
+                    -- Only Works with a present file or an open request can pass, so the profile's view is read for those ids alone, never for the catalog.
+                    AND visible."WorkId" = ANY(ARRAY(
+                        SELECT
+                            asset."WorkId"
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                        WHERE
+                            1 = ANY(@AvailabilityTypeIds::smallint[])
+                        UNION
+                        SELECT
+                            request."WorkId"
+                        FROM
+                            "AcquisitionRequests" AS request
+                        WHERE
+                            request."AcquisitionRequestStatusTypeId" BETWEEN 1 AND 5
+                            AND (2 = ANY(@AvailabilityTypeIds::smallint[]) AND request."RequestedByProfileId" = @ProfileId
+                                OR 3 = ANY(@AvailabilityTypeIds::smallint[]) AND request."RequestedByProfileId" IS DISTINCT FROM @ProfileId)
+                    ))
                     AND (
                         1 = ANY(@AvailabilityTypeIds::smallint[]) AND available."AddedAt" IS NOT NULL
                         OR EXISTS (
