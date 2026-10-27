@@ -1,7 +1,8 @@
-import { bookDimensions, paperProfile, paperOutline, printPlacement, type Point } from './BookGeometry';
+import { bookDimensions, paperProfile, paperOutline, printPlacement, stackSlope, type Point } from './BookGeometry';
 import { BookLeaf } from './BookLeaf';
 import { paintBookSolid, paperLighting } from './BookSolid';
 import { pagePrint } from './PagePrint';
+import { readerLifetime } from './Lifetime';
 
 export interface BookGroup { source: HTMLElement; page: number; count: number }
 export interface BookAdapter {
@@ -20,6 +21,7 @@ interface Flight {
 // One decorative renderer for prose and images. The adapters alone commit
 // pagination/progress. Idle/held paper schedules no frames; live leaves <= 3.
 export function initializeBookRenderer(reader: HTMLElement) {
+    const signal = readerLifetime();
     const root = reader.querySelector<HTMLElement>('.reader-book')!;
     const paper = reader.querySelector<HTMLElement>('.reader__paper')!;
     const host = root.querySelector<HTMLElement>('[data-book-leaves]')!;
@@ -33,14 +35,16 @@ export function initializeBookRenderer(reader: HTMLElement) {
     let drag: { id: number; x: number; y: number; scale: number; started: number; flight: Flight } | undefined;
     const clamp = (at: number) => Math.max(adapter.minimum, Math.min(adapter.maximum, at));
     const enabled = () => ready && reader.dataset.mode === 'paged' && reader.dataset.selecting !== 'true';
-    const motion = () => reader.dataset.animation === 'on' || reader.dataset.animation === 'system' && !reduced.matches;
+    // The book turns its pages in motion unless the device asks for reduced motion; flat pages are the reader's other mode.
+    const motion = () => !reduced.matches;
     const direction = () => reader.dataset.direction === 'rtl' ? -1 : 1;
     const number = (name: string, fallback: number) => Number(reader.dataset[name] ?? fallback);
-    const dimensions = (at: number) => bookDimensions(number('bookPageCount', 0), number('paperMicrons', 100),
-        number('bookPageBefore', 0) + adapter.number(at), number('paperBoard', 22));
+    // The exact count while it is known, else the book's last complete one: the thickness never vanishes while pages are counted.
+    const dimensions = (at: number) => bookDimensions(number('bookPageCount', number('bookThickPages', 0)), number('paperMicrons', 100),
+        number('bookPageBefore', number('bookThickBefore', 0)) + adapter.number(at), number('paperBoard', reader.dataset.paperBinding === 'hard' ? 22 : 3));
     const profile = (at: number, side: string) => {
         const body = dimensions(at);
-        return paperProfile(side === 'left' ? body.leftMm : body.rightMm, body.centreMm, number('paperCurve', 24), number('paperAngle', 14));
+        return paperProfile(side === 'left' ? body.leftMm : body.rightMm, number('paperCurve', 24), number('paperAngle', 14));
     };
     const state = () => {
         for (const [key, value] of Object.entries({ bookState: drag ? 'holding' : flights.length ? 'settling' : 'idle',
@@ -82,14 +86,16 @@ export function initializeBookRenderer(reader: HTMLElement) {
         const print = printing(at, columns === 1 || side === 'left' ? 0 : 1);
         if (!print) return;
         const place = printPlacement(profile(at, side), side, width / 148);
-        print.style.left = `${place.shift}px`;
+        // The text column lies inside the page margins: the outer one on the left sheet (and on a single page), the one at the spine on the right.
+        const margin = parseFloat(getComputedStyle(reader).getPropertyValue(columns === 1 || side === 'left' ? '--reader-margin-outer' : '--reader-margin-inner')) || 0;
+        print.style.left = `${place.shift + margin}px`;
         print.style.top = `${place.top}px`;
         // The paper curve moves the printed text, not the page number.
         // Centre the footer on the physical sheet rather than its shifted text viewport.
         const footer = print.querySelector<HTMLElement>('[data-book-number]');
         if (footer) {
             const printWidth = parseFloat(print.style.width) || width;
-            footer.style.left = `${direction() * ((width - printWidth) / 2 - place.shift)}px`;
+            footer.style.left = `${direction() * ((width - printWidth) / 2 - place.shift - margin)}px`;
         }
         return print;
     };
@@ -114,12 +120,15 @@ export function initializeBookRenderer(reader: HTMLElement) {
         root.style.setProperty('--paper', getComputedStyle(reader).getPropertyValue('--reader-paper'));
         root.style.setProperty('--paper-ink', getComputedStyle(reader).getPropertyValue('--reader-ink'));
         root.style.setProperty('--texture', reader.dataset.surface === 'clean' ? '0' : String(number('paperTexture', 30) / 100));
-        root.style.setProperty('--book-scale', String(210 / (210 + body.totalMm * .45)));
+        // The stack hangs below the page, so the body shrinks from its top edge by as much as a thick book's block hangs. The size is
+        // fixed: the page count arriving or changing never resizes the book under the reader.
+        root.style.setProperty('--book-scale', String(210 / (210 + 50 * stackSlope + 12)));
         root.dataset.bookColumns = String(columns); root.dataset.bookDirection = reader.dataset.direction;
-        root.dataset.bookBinding = reader.dataset.paperBinding ?? 'hard';
+        root.dataset.bookBinding = reader.dataset.paperBinding ?? 'soft';
         root.dataset.paperGrain = reader.dataset.paperGrain ?? 'fine'; root.dataset.paperEdge = reader.dataset.paperEdge ?? 'normal';
-        root.style.setProperty('--cover', reader.dataset.paperCover ?? '#84b6cb');
-        root.style.setProperty('--lining', reader.dataset.paperLining ?? reader.dataset.paperCover ?? '#84b6cb');
+        const cover = reader.dataset.paperCover ?? (root.dataset.bookBinding === 'hard' ? '#84b6cb' : '#efe9dd');
+        root.style.setProperty('--cover', cover);
+        root.style.setProperty('--lining', reader.dataset.paperLining ?? cover);
         root.style.setProperty('--edge-colour', reader.dataset.paperEdgeColour ?? '#9b8054');
         root.style.setProperty('--edge-strength', root.dataset.paperEdge === 'normal' ? '0' : String(number('paperEdgeStrength', 45) / 100));
         paintBookSolid(root, body, number('paperCurve', 24), number('paperAngle', 14), number('paperLight', 75) / 100, width / 148);
@@ -272,12 +281,13 @@ export function initializeBookRenderer(reader: HTMLElement) {
     root.addEventListener('pointercancel', restore);
     root.addEventListener('lostpointercapture', () => { if (drag) restore(); });
     reader.addEventListener('keydown', event => { if (event.key === 'Escape') restore(); });
-    document.addEventListener('visibilitychange', () => { if (document.hidden) restore(); });
-    window.addEventListener('pagehide', cancel);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) restore(); }, { signal });
+    window.addEventListener('pagehide', cancel, { signal });
+    signal.addEventListener('abort', cancel);
     new MutationObserver(() => {
         if (!ready || flights.length) return;
         prints.clear(); root.querySelectorAll<HTMLElement>('[data-book-page]').forEach(element => delete element.dataset.print);
         try { paintBook(); } catch { fail(); }
-    }).observe(reader, { attributes: true, attributeFilter: ['data-book-page-count', 'data-book-page-before'] });
+    }).observe(reader, { attributes: true, attributeFilter: ['data-book-page-count', 'data-book-page-before', 'data-book-thick-pages', 'data-book-thick-before', 'data-paper-binding'] });
     return { update, turn, enabled };
 }

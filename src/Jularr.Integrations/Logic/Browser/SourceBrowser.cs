@@ -259,12 +259,7 @@ namespace Jularr.Integrations.Logic.Browser
                     _lastOutcome = _refused ? "refused" : "no answer";
                     _lastError = _refused ? "the source refused this browser" : null;
                     Note(_lastOutcome, _lastError ?? $"no answer for {DiagnosticOrigin(uri)}");
-                    // Restart a refused process, keeping the source session until an explicit reset.
-                    if (_refused)
-                    {
-                        await CloseAsync();
-                    }
-
+                    // Keep the check page and its live session available for manual assistance.
                     return null;
                 }
 
