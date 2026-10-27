@@ -44,7 +44,10 @@ interface RouteFile { step: number; fileType: string; url: string; precision: st
 
 export function translator(reader: HTMLElement, content: HTMLElement, createWorker: () => Worker) {
     const blocks = Array.from(content.querySelectorAll<HTMLElement>("[data-b]"));
-    const originals = new Map(blocks.map(block => [block, block.innerHTML]));
+    // Parent blocks are never translated. Replacing a parent's innerHTML would detach
+    // all nested [data-b] nodes, leaving the translator's block references stale.
+    const originals = new Map(blocks.filter(block => !block.querySelector('[data-b]'))
+        .map(block => [block, block.innerHTML]));
     const status = reader.querySelector<HTMLElement>("[data-role=translation-status]");
     const source = languageOf(reader.dataset.language, content.innerText.slice(0, 20_000));
     let current: Language | "" = "";
@@ -85,6 +88,8 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         const route = `${source}/${target}`;
         if (worker && loaded === route) return worker;
         worker?.terminate();
+        worker = undefined;
+        loaded = undefined;
         const response = await fetch(reader.dataset.routeUrl! + route, { credentials: "same-origin" });
         if (!response.ok) throw new Error("No translation route.");
         const files = await response.json() as RouteFile[];
@@ -93,10 +98,15 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
             return { source: from, target: to, precision: step[0]?.precision ?? "int8shiftAlphaAll", files: Object.fromEntries(step.map(file => [file.fileType, file.url])) };
         });
         const started = createWorker();
-        await new Promise<void>((resolve, reject) => {
-            started.onmessage = event => event.data.type === "ready" ? resolve() : reject(new Error(event.data.message));
-            started.postMessage({ type: "load", engine: files.find(file => file.step === 0)!.url, models });
-        });
+        try {
+            await new Promise<void>((resolve, reject) => {
+                started.onmessage = event => event.data.type === "ready" ? resolve() : reject(new Error(event.data.message));
+                started.postMessage({ type: "load", engine: files.find(file => file.step === 0)!.url, models });
+            });
+        } catch (error) {
+            started.terminate();
+            throw error;
+        }
         worker = started;
         loaded = route;
         return started;
@@ -192,6 +202,26 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
             await translate(target, generation);
             if (current === target && generation === revision) reader.dataset.translationState = 'ready';
         } catch {
+            // A catalogue entry is not a guarantee that the browser can download or run
+            // its model. Keep the Reader usable and try the installed local provider.
+            if (reader.dataset.translationEngine !== 'gemma' && reader.dataset.localModel && reader.dataset.localTranslationUrl
+                && current === target && generation === revision) {
+                try {
+                    // A failed browser batch may already have altered some text.
+                    // Local TranslateGemma must receive the original source, not that partial translation.
+                    restore();
+                    reader.dataset.translationEngine = 'gemma';
+                    const provider = reader.querySelector<HTMLElement>('[data-translation-provider]');
+                    if (provider) provider.textContent =
+                        (reader.dataset.providerLocalLabel ?? 'TranslateGemma') + ' · ' + reader.dataset.localModel;
+                    reader.querySelector<HTMLButtonElement>('[data-local-quality-toggle]')?.setAttribute('aria-pressed', 'true');
+                    await translateLocal(target, generation);
+                    if (current === target && generation === revision) reader.dataset.translationState = 'ready';
+                    return;
+                } catch {
+                    // If both providers fail, keep the original document readable.
+                }
+            }
             if (current === target && generation === revision) { reader.dataset.translationState = 'failed'; restore(); say(reader.dataset.translationFailedLabel); }
         }
     };

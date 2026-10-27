@@ -1,9 +1,211 @@
-﻿{
+{
  "locale": "de",
  "name": "Deutsch",
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "errors.validation.search_in_progress": ["A library search is already queued or running. Finish or cancel it before starting a different selection.", "Eine Bibliothekssuche läuft bereits oder wartet. Beende sie oder brich sie ab, bevor du eine andere Auswahl startest."],
+  "errors.validation.no_search_targets": ["No monitored search targets match this selection. Monitoring was not changed.", "Die Auswahl enthält keine passenden überwachten Suchziele. Die Überwachung wurde nicht geändert."],
+  "works.outcome.evidence_missing": ["Existing file evidence is incomplete; review it manually.", "Die vorhandene Datei ist nicht ausreichend erkannt; bitte manuell prüfen."],
+  "works.search.refresh": ["Refresh search status", "Suchstatus aktualisieren"],
+  "works.search.title": ["Library search","Bibliothek durchsuchen"],
+  "works.search.all": ["Search all","Alle durchsuchen"],
+  "works.search.filtered": ["Search filtered","Gefilterte durchsuchen"],
+  "works.search.scope": ["Searches all matching monitored titles across every page using their current profiles. Existing downloads continue.","Durchsucht alle passenden überwachten Titel über sämtliche Seiten mit ihren aktuellen Profilen. Laufende Downloads bleiben bestehen."],
+  "works.search.progress": ["{0} of {1} targets checked","{0} von {1} Suchzielen geprüft"],
+  "works.search.cancelled": ["Cancelled","Abgebrochen"],
+  "works.search.results": ["Search results","Suchverlauf"],
+  "works.search.notRun": ["Not searched (cancelled)","Nicht gesucht (abgebrochen)"],
+  "works.outcome.pending": ["Waiting","Wartet"],
+  "works.outcome.paused": ["Monitoring paused","Überwachung pausiert"],
+  "operation.type.AcquisitionSearch": ["Library search","Bibliothekssuche"],
+  "jobs.job.searchQueue": ["Library search queue","Bibliothekssuche"],
+  "jobs.about.searchQueue": ["Searches queued library selections and reassesses upgrades using current profiles.","Durchsucht vorgemerkte Bibliothekstitel und bewertet Upgrades nach aktuellen Profilen."],
+  "profile.field.firstContentLanguage": ["First content language", "Erste Inhaltssprache"],
+  "profile.field.secondContentLanguage": ["Second content language", "Zweite Inhaltssprache"],
+  "profile.contentLanguage.none": ["No preference", "Keine Präferenz"],
+  "hint.ProfileFields.FirstContentLanguage.info": ["Prefer this content language; it applies to text, audio and subtitle availability, independently of the interface language.", "Diese Inhaltssprache wird bevorzugt; sie gilt für die Verfügbarkeit von Text, Ton und Untertiteln, unabhängig von der Menüsprache."],
+  "hint.ProfileFields.SecondContentLanguage.info": ["This content language is also accepted; it needs a first content language.", "Diese Inhaltssprache wird ebenfalls akzeptiert; sie braucht eine erste Inhaltssprache."],
+  "media.availability.PreferredSubtitles": ["Available with subtitles in a preferred language.", "Mit Untertiteln in einer bevorzugten Sprache verfügbar."],
+  "media.availability.PartialPreferredSubtitles": ["{0} of {1} monitored episodes or units are available, with matching subtitles where needed.", "{0} von {1} überwachten Folgen oder Einheiten sind verfügbar, bei Bedarf mit passenden Untertiteln."],
+  "media.availability.Paused": ["No usable file available; automatic search is paused.", "Keine nutzbare Datei vorhanden; automatische Suche pausiert."],
+  "media.availability.tag.PreferredSubtitles": ["With subtitles", "Mit Untertiteln"],
+  "media.availability.tag.PartialPreferredSubtitles": ["{0}/{1} · subtitles", "{0}/{1} · Untertitel"],
+  "media.availability.tag.Paused": ["Paused", "Pausiert"],
+  "pwa.main.choose": ["Use as main profile", "Als Hauptprofil verwenden"],
+  "pwa.main.current": ["Main profile for the home screen icon", "Hauptprofil für das Homescreen-Icon"],
+  "pwa.main.manage": ["Choose main profile for the home screen icon", "Hauptprofil für das Homescreen-Icon auswählen"],
+  "pwa.profile.accent": ["Profile accent (e.g. #8040f7)", "Profil-Akzentfarbe (z. B. #8040f7)"],
+  "pwa.update.available": ["An update is available.", "Eine Aktualisierung ist verfügbar."],
+  "pwa.update.install": ["Update", "Aktualisieren"],
+  "pwa.update.later": ["Later", "Später"],
+  "acquisition.connection.downloadPathWarning": ["Select a folder that Jularr can read. Until a download path is mapped, grabs from this client cannot start.","Wähle einen Ordner aus, auf den Jularr zugreifen kann. Ohne zugeordneten Downloadpfad können keine Downloads über diesen Client gestartet werden."],
+  "activity.view.queue": ["Queue","Warteschlange"],
+  "activity.view.history": ["History","Verlauf"],
+  "activity.views": ["Download views","Download-Ansichten"],
+  "activity.files.noJobs": ["No torrent downloads on this page.","Auf dieser Seite gibt es keine Torrent-Downloads."],
+  "activity.files": ["Files","Dateien"],
+  "activity.files.view": ["View torrent files","Torrent-Dateien anzeigen"],
+  "activity.files.empty": ["No torrent files were reported.","Keine Torrent-Dateien gefunden."],
+  "activity.files.unavailable": ["The torrent client's file list is currently unavailable.","Die Dateiliste des Torrent-Clients ist derzeit nicht verfügbar."],
+  "hint.acquisition.Nyaa.placeholder": ["https://nyaa.media","https://nyaa.media"],
+  "hint.acquisition.Nyaa.info": ["Nyaa RSS search endpoint; no API key required.","Nyaa-RSS-Suchquelle; kein API-Schlüssel erforderlich."],
+  "hint.acquisition.Qbittorrent.placeholder": ["http://qbittorrent:8080","http://qbittorrent:8080"],
+  "hint.acquisition.Qbittorrent.info": ["Address of the qBittorrent Web UI, reachable from Jularr.","Adresse der qBittorrent-Weboberfläche, die Jularr erreichen kann."],
+  "console.cleanupStatus": ["Jularr cleanup ledger","Jularr-Bereinigung"],
+  "console.cleanupEmpty": ["No automatic cleanup records yet.","Noch keine automatischen Bereinigungen."],
+  "console.cleanupWaiting": ["Cleanup queued","Bereinigung vorgemerkt"],
+  "console.cleanupRetry": ["Cleanup retry scheduled","Erneuter Löschversuch geplant"],
+  "console.cleaned": ["Removed from client","Aus SABnzbd entfernt"],
+  "console.jobId": ["SABnzbd job ID","SABnzbd-Auftrags-ID"],
+  "acquisition.connection.removesFailed": ["Remove failed SABnzbd jobs and source files","Fehlgeschlagene SABnzbd-Jobs und Quelldateien entfernen"],
+  "console.general": ["General","Allgemein"],
+  "console.downloads": ["Downloads","Downloads"],
+  "console.statistics": ["Statistics","Statistik"],
+  "console.history": ["History","Verlauf"],
+  "console.files": ["Files","Dateien"],
+  "console.queue": ["Download queue","Download-Queue"],
+  "console.queueEmpty": ["No jobs in the queue.","Keine Downloads in der Queue."],
+  "console.historyEmpty": ["No items in the provider history.","Keine Einträge im Download-Verlauf."],
+  "console.name": ["Name","Name"],
+  "console.progress": ["Progress","Fortschritt"],
+  "console.status": ["Status","Status"],
+  "console.size": ["Size","Größe"],
+  "console.timeLeft": ["Remaining","Verbleibend"],
+  "console.actions": ["Actions","Aktionen"],
+  "console.speed": ["Current speed","Aktuelle Geschwindigkeit"],
+  "console.free": ["Free space","Freier Speicher"],
+  "console.queueCount": ["Jobs in queue","Downloads in Queue"],
+  "console.paused": ["Queue paused","Queue pausiert"],
+  "console.pause": ["Pause","Pausieren"],
+  "console.resume": ["Resume","Fortsetzen"],
+  "console.cancel": ["Cancel download","Download abbrechen"],
+  "console.cancelConfirm": ["Cancel this download and remove its temporary files?","Download abbrechen und temporäre Dateien löschen?"],
+  "console.removeHistory": ["Remove from history","Aus Verlauf entfernen"],
+  "console.removeHistoryConfirm": ["Remove this record from SABnzbd history without deleting stored files?","Eintrag aus dem SABnzbd-Verlauf entfernen, ohne Dateien zu löschen?"],
+  "console.confirm": ["Confirm","Bestätigen"],
+  "console.limit": ["Only the first 200 provider items are shown.","Es werden nur die ersten 200 Einträge des Download-Clients angezeigt."],
+  "console.statsNote": ["Current values are live. Historical speed samples are not stored yet.","Aktuelle Werte sind live. Ein historischer Speed-Verlauf wird noch nicht aufgezeichnet."],
+  "console.categories": ["Available SABnzbd categories","Verfügbare SABnzbd-Kategorien"],
+  "console.complete": ["Complete","Abgeschlossen"],
+  "console.incomplete": ["Incomplete","Unvollständig"],
+  "console.filesEmpty": ["No files found in this folder.","Keine Einträge in diesem Ordner gefunden."],
+  "console.notMapped": ["Folder path is not configured or not accessible to Jularr.","Ordnerpfad nicht konfiguriert oder für Jularr nicht erreichbar."],
+  "console.fileAssignment": ["Assignment","Zuordnung"],
+  "console.unassigned": ["Not assigned; verify before deleting","Nicht zugeordnet – vor dem Löschen prüfen"],
+  "console.unchecked": ["Not fully checked","Nicht vollständig geprüft"],
+  "console.queued": ["Active download","Aktiver Download"],
+  "console.inHistory": ["In SABnzbd history","Im SABnzbd-Verlauf"],
+  "console.filesNote": ["Files are shown read-only. Unassigned does not mean safe to delete.","Dateien werden schreibgeschützt angezeigt. Unzugeordnet bedeutet nicht, dass sie gefahrlos gelöscht werden können."],
+  "console.refresh": ["Refresh","Aktualisieren"],
+  "console.orphan": ["SABnzbd orphan","SABnzbd-Waise"],
+  "console.removeOrphan": ["Clean up orphan","Waise bereinigen"],
+  "console.removeOrphanConfirm": ["Let SABnzbd delete this verified orphan folder?","Diesen von SABnzbd erkannten verwaisten Ordner löschen lassen?"],
+  "console.today": ["Today","Heute"],
+  "console.week": ["This week","Diese Woche"],
+  "console.month": ["This month","Dieser Monat"],
+  "console.total": ["Total downloads","Downloads insgesamt"],
+  "console.incompleteRemotePath": ["Incomplete folder path reported by SABnzbd","Von SABnzbd gemeldeter Incomplete-Pfad"],
+  "console.incompleteLocalPath": ["Same incomplete folder path visible to Jularr","Derselbe Incomplete-Pfad aus Sicht von Jularr"],
+  "console.mappingTitle": ["Categories by media type (blank uses default)","Kategorien nach Medienart (leer = Standard)"],
+  "console.kind.movie": ["Movies","Filme"],
+  "console.kind.tv": ["Series","Serien"],
+  "console.kind.anime": ["Anime","Anime"],
+  "console.kind.book": ["Books","Bücher"],
+  "console.kind.audiobook": ["Audiobooks (not routed separately yet)","Hörbücher (noch nicht separat zugeordnet)"],
+  "console.kind.manga": ["Manga / comics","Manga / Comics"],
+  "console.kind.lightNovel": ["Light novels","Light Novels"],
+  "console.kind.music": ["Music","Musik"],
+  "console.kind.game": ["Games","Spiele"],
+  "console.open": ["Open downloader","Downloader öffnen"],
+  "console.cleanup": ["Delete files","Dateien löschen"],
+  "console.deleteConfirmTitle": ["Delete verified orphan folder?","Verwaisten Ordner wirklich löschen?"],
+  "console.deletePreview": ["The selected folder and its contents will be permanently removed. Files and total size:","Der ausgewählte Ordner samt Inhalt wird dauerhaft gelöscht. Anzahl Dateien und Gesamtgröße:"],
+  "console.nextPage": ["Next page","Nächste Seite"],
+  "console.filesWarning": ["Only explicit SABnzbd orphans in the incomplete folder can be manually deleted. Unassigned files are read-only.","Manuell löschbar sind nur von SABnzbd gemeldete verwaiste Ordner im Incomplete-Verzeichnis. Unzugeordnete Dateien bleiben schreibgeschützt."],
+  "library.filter.availability": ["Show titles", "Titel anzeigen"],
+  "library.availability.Available": ["Available files", "Vorhandene Dateien"],
+  "library.availability.MyRequests": ["My requests", "Eigene Anfragen"],
+  "library.availability.OtherRequests": ["Other requests", "Anfragen anderer"],
+  "library.filter.genres": ["Genres", "Genres"],
+  "library.filter.audio": ["Audio language", "Audiosprache"],
+  "library.filter.subtitles": ["Subtitle language", "Untertitelsprache"],
+  "library.filter.rating": ["Minimum rating", "Mindestbewertung"],
+  "list.loadMore": ["Load more", "Weitere laden"],
+  "list.loading": ["Loading more entries…", "Weitere Einträge werden geladen…"],
+  "list.retry": ["Could not load more entries. Try again.", "Weitere Einträge konnten nicht geladen werden. Erneut versuchen."],
+  "companion.title": [
+   "Phone remote",
+   "Handy-Fernbedienung"
+  ],
+  "companion.description": [
+   "Control playback on your paired Jularr TV. You must be signed in with the same account and profile.",
+   "Steuere die Wiedergabe auf deinem verbundenen Jularr-TV. Du musst mit demselben Konto und Profil angemeldet sein."
+  ],
+  "companion.invite": [
+   "TV invitation",
+   "TV-Einladung"
+  ],
+  "companion.invitePlaceholder": [
+   "Paste the invitation from the TV",
+   "Einladung vom Fernseher einfügen"
+  ],
+  "companion.connect": [
+   "Connect",
+   "Verbinden"
+  ],
+  "companion.inviteHint": [
+   "Scan the TV QR code or paste its invitation. Invitations expire after five minutes.",
+   "Scanne den QR-Code am Fernseher oder füge die Einladung ein. Einladungen laufen nach fünf Minuten ab."
+  ],
+  "companion.disconnected": [
+   "Not connected to a TV",
+   "Nicht mit einem Fernseher verbunden"
+  ],
+  "companion.connected": [
+   "Connected to TV",
+   "Mit TV verbunden"
+  ],
+  "companion.connectionLost": [
+   "TV connection lost. Controls are disabled.",
+   "TV-Verbindung unterbrochen. Die Bedienung ist deaktiviert."
+  ],
+  "companion.pending": [
+   "Waiting for TV confirmation…",
+   "Warte auf Bestätigung vom Fernseher …"
+  ],
+  "companion.failed": [
+   "Command could not be confirmed.",
+   "Befehl konnte nicht bestätigt werden."
+  ],
+  "companion.rejected": [
+   "TV rejected the command.",
+   "Der Fernseher hat den Befehl abgelehnt."
+  ],
+  "companion.ended": [
+   "Session ended or access revoked. Pair again.",
+   "Sitzung beendet oder Zugriff entzogen. Bitte erneut koppeln."
+  ],
+  "companion.paired": [
+   "Paired with TV. Waiting for playback state…",
+   "Mit TV gekoppelt. Warte auf Wiedergabestatus …"
+  ],
+  "companion.play": [
+   "Play",
+   "Wiedergabe"
+  ],
+  "companion.pause": [
+   "Pause",
+   "Pause"
+  ],
+  "companion.disconnect": [
+   "Disconnect",
+   "Trennen"
+  ],
+  "companion.seek": [
+   "Position",
+   "Wiedergabeposition"
+  ],
   "progress.saveFailed": [
    "Progress could not be saved. Jularr will retry temporary failures.",
    "Der Fortschritt konnte nicht gespeichert werden. Jularr versucht es bei vorübergehenden Fehlern erneut."
@@ -49,8 +251,12 @@
    "Standard des Stils verwenden"
   ],
   "appearance.devicePreference": [
-   "Appearance choices are stored in this browser.",
-   "Die Darstellungsauswahl wird in diesem Browser gespeichert."
+   "Style and brightness are stored on this device; signed-in accent is stored on the main profile.",
+   "Stil und Helligkeit bleiben auf diesem Gerät; die Akzentfarbe wird beim Hauptprofil gespeichert."
+  ],
+  "appearance.accentSaveFailed": [
+   "The main profile color could not be saved. The previous color was restored.",
+   "Die Hauptprofilfarbe konnte nicht gespeichert werden. Die bisherige Farbe wurde wiederhergestellt."
   ],
   "design.title": [
    "Design lab",
@@ -1924,6 +2130,14 @@
    "SABnzbd",
    "SABnzbd"
   ],
+  "acquisition.connection.type.Qbittorrent": [
+   "qBittorrent",
+   "qBittorrent"
+  ],
+  "acquisition.connection.type.Nyaa": [
+   "Nyaa",
+   "Nyaa"
+  ],
   "acquisition.connection.baseUrl": [
    "Address",
    "Adresse"
@@ -2712,6 +2926,10 @@
    "Add indexer",
    "Indexer hinzufügen"
   ],
+  "acquisition.connection.addNyaa": [
+   "Add Nyaa indexer",
+   "Nyaa-Indexer hinzufügen"
+  ],
   "acquisition.connection.addClient": [
    "Add download client",
    "Download-Client hinzufügen"
@@ -2939,6 +3157,10 @@
   "instance.module.Requests": [
    "Requests",
    "Anfragen"
+  ],
+  "instance.module.Browser": [
+   "Browser support",
+   "Browser-Unterstützung"
   ],
   "instance.module.Acquisition": [
    "Arr+",
@@ -3685,8 +3907,8 @@
    "Verfügbar"
   ],
   "media.availability.tag.OtherAudio": [
-   "Other audio",
-   "Anderes Audio"
+   "Other language",
+   "Andere Sprache"
   ],
   "media.availability.tag.Partial": [
    "{0}/{1}",
@@ -3717,16 +3939,16 @@
    "Anfragen"
   ],
   "media.availability.ProfileAudio": [
-   "Local audio is available in the profile language.",
-   "Lokales Audio ist in der Profilsprache verfügbar."
+   "Available in a preferred content language.",
+   "In einer bevorzugten Inhaltssprache verfügbar."
   ],
   "media.availability.OtherAudio": [
-   "Available locally, but only in other audio languages.",
-   "Lokal verfügbar, aber nur in anderen Audiosprachen."
+   "Available, but only in other content languages.",
+   "Verfügbar, aber nur in anderen Inhaltssprachen."
   ],
   "media.availability.PartialOtherAudio": [
-   "{0} of {1} monitored episodes or units are available, but only in other audio languages.",
-   "{0} von {1} überwachten Folgen oder Einheiten sind verfügbar, aber nur in anderen Audiosprachen."
+   "{0} of {1} monitored episodes or units are available; some only in other content languages.",
+   "{0} von {1} überwachten Folgen oder Einheiten sind verfügbar; einige nur in anderen Inhaltssprachen."
   ],
   "media.availability.Requested": [
    "Requested",
@@ -4627,6 +4849,14 @@
   "acquisition.outcome.import_no_library": [
    "No library path for this media type",
    "Kein Bibliothekspfad für diesen Medientyp"
+  ],
+  "acquisition.outcome.import_book_language_unknown": [
+   "EPUB language could not be verified. The strict profile requires manual review; the download was kept.",
+   "Die Sprache dieses EPUBs konnte nicht bestätigt werden. Das strikte Profil erfordert eine manuelle Prüfung. Der Download bleibt erhalten."
+  ],
+  "acquisition.outcome.import_book_language_mismatch": [
+   "EPUB language differs from the mandatory profile language. The download was kept for review.",
+   "Die EPUB-Sprache entspricht nicht der verpflichtenden Profilsprache. Der Download bleibt zur Prüfung erhalten."
   ],
   "acquisition.outcome.import_source_unavailable": [
    "Download folder is unreachable",
@@ -6177,8 +6407,8 @@
    "Eigener Ersatz für den Doppelpunkt"
   ],
   "library.naming.specials": [
-   "Folder of season 0",
-   "Ordner für Staffel 0"
+   "Specials folder format",
+   "Ordnerformat für Specials"
   ],
   "library.naming.colon.Delete": [
    "Delete",
@@ -6209,8 +6439,12 @@
    "Platzhalter"
   ],
   "library.naming.rules": [
-   "Formats of Sonarr and Radarr work as they are, for example {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} or {series title}. Empty placeholders leave with their brackets; the file name always names the film or the episode.",
-   "Formate von Sonarr und Radarr funktionieren unverändert, zum Beispiel {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} oder {series title}. Leere Platzhalter verschwinden samt ihren Klammern; der Dateiname nennt immer den Film oder die Folge."
+   "Use placeholders such as {Title}, {anilist-{AnilistId}}, {olid-{OpenLibraryId}} or {[Quality Full]}. Empty placeholders disappear with their decoration. Saving changes import names; existing files move only after a confirmed rename preview. Multi-file game releases keep their internal paths.",
+   "Verwende Platzhalter wie {Title}, {anilist-{AnilistId}}, {olid-{OpenLibraryId}} oder {[Quality Full]}. Leere Platzhalter verschwinden samt ihren Zusätzen. Speichern ändert Importnamen; vorhandene Dateien werden erst nach einer bestätigten Umbenennungsvorschau verschoben. Mehrteilige Spiel-Releases behalten ihre internen Pfade."
+  ],
+  "library.naming.token.ImdbId": [
+   "IMDb ID",
+   "IMDb-ID"
   ],
   "library.naming.token.Title": [
    "The title",
@@ -6520,10 +6754,19 @@
    "Identify as existing work",
    "Einem vorhandenen Werk zuordnen"
   ],
+  "library.findWork": [
+   "Find the work",
+   "Werk suchen"
+  ],
+  "library.useMatch": [
+   "Use this entry",
+   "Diesen Eintrag verwenden"
+  ],
   "library.unassign": [
    "Remove identification",
    "Zuordnung entfernen"
   ],
+  "operation.type.MediaImport": ["Media list import", "Medienlistenimport"],
   "operation.type.LibraryScan": [
    "Library scan",
    "Bibliotheksscan"
@@ -7235,6 +7478,10 @@
   "errors.storage_unavailable": [
    "The storage is not reachable. Check that the NAS is on and the share is mounted.",
    "Der Speicher ist nicht erreichbar. Prüfe, ob das NAS an ist und die Freigabe eingebunden ist."
+  ],
+  "errors.download_storage_mount_required": [
+   "Choose writable folders on storage mounted inside Jularr. A direct SMB library connection alone cannot run the native downloader and unpack tools.",
+   "Wähle beschreibbare Ordner auf einem in Jularr eingebundenen Dateisystem. Eine direkte SMB-Bibliotheksverbindung allein reicht für den eigenen Downloader und die Entpackprogramme nicht aus."
   ],
   "errors.import_storage_full": [
    "The library has too little free space or its space could not be checked.",
@@ -8544,6 +8791,22 @@
    "The indexer or download client returned an invalid response.",
    "Der Indexer oder Download-Client hat eine ungültige Antwort geliefert."
   ],
+  "errors.source_gate": [
+   "The source needs a browser confirmation.",
+   "Die Quelle benötigt eine Bestätigung im Browser."
+  ],
+  "errors.source_markup_changed": [
+   "The source page could not be read. Its layout may have changed.",
+   "Die Quellenseite konnte nicht gelesen werden. Ihr Aufbau hat sich möglicherweise geändert."
+  ],
+  "errors.source_untrusted_origin": [
+   "The source returned an address outside its trusted mirrors.",
+   "Die Quelle hat eine Adresse außerhalb ihrer vertrauenswürdigen Mirrors geliefert."
+  ],
+  "errors.source_timeout": [
+   "The source did not answer in time.",
+   "Die Quelle hat nicht rechtzeitig geantwortet."
+  ],
   "errors.acquisition_download_path_unconfigured": [
    "Download workspace is not configured or is unavailable",
    "Download-Zwischenspeicher nicht eingerichtet oder nicht verfügbar"
@@ -8712,6 +8975,14 @@
    "This value cannot be used here.",
    "Dieser Wert kann hier nicht verwendet werden."
   ],
+  "errors.validation.not_allowed": [
+   "This action is not available for this item.",
+   "Diese Aktion ist für diesen Eintrag nicht verfügbar."
+  ],
+  "errors.validation.invalid_wireguard_configuration": [
+   "The WireGuard configuration cannot be used. It needs one interface, one peer and only supported keys.",
+   "Die WireGuard-Konfiguration kann nicht verwendet werden. Sie braucht genau eine Schnittstelle, einen Peer und nur unterstützte Schlüssel."
+  ],
   "errors.validation.unknown_language": [
    "Use two-letter language codes such as de or en.",
    "Verwende zweibuchstabige Sprachcodes wie de oder en."
@@ -8731,6 +9002,10 @@
   "errors.validation.naming_needs_release_token": [
    "Several releases need {Quality}, {Release Group} or {Edition} in every file name.",
    "Mehrere Releases brauchen {Quality}, {Release Group} oder {Edition} in jedem Dateinamen."
+  ],
+  "errors.validation.naming_invalid_folder": [
+   "Use one folder name without slashes; '.' and '..' are not allowed.",
+   "Verwende einen einzelnen Ordnernamen ohne Schrägstriche; '.' und '..' sind nicht erlaubt."
   ],
   "errors.validation.naming_invalid_path": [
    "Each folder of the pattern needs a name.",
@@ -9076,6 +9351,90 @@
    "Browser",
    "Browser"
   ],
+  "admin.browser.running": [
+   "Browser connected",
+   "Browser verbunden"
+  ],
+  "admin.browser.configured": [
+   "Browser configured but not connected",
+   "Browser eingerichtet, aber nicht verbunden"
+  ],
+  "admin.browser.missing": [
+   "Browser not configured",
+   "Browser nicht eingerichtet"
+  ],
+  "admin.browser.setupHint": [
+   "Install Chrome inside this Jularr container. Package installation requires container root and cannot run from the web interface. No additional container is needed.",
+   "Chrome wird im bestehenden Jularr-Container installiert. Die Installation benötigt Root-Rechte im Container und kann nicht über die Weboberfläche ausgeführt werden. Ein zusätzlicher Container ist nicht nötig."
+  ],
+  "admin.browser.installation": [
+   "Browser package",
+   "Browser-Paket"
+  ],
+  "admin.browser.version": [
+   "Installed version",
+   "Installierte Version"
+  ],
+  "admin.browser.diskUsage": [
+   "Managed storage",
+   "Belegter Speicher"
+  ],
+  "admin.browser.installation.disabled": [
+   "Disabled / not installed",
+   "Deaktiviert / nicht installiert"
+  ],
+  "admin.browser.installation.downloading": [
+   "Downloading",
+   "Download läuft"
+  ],
+  "admin.browser.installation.extracting": [
+   "Installing",
+   "Wird installiert"
+  ],
+  "admin.browser.installation.installed": [
+   "Installed",
+   "Installiert"
+  ],
+  "admin.browser.installation.failed": [
+   "Installation failed",
+   "Installation fehlgeschlagen"
+  ],
+  "admin.browser.installation.queued": [
+   "Queued for installation or update",
+   "Für die Installation oder Aktualisierung vorgemerkt"
+  ],
+  "admin.browser.install": [
+   "Install browser",
+   "Browser installieren"
+  ],
+  "admin.browser.uninstall": [
+   "Uninstall browser",
+   "Browser deinstallieren"
+  ],
+  "admin.browser.update": [
+   "Check for updates",
+   "Auf Updates prüfen"
+  ],
+  "admin.browser.repair": [
+   "Repair / reinstall",
+   "Reparieren / neu installieren"
+  ],
+  "admin.browser.queuedHint": [
+   "Browser action queued. Refresh the page to see progress.",
+   "Browser-Aktion vorgemerkt. Seite neu laden, um den Fortschritt zu sehen."
+  ],
+  "admin.browser.moduleHint": [
+   "Browser installation and removal follow the optional Browser module switch.",
+   "Installation und Bereinigung erfolgen über den Schalter des optionalen Browser-Moduls."
+  ],
+  "admin.browser.moduleLink": [
+   "Open module settings",
+   "Moduleinstellungen öffnen"
+  ],
+  "admin.browser.installSteps": [
+   "Show installation commands",
+   "Installationsbefehle anzeigen"
+  ],
   "admin.browser.state": [
    "What the browser did",
    "Was der Browser getan hat"
@@ -9124,6 +9483,27 @@
    "Do it",
    "Ausführen"
   ],
+  "admin.browser.manualOpen": ["Control browser", "Browser bedienen"],
+  "admin.browser.manualHint": ["Complete the source's check, then close this view and retry the search. Your browser session is kept; downloads continue through Jularr.", "Schließe die Prüfung der Quelle ab, schließe dann diese Ansicht und wiederhole die Suche. Die Browser-Sitzung bleibt erhalten; Downloads laufen weiterhin über Jularr."],
+  "admin.browser.manualImage": ["Interactive view of the source browser", "Bedienbare Ansicht des Quellen-Browsers"],
+  "admin.browser.manualLoading": ["Connecting to the source browser…", "Verbindung zum Quellen-Browser wird hergestellt…"],
+  "admin.browser.manualText": ["Text for the selected field in the source browser", "Text für das ausgewählte Feld im Quellen-Browser"],
+  "admin.browser.manualSend": ["Send text", "Text senden"],
+  "admin.browser.manualTab": ["Tab", "Tabulator"],
+  "admin.browser.manualEnter": ["Enter", "Eingabe"],
+  "admin.browser.manualUp": ["Scroll up", "Nach oben scrollen"],
+  "admin.browser.manualDown": ["Scroll down", "Nach unten scrollen"],
+  "admin.browser.manualClose": ["Done and close", "Fertig und schließen"],
+  "admin.browser.manualFailed": ["The browser view is disconnected. Reconnect to resume the current source page.", "Die Browseransicht ist getrennt. Verbinde sie erneut, um auf der aktuellen Quellenseite fortzufahren."],
+  "admin.browser.manualReconnect": ["Reconnect", "Wiederverbinden"],
+  "admin.browser.manualRetrying": ["The browser image is temporarily unavailable. Reconnecting…", "Das Browserbild ist vorübergehend nicht erreichbar. Die Verbindung wird wiederhergestellt…"],
+  "admin.browser.manualDenied": ["Browser access has ended. Sign in again or check your permissions.", "Der Browserzugriff wurde beendet. Melde dich erneut an oder prüfe deine Berechtigungen."],
+  "admin.browser.manualReady": ["Browser ready. Click the image to control the source.", "Browser bereit. Klicke auf das Bild, um die Quelle zu bedienen."],
+  "admin.browser.manualClosed": ["Browser view closed. The session is kept.", "Browseransicht geschlossen. Die Sitzung bleibt erhalten."],
+  "admin.browser.manualJavascript": ["Enable JavaScript to control this browser view.", "Aktiviere JavaScript, um diese Browseransicht zu bedienen."],
+  "errors.browser_assistance_busy": ["Another sign-in session currently controls the source browser. Try again when it is closed or becomes idle.", "Eine andere Anmeldesitzung bedient gerade den Quellen-Browser. Versuche es erneut, sobald die Ansicht geschlossen oder inaktiv ist."],
+  "errors.browser_assistance_ended": ["This browser view has ended. Open it again to continue.", "Diese Browseransicht wurde beendet. Öffne sie erneut, um fortzufahren."],
+  "errors.browser_assistance_unavailable": ["The source browser could not be controlled. Check that the browser module is enabled and installed, then open the view again.", "Der Quellen-Browser konnte nicht bedient werden. Prüfe, ob das Browser-Modul aktiviert und installiert ist, und öffne die Ansicht erneut."],
   "admin.browser.sources": [
    "The sources of the instance",
    "Die Quellen der Instanz"
@@ -9216,6 +9596,47 @@
    "Download import report",
    "Importbericht herunterladen"
   ],
+  "import.job.title": ["Recent media import", "Letzter Medienimport"],
+  "import.job.queued": ["Queued on server", "Auf dem Server eingeplant"],
+  "import.job.stage.Queued": ["Waiting", "Wartet"],
+  "import.job.stage.Matching": ["Matching metadata", "Metadaten werden abgeglichen"],
+  "import.job.stage.Importing": ["Adding work", "Werk wird hinzugefügt"],
+  "import.job.stage.Done": ["Finished", "Abgeschlossen"],
+  "import.job.running": ["Import running on server", "Import läuft auf dem Server"],
+  "import.job.completed": ["Import complete", "Import abgeschlossen"],
+  "import.job.failed": ["Import stopped", "Import angehalten"],
+  "import.job.disconnected": ["Connection lost. The server keeps the saved progress.", "Verbindung unterbrochen. Der Server speichert den Fortschritt weiter."],
+  "import.job.startFailed": ["Could not queue the import. Review the list and try again.", "Import konnte nicht gestartet werden. Liste prüfen und erneut versuchen."],
+  "import.job.filterLabel": ["Filter import results", "Importergebnisse filtern"],
+  "import.job.filterAll": ["All titles", "Alle Titel"],
+  "import.job.filterQueued": ["Waiting", "Wartend"],
+  "import.job.filterRunning": ["In progress", "In Bearbeitung"],
+  "import.job.filterDone": ["Completed", "Abgeschlossen"],
+  "import.job.filterReview": ["Needs review", "Manuell prüfen"],
+  "import.job.filterProblem": ["Problems", "Probleme"],
+  "import.job.current": ["Currently processing", "Wird gerade verarbeitet"],
+  "import.job.source": ["Source", "Quelle"],
+  "import.job.query": ["Search query / ISBN", "Suchbegriff / ISBN"],
+  "import.job.candidates": ["Candidates", "Kandidaten"],
+  "import.job.attempt": ["Retry attempt", "Wiederholungsversuch"],
+  "import.job.history": ["Search history", "Suchverlauf"],
+  "import.job.stage.Resolving": ["Resolving ISBN", "ISBN wird aufgelöst"],
+  "import.job.stage.Candidates": ["Candidates found", "Treffer gefunden"],
+  "import.job.stage.Review": ["Needs review", "Manuelle Prüfung nötig"],
+  "import.job.stage.NoMatch": ["No match", "Kein Treffer"],
+  "import.job.stage.Retrying": ["Retrying provider request", "Quellenanfrage wird erneut versucht"],
+  "import.job.stage.Unavailable": ["Provider unavailable", "Quelle nicht erreichbar"],
+  "import.job.reason.checking_library": ["Checking existing works", "Vorhandene Werke werden geprüft"],
+  "import.job.reason.isbn_lookup": ["Looking up exact ISBN", "Exakte ISBN wird nachgeschlagen"],
+  "import.job.reason.catalog_search": ["Searching the metadata catalog", "Metadatenkatalog wird durchsucht"],
+  "import.job.reason.no_match": ["No matching title found", "Kein passender Titel gefunden"],
+  "import.job.reason.isbn_no_match": ["ISBN could not be safely resolved", "ISBN konnte nicht sicher zugeordnet werden"],
+  "import.job.reason.match_found": ["One strongly matching candidate", "Ein eindeutig passender Kandidat"],
+  "import.job.reason.needs_review": ["Several or unverified candidates", "Mehrere oder unsichere Kandidaten"],
+  "import.job.reason.unavailable": ["Provider unavailable", "Quelle nicht erreichbar"],
+  "import.job.reason.rate_limited": ["Provider rate limit", "Anfragelimit der Quelle erreicht"],
+  "import.job.reason.provider_retry": ["Temporary provider error; retrying", "Vorübergehender Quellenfehler; erneuter Versuch"],
+  "import.job.reason.importing": ["Adding selected work", "Ausgewähltes Werk wird hinzugefügt"],
   "import.phase.partial": [
    "Import paused: some titles are still waiting",
    "Import pausiert: Einige Titel warten noch"
@@ -9443,6 +9864,18 @@
    "not searched yet",
    "noch nicht gesucht"
   ],
+  "import.job.stage.Searching": [
+   "Searching catalog",
+   "Katalog durchsuchen"
+  ],
+  "import.providerFailure.rate_limited": [
+   "Open Library has limited requests. Some books could not be searched. Try again later; existing choices stay intact.",
+   "Open Library begrenzt die Anfragen. Einige Bücher konnten nicht gesucht werden. Später erneut versuchen; die Auswahl bleibt erhalten."
+  ],
+  "import.providerFailure.unavailable": [
+   "The book metadata provider could not be reached. Unsearched books have not been checked; try again when the provider is available.",
+   "Der Buch-Metadatenanbieter ist nicht erreichbar. Die noch nicht gesuchten Bücher wurden nicht geprüft; bitte später erneut versuchen."
+  ],
   "import.searches": [
    "Searching",
    "Suche läuft"
@@ -9567,6 +10000,7 @@
    "Not found",
    "Nicht gefunden"
   ],
+  "import.outcome.NeedsReview": ["Review the match", "Treffer prüfen"],
   "import.outcome.Unavailable": [
    "Provider unavailable",
    "Anbieter nicht erreichbar"
@@ -9923,6 +10357,10 @@
    "Catalog sync",
    "Katalog-Abgleich"
   ],
+  "jobs.job.discoverFeeds": [
+   "Discover cache",
+   "Entdecken-Cache"
+  ],
   "jobs.job.resources": [
    "Resource sampling",
    "Ressourcenmessung"
@@ -10022,6 +10460,14 @@
   "jobs.job.coverBackfill": [
    "Cover conversion",
    "Titelbilder umwandeln"
+  ],
+  "jobs.job.metadataFill": [
+   "Missing metadata",
+   "Fehlende Metadaten"
+  ],
+  "jobs.job.wantedTargets": [
+   "Targets for titles",
+   "Ziele für Titel"
   ],
   "errors.playback_evicted": [
    "Playback ended because the server needed the capacity. Try again at a lower quality.",
@@ -10179,6 +10625,7 @@
    "The server is busy, so this plays in a lower quality.",
    "Der Server ist ausgelastet, deshalb läuft dies in niedrigerer Qualität."
   ],
+  "jobs.job.mediaImportQueue": ["Media imports", "Medienimporte"],
   "jobs.job.benchmarkQueue": [
    "Transcoding benchmark",
    "Transcoding-Benchmark"
@@ -10423,6 +10870,10 @@
    "Creates the backups that were asked for.",
    "Erstellt die angeforderten Sicherungen."
   ],
+  "jobs.about.mediaImportQueue": [
+   "Imports selected media-list titles in the background and resumes unfinished work after a restart.",
+   "Importiert ausgewählte Titel aus Medienlisten im Hintergrund und setzt unterbrochene Aufträge nach einem Neustart fort."
+  ],
   "jobs.about.downloads": [
    "Follows the progress of external downloads and starts their import when they finish.",
    "Verfolgt den Fortschritt externer Downloads und startet den Import, sobald sie fertig sind."
@@ -10454,6 +10905,14 @@
   "jobs.about.aniListMatching": [
    "Checks open AniList matches of anime titles.",
    "Prüft offene AniList-Zuordnungen von Anime-Titeln."
+  ],
+  "jobs.about.wantedTargets": [
+   "Gives every title with files a target that is not monitored yet, so each title page offers the same buttons.",
+   "Gibt jedem Titel mit Dateien ein Ziel, das noch nicht überwacht wird, damit jede Titelseite dieselben Buttons hat."
+  ],
+  "jobs.about.metadataFill": [
+   "Reads the description, cover and cast of titles that came without them, for example from a media server, a few at a time.",
+   "Lädt Beschreibung, Cover und Besetzung von Titeln, die ohne sie kamen, zum Beispiel aus einem Medienserver, einige auf einmal."
   ],
   "jobs.about.covers": [
    "Fetches and renews the covers of titles from their providers.",
@@ -10494,6 +10953,10 @@
   "jobs.about.catalog": [
    "Keeps the local Discover catalog up to date.",
    "Hält den lokalen Discover-Katalog aktuell."
+  ],
+  "jobs.about.discoverFeeds": [
+   "Prepares Discover lists and recommendations and refreshes stored results.",
+   "Bereitet Entdecken-Listen und Empfehlungen vor und aktualisiert gespeicherte Ergebnisse."
   ],
   "jobs.about.resources": [
    "Samples the load of the process for the System page.",
@@ -11936,12 +12399,16 @@
    "Absatzabstand (%)"
   ],
   "reader.language.none": [
-   "No reading language is set up yet. Choose your languages in the profile settings.",
-   "Noch keine Lesesprache eingerichtet. Wähle deine Sprachen in den Profileinstellungen."
+   "No translation engine is available right now. You can still read this book in its original language.",
+   "Derzeit ist keine Übersetzungs-Engine verfügbar. Du kannst das Buch weiterhin in seiner Originalsprache lesen."
   ],
   "reader.language.configure": [
    "Open profile settings",
    "Profileinstellungen öffnen"
+  ],
+  "reader.language.saving": [
+   "Saving reading language…",
+   "Lesesprache wird gespeichert…"
   ],
   "reader.chapter.previous": [
    "Previous chapter",
@@ -12422,6 +12889,10 @@
   "setup.module.help.Acquisition": [
    "Search, monitor, download and import titles; an alternative to Sonarr, Radarr, Readarr and Lidarr.",
    "Titel suchen, überwachen, herunterladen und importieren, als Alternative zu Sonarr, Radarr, Readarr und Lidarr."
+  ],
+  "setup.module.help.Browser": [
+   "Install and manage an optional browser for supported acquisition sources. Turning the module off removes only Jularr-managed browser files.",
+   "Optionalen Browser für unterstützte Bezugsquellen installieren und verwalten. Beim Ausschalten werden nur von Jularr verwaltete Browserdateien entfernt."
   ],
   "setup.module.help.Playback": [
    "Play films and series in the browser.",
@@ -13351,6 +13822,30 @@
    "Configure download storage",
    "Download-Speicher einrichten"
   ],
+  "downloadStorage.cleanup.title": [
+   "Direct download cleanup · since last restart",
+   "Bereinigung direkter Downloads · seit dem Neustart"
+  ],
+  "downloadStorage.cleanup.scanned": [
+   "Folders checked",
+   "Geprüfte Ordner"
+  ],
+  "downloadStorage.cleanup.deleted": [
+   "Orphaned folders removed",
+   "Entfernte verwaiste Ordner"
+  ],
+  "downloadStorage.cleanup.bytes": [
+   "Storage reclaimed",
+   "Freigegebener Speicher"
+  ],
+  "downloadStorage.cleanup.skipped": [
+   "Folders kept or skipped",
+   "Behaltene oder übersprungene Ordner"
+  ],
+  "downloadStorage.cleanup.errors": [
+   "Cleanup errors",
+   "Bereinigungsfehler"
+  ],
   "downloadStorage.purpose": [
    "Choose Incomplete and Complete folders for Jularr's own downloads. External clients keep their own download folders.",
    "Wähle die Ordner Incomplete und Complete für die eigenen Downloads von Jularr. Externe Clients behalten ihre eigenen Download-Ordner."
@@ -13587,6 +14082,18 @@
    "Download model",
    "Modell herunterladen"
   ],
+  "translation.local.retry": [
+   "Retry / resume download",
+   "Download erneut starten / fortsetzen"
+  ],
+  "translation.local.retryInfo": [
+   "This model download was interrupted. Select Retry to resume using the partial files saved by Ollama; nothing restarts automatically.",
+   "Der Modelldownload wurde unterbrochen. Mit erneutem Start werden bereits von Ollama gespeicherte Teile weiterverwendet. Nach einem Neustart wird nichts automatisch heruntergeladen."
+  ],
+  "translation.local.failureInfo": [
+   "Model download failed. Check Ollama and available storage, then retry.",
+   "Modelldownload fehlgeschlagen. Prüfe Ollama und den verfügbaren Speicher und starte ihn erneut."
+  ],
   "translation.local.pullBlocked": [
    "Download not available: verify free space or finish the active download.",
    "Download nicht möglich: Prüfe den freien Speicherplatz oder warte, bis der aktive Download abgeschlossen ist."
@@ -13626,6 +14133,18 @@
   "reader.translation.localQuality": [
    "TranslateGemma · local",
    "TranslateGemma · lokal"
+  ],
+  "reader.translation.provider.original": [
+   "Original text — no translation",
+   "Originaltext – keine Übersetzung"
+  ],
+  "reader.translation.provider.browser": [
+   "Engine: Mozilla/Bergamot · browser",
+   "Engine: Mozilla/Bergamot · Browser"
+  ],
+  "reader.translation.provider.local": [
+   "Engine: TranslateGemma · local",
+   "Engine: TranslateGemma · lokal"
   ],
   "errors.validation.password_incorrect": [
    "The current password is not correct.",
@@ -13674,6 +14193,258 @@
   "admin.accounts.passwordLinkShown": [
    "Give this link to the person. It sets a new password, works once and is valid for 24 hours. It is shown only now.",
    "Diesen Link der Person geben. Er setzt ein neues Passwort, funktioniert einmal und ist 24 Stunden gültig. Er wird nur jetzt angezeigt."
+  ],
+  "library.naming.Book": [
+   "Book files",
+   "Buchdateien"
+  ],
+  "library.naming.Book.Manga": [
+   "Manga files",
+   "Manga-Dateien"
+  ],
+  "library.naming.Book.LightNovel": [
+   "Light novel files",
+   "Light-Novel-Dateien"
+  ],
+  "library.naming.Music": [
+   "Music files",
+   "Musikdateien"
+  ],
+  "library.naming.Game": [
+   "Game files",
+   "Spieldateien"
+  ],
+  "library.naming.seasonFolder": [
+   "Season folder format",
+   "Staffelordnerformat"
+  ],
+  "library.naming.dailyFile": [
+   "Daily episode file format",
+   "Dateiformat für tägliche Folgen"
+  ],
+  "library.naming.renamesFiles": [
+   "Rename imported files",
+   "Importierte Dateien umbenennen"
+  ],
+  "library.naming.multiStyle": [
+   "Multi-episode style",
+   "Benennung mehrerer Folgen"
+  ],
+  "library.naming.multiExample": [
+   "Multiple episodes:",
+   "Mehrere Folgen:"
+  ],
+  "library.naming.dailyExample": [
+   "Daily episode:",
+   "Tägliche Folge:"
+  ],
+  "library.naming.specialsExample": [
+   "Special episode:",
+   "Spezialfolge:"
+  ],
+  "library.naming.multi.Extend": [
+   "Extend (S01E01-02-03)",
+   "Erweitert (S01E01-02-03)"
+  ],
+  "library.naming.multi.Duplicate": [
+   "Duplicate (S01E01 - S01E02 - S01E03)",
+   "Wiederholt (S01E01 - S01E02 - S01E03)"
+  ],
+  "library.naming.multi.Repeat": [
+   "Repeat (S01E01E02E03)",
+   "Aneinander (S01E01E02E03)"
+  ],
+  "library.naming.multi.Scene": [
+   "Scene (S01E01-E02-E03)",
+   "Scene-Stil (S01E01-E02-E03)"
+  ],
+  "library.naming.multi.Range": [
+   "Range (S01E01-03)",
+   "Bereich (S01E01-03)"
+  ],
+  "library.naming.multi.PrefixedRange": [
+   "Prefixed range (S01E01-E03)",
+   "Bereich mit Präfix (S01E01-E03)"
+  ],
+  "library.naming.token.Author": [
+   "The first author",
+   "Der erste Autor"
+  ],
+  "library.naming.token.AuthorName": [
+   "The author name",
+   "Der Autorenname"
+  ],
+  "library.naming.token.AuthorCleanName": [
+   "The author without punctuation",
+   "Der Autor ohne Satzzeichen"
+  ],
+  "library.naming.token.AuthorSortName": [
+   "The author name for sorting",
+   "Der Autorenname zur Sortierung"
+  ],
+  "library.naming.token.BookTitle": [
+   "The book title",
+   "Der Buchtitel"
+  ],
+  "library.naming.token.BookCleanTitle": [
+   "The book title without punctuation",
+   "Der Buchtitel ohne Satzzeichen"
+  ],
+  "library.naming.token.BookSeries": [
+   "The book series",
+   "Die Buchreihe"
+  ],
+  "library.naming.token.BookSeriesPosition": [
+   "The position in the book series",
+   "Die Position in der Buchreihe"
+  ],
+  "library.naming.token.BookYear": [
+   "The book release year",
+   "Das Erscheinungsjahr des Buchs"
+  ],
+  "library.naming.token.BookLanguage": [
+   "The known book language",
+   "Die bekannte Buchsprache"
+  ],
+  "library.naming.token.Artist": [
+   "The album artist",
+   "Der Albuminterpret"
+  ],
+  "library.naming.token.ArtistName": [
+   "The artist name",
+   "Der Interpretenname"
+  ],
+  "library.naming.token.AlbumArtist": [
+   "The album artist name",
+   "Der Name des Albuminterpreten"
+  ],
+  "library.naming.token.Album": [
+   "The album title",
+   "Der Albumtitel"
+  ],
+  "library.naming.token.AlbumTitle": [
+   "The title of the album",
+   "Der Titel des Albums"
+  ],
+  "library.naming.token.AlbumCleanTitle": [
+   "The album title without punctuation",
+   "Der Albumtitel ohne Satzzeichen"
+  ],
+  "library.naming.token.AlbumReleaseYear": [
+   "The album release year",
+   "Das Erscheinungsjahr des Albums"
+  ],
+  "library.naming.token.Track": [
+   "The track number",
+   "Die Titelnummer"
+  ],
+  "library.naming.token.TrackTitle": [
+   "The track title",
+   "Der Musiktitel"
+  ],
+  "library.naming.token.TrackCleanTitle": [
+   "The track title without punctuation",
+   "Der Musiktitel ohne Satzzeichen"
+  ],
+  "library.naming.token.DiscPrefix": [
+   "The disc prefix for multi-disc albums, empty for one disc",
+   "Das Disc-Präfix bei mehreren Discs, leer bei einer Disc"
+  ],
+  "library.naming.token.Disc": [
+   "The disc number",
+   "Die Discnummer"
+  ],
+  "library.naming.token.DiscCount": [
+   "The number of discs",
+   "Die Anzahl der Discs"
+  ],
+  "library.naming.token.Volume": [
+   "The volume number",
+   "Die Bandnummer"
+  ],
+  "library.naming.token.VolumeLabel": [
+   "The volume number prefixed with v",
+   "Die Bandnummer mit vorangestelltem v"
+  ],
+  "library.naming.token.Language": [
+   "The known language",
+   "Die bekannte Sprache"
+  ],
+  "library.naming.token.Format": [
+   "The file format",
+   "Das Dateiformat"
+  ],
+  "library.naming.token.Platform": [
+   "The game platform",
+   "Die Spielplattform"
+  ],
+  "library.naming.token.Region": [
+   "The game region",
+   "Die Spielregion"
+  ],
+  "library.naming.token.Version": [
+   "The game version",
+   "Die Spielversion"
+  ],
+  "library.naming.token.GameTitle": [
+   "The game title",
+   "Der Spieltitel"
+  ],
+  "library.naming.token.GameYear": [
+   "The game release year",
+   "Das Erscheinungsjahr des Spiels"
+  ],
+  "library.naming.token.GamePlatform": [
+   "The platform of the game",
+   "Die Plattform des Spiels"
+  ],
+  "library.naming.token.PrimaryId": [
+   "The main catalog ID for this media type",
+   "Die Hauptkatalog-ID für diesen Medientyp"
+  ],
+  "library.naming.token.ProviderId": [
+   "Any known provider ID, for example {ProviderId:anilist}",
+   "Eine bekannte Anbieter-ID, zum Beispiel {ProviderId:anilist}"
+  ],
+  "library.naming.token.TmdbId": [
+   "TMDB ID",
+   "TMDB-ID"
+  ],
+  "library.naming.token.TvdbId": [
+   "TVDB ID",
+   "TVDB-ID"
+  ],
+  "library.naming.token.TvMazeId": [
+   "TVmaze ID",
+   "TVmaze-ID"
+  ],
+  "library.naming.token.AnilistId": [
+   "AniList ID",
+   "AniList-ID"
+  ],
+  "library.naming.token.MusicBrainzId": [
+   "MusicBrainz ID",
+   "MusicBrainz-ID"
+  ],
+  "library.naming.token.OpenLibraryId": [
+   "OpenLibrary ID",
+   "OpenLibrary-ID"
+  ],
+  "library.naming.token.IgdbId": [
+   "IGDB ID",
+   "IGDB-ID"
+  ],
+  "library.naming.token.GutenbergId": [
+   "Gutenberg ID",
+   "Gutenberg-ID"
+  ],
+  "library.naming.token.IsbnId": [
+   "ISBN ID",
+   "ISBN-ID"
+  ],
+  "library.naming.token.PlexId": [
+   "Plex ID",
+   "Plex-ID"
   ]
  }
 }

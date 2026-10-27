@@ -36,6 +36,20 @@ namespace Jularr.Backend.Tests
         private const string Connections = "/api/v1/admin/acquisition/connections";
 
         [TestMethod]
+        public void DirectCatalogLanguage_UsesVerifiedIsoCodesOnly()
+        {
+            Assert.AreEqual("DE", DirectSources.TrustedLanguageCode("deu"));
+            Assert.AreEqual("DE", DirectSources.TrustedLanguageCode("ger"));
+            Assert.AreEqual("JA", DirectSources.TrustedLanguageCode("ja-JP"));
+            Assert.AreEqual("EN", DirectSources.TrustedLanguageCode("eng"));
+            Assert.IsNull(DirectSources.TrustedLanguageCode(null));
+            Assert.IsNull(DirectSources.TrustedLanguageCode(""));
+            Assert.IsNull(DirectSources.TrustedLanguageCode("pdf"));
+            Assert.IsNull(DirectSources.TrustedLanguageCode("unknown-language"));
+        }
+
+
+        [TestMethod]
         public async Task Catalog_SetUpAddsKeylessSourcesAndAsksForAccounts()
         {
             using var storage = new TemporaryDirectory();
@@ -45,6 +59,8 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(before.Single(item => item.Key == "openlibrary").IsConfigured);
             Assert.AreEqual(SourceAvailability.ReferenceOnly, before.Single(item => item.Key == "bookwalker").SourceAvailabilityId);
             Assert.AreEqual("https://api.nzbgeek.info", before.Single(item => item.Key == "nzbgeek").DefaultBaseUrl);
+            Assert.AreEqual("https://annas-archive.gl", before.Single(item => item.Key == "annasarchive").DefaultBaseUrl);
+            Assert.AreEqual(SourceAvailability.Planned, before.Single(item => item.Key == "nyaa").SourceAvailabilityId);
 
             // Keys and accounts are asked for, never invented.
             using var setUp = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/acquisition/sources/setup");
@@ -82,6 +98,12 @@ namespace Jularr.Backend.Tests
                 25, null, null, null, null));
             Assert.AreEqual(HttpStatusCode.OK, bare.StatusCode, await bare.Content.ReadAsStringAsync());
             StringAssert.Contains(html, "/Admin/Acquisition?Type=AnnasArchive");
+
+            using var browserPage = await host.SendAsync(HttpMethod.Get, "/Admin/Browser");
+            var browserHtml = await browserPage.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, browserPage.StatusCode, browserHtml);
+            StringAssert.Contains(browserHtml, "/Admin/Instance/Modules");
+            StringAssert.Contains(browserHtml, "Browser package");
         }
 
         [TestMethod]
@@ -154,6 +176,56 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow(true)]
+        [DataRow(false)]
+        public async Task AnnasArchive_DerivativeIsRejectedBeforeAutomaticGrab(bool includesOriginal)
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeSources();
+            sources.SearchPages[""] = """
+                <html><body>
+                <a href="/md5/11111111111111111111111111111111"><h3>The expert guide to Jane Austen's Pride and Prejudice -- in 30 minutes</h3>
+                <div class="italic">Jane Austen</div><div>English [en], .epub, 1.2MB, guide.epub</div></a>
+                """ + (includesOriginal ? """
+                <a href="/md5/0123456789abcdef0123456789abcdef"><h3>Pride and Prejudice</h3>
+                <div class="italic">Jane Austen</div><div>English [en], .epub, 1.2MB, original.epub</div></a>
+                """ : "") + "</body></html>";
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas.example.test", null, true, 50, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var wantedId = await CreateWantedBookAsync(host);
+
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+            var candidates = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!;
+            var derivative = candidates.Single(candidate => candidate.Title.Contains("expert guide", StringComparison.Ordinal));
+            Assert.AreEqual(ReleaseDecisionType.Rejected, derivative.ReleaseDecisionTypeId);
+            Assert.AreEqual("WrongTitle", derivative.ReasonCode);
+
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(includesOriginal ? 1L : 0L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\" WHERE \"Title\" LIKE '%expert guide%'"));
+            if (includesOriginal)
+            {
+                Assert.AreEqual("Jane Austen - Pride and Prejudice (EN) (epub)", await host.ScalarAsync("SELECT \"Title\" FROM \"AcquisitionReleases\""));
+            }
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_ExistingMirrorIsAlreadyConfigured()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas-archive.pk", null, true, 50, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var catalog = await ReadCatalogAsync(host);
+            Assert.IsTrue(catalog.Single(item => item.Key == "annasarchive").IsConfigured);
+        }
+
+        [TestMethod]
         public async Task AnnasArchive_KeyStaysWithTheSiteAndGatesWaitForAPerson()
         {
             using var storage = new TemporaryDirectory();
@@ -165,9 +237,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             var wantedId = await CreateWantedBookAsync(host);
 
-            // A challenge is never passed in production; the source simply has no results.
+            // A browser confirmation is distinct from an unavailable source or an empty search.
             using var tested = await host.SendAsync(HttpMethod.Post, Connections + "/2/test");
-            Assert.AreEqual("acquisition_unavailable", (await tested.Content.ReadFromJsonAsync<AcquisitionConnectionTestV1>())!.ErrorKey);
+            Assert.AreEqual("source_gate", (await tested.Content.ReadFromJsonAsync<AcquisitionConnectionTestV1>())!.ErrorKey);
             using var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, blocked.StatusCode);
 
@@ -182,6 +254,25 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Books", "Jane Austen", "Pride and Prejudice (1813)", "Pride and Prejudice.epub")));
             Assert.IsTrue(sources.Requests.Any(request => request.StartsWith("annas.example.test/dyn/api/fast_download.json", StringComparison.Ordinal) && request.Contains(FakeSources.MemberKey)));
             Assert.IsFalse(sources.Requests.Any(request => request.StartsWith("files.example.test", StringComparison.Ordinal) && request.Contains(FakeSources.MemberKey)));
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_UnreadableSearch_ReportsLayoutFailureThroughProbeAndSearch()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeSources();
+            sources.SearchPages["Austen"] = "<html><title>Domain for sale</title></html>";
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas.example.test", null, true, 60, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode);
+            var wantedId = await CreateWantedBookAsync(host);
+            using var tested = await host.SendAsync(HttpMethod.Post, Connections + "/2/test");
+            Assert.AreEqual("source_markup_changed", (await tested.Content.ReadFromJsonAsync<AcquisitionConnectionTestV1>())!.ErrorKey);
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, searched.StatusCode);
+            StringAssert.Contains(await searched.Content.ReadAsStringAsync(), "source_markup_changed");
         }
 
         [TestMethod]
@@ -425,6 +516,20 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("epub", record.Extension);
             Assert.AreEqual("en", record.Language);
             Assert.AreEqual(1258291L, record.SizeBytes);
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_FormatBadgesAreNotLanguageEvidence()
+        {
+            // The real result-row shape can put a [pdf] format badge before a language badge.
+            var sources = new FakeSources { RealRows = true, RowFacts = "PDF [pdf] · English [en] · 1.2MB" };
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
+            var record = (await client.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice", CancellationToken.None)).Single();
+            Assert.AreEqual("en", record.Language);
+
+            sources.RowFacts = "PDF [pdf] · 1.2MB";
+            record = (await client.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice", CancellationToken.None)).Single();
+            Assert.IsNull(record.Language, "A format badge alone must not be mistaken for a language.");
         }
 
         [TestMethod]
@@ -882,6 +987,7 @@ namespace Jularr.Backend.Tests
             public bool SlowGate { get; set; }
             public bool SlowWithoutFile { get; set; }
             public bool RealRows { get; set; }
+            public string RowFacts { get; set; } = "English [en] · EPUB · 1.2MB · 1813 · Book (fiction)";
             public string RowFileName { get; set; } = "lgli/Jane Austen - Pride and Prejudice (1813).epub";
 
             // The page of a search whose query contains the key.
@@ -1003,7 +1109,7 @@ namespace Jularr.Backend.Tests
                               <a href="/search?q=Jane Austen" class="custom-a text-sm"><span class="icon-[mdi--user-edit]"></span> Jane Austen</a>
                               <a href="/search?q=" class="custom-a text-sm"><span class="icon-[mdi--company]"></span> 1813</a>
                             </div>
-                            <div>English [en] Â· EPUB Â· 1.2MB Â· 1813 Â· ðŸ“• Book (fiction) Â· ðŸš€/lgli/zlib Â· Save Â· 24 Â· 1</div>
+                            <div>{RowFacts}</div>
                           </div>
                         </body></html>
                         """, "text/html");

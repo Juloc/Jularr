@@ -10,10 +10,13 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Integrations.Data.Newznab;
+using Jularr.Integrations.Data.AnnasArchive;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Sabnzbd;
+using Jularr.Integrations.Data.Qbittorrent;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.AspNetCore.DataProtection;
 using Jularr.Backend.Service.Core;
@@ -31,7 +34,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         private readonly NewznabClient _newznab;
         private readonly SabnzbdClient _sabnzbd;
+        private readonly QbittorrentClient _qbittorrent;
         private readonly DirectSources _direct;
+        private readonly NyaaSources _nyaa;
         private readonly IDataProtector _protector;
         private readonly IMemoryCache _offers;
         private readonly TimeProvider _time;
@@ -39,16 +44,18 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private readonly StorageAccess _storage;
         private readonly WorkSignals _signals;
 
-        public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, IDataProtectionProvider protection, IMemoryCache offers,
-            TimeProvider time, DownloadStorage downloads, StorageAccess storage, WorkSignals signals)
+        public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DirectSources direct, NyaaSources nyaa,
+            IDataProtectionProvider protection, IMemoryCache offers, TimeProvider time, DownloadStorage downloads, StorageAccess storage, WorkSignals signals)
         {
             _storage = storage;
             _signals = signals;
             _downloads = downloads;
+            _qbittorrent = qbittorrent;
             _time = time;
             _newznab = newznab;
             _sabnzbd = sabnzbd;
             _direct = direct;
+            _nyaa = nyaa;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
             _offers = offers;
         }
@@ -71,15 +78,45 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var budget = SearchBudget.For(depth);
             var offers = new ConcurrentDictionary<string, ReleaseOffer>(StringComparer.Ordinal);
             var failures = 0;
+            var sourceErrors = new ConcurrentBag<string>();
+            using var annaSearch = new AnnasArchiveSearchContext();
             var allNewznab = indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab).ToArray();
             var newznab = allNewznab.Where(indexer => AcquisitionConnectionLogic.CanSearch(indexer, target.MediaTypeId, automatic, now)).ToArray();
             var skipped = allNewznab.Count(indexer => AcquisitionConnectionLogic.Serves(indexer, target.MediaTypeId, automatic)) - newznab.Length;
             var uses = new ConcurrentDictionary<long, IndexerUse>();
             var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel ? indexers.Where(indexer => DirectSources.IsDirect(indexer.AcquisitionConnectionTypeId)).ToArray() : [];
+            var nyaaConnections = kind is AcquisitionKind.LightNovel ? indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Nyaa).ToArray() : [];
+            var torrents = nyaaConnections.Where(indexer => AcquisitionConnectionLogic.CanSearch(indexer, target.MediaTypeId, automatic, now)).ToArray();
+            skipped += nyaaConnections.Count(indexer => AcquisitionConnectionLogic.Serves(indexer, target.MediaTypeId, automatic)) - torrents.Length;
             var plans = newznab.ToDictionary(indexer => indexer.Id, indexer => SearchPlanner.Plan(intent, ReadCapabilities(indexer), depth));
 
             // Direct book sources answer one title and author query; they are asked at the same time as the indexers.
             var direct = SearchDirectSourcesAsync(catalogs, target, budget, offers, ct);
+            var nyaaSearch = SearchNyaaSourcesAsync(torrents, target, budget, offers, ct);
+
+            // The torrent index answers for the light novels; it is asked at the same time as the indexers.
+            async Task SearchNyaaSourcesAsync(IReadOnlyList<AcquisitionConnectionData> sources, WantedTargetData wanted, SearchBudget limits,
+                ConcurrentDictionary<string, ReleaseOffer> found, CancellationToken token)
+            {
+                await Parallel.ForEachAsync(sources, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, sources.Count), CancellationToken = token },
+                    async (source, inner) =>
+                    {
+                        var use = uses.GetOrAdd(source.Id, _ => new IndexerUse());
+                        if (!AcquisitionConnectionLogic.HasQueries(source, use.Queries)) return;
+                        Interlocked.Increment(ref use.Queries);
+                        if (await _nyaa.SearchAsync(source, wanted, inner) is not { } answers)
+                        {
+                            use.Failed = true;
+                            Interlocked.Increment(ref failures);
+                            return;
+                        }
+
+                        foreach (var offer in answers.Take(limits.MaxResults))
+                        {
+                            found.TryAdd(offer.Identity, offer);
+                        }
+                    });
+            }
 
             // The direct sources answer at the same time as the indexers; each of them on its own.
             async Task SearchDirectSourcesAsync(IReadOnlyList<AcquisitionConnectionData> sources, WantedTargetData wanted, SearchBudget limits,
@@ -88,7 +125,19 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 await Parallel.ForEachAsync(sources, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, sources.Count), CancellationToken = token },
                     async (source, inner) =>
                     {
-                        if (await _direct.SearchAsync(source, wanted, inner, Enough) is not { } answers)
+                        IReadOnlyList<ReleaseOffer>? answers;
+                        try
+                        {
+                            answers = await _direct.SearchAsync(source, wanted, inner, Enough, annaSearch);
+                        }
+                        catch (DirectSourceException exception)
+                        {
+                            sourceErrors.Add(exception.ErrorKey);
+                            Interlocked.Increment(ref failures);
+                            return;
+                        }
+
+                        if (answers is null)
                         {
                             Interlocked.Increment(ref failures);
                             return;
@@ -133,6 +182,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
                 // The direct sources answered at the same time; their releases belong to the choice.
                 await direct;
+                await nyaaSearch;
                 selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
                 if (selection.Ranked.Count(evaluation => evaluation.IsSelectable
                     && (!profile.IsBook || profile.LanguageOrder.Length == 0
@@ -144,6 +194,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             // The direct sources are waited for; they answered at the same time as the indexers.
             await direct;
+            await nyaaSearch;
             selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
 
             // Manual grabs pick from what was shown; the cache is bounded by offer count.
@@ -161,9 +212,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }, ct);
 
             // Indexers left out for backoff or limits count as unavailable, not as empty.
-            var sources = catalogs.Length + newznab.Length + skipped;
+            var sources = catalogs.Length + torrents.Length + newznab.Length + skipped;
             var unavailable = sources > 0 && failures + skipped >= sources && offers.IsEmpty;
-            return new WantedSearchResult(selection, offers, unavailable, AcquisitionSelectionLogic.OutcomeKey(selection.Outcome, unavailable));
+            var errorKey = unavailable && skipped == 0 && sourceErrors.Count == failures && sourceErrors.Distinct().Count() == 1 ? sourceErrors.First() : null;
+            return new WantedSearchResult(selection, offers, unavailable, AcquisitionSelectionLogic.OutcomeKey(selection.Outcome, unavailable), errorKey);
         }
 
         public ReleaseOffer? FindOffer(long wantedItemId, string candidateId) =>
@@ -188,7 +240,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var result = await SearchAsync(context, target, indexers, SearchDepth.Normal, automatic: true, ct, scope, language);
             if (result.IndexersUnavailable)
             {
-                throw new ServiceUnavailableException("acquisition_unavailable");
+                throw new ServiceUnavailableException(result.ErrorKey ?? "acquisition_unavailable");
             }
 
             if (result.Selection.Winner is not { } winner)
@@ -199,6 +251,62 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var offer = result.Offers[winner.Candidate.Id];
             await GrabAsync(context, target, offer, winner.Score?.QualityKey, clients, ct, accountId);
             return new AutomaticSearchResultV1("grabbed", TextLimit.Cut(offer.Title, 1000));
+        }
+
+        // A queued whole-title search reassesses installed evidence and claims each missing or upgradable unit once.
+        public async Task<string> SearchWholeTargetAsync(LogicContext context, long wantedItemId, CancellationToken ct)
+        {
+            var (target, indexers, clients) = await context.ExecuteBatchAsync(async (ctx, token) => (await ctx.ReadWantedTargetAsync(wantedItemId, token),
+                await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, token), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Download, token)), ct);
+            if (target.IsPaused) return "paused";
+            if (target.Definition is null) return "profile_missing";
+            var profile = AcquisitionSelectionLogic.ReadProfile(target);
+            var kind = AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId);
+            if (target.MediaTypeId != MediaType.Series && target.MediaSubtypeId != MediaSubtype.Manga)
+            {
+                if (target.IsDownloading) return "in_use";
+                if (target.HasMedia)
+                {
+                    if (AcquisitionSelectionLogic.Installed(profile, target) is not { } installed) return "evidence_missing";
+                    if (!AcquisitionSelectionLogic.NeedsUpgrade(profile, installed)) return "unchanged";
+                }
+                var result = await SearchAsync(context, target, indexers, SearchDepth.Normal, automatic: true, ct);
+                if (result.Selection.Winner is not { } winner) return result.OutcomeKey;
+                await GrabAsync(context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, ct, automatic: true);
+                return "grabbed";
+            }
+
+            var units = AcquisitionSelectionLogic.ReassessUnits(profile, target, await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnitStatesAsync(wantedItemId, token), ct));
+            var grabbed = false;
+            var outcome = "unchanged";
+            foreach (var parent in units.Where(unit => unit.NeedsSearch).Select(unit => unit.ParentNumber).Distinct().ToArray())
+            {
+                var first = true;
+                while (AcquisitionSelectionLogic.ReadNextUnitScope(units, parent, first) is { } scope)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    first = false;
+                    indexers = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, token), ct);
+                    var result = await SearchAsync(context, target, indexers, SearchDepth.Normal, automatic: true, ct, scope);
+                    if (result.Selection.Winner is { } winner)
+                    {
+                        await GrabAsync(context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, ct, automatic: true);
+                        grabbed = true;
+                        units = AcquisitionSelectionLogic.Claim(units, scope, kind, winner.Candidate.Parsed);
+                    }
+                    else
+                    {
+                        outcome = result.OutcomeKey;
+                        // An empty pack search still leaves single-unit queries; each unit is tried at most once in this run.
+                        units = units.Select(unit => unit.WorkUnitId == scope.Unit.Id
+                            ? new UnitStateData(unit.WorkUnitId, unit.ParentNumber, unit.Number, unit.IsAvailable, unit.HasMedia, true, unit.AbsoluteNumber, unit.ReleasedOn, unit.NeedsUpgrade, unit.Title)
+                            : unit).ToArray();
+                        if (result.IndexersUnavailable) break;
+                    }
+                }
+            }
+
+            return grabbed ? "grabbed" : outcome;
         }
 
         public async Task GrabAsync(LogicContext context, WantedTargetData target, ReleaseOffer offer, string? qualityKey, IReadOnlyList<AcquisitionConnectionData> clients, CancellationToken ct,
@@ -224,11 +332,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 return;
             }
 
-            // The same SABnzbd endpoint can have separate connections/categories per media type.
-            // Prefer a matching explicit scope, then the existing priority order; an unscoped
-            // connection remains the fallback for existing installations.
-            var client = clients.Where(connection => connection.MediaTypeIds.Contains((int)target.MediaTypeId))
-                .FirstOrDefault() ?? clients.FirstOrDefault(connection => connection.MediaTypeIds.Length == 0);
+            // Select a downloader only after filtering by offer transport and media coverage.
+            var isTorrent = offer.Transport == DownloadTransport.Torrent
+                || offer.DownloadUri?.Scheme.Equals("magnet", StringComparison.OrdinalIgnoreCase) == true
+                || offer.DownloadUri?.AbsolutePath.EndsWith(".torrent", StringComparison.OrdinalIgnoreCase) == true;
+            var compatibleTypes = isTorrent
+                ? new[] { AcquisitionConnectionType.Qbittorrent }
+                : new[] { AcquisitionConnectionType.Sabnzbd, AcquisitionConnectionType.Usenet };
+            var client = DownloadClientSelectionLogic.Select(clients, target.MediaTypeId, _time.GetUtcNow().UtcDateTime, compatibleTypes);
             if (client is null)
             {
                 throw new ServiceUnavailableException("acquisition_no_download_client");
@@ -240,9 +351,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
 
             // SABnzbd owns the download folder. Do not send a release that Jularr cannot import.
-            if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd)
+            if (client.AcquisitionConnectionTypeId is AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.Qbittorrent)
             {
-                await RequireSabImportSourceAsync(context, client, ct);
+                await RequireClientImportSourceAsync(context, client, ct);
             }
 
             // Refuse native downloads before reserving an operation or using an indexer grab.
@@ -277,7 +388,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             string? externalId = null;
             if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
-                var staging = await nativePaths!.PrepareIncompleteAsync(operationId, ct);
+                var staging = await nativePaths!.PrepareIncompleteAsync(operationId, ct, target.MediaTypeId, target.MediaSubtypeId);
                 try
                 {
                     Directory.CreateDirectory(staging);
@@ -298,6 +409,31 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 if (failure is not null && Directory.Exists(staging))
                 {
                     Directory.Delete(staging, recursive: true);
+                }
+            }
+            else if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent)
+            {
+                // New torrents receive the same media-scoped, operation-owned folder as native jobs.
+                // The client retains ownership while seeding; importing never moves its payload.
+                var connection = new QbittorrentConnection(client.HttpAddress, client.Username, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedPassword));
+                try
+                {
+                    var savePath = DownloadWorkspaceLayout.ExternalJobDirectory(client.RemotePath!, operationId, target.MediaTypeId, target.MediaSubtypeId);
+                    var result = await _qbittorrent.GrabAsync(connection,
+                        new QbittorrentGrabRequest(offer.DownloadUri, savePath, offer.Title), ct);
+                    if (result.Success && result.Hash is { } hash)
+                    {
+                        externalId = hash;
+                    }
+                    else
+                    {
+                        failure = result.ReasonKey ?? "acquisition_grab_failed";
+                    }
+                }
+                catch (Exception exception) when (exception is HttpRequestException or QbittorrentException or JsonException
+                    || exception is TaskCanceledException && !ct.IsCancellationRequested)
+                {
+                    failure = "acquisition_unavailable";
                 }
             }
             else
@@ -345,9 +481,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             _signals.Downloads.Notify();
         }
 
-        private async Task RequireSabImportSourceAsync(LogicContext context, AcquisitionConnectionData client, CancellationToken ct)
+        private async Task RequireClientImportSourceAsync(LogicContext context, AcquisitionConnectionData client, CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(client.RemotePath) || client.DownloadStorageMountId is null && string.IsNullOrWhiteSpace(client.LocalPath))
+            if (string.IsNullOrWhiteSpace(client.RemotePath) || client.DownloadStorageMountId is null && string.IsNullOrWhiteSpace(client.LocalPath)
+                || client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent
+                    && client.RemotePath.TrimEnd('/', '\\').Length == 0)
             {
                 throw new ServiceUnavailableException("acquisition_import_path_unconfigured");
             }

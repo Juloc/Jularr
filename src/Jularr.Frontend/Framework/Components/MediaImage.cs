@@ -15,8 +15,8 @@ namespace Jularr.Frontend.Framework
     {
         // The image where there is an address, otherwise the stand-in (NoCover): the one place a missing cover is decided.
         public static IUiComponent Or(FrontendAssets assets, string? url, string alt, int width, int height, NoCoverKind kind = NoCoverKind.Poster,
-            bool priority = false, string? placeholderClass = null) =>
-            string.IsNullOrWhiteSpace(url) ? new NoCover(assets, kind, placeholderClass) : new MediaImage(url, alt, width, height, priority: priority, kind: kind);
+            bool priority = false, string? placeholderClass = null, string? sizes = null) =>
+            string.IsNullOrWhiteSpace(url) ? new NoCover(assets, kind, placeholderClass) : new MediaImage(url, alt, width, height, sizes: sizes, priority: priority, kind: kind);
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {

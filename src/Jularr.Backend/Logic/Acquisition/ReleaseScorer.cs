@@ -49,12 +49,13 @@ namespace Jularr.Backend.Logic.Acquisition
                 }
             }
 
-            // Quality sizes scale with the runtime and the episodes a release holds; a season pack's length is unknown here.
-            if (profile.RuntimeMinutes is { } minutes && candidate.SizeBytes is { } bytes && profile.Sizes.TryGetValue(qualityKey, out var size) && !candidate.Release.IsSeasonPack)
+            // Quality sizes use known total duration, or the work runtime per episode. Packs need a known total duration.
+            if ((candidate.RuntimeMinutes ?? profile.RuntimeMinutes) is { } minutes && candidate.SizeBytes is { } bytes && profile.Sizes.TryGetValue(qualityKey, out var size)
+                && (!candidate.Release.IsSeasonPack || candidate.RuntimeMinutes is not null))
             {
                 var episodes = candidate.Release.EpisodeStart is { } first && candidate.Release.EpisodeEnd is { } last && last >= first ? last - first + 1 : 1;
                 var megabytes = bytes / 1_048_576m;
-                var length = minutes * episodes;
+                var length = candidate.RuntimeMinutes is not null ? minutes : minutes * episodes;
                 if (megabytes < size.Minimum * length)
                 {
                     rejections.Add(new ReleaseReason("SizeBelowQualityMinimum", qualityKey));

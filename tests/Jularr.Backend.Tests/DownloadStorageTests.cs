@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Enums.Storage;
+using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Storage;
 using Jularr.Backend.Service.Core;
@@ -16,6 +18,67 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class DownloadStorageTests
     {
+        private static readonly string[] AutomountedNas =
+        [
+            "1897 732 0:80 / / rw,relatime - overlay overlay rw",
+            "1908 1897 8:2 /mnt /mnt rw,relatime master:1 - ext4 /dev/sda2 rw",
+            "1909 1908 0:41 / /mnt/arr_bay4_media rw,relatime master:20 - autofs systemd-1 rw",
+            "1911 1909 0:520 / /mnt/arr_bay4_media rw,relatime master:479 - cifs //nas/media rw"
+        ];
+
+        [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public void FilesystemIdentity_AutomountedNas_UsesVisibleCifsRegardlessOfLineOrder(bool reverse)
+        {
+            var mounts = reverse ? AutomountedNas.Reverse().ToArray() : AutomountedNas;
+            var identity = StorageFileSystem.DownloadFilesystemIdentity("/mnt/arr_bay4_media/downloads/incomplete", mounts);
+            Assert.IsNotNull(identity);
+            Assert.IsTrue(identity.StartsWith("cifs:", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
+        [DataRow(false, false)]
+        [DataRow(false, true)]
+        [DataRow(true, false)]
+        [DataRow(true, true)]
+        public void FilesystemIdentity_AutomountedNas_PreservesExistingFingerprintsAcrossRemounts(bool includeDirectory, bool includeMountPoint)
+        {
+            var mounted = AutomountedNas.Where(line => !line.StartsWith("1909 ", StringComparison.Ordinal)).ToArray();
+            var remounted = AutomountedNas.Select(line => line.Replace("1911 1909", "42 1909", StringComparison.Ordinal)).ToArray();
+            const string path = "/mnt/arr_bay4_media/downloads/complete";
+            var existing = StorageFileSystem.DownloadFilesystemIdentity(path, mounted, includeDirectory, includeMountPoint);
+            Assert.IsNotNull(existing);
+            Assert.AreEqual(existing, StorageFileSystem.DownloadFilesystemIdentity(path, AutomountedNas, includeDirectory, includeMountPoint));
+            Assert.AreEqual(existing, StorageFileSystem.DownloadFilesystemIdentity(path, remounted, includeDirectory, includeMountPoint));
+        }
+
+        [TestMethod]
+        public void FilesystemIdentity_UnmountedAutomount_DoesNotFallBackToTheVmDisk()
+        {
+            Assert.IsNull(StorageFileSystem.DownloadFilesystemIdentity("/mnt/arr_bay4_media/downloads/incomplete", AutomountedNas[..3]));
+        }
+
+        [TestMethod]
+        [DataRow("tmpfs")]
+        [DataRow("overlay")]
+        [DataRow("autofs")]
+        public void FilesystemIdentity_CoveredCifs_DoesNotAcceptTheHiddenNas(string filesystem)
+        {
+            string[] mounts = [.. AutomountedNas, $"1912 1911 0:521 / /mnt/arr_bay4_media rw - {filesystem} covered rw"];
+            Assert.IsNull(StorageFileSystem.DownloadFilesystemIdentity("/mnt/arr_bay4_media/downloads/incomplete", mounts));
+        }
+
+        [TestMethod]
+        public void FilesystemIdentity_ChildOfCoveredAutomount_IsNotVisibleThroughCifs()
+        {
+            string[] mounts = [.. AutomountedNas, "1912 1909 8:3 / /mnt/arr_bay4_media/downloads rw - ext4 /dev/old-disk rw"];
+            var path = "/mnt/arr_bay4_media/downloads/incomplete";
+            var visible = StorageFileSystem.DownloadFilesystemIdentity(path, AutomountedNas.Where(line => !line.StartsWith("1909 ", StringComparison.Ordinal)).ToArray());
+            Assert.IsNotNull(visible);
+            Assert.AreEqual(visible, StorageFileSystem.DownloadFilesystemIdentity(path, mounts));
+        }
+
         private static DownloadStoragePaths Paths(string root, long? jobLimit = null, long? workspaceLimit = null)
         {
             var incomplete = Directory.CreateDirectory(Path.Combine(root, "Incomplete")).FullName;
@@ -23,6 +86,45 @@ namespace Jularr.Backend.Tests
             return new DownloadStoragePaths(new DownloadStorageSettingsData(DownloadStorageArea.Direct, 1, "Incomplete", StorageFileSystem.DownloadFilesystemIdentity(incomplete),
                 1, "Complete", StorageFileSystem.DownloadFilesystemIdentity(complete), 0, jobLimit, workspaceLimit, 2, 1, Guid.NewGuid()),
                 Path.Combine(incomplete, "workspace"), Path.Combine(complete, "workspace"), new DownloadStorageReservations());
+        }
+
+        [TestMethod]
+        public async Task JobWorkspace_MediaAndJobIdAreStableAcrossDownloadAndImport()
+        {
+            using var folder = new TemporaryDirectory();
+            var paths = Paths(folder.Path);
+            var book = await paths.PrepareIncompleteAsync(41, CancellationToken.None, MediaType.Book);
+            Assert.IsTrue(book.EndsWith(Path.Combine("books", "j-41"), StringComparison.Ordinal));
+            File.WriteAllText(Path.Combine(book, "novel.epub"), "ebook");
+            var complete = await paths.CompleteAsync(41, book, null, CancellationToken.None, MediaType.Book);
+            Assert.IsTrue(complete.EndsWith(Path.Combine("books", "j-41"), StringComparison.Ordinal));
+            Assert.IsTrue(File.Exists(Path.Combine(complete, "novel.epub")));
+            Assert.IsFalse(Directory.Exists(book));
+
+            var anime = await paths.PrepareIncompleteAsync(42, CancellationToken.None, MediaType.Series, MediaSubtype.Anime);
+            Assert.IsTrue(anime.EndsWith(Path.Combine("anime", "j-42"), StringComparison.Ordinal));
+            Assert.AreEqual("tv", DownloadWorkspaceLayout.Category(MediaType.Series, null));
+            Assert.AreEqual("manga", DownloadWorkspaceLayout.Category(MediaType.Book, MediaSubtype.Manga));
+
+            paths.RemoveCompleted(41);
+            paths.RemoveCompleted(42);
+            Assert.IsFalse(Directory.Exists(complete));
+            Assert.IsFalse(Directory.Exists(anime));
+        }
+
+        [TestMethod]
+        public async Task JobWorkspace_LegacyNativeJobsRemainResolvableAndCleanable()
+        {
+            using var folder = new TemporaryDirectory();
+            var paths = Paths(folder.Path);
+            var legacy = Directory.CreateDirectory(Path.Combine(paths.IncompleteRoot, "123")).FullName;
+            var resumed = await paths.PrepareIncompleteAsync(123, CancellationToken.None, MediaType.Book);
+            Assert.AreEqual(legacy, resumed);
+            File.WriteAllText(Path.Combine(resumed, "book.epub"), "ebook");
+            var completed = await paths.CompleteAsync(123, resumed, null, CancellationToken.None, MediaType.Book);
+            Assert.IsTrue(File.Exists(Path.Combine(completed, "book.epub")));
+            paths.RemoveCompleted(123);
+            Assert.IsFalse(Directory.Exists(completed));
         }
 
         [TestMethod]
@@ -41,7 +143,95 @@ namespace Jularr.Backend.Tests
                 mountPath = mount.FullName;
             }
             var drive = new DriveInfo(mountPath);
-            Assert.AreEqual(drive.AvailableFreeSpace, StorageFileSystem.AvailableFreeSpace(path));
+            // The hosted CI runner writes to the same mount concurrently. Two consecutive
+            // statvfs calls need not report byte-identical values even for the same filesystem.
+            var before = drive.AvailableFreeSpace;
+            var actual = StorageFileSystem.AvailableFreeSpace(path);
+            var after = drive.AvailableFreeSpace;
+            Assert.IsNotNull(actual);
+            const long jitterAllowance = 16L * 1024 * 1024;
+            Assert.IsTrue(actual.Value >= Math.Min(before, after) - jitterAllowance
+                && actual.Value <= Math.Max(before, after) + jitterAllowance,
+                $"Free space should match the containing mount (before {before}, observed {actual.Value}, after {after}).");
+        }
+
+        [TestMethod]
+        public void Cleanup_PreservesLiveAndRecentFoldersAndNeverTakesForeignNames()
+        {
+            using var folder = new TemporaryDirectory();
+            var paths = Paths(folder.Path);
+            var old = Directory.CreateDirectory(paths.Incomplete(101)).FullName;
+            var fresh = Directory.CreateDirectory(paths.Incomplete(102)).FullName;
+            Directory.CreateDirectory(Path.Combine(paths.IncompleteRoot, "manual-not-a-job"));
+            Directory.CreateDirectory(Path.Combine(paths.CompleteRoot, "partial-103"));
+            var now = DateTime.UtcNow;
+            Directory.SetLastWriteTimeUtc(old, now.AddDays(-8));
+            Directory.SetLastWriteTimeUtc(fresh, now);
+            Directory.SetLastWriteTimeUtc(Path.Combine(paths.CompleteRoot, "partial-103"), now.AddDays(-8));
+            using var cleanup = new DirectDownloadCleanup();
+            var found = cleanup.Candidates(paths, now);
+            Assert.AreEqual(2, found.Count);
+            Assert.IsTrue(found.Any(item => item.OperationId == 101));
+            Assert.IsTrue(found.Any(item => item.OperationId == 103));
+            Assert.IsFalse(found.Any(item => item.OperationId == 102));
+            var candidate = found.Single(item => item.OperationId == 101);
+            Assert.IsFalse(DirectDownloadCleanup.CanRemove(candidate, false, false, now), "An active operation is never cleaned.");
+            Assert.IsTrue(DirectDownloadCleanup.CanRemove(candidate, true, true, now));
+            DirectDownloadCleanup.Remove(paths, candidate, now, isMissing: true);
+            Assert.IsFalse(Directory.Exists(old));
+            Assert.IsTrue(Directory.Exists(fresh));
+            Assert.IsTrue(Directory.Exists(Path.Combine(paths.IncompleteRoot, "manual-not-a-job")));
+            Assert.IsTrue(Directory.Exists(Path.Combine(paths.CompleteRoot, "partial-103")));
+        }
+
+        [TestMethod]
+        public void Cleanup_RejectsRecentFilesInsideOldOperationDirectory()
+        {
+            using var folder = new TemporaryDirectory();
+            var paths = Paths(folder.Path);
+            var directory = Directory.CreateDirectory(paths.Incomplete(8)).FullName;
+            File.WriteAllText(Path.Combine(directory, "fresh.epub"), "do not remove");
+            var now = DateTime.UtcNow;
+            Directory.SetLastWriteTimeUtc(directory, now.AddDays(-8));
+            var candidate = new DirectDownloadCleanup.Candidate(8, paths.IncompleteRoot, "8", now.AddDays(-8));
+            Assert.Throws<InvalidDataException>(() => DirectDownloadCleanup.Remove(paths, candidate, now, isMissing: false));
+            Assert.IsTrue(File.Exists(Path.Combine(directory, "fresh.epub")));
+        }
+
+        [TestMethod]
+        public void Cleanup_RotatesAcrossLargeWorkspaces()
+        {
+            using var folder = new TemporaryDirectory();
+            var paths = Paths(folder.Path);
+            var now = DateTime.UtcNow;
+            for (var id = 1; id <= 65; id++)
+            {
+                var directory = Directory.CreateDirectory(paths.Incomplete(id)).FullName;
+                Directory.SetLastWriteTimeUtc(directory, now.AddDays(-3));
+            }
+
+            using var cleanup = new DirectDownloadCleanup();
+            var seen = new HashSet<long>();
+            for (var pass = 0; pass < 3; pass++)
+            {
+                var batch = cleanup.Candidates(paths, now);
+                Assert.IsTrue(batch.Count <= 32);
+                foreach (var candidate in batch) seen.Add(candidate.OperationId);
+            }
+
+            Assert.AreEqual(65, seen.Count);
+        }
+
+        [TestMethod]
+        public void Cleanup_MissingOperationNeedsLongerGracePeriod()
+        {
+            var now = DateTime.UtcNow;
+            var candidate = new DirectDownloadCleanup.Candidate(9, "/tmp/unused", "9", now.AddDays(-2));
+            Assert.IsTrue(DirectDownloadCleanup.CanRemove(candidate, true, false, now));
+            Assert.IsFalse(DirectDownloadCleanup.CanRemove(candidate, true, true, now));
+            Assert.IsFalse(DirectDownloadCleanup.TryParseName("partial-123.txt", out _));
+            Assert.IsFalse(DirectDownloadCleanup.TryParseName("../123", out _));
+            Assert.IsFalse(DirectDownloadCleanup.TryParseName("-1", out _));
         }
 
         [TestMethod]
@@ -149,6 +339,22 @@ namespace Jularr.Backend.Tests
             using var configured = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/downloads/" + (int)area,
                 new SaveDownloadStorageDataV1(mountId, "Incomplete", mountId, "Complete", 0, maxJobBytes, null, 2, 1, true));
             Assert.AreEqual(HttpStatusCode.OK, configured.StatusCode, await configured.Content.ReadAsStringAsync());
+        }
+
+        [TestMethod]
+        public async Task DirectCleanupStats_IsAvailableToAuthorizedAdminAndStartsEmpty()
+        {
+            using var folder = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(folder.Path);
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/downloads/2/cleanup");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            var stats = (await response.Content.ReadFromJsonAsync<DirectCleanupStatsV1>())!;
+            Assert.AreEqual(0L, stats.Scanned);
+            Assert.AreEqual(0L, stats.Deleted);
+            Assert.AreEqual(0L, stats.ReclaimedBytes);
+
+            using var wrongArea = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/downloads/1/cleanup");
+            Assert.AreEqual(HttpStatusCode.BadRequest, wrongArea.StatusCode);
         }
 
         [TestMethod]

@@ -31,8 +31,8 @@
 
     // The header and the bottom bar: one line each on the app's own 1px rule; tools that find no room leave for the More menu.
     &__top, &__footer { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 8px 18px; background: var(--surface); z-index: 2; }
-    &__top { grid-row: 1; border-bottom: 1px solid var(--border); }
-    &__footer { grid-row: 3; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); padding-block: 6px; min-height: 52px; border-top: 1px solid var(--border); }
+    &__top { grid-row: 1; padding: calc(8px + env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) 8px max(18px, env(safe-area-inset-left)); border-bottom: 1px solid var(--border); }
+    &__footer { grid-row: 3; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); padding: 6px max(18px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); min-height: 52px; border-top: 1px solid var(--border); }
     &__footer-start { display: flex; align-items: center; gap: 8px; min-width: 0; }
     &__bottom { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
     &__context { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--text-small, 10px); color: var(--muted); }

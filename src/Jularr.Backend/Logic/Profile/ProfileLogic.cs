@@ -160,6 +160,17 @@ namespace Jularr.Backend.Logic.Profile
 
             // Establish ownership before commit.
             await ctx.AddAccountProfileAsync(new AccountProfileData(data.OwnerAccountId, profile.Id), ct);
+
+            // The first owned profile becomes this account's main PWA profile; choosing another one is explicit.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE "Accounts"
+                SET "PwaMainProfileId" = @ProfileId
+                WHERE "Id" = @AccountId AND "PwaMainProfileId" IS NULL;
+                """;
+            sql.Parameters.Add(new AccountProfileData(data.OwnerAccountId, profile.Id));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         public static Task<ProfileUpdateData> ReadProfileAsync(this LogicContext ctx, long profileId, CancellationToken ct)
@@ -170,7 +181,9 @@ namespace Jularr.Backend.Logic.Profile
                 SELECT
                     profile."Id",
                     profile."DisplayName",
-                    profile."UiLocaleId"
+                    profile."UiLocaleId",
+                    profile."FirstContentLanguage",
+                    profile."SecondContentLanguage"
                 FROM
                     "Profiles" AS profile
                 WHERE
@@ -206,6 +219,11 @@ namespace Jularr.Backend.Logic.Profile
         {
             await ctx.RequireEnabledUiLocaleAsync(updateData.UiLocaleId, nameof(updateData.UiLocaleId), ct);
 
+            if (updateData.SecondContentLanguage is not null && (updateData.FirstContentLanguage is null || updateData.FirstContentLanguage == updateData.SecondContentLanguage))
+            {
+                throw new DataValidationException(nameof(updateData.SecondContentLanguage), "invalid_value");
+            }
+
             // Write the merged profile.
             var sql = new SqlStatement();
             sql.Statement =
@@ -215,6 +233,8 @@ namespace Jularr.Backend.Logic.Profile
                 SET
                     "DisplayName" = @DisplayName,
                     "UiLocaleId" = @UiLocaleId,
+                    "FirstContentLanguage" = @FirstContentLanguage,
+                    "SecondContentLanguage" = @SecondContentLanguage,
                     "UpdatedAt" = now()
                 WHERE
                     profile."Id" = @Id;

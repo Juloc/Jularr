@@ -58,6 +58,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("tt0944947", await host.ScalarAsync("SELECT \"ImdbId\" FROM \"ExternalWorks\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorks\" WHERE \"DetailedAt\" IS NULL"));
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncs\" WHERE \"ListedOn\" = '2026-10-19'"));
+            // The following pass finds no pending details and publishes the complete catalogs.
+            await RunAsync(host);
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncs\" WHERE \"CompletedAt\" IS NOT NULL"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM pg_stats WHERE schemaname = current_schema() AND tablename = 'ExternalWorks' AND attname = 'TrendingRank'"),
+                "Completing the initial catalog must prepare its ranking statistics before local discovery uses it.");
             Assert.IsFalse(tmdb.Requests.Any(request => request.AbsolutePath.EndsWith("/changes", StringComparison.Ordinal)), "The first pass reads everything anyway.");
 
             // The same day the list is not read again; six hours later the changed entries are read again.

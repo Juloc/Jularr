@@ -10,21 +10,18 @@ namespace Jularr.Backend.Logic.Library
     // One naming engine for completed downloads and already scanned files.
     internal static partial class NamingPattern
     {
-        public static void Validate(MediaType mediaType, string pattern, string field)
+        public static void Validate(MediaType mediaType, string pattern, string field, bool daily = false)
         {
-            var pieces = Parse(pattern);
-            if (pieces.Any(piece => piece.Name is null || !ValidFormat(piece.Name, piece.Format))
-                || Piece().Replace(pattern, "").IndexOfAny(['{', '}']) >= 0)
-            {
-                throw new DataValidationException(field, "naming_unknown_token");
-            }
+            var pieces = ValidateTokens(pattern, field);
 
             var names = pieces.Select(piece => piece.Name!).ToArray();
             var hasTitle = names.Any(name => name.Equals("Title", StringComparison.OrdinalIgnoreCase)
                 || name.StartsWith(mediaType == MediaType.Series ? "Series " : "Movie ", StringComparison.OrdinalIgnoreCase)
                 && name.Contains("Title", StringComparison.OrdinalIgnoreCase));
-            if (!hasTitle || mediaType == MediaType.Series
-                && (!names.Contains("Season", StringComparer.OrdinalIgnoreCase) || !names.Contains("Episode", StringComparer.OrdinalIgnoreCase)))
+            hasTitle |= names.Any(name => name is "Book Title" or "Book CleanTitle" or "Album" or "Album Title" or "Album CleanTitle" or "Game Title");
+            var hasEpisode = names.Contains("Episode", StringComparer.OrdinalIgnoreCase) && names.Contains("Season", StringComparer.OrdinalIgnoreCase)
+                || names.Contains("Absolute", StringComparer.OrdinalIgnoreCase);
+            if (!hasTitle || mediaType == MediaType.Series && !(daily ? names.Contains("Air Date", StringComparer.OrdinalIgnoreCase) : hasEpisode))
             {
                 throw new DataValidationException(field, "naming_incomplete");
             }
@@ -33,11 +30,51 @@ namespace Jularr.Backend.Logic.Library
             var file = parts[^1];
             var fileNames = Parse(file).Select(piece => piece.Name).ToArray();
             if (parts.Any(part => part.Trim() is "" or "." or "..")
-                || mediaType == MediaType.Series && !fileNames.Contains("Episode", StringComparer.OrdinalIgnoreCase)
+                || mediaType == MediaType.Series && !fileNames.Contains(daily ? "Air Date" : "Episode", StringComparer.OrdinalIgnoreCase)
+                    && !fileNames.Contains("Absolute", StringComparer.OrdinalIgnoreCase)
                 || mediaType == MediaType.Movie && !fileNames.Any(name => name?.Contains("Title", StringComparison.OrdinalIgnoreCase) == true))
             {
                 throw new DataValidationException(field, "naming_invalid_path");
             }
+        }
+
+        public static void ValidateRules(NamingRules rules)
+        {
+            if (rules.ColonReplacement == ColonReplacement.Custom && rules.CustomColonReplacement is null)
+                throw new DataValidationException(nameof(rules.CustomColonReplacement), "required");
+            if (rules.CustomColonReplacement?.IndexOfAny(['/', '\\', ':']) >= 0)
+                throw new DataValidationException(nameof(rules.CustomColonReplacement), "invalid_value");
+            if (rules.SpecialsFolder is { } specials) ValidateFolder(specials, nameof(rules.SpecialsFolder));
+        }
+
+        public static void ValidateDaily(MediaType type, MediaSubtype? subtype, string? folder, string? file, string field)
+        {
+            if (file is null) return;
+            if (type != MediaType.Series || subtype is not null) throw new DataValidationException(field, "invalid_value");
+            var pattern = Join(folder, file);
+            if (pattern.Length > 500) throw new DataValidationException(field, "too_long");
+            Validate(MediaType.Series, pattern, field, daily: true);
+        }
+
+        public static void ValidateFolder(string pattern, string field)
+        {
+            ValidateTokens(pattern, field);
+            if (pattern.Trim() is "" or "." or ".." || pattern.IndexOfAny(['/', '\\']) >= 0)
+            {
+                throw new DataValidationException(field, "naming_invalid_folder");
+            }
+        }
+
+        private static IReadOnlyList<NamingPiece> ValidateTokens(string pattern, string field)
+        {
+            var pieces = Parse(pattern);
+            if (pieces.Any(piece => piece.Name is null || !ValidFormat(piece.Name, piece.Format))
+                || Piece().Replace(pattern, "").IndexOfAny(['{', '}']) >= 0)
+            {
+                throw new DataValidationException(field, "naming_unknown_token");
+            }
+
+            return pieces;
         }
 
         public static string Join(string? folder, string file) => string.IsNullOrWhiteSpace(folder) ? file : folder.Trim().Trim('/') + "/" + file.Trim();
@@ -45,9 +82,19 @@ namespace Jularr.Backend.Logic.Library
         public static (string? Folder, string File) Split(string pattern) =>
             pattern.LastIndexOf('/') is var slash and >= 0 ? (pattern[..slash], pattern[(slash + 1)..]) : (null, pattern);
 
-        public static string Example(MediaType mediaType, string pattern) => Apply(pattern, mediaType == MediaType.Series
-            ? new NamingValues("Example Show", 2020, 1, 2, "The Second", "WEBDL-1080p", "GRP", null, 1) { MediaTypeId = MediaType.Series }
-            : new NamingValues("Example Movie", 1999, null, null, null, "Bluray-1080p", "GRP", null, 1)) + ".mkv";
+        public static string Example(MediaType mediaType, string pattern, MediaSubtype? subtype = null, bool multiple = false, NamingRules? rules = null, bool specials = false)
+        {
+            var title = mediaType == MediaType.Series ? "The Series Title's!" : mediaType == MediaType.Movie ? "The Movie: Title" : mediaType == MediaType.Music ? "Example Album" : "Example Title";
+            return Apply(pattern, new NamingValues(title, 2010, specials ? 0 : 1, 1, multiple ? "Episode Title" : "Episode Title (1)", mediaType == MediaType.Movie ? "Bluray-1080p" : "WEBDL-1080p", mediaType == MediaType.Movie ? "EVOLVE" : "RlsGrp", null, 2)
+            {
+                MediaTypeId = mediaType, MediaSubtypeId = subtype, Rules = rules ?? NamingRules.Default,
+                EpisodeNumbers = multiple ? [1, 2, 3] : [], AbsoluteNumbers = multiple ? [12, 13, 14] : [], Absolute = 12, AirDate = new DateOnly(2013, 10, 30),
+                Author = "Example Author", Artist = "Example Artist", TrackTitle = "Example Track", Track = 2, Disc = 1, Volume = 1, Platform = "Example Platform",
+                Language = "EN", OriginalFilename = "Original.Release", Region = "Europe",
+                MediaInfo = new Dictionary<string, string> { ["MediaInfo Full"] = "AVC DTS[DE] [EN+DE]", ["MediaInfo VideoCodec"] = "AVC", ["MediaInfo AudioCodec"] = "DTS", ["MediaInfo AudioLanguages"] = "[DE]", ["MediaInfo SubtitleLanguages"] = "[EN+DE]" },
+                ProviderIds = new Dictionary<string, string> { ["imdb"] = mediaType == MediaType.Movie ? "tt0066921" : "tt12345", ["anilist"] = "12345", ["openlibrary"] = "OL12345W", ["musicbrainz"] = "01234567-89ab-cdef-0123-456789abcdef", ["igdb"] = "12345" }
+            }) + "." + (mediaType == MediaType.Book ? subtype == MediaSubtype.Manga ? "cbz" : "epub" : mediaType == MediaType.Music ? "flac" : mediaType == MediaType.Game ? "rom" : "mkv");
+        }
 
         public static bool Distinguishes(string pattern) =>
             Parse(pattern.Split('/')[^1]).Any(piece => piece.Name?.ToLowerInvariant() is
@@ -61,18 +108,25 @@ namespace Jularr.Backend.Logic.Library
             var parts = pattern.Split('/');
             for (var index = 0; index < parts.Length; index++)
             {
-                // Season 0 goes to its own folder instead of the season folder.
-                if (values.Season == 0 && values.Rules.SpecialsFolder is { Length: > 0 } specials && index < parts.Length - 1
-                    && Parse(parts[index]).Any(piece => piece.Name == "Season"))
+                // Season 0 uses the same token rendering for its own folder format.
+                var part = parts[index];
+                if (index == parts.Length - 1 && !values.Rules.RenamesFiles && values.OriginalFilename is { Length: > 0 } original)
                 {
-                    segments.Add(LibraryNaming.SafeName(specials));
+                    segments.Add(LibraryNaming.SafeName(original));
                     continue;
+                }
+                if (index == parts.Length - 1 && values.EpisodeNumbers.Count > 1) part = MultipleEpisodes(part, values);
+                if (index == parts.Length - 1 && values.AbsoluteNumbers.Count > 1) part = MultipleAbsolute(part, values);
+                if (values.Season == 0 && values.Rules.SpecialsFolder is { Length: > 0 } specials && index < parts.Length - 1
+                    && Parse(part).Any(piece => piece.Name == "Season"))
+                {
+                    part = specials;
                 }
 
                 // Empty tokens drop out with the brackets and separators around them; what stays is rendered afterwards,
                 // so values keep whatever characters they have.
                 var rendered = new List<string>();
-                var literal = Tidy(Piece().Replace(parts[index], match =>
+                var literal = Tidy(Piece().Replace(part, match =>
                 {
                     var text = Render(ToPiece(match), values);
                     if (text is null)
@@ -94,6 +148,46 @@ namespace Jularr.Backend.Logic.Library
 
             return string.Join('/', segments);
         }
+
+        private static string MultipleEpisodes(string pattern, NamingValues values)
+        {
+            var numbers = values.EpisodeNumbers;
+            return EpisodeBlock().Replace(pattern, match =>
+            {
+                var first = match.Groups["prefix"].Value + Number(values.Season, match.Groups["seasonFormat"].Value) + match.Groups["episodePrefix"].Value;
+                var initial = first + Number(numbers[0], match.Groups["episodeFormat"].Value);
+                var separator = Regex.Match(pattern[..match.Index], @"[- ._]+$").Value;
+                var rest = values.Rules.MultiEpisodeStyle is MultiEpisodeStyle.Range or MultiEpisodeStyle.PrefixedRange ? new[] { numbers[^1] } : numbers.Skip(1);
+                return initial + string.Concat(rest.Select(number => values.Rules.MultiEpisodeStyle switch
+                {
+                    MultiEpisodeStyle.Duplicate => separator + first + Number(number, match.Groups["episodeFormat"].Value),
+                    MultiEpisodeStyle.Repeat => match.Groups["episodePrefix"].Value + Number(number, match.Groups["episodeFormat"].Value),
+                    MultiEpisodeStyle.Scene or MultiEpisodeStyle.PrefixedRange => "-" + match.Groups["episodePrefix"].Value + Number(number, match.Groups["episodeFormat"].Value),
+                    _ => "-" + Number(number, match.Groups["episodeFormat"].Value)
+                }));
+            });
+        }
+
+        private static string MultipleAbsolute(string pattern, NamingValues values) => AbsoluteBlock().Replace(pattern, match =>
+        {
+            var numbers = values.AbsoluteNumbers;
+            var separator = Regex.Match(pattern[..match.Index], @"[- ._]+$").Value;
+            if (string.IsNullOrWhiteSpace(separator)) separator = "-";
+            var join = values.Rules.MultiEpisodeStyle switch
+            {
+                MultiEpisodeStyle.Duplicate => separator,
+                MultiEpisodeStyle.Repeat => separator.Trim().Length == 0 ? " " : separator.Trim(),
+                _ => "-"
+            };
+            var selected = values.Rules.MultiEpisodeStyle is MultiEpisodeStyle.Range or MultiEpisodeStyle.PrefixedRange ? new[] { numbers[0], numbers[^1] } : numbers;
+            return string.Join(join, selected.Select(number => Number(number, match.Groups["format"].Value)));
+        });
+
+        [GeneratedRegex(@"\{absolute(?::(?<format>0+))?\}", RegexOptions.IgnoreCase)]
+        private static partial Regex AbsoluteBlock();
+
+        [GeneratedRegex(@"(?<prefix>s?)\{season(?::(?<seasonFormat>0+))?\}(?<episodePrefix>[- ._]?[ex])\{episode(?::(?<episodeFormat>0+))?\}", RegexOptions.IgnoreCase)]
+        private static partial Regex EpisodeBlock();
 
         // Private-use characters stand for rendered tokens while the template is tidied.
         private const char Marker = '\uE000';
@@ -210,12 +304,33 @@ namespace Jularr.Backend.Logic.Library
                 "Episode Title" => values.EpisodeTitle ?? "",
                 "Episode CleanTitle" => values.EpisodeTitle is { } episodeTitle ? Clean(episodeTitle) : "",
                 "Year" or "Release Year" or "Series Year" => year,
+                "Author" or "Author Name" or "Author SortName" => values.Author ?? "",
+                "Author CleanName" => values.Author is { } author ? Clean(author) : "",
+                "Book Title" or "Album" or "Album Title" or "Game Title" => finalTitle,
+                "Book CleanTitle" or "Album CleanTitle" => Clean(finalTitle),
+                "Book Series" => values.Collection ?? "",
+                "Book SeriesPosition" or "Volume" => Number(values.Volume, format),
+                "Volume Label" => values.Volume is null ? "" : "v" + Number(values.Volume, format),
+                "Book Year" or "Album ReleaseYear" or "Game Year" => year,
+                "Artist" or "Artist Name" or "Album Artist" => values.Artist ?? values.Author ?? "",
+                "Track" => Number(values.Track, format),
+                "Track Title" => values.TrackTitle ?? "",
+                "Track CleanTitle" => values.TrackTitle is { } trackTitle ? Clean(trackTitle) : "",
+                "Disc" => Number(values.Disc, format),
+                "Disc Prefix" => values.DiscCount > 1 && values.Disc is not null ? Number(values.Disc, format) + "-" : "",
+                "Disc Count" => Number(values.DiscCount, format),
+                "Language" or "Book Language" => values.Language ?? "",
+                "Platform" or "Game Platform" => values.Platform ?? "",
+                "Region" => values.Region ?? "",
+                "Version" => values.GameVersion ?? "",
+                "Format" => values.Format ?? "",
+                "Primary Id" => Id(values, values.MediaTypeId switch { MediaType.Movie => "imdb", MediaType.Series => values.MediaSubtypeId == MediaSubtype.Anime ? "anilist" : "tvdb", MediaType.Book => values.MediaSubtypeId is MediaSubtype.Manga or MediaSubtype.LightNovel ? "anilist" : "openlibrary", MediaType.Music => "musicbrainz", _ => "igdb" }),
                 "Season" => Number(values.Season, format),
-                "Episode" => Number(values.Episode, format),
+                "Episode" => values.EpisodeNumbers.Count > 1 ? Number(values.EpisodeNumbers[0], format) + "-" + Number(values.EpisodeNumbers[^1], format) : Number(values.Episode, format),
                 "Absolute" => Number(values.Absolute, format),
                 "Air Date" => values.AirDate?.ToString("yyyy MM dd", CultureInfo.InvariantCulture) ?? "",
                 "Quality" or "Quality Title" => values.Quality ?? "",
-                "Quality Full" => (values.Quality ?? "") + (values.Revision > 1 ? " Proper" : ""),
+                "Quality Full" => (values.Quality ?? "") + (values.Revision > 1 ? values.MediaSubtypeId == MediaSubtype.Anime ? " v" + values.Revision.ToString(CultureInfo.InvariantCulture) : " Proper" : ""),
                 "Quality Proper" or "Proper" => values.Revision > 1 ? "Proper" : "",
                 "Quality Real" => values.IsReal ? "REAL" : "",
                 "Release Group" => values.ReleaseGroup ?? "",
@@ -389,7 +504,7 @@ namespace Jularr.Backend.Logic.Library
     }
 
     // How values become file names; the defaults are the *arrs'.
-    internal sealed record NamingRules(bool ReplacesIllegalCharacters, ColonReplacement ColonReplacement, string? CustomColonReplacement, string? SpecialsFolder)
+    internal sealed record NamingRules(bool ReplacesIllegalCharacters, ColonReplacement ColonReplacement, string? CustomColonReplacement, string? SpecialsFolder, bool RenamesFiles = true, MultiEpisodeStyle MultiEpisodeStyle = MultiEpisodeStyle.PrefixedRange)
     {
         public static NamingRules Default { get; } = new(true, ColonReplacement.Smart, null, "Specials");
     }
@@ -397,6 +512,21 @@ namespace Jularr.Backend.Logic.Library
     internal sealed record NamingValues(string Title, int? Year, decimal? Season, decimal? Episode, string? EpisodeTitle, string? Quality, string? ReleaseGroup, string? Edition, int Revision)
     {
         public MediaType MediaTypeId { get; init; } = MediaType.Movie;
+        public MediaSubtype? MediaSubtypeId { get; init; }
+        public IReadOnlyList<decimal> EpisodeNumbers { get; init; } = [];
+        public IReadOnlyList<decimal> AbsoluteNumbers { get; init; } = [];
+        public string? Author { get; init; }
+        public string? Artist { get; init; }
+        public string? TrackTitle { get; init; }
+        public decimal? Track { get; init; }
+        public decimal? Disc { get; init; }
+        public decimal? DiscCount { get; init; }
+        public decimal? Volume { get; init; }
+        public string? Language { get; init; }
+        public string? Platform { get; init; }
+        public string? Region { get; init; }
+        public string? GameVersion { get; init; }
+        public string? Format { get; init; }
         public IReadOnlyDictionary<string, string>? ProviderIds { get; init; }
         public NamingRules Rules { get; init; } = NamingRules.Default;
         public decimal? Absolute { get; init; }

@@ -11,7 +11,7 @@ using static Jularr.Backend.Tests.DatabaseBaselineTests;
 
 namespace Jularr.Backend.Tests
 {
-    // The migration mechanism after the release freeze: migrations of the test assembly stand in for the production ones (there are none yet),
+    // The migration mechanism after the release freeze: explicit baseline-only test fixtures use probe migrations,
     // and a script stands in for pg_dump so the backup-first rule is tested without the PostgreSQL client.
     [TestClass]
     public sealed class DatabaseMigrationTests
@@ -57,6 +57,161 @@ namespace Jularr.Backend.Tests
             """);
 
         [TestMethod]
+        public async Task ContentLanguages_UpgradePreservesExistingProfilesWithoutInferringTheirPreferences()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(ContentLanguages_UpgradePreservesExistingProfilesWithoutInferringTheirPreferences));
+            var options = Backup(folder.Path, out var backups);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 11).ToArray()).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await ExecuteAsync(cs, """
+                BEGIN;
+                INSERT INTO "Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId")
+                SELECT 501, 41, 'Kept profile', "Id" FROM "UiLocales" ORDER BY "Id" LIMIT 1;
+                INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 501);
+                COMMIT;
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            Assert.AreEqual("Kept profile", await ScalarAsync(cs, """SELECT "DisplayName" FROM "Profiles" WHERE "Id" = 501"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Profiles" WHERE "Id" = 501 AND "FirstContentLanguage" IS NULL AND "SecondContentLanguage" IS NULL"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+            Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
+        }
+
+        [TestMethod]
+        public async Task ProductionCompanionMigration_UpgradesTheFrozenBaselineWithBackup()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(ProductionCompanionMigration_UpgradesTheFrozenBaselineWithBackup));
+            var options = Backup(folder.Path, out var backups);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+
+            await new DatabaseBaseline(cs, options, tools, []).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual("Kept Film", await ScalarAsync(cs, "SELECT \"CanonicalTitle\" FROM \"Works\" WHERE \"Id\" = 501;"));
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM pg_tables WHERE tablename = 'PlaybackCompanionStates';"));
+            Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
+        }
+
+        [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public async Task WantedProjection_Upgrade_PreservesDataAndRecordsTheReleaseMigration(bool fromFeedSchema)
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(WantedProjection_Upgrade_PreservesDataAndRecordsTheReleaseMigration) + fromFeedSchema);
+            var options = Backup(folder.Path, out var backups);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: fromFeedSchema ? DatabaseBaseline.Migrations.Take(1).ToArray() : []).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await ExecuteAsync(cs, "INSERT INTO \"WantedItems\" (\"WorkId\") VALUES (501);");
+            if (fromFeedSchema)
+                await ExecuteAsync(cs, """INSERT INTO "ExternalWorkFeeds" ("Key", "Namespace", "MediaTypeId", "DiscoverFeedTypeId", "Page") VALUES ('kept-feed', 'tmdb_movie', 1, 1, 1);""");
+
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual(DatabaseBaseline.CurrentFingerprint, await ScalarAsync(cs, "SELECT \"Fingerprint\" FROM \"DatabaseSchemaVersions\" ORDER BY \"Version\" DESC LIMIT 1;"));
+            Assert.AreEqual("Kept Film", await ScalarAsync(cs, "SELECT \"CanonicalTitle\" FROM \"Works\" WHERE \"Id\" = 501;"));
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"WantedItems\" WHERE \"WorkId\" = 501;"));
+            Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM \"WantedBelowCutoff\";"));
+            if (fromFeedSchema)
+                Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkFeeds" WHERE "Key" = 'kept-feed';"""));
+            Assert.HasCount(1, Directory.GetDirectories(backups));
+        }
+
+        [TestMethod]
+        public async Task Upgrade_NamingFromVersionEight_PreservesEditedVideoPatternsAndSeedsOtherMediaOnce()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_NamingFromVersionEight_PreservesEditedVideoPatternsAndSeedsOtherMediaOnce));
+            var options = Backup(folder.Path, out var backups);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, options, tools, migrations: [.. DatabaseBaseline.Migrations.Where(migration => migration.Version <= 8)]).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs, """
+                UPDATE "NamingPatterns" SET "Pattern" = '{Title}/S{Season:00}/{Title} - S{Season:00}E{Episode:00} {ImdbId}', "Version" = 7 WHERE "MediaTypeId" = 2;
+                UPDATE "NamingSettings" SET "ColonReplacementId" = 6, "CustomColonReplacement" = '~', "SpecialsFolder" = 'Extras - {ImdbId}', "Version" = 4 WHERE "MediaTypeId" = 2;
+                """);
+            var current = new DatabaseBaseline(cs, options, tools);
+            await current.StartAsync(CancellationToken.None);
+            await current.StartAsync(CancellationToken.None);
+            Assert.AreEqual(2L, await ScalarAsync(cs, """SELECT count(*) FROM "NamingPatterns" WHERE "MediaTypeId" = 2 AND "Version" = 7 AND "Pattern" = '{Title}/S{Season:00}/{Title} - S{Season:00}E{Episode:00} {ImdbId}'"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "NamingSettings" WHERE "MediaTypeId" = 2 AND "Version" = 4 AND "SpecialsFolder" = 'Extras - {ImdbId}' AND "CustomColonReplacement" = '~' AND "RenamesFiles" = TRUE"""));
+            Assert.AreEqual(5L, await ScalarAsync(cs, """SELECT count(*) FROM "NamingPatterns" WHERE "MediaTypeId" IN (3,6,7)"""));
+            Assert.AreEqual(3L, await ScalarAsync(cs, """SELECT count(*) FROM "NamingSettings" WHERE "MediaTypeId" IN (3,6,7)"""));
+            Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
+        }
+
+        [TestMethod]
+        public async Task Upgrade_ProductionFeedMigration_PreservesVersionOneDataAndBacksUpOnce()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_ProductionFeedMigration_PreservesVersionOneDataAndBacksUpOnce));
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            var options = Backup(folder.Path, out var backups);
+            var current = new DatabaseBaseline(cs, options, Tools(cs, FakeDump(folder.Path, true), null));
+            await current.StartAsync(CancellationToken.None);
+            await current.StartAsync(CancellationToken.None);
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+            Assert.AreEqual("Kept Film", await ScalarAsync(cs, "SELECT \"CanonicalTitle\" FROM \"Works\" WHERE \"Id\" = 501"));
+            Assert.AreEqual(2L, await ScalarAsync(cs, "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('ExternalWorkFeeds', 'ExternalWorkFeedItems')"));
+            Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
+        }
+
+        [TestMethod]
+        public async Task Upgrade_FeedVersionTwoToCompanionVersionFour_PreservesFeedsAndCreatesCompanionSchema()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_FeedVersionTwoToCompanionVersionFour_PreservesFeedsAndCreatesCompanionSchema));
+            var options = Backup(folder.Path, out var backups);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+
+            CollectionAssert.AreEqual(Enumerable.Range(2, DatabaseBaseline.Migrations.Count).ToArray(), DatabaseBaseline.Migrations.Select(migration => migration.Version).ToArray(), "All production migrations must have unique contiguous numbers.");
+            await new DatabaseBaseline(cs, options, tools, migrations: [DatabaseBaseline.Migrations[0]]).StartAsync(CancellationToken.None);
+            Assert.AreEqual("0002_external_work_feeds", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 2"));
+            Assert.AreEqual(0L, await ScalarAsync(cs,
+                "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'PlaybackCompanionStates'"));
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            Assert.AreEqual("0003_wanted_present_asset_projection", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 3"));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs,
+                "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+            Assert.AreEqual(2L, await ScalarAsync(cs, "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('AcquisitionSearchRuns', 'AcquisitionSearchTargets')"));
+            Assert.AreEqual("0004_playback_companion", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 4"));
+            Assert.AreEqual("0005_sabnzbd_incomplete_paths", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 5"));
+            Assert.AreEqual("0006_torrent_sources", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 6"));
+            Assert.AreEqual("0007_download_cleanup_source_inventory", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 7"));
+            Assert.AreEqual("0008_browser_module", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 8"));
+            Assert.AreEqual("0009_pwa_main_profile_accent", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 9"));
+            Assert.AreEqual("0010_media_naming", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 10"));
+            Assert.AreEqual("0012_acquisition_search_jobs", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 12"));
+            Assert.AreEqual("0013_media_import_jobs", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 13"));
+            Assert.AreEqual(2L, await ScalarAsync(cs,
+                "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('MediaImportJobs','MediaImportJobRows')"));
+            Assert.AreEqual(1L, await ScalarAsync(cs,
+                "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'PlaybackCompanionStates'"));
+            Assert.AreEqual(2L, await ScalarAsync(cs,
+                "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('ExternalWorkFeeds','ExternalWorkFeedItems')"));
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
+        }
+
+        [TestMethod]
         public async Task Upgrade_AppliesNumberedMigrations_AfterABackup_KeepsData_AndIsConcurrencySafe()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
@@ -65,7 +220,7 @@ namespace Jularr.Backend.Tests
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
 
             // Version 1 with data and nothing pending: no backup.
-            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, options, tools, []).StartAsync(CancellationToken.None);
             await InsertWorkAsync(cs);
             Assert.AreEqual(0, Directory.GetDirectories(backups).Length);
 
@@ -96,7 +251,7 @@ namespace Jularr.Backend.Tests
             var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_FailingMigration_RollsEverythingBack_KeepsTheBackup_AndRetries));
             var options = Backup(folder.Path, out var backups);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
-            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, options, tools, []).StartAsync(CancellationToken.None);
             await InsertWorkAsync(cs);
 
             var broken = new DatabaseBaseline(cs, options, tools, [Probe(2, AddColumnAndTable), Probe(3, "ALTER TABLE \"Works\" ADD COLUMN \"Broken\" int NOT NULL;")]);
@@ -120,7 +275,7 @@ namespace Jularr.Backend.Tests
             using var folder = new LibraryTests.TemporaryDirectory();
             var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_FailedBackup_AbortsBeforeAnyMigration));
             var options = Backup(folder.Path, out var backups);
-            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
             await InsertWorkAsync(cs);
 
             var failing = new DatabaseBaseline(cs, options, Tools(cs, FakeDump(folder.Path, false), null), [Probe(2, AddColumnAndTable)]);
@@ -138,7 +293,7 @@ namespace Jularr.Backend.Tests
             var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_ChangedChecksumOfAnAppliedMigration_RefusesToStart));
             var options = Backup(folder.Path, out var backups);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
-            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, options, tools, []).StartAsync(CancellationToken.None);
             await InsertWorkAsync(cs);
             await new DatabaseBaseline(cs, options, tools, [Probe(2, AddColumnAndTable)]).StartAsync(CancellationToken.None);
 
@@ -156,10 +311,10 @@ namespace Jularr.Backend.Tests
         {
             using var folder = new LibraryTests.TemporaryDirectory();
             var cs = TestPostgres.ResolveConnectionString(nameof(LegacyBaselineDatabase_WithoutVersionTable_IsMarkedVersionOne_WithoutABackup));
-            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
             await ExecuteAsync(cs, "UPDATE \"InstanceSettings\" SET \"Name\" = 'legacy'; DROP TABLE \"DatabaseSchemaVersions\";");
 
-            var legacy = new DatabaseBaseline(cs, new BackupOptions { Path = folder.Path });
+            var legacy = new DatabaseBaseline(cs, new BackupOptions { Path = folder.Path }, migrations: []);
             await legacy.StartAsync(CancellationToken.None);
             Assert.AreEqual("legacy", await ScalarAsync(cs, "SELECT \"Name\" FROM \"InstanceSettings\";"));
             Assert.AreEqual(1, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
@@ -175,9 +330,9 @@ namespace Jularr.Backend.Tests
         public async Task LegacyBaselineDatabase_WithAMissingColumn_IsRefusedAndNothingIsRecorded()
         {
             var cs = TestPostgres.ResolveConnectionString(nameof(LegacyBaselineDatabase_WithAMissingColumn_IsRefusedAndNothingIsRecorded));
-            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
             await ExecuteAsync(cs, "DROP TABLE \"DatabaseSchemaVersions\"; ALTER TABLE \"InstanceSettings\" DROP COLUMN \"Name\" CASCADE;");
-            var error = await Assert.ThrowsExactlyAsync<DatabaseUpgradeException>(() => new DatabaseBaseline(cs).StartAsync(CancellationToken.None));
+            var error = await Assert.ThrowsExactlyAsync<DatabaseUpgradeException>(() => new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None));
             StringAssert.Contains(error.Message, "InstanceSettings.Name");
             Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM pg_tables WHERE tablename = 'DatabaseSchemaVersions';"));
         }
@@ -188,7 +343,7 @@ namespace Jularr.Backend.Tests
             using var folder = new LibraryTests.TemporaryDirectory();
             var cs = TestPostgres.ResolveConnectionString(nameof(LegacyBaselineDatabase_WithAPendingMigration_BacksUpThenMarksVersionOneAndMigrates));
             var options = Backup(folder.Path, out var backups);
-            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
             await InsertWorkAsync(cs);
             await ExecuteAsync(cs, "DROP TABLE \"DatabaseSchemaVersions\";");
 
@@ -202,7 +357,7 @@ namespace Jularr.Backend.Tests
         public async Task DatabaseUpgrade_FailedUpdate_IsReturnedForTheMaintenancePage_AndACurrentDatabaseReturnsNull()
         {
             var cs = TestPostgres.ResolveConnectionString(nameof(DatabaseUpgrade_FailedUpdate_IsReturnedForTheMaintenancePage_AndACurrentDatabaseReturnsNull));
-            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
 
             // Without a backup tool the pending migration cannot start.
             using var failing = new ServiceCollection().AddLogging()
@@ -211,7 +366,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("backup", failure!.Migration);
             Assert.AreEqual(1, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
 
-            using var current = new ServiceCollection().AddLogging().AddSingleton(new DatabaseBaseline(cs)).BuildServiceProvider();
+            using var current = new ServiceCollection().AddLogging().AddSingleton(new DatabaseBaseline(cs, migrations: [])).BuildServiceProvider();
             Assert.IsNull(await DatabaseUpgrade.RunAsync(current));
         }
 

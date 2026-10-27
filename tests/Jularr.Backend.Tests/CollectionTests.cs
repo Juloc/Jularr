@@ -84,10 +84,19 @@ namespace Jularr.Backend.Tests
             using var confirm = await host.SendAsync(HttpMethod.Get, "/Collections/" + favorites + "?delete=true");
             StringAssert.Contains(await confirm.Content.ReadAsStringAsync(), "The titles themselves stay.");
 
-            // A title of the library is found by name and added from the collection page.
+            // A wanted title without a file is not offered by the library search.
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "WantedItems" ("WorkId") VALUES (20);
                 INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual") VALUES (20, 'New Film', TRUE);
+                """);
+            using var unavailable = await host.SendAsync(HttpMethod.Get, "/Collections/" + favorites + "?q=New");
+            Assert.AreEqual(HttpStatusCode.OK, unavailable.StatusCode);
+            Assert.IsFalse((await unavailable.Content.ReadAsStringAsync()).Contains("New Film", StringComparison.Ordinal));
+
+            // Own requested titles can be found and added before a file is available.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId")
+                    SELECT 20, 101, 41, "Id" FROM "UiLocales" ORDER BY "Id" LIMIT 1;
                 """);
             using var found = await host.SendAsync(HttpMethod.Get, "/Collections/" + favorites + "?q=New");
             var foundHtml = await found.Content.ReadAsStringAsync();

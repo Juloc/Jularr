@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Runtime.CompilerServices;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
@@ -12,6 +13,7 @@ namespace Jularr.Backend.Logic.Acquisition
     internal static class AcquisitionSelectionLogic
     {
         internal static readonly JsonSerializerOptions DefinitionOptions = new() { Converters = { new JsonStringEnumConverter() } };
+        private static readonly ConditionalWeakTable<WantedTargetData, Dictionary<long, InstalledFile[]>> InstalledEvidence = new();
 
         public static AcquisitionKind GetKind(MediaType mediaType, MediaSubtype? subtype) => (mediaType, subtype) switch
         {
@@ -64,19 +66,43 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         // The best present file by the profile's quality order, with the format score of its release name.
-        public static (string Quality, int FormatScore, IReadOnlyList<string> Languages)? Installed(QualityProfile profile, WantedTargetData target, long? workUnitId = null)
+        public static (string Quality, int FormatScore, IReadOnlyList<string> Languages, bool NeedsReplacement)? Installed(QualityProfile profile, WantedTargetData target, long? workUnitId = null)
         {
-            var files = JsonSerializer.Deserialize<InstalledFile[]>(target.InstalledFiles) ?? [];
-            var best = files.Where(file => file.WorkUnitId == workUnitId && UpgradePolicy.RankOf(profile, file.Quality) != int.MaxValue)
-                .Select(file => (file.Quality, Candidate: StoredFileFormatLogic.Candidate(file.Facts)))
-                .Select(file => (file.Quality, Score: file.Candidate is { } release ? ReleaseScorer.Score(profile, release).FormatScore : 0,
-                    Languages: file.Candidate?.Languages ?? []))
-                .OrderBy(file => UpgradePolicy.RankOf(profile, file.Quality)).ThenByDescending(file => file.Score)
-                .ThenBy(file => UpgradePolicy.LanguageRank(profile, file.Languages)).Take(1).ToArray();
-            return best.Length == 0 ? null : (best[0].Quality, best[0].Score, best[0].Languages);
+            return ReadInstalledEvidence(target).TryGetValue(workUnitId ?? 0, out var files) ? Installed(profile, files) : null;
         }
 
-        private sealed record InstalledFile(string Quality, long? WorkUnitId, StoredReleaseEvidence Facts);
+        private static (string Quality, int FormatScore, IReadOnlyList<string> Languages, bool NeedsReplacement)? Installed(QualityProfile profile, IEnumerable<InstalledFile> files)
+        {
+            var best = files
+                .Select(file => (file.Quality, file.RuntimeMinutes, Candidate: StoredFileFormatLogic.Candidate(file.Facts)))
+                .Select(file => (file.Quality, Score: file.Candidate is { } release ? ReleaseScorer.Score(profile,
+                    new ReleaseCandidate(release.Release, release.SizeBytes) { IndexerFlags = release.IndexerFlags, Languages = release.Languages, RuntimeMinutes = file.RuntimeMinutes is > 0 ? file.RuntimeMinutes : null }) : null,
+                    Languages: file.Candidate?.Languages ?? []))
+                .Select(file => (file.Quality, Score: file.Score?.FormatScore ?? 0, file.Languages,
+                    NeedsReplacement: profile.UpgradeAllowed && file.Score is { Accepted: false, QualityKey: not null and not "Unknown" }))
+                .OrderBy(file => file.NeedsReplacement).ThenBy(file => UpgradePolicy.RankOf(profile, file.Quality)).ThenByDescending(file => file.Score)
+                .ThenBy(file => UpgradePolicy.LanguageRank(profile, file.Languages)).Take(1).ToArray();
+            return best.Length == 0 ? null : (best[0].Quality, best[0].Score, best[0].Languages, best[0].NeedsReplacement);
+        }
+
+        private sealed record InstalledFile(string Quality, long? WorkUnitId, StoredReleaseEvidence Facts, decimal? RuntimeMinutes = null);
+
+        // A target is an immutable database snapshot; keep only its parsed evidence, never a cached policy decision.
+        private static Dictionary<long, InstalledFile[]> ReadInstalledEvidence(WantedTargetData target) => InstalledEvidence.GetValue(target,
+            snapshot => (JsonSerializer.Deserialize<InstalledFile[]>(snapshot.InstalledFiles) ?? []).GroupBy(file => file.WorkUnitId ?? 0).ToDictionary(group => group.Key, group => group.ToArray()));
+
+        // Re-evaluate every covered unit once, using current profiles rather than a stale stored score.
+        public static IReadOnlyList<UnitStateData> ReassessUnits(QualityProfile profile, WantedTargetData target, IReadOnlyList<UnitStateData> units)
+        {
+            var files = ReadInstalledEvidence(target).Where(group => group.Key != 0).ToDictionary(group => group.Key, group => Installed(profile, group.Value));
+            return units.Select(unit => new UnitStateData(unit.WorkUnitId, unit.ParentNumber, unit.Number, unit.IsAvailable, unit.HasMedia, unit.IsCovered,
+                unit.AbsoluteNumber, unit.ReleasedOn, files.TryGetValue(unit.WorkUnitId, out var installed) && installed is { } present
+                    ? NeedsUpgrade(profile, present) : unit.NeedsUpgrade, unit.Title)).ToArray();
+        }
+
+        public static bool NeedsUpgrade(QualityProfile profile, (string Quality, int FormatScore, IReadOnlyList<string> Languages, bool NeedsReplacement) installed) =>
+            profile.UpgradeAllowed && (installed.NeedsReplacement || UpgradePolicy.RankOf(profile, installed.Quality) != int.MaxValue
+                && (!UpgradePolicy.IsCutoffMet(profile, installed.Quality) || installed.FormatScore < profile.CutoffFormatScore));
 
         // The quality a release is stored with.
         public static string? QualityKey(AcquisitionKind kind, string title, int? igdbPlatform = null) => kind switch
@@ -130,7 +156,13 @@ namespace Jularr.Backend.Logic.Acquisition
         // Equal releases from several queries are one candidate with every stage that found it.
         public static ReleaseOffer Merge(ReleaseOffer existing, ReleaseOffer found) =>
             new(existing.Title, existing.ConnectionId, existing.ConnectionName, existing.ConnectionPriority, existing.Guid, existing.DownloadUri, existing.InfoUrl, existing.SizeBytes,
-                existing.PublishedAt, [.. existing.Stages.Union(found.Stages)]);
+                existing.PublishedAt, [.. existing.Stages.Union(found.Stages)])
+            {
+                Transport = existing.Transport == DownloadTransport.Torrent || found.Transport == DownloadTransport.Torrent
+                    ? DownloadTransport.Torrent : DownloadTransport.Usenet,
+                IndexerFlags = [.. existing.IndexerFlags.Union(found.IndexerFlags)],
+                IsPart = existing.IsPart || found.IsPart
+            };
 
         public static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, UnitScope? scope, IEnumerable<ReleaseOffer> offers, string? focusLanguage = null)
         {
@@ -158,6 +190,9 @@ namespace Jularr.Backend.Logic.Acquisition
                     ContextScore = judgement.ContextScore,
                     Languages = judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? [],
                     InstalledQuality = installed?.Quality,
+                    InstalledNeedsReplacement = installed?.NeedsReplacement ?? false,
+                    RuntimeMinutes = judgement.Parsed?.IsSeasonPack == true && scope is { Units.All.Count: > 0 } && profile.RuntimeMinutes is { } minutes
+                        ? (decimal)minutes * scope.Units.All.Count : null,
                     InstalledFormatScore = installed?.FormatScore,
                     InstalledLanguages = installed?.Languages
                 };

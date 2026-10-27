@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.AnnasArchive;
@@ -50,7 +51,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         public static string Format(string externalId) => externalId.Split(':').Last() is { Length: > 0 and <= 5 } format && format.All(char.IsAsciiLetterOrDigit) ? format : "epub";
 
         public async Task<IReadOnlyList<ReleaseOffer>?> SearchAsync(AcquisitionConnectionData source, WantedTargetData target, CancellationToken ct,
-            Func<IReadOnlyList<ReleaseOffer>, bool>? enough = null)
+            Func<IReadOnlyList<ReleaseOffer>, bool>? enough = null, AnnasArchiveSearchContext? annaSearch = null)
         {
             // Named like book releases so the shared judge decides; an edition in the requested language is asked for by its title, Anna's Archive by its ISBN.
             var query = string.Join(' ', new[] { target.EditionTitles.FirstOrDefault() ?? target.CanonicalTitle, BookReleaseJudge.Authors(target.Author).FirstOrDefault() }
@@ -66,12 +67,16 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         return [.. (await _opds.SearchAsync(Opds(source), query, ct)).SelectMany(book => book.Links.Select(link =>
                             Offer(source, "opds:" + Hash(book.Id) + ":" + link.Format, book.Authors, book.Title, book.Language, link.Format, link.Uri, null)))];
                     case AcquisitionConnectionType.AnnasArchive:
+                    {
                         var site = Catalog(source);
+                        var ownsSearch = annaSearch is null;
+                        annaSearch ??= new AnnasArchiveSearchContext();
+                        using var searchLifetime = ownsSearch ? annaSearch : null;
                         // Every way to find the work is asked in turn; the choice says when one way was enough.
                         var found = new List<ReleaseOffer>();
                         foreach (var way in AnnaWays(target))
                         {
-                            var records = await _annas.SearchAsync(site, way, ct);
+                            var records = await _annas.SearchAsync(site, way, ct, annaSearch);
                             found.AddRange(records.Select(record => Offer(source, "annas:" + record.Md5 + ":" + record.Extension,
                                 record.Author is null ? [] : [record.Author], record.Title, record.Language, record.Extension, AnnasArchiveClient.RecordUri(record.Site, record.Md5), record.SizeBytes, record.IsPart)));
                             if (enough is not null && enough(found))
@@ -81,11 +86,16 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         }
 
                         return found;
+                    }
                     default:
                         return [];
                 }
             }
-            catch (Exception exception) when (exception is GutenbergException or OpdsException or AnnasArchiveException)
+            catch (AnnasArchiveException exception)
+            {
+                throw new DirectSourceException(SearchErrorKey(exception.Failure));
+            }
+            catch (Exception exception) when (exception is GutenbergException or OpdsException)
             {
                 return null;
             }
@@ -95,8 +105,26 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         {
             // A search that answers proves the source; null means healthy.
             var probe = new WantedTargetData(0, 0, Data.Enums.Media.MediaType.Book, null, "Austen", null, [], null, null, null, [], false, false, false, 0, [], [], null, null, null);
-            return await SearchAsync(source, probe, ct) is null ? "acquisition_unavailable" : null;
+            try
+            {
+                return await SearchAsync(source, probe, ct) is null ? "acquisition_unavailable" : null;
+            }
+            catch (DirectSourceException exception)
+            {
+                return exception.ErrorKey;
+            }
         }
+
+        private static string SearchErrorKey(AnnasArchiveFailure failure) => failure switch
+        {
+            AnnasArchiveFailure.Gate => "source_gate",
+            AnnasArchiveFailure.Refused => "acquisition_authentication_failed",
+            AnnasArchiveFailure.InvalidResponse => "source_markup_changed",
+            AnnasArchiveFailure.UntrustedOrigin => "source_untrusted_origin",
+            AnnasArchiveFailure.RateLimited => "acquisition_rate_limited",
+            AnnasArchiveFailure.TimedOut => "source_timeout",
+            _ => "acquisition_unavailable"
+        };
 
         public async Task DownloadAsync(AcquisitionConnectionData source, DownloadData download, string destination, DownloadStoragePaths paths, CancellationToken ct)
         {
@@ -236,9 +264,16 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             return ways;
         }
 
+        // Only documented ISO 639 codes from the source become language evidence. An unknown
+        // catalog field must not be disguised as a real language or guessed from the title.
+        internal static string? TrustedLanguageCode(string? language) =>
+            LanguageCodes.ToTwoLetter(language?.Trim())?.ToUpperInvariant();
+
         private static ReleaseOffer Offer(AcquisitionConnectionData source, string guid, string[] authors, string title, string? language, string format, Uri download, long? sizeBytes, bool isPart = false)
         {
-            var name = (authors.Length > 0 ? string.Join(", ", authors) + " - " : "") + title + (language is { Length: > 0 } ? " (" + language.ToUpperInvariant() + ")" : "") + " (" + format + ")";
+            var verifiedLanguage = TrustedLanguageCode(language);
+            var name = (authors.Length > 0 ? string.Join(", ", authors) + " - " : "") + title
+                + (verifiedLanguage is null ? "" : " (" + verifiedLanguage + ")") + " (" + format + ")";
             return new ReleaseOffer(name.Length <= 1000 ? name : name[..1000], source.Id, source.Name, source.Priority, guid, download, download.ToString(), sizeBytes, null, ["title"]) { IsPart = isPart };
         }
 

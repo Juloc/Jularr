@@ -1,0 +1,26 @@
+name: Repository hygiene
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Check tracked secrets, credential files and public lab IPs
+        run: node scripts/verify-repository-hygiene.mjs
+      - name: Verify hygiene test cases
+        run: node --test scripts/verify-repository-hygiene.test.mjs

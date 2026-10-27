@@ -51,3 +51,16 @@
 }
 
 .activity-source-check { display: grid; gap: 12px; justify-items: start; }
+
+.activity-file-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    min-width: 0;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+
+    > :first-child { min-width: 0; flex: 1; }
+    > .list-value { white-space: nowrap; flex: none; }
+}

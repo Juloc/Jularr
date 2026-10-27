@@ -75,24 +75,32 @@ namespace Jularr.Frontend.Pages.User.Details
             if (items.Count == 0)
             {
                 // An empty page behind the last one leads back.
-                if (!preview) parts.Add(new Span().Paged(0, _availability?.PageSize ?? 48, "p"));
+                if (!preview)
+                {
+                    parts.Add(new Div().Class("details-file-items"));
+                    parts.Add(new Span().Infinite(0, 48, "p", ".details-file-items"));
+                }
                 return new Div([.. parts]);
             }
 
             if (preview) return new Div([.. parts, VersionTable(kind, [.. items.Take(5)])]);
 
             // Stored inventory, no storage access; named sections split it where staff defined them.
+            var groups = new List<IUiComponent>();
             var start = 0;
             for (var index = 1; index <= items.Count; index++)
             {
                 if (index < items.Count && items[index].GroupName == items[start].GroupName) continue;
-                if (items[start].GroupName is { } name) parts.Add(new H3(new ValueText(name)));
-                parts.Add(VersionTable(kind, [.. items.Skip(start).Take(index - start)]));
+                var group = new List<IUiComponent>();
+                if (items[start].GroupName is { } name) group.Add(new H3(new ValueText(name)));
+                group.Add(VersionTable(kind, [.. items.Skip(start).Take(index - start)]));
+                groups.Add(new Div([.. group]).Class("details-file-group").Attribute("data-list-key", items[start].Id.ToString(CultureInfo.InvariantCulture)));
                 start = index;
             }
 
             // One bounded inventory page.
-            parts.Add(new Span().Paged(items.Count, _availability!.PageSize, "p"));
+            parts.Add(new Div([.. groups]).Class("details-file-items"));
+            parts.Add(new Span().Infinite(items.Count, _availability!.PageSize, "p", ".details-file-items"));
             return new Div([.. parts]).Class("details-files");
         }
 

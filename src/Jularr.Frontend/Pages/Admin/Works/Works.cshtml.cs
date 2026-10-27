@@ -18,7 +18,8 @@ namespace Jularr.Frontend.Pages.Admin.Works
     // The library as a list: filters, columns kept in this browser, in-row monitoring and search, and the mass editor.
     public sealed partial class WorksModel(ReadWorksV1 read, ReadWorkExclusionsV1 readExclusions, DeleteWorkExclusionV1 deleteExclusion, CreateWorkV1 create, SearchMetadataV1 search, ImportMetadataWorkV1 import,
         ReadLibraryOverviewV1 readLibraries, ReadAcquisitionProfilesV1 readProfiles, UpdateWorksMonitoringV1 updateMonitoring, UpdateWorksProfileV1 updateProfile, UpdateWorksLibraryV1 updateLibrary,
-        SearchWorksV1 searchWorks, RefreshWorksMetadataV1 refreshWorks, DeleteWorksV1 deleteWorks, ReadWorksSummaryV1 readSummary, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
+        QueueWorksSearchV1 queueSearch, ReadWorksSearchRunV1 readSearch, ReadWorksSearchResultsV1 readSearchResults, CancelWorksSearchV1 cancelSearch,
+        RefreshWorksMetadataV1 refreshWorks, DeleteWorksV1 deleteWorks, ReadWorksSummaryV1 readSummary, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         // What one request may change: the mass editor's batch; searches and file removals take fewer.
         private const int PageSize = 50;
@@ -35,6 +36,14 @@ namespace Jularr.Frontend.Pages.Admin.Works
         private BaseDataList<MetadataSearchResultV1>? _results;
         private bool _bulkFailed;
         private WorksViewType _view;
+        private SearchRunDetailsV1? _searchRun;
+        private PageResult<WorkBulkOutcomeV1>? _searchResults;
+
+        [BindProperty(SupportsGet = true, Name = "searchJob")]
+        public long? SearchJob { get; set; }
+
+        [BindProperty(SupportsGet = true, Name = "searchPage")]
+        public int SearchPage { get; set; } = 1;
 
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
@@ -99,6 +108,8 @@ namespace Jularr.Frontend.Pages.Admin.Works
             // One row of filter chips with the title field and the view switch, then the titles in the chosen view; the chosen titles belong to one form that the dock's bulk zone and the change drawer post.
             page.NoPageRow();
             page.Content.Add(Toolbar());
+            if (CanAcquire) page.Content.Add(SearchControls(csrf));
+            if (_searchRun is not null) page.Content.Add(SearchPanel(csrf));
             if (_works is { } works)
             {
                 page.Content.Add(Titles(works.Items, csrf).Paged(works.Items.Count, PageSize, primary: true));
@@ -177,8 +188,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
         public async Task<IActionResult> OnPostSearchWorkAsync([BindRequired] long workId)
         {
             _bulkFailed = true;
-            var outcomes = await searchWorks.ExecuteAsync<BaseDataList<WorkBulkOutcomeV1>>(new WorksBulkParametersV1(), new HeavyWorksDataV1([workId]), HttpContext.RequestAborted);
-            return Reported("search", outcomes);
+            return await QueueSearchAsync(new QueueWorksSearchDataV1([workId]));
         }
 
         // The mass editor: the chosen titles take what was set, or are searched or refreshed.
@@ -191,7 +201,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             switch (action)
             {
                 case "search":
-                    return Reported("search", await searchWorks.ExecuteAsync<BaseDataList<WorkBulkOutcomeV1>>(new WorksBulkParametersV1(), new HeavyWorksDataV1(ids), token));
+                    return await QueueSearchAsync(new QueueWorksSearchDataV1(ids));
                 case "refresh":
                     return Reported("refresh", await refreshWorks.ExecuteAsync<BaseDataList<WorkBulkOutcomeV1>>(new WorksBulkParametersV1(), new HeavyWorksDataV1(ids), token));
             }
@@ -234,7 +244,15 @@ namespace Jularr.Frontend.Pages.Admin.Works
             _libraries = await readLibraries.ExecuteAsync<BaseDataList<LibraryOverviewV1>>(new ReadLibraryOverviewParametersV1(), ct);
 
             // Profiles belong to Arr+.
-            if (CanAcquire) _profiles = await readProfiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), ct);
+            if (CanAcquire)
+            {
+                _profiles = await readProfiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), ct);
+                _searchRun = (await readSearch.ExecuteAsync<BaseDataList<SearchRunDetailsV1>>(new ReadSearchRunParametersV1(SearchJob), ct)).FirstOrDefault();
+                if (_searchRun is { } run && SearchJob is not null)
+                {
+                    _searchResults = await readSearchResults.ExecuteAsync<PageResult<WorkBulkOutcomeV1>>(new SearchRunParametersV1(run.OperationId, SearchPage), ct);
+                }
+            }
         }
 
         // The address names a view and the cookie remembers it; a first visit shows the table.

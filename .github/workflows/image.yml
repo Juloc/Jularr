@@ -41,6 +41,13 @@ jobs:
       # Docker Compose still validates the exact image this job just built.
       - name: Build the image
         run: docker build --tag ghcr.io/juloc/jularr:ci .
+      - name: Download the managed Chrome version for the runtime check
+        run: |
+          version=$(curl --fail --silent --show-error --retry 3 https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["channels"]["Stable"]["version"])')
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://storage.googleapis.com/chrome-for-testing-public/${version}/linux64/chrome-linux64.zip" \
+            --output "${RUNNER_TEMP}/chrome-linux64.zip"
+          unzip -q "${RUNNER_TEMP}/chrome-linux64.zip" -d "${RUNNER_TEMP}/jularr-chrome"
       - name: Start the shipped compose.yaml with nothing but its variables
         env:
           JULARR_VERSION: ci
@@ -49,7 +56,7 @@ jobs:
           mkdir -p media
           docker compose up --detach --wait --wait-timeout 120 postgres
           docker compose up --detach jularr
-          for attempt in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             status=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8097/Setup || true)
             if [ "$status" = "200" ]; then break; fi
             sleep 2
@@ -58,3 +65,10 @@ jobs:
           test "$status" = "200"
           curl --silent http://127.0.0.1:8097/Setup | grep -q 'name="PasswordConfirmation"'
           docker compose exec -T jularr sh -c 'test -d /data/keys && ls /data'
+      - name: Verify managed Chrome dependencies as the application user
+        env:
+          JULARR_VERSION: ci
+          JULARR_DB_PASSWORD: ci-only-database-password
+        run: |
+          docker compose cp "${RUNNER_TEMP}/jularr-chrome/chrome-linux64" jularr:/tmp/chrome-runtime-check
+          docker compose exec -T jularr sh -c 'test "$(id -u)" -ne 0 && /tmp/chrome-runtime-check/chrome --version'

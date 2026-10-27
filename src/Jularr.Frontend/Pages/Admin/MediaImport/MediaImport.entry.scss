@@ -247,3 +247,88 @@
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
 }
+
+.media-import {
+    &__job-panel {
+        display: grid;
+        gap: 12px;
+        min-width: 0;
+        margin-block-start: 16px;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+
+        &[hidden] { display: none; }
+
+        progress {
+            width: 100%;
+            height: 8px;
+            accent-color: var(--accent);
+        }
+
+        ol {
+            display: grid;
+            gap: 8px;
+            margin: 0;
+            padding-inline-start: 24px;
+            max-height: min(42vh, 420px);
+            overflow: auto;
+        }
+    }
+
+    &__job-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        justify-content: space-between;
+        overflow-wrap: anywhere;
+        font-size: var(--text-control);
+
+        [data-job-outcome] { color: var(--muted); }
+    }
+}
+
+.media-import__job-panel > select {
+    align-self: start;
+    min-width: min(260px, 100%);
+    max-width: 100%;
+    padding: 8px 12px;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+}
+.media-import__job-active {
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    overflow-wrap: anywhere;
+}
+.media-import__job-row {
+    display: block;
+    &[hidden] { display: none; }
+    details { min-width: 0; }
+    summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        justify-content: space-between;
+        cursor: pointer;
+        padding: 6px 2px;
+    }
+}
+.media-import__job-details {
+    padding: 10px 12px;
+    margin-block: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    font-size: var(--text-control);
+    p { margin: 4px 0; }
+}
+.media-import__job-history {
+    max-height: none !important;
+    overflow: visible !important;
+    margin-block: 8px 0;
+}

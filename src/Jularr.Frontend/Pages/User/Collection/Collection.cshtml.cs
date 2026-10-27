@@ -47,6 +47,7 @@ namespace Jularr.Frontend.Pages.User.Collection
             page.Parent("favorites.title", "/Favorites");
             page.Asset("Pages/User/Collection/Collection.entry.scss");
             page.Asset("Framework/Components/MediaCard.entry.ts");
+            page.Asset("Framework/Components/InfiniteList.entry.ts");
             if (_collection is not { } collection)
             {
                 if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -63,10 +64,10 @@ namespace Jularr.Frontend.Pages.User.Collection
                     var card = MediaCard.For(assets, item)
                         .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, removeToken));
                     return collection.IsSmart ? (IUiComponent)card : new Div(card, new Form<CollectionWorkParametersV1>(form => form.Submit("media.remove", item.Title, valueHidden: true),
-                        Home + "?handler=Remove&workId=" + item.Id.ToString(CultureInfo.InvariantCulture), removeToken, new CollectionWorkParametersV1(collection.Id, item.Id))).Class("media-grid__entry");
-                })]).Class("media-grid"));
+                        Home + "?handler=Remove&workId=" + item.Id.ToString(CultureInfo.InvariantCulture), removeToken, new CollectionWorkParametersV1(collection.Id, item.Id))).Class("media-grid__entry").Attribute("data-list-key", item.Id.ToString(CultureInfo.InvariantCulture));
+                })]).Class("media-grid collection-grid"));
                 if (works.Items.Count == 0) page.Content.Add(new P(new Text(collection.IsSmart ? "collections.noMatch" : "collections.noWorks")));
-                page.Content.Add(new Span().Paged(works.Items.Count, works.PageSize));
+                page.Content.Add(new Span().Infinite(works.Items.Count, works.PageSize, PagedList.DefaultKey, ".collection-grid"));
             }
 
             // A hand-picked collection finds titles in the library and adds them.
@@ -125,10 +126,11 @@ namespace Jularr.Frontend.Pages.User.Collection
         {
             var token = HttpContext.RequestAborted;
             _collection = await read.ExecuteAsync<CollectionV1>(new CollectionParametersV1(Id), token);
-            _works = await readWorks.ExecuteAsync<PageResult<LibraryItemV1>>(new CollectionWorksParametersV1(Id, Math.Max(1, PageNumber)), token);
+            _works = await readWorks.ExecuteAsync<PageResult<LibraryItemV1>>(new CollectionWorksParametersV1(Id, Math.Max(1, PageNumber), 48), token);
             if (!_collection.IsSmart && !string.IsNullOrWhiteSpace(Query))
             {
-                _found = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(query: Query, pageSize: 12), token)).Items;
+                _found = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(query: Query, pageSize: 12,
+                    availabilityTypeIds: [LibraryAvailabilityType.Available, LibraryAvailabilityType.MyRequests]), token)).Items;
             }
         }
 

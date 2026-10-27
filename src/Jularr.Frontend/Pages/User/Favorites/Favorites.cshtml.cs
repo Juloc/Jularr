@@ -76,8 +76,11 @@ namespace Jularr.Frontend.Pages.User.Favorites
             {
                 _collections = await readCollections.ExecuteAsync<BaseDataList<CollectionV1>>(new CollectionsParametersV1(), token);
                 _current = _collections.FirstOrDefault(collection => collection.Id == CollectionId);
-                _newest = (await read.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadWatchlistParametersV1(1, 4), token)).Items;
-                _total = (await readCount.ExecuteAsync<WatchlistCountV1>(new ReadWatchlistCountParametersV1(), token)).Total;
+                if (Request.Headers["X-Jularr-Infinite"] != "1")
+                {
+                    _newest = (await read.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadWatchlistParametersV1(1, 4), token)).Items;
+                    _total = (await readCount.ExecuteAsync<WatchlistCountV1>(new ReadWatchlistCountParametersV1(), token)).Total;
+                }
             }
 
             // One bounded page of the favorites or of the chosen collection.

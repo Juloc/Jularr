@@ -57,7 +57,7 @@ namespace Jularr.Backend.Service.User.Media.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             // Persisted metadata of a Work the profile may open.
-            var sql = new SqlStatement();
+            var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 $$"""
                 SELECT
@@ -190,6 +190,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 """;
             sql.Parameters.Add(Parameters);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            sql.Parameters.Add(LanguageCodes.Aliases);
             return await Context.ReadSql.ReadRequiredAsync<WorkDetailsV1>(sql, CancellationToken);
         }
     }
@@ -435,6 +436,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 OFFSET @Offset;
                 """;
             sql.Parameters.Add(new PersonParametersV1(Parameters.PersonId));
+            sql.Parameters.Add(LanguageCodes.Aliases);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
@@ -469,7 +471,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                     "WatchlistEntries" AS entry
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"
                     JOIN "Works" AS work ON work."Id" = entry."WorkId"
-                    {{(needsProgress ? WorkCardProjection.ProgressJoin : "")}}
+                    {{(needsProgress ? WorkCardProjection.PageProgressJoin : "")}}
                 WHERE
                     entry."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
@@ -488,6 +490,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 """,
                 "TRUE");
             sql.Parameters.Add(new WorkListFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.ReleaseYearFrom, Parameters.ReleaseYearTo, Parameters.ProgressStateId, Parameters.LibrarySortTypeId));
+            sql.Parameters.Add(LanguageCodes.Aliases);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);

@@ -13,6 +13,7 @@ using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Acquisition.V1;
+using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Storage;
 
@@ -160,7 +161,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 var members = group.ToArray();
                 var qualities = ReadQualities(members, target);
                 var placements = ImportPlacementLogic.PlanChosen(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle, target.ReleaseYear, files, Numbers(members), loaded.Patterns, loaded.Episodes,
-                    qualities);
+                    qualities, ImportPlacementLogic.KnownValues(target));
                 if (placements.Count(placement => placement.IsMedia) != members.Length)
                 {
                     throw new DataValidationException(nameof(RunManualImportDataV1.Files), "unknown_reference");
@@ -324,7 +325,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             var target = loaded.Target;
             var (_, files, _) = await ManualImport.ReadFolderAsync(Context, _storage, target, Data.StorageMountId, Data.RelativePath, CancellationToken);
             return new ManualImportFolderV1(new BaseDataList<ManualImportFileV1>(ManualImportLogic.Propose(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle, target.ReleaseYear, files,
-                loaded.Patterns, loaded.Episodes).Select(proposal => new ManualImportFileV1(proposal.Path, proposal.SizeBytes, proposal.Season, proposal.Episode, proposal.QualityKey, proposal.TargetName, proposal.Languages))));
+                loaded.Patterns, loaded.Episodes, ImportPlacementLogic.KnownValues(target)).Select(proposal => new ManualImportFileV1(proposal.Path, proposal.SizeBytes, proposal.Season, proposal.Episode, proposal.QualityKey, proposal.TargetName, proposal.Languages))));
         }
     }
 
@@ -347,7 +348,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 var target = loaded.Target;
                 var members = group.ToArray();
                 var named = ManualImportLogic.NameChosen(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle, target.ReleaseYear, ManualImport.Numbers(members),
-                    ManualImport.ReadQualities(members, target), loaded.Patterns, loaded.Episodes);
+                    ManualImport.ReadQualities(members, target), loaded.Patterns, loaded.Episodes, ImportPlacementLogic.KnownValues(target));
                 ManualImport.ReadLanguages(members);
                 names.AddRange(members.Select(member => new ManualImportNameV1(member.Path, group.Key, target.MediaTypeId, target.CanonicalTitle, named.GetValueOrDefault(member.Path))));
             }
@@ -405,12 +406,12 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             var files = await ManualImport.ListFolderAsync(source, target, reference.Directory, CancellationToken);
             var handled = ImportProposal.ReadHandled(download.AttentionProposal).ToHashSet(StringComparer.Ordinal);
             return new ManualImportDownloadV1(download.WantedItemId, new BaseDataList<ManualImportFileV1>(ManualImportLogic.Propose(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle,
-                target.ReleaseYear, files, loaded.Patterns, loaded.Episodes).Select(proposal => new ManualImportFileV1(proposal.Path, proposal.SizeBytes, proposal.Season, proposal.Episode,
+                target.ReleaseYear, files, loaded.Patterns, loaded.Episodes, ImportPlacementLogic.KnownValues(target)).Select(proposal => new ManualImportFileV1(proposal.Path, proposal.SizeBytes, proposal.Season, proposal.Episode,
                     proposal.QualityKey, proposal.TargetName, proposal.Languages, handled.Contains(proposal.Path)))));
         }
     }
 
-    // Places the chosen files of a waiting download; the download is finished and its job leaves the client as after an import by itself.
+    // Finishing a manual download does not mean every source file was selected.
     [ServiceEndpoint("POST", "/api/v1/admin/activity/{operationId:long}/manual-import")]
     public sealed class RunManualImportDownloadV1 : AdminService<ActivityOperationParametersV1, RunManualImportDownloadDataV1>
     {
@@ -433,13 +434,34 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             var (download, reference, source, isReadOnly) = await ManualImport.OpenDownloadAsync(Context, _storage, Parameters.OperationId, CancellationToken);
             var loaded = await ManualImport.ReadTargetAsync(Context, download.WantedItemId, CancellationToken);
             var files = await ManualImport.ListFolderAsync(source, loaded.Target, reference.Directory, CancellationToken);
-            var result = await ManualImport.RunAsync(Context, _import, download.WantedItemId, source, reference.Directory, files, isReadOnly, Data.ImportTransferModeId, Data.Files, Auth.AccountId,
-                new ManualImportDownload(download.OperationId, ImportProposal.ReadHandled(download.AttentionProposal), Data.FinishesDownload, download.AttentionProposal), CancellationToken);
-            if (result.FinishedDownload)
+            var handled = ImportProposal.ReadHandled(download.AttentionProposal);
+            // Include non-media files when deciding whether completed source folders can be removed.
+            // A failed or incomplete scan must not make the import itself fail.
+            var allFiles = new List<StorageFile>();
+            var sourceScanComplete = false;
+            try
             {
-                await _import.RemoveFromClientAsync(Context, download.AcquisitionConnectionId, download.ExternalId, CancellationToken);
+                var scan = new StorageScanState();
+                await foreach (var file in source.EnumerateFilesAsync(reference.Directory, null, scan, CancellationToken))
+                    allFiles.Add(file);
+                sourceScanComplete = scan.IsComplete;
+            }
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+            {
+                // Leave the source untouched: there is no proof the folder was fully imported.
             }
 
+            var result = await ManualImport.RunAsync(Context, _import, download.WantedItemId, source, reference.Directory, files, isReadOnly, Data.ImportTransferModeId, Data.Files, Auth.AccountId,
+                new ManualImportDownload(download.OperationId, handled, Data.FinishesDownload, download.AttentionProposal), CancellationToken);
+            if (result.FinishedDownload && sourceScanComplete
+                && ImportPlacementLogic.AllSourceFilesSelected(allFiles.Select(file => file.RelativePath),
+                    handled.Concat(result.Files.Where(file => file.FailureKey is null).Select(file => file.Path))))
+            {
+                await _import.RemoveFromClientAsync(Context, download.AcquisitionConnectionId, download.ExternalId,
+                    DownloadSourceInventory.Fingerprint(allFiles), CancellationToken);
+            }
+
+            // A finished manual import with omitted files remains in the client for explicit cleanup.
             return result;
         }
     }

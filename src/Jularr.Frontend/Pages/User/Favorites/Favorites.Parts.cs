@@ -61,6 +61,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
             page.Asset("Pages/User/Favorites/Favorites.entry.scss");
 
             page.Asset("Framework/Components/MediaCard.entry.ts");
+            page.Asset("Framework/Components/InfiniteList.entry.ts");
             page.Asset("Pages/User/Favorites/Favorites.entry.ts");
             page.Asset("Framework/Components/Drawer.entry.ts");
             page.Asset("Framework/Components/ChoiceSelect.entry.ts");
@@ -78,7 +79,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
             if (_entries.Count > 0) parts.Add(new Div([.. _entries.Select(entry => EntryCard(entry, csrf, canCollect))]).Class("media-grid favorites-grid"));
             else parts.Add(new P(new Text(EmptyKey())).Class("favorites-empty").Attribute("role", "status"));
 
-            parts.Add(new Span().Paged(_entries.Count, PageSize, "p"));
+            parts.Add(new Span().Infinite(_entries.Count, PageSize, "p", ".favorites-grid"));
 
             // Panels open over the page.
             parts.Add(FilterDrawer());
@@ -218,7 +219,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
                     .Class("favorites-entry__select").Attribute("aria-pressed", "false").Attribute("data-favorites-select", id));
             }
 
-            return new Div([.. parts]).Class("favorites-entry").Attribute("data-favorites-entry", id).Attribute("data-title", entry.Title)
+            return new Div([.. parts]).Class("favorites-entry").Attribute("data-list-key", id).Attribute("data-favorites-entry", id).Attribute("data-title", entry.Title)
                 .Attribute("data-collections", string.Join(',', holding.Select(collectionId => collectionId.ToString(CultureInfo.InvariantCulture))));
         }
 

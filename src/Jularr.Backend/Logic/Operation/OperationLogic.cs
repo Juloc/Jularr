@@ -175,12 +175,12 @@ namespace Jularr.Backend.Logic.Operation
                     "Operations" AS operation
                 SET
                     "OperationStatusTypeId" = @OperationStatusTypeId,
-                    "ProcessedCount" = @ProcessedCount,
+                    "ProcessedCount" = CASE WHEN operation."OperationTypeId" IN (6, 7) AND @OperationStatusTypeId = 4 THEN operation."ProcessedCount" ELSE @ProcessedCount END,
                     "ErrorKey" = @ErrorKey,
                     "FinishedAt" = CASE WHEN @OperationStatusTypeId IN (3, 4) THEN now() END
                 WHERE
                     operation."Id" = @Id
-                    AND operation."OperationTypeId" IN (1, 3, 5)
+                    AND operation."OperationTypeId" IN (1, 3, 5, 6, 7)
                     AND operation."OperationStatusTypeId" = 2;
                 """;
             sql.Parameters.Add(data);
@@ -213,6 +213,10 @@ namespace Jularr.Backend.Logic.Operation
         {
             // Scans and backups run again; downloads search their target now.
             var sql = new SqlStatement();
+            sql.Statement = "SELECT pg_advisory_xact_lock(9461823) FROM \"Operations\" WHERE \"Id\" = @OperationId AND \"OperationTypeId\" = 6;";
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            sql = new SqlStatement();
             sql.Statement =
                 """
                 WITH failed AS (
@@ -276,11 +280,18 @@ namespace Jularr.Backend.Logic.Operation
                 UPDATE
                     "Operations" AS operation
                 SET
-                    "DismissedAt" = now()
+                    "DismissedAt" = CASE WHEN operation."OperationTypeId" = 6 THEN NULL ELSE now() END,
+                    "OperationStatusTypeId" = CASE WHEN operation."OperationTypeId" = 6 THEN 1 ELSE operation."OperationStatusTypeId" END,
+                    "StartedAt" = CASE WHEN operation."OperationTypeId" = 6 THEN NULL ELSE operation."StartedAt" END,
+                    "FinishedAt" = CASE WHEN operation."OperationTypeId" = 6 THEN NULL ELSE operation."FinishedAt" END,
+                    "ErrorKey" = CASE WHEN operation."OperationTypeId" = 6 THEN NULL ELSE operation."ErrorKey" END
                 FROM
                     failed
                 WHERE
-                    operation."Id" = failed."Id";
+                    operation."Id" = failed."Id"
+                    AND (operation."OperationTypeId" <> 6 OR operation."RequestedByAccountId" = @AccountId AND NOT EXISTS (
+                        SELECT 1 FROM "Operations" AS active WHERE active."OperationTypeId" = 6 AND active."OperationStatusTypeId" IN (1, 2)
+                    ));
                 """;
             sql.Parameters.Add(data);
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 0)
@@ -301,7 +312,7 @@ namespace Jularr.Backend.Logic.Operation
                     "OperationStatusTypeId" = 1,
                     "StartedAt" = NULL
                 WHERE
-                    operation."OperationTypeId" IN (1, 3, 5)
+                    operation."OperationTypeId" IN (1, 3, 5, 6, 7)
                     AND operation."OperationStatusTypeId" = 2;
                 """;
             return ctx.ExecuteAsyncForAffectedRows(sql, ct);

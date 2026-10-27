@@ -12,9 +12,13 @@ using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Newznab;
+using Jularr.Integrations.Data.Qbittorrent;
 using Jularr.Integrations.Data.Sabnzbd;
 using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Newznab;
+using Jularr.Integrations.Logic.Nyaa;
+using Jularr.Integrations.Data.Nyaa;
+using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Data.Subtitles;
 using Microsoft.AspNetCore.DataProtection;
@@ -49,8 +53,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."Categories",
                     connection."DownloadCategory",
                     connection."RemovesCompleted",
+                    connection."RemovesFailed",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."IncompleteRemotePath",
+                    connection."IncompleteLocalPath",
                     connection."DownloadStorageMountId",
                     connection."Username",
                     connection."MaxConnections",
@@ -111,8 +118,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."Categories",
                     connection."DownloadCategory",
                     connection."RemovesCompleted",
+                    connection."RemovesFailed",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."IncompleteRemotePath",
+                    connection."IncompleteLocalPath",
                     connection."DownloadStorageMountId",
                     connection."Username",
                     connection."MaxConnections",
@@ -144,11 +154,13 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     {
         private readonly IDataProtector _protector;
         private readonly SabnzbdClient _sabnzbd;
+        private readonly QbittorrentClient _qbittorrent;
 
-        internal CreateAcquisitionConnectionV1(IDataProtectionProvider protection, SabnzbdClient sabnzbd)
+        internal CreateAcquisitionConnectionV1(IDataProtectionProvider protection, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent)
         {
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
             _sabnzbd = sabnzbd;
+            _qbittorrent = qbittorrent;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
@@ -164,7 +176,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 throw new DataValidationException(Data.Username is null ? nameof(SaveAcquisitionConnectionDataV1.Username) : nameof(SaveAcquisitionConnectionDataV1.Password), "required");
             }
 
-            var detected = await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, null, _protector, _sabnzbd, CancellationToken);
+            var detected = await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, null, _protector, _sabnzbd, _qbittorrent, CancellationToken);
             var data = AcquisitionConnectionInput.Create(null, Data, _protector, detected);
             return new CreateAcquisitionConnectionResultV1(await Context.CreateAcquisitionConnectionAsync(data, CancellationToken));
         }
@@ -175,11 +187,13 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     {
         private readonly IDataProtector _protector;
         private readonly SabnzbdClient _sabnzbd;
+        private readonly QbittorrentClient _qbittorrent;
 
-        internal UpdateAcquisitionConnectionV1(IDataProtectionProvider protection, SabnzbdClient sabnzbd)
+        internal UpdateAcquisitionConnectionV1(IDataProtectionProvider protection, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent)
         {
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
             _sabnzbd = sabnzbd;
+            _qbittorrent = qbittorrent;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
@@ -199,7 +213,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     AcquisitionConnectionLogic.ReadAcquisitionConnectionStatement(Parameters.AcquisitionConnectionId), CancellationToken);
             }
 
-            var detected = await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, stored, _protector, _sabnzbd, CancellationToken);
+            var detected = await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, stored, _protector, _sabnzbd, _qbittorrent, CancellationToken);
             await Context.UpdateAcquisitionConnectionAsync(AcquisitionConnectionInput.Create(Parameters.AcquisitionConnectionId, Data, _protector, detected), CancellationToken);
             return new UpdateResult(true);
         }
@@ -256,11 +270,13 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     {
         private const int Limit = 25;
         private readonly NewznabClient _newznab;
+        private readonly NyaaClient _nyaa;
         private readonly IDataProtector _protector;
 
-        internal SearchAcquisitionConnectionV1(NewznabClient newznab, IDataProtectionProvider protection)
+        internal SearchAcquisitionConnectionV1(NewznabClient newznab, NyaaClient nyaa, IDataProtectionProvider protection)
         {
             _newznab = newznab;
+            _nyaa = nyaa;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
         }
 
@@ -273,14 +289,38 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         {
             // One free-text query of an indexer, counted like any other.
             var indexer = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(Parameters.AcquisitionConnectionId, ct), CancellationToken);
-            if (indexer.AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab)
-            {
+            if (indexer.AcquisitionConnectionTypeId is not (AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa))
                 throw new DataValidationException(nameof(SearchAcquisitionConnectionDataV1.Query), "invalid_transition");
-            }
 
             if (!AcquisitionConnectionLogic.HasQueries(indexer, 0))
-            {
                 throw new ServiceUnavailableException("acquisition_query_limit_reached");
+
+            if (indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Nyaa)
+            {
+                IReadOnlyList<NyaaEntry> nyaaItems;
+                try
+                {
+                    nyaaItems = await _nyaa.SearchAsync(new Uri(indexer.HttpAddress.TrimEnd('/') + "/"),
+                        Data.Query, NyaaClient.LiteratureCategories, CancellationToken);
+                }
+                catch (Exception exception) when (exception is NyaaException or HttpRequestException
+                    || exception is TaskCanceledException && !CancellationToken.IsCancellationRequested)
+                {
+                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    {
+                        await ctx.RecordIndexerUseAsync(new IndexerUseData(indexer.Id, 1, false), ct);
+                        return true;
+                    }, CancellationToken);
+                    throw new ServiceUnavailableException("acquisition_unavailable");
+                }
+
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.RecordIndexerUseAsync(new IndexerUseData(indexer.Id, 1, true), ct);
+                    return true;
+                }, CancellationToken);
+                return new BaseDataList<IndexerReleaseV1>([.. nyaaItems.Take(Limit).Select(item =>
+                    new IndexerReleaseV1(TextLimit.Cut(item.Title, 1000)!, item.SizeBytes, item.Published.UtcDateTime))]);
             }
 
             IReadOnlyList<NewznabItem> items = [];
@@ -311,11 +351,31 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         public const string ProtectorPurpose = "Jularr.Acquisition.ApiKey.V1";
 
         public static async Task<string?> DiscoverCompleteFolderAsync(SaveAcquisitionConnectionDataV1 data, AcquisitionConnectionData? stored,
-            IDataProtector protector, SabnzbdClient sabnzbd, CancellationToken ct)
+            IDataProtector protector, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, CancellationToken ct)
         {
             // Existing explicit API mappings remain valid; the regular UI no longer asks for a remote path.
-            if (data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd || data.RemotePath is not null
-                || data.DownloadStorageMountId is null && data.LocalPath is null) return null;
+            if (data.RemotePath is not null || data.DownloadStorageMountId is null && data.LocalPath is null) return null;
+
+            if (data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent)
+            {
+                // The torrent client tells where it writes; Jularr reads the same folder through the storage.
+                if (data.BaseUrl is null) throw new ServiceUnavailableException("acquisition_unavailable");
+                try
+                {
+                    var path = await qbittorrent.GetDefaultSavePathAsync(new QbittorrentConnection(data.BaseUrl, data.Username,
+                        data.Password ?? (stored is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Qbittorrent }
+                            ? Unprotect(protector, stored.ProtectedPassword) : null)), ct);
+                    if (path is null) throw new ServiceUnavailableException("acquisition_unavailable");
+                    return path;
+                }
+                catch (Exception exception) when (exception is HttpRequestException or QbittorrentException or JsonException
+                    || exception is TaskCanceledException && !ct.IsCancellationRequested)
+                {
+                    throw new ServiceUnavailableException("acquisition_unavailable");
+                }
+            }
+
+            if (data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd) return null;
 
             var key = data.ApiKey ?? (stored is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Sabnzbd }
                 ? Unprotect(protector, stored.ProtectedApiKey) : null);
@@ -338,13 +398,15 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         {
             // Protect before persistence.
             var apiKey = data.ApiKey is null ? null : protector.Protect(Encoding.UTF8.GetBytes(data.ApiKey));
-            var password = data.AcquisitionConnectionTypeId == AcquisitionConnectionType.OpenSubtitles && data.Password is { } clear ? protector.Protect(Encoding.UTF8.GetBytes(clear)) : null;
+            var password = data.AcquisitionConnectionTypeId is AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.Qbittorrent
+                && data.Password is { } clear ? protector.Protect(Encoding.UTF8.GetBytes(clear)) : null;
             return new AcquisitionConnectionSaveData(id, data.Name, data.AcquisitionConnectionTypeId, data.BaseUrl, apiKey, data.IsEnabled, data.Priority,
                 data.Categories, data.DownloadCategory, detectedRemotePath ?? data.RemotePath, data.LocalPath,
-                data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Opds or AcquisitionConnectionType.Usenet or AcquisitionConnectionType.OpenSubtitles ? data.Username : null,
+                data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Opds or AcquisitionConnectionType.Usenet or AcquisitionConnectionType.OpenSubtitles
+                    or AcquisitionConnectionType.Qbittorrent ? data.Username : null,
                 data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? data.MaxConnections ?? 8 : null, password, data.MediaTypeIds,
                 data.SearchesAutomatically, data.QueryLimit, data.GrabLimit, data.Host, data.Port, data.UseSsl, data.DownloadStorageMountId,
-                data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd || data.RemovesCompleted);
+                data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd || data.RemovesCompleted, data.IncompleteRemotePath, data.IncompleteLocalPath, data.RemovesFailed);
         }
 
         // Keyless indexers send no key.

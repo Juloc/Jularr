@@ -108,6 +108,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // The flags the indexer gives the release.
         public IReadOnlyList<string> IndexerFlags { get; init; } = [];
         public IReadOnlyList<string>? Languages { get; init; }
+        public decimal? RuntimeMinutes { get; init; }
     }
 
     internal sealed class ReleaseScoreResult

@@ -168,6 +168,29 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public async Task Execute_ReadBatchIsRestrictedAndNextWriteCommits(bool attemptMutation)
+        {
+            await using var database = CreateDataSource();
+            await using (var setup = new SqlContext(database))
+            {
+                await setup.BeginAsync(SqlAccessMode.ReadWrite);
+                await setup.RequireLogicSql().ExecuteAsync(new SqlStatement { Statement = "CREATE TABLE \"ServiceExecuteReadProbe\" (\"Id\" bigint PRIMARY KEY); CREATE SEQUENCE \"ServiceExecuteReadSequence\"" });
+                await setup.CommitAsync();
+            }
+            var gate = new TestGate { Area = ServiceArea.System };
+            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new ReadBatchService(attemptMutation));
+            await service.ExecuteAsync<AccountResult>(new AccountParameters(9), default(NoData));
+
+            CollectionAssert.AreEqual(new[] { SqlAccessMode.ReadOnly, SqlAccessMode.ReadOnly, SqlAccessMode.ReadWrite }, gate.TransactionModes.ToArray());
+            await using var verify = new SqlContext(database);
+            await verify.BeginAsync(SqlAccessMode.ReadOnly);
+            Assert.AreEqual(1L, await verify.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT count(*) FROM \"ServiceExecuteReadProbe\"" }));
+            Assert.AreEqual(false, await verify.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT is_called FROM \"ServiceExecuteReadSequence\"" }));
+        }
+
+        [TestMethod]
         public async Task ReadService_CannotObtainLogicWriteCapability()
         {
             await using var database = CreateDataSource();
@@ -337,6 +360,48 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "caller", "access", "transaction", "modules" }, gate.Events.ToArray());
         }
 
+        private sealed class ReadBatchService(bool attemptMutation) : SystemService<AccountParameters, NoData>
+        {
+            protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+            protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
+            protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.All("Library");
+            protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.system.execute");
+
+            protected override async Task<IServiceOutput> OnExecute()
+            {
+                var reading = Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    Assert.AreEqual("on", await ctx.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('transaction_read_only')" }, ct));
+                    var backend = await ctx.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT pg_backend_pid()" }, ct);
+                    var transaction = await ctx.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT txid_current()" }, ct);
+                    Assert.AreEqual(backend, await ctx.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT pg_backend_pid()" }, ct));
+                    Assert.AreEqual(transaction, await ctx.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT txid_current()" }, ct));
+                    Assert.ThrowsExactly<InvalidOperationException>(() => _ = ctx.Sql);
+                    if (attemptMutation)
+                    {
+                        await ctx.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT nextval('\"ServiceExecuteReadSequence\"')" }, ct);
+                    }
+                    return true;
+                }, CancellationToken, mode: SqlAccessMode.ReadOnly);
+                if (attemptMutation)
+                {
+                    var error = await Assert.ThrowsExactlyAsync<PostgresException>(() => reading);
+                    Assert.AreEqual("25006", error.SqlState);
+                }
+                else
+                {
+                    await reading;
+                }
+                Assert.ThrowsExactly<InvalidOperationException>(() => _ = Context.Sql);
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    Assert.AreEqual("off", await ctx.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('transaction_read_only')" }, ct));
+                    return await ctx.Sql.ExecuteAsync(new SqlStatement { Statement = "INSERT INTO \"ServiceExecuteReadProbe\" (\"Id\") VALUES (1)" }, ct);
+                }, CancellationToken);
+                return new AccountResult(Parameters.AccountId, "written");
+            }
+        }
+
         private sealed class SystemBatchService(bool requireModule = false) : SystemService<AccountParameters, AccountData>
         {
             public int HookCalls { get; private set; }
@@ -423,6 +488,7 @@ namespace Jularr.Backend.Tests
         private sealed class TestGate : IServiceGate
         {
             public readonly List<string> Events = [];
+            public readonly List<SqlAccessMode> TransactionModes = [];
             public bool BlockModule { get; init; }
             public bool BlockSecondTransaction { get; init; }
             private int _transactionChecks;
@@ -451,9 +517,10 @@ namespace Jularr.Backend.Tests
                 return Task.CompletedTask;
             }
 
-            public Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken)
+            public Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken, SqlAccessMode mode = SqlAccessMode.ReadWrite)
             {
                 Events.Add("transaction");
+                TransactionModes.Add(mode);
                 Assert.AreEqual("test-user", caller.PrincipalKey);
                 if (BlockSecondTransaction && ++_transactionChecks >= 2)
                 {

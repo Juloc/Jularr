@@ -27,7 +27,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".list-empty")).ToBeVisibleAsync();
 
                 // The indexer is added in a dialog and shows as not tested.
-                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add indexer", Exact = true }));
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add indexer", Exact = true }).And(page.Locator("[href*='Type=Newznab']")));
                 Assert.AreEqual(1, await page.Locator("dialog#connection-editor").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).CountAsync());
                 var form = page.Locator("dialog#connection-editor form").First;
                 await form.Locator("[name=Name]").FillAsync("Fake indexer");
@@ -76,7 +76,7 @@ namespace Jularr.E2E.Tests
 
                 // The download client has its own page, the same cards and a dialog of its own fields.
                 await page.GotoAsync("/Admin/Acquisition/Downloads");
-                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }));
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }).And(page.Locator("[href*='Type=Sabnzbd']")));
                 form = page.Locator("dialog#connection-editor form").First;
                 await form.Locator("[name=Name]").FillAsync("Fake SABnzbd");
                 await form.Locator("[name=BaseUrl]").FillAsync(new Uri(fakes.Address, "sabnzbd/").ToString());

@@ -52,7 +52,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 10.0.403
       - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
@@ -148,6 +148,15 @@ jobs:
         with:
           ffmpeg: ${{ matrix.kind == 'e2e' || matrix.tools == true }}
           cjxl: ${{ matrix.tools == true }}
+      # A concurrent dotnet CLI lane can fail its NuGet-Migrations named mutex
+      # when a hosted runner has no /run/user/<uid>/.dotnet/shm directory.
+      # Give backend lanes a stable user-owned runtime path before launching them.
+      - name: Prepare .NET runtime mutex directory
+        if: matrix.kind == 'backend'
+        run: |
+          mkdir -p "$RUNNER_TEMP/dotnet-runtime/.dotnet/shm"
+          chmod 700 "$RUNNER_TEMP/dotnet-runtime"
+          echo "XDG_RUNTIME_DIR=$RUNNER_TEMP/dotnet-runtime" >> "$GITHUB_ENV"
       - name: Cache the Playwright browser
         if: matrix.kind == 'e2e'
         uses: actions/cache@v6
@@ -165,6 +174,11 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
+          # Parallel dotnet test launches share one ready runtime directory. Without
+          # initialization the NuGet-Migrations mutex can race in /run/user/.../shm.
+          export XDG_RUNTIME_DIR="${RUNNER_TEMP}/jularr-dotnet-runtime"
+          install -d -m 0700 "${XDG_RUNTIME_DIR}" "${XDG_RUNTIME_DIR}/.dotnet" "${XDG_RUNTIME_DIR}/.dotnet/shm"
+          dotnet --info >/dev/null
           mapfile -t lanes < <(python3 scripts/ci-shard-tests.py plan --kind backend --shard "${SHARD}" --lanes 2 --reserve 4=150)
           pids=()
           for index in "${!lanes[@]}"; do

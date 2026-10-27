@@ -22,6 +22,43 @@ namespace Jularr.Backend.Tests
     public sealed class MediaTests
     {
         [TestMethod]
+        public async Task Library_RecentFiles_IgnoreMissingVersionsAndKeepUnitAssetsSeparate()
+        {
+            await using var host = await CreateHostAsync();
+            var mount = await LibraryTests.CreateMountAsync(host);
+            var root = await LibraryTests.CreateRootAsync(host, mount, "Recent", MediaType.Series);
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (10, 2, 'Show'), (20, 1, 'Film'), (30, 1, 'Missing');
+                INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works";
+                INSERT INTO "WorkEditions" ("WorkId") SELECT "Id" FROM "Works";
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId")
+                SELECT "WorkId", "WorkId", "Id" FROM "WorkEditions";
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId")
+                SELECT 21, 20, "Id" FROM "WorkEditions" WHERE "WorkId" = 20;
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number", "IsMonitored") VALUES (10, 10, 2, 1, FALSE), (11, 10, 2, 2, TRUE);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId")
+                VALUES (10, 10, 10, 10, 1), (20, 20, 20, NULL, 1), (21, 20, 21, NULL, 1);
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "CreatedAt", "MissingSince")
+                VALUES ({root}, 'show.mkv', 100, now(), now(), 10, '2026-01-02', NULL),
+                    ({root}, 'film.mkv', 100, now(), now(), 20, '2026-01-01', NULL),
+                    ({root}, 'missing-version.mkv', 100, now(), now(), 21, '2026-01-03', now());
+                """);
+
+            CollectionAssert.AreEqual(new long[] { 10, 20 }, await LibraryAsync(host, ""));
+            var film = await ReadCardAsync(host, "/api/v1/library", 20);
+            Assert.AreEqual(1, film.AvailableUnits);
+            Assert.AreEqual(1, film.MonitoredUnits);
+            var show = await ReadCardAsync(host, "/api/v1/library", 10);
+            Assert.AreEqual(0, show.AvailableUnits);
+            Assert.AreEqual(1, show.MonitoredUnits);
+
+            // A returned file changes the order immediately, with no stale result cache.
+            await host.Fixture.RunSqlAsync("""UPDATE "StoredFiles" SET "MissingSince" = NULL WHERE "MediaAssetId" = 21""");
+            CollectionAssert.AreEqual(new long[] { 20, 10 }, await LibraryAsync(host, ""));
+            Assert.AreEqual(1, (await ReadCardAsync(host, "/api/v1/library", 20)).AvailableUnits);
+        }
+
+        [TestMethod]
         public async Task Work_ManualCreationAndStaleEdit_PreserveIdentityAndTitleProvenance()
         {
             await using var host = await CreateHostAsync();
@@ -91,6 +128,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (10, 2, NULL, 'Series'), (20, 2, 1, 'Anime'), (30, 3, NULL, 'Book'), (40, 1, 1, 'Anime Movie'), (50, 3, 2, 'Manga');
                 INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works";
                 """);
+            await AddLibraryFilesAsync(host);
             using var library = await host.SendAsync(HttpMethod.Get, "/api/v1/library?" + filter);
             var page = (await library.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Library.V1.LibraryItemV1>>())!;
             CollectionAssert.AreEquivalent(expected, page.Items.Select(item => item.Id).ToArray());
@@ -108,6 +146,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId") VALUES (101, 30);
                 INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "ProgressPositionTypeId", "PositionMs", "DurationMs") VALUES (101, 20, 1, 750, 1000), (101, 10, 1, 250, 1000);
                 """);
+            await AddLibraryFilesAsync(host);
 
             // Several types and subtypes at once, a release year range and every order narrow the list.
             CollectionAssert.AreEquivalent(new long[] { 10, 20, 30, 60 }, await LibraryAsync(host, "mediaTypeIds=1&mediaTypeIds=3"));
@@ -140,6 +179,7 @@ namespace Jularr.Backend.Tests
             var media = (await listed.Content.ReadFromJsonAsync<BaseDataList<InstanceMediaDetailsV1>>())!;
             CollectionAssert.AreEqual(new[] { "Movie", "Series", "Anime", "Book", "Manga", "LightNovel", "Music", "Game" }, media.Select(item => item.Key).ToArray());
             Assert.IsTrue(media.All(item => item.IsEnabled && !item.HasLibrary));
+            await AddLibraryFilesAsync(host);
 
             // Anime off: its Works return to their parent lists.
             await SwitchAsync(host, "Anime", false, 1);
@@ -152,6 +192,9 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEquivalent(new long[] { 30, 40, 50 }, await LibraryAsync(host, ""));
             using var closed = await host.SendAsync(HttpMethod.Get, "/api/v1/works/20");
             Assert.AreEqual(HttpStatusCode.NotFound, closed.StatusCode);
+            using var overlay = await host.SendAsync(HttpMethod.Get, "/api/v1/library/availability?workIds=20&workIds=30");
+            Assert.AreEqual(HttpStatusCode.OK, overlay.StatusCode, await overlay.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new long[] { 30 }, (await overlay.Content.ReadFromJsonAsync<BaseDataList<WorkAvailabilityStateV1>>())!.Select(item => item.Id).ToArray());
 
             // A subtype needs an enabled parent; switching deletes nothing.
             await SwitchAsync(host, "Book", false, 1);
@@ -169,6 +212,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (10, 2, NULL, 'Series'), (20, 2, 1, 'Anime'), (30, 3, NULL, 'Book');
                 INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works";
                 """);
+            await AddLibraryFilesAsync(host);
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             var profileId = (await state.Content.ReadFromJsonAsync<AuthenticationResultV1>())!.ProfileId!.Value;
 
@@ -209,6 +253,82 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEquivalent(new long[] { 10, 20 }, await LibraryAsync(host, ""));
         }
 
+        [TestMethod]
+        public async Task Library_Availability_DefaultsToFilesAndUnionsActiveRequestsWithoutDuplicates()
+        {
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle")
+                SELECT n, 1, 'Title ' || n FROM generate_series(10, 19) AS n;
+                INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works";
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (17, 'plex', 'only-on-plex');
+                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId")
+                VALUES (10, 101, 41, 1, 1), (13, 101, 41, 1, 1), (13, 202, 41, 1, 1), (14, 202, 41, 1, 1), (16, 101, 41, 1, 9);
+                """);
+            await AddLibraryFilesAsync(host);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "StoredFiles" SET "MissingSince" = now() WHERE "MediaAssetId" >= 12;
+                UPDATE "StoredFiles" SET "RelativePath" = 'subtitle.srt' WHERE "MediaAssetId" = 11;
+                """);
+            CollectionAssert.AreEqual(new long[] { 10 }, await LibraryAsync(host, ""));
+            CollectionAssert.AreEquivalent(new long[] { 10, 13 }, await LibraryAsync(host, "availabilityTypeIds=MyRequests"));
+            CollectionAssert.AreEquivalent(new long[] { 13, 14 }, await LibraryAsync(host, "availabilityTypeIds=OtherRequests"));
+            CollectionAssert.AreEquivalent(new long[] { 10, 13, 14 }, await LibraryAsync(host, "availabilityTypeIds=Available&availabilityTypeIds=MyRequests&availabilityTypeIds=OtherRequests"));
+            await host.Fixture.RunSqlAsync("INSERT INTO \"ProfileMediaRules\" (\"ProfileId\", \"MediaTypeId\", \"IsHidden\") VALUES (101, 1, TRUE)");
+            CollectionAssert.AreEqual(Array.Empty<long>(), await LibraryAsync(host, "availabilityTypeIds=OtherRequests"));
+            using var options = await host.SendAsync(HttpMethod.Get, "/api/v1/library/filter-options?availabilityTypeIds=OtherRequests");
+            Assert.AreEqual(HttpStatusCode.OK, options.StatusCode, await options.Content.ReadAsStringAsync());
+            Assert.AreEqual(0, (await options.Content.ReadFromJsonAsync<LibraryFilterOptionsV1>())!.Genres.Length);
+        }
+
+        [TestMethod]
+        public async Task Library_Facets_UsePresentTracksManualGenresProgressAndCanonicalRating()
+        {
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (10, 1, 'A'), (20, 1, 'B'), (30, 1, 'C');
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual")
+                VALUES (10, 'Genres', 'Drama, Science Fiction', TRUE), (20, 'Genres', 'Comedy', TRUE), (30, 'Genres', 'Hidden', TRUE);
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual", "ProviderId")
+                SELECT 10, 'Genres', 'Stale provider genre', FALSE, "Id" FROM "Providers" WHERE "Key" = 'tmdb' LIMIT 1;
+                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "Rating", "Votes")
+                VALUES ('tmdb_movie', '10', 1, 'A', 8.5, 100), ('tmdb_movie', '20', 1, 'B', 9, 100), ('tvdb', '10', 1, 'A alt', 4, 2);
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (10, 'tmdb_movie', '10'), (20, 'tmdb_movie', '20'), (10, 'tvdb', '10');
+                INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "ProgressPositionTypeId", "PositionMs", "DurationMs", "IsCompleted", "CompletedAt")
+                VALUES (101, 10, 1, 500, 1000, FALSE, NULL), (101, 20, 1, 1000, 1000, TRUE, now());
+                """);
+            await AddLibraryFilesAsync(host);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "MediaTracks" ("StoredFileId", "StreamIndex", "MediaTrackTypeId", "Language", "IsDefault", "IsForced")
+                SELECT "Id", 1, 2, CASE WHEN "MediaAssetId" = 10 THEN 'eng' ELSE 'jpn' END, TRUE, FALSE FROM "StoredFiles";
+                INSERT INTO "MediaTracks" ("StoredFileId", "StreamIndex", "MediaTrackTypeId", "Language", "IsDefault", "IsForced")
+                SELECT "Id", 2, 3, 'deu', FALSE, FALSE FROM "StoredFiles" WHERE "MediaAssetId" = 10;
+                UPDATE "StoredFiles" SET "MissingSince" = now() WHERE "MediaAssetId" = 30;
+                """);
+            CollectionAssert.AreEqual(new long[] { 10 }, await LibraryAsync(host, "genres=Drama&audioLanguages=eng&subtitleLanguages=deu&progressStateId=InProgress&minimumRating=8"));
+            CollectionAssert.AreEqual(Array.Empty<long>(), await LibraryAsync(host, "genres=Drama&minimumRating=9"));
+            CollectionAssert.AreEqual(new long[] { 20 }, await LibraryAsync(host, "progressStateId=Finished"));
+            CollectionAssert.AreEqual(Array.Empty<long>(), await LibraryAsync(host, "progressStateId=NotStarted"));
+            CollectionAssert.AreEquivalent(new long[] { 10, 20 }, await LibraryAsync(host, "genres=Drama&genres=Comedy"));
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/library/filter-options?genres=Comedy");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            var options = (await response.Content.ReadFromJsonAsync<LibraryFilterOptionsV1>())!;
+            CollectionAssert.AreEqual(new[] { "Comedy", "Drama", "Science Fiction" }, options.Genres);
+            CollectionAssert.AreEqual(new[] { "eng", "jpn" }, options.AudioLanguages);
+            CollectionAssert.AreEqual(new[] { "deu" }, options.SubtitleLanguages);
+        }
+        private static async Task AddLibraryFilesAsync(Host host)
+        {
+            var mount = await LibraryTests.CreateMountAsync(host);
+            var root = await LibraryTests.CreateRootAsync(host, mount, "Library", MediaType.Movie);
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkEditions" ("WorkId") SELECT "Id" FROM "Works";
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "WorkId", "WorkId", "Id" FROM "WorkEditions";
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT "Id", "Id", "Id", 1 FROM "Works";
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
+                SELECT {root}, "Id" || '.mkv', 100, now(), now(), "Id" FROM "MediaAssets";
+                """);
+        }
         private static async Task SwitchAsync(Host host, string key, bool isEnabled, long version)
         {
             using var switched = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/media", new UpdateInstanceMediaDataV1(key, isEnabled, version));
@@ -313,6 +433,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("en", await host.ScalarAsync($"""SELECT lower(split_part(locale."Locale", '-', 1)) FROM "UiLocales" AS locale JOIN "Profiles" AS profile ON profile."UiLocaleId" = locale."Id" WHERE profile."Id" = {host.Fixture.ProfileAId}"""));
 
             // One of two episodes is here: the card is partial and names the real tracks.
+            using (var preferences = await host.SendAsync(HttpMethod.Put, $"/api/v1/profiles/{host.Fixture.ProfileAId}", new Jularr.Backend.Data.User.Profile.V1.UpdateProfileDataV1 { FirstContentLanguage = "en" }))
+                Assert.AreEqual(HttpStatusCode.OK, preferences.StatusCode, await preferences.Content.ReadAsStringAsync());
             var show = await ReadCardAsync(host, "/api/v1/watchlist", 10);
             Assert.AreEqual(MediaAvailabilityState.Partial, show.AvailabilityStateId);
             Assert.AreEqual(1, show.AvailableUnits);
@@ -378,6 +500,118 @@ namespace Jularr.Backend.Tests
             // A wanted title without a request searches for itself.
             await host.Fixture.RunSqlAsync("""DELETE FROM "AcquisitionRequests" WHERE "WorkId" = 40""");
             Assert.AreEqual(MediaAvailabilityState.Searching, (await ReadCardAsync(host, "/api/v1/watchlist", 40)).AvailabilityStateId);
+
+            // A paused missing target is not searching. Existing files remain available even during upgrades.
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "WantedItems" SET "IsPaused" = TRUE WHERE "WorkId" = 40;
+                INSERT INTO "WantedItems" ("WorkId", "IsPaused") VALUES (20, TRUE), (30, FALSE);
+                """);
+            Assert.AreEqual(MediaAvailabilityState.Paused, (await ReadCardAsync(host, "/api/v1/watchlist", 40)).AvailabilityStateId);
+            Assert.AreEqual(MediaAvailabilityState.ProfileAudio, (await ReadCardAsync(host, "/api/v1/library", 20)).AvailabilityStateId);
+            Assert.AreEqual(MediaAvailabilityState.OtherAudio, (await ReadCardAsync(host, "/api/v1/library", 30)).AvailabilityStateId);
+
+            await host.Fixture.RunSqlAsync("""
+                WITH release AS (
+                    INSERT INTO "AcquisitionReleases" ("WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId")
+                    SELECT "Id", 'upgrade-20', 'Better film', 1 FROM "WantedItems" WHERE "WorkId" = 20 RETURNING "Id"
+                )
+                INSERT INTO "Operations" ("OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId") SELECT 2, 1, "Id" FROM release;
+                UPDATE "MediaTracks" AS track SET "Language" = CASE WHEN track."MediaTrackTypeId" = 2 THEN 'ja' ELSE 'en' END
+                FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                WHERE track."StoredFileId" = file."Id" AND asset."WorkId" = 10;
+                """);
+            Assert.AreEqual(MediaAvailabilityState.ProfileAudio, (await ReadCardAsync(host, "/api/v1/library", 20)).AvailabilityStateId);
+            Assert.AreEqual(MediaAvailabilityState.PartialPreferredSubtitles, (await ReadCardAsync(host, "/api/v1/library", 10)).AvailabilityStateId);
+
+            // One physical file can cover both episodes; availability follows the canonical coverage links.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "MediaAssetAdditionalUnits" ("MediaAssetId", "WorkId", "WorkUnitId")
+                SELECT asset."Id", 10, unit."Id" FROM "MediaAssets" AS asset
+                    JOIN "WorkUnits" AS unit ON unit."WorkId" = asset."WorkId" AND unit."WorkUnitTypeId" = 2 AND unit."Number" = 2
+                WHERE asset."WorkId" = 10;
+                """);
+            var covered = await ReadCardAsync(host, "/api/v1/library", 10);
+            Assert.AreEqual(2, covered.AvailableUnits);
+            Assert.AreEqual(MediaAvailabilityState.PreferredSubtitles, covered.AvailabilityStateId);
+
+            // Secondary content language works even with a different menu language.
+            using (var preferences = await host.SendAsync(HttpMethod.Put, $"/api/v1/profiles/{host.Fixture.ProfileAId}", new UpdateProfileDataV1 { FirstContentLanguage = "de", SecondContentLanguage = "en" }))
+                Assert.AreEqual(HttpStatusCode.OK, preferences.StatusCode, await preferences.Content.ReadAsStringAsync());
+            Assert.AreEqual(MediaAvailabilityState.ProfileAudio, (await ReadCardAsync(host, "/api/v1/library", 20)).AvailabilityStateId);
+
+            // Matching subtitles are distinct from matching audio; missing files contribute neither.
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "MediaTracks" SET "Language" = 'eng' WHERE "Language" = 'en';
+                UPDATE "MediaTracks" AS track SET "Language" = 'de'
+                FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                WHERE track."StoredFileId" = file."Id" AND asset."WorkId" = 30 AND track."MediaTrackTypeId" = 3;
+                """);
+            Assert.AreEqual(MediaAvailabilityState.PreferredSubtitles, (await ReadCardAsync(host, "/api/v1/library", 30)).AvailabilityStateId);
+            Assert.AreEqual(MediaAvailabilityState.ProfileAudio, (await ReadCardAsync(host, "/api/v1/library", 20)).AvailabilityStateId);
+            await host.Fixture.RunSqlAsync("""UPDATE "MediaTracks" SET "Language" = 'deu' WHERE "MediaTrackTypeId" = 3 AND "Language" = 'de'""");
+            Assert.AreEqual(MediaAvailabilityState.PreferredSubtitles, (await ReadCardAsync(host, "/api/v1/library", 30)).AvailabilityStateId);
+            await host.Fixture.RunSqlAsync("""UPDATE "MediaTracks" SET "Language" = 'ger' WHERE "MediaTrackTypeId" = 3 AND "Language" = 'deu'""");
+            Assert.AreEqual(MediaAvailabilityState.PreferredSubtitles, (await ReadCardAsync(host, "/api/v1/library", 30)).AvailabilityStateId);
+            await host.Fixture.RunSqlAsync("""UPDATE "MediaTracks" SET "IsForced" = TRUE WHERE "MediaTrackTypeId" = 3 AND "Language" = 'ger'""");
+            Assert.AreEqual(MediaAvailabilityState.OtherAudio, (await ReadCardAsync(host, "/api/v1/library", 30)).AvailabilityStateId);
+            await host.Fixture.RunSqlAsync("""UPDATE "MediaTracks" SET "IsForced" = FALSE WHERE "MediaTrackTypeId" = 3 AND "Language" = 'ger'""");
+            using (var batch = await host.SendAsync(HttpMethod.Get, "/api/v1/library/availability?workIds=20&workIds=30&workIds=40&workIds=99999"))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, batch.StatusCode, await batch.Content.ReadAsStringAsync());
+                var states = (await batch.Content.ReadFromJsonAsync<BaseDataList<WorkAvailabilityStateV1>>())!;
+                Assert.AreEqual(3, states.Count);
+                Assert.AreEqual(MediaAvailabilityState.PreferredSubtitles, states.Single(item => item.Id == 30).AvailabilityStateId);
+            }
+
+            // With no explicit content choice the menu language never labels files as wrong.
+            using (var preferences = await host.SendAsync(HttpMethod.Put, $"/api/v1/profiles/{host.Fixture.ProfileAId}", new UpdateProfileDataV1 { FirstContentLanguage = null, SecondContentLanguage = null }))
+                Assert.AreEqual(HttpStatusCode.OK, preferences.StatusCode, await preferences.Content.ReadAsStringAsync());
+            Assert.AreEqual(MediaAvailabilityState.Available, (await ReadCardAsync(host, "/api/v1/library", 30)).AvailabilityStateId);
+        }
+
+        [TestMethod]
+        public async Task WorkCard_BooksUsePresentEditionOrCurrentDocumentLanguage_NotTheOriginalWorkLanguage()
+        {
+            await using var host = await CreateHostAsync();
+            var mount = await LibraryTests.CreateMountAsync(host);
+            var root = await LibraryTests.CreateRootAsync(host, mount, "Books", MediaType.Book);
+            await host.Fixture.RunSqlAsync($$"""
+                UPDATE "Profiles" SET "FirstContentLanguage" = 'de', "SecondContentLanguage" = 'en' WHERE "Id" = {{host.Fixture.ProfileAId}};
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "OriginalLanguage") VALUES (601, 3, 'Translated book', 'ja');
+                INSERT INTO "WorkEditions" ("Id", "WorkId", "LanguageCode") VALUES (601, 601, 'en'), (602, 601, 'de');
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (601, 601, 601), (602, 601, 602);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (601, 601, 601, 3), (602, 601, 602, 3);
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "MissingSince")
+                VALUES ({{root}}, 'present.epub', 100, now(), now(), 601, NULL), ({{root}}, 'missing.epub', 100, now(), now(), 602, now());
+                INSERT INTO "WantedItems" ("WorkId", "IsPaused") VALUES (601, FALSE);
+                """);
+            Assert.AreEqual(MediaAvailabilityState.ProfileAudio, (await ReadCardAsync(host, "/api/v1/library", 601)).AvailabilityStateId);
+
+            // The actual parsed file language overrides edition metadata; an absent preferred edition cannot mask it.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "ReadingDocuments" ("StoredFileId", "SourceSizeBytes", "SourceModifiedAt", "ContentHash", "AnalyzerVersion", "ReadingFormatTypeId", "Language", "Structure", "TotalCharacters")
+                SELECT "Id", "SizeBytes", "ModifiedAt", decode(repeat('ab', 32), 'hex'), 1, 1, 'fr-FR', '{}', 0
+                FROM "StoredFiles" WHERE "MediaAssetId" = 601;
+                """);
+            Assert.AreEqual(MediaAvailabilityState.OtherAudio, (await ReadCardAsync(host, "/api/v1/library", 601)).AvailabilityStateId);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "ReadingDocuments" SET "Language" = 'en';
+                INSERT INTO "ReadingDocuments" ("StoredFileId", "SourceSizeBytes", "SourceModifiedAt", "ContentHash", "AnalyzerVersion", "ReadingFormatTypeId", "Language", "Structure", "TotalCharacters")
+                SELECT "StoredFileId", "SourceSizeBytes", "SourceModifiedAt", "ContentHash", 2, "ReadingFormatTypeId", 'fr', '{}', 0 FROM "ReadingDocuments";
+                """);
+            Assert.AreEqual(MediaAvailabilityState.OtherAudio, (await ReadCardAsync(host, "/api/v1/library", 601)).AvailabilityStateId);
+            await host.Fixture.RunSqlAsync("""UPDATE "StoredFiles" SET "MissingSince" = NULL WHERE "MediaAssetId" = 602""");
+            Assert.AreEqual(MediaAvailabilityState.ProfileAudio, (await ReadCardAsync(host, "/api/v1/library", 601)).AvailabilityStateId);
+            await host.Fixture.RunSqlAsync("""UPDATE "StoredFiles" SET "MissingSince" = now() WHERE "MediaAssetId" = 602""");
+            await host.Fixture.RunSqlAsync("""UPDATE "ReadingDocuments" SET "Language" = 'en-GB'""");
+            Assert.AreEqual(MediaAvailabilityState.ProfileAudio, (await ReadCardAsync(host, "/api/v1/library", 601)).AvailabilityStateId);
+
+            // Without observed or edition language, the original Work language does not invent the file language.
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "ReadingDocuments" SET "Language" = NULL;
+                UPDATE "WorkEditions" SET "LanguageCode" = NULL WHERE "Id" = 601;
+                """);
+            Assert.AreEqual(MediaAvailabilityState.Available, (await ReadCardAsync(host, "/api/v1/library", 601)).AvailabilityStateId);
         }
 
         private static async Task<LibraryItemV1> ReadCardAsync(Host host, string route, long workId)

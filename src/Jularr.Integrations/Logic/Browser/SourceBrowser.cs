@@ -26,7 +26,7 @@ namespace Jularr.Integrations.Logic.Browser
 
     // A real browser reads the pages and files a plain request cannot: the source answers with a browser check.
     // The browser is started without automation flags, so the source sees an ordinary browser and no captcha is solved.
-    internal sealed partial class SourceBrowser : ISourceBrowser, IDisposable
+    internal sealed partial class SourceBrowser : ISourceBrowser, IDisposable, IAsyncDisposable
     {
         // The source's own check needs an undisturbed page; reading it too often makes it fail.
         private const int PollMilliseconds = 3000;
@@ -41,6 +41,8 @@ namespace Jularr.Integrations.Logic.Browser
         private readonly BrowserOptions _options;
         private readonly SemaphoreSlim _gate = new(1, 1);
         private readonly string? _path;
+        private readonly BrowserPackages? _packages;
+        private BrowserEgressProxy? _egress;
         private readonly string _profile;
         private readonly string _downloads;
         private readonly List<SourceBrowserEvent> _events = [];
@@ -54,17 +56,26 @@ namespace Jularr.Integrations.Logic.Browser
         private string? _lastError;
         private DateTime? _lastAttemptAt;
 
-        public SourceBrowser(BrowserOptions options)
+        public SourceBrowser(BrowserOptions options, BrowserPackages? packages = null)
         {
             _options = options;
+            _packages = packages;
             _path = ResolvePath(options.Path);
-            _profile = Path.Combine(options.ProfilePath, "profile");
-            _downloads = Path.Combine(options.ProfilePath, "downloads");
+            // Managed Chrome owns its own profile and download cache under managed/.
+            // Removing the module must never erase the pre-existing/manual browser profile.
+            var profileRoot = packages is not null && options.Path is null && string.IsNullOrWhiteSpace(options.RemoteAddress)
+                ? Path.Combine(options.ProfilePath, "managed")
+                : options.ProfilePath;
+            _profile = Path.Combine(profileRoot, "profile");
+            _downloads = Path.Combine(profileRoot, "downloads");
         }
 
-        public bool IsAvailable => _path is not null || !string.IsNullOrWhiteSpace(_options.RemoteAddress);
+        private string? BrowserPath => _path ?? (_options.Path is null && string.IsNullOrWhiteSpace(_options.RemoteAddress)
+            ? BrowserPackages.InstalledExecutable(_options.ProfilePath) : null);
 
-        public SourceBrowserStatus Status => new(_path, _options.RemoteAddress, _profile, _client is not null, _version, _lastUrl, _lastOutcome, _lastError, _lastAttemptAt, Events.Count);
+        public bool IsAvailable => (_packages?.Enabled ?? true) && (BrowserPath is not null || !string.IsNullOrWhiteSpace(_options.RemoteAddress));
+
+        public SourceBrowserStatus Status => new(BrowserPath, _options.RemoteAddress, _profile, _client is not null, _version, _lastUrl, _lastOutcome, _lastError, _lastAttemptAt, Events.Count);
 
         public IReadOnlyList<SourceBrowserEvent> Events
         {
@@ -79,6 +90,7 @@ namespace Jularr.Integrations.Logic.Browser
 
         public async Task<SourceBrowserStatus> StartAsync(CancellationToken ct)
         {
+            if (!IsAvailable) throw new SourceBrowserException("The browser module is disabled or Chrome is not installed.");
             await _gate.WaitAsync(ct);
             try
             {
@@ -93,8 +105,35 @@ namespace Jularr.Integrations.Logic.Browser
 
         public async Task StopAsync()
         {
-            await CloseAsync();
-            Note("stopped", "the browser is stopped");
+            await _gate.WaitAsync(CancellationToken.None);
+            try
+            {
+                // Stop an earlier process after a host restart too, not just one started by this object.
+                // Never shut down an external browser selected by RemoteAddress.
+                if (string.IsNullOrWhiteSpace(_options.RemoteAddress))
+                {
+                    if (_client is not null) await CloseBrowserAsync(CancellationToken.None);
+                    else await CloseRunningBrowserAsync(CancellationToken.None);
+                    // Chrome flushes persistent cookies while closing; killing it immediately loses them.
+                    if (_process is { } process)
+                    {
+                        try
+                        {
+                            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                        }
+                        catch (TimeoutException)
+                        {
+                            // A stuck browser is terminated by CloseAsync below.
+                        }
+                    }
+                }
+                await CloseAsync();
+                Note("stopped", "the browser is stopped");
+            }
+            finally
+            {
+                _gate.Release();
+            }
         }
 
         // A new client: the profile and the state the source knows of the old one go.
@@ -208,21 +247,21 @@ namespace Jularr.Integrations.Logic.Browser
             await _gate.WaitAsync(ct);
             try
             {
+                if (HasManualControl) return null;
                 await StartBrowserAsync(ct);
-                _lastUrl = uri.AbsoluteUri;
+                _lastUrl = DiagnosticOrigin(uri);
                 _lastAttemptAt = DateTime.UtcNow;
-                Note("navigate", uri.AbsoluteUri);
+                Note("navigate", DiagnosticOrigin(uri));
                 await _client!.SendAsync("Page.navigate", new { url = uri.AbsoluteUri }, ct);
                 var page = await WaitForPageAsync(uri, ct);
                 if (page is null)
                 {
                     _lastOutcome = _refused ? "refused" : "no answer";
                     _lastError = _refused ? "the source refused this browser" : null;
-                    Note(_lastOutcome, _lastError ?? $"no answer for {uri.AbsoluteUri}");
-                    // A source that refuses this client gets a new one next time.
+                    Note(_lastOutcome, _lastError ?? $"no answer for {DiagnosticOrigin(uri)}");
+                    // Restart a refused process, keeping the source session until an explicit reset.
                     if (_refused)
                     {
-                        await ForgetAsync(uri, ct);
                         await CloseAsync();
                     }
 
@@ -231,7 +270,7 @@ namespace Jularr.Integrations.Logic.Browser
 
                 _lastOutcome = "read";
                 _lastError = null;
-                Note("read", $"{uri.AbsoluteUri} ({page.Length} bytes)");
+                Note("read", $"{DiagnosticOrigin(uri)} ({page.Length} bytes)");
                 return page;
             }
             catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException or System.Text.Json.JsonException)
@@ -275,10 +314,15 @@ namespace Jularr.Integrations.Logic.Browser
             var opened = new List<OpenPage>();
             try
             {
+                if (HasManualControl) return null;
                 await StartBrowserAsync(ct);
-                foreach (var address in safe)
+                var current = await _client!.EvaluateAsync("location.href", ct);
+                var preferred = Uri.TryCreate(current, UriKind.Absolute, out var currentAddress)
+                    ? safe.FindIndex(address => SameOrigin(currentAddress, address)) : -1;
+                if (preferred > 0) (safe[0], safe[preferred]) = (safe[preferred], safe[0]);
+                for (var index = 0; index < safe.Count; index++)
                 {
-                    var page = await OpenPageAsync(address, ct);
+                    var page = await OpenPageAsync(safe[index], index == 0, ct);
                     if (page is not null)
                     {
                         opened.Add(page);
@@ -306,7 +350,7 @@ namespace Jularr.Integrations.Logic.Browser
                             continue;
                         }
 
-                        Note("read", $"{page.Address.AbsoluteUri} ({state.Html.Length} bytes)");
+                        Note("read", $"{DiagnosticOrigin(page.Address)} ({state.Html.Length} bytes)");
                         return new BrowserPage(page.Address, state.Html);
                     }
 
@@ -315,25 +359,39 @@ namespace Jularr.Integrations.Logic.Browser
 
                 return null;
             }
+            catch (Exception exception) when (exception is SourceBrowserException or JsonException)
+            {
+                Note("error", exception.Message);
+                return null;
+            }
             finally
             {
                 foreach (var page in opened)
                 {
-                    await ClosePageAsync(page.Target, ct);
+                    if (page.Target is { } target) await ClosePageAsync(target, ct);
                 }
 
                 _gate.Release();
             }
         }
 
-        // A page of its own, so several addresses can be read at the same time.
-        private async Task<OpenPage?> OpenPageAsync(Uri address, CancellationToken ct)
+        // Keep the primary page's session; alternative addresses use temporary background pages.
+        private async Task<OpenPage?> OpenPageAsync(Uri address, bool primary, CancellationToken ct)
         {
             try
             {
-                var (target, session) = await _client!.OpenPageAsync(ct);
-                await _client.SendAsync("Page.enable", null, ct, session);
-                await _client.SendAsync("Page.navigate", new { url = address.AbsoluteUri }, ct, session);
+                string? target = null;
+                string? session = null;
+                if (!primary)
+                {
+                    (target, session) = await _client!.OpenPageAsync(ct);
+                    await _client.SendAsync("Page.enable", null, ct, session);
+                }
+                else
+                {
+                    await _client!.SendAsync("Page.bringToFront", null, ct);
+                }
+                await _client!.SendAsync("Page.navigate", new { url = address.AbsoluteUri }, ct, session);
                 return new OpenPage(target, session, address);
             }
             catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException or System.Text.Json.JsonException)
@@ -341,6 +399,9 @@ namespace Jularr.Integrations.Logic.Browser
                 return null;
             }
         }
+
+        private static bool SameOrigin(Uri first, Uri second) =>
+            Uri.Compare(first, second, UriComponents.SchemeAndServer, UriFormat.UriEscaped, StringComparison.OrdinalIgnoreCase) == 0;
 
         private async Task ClosePageAsync(string target, CancellationToken ct)
         {
@@ -369,6 +430,7 @@ namespace Jularr.Integrations.Logic.Browser
             await _gate.WaitAsync(ct);
             try
             {
+                if (HasManualControl) throw new SourceBrowserException("A person currently controls the source browser.");
                 await StartBrowserAsync(ct);
                 Directory.CreateDirectory(_downloads);
                 foreach (var stale in Directory.GetFiles(_downloads))
@@ -419,8 +481,16 @@ namespace Jularr.Integrations.Logic.Browser
             }
         }
 
+        public async ValueTask DisposeAsync()
+        {
+            await StopAsync();
+            Dispose();
+        }
+
         public void Dispose()
         {
+            _egress?.Dispose();
+            _egress = null;
             var client = _client;
             _client = null;
             if (client is not null)
@@ -445,6 +515,9 @@ namespace Jularr.Integrations.Logic.Browser
 
         private async Task CloseAsync()
         {
+            Interlocked.Exchange(ref _manualUntil, 0);
+            _egress?.Dispose();
+            _egress = null;
             var client = _client;
             _client = null;
             _refused = false;
@@ -468,33 +541,6 @@ namespace Jularr.Integrations.Logic.Browser
             {
                 // The browser is already gone.
             }
-
-            // A refused client is worth nothing; the next one starts fresh.
-            if (Directory.Exists(_profile))
-            {
-                try
-                {
-                    Directory.Delete(_profile, true);
-                }
-                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-                {
-                    // The profile stays; the next attempt uses it as it is.
-                }
-            }
-        }
-
-        // A refused client is worth nothing: the source's own state of it goes, so the next attempt is a new one.
-        private async Task ForgetAsync(Uri uri, CancellationToken ct)
-        {
-            try
-            {
-                await _client!.SendAsync("Network.clearBrowserCookies", null, ct);
-                await _client.SendAsync("Storage.clearDataForOrigin", new { origin = uri.GetLeftPart(UriPartial.Authority), storageTypes = "all" }, ct);
-            }
-            catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException or System.Text.Json.JsonException)
-            {
-                // The browser is gone; the next attempt starts a new one.
-            }
         }
 
         // The browser starts on the first use and keeps its profile, so the source's check is passed once.
@@ -514,8 +560,14 @@ namespace Jularr.Integrations.Logic.Browser
 
             Directory.CreateDirectory(_profile);
 
-            // A browser that still runs with this profile is used as it is; it has passed the source's check already.
-            if (await UseRunningBrowserAsync(ct))
+            // A previous run cannot retain its loopback proxy after the host exits.
+            // Close and restart it with a new public-only tunnel. Local test fixtures
+            // deliberately keep their existing browser and do not enable interception.
+            if (!_options.AllowPrivateAddressesForTests)
+            {
+                await CloseRunningBrowserAsync(ct);
+            }
+            else if (await UseRunningBrowserAsync(ct))
             {
                 return;
             }
@@ -535,7 +587,19 @@ namespace Jularr.Integrations.Logic.Browser
 
             // A browser with a chosen port answers the source's check; one that picks its own does not.
             var port = _options.Port > 0 ? _options.Port : FreePort();
+            var executable = BrowserPath ?? throw new SourceBrowserException("Chrome is not installed.");
             var arguments = $"--remote-debugging-port={port} --user-data-dir=\"{_profile}\" --no-first-run --no-default-browser-check --window-size=1280,900 about:blank";
+            if (!_options.AllowPrivateAddressesForTests)
+            {
+                _egress = new BrowserEgressProxy();
+                _egress.Start();
+                arguments += $" --proxy-server=http://127.0.0.1:{_egress.Port} --proxy-bypass-list=\"<-loopback>\" --disable-quic --force-webrtc-ip-handling-policy=disable_non_proxied_udp";
+            }
+            if (_packages is not null && executable == _packages.ExecutablePath)
+            {
+                // The optional managed package uses Linux headless mode and does not need a display server.
+                arguments += " --headless=new";
+            }
             if (_options.NoSandbox)
             {
                 arguments += " --no-sandbox";
@@ -544,7 +608,7 @@ namespace Jularr.Integrations.Logic.Browser
             // A browser that does not open its port may have met the remains of an earlier one; it is tried again.
             for (var attempt = 1; attempt <= 3; attempt++)
             {
-                _process = Process.Start(new ProcessStartInfo(_path!) { UseShellExecute = false, Arguments = arguments });
+                _process = Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false, Arguments = arguments });
 
                 // The browser needs a moment before its first page counts.
                 await Task.Delay(StartMilliseconds, ct);
@@ -569,6 +633,8 @@ namespace Jularr.Integrations.Logic.Browser
                 }
             }
 
+            _egress?.Dispose();
+            _egress = null;
             throw new SourceBrowserException("The browser did not open its debugging port.");
         }
 
@@ -620,12 +686,13 @@ namespace Jularr.Integrations.Logic.Browser
         // The browser that runs elsewhere is used as it is; its profile is its own.
         private async Task UseRemoteBrowserAsync(CancellationToken ct)
         {
-            var remote = await ReadPageSocketAsync(new Uri(_options.RemoteAddress!), ct);
+            var address = new Uri(_options.RemoteAddress!);
+            var remote = await ReadPageSocketAsync(address, ct);
             _client = new DevToolsClient();
             await _client.ConnectAsync(remote, ct);
             await _client.SendAsync("Page.enable", null, ct);
             await RememberVersionAsync(ct);
-            Note("started", $"the browser at {_options.RemoteAddress} answers");
+            Note("started", $"the browser at {DiagnosticOrigin(address)} answers");
         }
 
         private async Task CloseProcessAsync()
@@ -797,6 +864,14 @@ namespace Jularr.Integrations.Logic.Browser
             return Uri.TryCreate(address, UriKind.Absolute, out var uri) ? uri.GetLeftPart(UriPartial.Path) : address;
         }
 
+        // A provider URL may carry a member key, signed file token or private search term.
+        // Only the source origin belongs in administrator diagnostics and status responses.
+        internal static string DiagnosticOrigin(Uri uri)
+        {
+            var host = uri.HostNameType == UriHostNameType.IPv6 ? "[" + uri.IdnHost + "]" : uri.IdnHost;
+            return uri.Scheme + "://" + host + (uri.IsDefaultPort ? "" : ":" + uri.Port);
+        }
+
         // What the browser did, for the administrator to see.
         private void Note(string kind, string message)
         {
@@ -848,7 +923,7 @@ namespace Jularr.Integrations.Logic.Browser
         // What one page says about itself.
         private sealed record BrowserState(string Href, string Ready, string Html);
 
-        // A page of its own, for reading several addresses at the same time.
-        private sealed record OpenPage(string Target, string Session, Uri Address);
+        // The primary page has no temporary target or attached session to close.
+        private sealed record OpenPage(string? Target, string? Session, Uri Address);
     }
 }

@@ -516,7 +516,8 @@ namespace Jularr.Backend.Service.User.Playback.V1
             try
             {
                 await Context.ExecuteBatchAsync((ctx, ct) =>
-                    ctx.CreatePlaybackSessionAsync(new PlaybackSessionCreationData(sessionId, lookup.ProfileId, Parameters.MediaAssetId, source.StoredFileId, mode, resume), ct), CancellationToken);
+                    ctx.CreatePlaybackSessionAsync(new PlaybackSessionCreationData(sessionId, lookup.ProfileId, Parameters.MediaAssetId, source.StoredFileId, mode, resume,
+                        Auth.SessionPublicId!.Value, Auth.SessionRevision!.Value), ct), CancellationToken);
             }
             catch
             {

@@ -60,36 +60,78 @@ kopieren, Release und Datenbankpasswort setzen, `docker compose up -d`, dann `ht
 (auf dem `PATH` gefunden; ein gesetzter Pfad gewinnt, ein leerer schaltet das Programm ab), aller
 Zustand liegt unter `DataPath` (`/data` im Image: `keys`, `backups`, `trickplay`, `translation`, `ocr`),
 Bibliotheken unter `/media` (`Storage:LocalPaths`). Eine leere Datenbank erhält beim ersten Start
-alle frischen Baselines in einer Transaktion; eine bestehende wird nie verändert oder migriert.
+die Baselines mit den nummerierten Migrationen; eine ältere bestehende Version wird nur nach
+erfolgreichem Backup migriert.
 
 ### Browser für Quellen mit Browserprüfung
 
-Anna's Archive stellt seine Seiten hinter eine Prüfung, die nur ein Browser besteht. Jularr liest
-solche Seiten mit einem echten Chrome oder Chromium, den es **nicht** selbst mitbringt: das Image
-bleibt schlank, der Browser kommt später dazu.
+Anna-Suchen unterscheiden bestätigte Nulltreffer von unlesbaren Seiten, Browserprüfungen,
+Rate-Limits und Zeitüberschreitungen. Erfolgreiche Seiten werden nur innerhalb eines
+Suchlaufs wiederverwendet. Zuletzt erfolgreiche vertrauenswürdige Mirrors werden bevorzugt;
+unlesbare Mirrors pausieren fünf Minuten, andere Verbindungsfehler eine Minute.
 
-Im Container, einmal je Container (der Browser landet in der Schicht, sein Profil im Volume):
+Bei der Buchauswahl gelten erkennbare Zusammenfassungen, Kurzfassungen, Workbooks
+und Guides zum angefragten Original als anderes Werk. Autorname oder eine Suche
+nach einer ISBN heben diesen Titelkonflikt nicht auf. Ausdrücklich angefragte
+Zusammenfassungen und Guides bleiben über ihren eigenen Titel oder Alias zulässig.
 
-```bash
-docker compose exec -u root jularr jularr-browser install   # Browser und Bibliotheken
-docker compose exec -d jularr jularr-browser run            # startet ihn auf Port 9222
-```
+**Standardmäßig deaktiviert.** Das optionale Modul **Browser** lässt sich im Adminbereich
+unter `/Admin/Instance/Modules` einschalten und wieder ausschalten; es hängt von
+**Acquisition** ab. Jularr benötigt dafür keinen zweiten Container, keine Root-Befehle
+aus dem Webprozess und keinen öffentlich erreichbaren Debugging-Port.
 
-`Browser:RemoteAddress` (z. B. `http://127.0.0.1:9222`) lässt Jularr einen Browser benutzen, der
-schon läuft – auch einen auf einem anderen Rechner. `Browser:Path` startet einen eigenen Browser
-mit dem Profil unter `DataPath/browser`; `Browser:Port` gibt dessen Port an, damit er von außen
-erreichbar ist. Beides zugleich geht nicht: sie teilen sich das Profil.
+Auf `/Admin/Browser` lässt sich der Browser mit **Installieren** direkt aktivieren,
+ohne `.env`-Eintrag oder zusätzlichen Compose-Dienst. **Aktualisieren** prüft Googles
+offiziellen Chrome-for-Testing-Stable-Kanal auf eine neuere Version, **Reparieren**
+installiert das Paket erneut; **Deinstallieren** deaktiviert das Modul und entfernt
+die verwalteten Dateien. Diese Aktionen werden durch den bestehenden Worker ausgeführt,
+nicht durch Shell- oder Root-Befehle des Webprozesses.
 
-Besteht der Browser die Prüfung der Quelle nicht (ein Captcha), bleibt die Quelle beim Menschen:
-der Link wird von Hand eingetragen. Auf einem Server ohne Grafik erkennt die Prüfung den Browser
-meist, dort hilft ein Browser auf einem Desktop-Rechner, den Jularr über `Browser:RemoteAddress`
-benutzt.
+Beim Einschalten lädt Jularr die aktuelle Stable-Version von Chrome for Testing
+für Linux x64 oder arm64 nach `DataPath/browser/managed`. Die Versionsmetadaten
+und das Paket stammen von festgelegten offiziellen HTTPS-Adressen; bei einem Update
+wird die bisherige Installation bis zur geprüften Bereitstellung behalten.
+Download und Entpacken haben Größen- und Pfadgrenzen.
+Der Hintergrunddienst aktiviert Chrome nach der Installation automatisch. Ein Neustart
+oder eine Container-Neuerstellung behält den Browser unter dem persistenten `/data`.
+Der Installationsfortschritt und Fehler erscheinen unter `/Admin/Browser`; die
+Modulverwaltung prüft den Zustand ungefähr alle 30 Sekunden.
 
-Der Browser prüft die angeforderte HTTPS-Adresse vor der Navigation auf öffentliche IP-Adressen.
-Das ist **keine vollständige Netzwerkisolierung**: Weiterleitungen und nachgeladene Ressourcen
-können weitere Ziele erreichen. Für den Betrieb mit nicht vertrauenswürdigen Seiten ist
-zusätzlich eine ausgehende Netzwerksperre für interne Docker-/VM-Adressen erforderlich.
-Chrome-Startparameter, virtueller Bildschirm und optionale Installation bleiben unverändert.
+Das Image enthält die benötigten Chrome-Laufzeitbibliotheken, einschließlich der
+`t64`-Paketnamen neuerer Ubuntu-Versionen. Die Image-CI prüft den verwalteten
+Chrome-Versionsstand als unprivilegierter Anwendungsbenutzer.
+
+Beim Ausschalten wird die Browserbenutzung unterbunden und der eigene Prozess gestoppt.
+Jularr entfernt nur seine verwalteten Browserdateien, temporären Dateien, Cookies und
+sein Browserprofil; Bibliotheken, NAS-Mounts und andere Downloadordner bleiben erhalten.
+Ein vorhandener manuell konfigurierter Browser über `Browser:Path` oder
+`Browser:RemoteAddress` bleibt als Konfigurationsoption erhalten.
+
+Bei einer manuellen Prüfung von Anna’s Archive öffnet „Browser bedienen“ unter
+`/Admin/Browser` oben eine bedienbare Ansicht derselben lokalen Chrome-Sitzung. Die
+Quellenauswahl und der Öffnen-Knopf stehen vor den Diagnoseabschnitten. Zugriff
+haben Owner mit `acquisition.manage`; Bild und Eingaben sind an
+die öffnende Anmeldesitzung gebunden. Solange diese Ansicht aktiv ist, wechselt die
+Automatik die Seite nicht. Nach zwei Minuten ohne Abruf oder Eingabe wird die
+Bedienfreigabe frei; die öffnende Sitzung behält einen direkten Wiederverbinden-Knopf.
+Kurze Bildabruf-Fehler werden begrenzt erneut versucht; das letzte Bild bleibt dabei
+sichtbar und Eingaben sind bis zur Wiederverbindung gesperrt. Wiederöffnen erhält
+die aktuelle Seite derselben Quelle. Die automatische Suche nutzt ebenfalls diesen
+Haupt-Tab und schließt nur ihre zusätzlichen Alternativ-Tabs.
+„Fertig und schließen“ und normales Stoppen erhalten das Profil; nur Zurücksetzen
+oder Ausschalten des verwalteten Browser-Moduls löschen es. Die Ansicht überträgt
+keine beliebigen Debugging-Befehle und erlaubt keine direkten Browser-Downloads.
+Ein zusätzlicher Container oder öffentliches Debugging-Port ist dafür nicht nötig.
+
+**Sicherheit:** Die normale HTTPS-Adressprüfung ist keine vollständige Browser-
+Netzwerkisolierung. Für nicht vertrauenswürdige Seiten muss die ausgehende
+Verbindungsbegrenzung gegen interne IPs auch für Redirects, Skripte, Frames und
+nachgeladene Ressourcen noch in einer isolierten Debian-Docker-Umgebung nachgewiesen
+werden ([#1483](https://github.com/Juloc/Jularr/issues/1483)). Der optionale Browser
+darf vor diesem Test nicht als sicherer Produktivpfad freigegeben werden. Für Prüfungen,
+die eine Person lösen muss, zeigt Jularr weiterhin den manuellen Link; es gibt keinen
+CAPTCHA-Bypass.
+
 
 ## Backend im gemeinsamen Host
 

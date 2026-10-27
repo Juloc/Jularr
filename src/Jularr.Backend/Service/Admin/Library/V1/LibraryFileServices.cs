@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Common;
@@ -37,6 +38,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                     file."LibraryRootId",
                     root."Name" AS "LibraryRootName",
                     root."MediaTypeId",
+                    root."MediaSubtypeId",
                     file."RelativePath",
                     file."SizeBytes",
                     file."MissingSince",
@@ -105,7 +107,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                 var title = Limit(path.Title);
                 var match = matches.FirstOrDefault(item => item.MediaTypeId == row.MediaTypeId && item.Title == title.ToLowerInvariant());
                 return new LibraryFileDetailsV1(row.Id, row.LibraryRootId, row.LibraryRootName, row.MediaTypeId, row.RelativePath, row.SizeBytes, row.MissingSince, row.MediaAssetId,
-                    row.WorkId, row.WorkTitle, title, match?.WorkId, path.WorkUnitTypeId, path.UnitNumber, path.ParentUnitNumber, row.HasOtherVersions, row.IsProtected);
+                    row.WorkId, row.WorkTitle, title, match?.WorkId, path.WorkUnitTypeId, path.UnitNumber, path.ParentUnitNumber, row.HasOtherVersions, row.IsProtected, row.MediaSubtypeId);
             }).ToArray();
             return new PageResult<LibraryFileDetailsV1>(items, Page);
         }
@@ -127,6 +129,56 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                 true);
             var asset = await Context.AssignStoredFileAsync(data, CancellationToken);
             await Context.RecordActivityAsync(new ActivityEventData(ActivityEventType.ManualImport, storedFileId: Parameters.StoredFileId, accountId: Auth.AccountId), CancellationToken);
+            return new AssignLibraryFileResultV1(asset.Id);
+        }
+    }
+
+    // The catalog entry is read from its provider first; the file then joins the Work it becomes.
+    [ServiceEndpoint("POST", "/api/v1/admin/library/files/{storedFileId:long}/identification")]
+    public sealed class IdentifyLibraryFileV1 : AdminService<StoredFileParametersV1, IdentifyLibraryFileDataV1>
+    {
+        private readonly MetadataCatalog _catalog;
+
+        internal IdentifyLibraryFileV1(MetadataCatalog catalog)
+        {
+            _catalog = catalog;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AssignLibraryFileResultV1>()];
+        protected override ModuleRequirement GetInstanceModules(StoredFileParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(StoredFileParametersV1 parameters, Type resultType) => new("media.manual.update");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // The library of the file names the catalog.
+            var root = await Context.ExecuteBatchAsync((ctx, ct) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        root."MediaTypeId",
+                        root."MediaSubtypeId"
+                    FROM
+                        "StoredFiles" AS file
+                        JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                    WHERE
+                        file."Id" = @StoredFileId;
+                    """;
+                sql.Parameters.Add(new StoredFileParameters(Parameters.StoredFileId));
+                return ctx.ReadSql.ReadRequiredAsync<StoredFileRootData>(sql, ct);
+            }, CancellationToken);
+            var workId = await _catalog.ImportAsync(Context, root.MediaTypeId, root.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
+
+            // The file joins the Work.
+            var data = new StoredFileAssignmentData(Parameters.StoredFileId, workId, null, Data.WorkUnitTypeId, Data.UnitNumber, Data.ParentUnitNumber, null, true);
+            var asset = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                var assigned = await ctx.AssignStoredFileAsync(data, ct);
+                await ctx.RecordActivityAsync(new ActivityEventData(ActivityEventType.ManualImport, storedFileId: Parameters.StoredFileId, accountId: Auth.AccountId), ct);
+                return assigned;
+            }, CancellationToken);
             return new AssignLibraryFileResultV1(asset.Id);
         }
     }
@@ -358,6 +410,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                     pattern."MediaTypeId",
                     pattern."MediaSubtypeId",
                     pattern."Pattern",
+                    pattern."DailyFile",
                     pattern."Version"
                 FROM
                     "NamingPatterns" AS pattern
@@ -365,10 +418,12 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                     pattern."MediaTypeId",
                     pattern."MediaSubtypeId" NULLS FIRST;
                 """;
+            var rules = (await Context.ReadNamingSettingsAsync(CancellationToken)).ToDictionary(settings => settings.MediaTypeId,
+                settings => new NamingRules(settings.ReplacesIllegalCharacters, settings.ColonReplacementId, settings.CustomColonReplacement, settings.SpecialsFolder, settings.RenamesFiles, settings.MultiEpisodeStyleId));
             return new BaseDataList<NamingPatternV1>([.. (await Context.ReadSql.ReadListAsync<NamingPatternSaveData>(sql, CancellationToken)).Select(row =>
             {
                 var (folder, file) = NamingPattern.Split(row.Pattern);
-                return new NamingPatternV1(row.MediaTypeId, row.MediaSubtypeId, folder, file, NamingPattern.Example(row.MediaTypeId, row.Pattern), row.Version);
+                return new NamingPatternV1(row.MediaTypeId, row.MediaSubtypeId, folder, file, NamingPattern.Example(row.MediaTypeId, row.Pattern, row.MediaSubtypeId, rules: rules.GetValueOrDefault(row.MediaTypeId)), row.Version, row.DailyFile);
             })]);
         }
     }
@@ -383,17 +438,26 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         // The same rules as the save, so a pattern that shows an example is one that saves.
         protected override Task<IServiceOutput> OnRead()
         {
-            var pattern = NamingPattern.Join(Parameters.Folder, Parameters.File);
+            var folder = string.IsNullOrEmpty(Parameters.SeasonFolder) ? Parameters.Folder : NamingPattern.Join(Parameters.Folder, Parameters.SeasonFolder);
+            var pattern = NamingPattern.Join(folder, Parameters.File);
+            var rules = new NamingRules(Parameters.ReplacesIllegalCharacters, Parameters.ColonReplacementId, Parameters.CustomColonReplacement, Parameters.SpecialsFolder,
+                Parameters.RenamesFiles, Parameters.MultiEpisodeStyleId);
             try
             {
                 NamingPattern.Validate(Parameters.MediaTypeId, pattern, nameof(Parameters.File));
+                NamingPattern.ValidateRules(rules);
+                NamingPattern.ValidateDaily(Parameters.MediaTypeId, Parameters.MediaSubtypeId, folder, Parameters.DailyFile, nameof(Parameters.DailyFile));
             }
             catch (DataValidationException exception)
             {
                 return Task.FromResult<IServiceOutput>(new NamingPreviewV1(null, exception.Code));
             }
 
-            return Task.FromResult<IServiceOutput>(new NamingPreviewV1(NamingPattern.Example(Parameters.MediaTypeId, pattern), null));
+            var series = Parameters.MediaTypeId == MediaType.Series;
+            return Task.FromResult<IServiceOutput>(new NamingPreviewV1(NamingPattern.Example(Parameters.MediaTypeId, pattern, Parameters.MediaSubtypeId, rules: rules), null,
+                series ? NamingPattern.Example(MediaType.Series, pattern, Parameters.MediaSubtypeId, multiple: true, rules: rules) : null,
+                series && Parameters.DailyFile is { } dailyFile ? NamingPattern.Example(MediaType.Series, NamingPattern.Join(folder, dailyFile), rules: rules) : null,
+                series ? NamingPattern.Example(MediaType.Series, pattern, Parameters.MediaSubtypeId, rules: rules, specials: true) : null));
         }
     }
 
@@ -407,7 +471,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.SaveNamingPatternAsync(new NamingPatternSaveData(Parameters.MediaTypeId, null, NamingPattern.Join(Data.Folder, Data.File), Data.Version), CancellationToken);
+            await Context.SaveNamingPatternAsync(new NamingPatternSaveData(Parameters.MediaTypeId, null, NamingPattern.Join(string.IsNullOrEmpty(Data.SeasonFolder) ? Data.Folder : NamingPattern.Join(Data.Folder, Data.SeasonFolder), Data.File), Data.Version, Data.DailyFile), CancellationToken);
             return new UpdateResult(true);
         }
     }
@@ -422,7 +486,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.SaveNamingPatternAsync(new NamingPatternSaveData(Parameters.MediaTypeId, Parameters.MediaSubtypeId, NamingPattern.Join(Data.Folder, Data.File), Data.Version), CancellationToken);
+            await Context.SaveNamingPatternAsync(new NamingPatternSaveData(Parameters.MediaTypeId, Parameters.MediaSubtypeId, NamingPattern.Join(string.IsNullOrEmpty(Data.SeasonFolder) ? Data.Folder : NamingPattern.Join(Data.Folder, Data.SeasonFolder), Data.File), Data.Version, Data.DailyFile), CancellationToken);
             return new UpdateResult(true);
         }
     }
@@ -435,7 +499,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         protected override ServicePermission GetPermission(ReadNamingSettingsParametersV1 parameters, Type resultType) => new("storage.read");
 
         protected override async Task<IServiceOutput> OnRead() => new BaseDataList<NamingSettingsV1>([.. (await Context.ReadNamingSettingsAsync(CancellationToken)).Select(settings =>
-            new NamingSettingsV1(settings.MediaTypeId, settings.ReplacesIllegalCharacters, settings.ColonReplacementId, settings.CustomColonReplacement, settings.SpecialsFolder, settings.Version))]);
+            new NamingSettingsV1(settings.MediaTypeId, settings.ReplacesIllegalCharacters, settings.ColonReplacementId, settings.CustomColonReplacement, settings.SpecialsFolder, settings.Version, settings.RenamesFiles, settings.MultiEpisodeStyleId))]);
     }
 
     [ServiceEndpoint("PUT", "/api/v1/admin/library/naming/{mediaTypeId}/settings")]
@@ -449,7 +513,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             await Context.SaveNamingSettingsAsync(new NamingSettingsData(Parameters.MediaTypeId, Data.ReplacesIllegalCharacters, Data.ColonReplacementId, Data.CustomColonReplacement,
-                Data.SpecialsFolder, Data.Version), CancellationToken);
+                Data.SpecialsFolder, Data.Version, Data.RenamesFiles, Data.MultiEpisodeStyleId), CancellationToken);
             return new UpdateResult(true);
         }
     }

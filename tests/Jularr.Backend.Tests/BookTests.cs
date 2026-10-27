@@ -31,6 +31,61 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class BookTests
     {
+        [TestMethod]
+        public void BookDocumentLanguages_VerifiesExplicitEpubMetadataWithoutGuessing()
+        {
+            var bytes = ReadingTests.BuildEpub("Pride and Prejudice");
+            using var data = new MemoryStream(bytes);
+            CollectionAssert.AreEqual(new[] { "EN" }, BookDocumentLanguages.ReadEpub(data));
+
+            var strict = new QualityProfile("strict", "Strict", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true, LanguageOrder = ["DE"], LanguageFallback = LanguageFallbackType.None
+            };
+            Assert.IsTrue(BookDocumentLanguages.ContradictsStrictProfile(strict, ["EN"]));
+            Assert.IsFalse(BookDocumentLanguages.ContradictsStrictProfile(strict, ["DE", "EN"]));
+            Assert.IsFalse(BookDocumentLanguages.ContradictsStrictProfile(strict, []));
+            Assert.AreEqual("import_book_language_unknown", BookDocumentLanguages.StrictEpubAttentionReason(strict, []));
+            Assert.AreEqual("import_book_language_mismatch", BookDocumentLanguages.StrictEpubAttentionReason(strict, ["EN"]));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(strict, ["DE"]));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(strict, ["DE", "EN"]));
+            var flexible = new QualityProfile("flexible", "Flexible", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true, LanguageOrder = ["DE"], LanguageFallback = LanguageFallbackType.Any
+            };
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(flexible, []));
+            Assert.IsNull(BookDocumentLanguages.StrictEpubAttentionReason(flexible, ["EN"]));
+            using var unknown = new MemoryStream("not an epub"u8.ToArray());
+            CollectionAssert.AreEqual(Array.Empty<string>(), BookDocumentLanguages.ReadEpub(unknown));
+        }
+
+        [TestMethod]
+        public void StrictEpubWithoutLanguageMetadata_RequiresManualReview()
+        {
+            using var stream = new MemoryStream(ReadingTests.BuildEpub("Unlabelled document"));
+            using (var archive = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Update, leaveOpen: true))
+            {
+                var opf = archive.GetEntry("OEBPS/content.opf")!;
+                string xml;
+                using (var reader = new StreamReader(opf.Open(), leaveOpen: false))
+                {
+                    xml = reader.ReadToEnd();
+                }
+                opf.Delete();
+                using var writer = new StreamWriter(archive.CreateEntry("OEBPS/content.opf").Open());
+                writer.Write(xml.Replace("<dc:language>en</dc:language>", "", StringComparison.Ordinal));
+            }
+
+            stream.Position = 0;
+            var actual = BookDocumentLanguages.ReadEpub(stream);
+            CollectionAssert.AreEqual(Array.Empty<string>(), actual);
+            var strict = new QualityProfile("strict", "Strict", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true, LanguageOrder = ["DE"], LanguageFallback = LanguageFallbackType.None
+            };
+            Assert.AreEqual("import_book_language_unknown", BookDocumentLanguages.StrictEpubAttentionReason(strict, actual));
+        }
+
         private const string Connections = "/api/v1/admin/acquisition/connections";
 
         [TestMethod]
@@ -71,7 +126,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, grabbed.StatusCode, await grabbed.Content.ReadAsStringAsync());
             Assert.AreEqual(0, sources.SabGrabs);
             await RunAsync<MonitorDownloadsV1>(host);
-            var book = Path.Combine(storage.Path, "1", "Books", "Jane Austen", "Pride and Prejudice (1813)", "Pride and Prejudice.epub");
+            var book = Path.Combine(storage.Path, "1", "Books", "Jane Austen", "Pride and Prejudice (1813) {olid-OL66554W}", "Pride and Prejudice {olid-OL66554W} [en].epub");
             Assert.IsTrue(File.Exists(book));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
@@ -121,6 +176,53 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Unmatched_FileIsIdentifiedAsACatalogEntry_ThroughTheWorkSearch()
+        {
+            using var storage = new TemporaryDirectory();
+            var sources = new FakeBookSources();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services =>
+            {
+                services.AddHttpClient<OpenLibraryClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
+                services.AddHttpClient<HardcoverClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
+            });
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Books", "Mystery Folder");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Mystery.epub"), "book");
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Books", MediaType.Book);
+            await LibraryTests.ScanAsync(host, rootId);
+            var fileId = (long)(await host.ScalarAsync("""SELECT "Id" FROM "StoredFiles" """))!;
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+
+            // The row offers the search; the search form starts with the folder's title.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Library/Unmatched?find=" + fileId);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "handler=FindWork");
+            StringAssert.Contains(html, "value=\"Mystery Folder\"");
+
+            // The catalog's entries are listed; choosing one makes it the Work.
+            using var found = await host.SendAsync(HttpMethod.Post, "/Admin/Library/Unmatched?PageNumber=1&handler=FindWork&storedFileId=" + fileId + "&find=" + fileId, new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = LibraryTests.Token(html), ["MediaTypeId"] = "3", ["Query"] = "Pride and Prejudice"
+            });
+            html = await found.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, html);
+            StringAssert.Contains(html, "Jane Austen");
+            StringAssert.Contains(html, "handler=AssignCatalog");
+            using var assigned = await host.SendAsync(HttpMethod.Post, "/Admin/Library/Unmatched?PageNumber=1&handler=AssignCatalog&storedFileId=" + fileId, new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = LibraryTests.Token(html), ["Namespace"] = "openlibrary", ["ExternalId"] = "OL66554W"
+            });
+            Assert.AreEqual(HttpStatusCode.Redirect, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" WHERE "CanonicalTitle" = 'Pride and Prejudice' AND "MediaTypeId" = 3 """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""
+                SELECT count(*) FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId" JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = asset."WorkId"
+                WHERE identity."Namespace" = 'openlibrary' AND identity."Value" = 'OL66554W'
+                """));
+        }
+
+        [TestMethod]
         public async Task Book_TheIndexerAndTheDirectSource_AreAskedAtTheSameTime()
         {
             using var storage = new TemporaryDirectory();
@@ -165,6 +267,12 @@ namespace Jularr.Backend.Tests
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual("download_failed", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""));
             Assert.IsFalse(Directory.Exists(Path.Combine(storage.Path, "1", "Books", "Jane Austen")));
+            Assert.AreEqual(0, Directory.EnumerateFiles(downloads.Path, "*", SearchOption.AllDirectories).Count(),
+                "A rejected ebook must not leave payloads or .part files.");
+            var operationId = (await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2 LIMIT 1"))!.ToString();
+            Assert.IsFalse(Directory.EnumerateDirectories(downloads.Path, "*", SearchOption.AllDirectories)
+                .Any(directory => Path.GetFileName(directory) is { } name && (name == operationId || name == "j-" + operationId)),
+                "A terminal operation must not leave complete or incomplete staging folders.");
             using var activity = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=Queue");
             Assert.AreEqual(OperationType.Download, (await activity.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single().OperationTypeId);
             Assert.AreEqual(wantedId, (long)(await host.ScalarAsync("SELECT \"WantedItemId\" FROM \"AcquisitionReleases\""))!);

@@ -80,18 +80,81 @@ namespace Jularr.Backend.Tests
         {
             using var http = new HttpClient(new FakeOllama());
             var client = new OllamaLocalModels(http);
+            var root = Path.Combine(Path.GetTempPath(), "jularr-local-pull-" + Guid.NewGuid().ToString("N"));
             using var noCapacity = new LocalTranslationDownloads(client,
                 Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 0 }),
+                Options.Create(new MediaOptions { TranslationPath = Path.Combine(root, "denied") }),
                 new LocalTranslationGate());
             Assert.IsFalse(noCapacity.Queue("translategemma:4b"));
             Assert.IsFalse(noCapacity.Queue("other:27b"));
 
             using var adequate = new LocalTranslationDownloads(client,
                 Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 6_000_000_000L }),
+                Options.Create(new MediaOptions { TranslationPath = Path.Combine(root, "approved") }),
                 new LocalTranslationGate());
             Assert.IsTrue(adequate.Queue("translategemma:4b"));
             Assert.IsFalse(adequate.Queue("translategemma:12b"));
             Assert.AreEqual("queued", adequate.Current().State);
+        }
+
+        [TestMethod]
+        public void DownloadStatus_SurvivesRestart_AsInterruptedUntilExplicitRetry()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "jularr-pull-restart-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                using var http = new HttpClient(new FakeOllama());
+                var client = new OllamaLocalModels(http);
+                var settings = Options.Create(new LocalTranslationOptions
+                {
+                    Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 6_000_000_000L
+                });
+                var media = Options.Create(new MediaOptions { TranslationPath = root });
+                using (var beforeRestart = new LocalTranslationDownloads(client, settings, media, new LocalTranslationGate()))
+                {
+                    Assert.IsTrue(beforeRestart.Queue("translategemma:4b"));
+                    Assert.AreEqual("queued", beforeRestart.Current().State);
+                    Assert.IsTrue(File.Exists(Path.Combine(root, "ollama-pull-state.json")));
+                }
+                // No automatic network activity: restart reports interruption and the owner
+                // explicitly retries the same model, whose partial blobs Ollama retains.
+                using (var afterRestart = new LocalTranslationDownloads(client, settings, media, new LocalTranslationGate()))
+                {
+                    Assert.AreEqual("interrupted", afterRestart.Current().State);
+                    Assert.AreEqual("translategemma:4b", afterRestart.Current().Model);
+                    Assert.IsTrue(afterRestart.Queue("translategemma:4b"));
+                    Assert.AreEqual("queued", afterRestart.Current().State);
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+        }
+
+        [TestMethod]
+        public void DownloadStatus_RejectsCorruptPersistentJob_FailsClosed()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "jularr-pull-corrupt-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(root);
+                File.WriteAllText(Path.Combine(root, "ollama-pull-state.json"), "{invalid-json");
+                using var http = new HttpClient(new FakeOllama());
+                using var downloads = new LocalTranslationDownloads(new OllamaLocalModels(http),
+                    Options.Create(new LocalTranslationOptions
+                    {
+                        Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 6_000_000_000L
+                    }),
+                    Options.Create(new MediaOptions { TranslationPath = root }),
+                    new LocalTranslationGate());
+                Assert.AreEqual("failed", downloads.Current().State);
+                Assert.IsFalse(downloads.Queue("translategemma:4b"));
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
         }
 
         private sealed class FakeOllama : HttpMessageHandler

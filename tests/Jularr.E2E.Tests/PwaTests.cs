@@ -8,6 +8,88 @@ namespace Jularr.E2E.Tests
     public sealed class PwaTests
     {
         [TestMethod]
+        [Timeout(180_000)]
+        public async Task InstalledPwa_ShowsUpdateButNeverReloadsUntilUserChooses()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+
+            // Model Chrome's installed-app display mode without depending on a platform launcher.
+            await browser.Context.AddInitScriptAsync("""
+                (() => {
+                    const native = window.matchMedia.bind(window);
+                    window.matchMedia = query => query === '(display-mode: standalone)'
+                        ? { matches: true, media: query, addEventListener() {}, removeEventListener() {} }
+                        : native(query);
+                })();
+                """);
+            await browser.Context.RouteAsync("**/pwa/version", route => route.FulfillAsync(new()
+            {
+                ContentType = "application/json",
+                Body = """{"build":"AAAAAAAAAAAAAAAA"}"""
+            }));
+
+            await page.GotoAsync("/");
+            var notice = page.Locator("[data-pwa-update]");
+            await Assertions.Expect(notice).ToBeVisibleAsync();
+            // The notification cannot force a reload; it leaves an active document marker intact.
+            await page.EvaluateAsync("() => { window.pwaDocumentMarker = 1; }");
+            await notice.Locator("[data-pwa-later]").ClickAsync();
+            await Assertions.Expect(notice).ToBeHiddenAsync();
+            Assert.AreEqual(1, await page.EvaluateAsync<int>("() => window.pwaDocumentMarker"));
+            await page.EvaluateAsync("() => window.dispatchEvent(new Event('pageshow'))");
+            await Assertions.Expect(notice).ToBeHiddenAsync();
+            Assert.AreEqual(1, await page.EvaluateAsync<int>("() => window.pwaDocumentMarker"));
+            CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
+        }
+
+        [TestMethod]
+        [Timeout(180_000)]
+        public async Task ExpiredSession_FromBoostedLink_SignsInAndRestoresDeepLink()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            // Reproduce Android's installed PWA mode, not just a normal Chromium tab.
+            await browser.Context.AddInitScriptAsync("""
+                (() => {
+                    const native = window.matchMedia.bind(window);
+                    window.matchMedia = query => query === '(display-mode: standalone)'
+                        ? { matches: true, media: query, addEventListener() {}, removeEventListener() {} }
+                        : native(query);
+                })();
+                """);
+            await Owner.SetUpAndSignInAsync(page);
+            await page.GotoAsync("/Admin/Jobs");
+
+            var paused = page.GetByRole(AriaRole.Navigation, new() { Name = "Job states" }).GetByRole(AriaRole.Link, new() { Name = "Paused" });
+            var href = await paused.GetAttributeAsync("href");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(href));
+            var requested = new Uri(jularr.Address, href).PathAndQuery;
+
+            // The document is still running its old session when the browser loses the cookie.
+            await browser.Context.ClearCookiesAsync();
+            await paused.ClickAsync();
+            await page.WaitForURLAsync(url => url.Contains("/Account/Login?ReturnUrl=", StringComparison.Ordinal));
+
+            var query = new Uri(page.Url).Query.TrimStart('?');
+            var encodedReturn = query.Split('&').Single(part => part.StartsWith("ReturnUrl=", StringComparison.OrdinalIgnoreCase))["ReturnUrl=".Length..];
+            Assert.AreEqual(requested, Uri.UnescapeDataString(encodedReturn), "The PWA login must preserve the destination of the interrupted GET.");
+
+            await page.FillAsync("[name=Username]", Owner.Username);
+            await page.FillAsync("[name=Password]", Owner.Password);
+            await page.Locator("main form button[type=submit]").First.ClickAsync();
+            await page.WaitForURLAsync(url => new Uri(url).PathAndQuery == requested);
+            Assert.AreEqual(requested, new Uri(page.Url).PathAndQuery);
+            await Assertions.Expect(page.Locator("#app-content")).ToBeVisibleAsync();
+            // Refresh after the restored login: the PWA retains the new authenticated cookie.
+            await page.ReloadAsync();
+            Assert.AreEqual(requested, new Uri(page.Url).PathAndQuery);
+            await Assertions.Expect(page.Locator("#app-content")).ToBeVisibleAsync();
+        }
+
+        [TestMethod]
         [Timeout(300_000)]
         public async Task WorkerRegistered_ManifestAndIconsServed_AndNavigationLoginSwapsLiveAndRangesStillWork()
         {
