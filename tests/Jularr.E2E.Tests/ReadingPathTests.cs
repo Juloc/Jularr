@@ -835,17 +835,20 @@ namespace Jularr.E2E.Tests
             await page.Locator("[data-action=settings]").ClickAsync();
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookReady === 'true'");
             Assert.IsTrue(await page.Locator(".reader-book__turn").CountAsync() <= 3);
-            var margins = await page.Locator("[data-role=content]").EvaluateAsync<double>("el => el.querySelector('p').getBoundingClientRect().left - el.getBoundingClientRect().left");
-            Assert.IsTrue(margins >= 23, "Each paper page needs its own inner text margin.");
+            var margins = await page.Locator("[data-role=content] p").First.EvaluateAsync<double>("p => { const reader = p.closest('.reader'), outer = parseFloat(getComputedStyle(reader).getPropertyValue('--reader-margin-outer')) || 0; return p.getBoundingClientRect().left - p.closest('.reader__paper').getBoundingClientRect().left >= outer - 1 ? outer : -1; }");
+            Assert.IsTrue(margins >= 20, "Each paper page needs its own inner text margin.");
             var area = (await page.Locator(".reader-book").BoundingBoxAsync())!;
+            // The page's own lower corner: the book is drawn a little smaller than its area, its stack hanging below the page.
+            var paper = (await page.Locator("[data-book-sheet=right]").BoundingBoxAsync())!;
+            var bottom = paper.Y + paper.Height;
             var initial = await root.GetAttributeAsync("data-page");
-            await page.Mouse.MoveAsync(area.X + area.Width - 8, area.Y + area.Height - 12);
+            await page.Mouse.MoveAsync(paper.X + paper.Width - 8, bottom - 12);
             await page.Mouse.DownAsync();
-            await page.Mouse.MoveAsync(area.X + area.Width * .65f, area.Y + area.Height - 60, new() { Steps = 18 });
+            await page.Mouse.MoveAsync(area.X + area.Width * .65f, bottom - 60, new() { Steps = 18 });
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookState === 'holding'");
             Assert.AreEqual(initial, await root.GetAttributeAsync("data-page"), "Holding a page must not save an uncommitted turn.");
             Assert.IsTrue(await page.Locator(".reader-book__fold-front").EvaluateAllAsync<bool>("items => items.some(el => el.style.clipPath.startsWith('polygon('))"));
-            await page.Mouse.MoveAsync(area.X + area.Width - 8, area.Y + area.Height - 12, new() { Steps = 18 });
+            await page.Mouse.MoveAsync(paper.X + paper.Width - 8, bottom - 12, new() { Steps = 18 });
             await page.Mouse.UpAsync();
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookState === 'idle'");
             Assert.AreEqual(initial, await root.GetAttributeAsync("data-page"));

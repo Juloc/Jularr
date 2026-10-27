@@ -139,10 +139,14 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
             // The single-page text inset must be active before calculating CSS-column pagination.
             reader.dataset.columns = String(columns);
             // Margins are a share of the page's width, so they follow the book's size; the inner ones form the gap between the two pages.
-            const page = paper.clientWidth / columns, margin = (share: number) => `${Math.round(page * share / 100)}px`;
+            const paperWidth = paper.getBoundingClientRect().width, page = paperWidth / columns;
+            const margin = (share: number) => `${Math.round(page * share / 100)}px`;
+            // The text box gets a whole-pixel width: pages are counted and turned in whole pixels, and a fraction of a pixel per
+            // column would add up across a chapter to a blank last page.
+            const outer = (paperWidth - Math.floor(paperWidth - 2 * Math.round(page * settings.marginOuter / 100))) / 2;
             reader.style.setProperty('--reader-margin-top', margin(settings.marginTop));
             reader.style.setProperty('--reader-margin-bottom', margin(settings.marginBottom));
-            reader.style.setProperty('--reader-margin-outer', margin(settings.marginOuter));
+            reader.style.setProperty('--reader-margin-outer', `${outer}px`);
             reader.style.setProperty('--reader-margin-inner', margin(settings.marginInner));
             reader.style.setProperty('--reader-margin-gap', margin(settings.marginInner * 2));
             content.removeAttribute('data-pad');

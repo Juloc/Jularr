@@ -23,11 +23,12 @@ const first = document.querySelector<HTMLElement>('.reader');
 if (first) start(first);
 if (first && !first.dataset.format && first.querySelector('[data-role=content]')) openChaptersInPlace(location.pathname);
 
-function start(reader: HTMLElement): void {
+// The address a reader opens at: the page's own, or the chapter it is about to show in place.
+function start(reader: HTMLElement, address = new URL(location.href)): void {
     if (reader.dataset.format === 'pdf') initializeReaderChrome(reader);
     else if (reader.dataset.format === 'pages') initializeOriginalPages(reader);
     else if (reader.dataset.format === 'comic') initializeComicPages(reader);
-    else if (reader.querySelector('[data-role=content]')) initializeText(reader);
+    else if (reader.querySelector('[data-role=content]')) initializeText(reader, address);
     initializeNotes(reader);
 }
 
@@ -69,13 +70,14 @@ function openChaptersInPlace(book: string): void {
             // The current reader stays on screen, out of the flow, while the next one lays out in its place.
             Object.assign(current.style, { position: 'fixed', left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
             current.before(incoming);
-            if (push) history.pushState({ readerChapter: true }, '', url);
-            document.title = page.title;
             endReaderLifetime();
-            start(incoming);
+            start(incoming, url);
             await ready(incoming);
+            // The address changes with what is shown: never while two readers stand on the page.
             current.remove();
             Object.assign(incoming.style, { opacity: '', pointerEvents: '' });
+            if (push) history.pushState({ readerChapter: true }, '', url);
+            document.title = page.title;
             regionSwapped();
             if (fullscreen) await incoming.requestFullscreen().catch(() => undefined);
         } catch {
@@ -109,7 +111,7 @@ function pdfPageOf(block: HTMLElement | undefined, reader: HTMLElement): number 
     return Number.isInteger(from) && from >= 1 ? from : null;
 }
 
-function initializeText(reader: HTMLElement): void {
+function initializeText(reader: HTMLElement, address: URL): void {
     const content = reader.querySelector<HTMLElement>('[data-role=content]')!;
     const section = Number(reader.dataset.section);
     const blocks = Math.max(1, Number(reader.dataset.blocks));
@@ -141,14 +143,14 @@ function initializeText(reader: HTMLElement): void {
     initializeReadAloud(reader, content, range => paging!.reveal(range), () => paging!.current());
 
     initializeViewChoice(reader, () => pdfPageOf(paging!.current(), reader));
-    const query = new URLSearchParams(location.search);
+    const query = address.searchParams;
     const requested = query.get('b') ?? reader.dataset.startBlock ?? null;
     const fraction = query.has('f') ? Number(query.get('f')) : NaN;
     const match = /^s(\d+)\/b(\d+)$/.exec(reader.dataset.locator ?? '');
     const block = requested && /^\d+$/.test(requested) ? requested : match && Number(match[1]) === section ? match[2] : null;
     const placed = () => requestAnimationFrame(() => { reader.dataset.placed = 'true'; });
     requestAnimationFrame(() => {
-        const target = location.hash ? document.getElementById(decodeURIComponent(location.hash.slice(1)))
+        const target = address.hash ? document.getElementById(decodeURIComponent(address.hash.slice(1)))
             : block !== null ? content.querySelector<HTMLElement>(`[data-b="${block}"]`) : null;
         if (target && content.contains(target)) paging!.reveal(target);
         if (!Number.isFinite(fraction)) placed();
