@@ -128,6 +128,7 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(4, await chapters.CountAsync());
                 CollectionAssert.AreEqual(new[] { "Cold open", "Opening", "Part A", "End Credits" }, (await chapters.Locator("span:first-child").AllTextContentsAsync()).ToArray());
                 await Assertions.Expect(chapters.Nth(2)).ToHaveAttributeAsync("aria-pressed", "true");
+                await Assertions.Expect(page.Locator("[data-role=chapter-now]")).ToHaveTextAsync("Part A");
                 await Evidence.SaveAsync(page, "player-chapters-menu");
                 await chapters.Nth(1).ClickAsync();
                 await page.WaitForFunctionAsync("() => { const time = document.querySelector('video').currentTime; return time >= 2 && time < 3; }");

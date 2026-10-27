@@ -268,7 +268,11 @@ namespace Jularr.E2E.Tests
             await Task.Delay(3200);
             Assert.IsTrue(await video.EvaluateAsync<bool>("video => !video.paused && video.currentTime > 2 && video.currentTime < 6"), "Holding the range must continue playback without seeking or pausing.");
             Assert.IsFalse(await page.Locator(".player").EvaluateAsync<bool>("player => player.classList.contains('player--idle')"), "Holding the seek control must keep the chrome visible.");
+            // Dragging names the target time, with or without thumbnails.
+            await Assertions.Expect(page.Locator("[data-role=preview]")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator("[data-role=preview] .player__preview-time")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex(@"^\d+:\d{2}"));
             await page.Mouse.UpAsync();
+            await Assertions.Expect(page.Locator("[data-role=preview]")).ToBeHiddenAsync();
             await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime > 6.5");
             await video.EvaluateAsync("video => video.pause()");
             Assert.IsTrue(await timeline.EvaluateAsync<bool>("input => input.style.getPropertyValue('--played').length > 0"));
