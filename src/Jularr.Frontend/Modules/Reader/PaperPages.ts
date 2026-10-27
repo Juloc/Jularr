@@ -94,6 +94,8 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
     };
     const turn = (delta: number): void => {
         if (settings.mode !== 'paged') { edge(delta)?.click(); return; }
+        // Before the first layout the chapter counts as one page, so a quick click would leave it for the next one.
+        if (!measured) return;
         if (!book?.turn(delta)) commit(spread + delta);
     };
     const reveal = (element: HTMLElement | Range): void => {
