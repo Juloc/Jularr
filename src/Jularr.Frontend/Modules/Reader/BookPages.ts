@@ -201,8 +201,9 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
             return;
         }
         const style = getComputedStyle(content);
-        const nextKey = JSON.stringify(['book-page-layout-v3', reader.dataset.sectionsUrl, reader.dataset.documentRevision, sections, next.width, next.height, next.columns, next.gap, next.rtl, style.font, style.letterSpacing,
-            style.getPropertyValue('--reader-text-width'), style.getPropertyValue('--reader-paragraph'), reader.dataset.indent, reader.dataset.hyphenation, reader.dataset.illustrations, document.documentElement.lang]);
+        const nextKey = JSON.stringify(['book-page-layout-v4', reader.dataset.sectionsUrl, reader.dataset.documentRevision, sections, next.width, next.height, next.columns, next.gap, next.rtl, style.font, style.letterSpacing,
+            style.getPropertyValue('--reader-text-width'), style.getPropertyValue('--reader-paragraph'),
+            style.getPropertyValue('--reader-margin-top'), style.getPropertyValue('--reader-margin-bottom'), style.getPropertyValue('--reader-margin-outer'), style.getPropertyValue('--reader-margin-inner'), reader.dataset.indent, reader.dataset.hyphenation, reader.dataset.illustrations, document.documentElement.lang]);
         if (key !== nextKey) {
             cancel(); key = nextKey; failed = false; resetCounts(); clearTotal();
             cachePending = true;

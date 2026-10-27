@@ -558,6 +558,8 @@ namespace Jularr.Frontend.Pages.User.Reader
             images ? new Span() : SettingsGroup("text", "reader.settings.text", group => group
                 .Select(data => data.FontFamily, "reader.font", [new("serif", texts["reader.font.serif"]), new("sans", texts["reader.font.sans"])])
                 .Range(data => data.Size, "reader.sizePixels").Range(data => data.Spacing, "reader.spacing").Range(data => data.Paragraph, "reader.paragraph").Range(data => data.TextWidth, "reader.textWidth")
+                .Range(data => data.MarginTop, "reader.margin.top").Range(data => data.MarginBottom, "reader.margin.bottom")
+                .Range(data => data.MarginInner, "reader.margin.inner").Range(data => data.MarginOuter, "reader.margin.outer")
                 .Toggle(data => data.Indent, "reader.indent").Toggle(data => data.Hyphenation, "reader.hyphenation").Toggle(data => data.Illustrations, "reader.illustrations")
                 .Content(new P().Attribute("data-role", "book-pages").Attribute("role", "status").Attribute("hidden", "hidden")
                     .TextAttribute("data-calculating-label", "reader.bookPages.calculating").TextAttribute("data-paused-label", "reader.bookPages.paused")

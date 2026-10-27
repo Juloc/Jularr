@@ -8,6 +8,10 @@ export interface ReaderSettings {
     paragraph: number;
     font: 'serif' | 'sans';
     width: number;
+    marginTop: number;
+    marginBottom: number;
+    marginInner: number;
+    marginOuter: number;
     indent: boolean;
     hyphenation: boolean;
     illustrations: boolean;
@@ -33,6 +37,10 @@ export function readerSettings(value: unknown, rtl = false): ReaderSettings {
         paragraph: number(stored.paragraph, 0, 200, 100),
         font: stored.font === 'sans' ? 'sans' : 'serif',
         width: number(stored.width, 40, 90, 68),
+        marginTop: number(stored.marginTop, 0, 20, 6),
+        marginBottom: number(stored.marginBottom, 0, 20, 6),
+        marginInner: number(stored.marginInner, 0, 20, 8),
+        marginOuter: number(stored.marginOuter, 0, 20, 7),
         indent: stored.indent === true,
         hyphenation: stored.hyphenation !== false,
         illustrations: stored.illustrations !== false,
@@ -93,7 +101,7 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
     };
     window.addEventListener('pagehide', () => { if (saving || queued) saveProfile(true); });
     const fields = Array.from(reader.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-panel=settings] input:not([type=hidden]), [data-panel=settings] select'));
-    const names: Record<string, keyof ReaderSettings> = { Size: 'size', Spacing: 'spacing', Paragraph: 'paragraph', FontFamily: 'font', TextWidth: 'width', Indent: 'indent', Hyphenation: 'hyphenation', Illustrations: 'illustrations',
+    const names: Record<string, keyof ReaderSettings> = { Size: 'size', Spacing: 'spacing', Paragraph: 'paragraph', FontFamily: 'font', TextWidth: 'width', MarginTop: 'marginTop', MarginBottom: 'marginBottom', MarginInner: 'marginInner', MarginOuter: 'marginOuter', Indent: 'indent', Hyphenation: 'hyphenation', Illustrations: 'illustrations',
         Mode: 'mode', Layout: 'layout', Direction: 'direction', Surface: 'surface', Colour: 'colour', Animation: 'animation', Preset: 'preset', Fit: 'fit' };
     const apply = (): void => {
         reader.dataset.mode = settings.mode;
@@ -126,7 +134,7 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
         const key = names[field.name];
         if (!key) return;
         const value = field instanceof HTMLInputElement && field.type === 'checkbox' ? field.checked
-            : key === 'size' || key === 'spacing' || key === 'paragraph' || key === 'width' ? Number(field.value) : field.value;
+            : key === 'size' || key === 'spacing' || key === 'paragraph' || key === 'width' || key.startsWith('margin') ? Number(field.value) : field.value;
         const next = { ...settings, [key]: value };
         if (key === 'preset') {
             next.spacing = next.preset === 'novel' ? 175 : 165;

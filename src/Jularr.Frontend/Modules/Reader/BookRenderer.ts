@@ -82,21 +82,23 @@ export function initializeBookRenderer(reader: HTMLElement) {
         const print = printing(at, columns === 1 || side === 'left' ? 0 : 1);
         if (!print) return;
         const place = printPlacement(profile(at, side), side, width / 148);
-        print.style.left = `${place.shift}px`;
+        // The text column lies inside the page margins: the outer one on the left sheet (and on a single page), the one at the spine on the right.
+        const margin = parseFloat(getComputedStyle(reader).getPropertyValue(columns === 1 || side === 'left' ? '--reader-margin-outer' : '--reader-margin-inner')) || 0;
+        print.style.left = `${place.shift + margin}px`;
         print.style.top = `${place.top}px`;
         // The paper curve moves the printed text, not the page number.
         // Centre the footer on the physical sheet rather than its shifted text viewport.
         const footer = print.querySelector<HTMLElement>('[data-book-number]');
         if (footer) {
             const printWidth = parseFloat(print.style.width) || width;
-            footer.style.left = `${direction() * ((width - printWidth) / 2 - place.shift)}px`;
+            footer.style.left = `${direction() * ((width - printWidth) / 2 - place.shift - margin)}px`;
         }
         // Bend the native text ink along the physical paper while preserving
         // the existing page number's centered sheet coordinates and text flow.
         const section = profile(at, side);
         for (const ink of Array.from(print.querySelectorAll<HTMLElement>('[data-paper-ink]'))) {
             const x = Number(ink.dataset.paperX), spanWidth = Number(ink.dataset.paperWidth);
-            const pose = paperInkPose(section, side === 'left' ? 'left' : 'right', width, place.shift + x, spanWidth);
+            const pose = paperInkPose(section, side === 'left' ? 'left' : 'right', width, place.shift + margin + x, spanWidth);
             ink.style.transform = `translateY(${pose.y.toFixed(3)}px) rotate(${pose.angle.toFixed(3)}deg)`;
         }
         return print;

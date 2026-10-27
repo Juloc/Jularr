@@ -25,11 +25,14 @@ export function pagePrint(source: HTMLElement, page: number, width: number, heig
     try {
         const bounds = source.getBoundingClientRect();
         const columns = Math.round((width + gap) / (columnWidth + gap));
-        columnWidth = (bounds.width - gap * (columns - 1)) / columns;
+        // The page margins are the source's padding: the columns lie inside them.
+        const inset = getComputedStyle(source);
+        const insetLeft = parseFloat(inset.paddingLeft) || 0, insetRight = parseFloat(inset.paddingRight) || 0;
+        columnWidth = (bounds.width - insetLeft - insetRight - gap * (columns - 1)) / columns;
         viewport.style.width = `${columnWidth}px`;
         const pitch = columnWidth + gap;
-        const left = rtl ? bounds.right - source.scrollLeft - columnWidth - page * pitch
-            : bounds.left - source.scrollLeft + page * pitch;
+        const left = rtl ? bounds.right - insetRight - source.scrollLeft - columnWidth - page * pitch
+            : bounds.left + insetLeft - source.scrollLeft + page * pitch;
         const right = left + columnWidth;
         const visible = (box: DOMRect) => box.width > .01 && box.height > .01
             && box.right > left + .5 && box.left < right - .5 && box.bottom > bounds.top && box.top < bounds.top + height;

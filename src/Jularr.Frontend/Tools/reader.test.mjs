@@ -21,6 +21,11 @@ test('Reader validates optional device settings without trusting saved shapes or
     assert.equal(exports.readerSettings({size:100, spacing:20, colour:'#123ABC', animation:'on'}).size, 40);
     assert.equal(exports.readerSettings({spacing:20}).spacing, 120);
     assert.equal(exports.readerSettings({colour:'#123ABC'}).colour, '#123ABC');
+    // Page margins are a share of the page width: defaults keep the text off the paper's edge, saved values stay within 0-20 %.
+    const margins = exports.readerSettings({});
+    assert.deepEqual([margins.marginTop, margins.marginBottom, margins.marginInner, margins.marginOuter], [6, 6, 8, 7]);
+    const limited = exports.readerSettings({marginTop:-5, marginBottom:99, marginInner:'wide', marginOuter:12});
+    assert.deepEqual([limited.marginTop, limited.marginBottom, limited.marginInner, limited.marginOuter], [0, 20, 8, 12]);
     assert.equal(exports.readerSettings({animation:'on'}).animation, 'on');
     assert.equal(exports.readerSettings({size:1.1, theme:'dark'}).size, 18);
     assert.equal(exports.readerSettings({theme:'dark'}).colour, '#141414');
