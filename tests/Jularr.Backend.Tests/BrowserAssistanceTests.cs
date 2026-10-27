@@ -246,7 +246,7 @@ namespace Jularr.Backend.Tests
             public override DateTimeOffset GetUtcNow() => Now;
         }
 
-        private sealed class Interaction : IBrowserInteraction, ISourceBrowser
+        internal sealed class Interaction : IBrowserInteraction, ISourceBrowser
         {
             public static readonly byte[] Picture = [0xff, 0xd8, 0xff, 0xd9];
             public bool HasManualControl { get; set; }
