@@ -129,11 +129,15 @@ namespace Jularr.Backend.Tests
             await first.DisposeAsync();
             Assert.AreEqual(1, (await files.ListAsync("", ct)).Count);
 
+            // Read-ahead may also have lost the second session. Test idle retention with a newly opened, healthy file.
+            await second.DisposeAsync();
+            await using var active = await files.OpenReadAsync("a.mkv", ct);
+            Assert.AreEqual(0, active.ReadByte());
             // An open file keeps its session; after 15 idle minutes the others close and the NAS may sleep.
             clock.Advance(TimeSpan.FromMinutes(16));
             share.CloseIfIdle(SmbShares.IdleTime);
             Assert.AreEqual(1, share.OpenSessions);
-            await second.DisposeAsync();
+            await active.DisposeAsync();
             clock.Advance(TimeSpan.FromMinutes(16));
             share.CloseIfIdle(SmbShares.IdleTime);
             Assert.AreEqual(0, share.OpenSessions);
