@@ -283,6 +283,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(WorkerJobResultType.Failed, await runner.RunAsync("subtitles", (_, _) => throw new InvalidOperationException("No provider."), default));
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs");
             var html = await page.Content.ReadAsStringAsync();
+            // The list has 25 jobs to a page; the failed one may be on the next.
+            using var secondPage = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs?pageNumber=2");
+            html += await secondPage.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "Seek thumbnails");
             StringAssert.Contains(html, "An unknown error occurred.");

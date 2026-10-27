@@ -51,6 +51,7 @@ namespace Jularr.Backend.Service.User.Library.V1
 
         // Where the profile stands with the title: finished when its own progress or every unit is completed,
         // in progress when anything was started, else not started. Needs only the Work as "work" and the profile.
+        // Only Works with progress of the profile are counted: without any, the state is "not started" either way, and catalog units are never read.
         private const string ProgressCounts =
             """
                 SELECT
@@ -62,7 +63,8 @@ namespace Jularr.Backend.Service.User.Library.V1
                     "WorkUnits" AS leaf
                     LEFT JOIN "MediaProgress" AS unitProgress ON unitProgress."ProfileId" = @ProfileId AND unitProgress."WorkId" = leaf."WorkId" AND unitProgress."WorkUnitId" = leaf."Id"
                 WHERE
-                    NOT EXISTS (
+                    leaf."WorkId" IN (SELECT progress."WorkId" FROM "MediaProgress" AS progress WHERE progress."ProfileId" = @ProfileId)
+                    AND NOT EXISTS (
                         SELECT
                             1
                         FROM
@@ -158,29 +160,14 @@ namespace Jularr.Backend.Service.User.Library.V1
                     coalesce(bool_or(present."HasKnownLanguage" AND NOT present."HasPreferredLanguage" AND NOT present."HasUnknownLanguage" AND present."HasPreferredSubtitles"), FALSE) AS "HasPreferredSubtitles"
                 FROM (
                     -- The units the profile monitors; a unit that groups others is no unit of its own.
+                    -- A Work without a monitored unit is the title itself: the outer join keeps its one empty row.
                     SELECT
-                        leaf."Id" AS "UnitId"
+                        monitored."UnitId"
                     FROM
-                        "WorkUnits" AS leaf
-                    WHERE
-                        leaf."WorkId" = work."Id"
-                        AND leaf."IsMonitored"
-                        AND NOT EXISTS (
+                        (SELECT 1) AS anchor
+                        LEFT JOIN (
                             SELECT
-                                1
-                            FROM
-                                "WorkUnits" AS child
-                            WHERE
-                                child."ParentWorkUnitId" = leaf."Id"
-                        )
-                    UNION ALL
-                    -- A Work without a monitored unit is the title itself.
-                    SELECT
-                        NULL::bigint
-                    WHERE
-                        NOT EXISTS (
-                            SELECT
-                                1
+                                leaf."Id" AS "UnitId"
                             FROM
                                 "WorkUnits" AS leaf
                             WHERE
@@ -194,7 +181,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                                     WHERE
                                         child."ParentWorkUnitId" = leaf."Id"
                                 )
-                        )
+                        ) AS monitored ON TRUE
                 ) AS unitSet
                 LEFT JOIN LATERAL (
                     SELECT

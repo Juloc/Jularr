@@ -39,5 +39,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly IntField MaximumTier = new() { Minimum = 1, Maximum = 3 };
         public static readonly BoolField DetailsTrending = new();
         public static readonly IntField KeepDays = new() { Minimum = 1, Maximum = 365 };
+        public static readonly BoolField IsDetailed = new();
+        public static readonly BoolField AreDetailsUnavailable = new();
     }
 }

@@ -12,7 +12,8 @@ using Microsoft.Extensions.Caching.Memory;
 namespace Jularr.Backend.Service.System.Media.V1
 {
     // Titles that came without their facts (a media server's sync names only the title, the year and ids) get their description, cover and cast from the catalog,
-    // a few at a time; true while more are waiting. A title is tried once a day: one the catalog cannot give anything stays as it is.
+    // and a title opened while its details were more than a day old gets them again; a few at a time, true while more are waiting.
+    // A title is tried once a day: one the catalog cannot give anything stays as it is.
     public sealed class FillWorkMetadataV1 : SystemService<CoverParametersV1, NoData>
     {
         private const int PassSize = 3;
@@ -41,7 +42,7 @@ namespace Jularr.Backend.Service.System.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Works with an identity a catalog knows and neither a description nor a cover; a catalog title nobody opened is no such Work.
+            // Works with an identity a catalog knows and neither a description nor a cover, or opened with details a day old; a catalog title nobody opened is no such Work.
             var waiting = await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
@@ -54,7 +55,7 @@ namespace Jularr.Backend.Service.System.Media.V1
                     WHERE
                         work."MediaTypeId" IN (1, 2, 3, 6, 7)
                         AND (work."DetailedAt" IS NOT NULL OR EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id"))
-                        AND NOT EXISTS (
+                        AND (work."DetailedAt" < work."ViewedAt" - interval '1 day' OR NOT EXISTS (
                             SELECT
                                 1
                             FROM
@@ -62,7 +63,7 @@ namespace Jularr.Backend.Service.System.Media.V1
                             WHERE
                                 fact."WorkId" = work."Id"
                                 AND fact."FactKey" IN ('Overview', 'Poster')
-                        )
+                        ))
                         AND EXISTS (
                             SELECT
                                 1

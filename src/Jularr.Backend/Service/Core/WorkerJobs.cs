@@ -92,6 +92,8 @@ namespace Jularr.Backend.Service.Core
             new("covers", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(35), canPauseWhileUsed: true),
             // Brings stored covers into the Owner's format, a few at a time, and only while nobody uses Jularr.
             new("coverBackfill", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(55), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
+            // Once a day: the details and catalog rows of titles nobody uses leave (see CleanCatalogTitlesV1).
+            new("catalogCleanup", WorkerGroupType.Media, TimeSpan.FromHours(24), TimeSpan.FromSeconds(58), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             new("storage", WorkerGroupType.Storage, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(5)),
             new("scanScheduling", WorkerGroupType.Storage, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(15), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             // Looks every half hour whether a backup is due; the Owner's interval says how old the newest may get.

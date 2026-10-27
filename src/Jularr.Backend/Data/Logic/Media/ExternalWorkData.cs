@@ -70,6 +70,50 @@ namespace Jularr.Backend.Data.Logic.Media
         public int? SeasonNumber { get; }
     }
 
+    // Whether a Work the profile may open has its details yet; a series that is only an anime season names its AniList entry.
+    internal sealed class WorkDetailStateData : BaseData
+    {
+        public WorkDetailStateData(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDetailed, string? aniListValue)
+        {
+            Id = id;
+            MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
+            IsDetailed = isDetailed;
+            AniListValue = aniListValue;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsDetailed))]
+        public bool IsDetailed { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Value), false)]
+        public string? AniListValue { get; }
+    }
+
+    // Anime seasons that were Works of their own and now go into the series that maps them.
+    internal sealed class AnimePlaceholderMergeData : BaseData
+    {
+        public AnimePlaceholderMergeData(long seriesWorkId, long[] placeholderWorkIds)
+        {
+            SeriesWorkId = seriesWorkId;
+            PlaceholderWorkIds = placeholderWorkIds;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long SeriesWorkId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Ids))]
+        public long[] PlaceholderWorkIds { get; }
+    }
+
     // The Work a saved catalog title is; an anime season is its series with the season.
     internal sealed class ExternalWorkSavedData : BaseData
     {

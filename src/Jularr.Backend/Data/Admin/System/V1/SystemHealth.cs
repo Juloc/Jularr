@@ -13,7 +13,7 @@ namespace Jularr.Backend.Data.Admin.System.V1
     // What the Owner needs to see at a glance: tools, queues, storage, backups and the library's size.
     public sealed class SystemHealthV1 : BaseResponse
     {
-        public SystemHealthV1(long databaseBytes, long queuedOperations, long failedOperations, long profiles, long storageOffline, DateTime? lastBackupAt, BaseDataList<ToolStateV1> tools,
+        public SystemHealthV1(long databaseBytes, long queuedOperations, long failedOperations, long profiles, long storageOffline, long catalogWorks, DateTime? lastBackupAt, BaseDataList<ToolStateV1> tools,
             BaseDataList<MediaTypeCountV1> library)
         {
             DatabaseBytes = databaseBytes;
@@ -21,6 +21,7 @@ namespace Jularr.Backend.Data.Admin.System.V1
             FailedOperations = failedOperations;
             Profiles = profiles;
             StorageOffline = storageOffline;
+            CatalogWorks = catalogWorks;
             LastBackupAt = lastBackupAt;
             Tools = tools;
             Library = library;
@@ -41,6 +42,10 @@ namespace Jularr.Backend.Data.Admin.System.V1
 
         [DataField(typeof(StatisticsFields), nameof(StatisticsFields.Count))]
         public long StorageOffline { get; }
+
+        // Titles only the catalog knows (no tie to the library); the library's own titles are counted per type below.
+        [DataField(typeof(StatisticsFields), nameof(StatisticsFields.Count))]
+        public long CatalogWorks { get; }
 
         [DataField(typeof(StatisticsFields), nameof(StatisticsFields.At))]
         public DateTime? LastBackupAt { get; }

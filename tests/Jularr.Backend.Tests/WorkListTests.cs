@@ -19,7 +19,7 @@ namespace Jularr.Backend.Tests
         private const string Bulk = "/api/v1/admin/works/bulk/";
 
         // 901 Alpha: film, monitored, filed, library 801 and its own profile. 902 Beta: film, paused. 903 Gamma: series, monitored, nothing filed.
-        // 904 Delta: film without a target. 905 Epsilon: film, monitored, a download runs. 906 Zeta: a game with two platform targets.
+        // 904 Delta: film without a target, a favorite. 905 Epsilon: film, monitored, a download runs. 906 Zeta: a game with two platform targets.
         private static async Task SeedAsync(Host host)
         {
             await host.Fixture.RunSqlAsync("""
@@ -33,6 +33,9 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "GamePlatforms" ("Id", "Name") OVERRIDING SYSTEM VALUE VALUES (801, 'Platform one'), (802, 'Platform two');
                 INSERT INTO "WantedItems" ("Id", "WorkId", "AcquisitionProfileId", "LibraryRootId", "IsPaused") VALUES (901, 901, 801, 801, FALSE), (902, 902, NULL, NULL, TRUE), (903, 903, NULL, NULL, FALSE), (905, 905, NULL, NULL, FALSE);
                 INSERT INTO "WantedItems" ("Id", "WorkId", "GamePlatformId", "IsPaused") VALUES (906, 906, 801, FALSE), (907, 906, 802, TRUE);
+                -- 904 is a favorite, which ties it to the library; 990 is only a catalog title and is not listed.
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "CreatedAt", "CatalogNamespace") VALUES (990, 1, 'Catalog only', 2023, '2026-01-07', 'tmdb_movie');
+                INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId") SELECT min("Id"), 904 FROM "Profiles";
                 INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (901, 901);
                 INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (901, 901, 901);
                 INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (901, 901, 901, 1);

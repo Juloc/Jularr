@@ -3450,6 +3450,10 @@
    "Media details",
    "Mediendetails"
   ],
+  "details.unavailable": [
+   "Details can't be loaded right now",
+   "Details gerade nicht ladbar"
+  ],
   "details.units": [
    "Episodes / editions",
    "Folgen / Editionen"
@@ -5386,6 +5390,10 @@
    "Failures to look at",
    "Fehler zum Nachsehen"
   ],
+  "system.catalogTitles": [
+   "Catalog titles",
+   "Katalogtitel"
+  ],
   "system.storageOffline": [
    "Storage connections offline",
    "Speicherverbindungen offline"
@@ -5623,8 +5631,8 @@
    "Text gescannter Bücher erkennen"
   ],
   "instance.module.DiscoverCache": [
-   "Keep Discover's titles locally",
-   "Discover-Titel lokal speichern"
+   "Keep Discover's lists locally",
+   "Discover-Listen lokal speichern"
   ],
   "instance.module.LocalDiscovery": [
    "Keep whole provider catalogs for Discover",
@@ -10457,6 +10465,10 @@
    "Provider covers",
    "Titelbilder der Anbieter"
   ],
+  "jobs.job.catalogCleanup": [
+   "Catalog cleanup",
+   "Katalog aufräumen"
+  ],
   "jobs.job.coverBackfill": [
    "Cover conversion",
    "Titelbilder umwandeln"
@@ -10917,6 +10929,10 @@
   "jobs.about.covers": [
    "Fetches and renews the covers of titles from their providers.",
    "Lädt und erneuert die Cover von Titeln bei ihren Anbietern."
+  ],
+  "jobs.about.catalogCleanup": [
+   "Drops the details and rows of catalog titles nobody uses, once a day.",
+   "Entfernt täglich die Details und Zeilen von Katalogtiteln, die niemand nutzt."
   ],
   "jobs.about.coverBackfill": [
    "Converts stored covers into the chosen cover format, a few at a time.",
@@ -12959,8 +12975,8 @@
    "Aus PDF-Büchern passende EPUB-Lesekopien vorbereiten."
   ],
   "setup.module.help.DiscoverCache": [
-   "Keep the titles Discover found on this server.",
-   "Entdeckte Titel lokal zwischenspeichern."
+   "Keep Discover's lists here; every title it shows is saved either way.",
+   "Discover-Listen hier halten; jeder gezeigte Titel wird ohnehin gespeichert."
   ],
   "setup.module.help.LocalDiscovery": [
    "Keep whole provider catalogs here; needs more storage.",

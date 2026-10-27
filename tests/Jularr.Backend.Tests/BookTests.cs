@@ -327,11 +327,11 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "href=\"/Details/" + workId + "\"");
             Assert.IsFalse(html.Contains("/Discover/books/", StringComparison.Ordinal));
 
-            // The Work's page names the book as the catalog does, whatever a link claims.
+            // The Work's page brings the book's details on its first open and names it as they do in the profile's language, whatever a link claims.
             using var item = await host.SendAsync(HttpMethod.Get, "/Details/" + workId + "?title=Confirm%20your%20password");
             var form = await item.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, item.StatusCode, form);
-            StringAssert.Contains(form, "Pride and Prejudice");
+            StringAssert.Contains(form, "Stolz und Vorurteil");
             Assert.IsFalse(form.Contains("Confirm your password", StringComparison.Ordinal));
 
             // Requesting asks for that same Work; the catalog still answers with it.

@@ -154,6 +154,47 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             return ctx.ReadSql.ReadListAsync<IdentityMatchTargetData>(sql, ct);
         }
 
+        // An anime series that was never matched, such as one just imported for a season it holds.
+        public static Task<IdentityMatchTargetData?> ReadUnmatchedSeriesAsync(LogicContext ctx, long workId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    work."Id" AS "WorkId",
+                    work."MediaTypeId",
+                    work."MediaSubtypeId",
+                    work."CanonicalTitle",
+                    work."ReleaseYear"::integer AS "ReleaseYear",
+                    ARRAY(
+                        SELECT DISTINCT
+                            title."Title"
+                        FROM
+                            "WorkTitles" AS title
+                        WHERE
+                            title."WorkId" = work."Id"
+                            AND title."Title" <> work."CanonicalTitle"
+                    ) AS "Titles"
+                FROM
+                    "Works" AS work
+                WHERE
+                    work."Id" = @WorkId
+                    AND work."MediaTypeId" = 2
+                    AND work."MediaSubtypeId" = 1
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkIdentityMatches" AS match
+                        WHERE
+                            match."WorkId" = work."Id"
+                            AND match."Namespace" = 'anilist'
+                    );
+                """;
+            sql.Parameters.Add(new IdentityMatchQueryData(workId, 1));
+            return ctx.ReadSql.ReadOptionalAsync<IdentityMatchTargetData>(sql, ct);
+        }
+
         // Regular seasons with the number of their episodes.
         public static Task<IReadOnlyList<SeasonEpisodesData>> ReadSeasonsAsync(LogicContext ctx, long workId, CancellationToken ct)
         {
