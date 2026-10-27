@@ -740,6 +740,7 @@ async function start(player: HTMLElement): Promise<void> {
     player.addEventListener("pointermove", event => { if (event.pointerType !== "touch") wake(); });
     player.addEventListener("pointerdown", event => { lastPointerType = event.pointerType; if (event.pointerType === "touch" && event.target !== video) wake(); }, { capture: true });
     touchGestures();
+    mediaSession();
     // A mouse leaving the picture hides the controls at once; touch and open panels keep them.
     player.addEventListener("pointerleave", event => {
         if (event.pointerType !== "mouse" || video.paused || seeking || player.classList.contains("player--mini") || player.querySelector(":popover-open")) return;
@@ -778,6 +779,7 @@ async function start(player: HTMLElement): Promise<void> {
         hls?.destroy();
         video.removeAttribute("src");
         video.load();
+        if (navigator.mediaSession) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = "none"; }
         releaseAddress();
         document.body.classList.remove("player-active", "player-mini");
         player.closest(".player-main")?.remove();
@@ -785,6 +787,40 @@ async function start(player: HTMLElement): Promise<void> {
 
     function seek(seconds: number): void {
         video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + seconds));
+    }
+
+    // Android and desktop browsers show the playback as media: notification, lock screen and headset keys name the title and carry play, pause, seek and the neighbouring episodes.
+    function mediaSession(): void {
+        const session = navigator.mediaSession;
+        if (!session) return;
+        const text = (selector: string) => player.querySelector(selector)?.textContent?.trim() ?? "";
+        const poster = video.getAttribute("poster");
+        session.metadata = new MediaMetadata({
+            title: text(".player__title"),
+            artist: text(".player__context"),
+            artwork: poster ? [{ src: new URL(poster, location.href).href }] : []
+        });
+        const set = (action: string, handler: MediaSessionActionHandler | null) => {
+            try { session.setActionHandler(action as MediaSessionAction, handler); } catch { /* The browser does not know this action. */ }
+        };
+        const neighbour = (direction: "previous" | "next") => player.querySelector<HTMLElement>(`[data-action=${direction}][data-href]`) ? () => go(direction) : null;
+        set("play", () => void video.play());
+        set("pause", () => video.pause());
+        set("seekbackward", details => seek(-(details.seekOffset ?? 10)));
+        set("seekforward", details => seek(details.seekOffset ?? 30));
+        set("seekto", details => { if (details.seekTime !== undefined) video.currentTime = details.seekTime; });
+        set("previoustrack", neighbour("previous"));
+        set("nexttrack", neighbour("next"));
+        // A phone leaving the app with the video running may carry it into the small window.
+        set("enterpictureinpicture", () => void video.requestPictureInPicture().catch(() => undefined));
+        const position = () => {
+            if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+            try { session.setPositionState({ duration: video.duration, playbackRate: video.playbackRate || 1, position: Math.min(video.currentTime, video.duration) }); } catch { /* A position outside the duration is refused. */ }
+        };
+        for (const name of ["timeupdate", "ratechange", "durationchange", "seeked"]) video.addEventListener(name, position, { signal });
+        video.addEventListener("play", () => { session.playbackState = "playing"; }, { signal });
+        video.addEventListener("pause", () => { session.playbackState = "paused"; }, { signal });
+        video.addEventListener("ended", () => { session.playbackState = "none"; }, { signal });
     }
 
     function setPlaying(playing: boolean): void {
