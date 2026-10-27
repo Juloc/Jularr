@@ -10129,6 +10129,10 @@
    "Chapter {0}",
    "Kapitel {0}"
   ],
+  "player.brightness.auto": [
+   "Auto",
+   "Automatisch"
+  ],
   "work.tab.markers": [
    "Markers",
    "Marker"

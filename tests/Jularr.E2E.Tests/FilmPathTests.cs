@@ -290,13 +290,15 @@ namespace Jularr.E2E.Tests
                     await wait(300);
                     tap(box.right - 20, y); await wait(60); tap(box.right - 20, y); await wait(300);
                     result.push('right ' + (video.currentTime > 6.5 || video.ended));
+                    const flash = document.querySelector('.player__seek[data-side=right]');
+                    result.push('flash ' + (!flash.hidden && flash.textContent.includes('+30 s')));
                     tap(box.left + 20, y); await wait(60); tap(box.left + 20, y); await wait(300);
                     result.push('left ' + (video.currentTime < 1));
                     video.volume = 0.5;
                     send('pointerdown', box.right - 30, y); send('pointermove', box.right - 30, y - 120); send('pointerup', box.right - 30, y - 120);
                     result.push('volume ' + (video.volume > 0.7));
                     send('pointerdown', box.left + 30, y); send('pointermove', box.left + 30, y - 120); send('pointerup', box.left + 30, y - 120);
-                    result.push('brightness ' + (video.style.filter.startsWith('brightness(')));
+                    result.push('brightness ' + (video.style.filter.startsWith('brightness(') && document.querySelector('[data-role=gesture]').dataset.kind === 'brightness'));
                     await video.play();
                     send('pointerdown', box.left + box.width / 2, y); await wait(700);
                     result.push('hold ' + (video.playbackRate === 2));
@@ -306,7 +308,7 @@ namespace Jularr.E2E.Tests
                     return result.join(',');
                 }
                 """);
-            Assert.AreEqual("right true,left true,volume true,brightness true,hold true,release true", touched);
+            Assert.AreEqual("right true,flash true,left true,volume true,brightness true,hold true,release true", touched);
             Assert.IsFalse(await page.EvaluateAsync<bool>("() => !!document.fullscreenElement"), "A double tap must not toggle fullscreen.");
 
             await page.Locator("[data-action=mute]").ClickAsync();

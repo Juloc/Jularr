@@ -820,7 +820,13 @@ async function start(player: HTMLElement): Promise<void> {
         let start: { x: number; y: number; at: number; side: "left" | "center" | "right"; width: number; height: number } | null = null;
         let kind: "" | "volume" | "brightness" | "speed" = "";
         let origin = 0;
-        let brightness = 1;
+        // The brightness slider rests at Auto on the bottom (no filter, the device decides); above it the picture goes from dim to bright.
+        const AutoBelow = 0.04;
+        const Dim = 0.3;
+        const Bright = 1.6;
+        let brightnessAt = 0;
+        const brightnessOf = (position: number) => Dim + (position - AutoBelow) / (1 - AutoBelow) * (Bright - Dim);
+        const positionOf = (value: number) => AutoBelow + (value - Dim) / (Bright - Dim) * (1 - AutoBelow);
         let heldRate = 1;
         let holdTimer = 0;
         let tapTimer = 0;
@@ -828,24 +834,36 @@ async function start(player: HTMLElement): Promise<void> {
         let lastSide = "";
         let hudTimer = 0;
         let seekTotal = 0;
+        let seekTimer = 0;
+        let seekSide = "";
         const text = gesture.querySelector<HTMLElement>("[data-role=gesture-text]")!;
         const fill = gesture.querySelector<HTMLElement>(".player__gesture-fill")!;
 
-        const hud = (side: string, label: string, level?: number) => {
-            gesture.dataset.side = side;
-            gesture.classList.toggle("player__gesture--bar", level !== undefined);
+        const hud = (name: string, label: string, level?: number) => {
+            gesture.dataset.kind = name;
             text.textContent = label;
             if (level !== undefined) fill.style.setProperty("--level", String(Math.min(1, Math.max(0, level))));
             gesture.hidden = false;
             clearTimeout(hudTimer);
         };
-        const hideHud = (delay = 600) => { clearTimeout(hudTimer); hudTimer = window.setTimeout(() => { gesture.hidden = true; seekTotal = 0; }, delay); };
-        const seekBy = (side: string) => {
+        const hideHud = (delay = 600) => { clearTimeout(hudTimer); hudTimer = window.setTimeout(() => { gesture.hidden = true; }, delay); };
+        // The tapped half lights up with arrows and the total of this series of taps.
+        const seekBy = (side: "left" | "right") => {
             const step = side === "left" ? -10 : 30;
+            if (seekSide !== side) seekTotal = 0;
+            seekSide = side;
             seek(step);
             seekTotal += step;
-            hud(side, (seekTotal > 0 ? "+" : "−") + Math.abs(seekTotal));
-            hideHud();
+            const flashes = Array.from(player.querySelectorAll<HTMLElement>(".player__seek"));
+            const flash = flashes.find(item => item.dataset.side === side)!;
+            for (const other of flashes) if (other !== flash) { other.hidden = true; other.classList.remove("player__seek--show"); }
+            flash.querySelector("[data-role=seek-text]")!.textContent = (seekTotal > 0 ? "+" : "−") + Math.abs(seekTotal) + " s";
+            flash.hidden = false;
+            flash.classList.remove("player__seek--show");
+            void flash.offsetWidth;
+            flash.classList.add("player__seek--show");
+            clearTimeout(seekTimer);
+            seekTimer = window.setTimeout(() => { flash.hidden = true; flash.classList.remove("player__seek--show"); seekTotal = 0; seekSide = ""; }, 700);
             wake();
         };
         const toggleChrome = () => {
@@ -871,7 +889,7 @@ async function start(player: HTMLElement): Promise<void> {
                 kind = "speed";
                 heldRate = video.playbackRate;
                 video.playbackRate = 2;
-                hud("center", "2×");
+                hud("speed", "2× ▶▶");
             }, Hold);
         });
         video.addEventListener("pointermove", event => {
@@ -884,17 +902,17 @@ async function start(player: HTMLElement): Promise<void> {
                 if (Math.abs(dy) <= Math.abs(dx)) { start = null; return; }
                 const left = start.x - video.getBoundingClientRect().left < start.width / 2;
                 kind = left ? "brightness" : "volume";
-                origin = left ? brightness : video.muted ? 0 : video.volume;
+                origin = left ? (brightnessAt === 0 ? positionOf(1) : brightnessAt) : video.muted ? 0 : video.volume;
             }
-            const level = origin - dy / (start.height * 0.7);
+            const level = Math.min(1, Math.max(0, origin - dy / (start.height * 0.7)));
             if (kind === "volume") {
                 video.muted = false;
-                video.volume = Math.min(1, Math.max(0, level));
-                hud("right", String(Math.round(video.volume * 100)), video.volume);
+                video.volume = level;
+                hud(level === 0 ? "muted" : "volume", String(Math.round(level * 100)), level);
             } else {
-                brightness = Math.min(1.6, Math.max(0.4, level));
-                video.style.filter = brightness === 1 ? "" : `brightness(${brightness})`;
-                hud("left", String(Math.round(brightness * 100)), (brightness - 0.4) / 1.2);
+                brightnessAt = level < AutoBelow ? 0 : level;
+                video.style.filter = brightnessAt === 0 ? "" : `brightness(${brightnessOf(level)})`;
+                hud("brightness", brightnessAt === 0 ? gesture.dataset.auto ?? "Auto" : String(Math.round(level * 100)), level);
             }
         });
         const release = (event: PointerEvent) => {

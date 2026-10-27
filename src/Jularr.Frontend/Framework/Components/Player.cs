@@ -53,9 +53,15 @@ namespace Jularr.Frontend.Framework
                     .Attribute("data-role", "loading").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
                 new Div(Icon("play"), Icon("pause")).Class("player__feedback")
                     .Attribute("data-role", "transport-feedback").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
-                // Touch gestures name what they do: the seek step, the speed, or the volume and brightness level.
-                new Div(new Span().Attribute("data-role", "gesture-text"), new Div(new Div().Class("player__gesture-fill")).Class("player__gesture-bar")).Class("player__gesture")
-                    .Attribute("data-role", "gesture").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
+                // Touch gestures name what they do: the tapped half lights up while seeking; volume, brightness and speed show a pill at the top centre.
+                new Div(new Span(new Span(), new Span(), new Span()).Class("player__seek-arrows"), new Span().Attribute("data-role", "seek-text")).Class("player__seek")
+                    .Attribute("data-side", "left").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
+                new Div(new Span(new Span(), new Span(), new Span()).Class("player__seek-arrows"), new Span().Attribute("data-role", "seek-text")).Class("player__seek")
+                    .Attribute("data-side", "right").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
+                new Div(new Span(Icon("volume")).Attribute("data-gesture-icon", "volume"), new Span(Icon("muted")).Attribute("data-gesture-icon", "muted"),
+                    new Span(Icon("brightness")).Attribute("data-gesture-icon", "brightness"), new Div(new Div().Class("player__gesture-fill")).Class("player__gesture-bar"),
+                    new Span().Attribute("data-role", "gesture-text")).Class("player__gesture").Attribute("data-role", "gesture").Attribute("data-auto", texts["player.brightness.auto"])
+                    .Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
                 new Div(
                     new Div(
                         new A(Icon("close")).Class("button button--icon player__button").Attribute("href", source.BackHref).Attribute("aria-label", texts["common.back"]).Attribute("data-action", "close"),
