@@ -315,6 +315,8 @@
     .player:not(.player--mini) .player__transport [data-action=back], .player:not(.player--mini) .player__transport [data-action=forward] { display: inline-grid; }
     .player__volume, [data-action=theater] { display: none; }
     .player--mini .player__heading { display: none; }
+    // The picture is low here and the transport floats over its middle: the chapter is named by the preview while dragging and in the chapter list.
+    .player__chapter-now { display: none; }
 }
 @media (max-width: 600px) {
     .player:not(.player--mini) .player__transport [data-action=back], .player:not(.player--mini) .player__transport [data-action=forward] { display: none; }
