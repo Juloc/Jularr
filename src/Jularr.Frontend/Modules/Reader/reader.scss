@@ -1,5 +1,6 @@
 @use './Book';
 @use './Figures';
+@use './SmartPages';
 
 // Reuse the regular app navigation, with the document header as the only top bar.
 // The page is as tall as what the browser shows; a browser without dynamic viewport units gets the height the reader script

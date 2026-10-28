@@ -10,6 +10,13 @@ namespace Jularr.Backend.Logic.Reading
     {
         public static string SectionPath(int index) => ":section/" + index.ToString("D5", CultureInfo.InvariantCulture);
 
+        // Smart Pages are reading units of their own beside the sections (read and translated like them), numbered from SmartPageUnits.
+        public const int SmartPageUnits = 100_000;
+
+        public static string SmartPagePath(int index) => ":smartpage/" + index.ToString("D5", CultureInfo.InvariantCulture);
+
+        public static string SmartImagePath(int page) => "pdf/smart/" + page.ToString("D5", CultureInfo.InvariantCulture) + ".jpg";
+
         public static PdfPreparedBook Prepare(PdfBookContent book, long documentId)
         {
             var sections = new List<PdfPreparedSection>();
@@ -39,7 +46,43 @@ namespace Jularr.Backend.Logic.Reading
                 sections.Add(new PdfPreparedSection(new ReadingStructureSection(path, chapter.Title, prepared.Characters, prepared.Blocks, pages.DefaultIfEmpty(0).Min(), pages.DefaultIfEmpty(0).Max()), prepared.Html));
             }
 
-            return new PdfPreparedBook(sections, toc, [.. book.Chapters.SelectMany(chapter => chapter.Blocks).Where(block => block.Figure == ReadingHtml.OriginalFigure).Select(block => block.Page).Distinct().Order()]);
+            return new PdfPreparedBook(sections, toc, [.. book.Chapters.SelectMany(chapter => chapter.Blocks).Where(block => block.Figure == ReadingHtml.OriginalFigure).Select(block => block.Page).Distinct().Order()],
+                [.. book.SmartPages.Select(page => SmartPage(page, documentId))]);
+        }
+
+        // A Smart Page: the text-free page and its blocks where they stand, each run in its measured look; the Reader fits the text (or its translation) into the box.
+        private static PdfPreparedSection SmartPage(PdfSmartPage page, long documentId)
+        {
+            static string Number(double value) => value.ToString("0.#####", CultureInfo.InvariantCulture);
+            var html = new StringBuilder();
+            html.Append("<div data-smart-page=\"").Append(page.Number.ToString(CultureInfo.InvariantCulture)).Append("\" data-ratio=\"").Append(Number(page.Ratio)).Append("\">")
+                .Append("<img data-smart-image alt=\"\" src=\"").Append(WebUtility.HtmlEncode(ReadingHtml.ResourceUrl(documentId, SmartImagePath(page.Number)))).Append("\">");
+            for (var index = 0; index < page.Blocks.Count; index++)
+            {
+                var block = page.Blocks[index];
+                html.Append("<p data-b=\"").Append(index.ToString(CultureInfo.InvariantCulture)).Append("\" data-box=\"")
+                    .AppendJoin(' ', new[] { block.Left, block.Top, block.Width, block.Height }.Select(Number)).Append("\" data-lines=\"").Append(block.Lines.ToString(CultureInfo.InvariantCulture))
+                    .Append("\" data-base=\"").Append(Number(block.Base)).Append('"');
+                if (block.Series > 0)
+                {
+                    html.Append(" data-series=\"").Append(block.Series.ToString(CultureInfo.InvariantCulture)).Append('"');
+                }
+
+                html.Append(block.IsLabel ? " data-label" : "").Append(block.IsRunning ? " data-running" : "").Append('>');
+                foreach (var run in block.Runs)
+                {
+                    html.Append("<span data-face=\"").Append(run.Serif ? "serif" : "sans").Append("\" style=\"font-weight:").Append(run.Weight.ToString(CultureInfo.InvariantCulture))
+                        .Append(run.Italic ? ";font-style:italic" : "").Append(run.Serif ? "" : ";font-stretch:" + run.Stretch.ToString(CultureInfo.InvariantCulture) + "%")
+                        .Append(";color:").Append(run.Ink).Append(";font-size:").Append(Number(block.Base > 0 ? run.Size / block.Base : 1)).Append("em\">")
+                        .Append(WebUtility.HtmlEncode(run.Text)).Append("</span>");
+                }
+
+                html.Append("</p>");
+            }
+
+            var characters = page.Blocks.Sum(block => block.Runs.Sum(run => run.Text.Length));
+            return new PdfPreparedSection(new ReadingStructureSection("pdf/smart/" + page.Number.ToString("D5", CultureInfo.InvariantCulture) + ".xhtml", null, characters, page.Blocks.Count, page.Number, page.Number),
+                html.Append("</div>").ToString());
         }
 
         // A paragraph, a small picture in the line, a figure with its alternative text and caption, or the stand-in for a page only the original shows; each starts on a page.
@@ -67,5 +110,6 @@ namespace Jularr.Backend.Logic.Reading
 
     internal sealed record PdfPreparedSection(ReadingStructureSection Structure, string Html);
 
-    internal sealed record PdfPreparedBook(IReadOnlyList<PdfPreparedSection> Sections, IReadOnlyList<ReadingStructureEntry> Toc, IReadOnlyList<int> OriginalPages);
+    internal sealed record PdfPreparedBook(IReadOnlyList<PdfPreparedSection> Sections, IReadOnlyList<ReadingStructureEntry> Toc, IReadOnlyList<int> OriginalPages,
+        IReadOnlyList<PdfPreparedSection> SmartPages);
 }

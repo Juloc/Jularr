@@ -291,6 +291,7 @@ namespace Jularr.Backend.Tests
 
             var lines = PdfScanAnalysis.Analyse(page, read, layer);
             CollectionAssert.AreEqual(new[] { "Rule No. 687: If it’s fast,", "Rule No. 688: If it’s in" }, lines.Select(line => line.Text).ToArray());
+            Assert.AreEqual(12, lines.Sum(line => line.Words!.Length / 2));
 
             PdfLayerWord[] noise = [new("ee", 0.05, 0.1, 0.1, 0.125), new("Ll", 0.11, 0.1, 0.14, 0.125), new("rme|", 0.15, 0.1, 0.19, 0.125), new("Sue", 0.2, 0.1, 0.25, 0.125),
                 new("mln|fel", 0.3, 0.1, 0.4, 0.125), new("=S|", 0.45, 0.1, 0.5, 0.125)];
@@ -337,6 +338,35 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(book.Images.All(picture => picture.MediaType == "image/jpeg" && SKBitmap.Decode(picture.Bytes) is { Width: > 300 }));
             Assert.IsFalse(blocks.Any(block => block.Text?.Contains("ALWAYS", StringComparison.Ordinal) == true || block.Text?.Contains("He shouted", StringComparison.Ordinal) == true));
             StringAssert.Contains(blocks.First(block => block.Text is not null).Text, Sentences[0]);
+
+            // Smart Pages: the pages between the covers in their own layout, their text set anew in serif like the print, the label as a label, and the
+            // text erased from the page while the drawing stays.
+            CollectionAssert.AreEqual(new[] { 2, 3 }, book.SmartPages.Select(page => page.Number).ToArray());
+            var smart = book.SmartPages[0];
+            StringAssert.StartsWith(string.Concat(smart.Blocks[0].Runs.Select(run => run.Text)), Sentences[0]);
+            Assert.IsTrue(smart.Blocks[0].Runs.All(run => run.Serif && !run.Italic && run.Weight <= 500));
+            Assert.IsTrue(smart.Blocks.Single(block => block.Runs.Any(run => run.Text == "ALWAYS")).IsLabel);
+            Assert.IsTrue(smart.Blocks.Any(block => !block.IsLabel && block.Runs.Any(run => run.Text == "He shouted.")));
+            using var clean = SKBitmap.Decode(smart.Image);
+            Assert.AreEqual(1240.0 / 1754, smart.Ratio, 0.01);
+            Assert.IsTrue(Darkest(clean, 0.1, 210 / 1754.0, 0.88, 250 / 1754.0) > 170, "the first line is erased");
+            Assert.IsTrue(Darkest(clean, 0.25, 0.42, 0.72, 0.6) < 100, "the drawing stays");
+        }
+
+        // The darkest grey in a part of a picture, given in fractions of it.
+        private static int Darkest(SKBitmap bitmap, double left, double top, double right, double bottom)
+        {
+            var darkest = 255;
+            for (var y = (int)(top * bitmap.Height); y < (int)(bottom * bitmap.Height); y++)
+            {
+                for (var x = (int)(left * bitmap.Width); x < (int)(right * bitmap.Width); x++)
+                {
+                    var pixel = bitmap.GetPixel(x, y);
+                    darkest = Math.Min(darkest, (pixel.Red + pixel.Green + pixel.Blue) / 3);
+                }
+            }
+
+            return darkest;
         }
 
         // Words of large type detected apart are read as their line; a narrow column beside large type, and columns of text, stay apart.

@@ -527,13 +527,15 @@ namespace Jularr.Backend.Data.Logic.Reading
     // Spine sections and table of contents, stored as JSON.
     internal sealed class ReadingStructure
     {
-        public ReadingStructure(ReadingStructureSection[] sections, ReadingStructureEntry[] toc, bool recommended = true, string? reason = null, int[]? originalPages = null)
+        public ReadingStructure(ReadingStructureSection[] sections, ReadingStructureEntry[] toc, bool recommended = true, string? reason = null, int[]? originalPages = null,
+            ReadingStructureSection[]? smartPages = null)
         {
             Sections = sections;
             Toc = toc;
             Recommended = recommended;
             Reason = reason;
             OriginalPages = originalPages ?? [];
+            SmartPages = smartPages ?? [];
         }
 
         public ReadingStructureSection[] Sections { get; }
@@ -545,6 +547,9 @@ namespace Jularr.Backend.Data.Logic.Reading
 
         // The pages of a converted PDF that stand in the text as the original page and are not part of a downloaded EPUB.
         public int[] OriginalPages { get; }
+
+        // A scanned PDF's pages set anew in their own layout (Smart Pages), in page order; each covers one page.
+        public ReadingStructureSection[] SmartPages { get; }
     }
 
     internal sealed class ReadingStructureSection

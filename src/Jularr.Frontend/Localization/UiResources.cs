@@ -505,6 +505,8 @@ namespace Jularr.Frontend.Localization
             new("reader.view.auto", "Automatic"),
             new("reader.view.smart", "Smart Book"),
             new("reader.view.original", "Original pages"),
+            new("reader.view.smartPages", "Smart Pages"),
+            new("reader.view.smartPagesUnavailable", "Smart Pages are not ready for this book; the original pages are shown."),
             new("reader.view.failed", "The view could not be saved."),
             new("reader.view.smartUnavailable", "The Smart Book is not ready yet; the original pages are shown."),
             new("reader.offer.smart", "The Smart Book of this book is ready."),

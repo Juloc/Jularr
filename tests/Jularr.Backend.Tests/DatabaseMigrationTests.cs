@@ -209,6 +209,10 @@ namespace Jularr.Backend.Tests
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 15"));
             Assert.AreEqual(1L, await ScalarAsync(cs,
                 "SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'ProfilePlaybackPreferences' AND column_name = 'SecondSubtitleLanguage'"));
+            Assert.AreEqual("0016_smart_pages_view", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 16"));
+            Assert.AreEqual("SmartPages", await ScalarAsync(cs,
+                "SELECT \"Key\" FROM \"ReadingViewTypes\" WHERE \"Id\" = 3"));
             Assert.AreEqual(2L, await ScalarAsync(cs,
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('MediaImportJobs','MediaImportJobRows')"));
             Assert.AreEqual(1L, await ScalarAsync(cs,

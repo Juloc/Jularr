@@ -25,8 +25,12 @@ namespace Jularr.Backend.Logic.Reading
             // Words the page uses more than once: where the recognizer read a word the page has nowhere else and the layer one it has, the layer is right ("Ir" for "It").
             var common = read.Lines.SelectMany(line => line.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Select(Key).Where(word => word.Length > 0)
                 .GroupBy(word => word).ToDictionary(group => group.Key, group => group.Count());
-            var lines = read.Lines.Select(line => new RecognizedLine(Round(line.Left / width), Round(line.Top / height), Round(line.Right / width), Round(line.Bottom / height),
-                Text(line, layer, width, height, common), Math.Round(line.Confidence, 3))).Where(line => line.Text.Length > 0).ToList();
+            var lines = read.Lines.Select(line =>
+            {
+                var (text, spans) = Text(line, layer, width, height, common);
+                return new RecognizedLine(Round(line.Left / width), Round(line.Top / height), Round(line.Right / width), Round(line.Bottom / height), text, Math.Round(line.Confidence, 3),
+                    Words: spans);
+            }).Where(line => line.Text.Length > 0).ToList();
             lines = Layered(lines, layer, width, height);
 
             using var work = Small(page);
@@ -93,7 +97,8 @@ namespace Jularr.Backend.Logic.Reading
                     {
                         var ordered = row.OrderBy(word => word.Left).ToList();
                         result.Add(new RecognizedLine(Round(ordered.Min(word => word.Left)), Round(ordered.Min(word => word.Top)), Round(ordered.Max(word => word.Right)),
-                            Round(ordered.Max(word => word.Bottom)), string.Join(' ', ordered.Select(word => Typeset(word.Text))), UnsureLine));
+                            Round(ordered.Max(word => word.Bottom)), string.Join(' ', ordered.Select(word => Typeset(word.Text))), UnsureLine,
+                            Words: [.. ordered.SelectMany(word => new[] { Round(word.Left), Round(word.Right) })]));
                     }
                 }
             }
@@ -101,16 +106,18 @@ namespace Jularr.Backend.Logic.Reading
             return result;
         }
 
-        // A recognized line's text: its words, each checked against the scan's own layer where the recognizer was unsure of it.
-        private static string Text(OcrLine line, IReadOnlyList<PdfLayerWord> layer, double width, double height, IReadOnlyDictionary<string, int> common)
+        // A recognized line's text: its words, each checked against the scan's own layer where the recognizer was unsure of it, and where each word stands
+        // (its left and right edge in fractions of the page, word after word), so Smart Pages can measure each word's look.
+        private static (string Text, double[]? Spans) Text(OcrLine line, IReadOnlyList<PdfLayerWord> layer, double width, double height, IReadOnlyDictionary<string, int> common)
         {
             if (line.Characters.Count == 0)
             {
-                return Typeset(line.Text.Trim());
+                return (Typeset(line.Text.Trim()), null);
             }
 
             var pitch = line.Characters.Count > 1 ? (line.Characters[^1].Center - line.Characters[0].Center) / (line.Characters.Count - 1) : line.Right - line.Left;
             var words = new List<string>();
+            var spans = new List<(double Left, double Right)>();
             var group = new List<OcrCharacter>();
             void End()
             {
@@ -141,10 +148,12 @@ namespace Jularr.Backend.Logic.Reading
                     || layer.Any(candidate => Letters(candidate.Text) == Letters(words[^1]) && candidate.Text.EndsWith(word, StringComparison.Ordinal) && Overlap(candidate, left, top, right, bottom) > 0)))
                 {
                     words[^1] = words[^1].EndsWith(word, StringComparison.Ordinal) ? words[^1] : words[^1] + word;
+                    spans[^1] = (spans[^1].Left, Math.Max(spans[^1].Right, right));
                 }
                 else
                 {
                     words.Add(word);
+                    spans.Add((left, right));
                 }
 
                 group.Clear();
@@ -171,10 +180,12 @@ namespace Jularr.Backend.Logic.Reading
                 {
                     words[index] += words[index + 1];
                     words.RemoveAt(index + 1);
+                    spans[index] = (spans[index].Left, spans[index + 1].Right);
+                    spans.RemoveAt(index + 1);
                 }
             }
 
-            return Closed(Doubled().Replace(string.Join(' ', words), "$1"));
+            return (Closed(Doubled().Replace(string.Join(' ', words), "$1")), [.. spans.SelectMany(span => new[] { Round(span.Left), Round(span.Right) })]);
         }
 
         [GeneratedRegex(@"([“”‘’])\1+")]
@@ -368,7 +379,7 @@ namespace Jularr.Backend.Logic.Reading
         private static double Round(double fraction) => Math.Round(Math.Clamp(fraction, 0, 1), 4);
 
         // The page's pixels in red, green, blue, alpha order, converted (a copy of the bitmap would keep PDFium's blue-first bytes).
-        private static SKBitmap Rgba(SKBitmap page)
+        internal static SKBitmap Rgba(SKBitmap page)
         {
             var rgba = new SKBitmap(new SKImageInfo(page.Width, page.Height, SKColorType.Rgba8888, SKAlphaType.Premul));
             using var pixmap = page.PeekPixels();
@@ -398,8 +409,14 @@ namespace Jularr.Backend.Logic.Reading
                 var grow = (line.Bottom - line.Top) * h * 0.06;
                 return new SKRectI(Math.Max(0, (int)(line.Left * w - grow)), Math.Max(0, (int)(line.Top * h - grow)), Math.Min(w - 1, (int)Math.Ceiling(line.Right * w + grow)),
                     Math.Min(h - 1, (int)Math.Ceiling(line.Bottom * h + grow)));
-            }).Where(box => box.Width > 0 && box.Height > 0).OrderBy(box => box.Top).ToList();
+            }).Where(box => box.Width > 0 && box.Height > 0).ToList();
+            Erase(pixels, w, h, boxes, 8);
+            return Regions(pixels, w, h);
+        }
 
+        // Fills the boxes from the top down with the paper around them; the paper is smoothed across this many columns either side.
+        internal static void Erase(byte[] pixels, int w, int h, IReadOnlyList<SKRectI> boxes, int reach)
+        {
             // Pixels still covered by letters of lines not yet erased are not paper to sample.
             var covered = new int[w * h];
             foreach (var box in boxes)
@@ -407,13 +424,11 @@ namespace Jularr.Backend.Logic.Reading
                 Cover(covered, w, box, 1);
             }
 
-            foreach (var box in boxes)
+            foreach (var box in boxes.OrderBy(box => box.Top))
             {
                 Cover(covered, w, box, -1);
-                Fill(pixels, covered, w, h, box);
+                Fill(pixels, covered, w, h, box, reach);
             }
-
-            return Regions(pixels, w, h);
         }
 
         private static void Cover(int[] covered, int w, SKRectI box, int by)
@@ -429,7 +444,7 @@ namespace Jularr.Backend.Logic.Reading
 
         // A line box filled column by column, blending the paper above it into the paper below it (smoothed across neighbouring columns), so tints and
         // gradients carry on; pixels of lines not yet erased are not sampled.
-        private static void Fill(byte[] pixels, int[] covered, int w, int h, SKRectI box)
+        private static void Fill(byte[] pixels, int[] covered, int w, int h, SKRectI box, int reach)
         {
             var band = Math.Max(2, box.Height / 8);
             var columns = box.Width + 1;
@@ -449,7 +464,7 @@ namespace Jularr.Backend.Logic.Reading
                 }
             }
 
-            (above, below) = (Smooth(above, columns, 8), Smooth(below, columns, 8));
+            (above, below) = (Smooth(above, columns, reach), Smooth(below, columns, reach));
             for (var y = box.Top; y <= box.Bottom; y++)
             {
                 var t = (double)(y - box.Top) / Math.Max(1, box.Height);
@@ -487,7 +502,7 @@ namespace Jularr.Backend.Logic.Reading
         }
 
         // The median colour of a thin ring just outside the box: the paper the letters stood on.
-        private static int[] Ring(byte[] pixels, int w, int h, SKRectI box)
+        internal static int[] Ring(byte[] pixels, int w, int h, SKRectI box)
         {
             var samples = new List<int>[] { [], [], [] };
             var ring = Math.Max(2, box.Height / 6);

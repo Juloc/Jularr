@@ -45,7 +45,7 @@ namespace Jularr.Backend.Logic.Reading
         public static IReadOnlyList<RecognizedLine> Parse(string json) => JsonSerializer.Deserialize<RecognizedLine[]>(json) ?? [];
     }
 
-    // A line of text in fractions of the page, or (by its kind) a label inside a picture or the picture itself.
+    // A line of text in fractions of the page, or (by its kind) a label inside a picture or the picture itself; Words holds each word's left and right edge, word after word.
     internal sealed record RecognizedLine(
         [property: JsonPropertyName("l")] double Left,
         [property: JsonPropertyName("t")] double Top,
@@ -53,7 +53,8 @@ namespace Jularr.Backend.Logic.Reading
         [property: JsonPropertyName("b")] double Bottom,
         [property: JsonPropertyName("s")] string Text,
         [property: JsonPropertyName("c")] double Confidence,
-        [property: JsonPropertyName("k"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Kind = null)
+        [property: JsonPropertyName("k"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Kind = null,
+        [property: JsonPropertyName("w"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double[]? Words = null)
     {
         public const string Label = "label";
         public const string Picture = "picture";

@@ -43,6 +43,9 @@ namespace Jularr.Frontend.Pages.User.Reader
 
         // The original pages show; the page they open at, the book's state and the profile's notes on its pages.
         private bool _original;
+
+        // The prepared book whose scanned pages show as Smart Pages inside the original pages; null where they show as scanned.
+        private ReadingDocumentV1? _smart;
         private int _page = 1;
         private ReadingStateV1? _state;
         private IReadOnlyList<ReadingPageNoteV1> _pageNotes = [];
@@ -310,7 +313,9 @@ namespace Jularr.Frontend.Pages.User.Reader
         {
             var asset = Id.ToString(CultureInfo.InvariantCulture);
             var file = "/api/v1/reading/assets/" + asset + "/file";
+            var translates = _smart is not null && texts.CanTranslate();
             var top = Header(source.Title, "", source.WorkId, [
+                .. translates ? [Overflowing(Tool("globe", "reader.language", "language"), "language", 1)] : Array.Empty<IUiComponent>(),
                 Overflowing(Tool("bookmark", "reader.notes", "notes"), "notes", 2),
                 Overflowing(new Button(new Icon("settings", assets)).IconOnly(texts["reader.settings"]).Attribute("data-reader-open-settings", "all").Attribute("aria-expanded", "false"), "settings", 1),
                 Tool("player-more", "reader.more", "more").Attribute("data-overflow-more", "")
@@ -344,8 +349,10 @@ namespace Jularr.Frontend.Pages.User.Reader
                 ).Class("reader__offer").Attribute("data-role", "view-offer").Attribute("role", "status").Attribute("hidden", "hidden")
             ).Class("reader__notices");
 
-            return new ReaderFrame(assets, texts, top, new Span(), stage, bottom, Settings(true, true, true), PageNotes(), notices,
-                More([MoreEntry(new Icon("bookmark", assets), "reader.notes", "notes"), MoreEntry(new Icon("settings", assets), "reader.settings", "settings"), .. ViewEntries(),
+            var frame = new ReaderFrame(assets, texts, top, new Span(), stage, bottom, Settings(true, true, true), PageNotes(), notices,
+                translates && _smart is { } smart ? Languages(smart) : new Span(),
+                More([.. translates ? [MoreEntry(new Icon("globe", assets), "reader.language", "language")] : Array.Empty<IUiComponent>(),
+                    MoreEntry(new Icon("bookmark", assets), "reader.notes", "notes"), MoreEntry(new Icon("settings", assets), "reader.settings", "settings"), .. ViewEntries(),
                     new A(new Icon("download", assets), new Text("reader.originalPdf")).Class("button reader__menu-item").Attribute("href", file).Attribute("target", "_blank").Attribute("rel", "noopener")]),
                 new P(new Text("progress.saveFailed")).Attribute("data-role", "save-error").Attribute("role", "status").Attribute("hidden", "hidden"))
                 .Class("reader reader--pages").Attribute("data-format", "pages")
@@ -359,12 +366,41 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-view-url", "/api/v1/reading/assets/" + asset + "/view")
                 .Attribute("data-view-chosen", ViewChoiceName(source.ReadingViewTypeId))
                 .Attribute("data-recognition-label", texts["reader.recognition.progress"]);
+            if (_smart is { } document)
+            {
+                // Scanned pages set anew: their reading units (from 100000 on) and, where the server's model translates, the language to show them in.
+                var units = "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/";
+                frame.Attribute("data-smart-pages", string.Join(',', document.SmartPages.Select(number => number.ToString(CultureInfo.InvariantCulture))))
+                    .Attribute("data-smart-url", units);
+                if (translates)
+                {
+                    frame.Attribute("data-local-model", _localTranslationModel ?? "")
+                        .Attribute("data-language", document.Language ?? document.OriginalLanguage ?? "")
+                        .Attribute("data-reading-language", Chosen(document))
+                        .Attribute("data-language-url", "/api/v1/reading/assets/" + asset + "/language")
+                        .Attribute("data-translating-label", texts["reader.translating"])
+                        .Attribute("data-translation-failed-label", texts["reader.translationFailed"]);
+                }
+            }
+
+            return frame;
         }
+
+        // The languages the book can be read in; the choice is kept for the profile.
+        private IUiComponent Languages(ReadingDocumentV1 document) => _languages.Length == 0
+            ? new Div(new P(new Text("reader.language.none"))).Class("reader__panel").Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"])
+            : new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
+                .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false")),
+                new P().Attribute("data-role", "translation-status").Attribute("role", "status").Attribute("hidden", "hidden")])
+                .Class("reader__panel reader__choices").Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"]);
 
         private string RecognitionText(ReadingStateV1 state) => string.Format(CultureInfo.InvariantCulture, texts["reader.recognition.progress"], state.RecognizedPages, state.RecognitionPages);
 
         // The profile's choice as the page's script names it.
-        private static string ViewChoiceName(ReadingView? view) => view switch { ReadingView.Smart => "smart", ReadingView.Original => "original", _ => "auto" };
+        private static string ViewChoiceName(ReadingView? view) => view switch
+        {
+            ReadingView.Smart => "smart", ReadingView.Original => "original", ReadingView.SmartPages => "smartpages", _ => "auto"
+        };
 
         // This book's notes on pages: the one for the page in view, and the others, each leading to its page.
         private IUiComponent PageNotes()
@@ -556,6 +592,7 @@ namespace Jularr.Frontend.Pages.User.Reader
         private IUiComponent ViewGroup() => SettingsGroup("view", "reader.settings.view", group => group.Content(new Div(
             new Button(new Text("reader.view.auto")).Class("button").Attribute("data-view-choice", "auto"),
             new Button(new Text("reader.view.smart")).Class("button").Attribute("data-view-choice", "smart"),
+            new Button(new Text("reader.view.smartPages")).Class("button").Attribute("data-view-choice", "smartpages"),
             new Button(new Text("reader.view.original")).Class("button").Attribute("data-view-choice", "original"),
             new P(new Text("reader.view.failed")).Attribute("data-role", "view-error").Attribute("role", "status").Attribute("hidden", "hidden")
         ).Class("reader__choices")), open: true);
@@ -736,7 +773,7 @@ namespace Jularr.Frontend.Pages.User.Reader
             _work = await readWork.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(_source.WorkId), ct);
 
             // The view: this visit's, else the profile's choice for the book, else automatic. The original pages need no analysis, so they open without it.
-            var requested = ViewName switch { "smart" => ReadingView.Smart, "original" => ReadingView.Original, _ => _source.ReadingViewTypeId };
+            var requested = ViewName switch { "smart" => ReadingView.Smart, "original" => ReadingView.Original, "smartpages" => ReadingView.SmartPages, _ => _source.ReadingViewTypeId };
             if (_source.HasPdf && requested == ReadingView.Original)
             {
                 await LoadOriginalAsync(ct);
@@ -751,9 +788,35 @@ namespace Jularr.Frontend.Pages.User.Reader
                 && exception.Code is "reading_pdf_without_text" or "reading_invalid_file" or "reading_pdf_recognizing" or "reading_pdf_unfit")
             {
                 // No reading text, or not yet: the original pages show what Jularr cannot reflow, and a profile that asked for the Smart Book is told it is not there.
-                _status = exception.Code == "reading_pdf_recognizing" ? "errors." + exception.Code : requested == ReadingView.Smart ? "reader.view.smartUnavailable" : null;
+                _status = exception.Code == "reading_pdf_recognizing" ? "errors." + exception.Code : requested == ReadingView.Smart ? "reader.view.smartUnavailable"
+                    : requested == ReadingView.SmartPages ? "reader.view.smartPagesUnavailable" : null;
                 await LoadOriginalAsync(ct);
                 return;
+            }
+
+            // Smart Pages: by choice, or by themselves where the reading text did not pass its quality gate and the scan's pages are set anew; the pages
+            // without a Smart Page show as scanned.
+            if (_source.HasPdf && _document.ReadingFormatTypeId == ReadingFormatType.Pdf && (requested == ReadingView.SmartPages || requested is null && !_document.IsRecommended))
+            {
+                if (_document.SmartPages.Length > 0)
+                {
+                    _smart = _document;
+                    if (texts.CanTranslate())
+                    {
+                        _languages = await LanguagesAsync(ct);
+                    }
+
+                    await LoadOriginalAsync(ct);
+                    return;
+                }
+
+                if (requested == ReadingView.SmartPages)
+                {
+                    _status = "reader.view.smartPagesUnavailable";
+                    _document = null;
+                    await LoadOriginalAsync(ct);
+                    return;
+                }
             }
 
             // A converted PDF whose text did not pass the quality gate opens as its original pages, unless the profile asked for the Smart Book.

@@ -14,6 +14,7 @@ function load(name) {
 
 const view = load('PageView');
 const switchView = load('ViewSwitch');
+const smartFit = load('SmartPageFit');
 
 test('a page fits the whole viewport or its width, and zoom multiplies either', () => {
     const viewport = { width: 800, height: 600 }, page = { width: 400, height: 800 };
@@ -115,4 +116,28 @@ test('the other view opens at the same page, without a section or block of the o
     assert.equal(switchView.viewAddress('/Read/7?s=3&b=17', 'original', 12), '/Read/7?view=original&pg=12');
     assert.equal(switchView.viewAddress('/Read/7?view=original&pg=2', 'smart', 40), '/Read/7?view=smart&pg=40');
     assert.equal(switchView.viewAddress('/Read/7?pg=2', 'smart', null), '/Read/7?view=smart');
+});
+
+test('Smart Pages are a fourth choice, stored as view 3, and open at the same page', () => {
+    assert.equal(switchView.choiceOf('smartpages'), 'smartpages');
+    assert.deepEqual(['auto', 'smart', 'original', 'smartpages'].map(switchView.viewTypeOf), [null, 1, 2, 3]);
+    assert.equal(switchView.viewAddress('/Read/7?view=original&pg=2', 'smartpages', 9), '/Read/7?view=smartpages&pg=9');
+});
+
+test('a Smart Page sets its text at the measured size, in the boxes of the page, spreading a single line like the print', () => {
+    assert.equal(smartFit.startSize(0.036, 1000), 50);
+    assert.equal(smartFit.startSize(Number.NaN, 1000), 12);
+    assert.deepEqual({ ...smartFit.blockBox('0.1 0.2 0.5 0.05') }, { left: 0.1, top: 0.2, width: 0.5, height: 0.05 });
+    assert.equal(smartFit.blockBox('0.1 0.2 0.5'), undefined);
+    assert.equal(smartFit.blockBox('0.1 0.2 1.5 0.1'), undefined);
+    assert.equal(smartFit.blockBox('0.1 0.2 0 0.1'), undefined);
+    assert.equal(smartFit.letterSpacing(40, 10, 20, false), 4);
+    assert.equal(smartFit.letterSpacing(400, 10, 20, false), 8, 'at most 0.4 em');
+    assert.equal(smartFit.letterSpacing(400, 10, 20, true), 1, 'a translation only a little');
+    assert.equal(smartFit.letterSpacing(-5, 10, 20, false), 0);
+    assert.equal(smartFit.spreads('ALWAYS'), true);
+    assert.equal(smartFit.spreads('THE OPPOSITE'), true);
+    assert.equal(smartFit.spreads('And Jacob.'), false);
+    assert.equal(smartFit.spreads('ONE TWO THREE'), false);
+    assert.equal(smartFit.spreads('12'), false);
 });
