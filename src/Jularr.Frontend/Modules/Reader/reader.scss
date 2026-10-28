@@ -184,6 +184,19 @@
     [data-mode-icon] { display: none; }
     &[data-mode=paged][data-paging=flat] [data-mode-icon=flat], &[data-mode=paged][data-paging=book] [data-mode-icon=book],
     &[data-mode=scroll] [data-mode-icon=scroll] { display: contents; }
+    // Arrows beside the page, always there while paging: back on the left, on to the right (the other way round right to left).
+    &__side { position: absolute; z-index: 3; top: 50%; width: 36px; height: 36px; min-width: 0; padding: 0; transform: translateY(-50%);
+        border: 1px solid var(--border); border-radius: 50%; background: color-mix(in srgb, var(--surface) 88%, transparent); color: var(--text); }
+    &__side--back { left: max(4px, env(safe-area-inset-left)); }
+    &__side--forward { right: max(4px, env(safe-area-inset-right)); .ui-icon { transform: rotate(180deg); } }
+    &[data-direction=rtl] &__side--back { left: auto; right: max(4px, env(safe-area-inset-right)); .ui-icon { transform: rotate(180deg); } }
+    &[data-direction=rtl] &__side--forward { right: auto; left: max(4px, env(safe-area-inset-left)); .ui-icon { transform: none; } }
+    &[data-mode=scroll] &__side, &[data-selecting=true] &__side { display: none; }
+    &:has([data-role=turn-tools] [data-turn="-1"]:disabled) &__side--back,
+    &:has([data-role=turn-tools] [data-turn="1"]:disabled) &__side--forward { opacity: .35; pointer-events: none; }
+    // The ways to the previous and the next chapter at the top and the bottom of a scrolled text.
+    &__chapter-edge { display: none; }
+    &[data-mode=scroll] &__chapter-edge { display: flex; justify-content: center; width: fit-content; margin: 24px auto; }
     &[data-direction=rtl] &__page-controls { flex-direction: row-reverse; }
     &[data-direction=rtl] &__page-controls .ui-icon { transform: rotate(180deg); }
     &[data-direction=rtl] &__page-controls .reader__turn-next .ui-icon { transform: none; }
