@@ -120,6 +120,41 @@ namespace Jularr.E2E.Tests
 
         [TestMethod]
         [Timeout(300_000)]
+        public async Task BackArrow_LeavesTheBookInOneStep_AfterChapterChanges_ToWhereTheReaderCameFrom()
+        {
+            using var folders = new Folders("Books");
+            WriteReaderEpub(Path.Combine(folders.Library, "Books", "reader-back.epub"), "The Back Archive", "Local fixture", 6, 36);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            try
+            {
+                await ReadingPathTests.AddBookAsync(page, folders, "The Back Archive");
+                // The reader comes from the Library, not from the title's details.
+                await page.GotoAsync("/Library");
+                var origin = page.Url;
+                await OpenReaderAsync(page, 1440, 900);
+                var entries = await page.EvaluateAsync<int>("() => history.length");
+
+                // Another chapter opens in place and takes the book's history entry; it adds none.
+                await page.EvaluateAsync("() => { const link = [...document.querySelectorAll('.reader a[href]')].find(item => /[?&]s=1(?![0-9])/.test(item.getAttribute('href'))); if (!link) throw new Error('No link to the second chapter.'); link.click(); }");
+                await page.WaitForFunctionAsync("() => location.search.includes('s=1')");
+                Assert.AreEqual(entries, await page.EvaluateAsync<int>("() => history.length"));
+
+                // One press on Back leaves the book for the page it was opened from.
+                await page.Locator("[data-reader-back]").ClickAsync();
+                await page.WaitForURLAsync(origin);
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch
+            {
+                await Evidence.SaveAsync(page, "reader-back-failure");
+                throw;
+            }
+        }
+
+        [TestMethod]
+        [Timeout(300_000)]
         public async Task ModeButton_CyclesBookScrollAndFlatPages_AndTheDeviceKeepsIt()
         {
             using var folders = new Folders("Books");
