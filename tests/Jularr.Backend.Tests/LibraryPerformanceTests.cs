@@ -13,7 +13,6 @@ using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Infrastructure.Sql;
-using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
-import ts from 'typescript';
+import ts from './transpile.mjs';
 
 const source = readFileSync(new URL('../Modules/Reader/Translation/translation.ts', import.meta.url), 'utf8');
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
 const exports = {};
-runInNewContext(script, { exports });
+const lifetime = { require: () => ({ readerLifetime: () => new AbortController().signal }) };
+runInNewContext(script, { exports, ...lifetime });
 
 test('a book names its language, else its text tells it', () => {
     assert.equal(exports.languageOf('de-DE', ''), 'de');
@@ -74,7 +75,7 @@ test('a failed browser batch restores original blocks before local fallback', as
         throw new Error('Unexpected fetch: ' + url);
     };
     const localExports = {};
-    runInNewContext(script, { exports: localExports, fetch: fetchStub });
+    runInNewContext(script, { exports: localExports, fetch: fetchStub, ...lifetime });
     const fakeWorker = {
         onmessage: null,
         terminate() {},

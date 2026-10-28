@@ -254,7 +254,7 @@ namespace Jularr.E2E.Tests
 
                 // Only adding opens a dialog (with Cancel); the added indexer is the same card as in the administration, its settings as inputs inside it.
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add indexer", Exact = true }).And(page.Locator("[href*='Type=Newznab']")));
-                Assert.AreEqual(1, await page.Locator("dialog#connection-editor").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).CountAsync());
+                await Assertions.Expect(page.Locator("dialog#connection-editor").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true })).ToHaveCountAsync(1);
                 var indexerForm = page.Locator("dialog#connection-editor form").First;
                 await indexerForm.Locator("[name=Name]").FillAsync("Setup indexer");
                 await indexerForm.Locator("[name=BaseUrl]").FillAsync(new Uri(fakes.Address, "newznab/").ToString());

@@ -389,8 +389,9 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         private IUiComponent Confirmed(ActivityItemV1 item, string handler, string labelKey, string confirmKey, string? csrf) =>
             new Details(new Summary(new Text(labelKey)), Action(item, handler, confirmKey, csrf)).Class("activity-confirm");
 
-        // The person passes the source's check in their own browser; the server takes the file link from there.
+        // The shared browser resumes automatic links; pasting a file URL remains an optional fallback.
         private IUiComponent ManualLink(ActivityItemV1 item, string manual, string? csrf) => new Div(
+            new A(new Text("admin.browser.manualOpen")).Class("button").Attribute("href", "/Admin/Browser"),
             new A(new Text("activity.openSource")).Class("button").Attribute("href", manual).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"),
             new Form<SaveActivitySourceLinkDataV1>(form =>
             {

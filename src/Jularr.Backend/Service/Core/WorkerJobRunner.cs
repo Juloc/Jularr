@@ -78,9 +78,19 @@ namespace Jularr.Backend.Service.Core
             }
             catch (Exception exception) when (!ct.IsCancellationRequested)
             {
-                logger.LogWarning(exception, "{Job} failed.", key);
-                result = WorkerJobResultType.Failed;
                 errorKey = ServiceError.FromException(exception).Code;
+
+                // A service that is not available is a known state, not a fault worth a stack trace.
+                if (exception is ServiceUnavailableException)
+                {
+                    logger.LogWarning("{Job} failed: {Error}.", key, errorKey);
+                }
+                else
+                {
+                    logger.LogWarning(exception, "{Job} failed.", key);
+                }
+
+                result = WorkerJobResultType.Failed;
             }
 
             await ReportAsync(key, jobs.Finish(key, result, errorKey), ct);

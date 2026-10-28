@@ -15,5 +15,7 @@ namespace Jularr.Backend.Data.Fields.Translation
 
         // A section's blocks in order as a JSON array of plain texts.
         public static readonly StringField Blocks = new() { MaximumLength = 4_000_000, AllowBlank = false };
+        // A section's cached translation so far, as the background job reads it; none before its first block.
+        public static readonly StringField Cache = new() { MaximumLength = 4_000_000, Required = false };
     }
 }

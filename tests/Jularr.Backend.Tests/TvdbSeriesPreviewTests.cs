@@ -135,7 +135,7 @@ namespace Jularr.Backend.Tests
                     {
                         json = System.Text.Json.JsonSerializer.Serialize(new { data = new { id = 123, name = "Remote Show", remoteIds = new[] { new { sourceName = "IMDb", id = SeriesImdbId } } } });
                     }
-                    else if (path == "/v4/series/123/episodes/default")
+                    else if (path == "/v4/series/123/episodes/default/eng")
                     {
                         json = """{"data":{"episodes":[{"id":10,"seasonNumber":0,"number":1,"name":"Special"},{"id":11,"seasonNumber":1,"number":1,"name":"Pilot"},{"id":12,"seasonNumber":1,"number":2,"name":"Next"}]},"links":{"next":null}}""";
                     }
