@@ -323,6 +323,20 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(true, facts.CopyVideo);
             Assert.AreEqual(true, facts.CopyAudio);
 
+            // Moving the audio against the picture re-encodes it: the same file now needs a conversion of its own.
+            using var movedStart = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", new StartPlaybackDataV1(["hls"], ["h264"], ["aac"], audioOffsetMs: 250));
+            Assert.AreEqual(HttpStatusCode.OK, movedStart.StatusCode, await movedStart.Content.ReadAsStringAsync());
+            var moved = (await movedStart.Content.ReadFromJsonAsync<PlaybackPlanV1>())!;
+            Assert.AreEqual(PlaybackModeType.Transcode, moved.PlaybackModeTypeId);
+            StringAssert.EndsWith(moved.StreamUrl, "/playlist.m3u8");
+            using var movedFacts = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, moved.StreamUrl.Replace("playlist.m3u8", "facts", StringComparison.Ordinal)));
+            var movedInfo = (await movedFacts.Content.ReadFromJsonAsync<PlaybackFactsV1>())!;
+            Assert.AreEqual(true, movedInfo.CopyVideo);
+            Assert.AreEqual(false, movedInfo.CopyAudio);
+            Assert.AreEqual(192, movedInfo.AudioKilobits);
+            using var outOfRange = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", new StartPlaybackDataV1(["hls"], ["h264"], ["aac"], audioOffsetMs: 20_000));
+            Assert.AreEqual(HttpStatusCode.BadRequest, outOfRange.StatusCode);
+
             // Finished segments stream; missing ones need FFmpeg.
             var directory = Path.Combine(cache.Path, plan.PlaybackSessionId.ToString("N"));
             Directory.CreateDirectory(directory);

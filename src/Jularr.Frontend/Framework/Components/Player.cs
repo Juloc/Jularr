@@ -230,6 +230,16 @@ namespace Jularr.Frontend.Framework
                         .Attribute("aria-pressed", value == Speed ? "true" : "false"))]).Class("player__speed-points")).Class("player__speed"));
             }
 
+            // Audio and subtitles move against the picture in milliseconds: later with a plus, earlier with a minus.
+            IUiComponent OffsetField(string name, string labelKey)
+            {
+                var id = "player-offset-" + name;
+                return Surface(id, labelKey, new Div(
+                    new Input().Class("player__offset-input").Attribute("id", id).Attribute("type", "number").Attribute("min", "-10000").Attribute("max", "10000").Attribute("step", "50")
+                        .Attribute("value", "0").Attribute("inputmode", "numeric").Attribute("data-setting", name + "-offset"),
+                    new Button(new Text("player.offset.reset")).Class("button player__offset-reset").Attribute("data-action", name + "-offset-reset")).Class("player__offset"));
+            }
+
             IUiComponent FitField()
             {
                 var segments = new[] { "contain", "cover", "original" }.Select(value =>
@@ -289,8 +299,8 @@ namespace Jularr.Frontend.Framework
                         new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("popovertarget", "player-settings").Attribute("popovertargetaction", "hide")),
                     new Div(
                         Pane("basic", AudioField("basic"), SubtitleField("basic"), SpeedField("basic"), QualityField("basic")),
-                        Pane("audio", AudioField("audio")),
-                        Pane("subtitles", SubtitleField("subtitles")),
+                        Pane("audio", AudioField("audio"), OffsetField("audio", "player.offset.audio")),
+                        Pane("subtitles", SubtitleField("subtitles"), OffsetField("subtitle", "player.offset.subtitles")),
                         Pane("playback", [QualityField("playback"), SpeedField("playback"), FitField(), .. PreferenceFields()]),
                         Pane("info", Facts())
                     ).Class("player__settings-body"),
