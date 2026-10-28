@@ -5,6 +5,7 @@ import { inserted, keepAddress, pushAddress, releaseAddress, visit } from "../Na
 import type { CastSender, CastState } from "./Cast";
 import { awake, focus } from "../Playback/MediaFocus";
 import type { StyledSubtitles } from "./StyledSubtitles";
+import { Automatic, nextQuality, recordStall, StallSeconds, troubled } from "./AutoQuality";
 import { pickSecondSubtitle, pickTranslationSource, SecondSubtitleLine, type SubtitleOption } from "./Subtitles";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
 
@@ -442,6 +443,34 @@ async function start(player: HTMLElement): Promise<void> {
             if (autoplay) void video.play().catch(() => stopLoading());
             else video.pause();
         }, { once: true });
+    }
+
+    // A device that plays in Automatic and stalls twice within a minute asks for a lower quality, once per step; an explicit choice is never changed.
+    let stalls: number[] = [];
+    let waitingSince = 0;
+    let loweredByPlayer = false;
+    video.addEventListener("waiting", () => { if (!video.paused && !video.seeking && !switching && !waitingSince) waitingSince = performance.now(); });
+    video.addEventListener("seeking", () => { waitingSince = 0; });
+    video.addEventListener("pause", () => { waitingSince = 0; });
+    video.addEventListener("playing", () => {
+        const waited = waitingSince ? (performance.now() - waitingSince) / 1000 : 0;
+        waitingSince = 0;
+        if (waited < StallSeconds) return;
+        stalls = recordStall(stalls, Date.now());
+        if (troubled(stalls)) void lowerQuality();
+    });
+
+    async function lowerQuality(): Promise<void> {
+        const current = quality ?? Number(initialQuality);
+        if (switching || casting || (current !== Automatic && !loweredByPlayer)) return;
+        const target = nextQuality(current, hlsBandwidth());
+        if (target === null) return;
+        stalls = [];
+        if (await replan(audioIndex, target)) {
+            loweredByPlayer = true;
+            setChoice("quality", String(target));
+            notice("playback_slow");
+        }
     }
 
     // The new plan comes first; only then the old session ends and playback continues at the same position.

@@ -10741,6 +10741,10 @@
    "Playback ended because the server needed the capacity. Choose a lower quality to continue.",
    "Die Wiedergabe wurde beendet, weil der Server die Kapazität brauchte. Wähle eine niedrigere Qualität, um fortzufahren."
   ],
+  "player.status.playback_slow": [
+   "The connection is slow, so this plays in a lower quality.",
+   "Die Verbindung ist langsam, deshalb läuft das Video in niedrigerer Qualität."
+  ],
   "player.status.playback_reduced": [
    "The server is busy, so this plays in a lower quality.",
    "Der Server ist ausgelastet, deshalb läuft dies in niedrigerer Qualität."

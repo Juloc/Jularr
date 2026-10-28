@@ -2021,6 +2021,7 @@ namespace Jularr.Frontend.Localization
             new("player.status.playback_cache_unavailable", "Playback cache is full or its storage is unavailable"),
             new("player.status.playback_evicted", "Playback ended because the server needed the capacity. Choose a lower quality to continue."),
             new("player.status.playback_reduced", "The server is busy, so this plays in a lower quality."),
+            new("player.status.playback_slow", "The connection is slow, so this plays in a lower quality."),
             new("system.database", "Database size"),
             new("system.profiles", "Profiles"),
             new("system.queued", "Queued operations"),
