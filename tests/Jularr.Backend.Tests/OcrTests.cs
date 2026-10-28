@@ -274,6 +274,7 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { Box(400, 198, 1300, 322) }, joined.ToArray(), "the words of a large heading");
             Assert.AreEqual(2, OcrEngine.Join([Box(60, 230, 300, 270), Box(400, 200, 900, 330)]).Count, "a small line beside large type");
             Assert.AreEqual(2, OcrEngine.Join([Box(60, 300, 500, 330), Box(560, 302, 1000, 331)]).Count, "two columns of text");
+            Assert.AreEqual(1, OcrEngine.Join([Box(60, 300, 100, 320), Box(110, 296, 300, 330), Box(310, 300, 350, 320)]).Count, "a short word beside one with a descender");
         }
 
         // A page drawn by PDFium keeps its colours: an orange box stays orange, not blue.
