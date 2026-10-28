@@ -311,6 +311,10 @@ namespace Jularr.E2E.Tests
             Assert.AreEqual("right true,flash true,left true,volume true,brightness true,hold true,release true", touched);
             Assert.IsFalse(await page.EvaluateAsync<bool>("() => !!document.fullscreenElement"), "A double tap must not toggle fullscreen.");
 
+            // The playback is media for the system: notification and lock screen name it and know its state.
+            Assert.AreEqual("paused", await page.EvaluateAsync<string>("() => navigator.mediaSession.playbackState"));
+            Assert.IsFalse(string.IsNullOrWhiteSpace(await page.EvaluateAsync<string>("() => navigator.mediaSession.metadata?.title ?? ''")), "The media session names no title.");
+
             await page.Locator("[data-action=mute]").ClickAsync();
             Assert.IsTrue(await video.EvaluateAsync<bool>("video => video.muted"));
             await page.Locator("[data-action=mute]").ClickAsync();
