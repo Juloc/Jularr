@@ -1119,6 +1119,85 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(series, await host.ScalarAsync("SELECT \"WorkId\" FROM \"WatchlistEntries\""));
         }
 
+        [TestMethod]
+        public async Task Request_OnAnAnimeSeasonTheMappingsName_TakesTheMappedSeriesAndSeasons_WithoutATitleSearch()
+        {
+            var tvdb = new FakeTvdb();
+            await using var host = await CreateHostAsync(anime: new FakeAniList(), tvdb: tvdb);
+
+            // The AniBridge mappings put both AniList entries into TheTVDB's series, one season each.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "AnimeMappings" ("AniListId", "TvdbId", "SeasonNumber", "AniListEpisode", "FirstEpisode", "LastEpisode") VALUES (20, 81189, 1, 1, 1, 12), (21, 81189, 2, 1, 1, 12);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (800, 2, 1, 'The Matrix Show Season 2', 2021, 'anilist');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (800, 'anilist', '21');
+                """);
+
+            // The request is the mapped series'; its seasons hold their entries from the mappings and TheTVDB is never searched by title.
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/works/800/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            var series = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tvdb' AND \"Value\" = '81189'"))!;
+            Assert.AreEqual(series, await host.ScalarAsync("SELECT \"WorkId\" FROM \"AcquisitionRequests\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"Id\" = 800"));
+            Assert.AreEqual("1:20:0,2:21:0", await host.ScalarAsync("""
+                SELECT string_agg(season."Number"::integer || ':' || mapped."Value" || ':' || mapped."EpisodeOffset", ',' ORDER BY season."Number")
+                FROM "WorkUnitExternalIdentities" AS mapped JOIN "WorkUnits" AS season ON season."Id" = mapped."WorkUnitId"
+                """));
+            Assert.IsFalse(tvdb.Requests.Any(request => request.AbsolutePath == "/v4/search"));
+        }
+
+        [TestMethod]
+        public async Task FeedRefresh_DetailsTheSeriesListsAhead_WithinTheTvdbCatalogsBudget()
+        {
+            var tvdb = new FakeTvdb();
+            await using var host = await CreateHostAsync(tvdb: tvdb);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "MediaTypes" SET "IsEnabled" = FALSE WHERE "Id" <> 2;
+                UPDATE "InstanceSettings" SET "DetailsDiscoverAhead" = TRUE;
+                UPDATE "ExternalWorkSyncs" SET "PausesWhileUsed" = TRUE WHERE "Namespace" = 'tvdb';
+                """);
+            async Task Refresh()
+            {
+                await using var scope = host.Services.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<RefreshDiscoverFeedsV1>().ExecuteAsync<UpdateResult>(new RefreshDiscoverFeedsParametersV1(), default);
+            }
+            const string Show = "SELECT work.\"DetailedAt\" IS NOT NULL FROM \"Works\" AS work JOIN \"WorkExternalIdentities\" AS identity ON identity.\"WorkId\" = work.\"Id\" WHERE identity.\"Namespace\" = 'tvdb' AND identity.\"Value\" = '81189'";
+
+            // TMDB's series lists are kept as TheTVDB's series; while someone uses Jularr, TheTVDB waits as its card says.
+            using var used = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/syncs");
+            await Refresh();
+            Assert.AreEqual(false, await host.ScalarAsync(Show));
+            Assert.IsFalse(tvdb.Requests.Any(request => request.AbsolutePath == "/v4/series/81189/extended"));
+
+            // Without the pause the next pass details the series of the lists within TheTVDB's requests a minute.
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"PausesWhileUsed\" = FALSE WHERE \"Namespace\" = 'tvdb'");
+            await Refresh();
+            Assert.AreEqual(true, await host.ScalarAsync(Show));
+            Assert.AreEqual(24L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 2"));
+        }
+
+        [TestMethod]
+        [DataRow(true)]
+        [DataRow(false)]
+        public async Task Razor_HomeSeriesSlide_ComesFromDiscoversSeriesList_KeptOrAskedLive(bool caching)
+        {
+            var tmdb = new FakeTmdb();
+            await using var host = await CreateHostAsync(razor: true, fake: tmdb, tvdb: new FakeTvdb());
+            if (!caching) await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" IN ('DiscoverCache', 'LocalDiscovery')");
+            int Trending() => tmdb.Requests.Count(request => request.AbsolutePath == "/3/trending/tv/week");
+
+            // The series slide is TMDB's trending series as TheTVDB's title; the films keep their own slide.
+            var html = await PageAsync(host, "/");
+            StringAssert.Contains(html, "data-hero-group=\"series\"");
+            StringAssert.Contains(html, "class=\"hero-carousel__title\">The Matrix Show<");
+            StringAssert.Contains(html, "data-hero-group=\"movies\"");
+
+            // A kept list answers the next visit; without the Caching module each visit asks TMDB.
+            var asked = Trending();
+            Assert.AreEqual(1, asked);
+            StringAssert.Contains(await PageAsync(host, "/"), "class=\"hero-carousel__title\">The Matrix Show<");
+            Assert.AreEqual(caching ? 1 : 2, Trending());
+        }
+
         private static async Task<string> PageAsync(Host host, string path)
         {
             using var page = await host.SendAsync(HttpMethod.Get, path);

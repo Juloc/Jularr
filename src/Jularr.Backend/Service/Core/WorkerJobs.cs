@@ -83,6 +83,8 @@ namespace Jularr.Backend.Service.Core
             new("aniListMatching", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(30), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             // The relations of the matched anime, manga and light novels; skipped while the AniList module is off.
             new("aniListRelations", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(32), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
+            // Once a day the AniBridge mappings from AniList to TheTVDB; skipped while the AniList module is off.
+            new("animeMappings", WorkerGroupType.Media, TimeSpan.FromHours(24), TimeSpan.FromSeconds(34), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             // Every profile's own AniList list and progress; waits while Jularr is used, as the other syncs do.
             new("aniListSync", WorkerGroupType.Media, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(45), canPauseWhileUsed: true),
             // Titles that came without a description and cover (a media server's sync names only title, year and ids) get them from the catalog, a few at a time.

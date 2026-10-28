@@ -133,6 +133,8 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(ExternalWorkLogic.MaySync(CachingTier.Lean, eager, [], new TimeOnly(23, 30), false));
             Assert.IsFalse(ExternalWorkLogic.MaySync(CachingTier.Full, new ExternalWorkSyncData("openlibrary", 20, false, null, null, null), [], new TimeOnly(23, 30), false),
                 "A catalog without a full list is never kept whole.");
+            Assert.IsFalse(ExternalWorkLogic.MaySync(CachingTier.Full, new ExternalWorkSyncData("tvdb", 120, false, null, null, null), [], new TimeOnly(23, 30), false),
+                "TheTVDB's card only budgets the details of the series lists.");
         }
 
         [TestMethod]
@@ -164,11 +166,11 @@ namespace Jularr.Backend.Tests
             }
 
             // Caching is on and the full catalog off by default.
-            Assert.AreEqual("anilist:Standard,openlibrary:Standard,tmdb_movie:Standard", await TiersAsync());
+            Assert.AreEqual("anilist:Standard,openlibrary:Standard,tmdb_movie:Standard,tvdb:Standard", await TiersAsync());
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'LocalDiscovery'");
-            Assert.AreEqual("anilist:Full,openlibrary:Standard,tmdb_movie:Full", await TiersAsync());
+            Assert.AreEqual("anilist:Full,openlibrary:Standard,tmdb_movie:Full,tvdb:Standard", await TiersAsync(), "TheTVDB has no full list and is never kept whole.");
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" IN ('LocalDiscovery', 'DiscoverCache')");
-            Assert.AreEqual("anilist:Lean,openlibrary:Lean,tmdb_movie:Lean", await TiersAsync());
+            Assert.AreEqual("anilist:Lean,openlibrary:Lean,tmdb_movie:Lean,tvdb:Lean", await TiersAsync());
         }
 
         [TestMethod]
@@ -240,7 +242,7 @@ namespace Jularr.Backend.Tests
             // With the full catalog a catalog with a full list is kept whole, the others keep Discover's lists; each card keeps its pace, pause and windows.
             var html = await PageAsync();
             Assert.IsFalse(html.Contains("id=\"catalog-tmdb_tv\"", StringComparison.Ordinal), "TMDB's series catalog has no card.");
-            foreach (var (@namespace, mode) in new[] { ("anilist", "Whole"), ("tmdb_movie", "Whole"), ("openlibrary", "Kept") })
+            foreach (var (@namespace, mode) in new[] { ("anilist", "Whole"), ("tmdb_movie", "Whole"), ("openlibrary", "Kept"), ("tvdb", "Kept") })
             {
                 var card = Card(html, @namespace);
                 StringAssert.Contains(card, ">" + mode + "<", @namespace);

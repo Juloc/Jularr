@@ -372,8 +372,8 @@ namespace Jularr.Backend.Logic.Media
             return await ctx.ReadSql.ReadListAsync<CatalogPrefetchData>(sql, ct);
         }
 
-        // The next titles of a catalog's Discover lists that have no details yet and a catalog entry that can give them, in the lists' order.
-        // Recommendations of a Work are no Discover list.
+        // The next titles of a catalog's Discover lists that have no details yet and a catalog entry that can give them, in the lists' order; TMDB's series lists
+        // are TheTVDB's. Recommendations of a Work are no Discover list.
         public static async Task<IReadOnlyList<WorkIdData>> ReadUndetailedDiscoverWorksAsync(this LogicContext ctx, CatalogPrefetchQueryData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -391,7 +391,7 @@ namespace Jularr.Backend.Logic.Media
                         JOIN "ExternalWorkFeedItems" AS item ON item."FeedId" = feed."Id"
                         JOIN "Works" AS work ON work."Id" = item."WorkId"
                     WHERE
-                        feed."Namespace" = @Namespace
+                        CASE feed."Namespace" WHEN 'tmdb_tv' THEN 'tvdb' ELSE feed."Namespace" END = @Namespace
                         AND feed."SourceValue" IS NULL
                         AND work."DetailedAt" IS NULL
                         AND work."Id" <> ALL(@Skipped)

@@ -17,6 +17,10 @@ namespace Jularr.Workers
             await Runner.RunIfConnectedAsync("aniListSync", async (services, token) =>
                 (await services.GetRequiredService<SyncAniListV1>().ExecuteAsync<UpdateResult>(new AniListSyncParametersV1(), default, token)).Success, ct);
 
+            // The AniBridge mappings first, so a new release maps the anime of this pass.
+            await Runner.RunAsync("animeMappings", (services, token) =>
+                services.GetRequiredService<SyncAnimeMappingsV1>().ExecuteAsync<UpdateResult>(new MediaMatchParametersV1(), default, token), ct);
+
             await Runner.RunAsync("aniListMatching", (services, token) =>
                 services.GetRequiredService<MatchAniListV1>().ExecuteAsync<UpdateResult>(new MediaMatchParametersV1(), default, token), ct);
 

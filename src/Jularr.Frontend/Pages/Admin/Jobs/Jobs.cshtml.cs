@@ -37,6 +37,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             ["usenet"] = ("download", UiTone.Info),
             ["aniListMatching"] = ("layers", UiTone.Warning),
             ["aniListRelations"] = ("link", UiTone.Warning),
+            ["animeMappings"] = ("link", UiTone.Warning),
             ["aniListSync"] = ("sync", UiTone.Warning),
             ["metadataFill"] = ("layers", UiTone.Accent),
             ["wantedTargets"] = ("search", UiTone.Accent),

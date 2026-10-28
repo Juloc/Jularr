@@ -64,10 +64,10 @@ namespace Jularr.E2E.Tests
                 await page.Locator("[data-discover-layout]").ClickAsync();
                 await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-discover-layout", "grid");
 
-                // One highlight per type leaves one slide for each type read whole: the films; series come from TMDB's lists and have none.
+                // One highlight per type leaves one slide for each of the two types: the films read whole, the series from Discover's series list.
                 await page.Locator("button[data-drawer-pane=view]").ClickAsync();
                 await page.Locator("#discover-panel .choice-group__item", new() { HasText = "1 title" }).ClickAsync();
-                await Assertions.Expect(page.Locator(".hero-carousel__counter")).ToHaveTextAsync("1 / 1");
+                await Assertions.Expect(page.Locator(".hero-carousel__counter")).ToHaveTextAsync("1 / 2");
                 await Evidence.SaveAsync(page, "discover-layout");
             }
             catch

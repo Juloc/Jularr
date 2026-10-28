@@ -107,7 +107,7 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   opens from its shelf's See all and names itself with a way back. Owner's mockup of 19 Oct
   ("capsules"): one capsule row (All, then Watch, Read, Hear and Game with their types; several
   types may be chosen, `type=a,b`) with the Customize and Filter drawers at its end, the highlights
-  as one carousel (continued titles first, then each type's best by rank; the device keeps how many
+  as one carousel (continued titles first, then each type's best by rank, series from Discover's series list; the device keeps how many
   and whether it turns by itself), feed chips, sort and a rows/grid switch. The header owns the **one**
   global Search; do not add another search field inside Discover. The Filter drawer lists the media types first, then the local availability
   (in Jularr, can be requested), then only what the chosen types have: the release year and their rankings; the rankings a chosen

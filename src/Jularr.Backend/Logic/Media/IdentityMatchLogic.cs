@@ -29,7 +29,37 @@ namespace Jularr.Backend.Logic.Media
                 }
             }
 
-            // Season entries land on the Work's regular seasons by number.
+            // Mapped seasons replace the automatic entries of an earlier pass that no longer fit; a person's entries stay.
+            if (data.ReplacesAutomatic)
+            {
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    DELETE FROM
+                        "WorkUnitExternalIdentities" AS mapped
+                    USING
+                        "WorkUnits" AS season
+                    WHERE
+                        season."Id" = mapped."WorkUnitId"
+                        AND season."WorkId" = @WorkId
+                        AND mapped."Namespace" = @Namespace
+                        AND NOT mapped."IsManual"
+                        AND NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                jsonb_to_recordset(@Seasons::jsonb) AS item ("Season" integer, "Value" text, "Offset" integer)
+                            WHERE
+                                item."Value" = mapped."Value"
+                                AND item."Season" = season."Number"
+                                AND item."Offset" = mapped."EpisodeOffset"
+                        );
+                    """;
+                sql.Parameters.Add(data);
+                await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            }
+
+            // Season entries land on the Work's seasons by number.
             sql = new SqlStatement();
             sql.Statement =
                 """

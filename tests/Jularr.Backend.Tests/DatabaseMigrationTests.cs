@@ -101,8 +101,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "InstanceModuleDependencies" WHERE "ModuleKey" = 'LocalDiscovery' AND "RequiredKey" = 'DiscoverCache'"""),
                 "The full catalog stays a sub-option of the Caching module.");
             Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM information_schema.columns WHERE table_name = 'ExternalWorkSyncs' AND column_name IN ('IsEnabled', 'DetailsTrending', 'CacheTier')"""));
-            Assert.AreEqual("anilist:30,tmdb_movie:30", await ScalarAsync(cs, """SELECT string_agg("Namespace" || ':' || "RequestsPerMinute", ',' ORDER BY "Namespace") FROM "ExternalWorkSyncs" """),
-                "Each catalog keeps its pace; the TMDB series catalog went with 0018.");
+            Assert.AreEqual("anilist:30,tmdb_movie:30,tvdb:120", await ScalarAsync(cs, """SELECT string_agg("Namespace" || ':' || "RequestsPerMinute", ',' ORDER BY "Namespace") FROM "ExternalWorkSyncs" """),
+                "Each catalog keeps its pace; the TMDB series catalog went with 0018, TheTVDB's card came with 0019.");
             Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkSyncWindows" WHERE "Namespace" = 'anilist'"""), "The Owner's windows stay.");
             Assert.AreEqual("false:14", await ScalarAsync(cs, """SELECT "DetailsDiscoverAhead" || ':' || "CatalogDetailKeepDays" FROM "InstanceSettings" WHERE "Id" = 1"""));
             Assert.AreEqual(17, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0017_catalog_cache_tiers'"""));
@@ -133,7 +133,7 @@ namespace Jularr.Backend.Tests
                 """);
             await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
 
-            Assert.AreEqual("anilist,tmdb_movie", await ScalarAsync(cs, """SELECT string_agg("Namespace", ',' ORDER BY "Namespace") FROM "ExternalWorkSyncs" """));
+            Assert.AreEqual("anilist,tmdb_movie,tvdb", await ScalarAsync(cs, """SELECT string_agg("Namespace", ',' ORDER BY "Namespace") FROM "ExternalWorkSyncs" """));
             Assert.AreEqual("tmdb_movie", await ScalarAsync(cs, """SELECT string_agg("Namespace", ',') FROM "ExternalWorkSyncWindows" """));
             CollectionAssert.AreEqual(new long[] { 501, 603, 604, 605, 606 }, (long[])(await ScalarAsync(cs, """SELECT array_agg("Id" ORDER BY "Id") FROM "Works" """))!,
                 "Catalog series of TMDB go, opened or not; a series in the library, a series not from that catalog and the films stay.");
@@ -147,6 +147,34 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "PersonExternalIdentities" ("PersonId", "Namespace", "Value") VALUES (900, 'tvdb', '300');
                 """);
             Assert.AreEqual(18, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0018_series_from_tvdb'"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+        }
+
+        [TestMethod]
+        public async Task AnimeMappings_UpgradeAddsTheEmptyMappingsTheirSource_AndTheTvdbCatalogCard()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(AnimeMappings_UpgradeAddsTheEmptyMappingsTheirSource_AndTheTvdbCatalogCard));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 19).ToArray()).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await ExecuteAsync(cs, """UPDATE "ExternalWorkSyncs" SET "RequestsPerMinute" = 30, "PausesWhileUsed" = TRUE WHERE "Namespace" = 'tmdb_movie'""");
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            // The other catalogs keep the Owner's choices; TheTVDB's card has TMDB's pace and no full sync state.
+            Assert.AreEqual("anilist:20:true,tmdb_movie:30:true,tvdb:120:false", await ScalarAsync(cs,
+                """SELECT string_agg("Namespace" || ':' || "RequestsPerMinute" || ':' || "PausesWhileUsed", ',' ORDER BY "Namespace") FROM "ExternalWorkSyncs" """));
+            Assert.AreEqual(true, await ScalarAsync(cs, """SELECT "ListedOn" IS NULL AND "Cursor" IS NULL AND "CompletedAt" IS NULL FROM "ExternalWorkSyncs" WHERE "Namespace" = 'tvdb'"""));
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "AnimeMappings" """));
+            Assert.AreEqual(true, await ScalarAsync(cs, """SELECT "ETag" IS NULL AND "LoadedAt" IS NULL FROM "AnimeMappingSources" """));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 501"""));
+
+            // A row per entry and season, ranges within themselves; one source row only.
+            await ExecuteAsync(cs, """INSERT INTO "AnimeMappings" ("AniListId", "TvdbId", "SeasonNumber", "AniListEpisode", "FirstEpisode", "LastEpisode") VALUES (104578, 267440, 3, 1, 13, 22), (21, 81797, 23, 1156, 1, NULL)""");
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "AnimeMappings" ("AniListId", "TvdbId", "SeasonNumber", "AniListEpisode", "FirstEpisode", "LastEpisode") VALUES (1, 1, 1, 1, 5, 4)"""));
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "AnimeMappingSources" ("Id") VALUES (FALSE)"""));
+            Assert.AreEqual(19, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0019_anime_mappings_tvdb_budget'"""));
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
         }
 
@@ -253,9 +281,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(6L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" """));
             Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkFeedItems" """));
             Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkFeeds" WHERE "RefreshedAt" IS NULL AND "RetryAfter" <= now()"""));
-            Assert.AreEqual(2L, await ScalarAsync(cs, """
+            Assert.AreEqual(3L, await ScalarAsync(cs, """
                 SELECT count(*) FROM "ExternalWorkSyncs" WHERE "ListedOn" IS NULL AND "Cursor" IS NULL AND "ChangesReadAt" IS NULL AND "CompletedAt" IS NULL AND "RequestsPerMinute" > 0
-                """), "TMDB films and AniList; the TMDB series catalog went with 0018.");
+                """), "TMDB films, AniList and TheTVDB's card of 0019; the TMDB series catalog went with 0018.");
             Assert.AreEqual(DBNull.Value, await ScalarAsync(cs, """SELECT to_regclass('"ExternalWorks"')::text"""));
             Assert.AreEqual(0L, await ScalarAsync(cs, """
                 SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND column_name = 'ExternalWorkId' AND table_name IN ('WorkRelations', 'ExternalWorkFeedItems')

@@ -119,6 +119,48 @@ namespace Jularr.Backend.Logic.Media
             return aligned;
         }
 
+        // The seasons the AniBridge mappings give the AniList entries of one TheTVDB series: an entry sits in the season of its earliest episode, its offset is the
+        // episodes of that season before it. Ranges that overlap in a regular season, or an entry that names another series as well, are for a person (the conflicts);
+        // overlapping specials are left out. An entry that would start before its season's first episode is left out too.
+        public static (IReadOnlyList<(int Season, int AniListId, int Offset)> Seasons, IReadOnlyList<int> Conflicts) FromMappings(IReadOnlyList<AnimeMappingData> mappings)
+        {
+            var conflicts = mappings.Where(mapping => mapping.IsAmbiguous).Select(mapping => mapping.AniListId).ToHashSet();
+            var leftOut = new HashSet<(int AniListId, int Season)>();
+            foreach (var season in mappings.GroupBy(mapping => mapping.SeasonNumber))
+            {
+                AnimeMappingData? reach = null;
+                foreach (var mapping in season.OrderBy(mapping => mapping.FirstEpisode).ThenBy(mapping => mapping.AniListId))
+                {
+                    if (reach is not null && (reach.LastEpisode is not { } end || mapping.FirstEpisode <= end))
+                    {
+                        if (season.Key == 0)
+                        {
+                            leftOut.Add((reach.AniListId, 0));
+                            leftOut.Add((mapping.AniListId, 0));
+                        }
+                        else
+                        {
+                            conflicts.Add(reach.AniListId);
+                            conflicts.Add(mapping.AniListId);
+                        }
+                    }
+
+                    if (reach is null || reach.LastEpisode is { } reached && (mapping.LastEpisode is null || mapping.LastEpisode > reached))
+                    {
+                        reach = mapping;
+                    }
+                }
+            }
+
+            var seasons = mappings.GroupBy(mapping => mapping.AniListId)
+                .Select(entry => entry.OrderBy(mapping => mapping.AniListEpisode).ThenBy(mapping => mapping.SeasonNumber == 0).ThenBy(mapping => mapping.SeasonNumber).First())
+                .Where(mapping => !leftOut.Contains((mapping.AniListId, mapping.SeasonNumber)) && mapping.FirstEpisode >= mapping.AniListEpisode)
+                .Select(mapping => (Season: mapping.SeasonNumber, mapping.AniListId, Offset: mapping.FirstEpisode - mapping.AniListEpisode))
+                .OrderBy(entry => entry.Season).ThenBy(entry => entry.Offset).ThenBy(entry => entry.AniListId)
+                .ToArray();
+            return (seasons, [.. conflicts.Order()]);
+        }
+
         // The TheTVDB series of an anime's first season: exactly one search result named like it and, where known, started within a year.
         public static int? ChooseSeries(IReadOnlyList<ExternalWorkData> results, AniListMedia first)
         {

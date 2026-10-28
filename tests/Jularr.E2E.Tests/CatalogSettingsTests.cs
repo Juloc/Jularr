@@ -19,10 +19,14 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(page.GetByText("Full local discovery is off", new() { Exact = false })).ToBeVisibleAsync();
 
             // Every catalog is a card: how it is kept (here only what Discover loaded), the titles and what is still to read.
-            // TMDB keeps only films whole; series come from TheTVDB.
+            // TMDB keeps only films whole; series come from TheTVDB, whose card budgets the details of the series lists and is never kept whole.
             var cards = page.Locator(".card-grid .feature-card");
-            await Assertions.Expect(cards).ToHaveCountAsync(2);
+            await Assertions.Expect(cards).ToHaveCountAsync(3);
             await Assertions.Expect(cards.Filter(new() { HasText = "TMDB series" })).ToHaveCountAsync(0);
+            var tvdb = cards.Filter(new() { HasText = "TVDB" });
+            await Assertions.Expect(tvdb).ToContainTextAsync("Kept");
+            await Assertions.Expect(tvdb.Locator("[name=RequestsPerMinute]")).ToHaveValueAsync("120");
+            await Assertions.Expect(tvdb.Locator("[name=PausesWhileUsed]")).Not.ToHaveCountAsync(0);
             var aniList = cards.Filter(new() { HasText = "AniList" });
             await Assertions.Expect(aniList).ToContainTextAsync("Kept");
             Assert.IsTrue(await page.GetByRole(AriaRole.Button, new() { Name = "Sync now", Exact = true }).IsDisabledAsync(), "Sync now needs full local discovery.");
@@ -128,7 +132,7 @@ namespace Jularr.E2E.Tests
             var page = browser.Page;
             await Owner.SetUpAndSignInAsync(page);
             await jularr.RunSqlAsync("""
-                INSERT INTO "ExternalWorkSyncs" ("Namespace", "RequestsPerMinute") VALUES ('tvdb', 30), ('openlibrary', 30), ('musicbrainz', 30), ('igdb', 30);
+                INSERT INTO "ExternalWorkSyncs" ("Namespace", "RequestsPerMinute") VALUES ('openlibrary', 30), ('musicbrainz', 30), ('igdb', 30);
                 """);
             await page.GotoAsync("/Admin/Catalog");
 

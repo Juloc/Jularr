@@ -93,8 +93,10 @@ namespace Jularr.Backend.Data.Logic.Media
     // The outcome of one matching pass; a Work-level entry or season entries with their episode offsets.
     internal sealed class IdentityMatchResultData : BaseData
     {
-        public IdentityMatchResultData(long workId, string @namespace, IdentityMatchStatusType identityMatchStatusTypeId, string candidates, string? value, string seasons, bool isManual)
+        public IdentityMatchResultData(long workId, string @namespace, IdentityMatchStatusType identityMatchStatusTypeId, string candidates, string? value, string seasons, bool isManual,
+            bool replacesAutomatic = false)
         {
+            ReplacesAutomatic = replacesAutomatic;
             WorkId = workId;
             Namespace = @namespace;
             IdentityMatchStatusTypeId = identityMatchStatusTypeId;
@@ -126,5 +128,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.IsManual))]
         public bool IsManual { get; }
+
+        // The seasons come from the AniBridge mappings and replace the Work's earlier automatic ones; a person's stay.
+        [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.ReplacesAutomatic))]
+        public bool ReplacesAutomatic { get; }
     }
 }

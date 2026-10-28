@@ -81,10 +81,16 @@ namespace Jularr.Backend.Service.Core
             return media.Format is { } format && AniListMatching.Formats(MediaType.Series, MediaSubtype.Anime).Contains(format) ? media : throw new KeyNotFoundException("Not an anime series.");
         }
 
-        // The TheTVDB series of an entry is the one of its first season, along the prequels; kept for a while either way.
-        // An AniList-to-TheTVDB mapping belongs before the title search, once there is one.
+        // The TheTVDB series of an entry is the one the AniBridge mappings name for it; without one, the one a title search names for its first season, along the
+        // prequels, kept for a while. Where the mappings name several series, the title search may only choose among them.
         private async Task<int?> FindAnimeSeriesAsync(LogicContext context, AniListMedia media, CancellationToken ct)
         {
+            var mapped = await ReadMappedSeriesAsync(context, media.Id, ct);
+            if (mapped is [var only])
+            {
+                return only;
+            }
+
             var key = "metadata.anime.tvdb." + media.Id.ToString(CultureInfo.InvariantCulture);
             if (cache.TryGetValue(key, out int? cached))
             {
@@ -121,11 +127,19 @@ namespace Jularr.Backend.Service.Core
                 first = previous;
             }
 
+            // The first season may be mapped where the entry itself is not.
+            if (mapped.Count == 0 && first.Id != media.Id && await ReadMappedSeriesAsync(context, first.Id, ct) is [var series])
+            {
+                return series;
+            }
+
             // Without a mapping, TheTVDB's title search names the series.
             int? found = null;
             foreach (var query in new[] { first.EnglishTitle, first.RomajiTitle }.OfType<string>().Distinct(StringComparer.Ordinal))
             {
-                found = AniListMatching.ChooseSeries(await metadata.SearchSeriesAsync(context, query, null, ct), first);
+                var results = await metadata.SearchSeriesAsync(context, query, null, ct);
+                found = AniListMatching.ChooseSeries(mapped.Count == 0 ? results
+                    : [.. results.Where(result => mapped.Any(id => id.ToString(CultureInfo.InvariantCulture) == result.Value))], first);
                 if (found is not null)
                 {
                     break;
@@ -135,6 +149,9 @@ namespace Jularr.Backend.Service.Core
             cache.Set(key, found, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(6), Size = 1 });
             return found;
         }
+
+        private static async Task<IReadOnlyList<int>> ReadMappedSeriesAsync(LogicContext context, int aniListId, CancellationToken ct) =>
+            [.. (await context.ExecuteBatchAsync((ctx, token) => ctx.ReadAnimeMappingSeriesAsync(aniListId, token), ct, mode: SqlAccessMode.ReadOnly)).Select(series => series.TvdbId)];
 
         private static MetadataSearchResultV1 AniListAnime(AniListMedia result) => new(AniListMetadata.Namespace, result.Id.ToString(CultureInfo.InvariantCulture),
             TextLimit.Cut(AniListMetadata.Title(result), 500)!, TextLimit.Cut(result.RomajiTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null,
@@ -399,8 +416,9 @@ namespace Jularr.Backend.Service.Core
             {
                 try
                 {
-                    var seasons = await context.ExecuteBatchAsync((ctx, token) => AniListMatcher.ReadSeasonsAsync(ctx, seriesId, token), ct, mode: SqlAccessMode.ReadOnly);
-                    match = await matcher.MatchAsync(target, seasons, null, ct);
+                    var (seasons, mappings) = await context.ExecuteBatchAsync(async (ctx, token) =>
+                        (await AniListMatcher.ReadSeasonsAsync(ctx, seriesId, token), await ctx.ReadAnimeMappingsOfWorkAsync(seriesId, token)), ct, mode: SqlAccessMode.ReadOnly);
+                    match = await matcher.MatchAsync(target, seasons, mappings, null, ct);
                 }
                 catch (ServiceUnavailableException)
                 {

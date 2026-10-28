@@ -12575,6 +12575,14 @@
    "Reads the relations AniList names for matched titles and adds them to the library's relations.",
    "Liest die Beziehungen, die AniList für zugeordnete Titel nennt, und ergänzt damit die Beziehungen der Bibliothek."
   ],
+  "jobs.job.animeMappings": [
+   "Anime mappings",
+   "Anime-Zuordnungen"
+  ],
+  "jobs.about.animeMappings": [
+   "Loads the AniBridge mappings from AniList to TheTVDB once a day.",
+   "Lädt einmal täglich die AniBridge-Zuordnungen von AniList zu TheTVDB."
+  ],
   "jobs.about.aniListSync": [
    "Reads each connected profile's AniList list, takes over what is watched or read there and sends the progress made here.",
    "Liest die AniList-Liste jedes verbundenen Profils, übernimmt, was dort gesehen oder gelesen ist, und sendet den hier gemachten Fortschritt."
