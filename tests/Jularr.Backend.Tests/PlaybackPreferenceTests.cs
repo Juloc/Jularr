@@ -336,6 +336,19 @@ namespace Jularr.Backend.Tests
             CollectionAssert.DoesNotContain(uncapped, "-maxrate");
         }
 
+        [TestMethod]
+        public void Transcoder_AudioOffset_DelaysOrTrimsTheEncodedAudio()
+        {
+            var later = MediaTranscoder.BuildArguments(new TranscodeRequest("/media/film.mkv", "/cache/s", 10, 6, 0, 1, true, false, [], []) { AudioOffsetMs = 250 }).ToList();
+            Assert.AreEqual("adelay=250:all=1", later[later.IndexOf("-af") + 1]);
+            var earlier = MediaTranscoder.BuildArguments(new TranscodeRequest("/media/film.mkv", "/cache/s", 0, 6, 0, 1, true, false, [], []) { AudioOffsetMs = -1500 }).ToList();
+            Assert.AreEqual("atrim=start=1.5,asetpts=PTS-STARTPTS", earlier[earlier.IndexOf("-af") + 1]);
+
+            // Copied audio cannot move, and no offset adds no filter.
+            CollectionAssert.DoesNotContain(MediaTranscoder.BuildArguments(new TranscodeRequest("/media/film.mkv", "/cache/s", 0, 6, 0, 1, true, true, [], []) { AudioOffsetMs = 250 }).ToList(), "-af");
+            CollectionAssert.DoesNotContain(MediaTranscoder.BuildArguments(new TranscodeRequest("/media/film.mkv", "/cache/s", 0, 6, 0, 1, true, false, [], [])).ToList(), "-af");
+        }
+
         private static async Task<Host> CreateFilmHostAsync(LibraryTests.TemporaryDirectory storage, LibraryTests.TemporaryDirectory cache) =>
             await LibraryTests.CreateHostAsync(storage.Path, razor: true, settings: new Dictionary<string, string>
             {

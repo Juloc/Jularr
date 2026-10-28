@@ -24,6 +24,8 @@ namespace Jularr.Integrations.Data.Tvdb
         public string? Name { get; } = name;
         public DateOnly? Aired { get; } = aired;
         public int? Runtime { get; } = runtime;
+
+        public TvdbEpisode WithName(string? other) => new(Id, SeasonNumber, EpisodeNumber, AbsoluteNumber, other, Aired, Runtime);
     }
 
     internal enum TvdbFailure : byte

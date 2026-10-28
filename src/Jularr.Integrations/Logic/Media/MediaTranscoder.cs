@@ -261,6 +261,16 @@ namespace Jularr.Integrations.Logic.Media
             }
 
             arguments.AddRange(request.CopyAudio ? ["-c:a", "copy"] : ["-c:a", "aac", "-ac", "2", "-b:a", request.AudioKilobits.ToString(CultureInfo.InvariantCulture) + "k"]);
+
+            // Later audio starts with silence; earlier audio drops its first moments. Both count from the point the conversion starts at, so a seek keeps the same shift.
+            if (!request.CopyAudio && request.AudioOffsetMs > 0)
+            {
+                arguments.AddRange(["-af", "adelay=" + request.AudioOffsetMs.ToString(CultureInfo.InvariantCulture) + ":all=1"]);
+            }
+            else if (!request.CopyAudio && request.AudioOffsetMs < 0)
+            {
+                arguments.AddRange(["-af", "atrim=start=" + (-request.AudioOffsetMs / 1000d).ToString("0.###", CultureInfo.InvariantCulture) + ",asetpts=PTS-STARTPTS"]);
+            }
             arguments.AddRange([
                 "-output_ts_offset", offset,
                 "-f", "hls",
