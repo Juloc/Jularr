@@ -25,7 +25,7 @@ namespace Jularr.Frontend.Framework
 
     public sealed class UiPlayer(PlayerSource source, FrontendAssets assets) : IUiComponent
     {
-        private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "playback_capacity_exhausted", "playback_evicted", "playback_reduced", "playback_slow", "cast_unreachable", "not_found", "failed"];
+        private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "playback_capacity_exhausted", "playback_evicted", "playback_reduced", "playback_slow", "cast_unreachable", "cast_insecure", "not_found", "failed"];
         private static readonly string[] Kinds = ["Intro", "Credits", "Recap", "Preview"];
         private static readonly string[] Presets = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "2", "3", "4"];
         private static readonly PlaybackQuality[] Qualities = Enum.GetValues<PlaybackQuality>();
@@ -72,6 +72,8 @@ namespace Jularr.Frontend.Framework
                         new Div([.. title]).Class("player__heading"),
                         new Button(new Icon("chevron-up", assets)).Class("button button--icon player__button player__mini-only").Attribute("data-action", "expand")
                             .Attribute("aria-label", texts["player.expand"]),
+                        Action("airplay", "player.airplay", "airplay").Attribute("hidden", "hidden"),
+                        Action("cast", "player.cast", "cast").Attribute("hidden", "hidden"),
                         new Button(Icon("close")).Class("button button--icon player__button player__mini-only").Attribute("data-action", "stop").Attribute("aria-label", texts["player.stop"])
                     ).Class("player__top"),
                     new Div(
@@ -114,8 +116,6 @@ namespace Jularr.Frontend.Framework
                                 new Button(new Icon("settings", assets)).IconOnly(texts["player.settings"]).Class("button button--icon player__button")
                                     .Attribute("data-action", "settings").Attribute("popovertarget", "player-settings"),
                                 Action("theater", "player.theater", "theater").Attribute("aria-pressed", "false"),
-                                Action("airplay", "player.airplay", "airplay").Attribute("hidden", "hidden"),
-                                Action("cast", "player.cast", "cast").Attribute("hidden", "hidden"),
                                 Action("pip", "player.pip", "pip").Attribute("hidden", "hidden"),
                                 Action("fullscreen", "player.fullscreen", "fullscreen")
                             ]).Class("player__options")
@@ -249,9 +249,9 @@ namespace Jularr.Frontend.Framework
             }
 
             // Audio and subtitles move against the picture in milliseconds: later with a plus, earlier with a minus.
-            IUiComponent OffsetField(string name, string labelKey)
+            IUiComponent OffsetField(string name, string labelKey, string pane)
             {
-                var id = "player-offset-" + name;
+                var id = "player-offset-" + name + "-" + pane;
                 return Surface(id, labelKey, new Div(
                     new Input().Class("player__offset-input").Attribute("id", id).Attribute("type", "number").Attribute("min", "-10000").Attribute("max", "10000").Attribute("step", "50")
                         .Attribute("value", "0").Attribute("inputmode", "numeric").Attribute("data-setting", name + "-offset"),
@@ -317,8 +317,8 @@ namespace Jularr.Frontend.Framework
                         new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("popovertarget", "player-settings").Attribute("popovertargetaction", "hide")),
                     new Div(
                         Pane("basic", AudioField("basic"), SubtitleField("basic"), SpeedField("basic"), QualityField("basic")),
-                        Pane("audio", AudioField("audio"), OffsetField("audio", "player.offset.audio")),
-                        Pane("subtitles", SubtitleField("subtitles"), SecondSubtitleField("subtitles"), TranslateStatus(), OffsetField("subtitle", "player.offset.subtitles")),
+                        Pane("audio", AudioField("audio"), new Div(OffsetField("audio", "player.offset.audio", "audio"), OffsetField("subtitle", "player.offset.subtitles", "audio")).Class("player__pair"), SpeedField("audio")),
+                        Pane("subtitles", new Div(SubtitleField("subtitles"), SecondSubtitleField("subtitles")).Class("player__pair"), TranslateStatus(), new Div(OffsetField("subtitle", "player.offset.subtitles", "subtitles"), OffsetField("audio", "player.offset.audio", "subtitles")).Class("player__pair"), SpeedField("subtitles")),
                         Pane("playback", [QualityField("playback"), SpeedField("playback"), FitField(), .. PreferenceFields()]),
                         Pane("info", Facts())
                     ).Class("player__settings-body"),

@@ -768,7 +768,7 @@ async function start(player: HTMLElement): Promise<void> {
         "audio-offset-reset": () => void setAudioOffset(0),
         "subtitle-offset-reset": () => setSubtitleOffset(0),
         airplay: () => (video as AirPlayVideo).webkitShowPlaybackTargetPicker?.(),
-        cast: () => void (casting ? castSender?.stop() : startCastRequest()),
+        cast: () => { if (!casting && !window.isSecureContext) notice("cast_insecure"); else void (casting ? castSender?.stop() : startCastRequest()); },
         "copy-info": () => void copyInfo(),
         toggle: () => {
             if (casting) { castSender?.playOrPause(); return; }
@@ -975,10 +975,9 @@ async function start(player: HTMLElement): Promise<void> {
     // The two offset fields: the audio asks the server for a new conversion that plays on from here, the subtitles move at once.
     function offsetFields(): void {
         const value = (input: HTMLInputElement) => Math.max(-10_000, Math.min(10_000, Math.round(Number(input.value) || 0)));
-        const audioInput = player.querySelector<HTMLInputElement>("[data-setting=audio-offset]");
-        const subtitleInput = player.querySelector<HTMLInputElement>("[data-setting=subtitle-offset]");
-        audioInput?.addEventListener("change", () => void setAudioOffset(value(audioInput)));
-        subtitleInput?.addEventListener("input", () => setSubtitleOffset(value(subtitleInput)));
+        // Both delays stand in the Audio and the Subtitles tab; every field of one delay shows and sets the same value.
+        player.querySelectorAll<HTMLInputElement>("[data-setting=audio-offset]").forEach(input => input.addEventListener("change", () => void setAudioOffset(value(input))));
+        player.querySelectorAll<HTMLInputElement>("[data-setting=subtitle-offset]").forEach(input => input.addEventListener("input", () => setSubtitleOffset(value(input))));
     }
 
     async function setAudioOffset(milliseconds: number): Promise<void> {
@@ -1092,7 +1091,8 @@ async function start(player: HTMLElement): Promise<void> {
     // The Cast button shows where Chrome and a secure page allow it; Google's library loads only when it is pressed.
     function castSupport(): void {
         const button = player.querySelector<HTMLElement>("[data-action=cast]");
-        if (button) button.hidden = !/Chrome\//.test(navigator.userAgent) || !window.isSecureContext;
+        // Chrome shows the button; on an address that is not secure it says what is missing instead of vanishing.
+        if (button) button.hidden = !/Chrome\//.test(navigator.userAgent);
     }
 
     // A device cannot sign in and cannot see this computer's own address.

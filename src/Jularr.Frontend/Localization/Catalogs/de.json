@@ -7359,6 +7359,10 @@
    "Casting to {0}",
    "Wird übertragen auf {0}"
   ],
+  "player.status.cast_insecure": [
+   "Chromecast needs a secure address (https). Open Jularr over https to cast.",
+   "Chromecast braucht eine sichere Adresse (https). Öffne Jularr über https zum Übertragen."
+  ],
   "player.status.cast_unreachable": [
    "A cast device cannot reach this address. Open Jularr under its network address.",
    "Ein Cast-Gerät erreicht diese Adresse nicht. Öffne Jularr über die Netzwerkadresse."
