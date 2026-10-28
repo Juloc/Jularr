@@ -319,6 +319,17 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(blocks.First(block => block.Text is not null).Text, Sentences[0]);
         }
 
+        // Words of large type detected apart are read as their line; a narrow column beside large type, and columns of text, stay apart.
+        [TestMethod]
+        public void Recognizer_JoinsTheWordsOfALine_ButNotTheColumns()
+        {
+            static SKRectI Box(int left, int top, int right, int bottom) => new(left, top, right, bottom);
+            var joined = OcrEngine.Join([Box(400, 200, 700, 320), Box(740, 205, 1000, 318), Box(1030, 198, 1300, 322)]);
+            CollectionAssert.AreEqual(new[] { Box(400, 198, 1300, 322) }, joined.ToArray(), "the words of a large heading");
+            Assert.AreEqual(2, OcrEngine.Join([Box(60, 230, 300, 270), Box(400, 200, 900, 330)]).Count, "a small line beside large type");
+            Assert.AreEqual(2, OcrEngine.Join([Box(60, 300, 500, 330), Box(560, 302, 1000, 331)]).Count, "two columns of text");
+        }
+
         // A page drawn by PDFium keeps its colours: an orange box stays orange, not blue.
         [TestMethod]
         public void Rendering_KeepsTheColoursOfThePage()

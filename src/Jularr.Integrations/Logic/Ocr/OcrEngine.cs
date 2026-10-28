@@ -72,9 +72,9 @@ namespace Jularr.Integrations.Logic.Ocr
             return new OcrPage(page.Width, page.Height, [.. lines.OrderBy(line => line.Top).ThenBy(line => line.Left)]);
         }
 
-        // Large type is detected word by word: pieces side by side on the same rows become their line again, so it is read in one go and in order. A wide gap
-        // (another column) keeps them apart.
-        private static List<SKRectI> Join(List<SKRectI> boxes)
+        // Large type is detected word by word: pieces side by side on the same rows become their line again, so it is read in one go and in order. Only pieces
+        // of nearly one height a word space apart join; a gap wider than that (the gutter to another column) or type of another size keeps them apart.
+        internal static List<SKRectI> Join(List<SKRectI> boxes)
         {
             var lines = boxes.OrderBy(box => box.Left).ToList();
             for (var merged = true; merged;)
@@ -87,7 +87,8 @@ namespace Jularr.Integrations.Logic.Ocr
                         var (one, other) = (lines[first], lines[second]);
                         var overlap = Math.Min(one.Bottom, other.Bottom) - Math.Max(one.Top, other.Top);
                         var gap = Math.Max(one.Left, other.Left) - Math.Min(one.Right, other.Right);
-                        if (overlap < Math.Min(one.Height, other.Height) * 0.6f || gap > Math.Max(one.Height, other.Height) * 1.2f)
+                        var (low, high) = (Math.Min(one.Height, other.Height), Math.Max(one.Height, other.Height));
+                        if (high > low * 1.4f || overlap < low * 0.7f || gap > low * 0.6f)
                         {
                             continue;
                         }
