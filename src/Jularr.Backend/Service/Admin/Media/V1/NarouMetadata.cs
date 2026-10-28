@@ -8,6 +8,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Provider;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.AniList;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Narou;
 using Jularr.Integrations.Logic.Narou;
@@ -17,7 +18,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 {
     // Narō's web novels: found by title or ncode through its API and kept as Light Novel Works under their ncode.
     // A web novel is its own Work; it is never taken for a published edition because a title is the same.
-    internal sealed class NarouMetadata(NarouClient narou, IMemoryCache cache)
+    internal sealed class NarouMetadata(NarouClient narou, AniListMetadata aniList, AniListMatcher matcher, IMemoryCache cache)
     {
         public const string Namespace = WorkMetadataLogic.WebNovelNamespace;
         private static readonly TimeSpan Lifetime = TimeSpan.FromHours(1);
@@ -58,6 +59,19 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
+        // The light novel entry a web novel is clearly the original of, asked by its Japanese title; AniList failing leaves it unlinked.
+        public async Task<AniListMedia?> FindEditionAsync(NarouNovel novel, CancellationToken ct)
+        {
+            try
+            {
+                return AniListMatching.LinkWebNovel(await aniList.SearchBooksAsync(MediaSubtype.LightNovel, novel.Title, null, ct), novel.Title, novel.Writer).Match;
+            }
+            catch (ServiceUnavailableException)
+            {
+                return null;
+            }
+        }
+
         public async Task<long> ImportAsync(LogicContext context, string ncode, CancellationToken ct)
         {
             // Read before the short write batch; Narō's novels are written in Japanese.
@@ -66,12 +80,33 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var data = new WorkMetadataData(MediaType.Book, MediaSubtype.LightNovel, Namespace, novel.Ncode, TextLimit.Cut(novel.Title, 500)!, null, novel.FirstYear is >= 1800 and <= 2200 ? novel.FirstYear : null,
                 "[]", "[]", JsonSerializer.Serialize(facts), Namespace, null) { OriginalLanguage = "ja" };
             var people = WorkPeopleLogic.Rows(novel.Writer.Length == 0 ? [] : [new ProviderPerson(null, novel.Writer, ProviderPerson.Author)]).ToArray();
-            return await context.ExecuteBatchAsync(async (ctx, token) =>
+            var (workId, matched) = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 var workId = await ctx.SaveWorkMetadataAsync(data, token);
                 await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, Namespace, people), token);
-                return workId;
+                return (workId, await ctx.HasAniListMatchAsync(workId, token));
             }, ct);
+
+            // A new web novel looks for its published edition at once: a clear one names it, a doubtful one waits for a person; AniList failing leaves it to the matching pass.
+            if (!matched)
+            {
+                try
+                {
+                    var target = new IdentityMatchTargetData(workId, MediaType.Book, MediaSubtype.LightNovel, data.CanonicalTitle, data.ReleaseYear, [], novel.Writer.Length == 0 ? null : novel.Writer, true);
+                    var result = await matcher.MatchAsync(target, [], null, ct);
+                    await context.ExecuteBatchAsync(async (ctx, token) =>
+                    {
+                        await ctx.SaveIdentityMatchAsync(result, token);
+                        return true;
+                    }, ct);
+                }
+                catch (ServiceUnavailableException)
+                {
+                    // The matching pass tries again.
+                }
+            }
+
+            return workId;
         }
 
         private static Exception Translate(NarouException exception) => exception.Failure == NarouFailure.Missing

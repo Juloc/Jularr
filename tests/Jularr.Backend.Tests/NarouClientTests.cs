@@ -103,6 +103,9 @@ namespace Jularr.Backend.Tests
             public int? FailingChapter { get; set; }
             public string? Api { get; set; }
 
+            // When set, a title search finds the novel only under this word.
+            public string? Word { get; set; }
+
             public static string Novel => """
                 [{"allcount":1},{"title":"転生したら図書館だった件","ncode":"N1234AB","writer":"山田太郎","story":"司書が異世界で本を集める。","general_firstup":"2019-04-01 12:00:00","novel_type":1,"end":1,"general_all_no":3}]
                 """;
@@ -121,6 +124,12 @@ namespace Jularr.Backend.Tests
             {
                 var address = request.RequestUri!.AbsoluteUri;
                 Requests.Add(address);
+                if (address.StartsWith(NarouClient.Api, StringComparison.Ordinal) && Word is not null && address.Contains("word=", StringComparison.Ordinal)
+                    && !address.EndsWith("word=" + Uri.EscapeDataString(Word), StringComparison.Ordinal))
+                {
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("[{\"allcount\":0}]", Encoding.UTF8, "application/json") });
+                }
+
                 if (address.StartsWith(NarouClient.Api, StringComparison.Ordinal))
                 {
                     return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Api ?? Novel, Encoding.UTF8, "application/json") });
