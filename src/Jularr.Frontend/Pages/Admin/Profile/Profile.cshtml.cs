@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Admin.Profile
 {
     public sealed class ProfileModel(ReadAcquisitionProfileV1 read, CreateAcquisitionProfileV1 create, UpdateAcquisitionProfileV1 update, DeleteAcquisitionProfileV1 delete,
-        ReadCustomFormatsV1 formats, ReadCustomFormatV1 readFormat, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadCustomFormatsV1 formats, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string NewId = "New";
         private AcquisitionProfileDetailsV1? _profile;
