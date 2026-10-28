@@ -69,6 +69,10 @@ namespace Jularr.Backend.Logic.Playback
         // Image subtitles need burning in, which no plan offers yet.
         public static bool IsText(string? codec) => codec is not null && TextCodecs.Contains(codec);
 
+        public static bool IsStyled(string? codec) => codec is not null && (codec.Equals("ass", StringComparison.OrdinalIgnoreCase) || codec.Equals("ssa", StringComparison.OrdinalIgnoreCase));
+
+        public static bool IsStyledFile(string relativePath) => Path.GetExtension(relativePath).ToLowerInvariant() is ".ass" or ".ssa";
+
         public static bool IsTextFile(string relativePath) => Path.GetExtension(relativePath).ToLowerInvariant() is ".srt" or ".vtt" or ".ass" or ".ssa";
 
         // "Movie.de.forced.srt" is German and forced; only real language codes count.
