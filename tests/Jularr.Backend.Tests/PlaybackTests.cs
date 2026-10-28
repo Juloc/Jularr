@@ -381,6 +381,40 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task CacheSize_CountsEveryFileAndIgnoresFoldersRemovedWhileCounting()
+        {
+            using var cache = new LibraryTests.TemporaryDirectory();
+            Directory.CreateDirectory(Path.Combine(cache.Path, "a"));
+            File.WriteAllBytes(Path.Combine(cache.Path, "a", "segment0.ts"), new byte[100]);
+            Directory.CreateDirectory(Path.Combine(cache.Path, "b"));
+            var hidden = Path.Combine(cache.Path, "b", "segment1.tmp");
+            File.WriteAllBytes(hidden, new byte[50]);
+            File.SetAttributes(hidden, FileAttributes.Hidden);
+            Assert.AreEqual(150, PlaybackTranscodes.CacheBytes(cache.Path));
+            Assert.AreEqual(0, PlaybackTranscodes.CacheBytes(Path.Combine(cache.Path, "missing")));
+
+            // Sessions end while the cache is counted for a new one: their folders vanish, and the count is no failure.
+            using var stop = new CancellationTokenSource();
+            var churn = Task.Run(() =>
+            {
+                while (!stop.IsCancellationRequested)
+                {
+                    var folder = Path.Combine(cache.Path, Guid.NewGuid().ToString("N"));
+                    Directory.CreateDirectory(folder);
+                    File.WriteAllBytes(Path.Combine(folder, "segment0.ts"), new byte[10]);
+                    Directory.Delete(folder, true);
+                }
+            });
+            for (var index = 0; index < 300; index++)
+            {
+                Assert.IsTrue(PlaybackTranscodes.CacheBytes(cache.Path) >= 150);
+            }
+
+            await stop.CancelAsync();
+            await churn;
+        }
+
+        [TestMethod]
         public async Task Hls_RealFfmpeg_TranscodesSeeksAndStaysWithinBudget()
         {
             // Opt-in: JULARR_TEST_FFMPEG names an ffmpeg executable (7.0 or newer).
