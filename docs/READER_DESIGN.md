@@ -46,7 +46,7 @@ reference is `9cd7fd3`. Later explicit decisions override the earlier mockups:
   same text begins (never by the line's box height), so tight line spacing cannot print the end of a
   broken word twice; `LocalEpub_PageBreakInsideAWord_NeverRepeatsTheFirstLine` checks it with a generated EPUB.
 
-This package starts from clean-start and carries forward the approved frame work.
+This package carries forward the approved frame work.
 The overlapping #1228 remains untouched; #289 is roadmap context, not permission
 to invent unavailable TTS/OCR/processing actions. No database/schema changes or
 active installation data are part of this work.
@@ -219,7 +219,7 @@ full document navigation; app-shell navigation was not expanded in this package.
 
 Passed: TypeScript/Vite build without StPageFlip; 27 affected script, Range,
 background-count and book geometry tests; six typed Form.Range binding cases
-passed on the updated clean-start base. The latter verify invariant bounds/value,
+passed on the updated base. The latter verify invariant bounds/value,
 precision, indexed fields, error output and server/local/read-only guards.
 The current local-EPUB browser case passes, including distinct first leaves, final
 paragraph, bounded printing of fonts/lists/tables/images, stationary held paper,

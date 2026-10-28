@@ -18,6 +18,8 @@ import { endReaderLifetime, readerLifetime } from './Lifetime';
 import { handleChapters } from './ChapterNavigation';
 import { hasNewBuild } from '../Navigation/Navigation';
 import { regionSwapped } from '../Navigation/PageSwap';
+import { awake } from '../Playback/MediaFocus';
+import { leavesByHistory } from './BackTarget';
 
 // What the browser really shows, for browsers without dynamic viewport units (their 100vh includes the toolbars).
 if (!CSS.supports('height', '100dvh')) {
@@ -33,6 +35,19 @@ if (first && !first.dataset.format && first.querySelector('[data-role=content]')
 
 // The address a reader opens at: the page's own, or the chapter it is about to show in place.
 function start(reader: HTMLElement, address = new URL(location.href)): void {
+    // An open book keeps the screen on, with or without read aloud, as long as the profile allows it.
+    awake.hold('reader');
+    readerLifetime().addEventListener('abort', () => awake.drop('reader'));
+    // Back leaves the book one step, to where the reader came from; the link to the title's details stays for a book that was opened without such a page.
+    reader.addEventListener('click', event => {
+        const back = (event.target as Element | null)?.closest?.<HTMLAnchorElement>('[data-reader-back]');
+        if (!back || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const navigation = (window as unknown as { navigation?: { entries(): { url: string | null }[]; currentEntry: { index: number } } }).navigation;
+        const previous = navigation ? navigation.entries()[navigation.currentEntry.index - 1]?.url ?? null : undefined;
+        if (!leavesByHistory({ previous, length: history.length, referrer: document.referrer, origin: location.origin })) return;
+        event.preventDefault();
+        history.back();
+    });
     // The arrows beside the page press the bar's page buttons, which every book format already handles.
     reader.addEventListener('click', event => {
         const side = (event.target as Element | null)?.closest?.<HTMLElement>('[data-side-turn]');
@@ -89,7 +104,8 @@ function openChaptersInPlace(book: string): void {
             // The address changes with what is shown: never while two readers stand on the page.
             current.remove();
             Object.assign(incoming.style, { opacity: '', pointerEvents: '' });
-            if (push) history.pushState({ readerChapter: true }, '', url);
+            // A chapter replaces the entry of the book instead of adding one, so Back leaves the book in one step.
+            if (push) history.replaceState({ readerChapter: true }, '', url);
             document.title = page.title;
             regionSwapped();
             if (fullscreen) await incoming.requestFullscreen().catch(() => undefined);
