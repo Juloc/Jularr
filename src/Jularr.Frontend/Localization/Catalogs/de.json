@@ -1166,17 +1166,21 @@
    "Dark",
    "Dunkel"
   ],
-  "reader.mode": [
-   "Layout",
-   "Layout"
-  ],
   "reader.mode.scroll": [
    "Scroll",
    "Scrollen"
   ],
-  "reader.mode.paged": [
-   "Pages",
-   "Seiten"
+  "reader.mode.toggle": [
+   "Reading mode",
+   "Lesemodus"
+  ],
+  "reader.mode.flat": [
+   "Flat pages",
+   "Flache Seiten"
+  ],
+  "reader.mode.book": [
+   "Book",
+   "Buch"
   ],
   "reader.notCached": [
    "This book is still being saved for reading without the storage.",
@@ -10770,6 +10774,10 @@
    "Reading copies",
    "Lesekopien"
   ],
+  "jobs.job.bookTranslations": [
+   "Book translations",
+   "Buchübersetzungen"
+  ],
   "reader.settings.view": [
    "View",
    "Ansicht"
@@ -11053,6 +11061,10 @@
   "jobs.about.readingCopies": [
    "Writes a reading copy (an EPUB) beside digital PDFs, so they read like a book.",
    "Schreibt neben digitale PDFs eine Lesekopie (EPUB), damit sie sich wie ein Buch lesen lassen."
+  ],
+  "jobs.about.bookTranslations": [
+   "Translates the books with the local TranslateGemma model into every language a profile uses, books being read first, so they open translated at once.",
+   "Übersetzt die Bücher mit dem lokalen TranslateGemma-Modell in jede Sprache, die ein Profil nutzt (angefangene Bücher zuerst), damit sie sofort übersetzt öffnen."
   ],
   "media.preview.trailer": [
    "Trailer",
@@ -13638,29 +13650,21 @@
    "Paper",
    "Papier"
   ],
+  "reader.binding": [
+   "Binding",
+   "Einband"
+  ],
+  "reader.binding.soft": [
+   "Paperback",
+   "Taschenbuch"
+  ],
+  "reader.binding.hard": [
+   "Hardcover",
+   "Hardcover"
+  ],
   "reader.colour": [
    "Paper colour",
    "Papierfarbe"
-  ],
-  "reader.animation": [
-   "Page turn animation",
-   "Animation beim Umblättern"
-  ],
-  "reader.animation.system": [
-   "Follow system preference",
-   "Systemeinstellung befolgen"
-  ],
-  "reader.animation.on": [
-   "On · turn paper",
-   "An · Papier blättern"
-  ],
-  "reader.animation.off": [
-   "Off · instant pages",
-   "Aus · sofortige Seiten"
-  ],
-  "reader.animation.hint": [
-   "System mode respects reduced motion. Choose On to enable paper folding. Switch off Select text before dragging a page.",
-   "Der Systemmodus berücksichtigt reduzierte Bewegung. Wähle An, um das Papierfalten zu aktivieren. Schalte „Text markieren“ aus, bevor du eine Seite ziehst."
   ],
   "reader.sizePixels": [
    "Text size (px)",
@@ -13685,6 +13689,22 @@
   "reader.textWidth": [
    "Text width (characters)",
    "Textbreite (Zeichen)"
+  ],
+  "reader.margin.top": [
+   "Top margin (% of page width)",
+   "Oberer Rand (% der Seitenbreite)"
+  ],
+  "reader.margin.bottom": [
+   "Bottom margin (% of page width)",
+   "Unterer Rand (% der Seitenbreite)"
+  ],
+  "reader.margin.inner": [
+   "Inner margin at the spine (% of page width)",
+   "Innerer Rand am Falz (% der Seitenbreite)"
+  ],
+  "reader.margin.outer": [
+   "Outer margin (% of page width)",
+   "Äußerer Rand (% der Seitenbreite)"
   ],
   "reader.indent": [
    "Indent paragraphs",
@@ -13765,10 +13785,6 @@
   "reader.settings.paper": [
    "Paper & colour",
    "Papier & Farbe"
-  ],
-  "reader.settings.motion": [
-   "Page movement",
-   "Seitenbewegung"
   ],
   "reader.presentation": [
    "Reader view",

@@ -170,6 +170,35 @@ namespace Jularr.Backend.Tests
             var destination = Path.Combine(folder.Path, "book.epub");
             await source.SaveFileAsync(new Uri(server.Address, "/book.epub"), destination, null, null, CancellationToken.None);
             Assert.AreEqual("the book", await File.ReadAllTextAsync(destination));
+
+            // Subsequent search and download pages keep the same browser and its source cookie.
+            var search = await source.ReadPagesAsync([new Uri(server.Address, "/search?q=next")], default);
+            Assert.IsNotNull(search);
+            StringAssert.Contains(server.LastCookie ?? "", "passed");
+            Assert.IsNotNull(await source.ReadPageAsync(new Uri(server.Address, "/slow_download/next/0/0"), default));
+            StringAssert.Contains(server.LastCookie ?? "", "passed");
+            Assert.AreEqual(1, source.Events.Count(item => item.Kind == "started"));
+        }
+
+        [TestMethod]
+        public async Task Browser_UnfinishedCheckKeepsItsLivePageForManualAssistance()
+        {
+            var executable = Environment.GetEnvironmentVariable("JULARR_BROWSER");
+            if (string.IsNullOrWhiteSpace(executable)) Assert.Inconclusive("JULARR_BROWSER names no browser.");
+            using var folder = new TemporaryDirectory();
+            using var server = new CheckPage();
+            using var source = new SourceBrowser(new BrowserOptions { Path = executable, ProfilePath = folder.Path, PageTimeoutSeconds = 4, AllowPrivateAddressesForTests = true });
+            Assert.IsNull(await source.ReadPageAsync(new Uri(server.Address, "/needs-person"), default));
+            Assert.AreEqual("refused", source.Status.LastOutcome);
+            Assert.IsTrue(source.Status.IsRunning);
+
+            // Opening assistance at the source root must retain the actual check page and browser process.
+            await source.BeginManualAsync(server.Address, DateTimeOffset.UtcNow.AddMinutes(2), default);
+            var frame = await source.CaptureManualAsync(DateTimeOffset.UtcNow.AddMinutes(2), default);
+            Assert.IsTrue(frame.Length > 500 && frame[0] == 0xff && frame[1] == 0xd8);
+            Assert.AreEqual(1, source.Events.Count(item => item.Kind == "started"));
+            await source.EndManualAsync(default);
+            await source.StopAsync();
         }
 
         [TestMethod]
@@ -444,13 +473,14 @@ namespace Jularr.Backend.Tests
                     }
 
                     LastCookie = context.Request.Headers["Cookie"];
-                    if (context.Request.Url!.AbsolutePath is "/manual" or "/accepted" or "/session")
+                    if (context.Request.Url!.AbsolutePath is "/manual" or "/accepted" or "/session" or "/needs-person")
                     {
                         if (context.Request.Url.AbsolutePath == "/accepted")
                         {
                             var accepted = context.Request.QueryString["v"] ?? "";
                             if (!ManualInput.TrySetResult(accepted)) SecondManualInput.TrySetResult(accepted);
                         }
+                        var title = context.Request.Url.AbsolutePath == "/needs-person" ? "DDoS-Guard" : "Manual browser fixture";
                         var bytes = Encoding.UTF8.GetBytes("""
                             <html><head><title>Manual browser fixture</title></head><body style="margin:0">
                             <input id="entry" style="position:absolute;left:40px;top:40px;width:250px;height:40px">
@@ -458,7 +488,7 @@ namespace Jularr.Backend.Tests
                             <p id="proof" style="position:absolute;top:220px"></p>
                             <script>document.getElementById('entry').value=sessionStorage.getItem('assisted')||'';document.getElementById('proof').textContent='Primary page session: '+(sessionStorage.getItem('assisted')||'');</script>
                             </body></html>
-                            """);
+                            """.Replace("Manual browser fixture", title, StringComparison.Ordinal));
                         context.Response.ContentType = "text/html";
                         context.Response.ContentLength64 = bytes.Length;
                         await context.Response.OutputStream.WriteAsync(bytes);

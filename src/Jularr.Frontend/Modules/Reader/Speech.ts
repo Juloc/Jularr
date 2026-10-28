@@ -3,6 +3,7 @@ import { deviceVoice, initializeSpeechSettings, preferenceFor, type SpeechPrefer
 import { installedModels } from '../Speech/ModelStore';
 import type { NeuralSession } from '../Speech/NeuralSession';
 import { followDelta, minutesLeft, sentenceAround, timerMinutes } from './SpeechFollow';
+import { readerLifetime } from './Lifetime';
 
 // Text coordinates stay on canonical content. Highlights never wrap or mutate its nodes.
 export function speechRange(source: Range, start: number, length: number): Range | undefined {
@@ -193,8 +194,10 @@ export function initializeReadAloud(reader: HTMLElement, content: HTMLElement, r
     const prints = new MutationObserver(paintWord);
     prints.observe(reader.querySelector('.reader-book')!, { childList: true, subtree: true });
     prints.observe(reader, { attributes: true, attributeFilter: ['data-book-state'] });
-    document.addEventListener('visibilitychange', () => { if (document.hidden) { preparing++; session?.pause(); if (pendingContext) stop(); } });
-    window.addEventListener('speech-model-removed', event => { if ((event as CustomEvent<string>).detail === neuralModel) stop(); });
-    window.addEventListener('pagehide', stop);
+    const signal = readerLifetime();
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { preparing++; session?.pause(); if (pendingContext) stop(); } }, { signal });
+    window.addEventListener('speech-model-removed', event => { if ((event as CustomEvent<string>).detail === neuralModel) stop(); }, { signal });
+    window.addEventListener('pagehide', stop, { signal });
+    signal.addEventListener('abort', () => { setTimer(0); stop(); });
     changed('idle');
 }

@@ -1,4 +1,5 @@
 import { initializeInfiniteList } from "../../Framework/Components/InfiniteList";
+import { readerLifetime } from "./Lifetime";
 
 export function initializeNotes(reader: HTMLElement): void {
     const root = reader.querySelector<HTMLElement>('[data-infinite-list=".reader__notes"]');
@@ -13,5 +14,9 @@ export function initializeNotes(reader: HTMLElement): void {
             return address.href;
         }
     });
-    if (dispose) window.addEventListener("pagehide", event => { if (!event.persisted) dispose(); });
+    const signal = readerLifetime();
+    if (dispose) {
+        window.addEventListener("pagehide", event => { if (!event.persisted) dispose(); }, { signal });
+        signal.addEventListener("abort", dispose);
+    }
 }
