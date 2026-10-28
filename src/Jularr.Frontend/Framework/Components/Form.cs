@@ -207,7 +207,6 @@ namespace Jularr.Frontend.Framework
                         .Attribute("name", field.Name).Attribute("value", option.Value);
                     if (option.Value == value) radio.Attribute("checked", "checked");
                     Configure(field, radio);
-                    if (option.IsDisabled) radio.Attribute("disabled", "disabled");
                     if (refreshAction is not null) radio.Attribute("data-form-refresh", refreshAction);
                     return new HtmlLabel(radio, new Span(new ValueText(option.Label))).Class("ui-segment");
                 }).ToArray<IUiComponent>();
@@ -222,11 +221,6 @@ namespace Jularr.Frontend.Framework
                 if (option.Value == value)
                 {
                     element.Attribute("selected", "selected");
-                }
-
-                if (option.IsDisabled)
-                {
-                    element.Attribute("disabled", "disabled");
                 }
 
                 return element;
@@ -671,8 +665,8 @@ namespace Jularr.Frontend.Framework
         internal IReadOnlySet<string> Selected { get; }
     }
 
-    // An option may carry an icon (a flag); a select without a prefix of its own then shows the icon of the chosen option at its start. A disabled option is shown but cannot be chosen.
-    public sealed record SelectOption(string Value, string Label, IUiComponent? Icon = null, bool IsDisabled = false);
+    // An option may carry an icon (a flag); a select without a prefix of its own then shows the icon of the chosen option at its start.
+    public sealed record SelectOption(string Value, string Label, IUiComponent? Icon = null);
 
     // What a field wears inside its frame: an icon circle at the start (built by the page, which owns the icon sprite) and a unit text key at the end.
     public sealed record FieldAffix(IUiComponent? Prefix = null, string? SuffixKey = null)

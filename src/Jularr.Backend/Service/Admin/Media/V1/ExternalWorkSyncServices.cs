@@ -19,8 +19,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         {
             var syncs = await Context.ReadExternalWorkSyncSummariesAsync(CancellationToken);
             var windows = await Context.ReadExternalWorkSyncWindowsAsync(CancellationToken);
-            return new BaseDataList<ExternalWorkSyncV1>([.. syncs.Select(sync => new ExternalWorkSyncV1(sync.Namespace, sync.CacheTier, ExternalWorkLogic.MaximumCacheTier(sync.Namespace),
-                sync.RequestsPerMinute, sync.PausesWhileUsed, sync.ListedOn, sync.Entries, sync.Pending, sync.Version,
+            var tier = await Context.ReadCachingTierAsync(CancellationToken);
+            return new BaseDataList<ExternalWorkSyncV1>([.. syncs.Select(sync => new ExternalWorkSyncV1(sync.Namespace, ExternalWorkLogic.CatalogTier(tier, sync.Namespace), sync.RequestsPerMinute,
+                sync.PausesWhileUsed, sync.ListedOn, sync.Entries, sync.Pending, sync.Version,
                 new BaseDataList<ExternalWorkSyncWindowV1>([.. windows.Where(window => window.Namespace == sync.Namespace).Select(window => new ExternalWorkSyncWindowV1(window.StartsAt, window.EndsAt))])))]);
         }
     }
@@ -42,7 +43,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
 
             var windows = JsonSerializer.Serialize(Data.Windows.Select(window => new { StartsAt = window.StartsAt.ToString("HH:mm"), EndsAt = window.EndsAt.ToString("HH:mm") }));
-            await Context.UpdateExternalWorkSyncSettingsAsync(new ExternalWorkSyncSettingsData(Parameters.Namespace, Data.CacheTier, Data.RequestsPerMinute, Data.PausesWhileUsed,
+            await Context.UpdateExternalWorkSyncSettingsAsync(new ExternalWorkSyncSettingsData(Parameters.Namespace, Data.RequestsPerMinute, Data.PausesWhileUsed,
                 Data.Version, windows), CancellationToken);
             return new UpdateResult(true);
         }

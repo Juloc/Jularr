@@ -366,10 +366,9 @@ namespace Jularr.Backend.Data.Logic.Media
     // A catalog's full-sync settings and progress.
     internal sealed class ExternalWorkSyncData : BaseData
     {
-        public ExternalWorkSyncData(string @namespace, CatalogCacheTier cacheTier, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, int? cursor, DateTime? changesReadAt)
+        public ExternalWorkSyncData(string @namespace, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, int? cursor, DateTime? changesReadAt)
         {
             Namespace = @namespace;
-            CacheTier = cacheTier;
             RequestsPerMinute = requestsPerMinute;
             PausesWhileUsed = pausesWhileUsed;
             ListedOn = listedOn;
@@ -379,9 +378,6 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
         public string Namespace { get; }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.CacheTier))]
-        public CatalogCacheTier CacheTier { get; }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.RequestsPerMinute))]
         public int RequestsPerMinute { get; }
@@ -397,22 +393,6 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.ChangesReadAt))]
         public DateTime? ChangesReadAt { get; }
-    }
-
-    // How long unused catalog details and minimal rows are kept, and whether the titles of every Discover list get their details in advance.
-    internal sealed class CatalogCacheSettingsData : BaseData
-    {
-        public CatalogCacheSettingsData(int keepDays, bool detailsDiscoverAhead)
-        {
-            KeepDays = keepDays;
-            DetailsDiscoverAhead = detailsDiscoverAhead;
-        }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.KeepDays))]
-        public int KeepDays { get; }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.DetailsDiscoverAhead))]
-        public bool DetailsDiscoverAhead { get; }
     }
 
     // A catalog whose Discover lists get their details in advance: its requests a pass and whether it waits while Jularr is used.
@@ -499,10 +479,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
     internal sealed class ExternalWorkSyncSummaryData : BaseData
     {
-        public ExternalWorkSyncSummaryData(string @namespace, CatalogCacheTier cacheTier, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, long entries, long pending, long version)
+        public ExternalWorkSyncSummaryData(string @namespace, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, long entries, long pending, long version)
         {
             Namespace = @namespace;
-            CacheTier = cacheTier;
             RequestsPerMinute = requestsPerMinute;
             PausesWhileUsed = pausesWhileUsed;
             ListedOn = listedOn;
@@ -513,9 +492,6 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
         public string Namespace { get; }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.CacheTier))]
-        public CatalogCacheTier CacheTier { get; }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.RequestsPerMinute))]
         public int RequestsPerMinute { get; }
@@ -539,10 +515,9 @@ namespace Jularr.Backend.Data.Logic.Media
     // The Owner's choices for one catalog, with its windows as JSON rows.
     internal sealed class ExternalWorkSyncSettingsData : BaseData
     {
-        public ExternalWorkSyncSettingsData(string @namespace, CatalogCacheTier cacheTier, int requestsPerMinute, bool pausesWhileUsed, long version, string windows)
+        public ExternalWorkSyncSettingsData(string @namespace, int requestsPerMinute, bool pausesWhileUsed, long version, string windows)
         {
             Namespace = @namespace;
-            CacheTier = cacheTier;
             RequestsPerMinute = requestsPerMinute;
             PausesWhileUsed = pausesWhileUsed;
             Version = version;
@@ -551,9 +526,6 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
         public string Namespace { get; }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.CacheTier))]
-        public CatalogCacheTier CacheTier { get; }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.RequestsPerMinute))]
         public int RequestsPerMinute { get; }

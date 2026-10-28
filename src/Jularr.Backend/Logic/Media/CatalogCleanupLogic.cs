@@ -1,15 +1,20 @@
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Media
 {
-    // Keeps the catalog small: details nobody uses go first, then the catalog rows of providers that keep no whole catalog.
+    // Keeps the catalog small after the instance's caching tier: details nobody uses go first, then the catalog rows of catalogs that are not kept whole.
     // A title is used when something ties it to the library (WorkLibraryRelations), a file record exists, or it is trending.
     internal static class CatalogCleanupLogic
     {
-        // Drops the details (child rows) of titles without a library tie that nobody opened for CatalogDetailKeepDays and that are not trending; while Discover's lists
-        // are detailed in advance (DetailsDiscoverAhead), every title of a Discover list keeps them too. The minimal row, its identities and incoming relations stay.
-        // A title without an identity a provider can read again keeps its details.
+        // The tier as the cleanup reads it, from the one rule in ExternalWorkLogic.
+        public static CatalogCleanupData CleanupFor(CachingTier tier, int limit) =>
+            new(limit, tier != CachingTier.Lean, tier == CachingTier.Full ? [.. ExternalWorkLogic.FullSyncCatalogs] : []);
+
+        // Drops the details (child rows) of titles without a library tie that nobody opened for CatalogDetailKeepDays and that are not trending. While Discover keeps
+        // its lists, the titles of its trending lists keep them too, and with DetailsDiscoverAhead every title of a Discover list. The minimal row, its identities and
+        // incoming relations stay. A title without an identity a provider can read again keeps its details.
         // Returns how many titles were reset; the caller repeats while a statement fills its limit.
         public static async Task<int> ResetUnusedCatalogDetailsAsync(this LogicContext ctx, CatalogCleanupData data, CancellationToken ct)
         {
@@ -28,7 +33,7 @@ namespace Jularr.Backend.Logic.Media
                         AND NOT EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id")
                         AND NOT EXISTS (SELECT 1 FROM "MediaAssets" AS asset WHERE asset."WorkId" = work."Id")
                         AND EXISTS (SELECT 1 FROM "WorkExternalIdentities" AS identity WHERE identity."WorkId" = work."Id" AND identity."Namespace" <> 'plex')
-                        AND NOT EXISTS (
+                        AND NOT (@KeepsDiscoverLists AND EXISTS (
                             SELECT 1
                             FROM
                                 "ExternalWorkFeedItems" AS item
@@ -37,7 +42,7 @@ namespace Jularr.Backend.Logic.Media
                             WHERE
                                 item."WorkId" = work."Id"
                                 AND settings."Id" = 1
-                                AND (feed."DiscoverFeedTypeId" = 1 OR settings."DetailsDiscoverAhead"))
+                                AND (feed."DiscoverFeedTypeId" = 1 OR settings."DetailsDiscoverAhead")))
                     ORDER BY
                         work."Id"
                     LIMIT @Limit
@@ -76,7 +81,7 @@ namespace Jularr.Backend.Logic.Media
             return await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        // Deletes catalog rows without details of providers on cache tier 1 or 2 (tier 3 keeps the whole catalog) that nothing uses for CatalogDetailKeepDays:
+        // Deletes catalog rows without details of catalogs that are not kept whole that nothing uses for CatalogDetailKeepDays:
         // no library tie, no feed, no trending rank, and not the target of a relation of a title with details or a library tie.
         public static async Task<int> DeleteUnusedCatalogTitlesAsync(this LogicContext ctx, CatalogCleanupData data, CancellationToken ct)
         {
@@ -88,7 +93,7 @@ namespace Jularr.Backend.Logic.Media
                         work."Id"
                     FROM
                         "Works" AS work
-                        JOIN "ExternalWorkSyncs" AS sync ON sync."Namespace" = work."CatalogNamespace" AND sync."CacheTier" IN (1, 2)
+                        JOIN "ExternalWorkSyncs" AS sync ON sync."Namespace" = work."CatalogNamespace" AND sync."Namespace" <> ALL(@WholeCatalogs)
                     WHERE
                         work."DetailedAt" IS NULL
                         AND work."TrendingRank" IS NULL

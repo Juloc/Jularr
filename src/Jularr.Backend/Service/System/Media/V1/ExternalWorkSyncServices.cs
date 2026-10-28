@@ -33,14 +33,14 @@ namespace Jularr.Backend.Service.System.Media.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(SyncExternalWorksParametersV1 parameters) => ModuleRequirement.All("Library", "LocalDiscovery");
+        protected override ModuleRequirement GetInstanceModules(SyncExternalWorksParametersV1 parameters) => ModuleRequirement.All("Library", "DiscoverCache", "LocalDiscovery");
         protected override ServicePermission GetPermission(SyncExternalWorksParametersV1 parameters, Type resultType) => new("system.media");
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var windows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkSyncWindowsAsync(ct), CancellationToken);
+            var (tier, windows) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await ctx.ReadCachingTierAsync(ct), await ctx.ReadExternalWorkSyncWindowsAsync(ct)), CancellationToken);
             var isUsed = _activity.IsUsedWithin(ExternalWorkLogic.UseLasts);
-            var changed = await SyncAniListAsync(windows, isUsed);
+            var changed = await SyncAniListAsync(tier, windows, isUsed);
 
             // Without a TMDB key there is nothing to keep from TMDB.
             TmdbConnection connection;
@@ -58,7 +58,7 @@ namespace Jularr.Backend.Service.System.Media.V1
                 var list = new ExternalWorkListData(WorkMetadata.Namespace(mediaType), mediaType, null);
                 var now = _time.GetUtcNow();
                 var sync = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkSyncAsync(list.Namespace, ct), CancellationToken);
-                if (sync is null || !ExternalWorkLogic.MaySync(sync, windows, TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, _time.LocalTimeZone).DateTime), isUsed)) continue;
+                if (sync is null || !ExternalWorkLogic.MaySync(tier, sync, windows, TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, _time.LocalTimeZone).DateTime), isUsed)) continue;
 
                 var today = DateOnly.FromDateTime(now.UtcDateTime);
                 var listedOn = sync.ListedOn;
@@ -87,11 +87,11 @@ namespace Jularr.Backend.Service.System.Media.V1
         }
 
         // AniList has no id list: a pass walks its titles by id, a page per request within the budget, and goes on where the last one stopped.
-        private async Task<int> SyncAniListAsync(IReadOnlyList<ExternalWorkSyncWindowData> windows, bool isUsed)
+        private async Task<int> SyncAniListAsync(CachingTier tier, IReadOnlyList<ExternalWorkSyncWindowData> windows, bool isUsed)
         {
             var now = _time.GetUtcNow();
             var sync = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkSyncAsync(AniListMetadata.Namespace, ct), CancellationToken);
-            if (sync is null || !ExternalWorkLogic.MaySync(sync, windows, TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, _time.LocalTimeZone).DateTime), isUsed)
+            if (sync is null || !ExternalWorkLogic.MaySync(tier, sync, windows, TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, _time.LocalTimeZone).DateTime), isUsed)
                 || !ExternalWorkLogic.IsFullPassDue(sync, now))
             {
                 return 0;

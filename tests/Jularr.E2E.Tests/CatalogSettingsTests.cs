@@ -2,7 +2,8 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // The Discover catalog page: the catalogs are cards with their tier, mode, counts and inputs; a sync window is added as a draft in the card, typed in the desktop time fields and saved by the page's pill.
+    // The Discover catalog page: the catalogs are cards with their mode, counts and inputs; a sync window is added as a draft in the card, typed in the desktop time fields and saved by the page's pill.
+    // How much is kept is the Caching module's choice on the Modules page: its days, and while it is on its sub-options.
     [TestClass]
     public sealed class CatalogSettingsTests
     {
@@ -46,30 +47,74 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(aniList.Locator("[name='Windows[0].StartsAt']")).ToHaveValueAsync("22:30");
             await Assertions.Expect(aniList.Locator("[name='Windows[0].EndsAt']")).ToHaveValueAsync("01:00");
 
-            // The card's tier replaces its old switch: kept whole before the update, the lean tier asks for Discover's lists each time.
-            await Assertions.Expect(aniList.GetByRole(AriaRole.Radio, new() { Name = "3 Full", Exact = true })).ToBeCheckedAsync();
-            Assert.AreEqual(0, await aniList.GetByText("Keep whole", new() { Exact = true }).CountAsync());
-            await aniList.GetByRole(AriaRole.Radio, new() { Name = "1 Lean", Exact = true }).CheckAsync(new() { Force = true });
-            await Steps.SaveAsync(page);
-            await page.ReloadAsync();
-            await Assertions.Expect(aniList.GetByRole(AriaRole.Radio, new() { Name = "1 Lean", Exact = true })).ToBeCheckedAsync();
-            await Assertions.Expect(aniList).ToContainTextAsync("Live");
-            await Assertions.Expect(aniList.Locator("[name='Windows[0].StartsAt']")).ToHaveValueAsync("22:30");
-
-            // One section keeps the instance's choices beside the images of other titles, each saved through the page's pill.
-            var section = page.Locator(".ui-section", new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Cache", Exact = true }) });
-            var details = section.Locator("form[action='/Admin/Catalog?handler=Cache']");
-            var covers = section.Locator("form[action='/Admin/Catalog?handler=Covers']");
-            await Assertions.Expect(details.GetByLabel("Keep details for")).ToHaveValueAsync("14");
-            await details.GetByLabel("Keep details for").FillAsync("30");
-            await details.GetByRole(AriaRole.Switch, new() { Name = "Detail Discover in advance", Exact = true }).CheckAsync(new() { Force = true });
+            // A card has no choice of its own how much is kept; the cache of images of other titles is sized here and saved through the page's pill.
+            Assert.AreEqual(0, await aniList.GetByRole(AriaRole.Radio).CountAsync());
+            Assert.AreEqual(0, await page.GetByRole(AriaRole.Heading, new() { Name = "Cache", Exact = true }).CountAsync());
+            var covers = page.Locator(".ui-section", new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Images of other titles", Exact = true }) }).Locator("form[data-save]");
             await Assertions.Expect(covers.GetByLabel("Keep unused images for")).ToHaveValueAsync("14");
             await covers.GetByLabel("Largest size, 0 keeps none").FillAsync("120");
             await Steps.SaveAsync(page);
             await page.ReloadAsync();
-            await Assertions.Expect(details.GetByLabel("Keep details for")).ToHaveValueAsync("30");
-            await Assertions.Expect(details.GetByRole(AriaRole.Switch, new() { Name = "Detail Discover in advance", Exact = true })).ToBeCheckedAsync();
             await Assertions.Expect(covers.GetByLabel("Largest size, 0 keeps none")).ToHaveValueAsync("120");
+        }
+
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task CachingModule_ShowsItsDaysAndSubOptions_AndDecidesHowEveryCatalogIsKept()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            await Owner.SetUpAndSignInAsync(page);
+            await page.GotoAsync("/Admin/Instance/Modules");
+
+            // One card: the module's switch, the days with their tooltip, and while it is on the full catalog and detailing Discover in advance.
+            var card = page.Locator(".setting-card[data-module=DiscoverCache]");
+            var own = card.Locator(".setting-card__head input[type=checkbox]");
+            var subs = card.Locator(".option-subs");
+            var days = card.GetByLabel("Keep extended data");
+            var full = subs.Locator("[data-module=LocalDiscovery]");
+            var ahead = subs.GetByRole(AriaRole.Switch, new() { Name = "Detail Discover in advance", Exact = true });
+            await Assertions.Expect(card.Locator(".setting-card__name .truncated__text")).ToHaveTextAsync("Caching");
+            await Assertions.Expect(own).ToBeCheckedAsync();
+            await Assertions.Expect(days).ToHaveValueAsync("14");
+            await Assertions.Expect(subs).ToBeVisibleAsync();
+            await Assertions.Expect(full).ToContainTextAsync("Keep full catalog");
+            await Assertions.Expect(page.Locator(".setting-card[data-module=LocalDiscovery]")).ToHaveCountAsync(0);
+            await card.Locator(".ui-field__info").ClickAsync();
+            await Assertions.Expect(card.GetByRole(AriaRole.Tooltip)).ToContainTextAsync("Seasons and episodes, cast, trailers, descriptions and relations");
+
+            await days.FillAsync("30");
+            await full.Locator(".toggle").ClickAsync();
+            await ahead.CheckAsync(new() { Force = true });
+            await Evidence.SaveAsync(page, "caching-module");
+            await Steps.SaveAsync(page);
+            await page.ReloadAsync();
+            await Assertions.Expect(days).ToHaveValueAsync("30");
+            await Assertions.Expect(full.Locator("input[type=checkbox]")).ToBeCheckedAsync();
+            await Assertions.Expect(ahead).ToBeCheckedAsync();
+
+            // The catalogs with a full list are kept whole now; the page names no choice of its own.
+            await page.GotoAsync("/Admin/Catalog");
+            var aniList = page.Locator(".card-grid .feature-card").Filter(new() { HasText = "AniList" });
+            await Assertions.Expect(aniList).ToContainTextAsync("Whole");
+            await Assertions.Expect(page.GetByText("Full local discovery is off", new() { Exact = false })).ToHaveCountAsync(0);
+            Assert.IsFalse(await page.GetByRole(AriaRole.Button, new() { Name = "Sync now", Exact = true }).IsDisabledAsync());
+
+            // Off: the sub-options hide, the days stay; Discover asks the providers each time.
+            await page.GotoAsync("/Admin/Instance/Modules");
+            await full.Locator(".toggle").ClickAsync();
+            await card.Locator(".setting-card__head .toggle").ClickAsync();
+            await Assertions.Expect(own).Not.ToBeCheckedAsync();
+            await Assertions.Expect(subs).ToBeHiddenAsync();
+            await Assertions.Expect(days).ToBeVisibleAsync();
+            await Steps.SaveAsync(page);
+            await page.ReloadAsync();
+            await Assertions.Expect(own).Not.ToBeCheckedAsync();
+            await Assertions.Expect(days).ToHaveValueAsync("30");
+            await page.GotoAsync("/Admin/Catalog");
+            await Assertions.Expect(aniList).ToContainTextAsync("Live");
+            await Assertions.Expect(page.GetByText("Discover keeps nothing locally", new() { Exact = false })).ToBeVisibleAsync();
         }
 
         [TestMethod]
@@ -95,9 +140,6 @@ namespace Jularr.E2E.Tests
 
             await Assertions.Expect(catalogRows.Locator(".icon-tile .ui-icon")).ToHaveCountAsync(7);
 
-            // Only a catalog with a full sync may keep the whole catalog.
-            await Assertions.Expect(catalogRows.Filter(new() { HasText = "TVDB" }).GetByRole(AriaRole.Radio, new() { Name = "3 Full", Exact = true })).ToBeDisabledAsync();
-            await Assertions.Expect(catalogRows.Filter(new() { HasText = "TMDB films" }).GetByRole(AriaRole.Radio, new() { Name = "3 Full", Exact = true })).ToBeEnabledAsync();
             var text = await page.Locator("#app-content").InnerTextAsync();
             foreach (var key in new[] { "tmdb_movie", "tmdb_tv", "tvdb", "openlibrary", "musicbrainz", "igdb", "anilist", "admin.catalog." })
             {

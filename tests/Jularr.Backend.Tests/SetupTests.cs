@@ -171,7 +171,8 @@ namespace Jularr.Backend.Tests
             var modules = (await read.Content.ReadFromJsonAsync<BaseDataList<SetupModuleV1>>())!;
             var settingsVersion = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSettings\""))!;
             var setupVersion = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""))!;
-            var form = Token(html, ("Name", "  My server  "), ("Version", settingsVersion.ToString()), ("SetupVersion", setupVersion.ToString()));
+            var form = Token(html, ("Name", "  My server  "), ("Version", settingsVersion.ToString()), ("SetupVersion", setupVersion.ToString()),
+                ("CatalogDetailKeepDays", "21"), ("DetailsDiscoverAhead", "true"));
             for (var index = 0; index < modules.Count; index++)
             {
                 var module = modules[index];
@@ -186,6 +187,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(settingsVersion, await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSettings\""));
             Assert.AreEqual(setupVersion, await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""));
             Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"InstanceModules\" WHERE \"Key\" = 'Devices'"));
+            Assert.AreEqual("14:false", await host.ScalarAsync("SELECT \"CatalogDetailKeepDays\" || ':' || \"DetailsDiscoverAhead\" FROM \"InstanceSettings\""));
 
             form[$"Modules[{modules.Count - 1}].Version"] = modules[^1].Version.ToString();
 
@@ -208,6 +210,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"InstanceModules\" WHERE \"Key\" = 'Registration'"));
             Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"MediaTypes\" WHERE \"Key\" = 'Music'"));
             Assert.AreEqual(movieVersion, await host.ScalarAsync("SELECT \"Version\" FROM \"MediaTypes\" WHERE \"Key\" = 'Movie'"));
+            Assert.AreEqual("21:true", await host.ScalarAsync("SELECT \"CatalogDetailKeepDays\" || ':' || \"DetailsDiscoverAhead\" FROM \"InstanceSettings\""), "The Caching module's settings save with the step.");
 
             using var nextPage = await host.SendAsync(HttpMethod.Get, "/Setup/Providers");
             var nextHtml = await nextPage.Content.ReadAsStringAsync();

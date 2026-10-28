@@ -309,8 +309,8 @@ namespace Jularr.Backend.Tests
                     await context.BeginAsync(SqlAccessMode.ReadWrite);
                     var begin = Stopwatch.GetTimestamp();
                     changed = step == "reset"
-                        ? await new LogicContext(context).ResetUnusedCatalogDetailsAsync(new CatalogCleanupData(1000), default)
-                        : await new LogicContext(context).DeleteUnusedCatalogTitlesAsync(new CatalogCleanupData(1000), default);
+                        ? await new LogicContext(context).ResetUnusedCatalogDetailsAsync(CatalogCleanupLogic.CleanupFor(CachingTier.Standard, 1000), default)
+                        : await new LogicContext(context).DeleteUnusedCatalogTitlesAsync(CatalogCleanupLogic.CleanupFor(CachingTier.Standard, 1000), default);
                     durations.Add(Stopwatch.GetElapsedTime(begin).TotalMilliseconds);
                 }
                 durations.Sort();
@@ -345,10 +345,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
             await SeedInventoryAsync(host, 300, 411, false);
             await host.Fixture.RunSqlAsync($"""
-                INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('LocalDiscovery', TRUE)
+                INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('DiscoverCache', TRUE), ('LocalDiscovery', TRUE)
                     ON CONFLICT ("Key") DO UPDATE SET "IsEnabled" = TRUE;
                 INSERT INTO "ExternalWorkSyncs" ("Namespace", "RequestsPerMinute") VALUES ('openlibrary', 20);
-                UPDATE "ExternalWorkSyncs" SET "CacheTier" = 3;
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
                 SELECT "Id", 'tmdb_movie', "Id"::text FROM "Works" WHERE "MediaTypeId" = 1;
                 UPDATE "Works" SET "MediaSubtypeId" = 1 WHERE "MediaTypeId" = 2;

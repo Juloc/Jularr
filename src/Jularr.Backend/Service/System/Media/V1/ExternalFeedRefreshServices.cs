@@ -11,8 +11,9 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace Jularr.Backend.Service.System.Media.V1
 {
-    // Persistent public lists are renewed here; their readers do not decide when they expire. With the instance's switch on, the titles of every Discover list
-    // then get their details, within each catalog's request budget and, where the catalog waits, only while nobody uses Jularr.
+    // Persistent public lists are renewed here while the Caching module keeps them; their readers do not decide when they expire. With its sub-option
+    // DetailsDiscoverAhead on, the titles of every Discover list then get their details, within each catalog's request budget and, where the catalog waits,
+    // only while nobody uses Jularr.
     public sealed class RefreshDiscoverFeedsV1 : SystemService<RefreshDiscoverFeedsParametersV1, NoData>
     {
         // A title its catalog could not detail waits this long before a pass asks for it again; the process remembers it.
@@ -38,7 +39,7 @@ namespace Jularr.Backend.Service.System.Media.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(RefreshDiscoverFeedsParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ModuleRequirement GetInstanceModules(RefreshDiscoverFeedsParametersV1 parameters) => ModuleRequirement.All("Library", "DiscoverCache");
         protected override ServicePermission GetPermission(RefreshDiscoverFeedsParametersV1 parameters, Type resultType) => new("system.media");
 
         protected override async Task<IServiceOutput> OnExecute()

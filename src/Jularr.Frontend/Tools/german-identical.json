@@ -1,5 +1,4 @@
 [
- "2 Standard",
  "AcoustID",
  "Admin",
  "Album",
@@ -13,6 +12,7 @@
  "Backups",
  "Benchmark",
  "Browser",
+ "Caching",
  "Clean",
  "Client",
  "Comic",

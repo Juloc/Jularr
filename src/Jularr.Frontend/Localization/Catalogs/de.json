@@ -1250,6 +1250,10 @@
    "Discover catalog",
    "Discover-Katalog"
   ],
+  "admin.catalog.nothingKept": [
+   "Discover keeps nothing locally and always asks the providers.",
+   "Discover speichert nichts lokal und fragt immer die Anbieter."
+  ],
   "admin.catalog.off": [
    "Full local discovery is off; Discover keeps only what it loaded.",
    "Full local discovery ist aus; Discover behält nur, was es geladen hat."
@@ -1278,13 +1282,6 @@
    "Last complete",
    "Zuletzt vollständig"
   ],
-  "admin.catalog.cacheTier": ["Cache tier", "Cache-Stufe"],
-  "admin.catalog.tier.lean": ["1 Lean", "1 Schlank"],
-  "admin.catalog.tier.standard": ["2 Standard", "2 Standard"],
-  "admin.catalog.tier.full": ["3 Full", "3 Voll"],
-  "admin.catalog.cache": ["Cache", "Zwischenspeicher"],
-  "admin.catalog.keepDays": ["Keep details for", "Details aufbewahren"],
-  "admin.catalog.detailsDiscoverAhead": ["Detail Discover in advance", "Discover vorab detaillieren"],
   "admin.catalog.requestsPerMinute": [
    "Requests per minute",
    "Anfragen pro Minute"
@@ -1308,6 +1305,10 @@
   "admin.catalog.removeWindow": [
    "Remove last window",
    "Letztes Fenster entfernen"
+  ],
+  "admin.catalog.covers": [
+   "Images of other titles",
+   "Bilder anderer Titel"
   ],
   "admin.catalog.coversKeepDays": [
    "Keep unused images for days",
@@ -5625,10 +5626,11 @@
    "Recognize the text of scanned books",
    "Text gescannter Bücher erkennen"
   ],
-  "instance.module.LocalDiscovery": [
-   "Keep whole provider catalogs for Discover",
-   "Ganze Anbieter-Kataloge für Discover lokal halten"
-  ],
+  "instance.module.DiscoverCache": ["Caching", "Caching"],
+  "instance.module.LocalDiscovery": ["Keep full catalog", "Vollen Katalog behalten"],
+  "instance.caching.keepDays": ["Keep extended data", "Erweiterte Daten aufbewahren"],
+  "hint.InstanceSettingsFields.CatalogDetailKeepDays.info": ["Seasons and episodes, cast, trailers, descriptions and relations of titles outside the library. Titles in the library are never cleaned up.", "Staffeln und Folgen, Besetzung, Trailer, Beschreibungen und Beziehungen von Titeln außerhalb der Bibliothek. Titel in der Bibliothek werden nie aufgeräumt."],
+  "instance.caching.detailsDiscoverAhead": ["Detail Discover in advance", "Discover vorab detaillieren"],
   "instance.module.Diagnostics": [
    "Diagnostics in memory",
    "Diagnose im Arbeitsspeicher"
@@ -12964,10 +12966,6 @@
   "setup.module.help.SmartPdf": [
    "Prepare matching EPUB reading copies of PDF books.",
    "Aus PDF-Büchern passende EPUB-Lesekopien vorbereiten."
-  ],
-  "setup.module.help.LocalDiscovery": [
-   "Keep whole provider catalogs here; needs more storage.",
-   "Ganze Anbieter-Kataloge lokal halten; braucht mehr Speicher."
   ],
   "setup.module.help.Subtitles": [
    "Look for missing subtitles at providers.",

@@ -3,8 +3,8 @@ using Jularr.Backend.Data.Admin.Instance.V1;
 
 namespace Jularr.Frontend.Framework
 {
-    // The card of one module, as the Modules page and the setup's module step show it: its icon, name and state, its switch, and the modules it needs
-    // and the ones that need it (Modules.entry.ts keeps those tags and the switch's freedom to move as the switches change).
+    // The card of one module, as the Modules page shows it: its icon, name and state, its switch, the modules it needs and the ones that need it
+    // (Modules.entry.ts keeps those tags and the switch's freedom to move as the switches change), and the fields that belong to it.
     public static class ModuleCard
     {
         // The icon of what a module does, from the project's icon set.
@@ -36,11 +36,12 @@ namespace Jularr.Frontend.Framework
             ["Translation"] = "globe",
             ["Ocr"] = "text-select",
             ["SmartPdf"] = "document",
+            ["DiscoverCache"] = "drive",
             ["LocalDiscovery"] = "network"
         };
 
         public static IUiComponent Build(InstanceModuleDetailsV1 module, IReadOnlyList<InstanceModuleDetailsV1> modules, IUiComponent control, bool isOn,
-            IReadOnlyDictionary<string, bool> enabled, FrontendAssets assets, UiText texts)
+            IReadOnlyDictionary<string, bool> enabled, FrontendAssets assets, UiText texts, IReadOnlyList<IUiComponent>? body = null)
         {
             var tags = new List<IUiComponent>();
             if (module.Requires.Length > 0)
@@ -62,7 +63,7 @@ namespace Jularr.Frontend.Framework
 
             var blocked = isOn ? dependants.Any(other => enabled.GetValueOrDefault(other.Key)) : module.Requires.Any(key => !enabled.GetValueOrDefault(key));
             var card = new SettingCard(new IconTile(new Icon(Icons.GetValueOrDefault(module.Key, "settings"), assets, 17)), new Truncated(texts["instance.module." + module.Key]), control, isOn,
-                "admin.providers.enabled", "admin.providers.disabled", tags).Data("module", module.Key).Data("requires", string.Join(' ', module.Requires));
+                "admin.providers.enabled", "admin.providers.disabled", tags, body).Data("module", module.Key).Data("requires", string.Join(' ', module.Requires));
             return blocked ? card.Blocked() : card;
         }
     }

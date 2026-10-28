@@ -66,7 +66,7 @@ namespace Jularr.Backend.Tests
                 Assert.IsNotNull(items);
                 Assert.AreEqual(0, items.Count);
             }
-            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"CacheTier\" = 1 WHERE \"Namespace\" = 'tmdb_movie'");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'DiscoverCache'");
             await using var disabled = new SqlContext(host.Fixture.Database);
             await disabled.BeginAsync(SqlAccessMode.ReadOnly);
             await Assert.ThrowsExactlyAsync<SecurityException>(() => new LogicContext(disabled).ReadExternalFeedAsync(Trending, default));

@@ -34,12 +34,12 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly TimeField EndsAt = new();
         public static readonly LongField Entries = new() { Minimum = 0 };
         public static readonly LongField Pending = new() { Minimum = 0 };
-        public static readonly EnumField CacheTier = new(typeof(CatalogCacheTier));
-        public static readonly IntField KeepDays = new() { Minimum = 1, Maximum = 365 };
-        public static readonly BoolField DetailsDiscoverAhead = new();
+        public static readonly EnumField Tier = new(typeof(CachingTier));
         // Works a pass leaves out for now, such as titles that just could not be detailed.
         public static readonly LongArrayField WorkIds = new() { Minimum = 1, MaximumLength = 10000, IsSet = true };
         public static readonly BoolField IsDetailed = new();
+        // Whether Discover keeps its lists (the Caching module is on).
+        public static readonly BoolField KeepsDiscoverLists = new();
         public static readonly BoolField AreDetailsUnavailable = new();
     }
 }

@@ -138,11 +138,11 @@ namespace Jularr.Backend.Service.Core
         public async Task<IReadOnlyList<ExternalWorkData>?> ReadCachedFeedInBatchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, CancellationToken ct)
         {
             var ranking = Ranking(mediaType, subtype, feed);
-            var descriptor = new ExternalFeedData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype, feed, 1, null, null);
-            if (!await context.KeepsDiscoverListsAsync(descriptor.Namespace, ct))
+            if (!await context.KeepsDiscoverListsAsync(ct))
             {
                 return null;
             }
+            var descriptor = new ExternalFeedData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype, feed, 1, null, null);
             return (await ExternalFeedCache.ReadAsync(context, descriptor, ct)).Items;
         }
 
@@ -151,7 +151,7 @@ namespace Jularr.Backend.Service.Core
         {
             var ranking = Ranking(mediaType, subtype, feed);
             var descriptor = new ExternalFeedData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype, feed, 1, null, null);
-            var keeps = await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverListsAsync(descriptor.Namespace, token), ct, mode: SqlAccessMode.ReadOnly);
+            var keeps = await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverListsAsync(token), ct, mode: SqlAccessMode.ReadOnly);
             if (keeps)
             {
                 return await feeds.LoadAsync(context, descriptor, FetchExternalFeedAsync, ct);

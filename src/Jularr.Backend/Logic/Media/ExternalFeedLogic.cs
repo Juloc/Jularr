@@ -62,8 +62,6 @@ namespace Jularr.Backend.Logic.Media
                         AND provider."IsEnabled"
                         AND (provider."Key" <> 'tmdb' OR provider."ProtectedSecret" IS NOT NULL)
                         AND (candidate."SourceValue" IS NOT NULL OR candidate."Namespace" <> ALL(@WholeCatalogs))
-                        -- A catalog on the lean tier keeps no lists.
-                        AND NOT EXISTS (SELECT 1 FROM "ExternalWorkSyncs" AS sync WHERE sync."Namespace" = candidate."Namespace" AND sync."CacheTier" = 1)
                 )
                 SELECT
                     candidate."Namespace",
@@ -125,7 +123,6 @@ namespace Jularr.Backend.Logic.Media
                     AND (provider."Key" <> 'tmdb' OR provider."ProtectedSecret" IS NOT NULL)
                     AND (provider."Key" <> 'tmdb' OR feed."Language" = locale."Locale")
                     AND (feed."SourceValue" IS NOT NULL OR feed."Namespace" <> ALL(@WholeCatalogs))
-                    AND NOT EXISTS (SELECT 1 FROM "ExternalWorkSyncs" AS sync WHERE sync."Namespace" = feed."Namespace" AND sync."CacheTier" = 1)
                     AND feed."RetryAfter" <= @Now
                     AND (
                         feed."RefreshedAt" IS NULL
@@ -146,20 +143,24 @@ namespace Jularr.Backend.Logic.Media
 
         public static async Task<IReadOnlyList<ExternalWorkData>?> ReadExternalFeedAsync(this LogicContext ctx, ExternalFeedData feed, CancellationToken ct)
         {
+            if (!await ctx.KeepsDiscoverListsAsync(ct))
+            {
+                throw new SecurityException("Discover keeps no lists without the Caching module.");
+            }
+
             var state = new SqlStatement();
             state.Statement =
                 """
                 SELECT
-                    NOT EXISTS (SELECT 1 FROM "ExternalWorkSyncs" AS sync WHERE sync."Namespace" = @Namespace AND sync."CacheTier" = 1) AS "IsKept",
-                    (SELECT feed."Id" FROM "ExternalWorkFeeds" AS feed WHERE feed."Key" = @Key AND feed."RefreshedAt" IS NOT NULL) AS "FeedId";
+                    feed."Id" AS "FeedId"
+                FROM
+                    "ExternalWorkFeeds" AS feed
+                WHERE
+                    feed."Key" = @Key
+                    AND feed."RefreshedAt" IS NOT NULL;
                 """;
             state.Parameters.Add(feed);
-            var current = await ctx.ReadSql.ReadOptionalAsync<ExternalFeedStateData>(state, ct);
-            if (current is not { IsKept: true })
-            {
-                throw new SecurityException("The catalog keeps no Discover lists.");
-            }
-            if (current.FeedId is null)
+            if (await ctx.ReadSql.ReadOptionalAsync<ExternalFeedStateData>(state, ct) is null)
             {
                 return null;
             }
@@ -225,9 +226,9 @@ namespace Jularr.Backend.Logic.Media
 
         public static async Task SaveExternalFeedAsync(this LogicContext ctx, ExternalFeedData feed, IReadOnlyList<ExternalWorkData> works, CancellationToken ct)
         {
-            if (!await ctx.KeepsDiscoverListsAsync(feed.Namespace, ct))
+            if (!await ctx.KeepsDiscoverListsAsync(ct))
             {
-                throw new SecurityException("The catalog keeps no Discover lists.");
+                throw new SecurityException("Discover keeps no lists without the Caching module.");
             }
 
             var list = new ExternalWorkListData(feed.Namespace, feed.MediaTypeId, feed.MediaSubtypeId);
@@ -309,9 +310,9 @@ namespace Jularr.Backend.Logic.Media
 
         public static async Task PostponeExternalFeedAsync(this LogicContext ctx, ExternalFeedRetryData data, CancellationToken ct)
         {
-            if (!await ctx.KeepsDiscoverListsAsync(data.Namespace, ct))
+            if (!await ctx.KeepsDiscoverListsAsync(ct))
             {
-                throw new SecurityException("The catalog keeps no Discover lists.");
+                throw new SecurityException("Discover keeps no lists without the Caching module.");
             }
             var sql = new SqlStatement();
             sql.Statement =
@@ -347,8 +348,8 @@ namespace Jularr.Backend.Logic.Media
             }
         }
 
-        // With the instance's switch on, the catalogs whose Discover lists get their details in advance, each with its own request budget; none while it is off.
-        // A catalog on the lean tier keeps no lists, and one without settings of its own has no budget.
+        // With the Caching module's sub-option on, the catalogs whose Discover lists get their details in advance, each with its own request budget; none while it is off.
+        // A catalog without settings of its own has no budget. The refresh runs only while Discover keeps its lists.
         public static async Task<IReadOnlyList<CatalogPrefetchData>> ReadCatalogPrefetchesAsync(this LogicContext ctx, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -361,8 +362,6 @@ namespace Jularr.Backend.Logic.Media
                 FROM
                     "ExternalWorkSyncs" AS sync
                     JOIN "InstanceSettings" AS settings ON settings."Id" = 1 AND settings."DetailsDiscoverAhead"
-                WHERE
-                    sync."CacheTier" > 1
                 ORDER BY
                     sync."Namespace";
                 """;

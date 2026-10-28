@@ -10,20 +10,24 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Backend.Tests
 {
-    // The daily cleanup of catalog titles (#1651 step 4): details of unused titles go, then the rows of providers that keep no whole catalog.
+    // The daily cleanup of catalog titles (#1651 step 4): details of unused titles go, then the rows of catalogs the Caching module does not keep whole.
     [TestClass]
     public sealed class CatalogCleanupTests
     {
         private const string Old = "now() - interval '30 days'";
 
         [TestMethod]
-        public async Task Cleanup_KeepsEveryProtectedTitle_DropsOnlyDetailsOfUnusedOnes_AndDeletesUnusedRowsOfLeanProviders()
+        public async Task Cleanup_KeepsEveryProtectedTitle_DropsOnlyDetailsOfUnusedOnes_AndDeletesUnusedRowsOfCatalogsNotKeptWhole()
         {
             using var storage = new LibraryTests.TemporaryDirectory();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path);
             var mountId = await LibraryTests.CreateMountAsync(host);
             var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Films", MediaType.Movie);
-            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"CacheTier\" = CASE \"Namespace\" WHEN 'anilist' THEN 3 WHEN 'tmdb_tv' THEN 1 ELSE 2 END;");
+            // The full catalog keeps TMDB and AniList whole; Open Library has no full list and keeps Discover's lists only.
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('DiscoverCache', 'LocalDiscovery');
+                INSERT INTO "ExternalWorkSyncs" ("Namespace", "RequestsPerMinute") VALUES ('openlibrary', 20);
+                """);
 
             // Details: every one of these has an old ViewedAt, a title, a fact, a unit and a cover, so only a protection keeps it.
             var ids = "ARRAY[1,2,3,4,5,6,7,8,20,21,22,23,24]";
@@ -58,7 +62,8 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "ExternalWorkFeedItems" ("FeedId", "Position", "WorkId") VALUES ((SELECT "Id" FROM "ExternalWorkFeeds" WHERE "Key" = 'trending'), 1, 23), ((SELECT "Id" FROM "ExternalWorkFeeds" WHERE "Key" = 'top'), 1, 24);
                 """);
 
-            // Minimal rows: 30 old lean row, 31 in a feed, 32 relation target of a Work with details, 33 tier 3, 34 recent, 35 favorite, 36 tier 1, 37 trending, 38 target of an unused Work.
+            // Minimal rows of Open Library: 30 old, 31 in a feed, 32 relation target of a Work with details, 34 recent, 35 favorite, 36 old, 37 trending, 38 target of an unused Work;
+            // 33 of AniList, kept whole.
             await host.Fixture.RunSqlAsync($"""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "CatalogNamespace", "FetchedAt", "TrendingRank")
                 VALUES (30, 1, 'Lean old', 'tmdb_movie', {Old}, NULL), (31, 1, 'In a feed', 'tmdb_movie', {Old}, NULL), (32, 1, 'Related', 'tmdb_movie', {Old}, NULL),
@@ -68,7 +73,8 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "ExternalWorkFeedItems" ("FeedId", "Position", "WorkId") VALUES ((SELECT "Id" FROM "ExternalWorkFeeds" WHERE "Key" = 'top'), 2, 31);
                 INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey") VALUES (22, 32, 1, 'tmdb'), (20, 38, 1, 'tmdb');
                 INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId") SELECT (SELECT min("Id") FROM "Profiles"), 35;
-                -- Work 20 belongs to the whole catalog (tier 3): it keeps its row once its details are gone; on tier 2 the row would go as well.
+                UPDATE "Works" SET "CatalogNamespace" = 'openlibrary' WHERE "Id" IN (30, 31, 32, 34, 35, 36, 37, 38);
+                -- Work 20 belongs to a catalog kept whole: it keeps its row once its details are gone; without the full catalog the row would go as well.
                 UPDATE "Works" SET "CatalogNamespace" = 'anilist' WHERE "Id" = 20;
                 """);
 
@@ -94,7 +100,7 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual(0L, await host.ScalarAsync($"SELECT count(*) FROM \"{table}\" WHERE \"WorkId\" = 20"), table);
             }
 
-            // On tier 2 the same Work would be deleted in the same pass: Work 24 only stays because a feed lists it.
+            // Without the full catalog the same Work would be deleted in the same pass: Work 24 only stays because a feed lists it.
             // Trending (rank or trending feed) and recently opened titles keep their details; a title only in another feed does not.
             foreach (var id in new[] { 21, 22, 23 })
             {
@@ -102,10 +108,10 @@ namespace Jularr.Backend.Tests
             }
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"Id\" = 24 AND \"DetailedAt\" IS NULL"));
 
-            // Lean providers lose unused minimal rows; a feed, a relation target of a Work with details, tier 3, a recent row, a tie and a trending rank keep them.
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"Id\" IN (30, 36, 38)"), "Unused minimal rows of tier 1 and 2 are deleted.");
+            // A catalog not kept whole loses unused minimal rows; a feed, a relation target of a Work with details, a whole catalog, a recent row, a tie and a trending rank keep them.
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"Id\" IN (30, 36, 38)"), "Unused minimal rows of a catalog not kept whole are deleted.");
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"WorkId\" IN (30, 36, 38)"));
-            foreach (var (id, reason) in new[] { (31, "In a feed"), (32, "Target of a Work with details"), (33, "Tier 3 keeps the whole catalog"), (34, "Used recently"), (35, "Favorite"), (37, "Trending") })
+            foreach (var (id, reason) in new[] { (31, "In a feed"), (32, "Target of a Work with details"), (33, "The full catalog keeps AniList whole"), (34, "Used recently"), (35, "Favorite"), (37, "Trending") })
             {
                 Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"Works\" WHERE \"Id\" = {id}"), reason);
             }
@@ -129,7 +135,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Cleanup_WhileDiscoverIsDetailedAhead_KeepsTheDetailsOfEveryDiscoverListTitle()
+        public async Task Cleanup_WhileDiscoverIsDetailedAhead_KeepsTheDetailsOfEveryDiscoverListTitle_AndNoneWithoutCaching()
         {
             await using var host = await AuthenticationTests.Host.CreateAsync(library: true);
 
@@ -144,15 +150,24 @@ namespace Jularr.Backend.Tests
                 UPDATE "InstanceSettings" SET "DetailsDiscoverAhead" = TRUE;
                 """);
 
-            await using (var scope = host.Services.CreateAsyncScope())
+            async Task CleanAsync()
             {
+                await using var scope = host.Services.CreateAsyncScope();
                 await scope.ServiceProvider.GetRequiredService<CleanCatalogTitlesV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default);
             }
 
-            Assert.AreEqual("40:true,41:false,42:false", await host.ScalarAsync("""
+            const string Detailed = """
                 SELECT string_agg(work."Id" || ':' || (work."DetailedAt" IS NOT NULL AND EXISTS (SELECT 1 FROM "WorkTitles" AS title WHERE title."WorkId" = work."Id")), ',' ORDER BY work."Id")
                 FROM "Works" AS work WHERE work."Id" IN (40, 41, 42)
-                """), "A title of a Discover list keeps its details; recommendations and other titles do not.");
+                """;
+            await CleanAsync();
+            Assert.AreEqual("40:true,41:false", await host.ScalarAsync(Detailed),
+                "A title of a Discover list keeps its details; recommendations do not, and a title in no list goes with its row (the catalog is not kept whole).");
+
+            // Without the Caching module Discover keeps no lists, so they protect nothing.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" IN ('DiscoverCache', 'LocalDiscovery')");
+            await CleanAsync();
+            Assert.AreEqual("40:false", await host.ScalarAsync(Detailed.Replace("(40, 41, 42)", "(40)", StringComparison.Ordinal)));
         }
     }
 }

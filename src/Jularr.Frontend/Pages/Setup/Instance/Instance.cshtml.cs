@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Setup.Instance
 {
-    public sealed class InstanceModel(ReadInstanceSettingsV1 readSettings, ReadSetupModulesV1 readModules, ReadInstanceModulesV1 readDetails, ReadInstanceMediaV1 readMedia,
+    public sealed class InstanceModel(ReadInstanceSettingsV1 readSettings, ReadSetupModulesV1 readModules, ReadInstanceModulesV1 readDetails, ReadCachingSettingsV1 readCaching, ReadInstanceMediaV1 readMedia,
         ReadSetupProgressV1 readProgress, ReadWorksV1 readWorks, SaveSetupModulesV1 save, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         // The basic functions, as tinted cards in a grid.
@@ -30,13 +30,14 @@ namespace Jularr.Frontend.Pages.Setup.Instance
             ("setup.modules.watch", "play", ["Trickplay", "Subtitles", "AniList"]),
             ("setup.modules.reading", "book", ["Translation", "Ocr", "SmartPdf", "Uploads"]),
             ("setup.modules.games", "gamepad", ["Emulation"]),
-            ("setup.modules.discovery", "search", ["LocalDiscovery", "Franchises"]),
+            ("setup.modules.discovery", "search", [CachingModule.Key, CachingModule.FullCatalogKey, "Franchises"]),
             ("setup.modules.personal", "bookmark", ["Notifications", "Collections", "Calendar", "Statistics", "UnitGroups", "HomeLayout"]),
             ("setup.modules.accounts", "users", ["Profiles", "ProgressSync", "Devices", "Registration"]),
             ("setup.modules.operations", "settings", ["Diagnostics"])
         ];
 
         private InstanceSettingsDetailsV1? _settings;
+        private CachingSettingsV1? _caching;
         private SetupProgressV1? _progress;
         private IReadOnlyList<SetupModuleV1> _modules = [];
         private IReadOnlyList<InstanceModuleDetailsV1> _details = [];
@@ -52,12 +53,13 @@ namespace Jularr.Frontend.Pages.Setup.Instance
             page.Asset("Framework/Components/OptionList.entry.scss");
             page.Asset("Framework/Components/Truncated.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            if (_settings is not { } settings || _progress is not { } progress) return;
+            if (_settings is not { } settings || _progress is not { } progress || _caching is not { } caching) return;
 
             // After a takeover the media types start as what was taken over: the types that hold titles stay on, the others start off.
             var input = _input ?? new SaveSetupModulesDataV1(settings.Name, settings.Version, progress.Version,
                 new BaseDataList<InstanceModuleInputV1>(_modules.Select(module => new InstanceModuleInputV1(module.Id, module.IsEnabled, module.Version))),
-                new BaseDataList<UpdateInstanceMediaDataV1>(_media.Select(media => new UpdateInstanceMediaDataV1(media.Key, _taken is null || media.IsSubtype ? media.IsEnabled : _taken.Contains(media.Key), media.Version))));
+                new BaseDataList<UpdateInstanceMediaDataV1>(_media.Select(media => new UpdateInstanceMediaDataV1(media.Key, _taken is null || media.IsSubtype ? media.IsEnabled : _taken.Contains(media.Key), media.Version))),
+                caching.CatalogDetailKeepDays, caching.DetailsDiscoverAhead);
             var presets = new Div(
                 new OptionPreset(new Icon("spark", assets, 18), "setup.preset.complete", "setup.preset.complete.line", "complete"),
                 new OptionPreset(new Icon("film", assets, 18), "setup.preset.mediaServer", "setup.preset.mediaServer.line", "mediaServer"),
@@ -72,16 +74,42 @@ namespace Jularr.Frontend.Pages.Setup.Instance
             var mediaInfo = _media.ToDictionary(media => media.Key);
 
             // One module as a row; the row keeps its place in the posted list through its id.
-            void ModuleRow(Form<SaveSetupModulesDataV1> fields, string key, Func<OptionRow, OptionRow> style)
+            void ModuleRow(Form<SaveSetupModulesDataV1> fields, string key, Func<IUiComponent, IUiComponent> place)
             {
-                if (!ids.TryGetValue(key, out var id) || !details.TryGetValue(key, out var detail)) return;
+                if (!ids.TryGetValue(key, out var id)) return;
                 fields.Rows(item => item.Modules, (row, module) =>
                 {
                     row.Hidden(item => item.Id);
                     row.Hidden(item => item.Version);
-                    row.Switch(item => item.IsEnabled, "instance.module." + key, control => style(new OptionRow(texts["instance.module." + key], texts["setup.module.help." + key], control))
-                        .Data("module", key).Data("requires", string.Join(' ', detail.Requires)));
+                    row.Switch(item => item.IsEnabled, "instance.module." + key, place);
                 }, module => module.Id == id);
+            }
+
+            OptionRow Option(string key, IUiComponent control) =>
+                new OptionRow(texts["instance.module." + key], texts["setup.module.help." + key], control).Data("module", key).Data("requires", string.Join(' ', details[key].Requires));
+
+            // A module as a tinted card; the Caching module's card holds its settings and its sub-option modules.
+            void ModuleOption(Form<SaveSetupModulesDataV1> fields, string key)
+            {
+                if (!details.ContainsKey(key) || key == CachingModule.FullCatalogKey) return;
+                if (key != CachingModule.Key)
+                {
+                    ModuleRow(fields, key, control => Option(key, control).Card());
+                    return;
+                }
+
+                fields.Wrap(parts => new Div(new OptionRow(texts["instance.module." + key], null, parts[0]).Card().Data("module", key)
+                    .Data("requires", string.Join(' ', details[key].Requires)).With(parts.Skip(1))).Class("ui-form__row"), card =>
+                {
+                    ModuleRow(card, key, control => control);
+                    CachingModule.Parts(card, item => item.CatalogDetailKeepDays, item => item.DetailsDiscoverAhead, subs =>
+                    {
+                        if (details.TryGetValue(CachingModule.FullCatalogKey, out var full))
+                        {
+                            ModuleRow(subs, CachingModule.FullCatalogKey, control => CachingModule.FullCatalogRow(control, full.Requires, texts));
+                        }
+                    }, texts);
+                });
             }
 
             string Count(IEnumerable<string> moduleKeys, IEnumerable<string> mediaKeys)
@@ -106,7 +134,7 @@ namespace Jularr.Frontend.Pages.Setup.Instance
 
                 fields.Wrap(rows => new Div([.. rows]).Class("option-grid"), grid =>
                 {
-                    foreach (var key in Basics) ModuleRow(grid, key, row => row.Card());
+                    foreach (var key in Basics) ModuleOption(grid, key);
                 });
 
                 fields.Wrap(groups => new Div([.. groups]).Class("option-groups"), all =>
@@ -148,7 +176,7 @@ namespace Jularr.Frontend.Pages.Setup.Instance
                         all.Wrap(group => new OptionGroup(new Icon(icon, assets, 16), texts[title], Count(groupKeys, []), false, assets, [.. group])
                             .Attribute("data-has-enabled", groupKeys.Any(key => enabled.GetValueOrDefault(key)) ? "true" : "false"), inside =>
                         {
-                            foreach (var key in groupKeys) ModuleRow(inside, key, row => row.Card());
+                            foreach (var key in groupKeys) ModuleOption(inside, key);
                         });
                     }
                 });
@@ -174,16 +202,18 @@ namespace Jularr.Frontend.Pages.Setup.Instance
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync(string? name, long version, long setupVersion, List<ModuleRow> modules, List<MediaRow> media)
+        public async Task<IActionResult> OnPostAsync(string? name, long version, long setupVersion, List<ModuleRow> modules, List<MediaRow> media, int catalogDetailKeepDays,
+            bool detailsDiscoverAhead)
         {
             // The page shows every row as posted; only the media that changed are saved, so a subtype whose parent was switched off is not asked to turn on again.
             _media = await readMedia.ExecuteAsync<BaseDataList<InstanceMediaDetailsV1>>(new ReadInstanceMediaParametersV1(), HttpContext.RequestAborted);
             var current = _media.ToDictionary(item => item.Key);
             var posted = (media ?? []).Select(item => new UpdateInstanceMediaDataV1(item.Key ?? "", item.IsEnabled, item.Version)).ToList();
             var moduleRows = new BaseDataList<InstanceModuleInputV1>(modules.Select(module => new InstanceModuleInputV1(module.Id, module.IsEnabled, module.Version)));
-            _input = new SaveSetupModulesDataV1(name ?? "", version, setupVersion, moduleRows, new BaseDataList<UpdateInstanceMediaDataV1>(posted));
+            _input = new SaveSetupModulesDataV1(name ?? "", version, setupVersion, moduleRows, new BaseDataList<UpdateInstanceMediaDataV1>(posted), catalogDetailKeepDays, detailsDiscoverAhead);
             var changed = new BaseDataList<UpdateInstanceMediaDataV1>(posted.Where(item => !current.TryGetValue(item.Key, out var now) || now.IsEnabled != item.IsEnabled));
-            await save.ExecuteAsync<UpdateResult>(new SetupProgressParametersV1(), new SaveSetupModulesDataV1(name ?? "", version, setupVersion, moduleRows, changed), HttpContext.RequestAborted);
+            await save.ExecuteAsync<UpdateResult>(new SetupProgressParametersV1(), new SaveSetupModulesDataV1(name ?? "", version, setupVersion, moduleRows, changed,
+                catalogDetailKeepDays, detailsDiscoverAhead), HttpContext.RequestAborted);
             return LocalRedirect("/Setup/Progress");
         }
 
@@ -194,6 +224,7 @@ namespace Jularr.Frontend.Pages.Setup.Instance
             _settings = await readSettings.ExecuteAsync<InstanceSettingsDetailsV1>(new ReadInstanceSettingsParametersV1(), ct);
             _modules = await readModules.ExecuteAsync<BaseDataList<SetupModuleV1>>(cancellationToken: ct);
             _details = await readDetails.ExecuteAsync<BaseDataList<InstanceModuleDetailsV1>>(new ReadInstanceModulesParametersV1(), ct);
+            _caching = await readCaching.ExecuteAsync<CachingSettingsV1>(new ReadInstanceModulesParametersV1(), ct);
             if (_media.Count == 0) _media = await readMedia.ExecuteAsync<BaseDataList<InstanceMediaDetailsV1>>(new ReadInstanceMediaParametersV1(), ct);
             if (_progress is { SetupStartTypeId: SetupStartType.Takeover } && _progress.SetupStepTypeId <= SetupStepType.Modules && _input is null)
             {

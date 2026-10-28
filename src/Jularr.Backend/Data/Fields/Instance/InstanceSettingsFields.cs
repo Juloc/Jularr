@@ -30,5 +30,8 @@ namespace Jularr.Backend.Data.Fields.Instance
         public static readonly StringField RecyclePath = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false, Trim = true, Format = Enums.Field.StringFormat.RelativePath };
         public static readonly IntField RecycleDays = new() { Minimum = 0, Maximum = 3650 };
         public static readonly BoolField UnmonitorsDeletedUnits = new();
+        // The Caching module's settings: days unused extended data of titles outside the library is kept, and whether Discover's lists are detailed in advance.
+        public static readonly IntField CatalogDetailKeepDays = new() { Minimum = 1, Maximum = 365 };
+        public static readonly BoolField DetailsDiscoverAhead = new();
     }
 }

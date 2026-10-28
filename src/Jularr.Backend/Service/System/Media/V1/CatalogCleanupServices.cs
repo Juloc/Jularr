@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Logic.Media;
@@ -7,7 +8,7 @@ using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.System.Media.V1
 {
-    // Daily: the details of catalog titles nobody uses are dropped, then the catalog rows that providers without a whole catalog (cache tier 1 and 2) do not need.
+    // Daily: the details of catalog titles nobody uses are dropped, then the catalog rows that catalogs not kept whole (Caching module tiers) do not need.
     // Each statement changes at most BatchSize titles, so the Works table is never locked for long. The covers of a reset title are swept with the next cover cleanup.
     public sealed class CleanCatalogTitlesV1 : SystemService<CoverParametersV1, NoData>
     {
@@ -28,7 +29,8 @@ namespace Jularr.Backend.Service.System.Media.V1
         {
             var changed = 0;
             var batches = 0;
-            var data = new CatalogCleanupData(BatchSize);
+            var tier = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadCachingTierAsync(ct), CancellationToken, mode: SqlAccessMode.ReadOnly);
+            var data = CatalogCleanupLogic.CleanupFor(tier, BatchSize);
             int count;
             do
             {

@@ -183,11 +183,11 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Catalog_OnTheLeanTier_KeepsNoListsAndAsksTheProviders()
+        public async Task Catalog_WithoutTheCachingModule_KeepsNoListsAndAsksTheProviders()
         {
             var tmdb = new FakeTmdb();
             await using var host = await CreateHostAsync(fake: tmdb);
-            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"CacheTier\" = 1");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'DiscoverCache'");
             using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
             var shown = (await feed.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single();
             Assert.AreEqual("The Matrix", shown.Title);
@@ -301,6 +301,15 @@ namespace Jularr.Backend.Tests
             await Refresh();
             Assert.AreEqual(false, await host.ScalarAsync(Matrix));
             Assert.AreEqual(1, Details("603"));
+
+            // The switch is a sub-option of the Caching module: without the module no list is kept and nothing is detailed ahead.
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "ExternalWorkSyncs" SET "PausesWhileUsed" = FALSE;
+                UPDATE "InstanceModules" SET "IsEnabled" = FALSE WHERE "Key" = 'DiscoverCache';
+                """);
+            await Assert.ThrowsExactlyAsync<System.Security.SecurityException>(Refresh);
+            Assert.AreEqual(false, await host.ScalarAsync(Matrix));
+            Assert.AreEqual(1, Details("603"));
         }
 
         [TestMethod]
@@ -377,7 +386,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("""
                 UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
                 UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'anilist';
-                INSERT INTO "ExternalWorkSyncs" ("Namespace", "RequestsPerMinute", "CompletedAt", "CacheTier") VALUES ('openlibrary', 20, now(), 3);
+                INSERT INTO "ExternalWorkSyncs" ("Namespace", "RequestsPerMinute", "CompletedAt") VALUES ('openlibrary', 20, now());
                 INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES
                     (100, 3, NULL, 'Owned book'), (101, 3, 3, 'Blocked novel'), (102, 2, 1, 'Anime work'), (103, 2, 1, 'Anime season');
                 INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (100, 102, 1, 1), (101, 103, 1, 1);
@@ -475,11 +484,11 @@ namespace Jularr.Backend.Tests
             using var narrowed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("matrix rel", "movies"));
             Assert.AreEqual("The Matrix Reloaded", (await narrowed.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.Single().Title);
 
-            // Without full local discovery the shelves come from the providers again; catalogs on the lean tier suggest nothing.
+            // Without full local discovery the shelves come from the providers again; without the Caching module nothing is suggested.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'LocalDiscovery'");
             using var off = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/shelves", new ReadDiscoverShelvesDataV1());
             Assert.AreEqual(0, (await off.Content.ReadFromJsonAsync<BaseDataList<DiscoverShelfV1>>())!.Count);
-            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"CacheTier\" = 1");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'DiscoverCache'");
             using var none = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("matr"));
             Assert.AreEqual(0, (await none.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.Count);
         }

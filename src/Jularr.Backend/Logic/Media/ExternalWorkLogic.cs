@@ -12,40 +12,23 @@ namespace Jularr.Backend.Logic.Media
     // The provider catalog Discover keeps: every title it loaded once, the current trending lists in their order.
     internal static class ExternalWorkLogic
     {
-        // A catalog above the lean tier keeps Discover's lists and answers from them; on the lean tier Discover asks the provider each time.
-        // A catalog without settings of its own keeps them like the standard tier.
-        public static async Task<bool> KeepsDiscoverListsAsync(this LogicContext ctx, string @namespace, CancellationToken ct)
+        // The one rule for how much of the provider catalogs is kept, for the whole instance: without the Caching module (key DiscoverCache) only the library and
+        // opened titles (lean), with it also Discover's lists (standard), with its sub-option LocalDiscovery the whole catalog (full).
+        public static CachingTier CachingTierOf(bool caching, bool fullCatalog) => !caching ? CachingTier.Lean : fullCatalog ? CachingTier.Full : CachingTier.Standard;
+
+        public static async Task<CachingTier> ReadCachingTierAsync(this LogicContext ctx, CancellationToken ct)
         {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    sync."Namespace"
-                FROM
-                    "ExternalWorkSyncs" AS sync
-                WHERE
-                    sync."Namespace" = @Namespace
-                    AND sync."CacheTier" = 1;
-                """;
-            sql.Parameters.Add(new ExternalWorkNamespaceData(@namespace));
-            return await ctx.ReadSql.ReadOptionalAsync<ExternalWorkNamespaceData>(sql, ct) is null;
+            var modules = await ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["DiscoverCache", "LocalDiscovery"]), ct);
+            return CachingTierOf(modules.Any(module => module.Key == "DiscoverCache" && module.IsEnabled), modules.Any(module => module.Key == "LocalDiscovery" && module.IsEnabled));
         }
 
-        // The catalogs on the lean tier, whose Discover lists are not kept.
-        public static async Task<IReadOnlySet<string>> ReadLeanCatalogsAsync(this LogicContext ctx, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    sync."Namespace"
-                FROM
-                    "ExternalWorkSyncs" AS sync
-                WHERE
-                    sync."CacheTier" = 1;
-                """;
-            return (await ctx.ReadSql.ReadListAsync<ExternalWorkNamespaceData>(sql, ct)).Select(row => row.Namespace).ToHashSet(StringComparer.Ordinal);
-        }
+        // Catalogs with a full list may be kept whole; on the full tier every other one keeps Discover's lists.
+        public static readonly IReadOnlySet<string> FullSyncCatalogs = new HashSet<string>(StringComparer.Ordinal) { "tmdb_movie", "tmdb_tv", "anilist" };
+
+        public static CachingTier CatalogTier(CachingTier tier, string @namespace) => tier == CachingTier.Full && !FullSyncCatalogs.Contains(@namespace) ? CachingTier.Standard : tier;
+
+        // Above the lean tier Discover keeps its lists and answers from them; on the lean tier it asks the provider each time.
+        public static async Task<bool> KeepsDiscoverListsAsync(this LogicContext ctx, CancellationToken ct) => await ctx.ReadCachingTierAsync(ct) != CachingTier.Lean;
 
         // The one owner of catalog rows: every title a list, search or relation names is a Work with its identity, found again by that identity.
         // An anime entry AniList knows as a season of a series is that series with the season, also while an earlier entry of its own still waits to be merged into it.
@@ -269,15 +252,10 @@ namespace Jularr.Backend.Logic.Media
         public static bool AreChangesDue(ExternalWorkSyncData sync, DateTimeOffset now) =>
             sync.ChangesReadAt is not { } read || now - new DateTimeOffset(read, TimeSpan.Zero) >= ChangesInterval;
 
-        // Catalogs with a full sync may keep the whole catalog; every other one keeps Discover's lists at most.
-        public static readonly IReadOnlySet<string> FullSyncCatalogs = new HashSet<string>(StringComparer.Ordinal) { "tmdb_movie", "tmdb_tv", "anilist" };
-
-        public static CatalogCacheTier MaximumCacheTier(string @namespace) => FullSyncCatalogs.Contains(@namespace) ? CatalogCacheTier.Full : CatalogCacheTier.Standard;
-
-        // A catalog syncs on the full tier, inside one of its windows (none: any time) and, if it waits, while nobody uses Jularr.
-        public static bool MaySync(ExternalWorkSyncData sync, IReadOnlyList<ExternalWorkSyncWindowData> windows, TimeOnly localTime, bool isUsed)
+        // A catalog syncs while it is kept whole, inside one of its windows (none: any time) and, if it waits, while nobody uses Jularr.
+        public static bool MaySync(CachingTier tier, ExternalWorkSyncData sync, IReadOnlyList<ExternalWorkSyncWindowData> windows, TimeOnly localTime, bool isUsed)
         {
-            if (sync.CacheTier != CatalogCacheTier.Full || sync.PausesWhileUsed && isUsed) return false;
+            if (CatalogTier(tier, sync.Namespace) != CachingTier.Full || sync.PausesWhileUsed && isUsed) return false;
             var own = windows.Where(window => window.Namespace == sync.Namespace).ToArray();
             return own.Length == 0 || own.Any(window => window.StartsAt < window.EndsAt
                 ? localTime >= window.StartsAt && localTime < window.EndsAt
@@ -292,11 +270,10 @@ namespace Jularr.Backend.Logic.Media
         public const int UpcomingWithinDays = 180;
         public const int SuggestionCount = 6;
 
-        // With full local discovery a catalog read whole answers Discover itself.
+        // On the full tier a catalog read whole once answers Discover itself; only its full sync reads a catalog whole, and that runs only for a catalog with a full list.
         public static async Task<IReadOnlySet<string>> ReadWholeExternalWorkCatalogsAsync(this LogicContext ctx, CancellationToken ct)
         {
-            var modules = await ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["LocalDiscovery"]), ct);
-            if (!modules.Any(module => module.IsEnabled)) return new HashSet<string>(StringComparer.Ordinal);
+            if (await ctx.ReadCachingTierAsync(ct) != CachingTier.Full) return new HashSet<string>(StringComparer.Ordinal);
 
             var sql = new SqlStatement();
             sql.Statement =
@@ -306,8 +283,7 @@ namespace Jularr.Backend.Logic.Media
                 FROM
                     "ExternalWorkSyncs" AS sync
                 WHERE
-                    sync."CacheTier" = 3
-                    AND sync."CompletedAt" IS NOT NULL;
+                    sync."CompletedAt" IS NOT NULL;
                 """;
             return (await ctx.ReadSql.ReadListAsync<ExternalWorkNamespaceData>(sql, ct)).Select(row => row.Namespace).ToHashSet(StringComparer.Ordinal);
         }
@@ -556,7 +532,6 @@ namespace Jularr.Backend.Logic.Media
                 """
                 SELECT
                     sync."Namespace",
-                    sync."CacheTier",
                     sync."RequestsPerMinute"::integer AS "RequestsPerMinute",
                     sync."PausesWhileUsed",
                     sync."ListedOn",
@@ -569,42 +544,6 @@ namespace Jularr.Backend.Logic.Media
                 """;
             sql.Parameters.Add(new ExternalWorkSyncProgressData(@namespace, null, null, null));
             return await ctx.ReadSql.ReadOptionalAsync<ExternalWorkSyncData>(sql, ct);
-        }
-
-        public static Task<CatalogCacheSettingsData> ReadCatalogCacheSettingsAsync(this LogicContext ctx, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    settings."CatalogDetailKeepDays"::integer AS "KeepDays",
-                    settings."DetailsDiscoverAhead"
-                FROM
-                    "InstanceSettings" AS settings
-                WHERE
-                    settings."Id" = 1;
-                """;
-            return ctx.ReadSql.ReadRequiredAsync<CatalogCacheSettingsData>(sql, ct);
-        }
-
-        public static async Task UpdateCatalogCacheSettingsAsync(this LogicContext ctx, CatalogCacheSettingsData data, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                UPDATE
-                    "InstanceSettings" AS settings
-                SET
-                    "CatalogDetailKeepDays" = @KeepDays,
-                    "DetailsDiscoverAhead" = @DetailsDiscoverAhead
-                WHERE
-                    settings."Id" = 1;
-                """;
-            sql.Parameters.Add(data);
-            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
-            {
-                throw new InvalidOperationException("The instance settings are missing.");
-            }
         }
 
         public static async Task<IReadOnlyList<ExternalWorkSyncWindowData>> ReadExternalWorkSyncWindowsAsync(this LogicContext ctx, CancellationToken ct)
@@ -633,7 +572,6 @@ namespace Jularr.Backend.Logic.Media
                 """
                 SELECT
                     sync."Namespace",
-                    sync."CacheTier",
                     sync."RequestsPerMinute"::integer AS "RequestsPerMinute",
                     sync."PausesWhileUsed",
                     sync."ListedOn",
@@ -690,22 +628,15 @@ namespace Jularr.Backend.Logic.Media
             return changed;
         }
 
-        // The Owner's choices replace the old ones and their windows, if nobody changed them in between. A tier above what the catalog can keep is refused;
-        // a lower tier deletes nothing at once, the cleanup lets unused rows go later.
+        // The Owner's choices replace the old ones and their windows, if nobody changed them in between.
         public static async Task UpdateExternalWorkSyncSettingsAsync(this LogicContext ctx, ExternalWorkSyncSettingsData data, CancellationToken ct)
         {
-            if (data.CacheTier > MaximumCacheTier(data.Namespace))
-            {
-                throw new DataValidationException(nameof(data.CacheTier), "invalid_value");
-            }
-
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 UPDATE
                     "ExternalWorkSyncs" AS sync
                 SET
-                    "CacheTier" = @CacheTier,
                     "RequestsPerMinute" = @RequestsPerMinute,
                     "PausesWhileUsed" = @PausesWhileUsed,
                     "Version" = sync."Version" + 1,

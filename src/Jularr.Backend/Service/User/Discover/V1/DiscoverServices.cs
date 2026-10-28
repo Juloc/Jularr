@@ -59,7 +59,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime), (Data.Page - 1) * ExternalWorkLogic.ShelfSize), ct);
                     return (Keeps: true, Cached: (BaseDataList<DiscoverItemV1>?)new(rows.Select(row => DiscoverQueries.ToItem(Data.MediaTypeId, row)).ToArray()));
                 }
-                var keeps = await ctx.KeepsDiscoverListsAsync(list.Namespace, ct);
+                var keeps = await ctx.KeepsDiscoverListsAsync(ct);
                 if (keeps)
                 {
                     var snapshot = await ExternalFeedCache.ReadAsync(ctx, feed, ct);
@@ -267,7 +267,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 {
                     return (Identity: (WorkIdentityData?)null, Keeps: false, Cached: (BaseDataList<DiscoverItemV1>?)new([]));
                 }
-                var keeps = await ctx.KeepsDiscoverListsAsync(identity.Namespace, ct);
+                var keeps = await ctx.KeepsDiscoverListsAsync(ct);
                 if (keeps)
                 {
                     var feed = new ExternalFeedData(identity.Namespace, type, null, null, 1, identity.Value, null);
@@ -362,7 +362,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
         }
     }
 
-    // Titles while typing, from what Discover keeps; a catalog on the lean tier keeps nothing to suggest from.
+    // Titles while typing, from what Discover keeps; without the Caching module there is nothing to suggest from.
     [ServiceEndpoint("POST", "/api/v1/discover/suggestions")]
     public sealed class SuggestDiscoverV1 : UserService<DiscoverParametersV1, SuggestDiscoverDataV1>
     {
@@ -374,14 +374,14 @@ namespace Jularr.Backend.Service.User.Discover.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             var text = Data.Query.Trim();
-            if (text.Length < 2 || ExternalWorkLogic.SearchTerms(text) is not { } terms)
+            if (text.Length < 2 || ExternalWorkLogic.SearchTerms(text) is not { } terms
+                || !await Context.ExecuteBatchAsync((ctx, ct) => ctx.KeepsDiscoverListsAsync(ct), CancellationToken, mode: SqlAccessMode.ReadOnly))
             {
                 return new BaseDataList<DiscoverSuggestionV1>([]);
             }
 
-            var (lean, readable) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await ctx.ReadLeanCatalogsAsync(ct), await DiscoverQueries.ReadScopesAsync(ctx, Auth.ProfileId!.Value, ct)),
-                CancellationToken, mode: SqlAccessMode.ReadOnly);
-            var scopes = readable.Where(scope => (Data.ScopeSlug is null || scope.Slug == Data.ScopeSlug) && !lean.Contains(DiscoverScopes.Namespace(scope))).ToArray();
+            var scopes = (await Context.ExecuteBatchAsync((ctx, ct) => DiscoverQueries.ReadScopesAsync(ctx, Auth.ProfileId!.Value, ct), CancellationToken, mode: SqlAccessMode.ReadOnly))
+                .Where(scope => Data.ScopeSlug is null || scope.Slug == Data.ScopeSlug).ToArray();
             if (scopes.Length == 0) return new BaseDataList<DiscoverSuggestionV1>([]);
 
             var query = new ExternalWorkSuggestionQueryData([.. scopes.Select((scope, index) => new ExternalWorkShelfData(index, DiscoverScopes.Namespace(scope), scope.MediaTypeId,
