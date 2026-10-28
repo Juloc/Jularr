@@ -14,9 +14,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
     public sealed class PlaybackPreferencesV1 : BaseResponse
     {
         public PlaybackPreferencesV1(string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext, SkipMode introSkipModeTypeId,
-            SkipMode outroSkipModeTypeId, string profileLanguage, PlaybackQuality deviceQuality, bool autoplayPreviews = true)
+            SkipMode outroSkipModeTypeId, string profileLanguage, PlaybackQuality deviceQuality, bool autoplayPreviews = true, bool keepScreenOn = true)
         {
             AutoplayPreviews = autoplayPreviews;
+            KeepScreenOn = keepScreenOn;
             AudioLanguage = audioLanguage;
             SubtitleLanguage = subtitleLanguage;
             SubtitleModeTypeId = subtitleModeTypeId;
@@ -56,6 +57,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayPreviews))]
         public bool AutoplayPreviews { get; }
 
+        // Whether the screen stays on while a video plays or a book is read.
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.KeepScreenOn))]
+        public bool KeepScreenOn { get; }
+
         // The language of the profile's interface, the subtitle language it has when none is chosen.
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language), true)]
         public string ProfileLanguage { get; }
@@ -68,9 +73,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
     public sealed class SavePlaybackPreferencesDataV1 : BaseData
     {
         public SavePlaybackPreferencesDataV1(string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext, SkipMode introSkipModeTypeId,
-            SkipMode outroSkipModeTypeId, bool autoplayPreviews = true)
+            SkipMode outroSkipModeTypeId, bool autoplayPreviews = true, bool keepScreenOn = true)
         {
             AutoplayPreviews = autoplayPreviews;
+            KeepScreenOn = keepScreenOn;
             AudioLanguage = audioLanguage;
             SubtitleLanguage = subtitleLanguage;
             SubtitleModeTypeId = subtitleModeTypeId;
@@ -103,6 +109,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayPreviews))]
         public bool AutoplayPreviews { get; }
+
+        // Whether the screen stays on while a video plays or a book is read.
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.KeepScreenOn))]
+        public bool KeepScreenOn { get; }
     }
 
     // The speed chosen in the player, remembered for the profile.

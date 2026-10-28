@@ -698,6 +698,7 @@ namespace Jularr.Frontend.Localization
             new("playback.speed", "Speed"),
             new("playback.autoplayNext", "Play the next episode automatically"),
             new("playback.autoplayPreviews", "Play previews automatically"),
+            new("playback.keepScreenOn", "Keep the screen on while playing or reading"),
             new("player.next.countdown", "Next episode in {0}"),
             new("player.next.play", "Play now"),
             new("player.next.cancel", "Cancel"),

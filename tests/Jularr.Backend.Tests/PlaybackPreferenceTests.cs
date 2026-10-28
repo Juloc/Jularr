@@ -38,6 +38,7 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(preferences.AutoplayNext);
             Assert.AreEqual((SkipMode.Button, SkipMode.Button), (preferences.IntroSkipModeTypeId, preferences.OutroSkipModeTypeId));
             Assert.IsTrue(preferences.AutoplayPreviews);
+            Assert.IsTrue(preferences.KeepScreenOn);
             Assert.AreEqual(PlaybackQuality.Automatic, preferences.DeviceQuality);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ProfilePlaybackPreferences\""));
 
@@ -50,13 +51,14 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((1.50m, SubtitleMode.WhenForeign, true, true), (preferences.Speed, preferences.SubtitleModeTypeId, preferences.AutoplayNext, preferences.AutoplayPreviews));
 
             // A full save replaces them; the speed alone then leaves the languages as they are. Languages are lower-cased codes.
-            using var saved = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("DE", "fr", SubtitleMode.ForcedOnly, 0.75m, false, SkipMode.Automatic, SkipMode.Off, false));
+            using var saved = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("DE", "fr", SubtitleMode.ForcedOnly, 0.75m, false, SkipMode.Automatic, SkipMode.Off, false, false));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             using var faster = await host.SendAsync(HttpMethod.Put, Route + "/speed", new SavePlaybackSpeedDataV1(2m));
             Assert.AreEqual(HttpStatusCode.OK, faster.StatusCode, await faster.Content.ReadAsStringAsync());
             preferences = await ReadAsync(host);
             Assert.AreEqual(("de", "fr", SubtitleMode.ForcedOnly, 2.00m, false, false), (preferences.AudioLanguage, preferences.SubtitleLanguage, preferences.SubtitleModeTypeId, preferences.Speed, preferences.AutoplayNext, preferences.AutoplayPreviews));
             Assert.AreEqual((SkipMode.Automatic, SkipMode.Off), (preferences.IntroSkipModeTypeId, preferences.OutroSkipModeTypeId));
+            Assert.IsFalse(preferences.KeepScreenOn);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ProfilePlaybackPreferences\""));
 
             // Unknown languages and speeds outside the player's range are refused; no language is allowed.

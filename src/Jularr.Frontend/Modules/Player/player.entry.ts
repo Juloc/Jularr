@@ -3,6 +3,7 @@ import { updateRangeValue } from "../../Framework/Components/Range";
 import { progressReporter } from "../Tracking/Progress";
 import { inserted, keepAddress, pushAddress, releaseAddress, visit } from "../Navigation/PageSwap";
 import type { CastSender, CastState } from "./Cast";
+import { awake, focus } from "../Playback/MediaFocus";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
@@ -553,7 +554,7 @@ async function start(player: HTMLElement): Promise<void> {
     }
     const controlsWatch = new MutationObserver(refreshSkip);
     controlsWatch.observe(player, { attributes: true, attributeFilter: ["class"] });
-    signal.addEventListener("abort", () => { clearTimeout(skipAgeTimer); controlsWatch.disconnect(); });
+    signal.addEventListener("abort", () => { clearTimeout(skipAgeTimer); controlsWatch.disconnect(); awake.drop("player"); focus.release("player"); });
 
     // Jump to the end of the stretch, or to the next episode where credits run out and it follows by itself.
     function skipMarker(marker: Marker, automatic: boolean): void {
@@ -1075,6 +1076,9 @@ async function start(player: HTMLElement): Promise<void> {
 
     function setPlaying(playing: boolean): void {
         player.classList.toggle("player--playing", playing);
+        // A playing video keeps the screen on and takes the focus from another medium of this browser; a paused one gives both up.
+        if (playing) { awake.hold("player"); focus.claim("player", () => video.pause()); }
+        else { awake.drop("player"); focus.release("player"); }
         toggle.setAttribute("aria-label", (playing ? toggle.dataset.labelPause : toggle.dataset.labelPlay) ?? "");
         wake();
     }

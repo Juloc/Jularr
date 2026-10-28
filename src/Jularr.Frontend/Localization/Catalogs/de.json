@@ -1690,6 +1690,10 @@
    "Play previews automatically",
    "Vorschau automatisch abspielen"
   ],
+  "playback.keepScreenOn": [
+   "Keep the screen on while playing or reading",
+   "Bildschirm beim Abspielen und Lesen anlassen"
+  ],
   "player.next.countdown": [
    "Next episode in {0}",
    "Nächste Folge in {0}"
