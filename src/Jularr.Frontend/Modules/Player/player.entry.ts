@@ -3,7 +3,12 @@ import { updateRangeValue } from "../../Framework/Components/Range";
 import { progressReporter } from "../Tracking/Progress";
 import { inserted, keepAddress, pushAddress, releaseAddress, visit } from "../Navigation/PageSwap";
 import type { CastSender, CastState } from "./Cast";
-import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, type Marker } from "./Skip";
+import { awake, focus } from "../Playback/MediaFocus";
+import type { StyledSubtitles } from "./StyledSubtitles";
+import { deviceKind } from "./Device";
+import { Automatic, nextQuality, recordStall, StallSeconds, troubled } from "./AutoQuality";
+import { pickSecondSubtitle, pickTranslationSource, SecondSubtitleLine, type SubtitleOption } from "./Subtitles";
+import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
 interface PlaybackPlan {
@@ -16,6 +21,9 @@ interface PlaybackPlan {
 
 const Modes = ["", "DirectPlay", "Remux", "Transcode"];
 const ReportInterval = 15_000;
+// Safari's own extension of the video element for AirPlay.
+interface AirPlayVideo extends HTMLVideoElement { webkitShowPlaybackTargetPicker?(): void; }
+
 const IdleDelay = 3_000;
 const MaxRecoveries = 5;
 const WakeRetries = 6;
@@ -104,6 +112,11 @@ async function start(player: HTMLElement): Promise<void> {
     let sourceReady = false;
     let sourcePosition = 0;
     let lastSubtitle: { key: string; language: string | undefined } | undefined;
+    let styledSubtitles: StyledSubtitles | undefined;
+    let styledVersion = 0;
+    let secondKey = "";
+    let statusTimer = 0;
+    let firstSubtitleShown = false;
     // The profile's choices come with the page; the settings change them for this playback only, the quality is this playback's own (the device's applies until then).
     const preferredSpeed = Number(player.dataset.preferredSpeed) || 1;
     const countdownSeconds = Number(player.dataset.countdown) || 0;
@@ -127,6 +140,8 @@ async function start(player: HTMLElement): Promise<void> {
     const chapters = Array.from(player.querySelectorAll<HTMLButtonElement>(".player__chapter[data-chapter]"));
     const handled = new Set<string>();
     let offered: Marker | null = null;
+    let skipAged = false;
+    let skipAgeTimer = 0;
     let currentChapter = -1;
     let undoPosition: number | null = null;
     let skippedTimer = 0;
@@ -172,6 +187,7 @@ async function start(player: HTMLElement): Promise<void> {
     if (preferredSubtitle) {
         lastSubtitle = { key: preferredSubtitle.value, language: preferredSubtitle.dataset.language };
         showSubtitle(preferredSubtitle.value, preferredSubtitle.dataset.language);
+        startSecondSubtitle(preferredSubtitle.value, preferredSubtitle.dataset.language);
     }
     document.body.classList.add("player-active");
     const minimizeButton = player.querySelector<HTMLButtonElement>("[data-action=minimize]");
@@ -431,6 +447,34 @@ async function start(player: HTMLElement): Promise<void> {
         }, { once: true });
     }
 
+    // A device that plays in Automatic and stalls twice within a minute asks for a lower quality, once per step; an explicit choice is never changed.
+    let stalls: number[] = [];
+    let waitingSince = 0;
+    let loweredByPlayer = false;
+    video.addEventListener("waiting", () => { if (!video.paused && !video.seeking && !switching && !waitingSince) waitingSince = performance.now(); });
+    video.addEventListener("seeking", () => { waitingSince = 0; });
+    video.addEventListener("pause", () => { waitingSince = 0; });
+    video.addEventListener("playing", () => {
+        const waited = waitingSince ? (performance.now() - waitingSince) / 1000 : 0;
+        waitingSince = 0;
+        if (waited < StallSeconds) return;
+        stalls = recordStall(stalls, Date.now());
+        if (troubled(stalls)) void lowerQuality();
+    });
+
+    async function lowerQuality(): Promise<void> {
+        const current = quality ?? Number(initialQuality);
+        if (switching || casting || (current !== Automatic && !loweredByPlayer)) return;
+        const target = nextQuality(current, hlsBandwidth());
+        if (target === null) return;
+        stalls = [];
+        if (await replan(audioIndex, target)) {
+            loweredByPlayer = true;
+            setChoice("quality", String(target));
+            notice("playback_slow");
+        }
+    }
+
     // The new plan comes first; only then the old session ends and playback continues at the same position.
     async function replan(streamIndex: number | null, qualityChoice: number | null): Promise<boolean> {
         if (switching) return false;
@@ -454,11 +498,103 @@ async function start(player: HTMLElement): Promise<void> {
         }
     }
 
-    // Subtitles are WebVTT tracks on the same video; Off removes them.
+    // Subtitles are WebVTT tracks on the same video, ASS and SSA ones are drawn by libass; Off removes them.
     function showSubtitle(key: string, language: string | undefined): void {
-        video.querySelectorAll("track").forEach(track => track.remove());
+        video.querySelectorAll("track:not([data-second])").forEach(track => track.remove());
+        firstSubtitleShown = !!key;
+        if (key && key === secondKey) showSecondSubtitle("");
+        syncSecondSubtitle();
+        styledVersion++;
+        styledSubtitles?.destroy();
+        styledSubtitles = undefined;
         player.querySelector('[data-action=subtitle-toggle]')!.setAttribute('aria-pressed', String(!!key));
         if (!key) return;
+        const option = Array.from(player.querySelectorAll<HTMLOptionElement>("select[data-setting=subtitle] option")).find(item => item.value === key);
+        // libass draws on a canvas over the picture; touch devices keep the plain WebVTT lines until that is proven steady there (the owner saw the picture flicker black on a phone).
+        if (option?.dataset.styled === "true" && !matchMedia("(pointer: coarse)").matches && typeof WebAssembly === "object" && typeof OffscreenCanvas === "function") {
+            const version = styledVersion;
+            void import("./StyledSubtitles")
+                .then(module => module.showStyledSubtitles(video, (player.dataset.subtitleUrl ?? "") + encodeURIComponent(key) + "?styled=true", subtitleOffset / 1000))
+                .then(styled => { if (version === styledVersion) styledSubtitles = styled; else styled.destroy(); })
+                .catch(() => { if (version === styledVersion) showPlainSubtitle(key, language); });
+            return;
+        }
+        showPlainSubtitle(key, language);
+    }
+
+    // A second language runs beside the first, a few lines above it; it shows only while the first subtitle is on.
+    function showSecondSubtitle(key: string): void {
+        video.querySelectorAll("track[data-second]").forEach(track => track.remove());
+        secondKey = key;
+        setChoice("subtitle2", key);
+        if (!key) return;
+        const track = document.createElement("track");
+        track.kind = "subtitles";
+        track.dataset.second = "true";
+        track.src = (player.dataset.subtitleUrl ?? "") + encodeURIComponent(key);
+        const raise = () => {
+            for (const cue of Array.from(track.track.cues ?? [])) { (cue as VTTCue).snapToLines = true; (cue as VTTCue).line = SecondSubtitleLine; }
+            applySubtitleOffset();
+        };
+        track.addEventListener("load", () => { raise(); syncSecondSubtitle(); });
+        track.addEventListener("error", () => { track.remove(); secondKey = ""; setChoice("subtitle2", ""); });
+        video.append(track);
+        syncSecondSubtitle();
+    }
+
+    function syncSecondSubtitle(): void {
+        for (const track of Array.from(video.querySelectorAll<HTMLTrackElement>("track[data-second]"))) track.track.mode = firstSubtitleShown ? "showing" : "hidden";
+    }
+
+    // The local model translates a subtitle into the profile's language: the server works in the background, the player follows its status and then shows the result as the second subtitle.
+    let translating = false;
+    async function translateSubtitle(): Promise<void> {
+        const url = player.dataset.translateUrl;
+        const language = player.dataset.translateLanguage;
+        if (!url || !language || translating) return;
+        const options: SubtitleOption[] = Array.from(player.querySelectorAll<HTMLOptionElement>("select[data-setting=subtitle] option:not([value=\"\"]):not(:disabled)"))
+            .map(option => ({ key: option.value, language: option.dataset.language, forced: option.dataset.forced === "true" }));
+        const source = pickTranslationSource(options, player.querySelector<HTMLSelectElement>("select[data-setting=subtitle]")?.value ?? "", language);
+        const status = player.querySelector<HTMLElement>("[data-role=translate-status]");
+        const say = (message: string) => { if (status) { status.textContent = message; status.hidden = message === ""; } };
+        if (!source) { say(player.dataset.translateFailedLabel ?? ""); return; }
+        translating = true;
+        const headers = { "Content-Type": "application/json", RequestVerificationToken: antiforgery };
+        try {
+            let result = await (await fetch(url, { method: "POST", credentials: "same-origin", headers, signal, body: JSON.stringify({ sourceKey: source.key, sourceLanguage: source.language ?? null, language }) })).json() as { key: string; state: string; done: number; total: number };
+            while (result.state === "queued" || result.state === "running") {
+                say((player.dataset.translatingLabel ?? "").replace("{0}", String(result.total > 0 ? Math.floor(result.done * 100 / result.total) : 0)));
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                if (signal.aborted) return;
+                result = await (await fetch(`${url}/${encodeURIComponent(result.key)}`, { credentials: "same-origin", signal })).json();
+            }
+            if (result.state !== "done") throw new Error("failed");
+            const label = (player.dataset.translatedLabel ?? "{0}").replace("{0}", new Intl.DisplayNames(document.documentElement.lang || undefined, { type: "language" }).of(language) ?? language);
+            player.querySelectorAll<HTMLSelectElement>("select[data-setting=subtitle2]").forEach(select => {
+                if (!Array.from(select.options).some(option => option.value === result.key)) {
+                    const option = new Option(label, result.key);
+                    option.dataset.language = language;
+                    select.add(option, select.options[select.options.length - 1]);
+                }
+            });
+            say("");
+            showSecondSubtitle(result.key);
+        } catch {
+            if (!signal.aborted) say(player.dataset.translateFailedLabel ?? "");
+        } finally {
+            translating = false;
+        }
+    }
+
+    // The profile's second language starts beside the preferred first subtitle.
+    function startSecondSubtitle(primaryKey: string, primaryLanguage: string | undefined): void {
+        const options: SubtitleOption[] = Array.from(player.querySelectorAll<HTMLOptionElement>("select[data-setting=subtitle2] option:not([value=\"\"]):not(:disabled)"))
+            .map(option => ({ key: option.value, language: option.dataset.language, forced: option.dataset.forced === "true" }));
+        const second = pickSecondSubtitle(options, player.dataset.secondLanguage || undefined, primaryKey, primaryLanguage);
+        if (second) showSecondSubtitle(second.key);
+    }
+
+    function showPlainSubtitle(key: string, language: string | undefined): void {
         const track = document.createElement("track");
         track.kind = "subtitles";
         track.src = (player.dataset.subtitleUrl ?? "") + encodeURIComponent(key);
@@ -484,7 +620,7 @@ async function start(player: HTMLElement): Promise<void> {
     });
     video.addEventListener("waiting", () => { if (!video.paused) showLoading(); });
     video.addEventListener("stalled", () => { if (!video.paused) showLoading(); });
-    video.addEventListener("seeking", () => { if (!video.paused) showLoading(); });
+    video.addEventListener("seeking", () => showLoading());
     video.addEventListener("canplay", stopLoading);
     video.addEventListener("seeked", () => { if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) stopLoading(); });
     video.addEventListener("playing", () => { recoveries = 0; stopLoading(); });
@@ -534,15 +670,30 @@ async function start(player: HTMLElement): Promise<void> {
         }
         if (marker === offered) return;
         offered = marker;
-        skip.hidden = !marker;
+        ageSkip();
         if (marker) skip.querySelector<HTMLElement>("[data-role=skip-text]")!.textContent = text("data-skip-label", marker.kind);
     }
+
+    // The button shows for a few seconds when a stretch begins; afterwards it returns only while the controls are shown and the stretch lasts.
+    function ageSkip(): void {
+        clearTimeout(skipAgeTimer);
+        skipAged = false;
+        if (offered) skipAgeTimer = window.setTimeout(() => { skipAged = true; refreshSkip(); }, SkipShowSeconds * 1000);
+        refreshSkip();
+    }
+
+    function refreshSkip(): void {
+        skip.hidden = !skipShown(offered !== null, skipAged, !player.classList.contains("player--idle"));
+    }
+    const controlsWatch = new MutationObserver(refreshSkip);
+    controlsWatch.observe(player, { attributes: true, attributeFilter: ["class"] });
+    signal.addEventListener("abort", () => { clearTimeout(skipAgeTimer); controlsWatch.disconnect(); awake.drop("player"); focus.release("player"); styledSubtitles?.destroy(); });
 
     // Jump to the end of the stretch, or to the next episode where credits run out and it follows by itself.
     function skipMarker(marker: Marker, automatic: boolean): void {
         handled.add(markerKey(marker));
-        skip.hidden = true;
         offered = null;
+        ageSkip();
         const hasNext = !!player.querySelector("[data-action=next][data-href]");
         const plan = skipPlan(marker, video.duration, hasNext, autoplay);
         const from = video.currentTime;
@@ -608,7 +759,7 @@ async function start(player: HTMLElement): Promise<void> {
         seeking = true;
         timeline.style.setProperty('--played', `${Number(timeline.value) / Math.max(1, Number(timeline.max)) * 100}%`);
     });
-    timeline.addEventListener('change', () => { if (casting) castSender?.seek(Number(timeline.value)); else video.currentTime = Number(timeline.value); seeking = false; wake(); });
+    timeline.addEventListener('change', () => { if (casting) castSender?.seek(Number(timeline.value)); else jumpTo(Number(timeline.value)); seeking = false; wake(); });
     timeline.addEventListener('pointercancel', () => { seeking = false; timeline.value = String(Math.floor(video.currentTime)); wake(); });
     void previews();
     volume.addEventListener("input", () => { video.volume = Number(volume.value); video.muted = video.volume === 0; });
@@ -619,7 +770,8 @@ async function start(player: HTMLElement): Promise<void> {
     const actions: Record<string, () => void> = {
         "audio-offset-reset": () => void setAudioOffset(0),
         "subtitle-offset-reset": () => setSubtitleOffset(0),
-        cast: () => void (casting ? castSender?.stop() : startCastRequest()),
+        airplay: () => (video as AirPlayVideo).webkitShowPlaybackTargetPicker?.(),
+        cast: () => { if (!casting && !window.isSecureContext) notice("cast_insecure"); else void (casting ? castSender?.stop() : startCastRequest()); },
         "copy-info": () => void copyInfo(),
         toggle: () => {
             if (casting) { castSender?.playOrPause(); return; }
@@ -703,6 +855,7 @@ async function start(player: HTMLElement): Promise<void> {
                 showSubtitle(field.value, option?.dataset.language);
                 break;
             }
+            case "subtitle2": if (field.value === "translate") { setChoice("subtitle2", secondKey); void translateSubtitle(); } else showSecondSubtitle(field.value); break;
             case "speed-range": case "speed-number": setSpeed(Number(field.value), true); break;
             case "fit": for (const mode of ["cover", "original"]) player.classList.toggle(`player--fit-${mode}`, field.value === mode); break;
             case "autoplay": autoplay = (field as HTMLInputElement).checked; break;
@@ -767,9 +920,11 @@ async function start(player: HTMLElement): Promise<void> {
     // Chrome hides only while playing without an open panel.
     player.addEventListener("pointermove", event => { if (event.pointerType !== "touch") wake(); });
     player.addEventListener("pointerdown", event => { lastPointerType = event.pointerType; if (event.pointerType === "touch" && event.target !== video) wake(); }, { capture: true });
+    deviceLayout();
     touchGestures();
     mediaSession();
     castSupport();
+    airplaySupport();
     infoPane();
     offsetFields();
     // A mouse leaving the picture hides the controls at once; touch and open panels keep them.
@@ -818,16 +973,29 @@ async function start(player: HTMLElement): Promise<void> {
 
     function seek(seconds: number): void {
         if (casting) { castSender?.seek(Math.max(0, Math.min(castState.duration || 0, castState.currentTime + seconds))); return; }
-        video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + seconds));
+        jumpTo(Math.max(0, Math.min(video.duration || 0, video.currentTime + seconds)));
+    }
+
+    // A jump shows at once, playing or paused: the position moves before the picture is there, and the picture says that it is loading.
+    function jumpTo(time: number): void {
+        video.currentTime = time;
+        showPosition(time);
+        if (video.paused) showLoading();
+    }
+
+    function showPosition(time: number): void {
+        if (!Number.isFinite(time)) return;
+        timeline.value = String(Math.floor(time));
+        timeline.style.setProperty("--played", `${time / Math.max(1, Number(timeline.max)) * 100}%`);
+        player.querySelector("[data-role=time]")!.textContent = clock(time);
     }
 
     // The two offset fields: the audio asks the server for a new conversion that plays on from here, the subtitles move at once.
     function offsetFields(): void {
         const value = (input: HTMLInputElement) => Math.max(-10_000, Math.min(10_000, Math.round(Number(input.value) || 0)));
-        const audioInput = player.querySelector<HTMLInputElement>("[data-setting=audio-offset]");
-        const subtitleInput = player.querySelector<HTMLInputElement>("[data-setting=subtitle-offset]");
-        audioInput?.addEventListener("change", () => void setAudioOffset(value(audioInput)));
-        subtitleInput?.addEventListener("input", () => setSubtitleOffset(value(subtitleInput)));
+        // Both delays stand in the Audio and the Subtitles tab; every field of one delay shows and sets the same value.
+        player.querySelectorAll<HTMLInputElement>("[data-setting=audio-offset]").forEach(input => input.addEventListener("change", () => void setAudioOffset(value(input))));
+        player.querySelectorAll<HTMLInputElement>("[data-setting=subtitle-offset]").forEach(input => input.addEventListener("input", () => setSubtitleOffset(value(input))));
     }
 
     async function setAudioOffset(milliseconds: number): Promise<void> {
@@ -845,13 +1013,14 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Every cue keeps its own times; the offset is added to those, so moving it again never adds up.
     function applySubtitleOffset(): void {
-        const cues = Array.from(video.textTracks).find(track => track.mode === "showing")?.cues;
-        if (!cues) return;
-        for (const cue of Array.from(cues)) {
-            let base = cueBase.get(cue);
-            if (!base) { base = { start: cue.startTime, end: cue.endTime }; cueBase.set(cue, base); }
-            cue.startTime = Math.max(0, base.start + subtitleOffset / 1000);
-            cue.endTime = Math.max(cue.startTime, base.end + subtitleOffset / 1000);
+        styledSubtitles?.setOffset(subtitleOffset / 1000);
+        for (const showing of Array.from(video.textTracks).filter(track => track.mode === "showing")) {
+            for (const cue of Array.from(showing.cues ?? [])) {
+                let base = cueBase.get(cue);
+                if (!base) { base = { start: cue.startTime, end: cue.endTime }; cueBase.set(cue, base); }
+                cue.startTime = Math.max(0, base.start + subtitleOffset / 1000);
+                cue.endTime = Math.max(cue.startTime, base.end + subtitleOffset / 1000);
+            }
         }
     }
 
@@ -930,10 +1099,18 @@ async function start(player: HTMLElement): Promise<void> {
         try { await navigator.clipboard.writeText(lines.join("\n")); } catch { /* The browser refused the clipboard. */ }
     }
 
+    // AirPlay is Safari's own picker: the button shows only while Safari reports a target, and the stream goes through the picture's own element.
+    function airplaySupport(): void {
+        const button = player.querySelector<HTMLElement>("[data-action=airplay]");
+        if (!button || typeof (video as AirPlayVideo).webkitShowPlaybackTargetPicker !== "function") return;
+        video.addEventListener("webkitplaybacktargetavailabilitychanged", event => { button.hidden = (event as Event & { availability?: string }).availability !== "available"; }, { signal });
+    }
+
     // The Cast button shows where Chrome and a secure page allow it; Google's library loads only when it is pressed.
     function castSupport(): void {
         const button = player.querySelector<HTMLElement>("[data-action=cast]");
-        if (button) button.hidden = !/Chrome\//.test(navigator.userAgent) || !window.isSecureContext;
+        // Chrome shows the button; on an address that is not secure it says what is missing instead of vanishing.
+        if (button) button.hidden = !/Chrome\//.test(navigator.userAgent);
     }
 
     // A device cannot sign in and cannot see this computer's own address.
@@ -1058,6 +1235,9 @@ async function start(player: HTMLElement): Promise<void> {
 
     function setPlaying(playing: boolean): void {
         player.classList.toggle("player--playing", playing);
+        // A playing video keeps the screen on and takes the focus from another medium of this browser; a paused one gives both up.
+        if (playing) { awake.hold("player"); focus.claim("player", () => video.pause()); }
+        else { awake.drop("player"); focus.release("player"); }
         toggle.setAttribute("aria-label", (playing ? toggle.dataset.labelPause : toggle.dataset.labelPlay) ?? "");
         wake();
     }
@@ -1210,6 +1390,20 @@ async function start(player: HTMLElement): Promise<void> {
         video.addEventListener("contextmenu", event => { if (lastPointerType === "touch") event.preventDefault(); });
     }
 
+    // A touch device gets a class for what it is, whatever the picture's width (a phone in fullscreen is wide): a phone, whose short side is under 600 px, has
+    // one arrangement of its own; Picture in Picture goes up beside Cast, Episodes and Chapters take the place of the volume, which is the device's own.
+    function deviceLayout(): void {
+        const kind = deviceKind(matchMedia("(pointer: coarse)").matches, screen.width, screen.height);
+        player.classList.toggle("player--touch", kind !== "pointer");
+        player.classList.toggle("player--phone", kind === "phone");
+        if (kind !== "phone") return;
+        const top = player.querySelector<HTMLElement>(".player__top");
+        const pip = player.querySelector<HTMLElement>("[data-action=pip]");
+        if (top && pip) top.insertBefore(pip, top.querySelector("[data-action=stop]"));
+        const left = player.querySelector<HTMLElement>(".player__audio");
+        if (left) for (const name of ["episodes", "chapters"]) { const button = player.querySelector<HTMLElement>(`[data-action=${name}]`); if (button) left.append(button); }
+    }
+
     function layout(): void {
         const wide = player.classList.contains('player--theater');
         player.querySelector('[data-action=theater]')!.setAttribute('aria-pressed', String(wide));
@@ -1239,7 +1433,11 @@ async function start(player: HTMLElement): Promise<void> {
         stopLoading();
         status.textContent = text("data-status", code) || text("data-status", "failed");
         status.hidden = false;
+        // A message goes away by itself (a waking drive says so as long as it takes) and by a tap, so it never stays over the picture.
+        clearTimeout(statusTimer);
+        if (code !== "storage_waking") statusTimer = window.setTimeout(() => { status.hidden = true; }, 8_000);
     }
+    status.addEventListener("click", () => { status.hidden = true; });
 
     // A message that goes away by itself.
     function notice(code: string): void {
@@ -1274,13 +1472,18 @@ function capabilities(): { containers: string[]; videoCodecs: string[]; audioCod
     const video = (type: string) => probe.canPlayType(type) !== "";
     const supported = (types: Record<string, string>) => Object.keys(types).filter(name => video(types[name]));
     const hls = video("application/vnd.apple.mpegurl") || typeof MediaSource !== "undefined" && MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01E,mp4a.40.2"');
+    // A phone or tablet answers "maybe" for a Matroska file and then plays sound without a picture (HEVC in MKV on Android): there only the formats that
+    // are known to work are offered directly, anything else is delivered as HLS, and HEVC counts only where the media source takes it.
+    const touch = matchMedia("(pointer: coarse)").matches;
+    const hevc = 'video/mp4; codecs="hvc1.1.6.L120.90"';
+    const containers = supported({
+        mp4: "video/mp4", webm: "video/webm", mkv: "video/x-matroska", mp3: "audio/mpeg", ogg: "audio/ogg", flac: "audio/flac", wav: "audio/wav", aac: "audio/aac"
+    }).filter(name => !(touch && name === "mkv"));
     return {
-        containers: [...(hls ? ["hls"] : []), ...supported({
-            mp4: "video/mp4", webm: "video/webm", mkv: "video/x-matroska", mp3: "audio/mpeg", ogg: "audio/ogg", flac: "audio/flac", wav: "audio/wav", aac: "audio/aac"
-        })],
+        containers: [...(hls ? ["hls"] : []), ...containers],
         videoCodecs: supported({
-            h264: 'video/mp4; codecs="avc1.640028"', hevc: 'video/mp4; codecs="hvc1.1.6.L120.90"', vp9: 'video/webm; codecs="vp9"', av1: 'video/mp4; codecs="av01.0.05M.08"'
-        }),
+            h264: 'video/mp4; codecs="avc1.640028"', hevc, vp9: 'video/webm; codecs="vp9"', av1: 'video/mp4; codecs="av01.0.05M.08"'
+        }).filter(name => !(touch && name === "hevc" && !(typeof MediaSource !== "undefined" && MediaSource.isTypeSupported(hevc)))),
         audioCodecs: supported({
             aac: 'audio/mp4; codecs="mp4a.40.2"', mp3: "audio/mpeg", opus: 'audio/webm; codecs="opus"', vorbis: 'audio/webm; codecs="vorbis"',
             flac: "audio/flac", ac3: 'audio/mp4; codecs="ac-3"', eac3: 'audio/mp4; codecs="ec-3"'

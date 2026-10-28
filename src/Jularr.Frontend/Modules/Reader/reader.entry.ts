@@ -18,6 +18,7 @@ import { endReaderLifetime, readerLifetime } from './Lifetime';
 import { handleChapters } from './ChapterNavigation';
 import { hasNewBuild } from '../Navigation/Navigation';
 import { regionSwapped } from '../Navigation/PageSwap';
+import { awake } from '../Playback/MediaFocus';
 
 // What the browser really shows, for browsers without dynamic viewport units (their 100vh includes the toolbars).
 if (!CSS.supports('height', '100dvh')) {
@@ -33,6 +34,9 @@ if (first && !first.dataset.format && first.querySelector('[data-role=content]')
 
 // The address a reader opens at: the page's own, or the chapter it is about to show in place.
 function start(reader: HTMLElement, address = new URL(location.href)): void {
+    // An open book keeps the screen on, with or without read aloud, as long as the profile allows it.
+    awake.hold('reader');
+    readerLifetime().addEventListener('abort', () => awake.drop('reader'));
     // The arrows beside the page press the bar's page buttons, which every book format already handles.
     reader.addEventListener('click', event => {
         const side = (event.target as Element | null)?.closest?.<HTMLElement>('[data-side-turn]');

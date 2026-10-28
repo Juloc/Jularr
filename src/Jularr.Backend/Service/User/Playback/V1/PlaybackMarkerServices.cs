@@ -3,6 +3,7 @@ using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Playback;
 using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Playback;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.User.Playback.V1
@@ -20,16 +21,19 @@ namespace Jularr.Backend.Service.User.Playback.V1
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                SELECT DISTINCT ON (marker."MediaMarkerKindTypeId")
+                SELECT
                     marker."MediaMarkerKindTypeId",
+                    marker."MediaMarkerSourceTypeId",
                     marker."StartMs",
-                    marker."EndMs"
+                    marker."EndMs",
+                    played."DurationMs"
                 FROM
                     "MediaAssets" AS asset
                     JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                     JOIN LATERAL (
                         SELECT
-                            file."Id"
+                            file."Id",
+                            file."DurationMs"
                         FROM
                             "StoredFiles" AS file
                         WHERE
@@ -48,7 +52,11 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     marker."MediaMarkerSourceTypeId";
                 """;
             sql.Parameters.Add(new PlaybackSourceParameters(Parameters.MediaAssetId, Auth.ProfileId!.Value));
-            var markers = await Context.ReadSql.ReadListAsync<PlaybackMarkerV1>(sql, CancellationToken);
+            var rows = await Context.ReadSql.ReadListAsync<PlaybackMarkerRowData>(sql, CancellationToken);
+            // One marker per kind, the most trusted source first; a marker read from chapters that cannot be right is left out (it may be stored from before that rule).
+            var markers = rows.Where(row => MediaMarkers.IsUsable(row.MediaMarkerKindTypeId, row.MediaMarkerSourceTypeId, row.StartMs, row.EndMs, row.DurationMs))
+                .OrderBy(row => row.MediaMarkerSourceTypeId).GroupBy(row => row.MediaMarkerKindTypeId).Select(group => group.First())
+                .Select(row => new PlaybackMarkerV1(row.MediaMarkerKindTypeId, row.StartMs, row.EndMs));
             return new BaseDataList<PlaybackMarkerV1>([.. markers.OrderBy(marker => marker.StartMs)]);
         }
     }
@@ -94,7 +102,10 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     chapter."ChapterIndex";
                 """;
             sql.Parameters.Add(new PlaybackSourceParameters(Parameters.MediaAssetId, Auth.ProfileId!.Value));
-            return new BaseDataList<PlaybackChapterV1>(await Context.ReadSql.ReadListAsync<PlaybackChapterV1>(sql, CancellationToken));
+            var chapters = await Context.ReadSql.ReadListAsync<PlaybackChapterV1>(sql, CancellationToken);
+            // A file whose only chapter is a stretch over the whole episode named "Credits" has no chapters worth listing.
+            var usable = MediaMarkers.UsableChapters([.. chapters.Select(chapter => new MediaChapterRow(chapter.ChapterIndex, chapter.StartMs, chapter.EndMs, chapter.Title))]);
+            return new BaseDataList<PlaybackChapterV1>([.. chapters.Where(chapter => usable.Any(item => item.ChapterIndex == chapter.ChapterIndex))]);
         }
     }
 }
