@@ -7253,6 +7253,10 @@
    "The translation did not work.",
    "Die Übersetzung hat nicht geklappt."
   ],
+  "player.libass": [
+   "Styled subtitles (libass)",
+   "Gestaltete Untertitel (libass)"
+  ],
   "player.subtitles.second": [
    "Second subtitle",
    "Zweiter Untertitel"

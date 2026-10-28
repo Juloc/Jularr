@@ -2868,6 +2868,7 @@ namespace Jularr.Frontend.Localization
             new("player.subtitles", "Subtitles"),
             new("player.subtitles.off", "Off"),
             new("player.subtitles.second", "Second subtitle"),
+            new("player.libass", "Styled subtitles (libass)"),
             new("player.subtitles.translate", "Translate to {0} (AI)"),
             new("player.subtitles.translating", "Translating… {0} %"),
             new("player.subtitles.translated", "{0} (AI)"),

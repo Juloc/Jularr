@@ -5,7 +5,7 @@ import { inserted, keepAddress, pushAddress, releaseAddress, visit } from "../Na
 import type { CastSender, CastState } from "./Cast";
 import { awake, focus } from "../Playback/MediaFocus";
 import type { StyledSubtitles } from "./StyledSubtitles";
-import { deviceKind } from "./Device";
+import { deviceKind, libassWanted } from "./Device";
 import { Automatic, nextQuality, recordStall, StallSeconds, troubled } from "./AutoQuality";
 import { pickSecondSubtitle, pickTranslationSource, SecondSubtitleLine, type SubtitleOption } from "./Subtitles";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
@@ -510,8 +510,7 @@ async function start(player: HTMLElement): Promise<void> {
         player.querySelector('[data-action=subtitle-toggle]')!.setAttribute('aria-pressed', String(!!key));
         if (!key) return;
         const option = Array.from(player.querySelectorAll<HTMLOptionElement>("select[data-setting=subtitle] option")).find(item => item.value === key);
-        // libass draws on a canvas over the picture; touch devices keep the plain WebVTT lines until that is proven steady there (the owner saw the picture flicker black on a phone).
-        if (option?.dataset.styled === "true" && !matchMedia("(pointer: coarse)").matches && typeof WebAssembly === "object" && typeof OffscreenCanvas === "function") {
+        if (option?.dataset.styled === "true" && libassOn() && typeof WebAssembly === "object" && typeof OffscreenCanvas === "function") {
             const version = styledVersion;
             void import("./StyledSubtitles")
                 .then(module => module.showStyledSubtitles(video, (player.dataset.subtitleUrl ?? "") + encodeURIComponent(key) + "?styled=true", subtitleOffset / 1000))
@@ -592,6 +591,13 @@ async function start(player: HTMLElement): Promise<void> {
             .map(option => ({ key: option.value, language: option.dataset.language, forced: option.dataset.forced === "true" }));
         const second = pickSecondSubtitle(options, player.dataset.secondLanguage || undefined, primaryKey, primaryLanguage);
         if (second) showSecondSubtitle(second.key);
+    }
+
+    // libass is the device's own choice (the Subtitles tab); a touch device starts with the plain lines.
+    function libassOn(): boolean {
+        let stored: string | null = null;
+        try { stored = localStorage.getItem("jularr.player.libass"); } catch { /* Storage is optional. */ }
+        return libassWanted(stored, deviceKind(matchMedia("(pointer: coarse)").matches, screen.width, screen.height));
     }
 
     function showPlainSubtitle(key: string, language: string | undefined): void {
@@ -859,6 +865,14 @@ async function start(player: HTMLElement): Promise<void> {
             case "speed-range": case "speed-number": setSpeed(Number(field.value), true); break;
             case "fit": for (const mode of ["cover", "original"]) player.classList.toggle(`player--fit-${mode}`, field.value === mode); break;
             case "autoplay": autoplay = (field as HTMLInputElement).checked; break;
+            case "libass": {
+                const on = (field as HTMLInputElement).checked;
+                try { localStorage.setItem("jularr.player.libass", on ? "on" : "off"); } catch { /* Storage is optional. */ }
+                player.querySelectorAll<HTMLInputElement>("[data-setting=libass]").forEach(input => { input.checked = on; });
+                const current = player.querySelector<HTMLSelectElement>("select[data-setting=subtitle]");
+                if (current?.value) showSubtitle(current.value, current.selectedOptions[0]?.dataset.language);
+                break;
+            }
             case "skip-intro": introMode = parseMode(field.value); handled.clear(); break;
             case "skip-outro": outroMode = parseMode(field.value); handled.clear(); break;
         }
@@ -1393,6 +1407,7 @@ async function start(player: HTMLElement): Promise<void> {
     // A touch device gets a class for what it is, whatever the picture's width (a phone in fullscreen is wide): a phone, whose short side is under 600 px, has
     // one arrangement of its own; Picture in Picture goes up beside Cast, Episodes and Chapters take the place of the volume, which is the device's own.
     function deviceLayout(): void {
+        player.querySelectorAll<HTMLInputElement>("[data-setting=libass]").forEach(input => { input.checked = libassOn(); });
         const kind = deviceKind(matchMedia("(pointer: coarse)").matches, screen.width, screen.height);
         player.classList.toggle("player--touch", kind !== "pointer");
         player.classList.toggle("player--phone", kind === "phone");

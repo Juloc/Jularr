@@ -230,6 +230,15 @@ namespace Jularr.Frontend.Framework
             IEnumerable<HtmlElement> TranslateOption() => TranslateLanguage is { } language
                 ? [Choice("translate", new ValueText(string.Format(CultureInfo.CurrentCulture, texts["player.subtitles.translate"], LanguageLabel.Name(language) ?? language)), false, false)] : [];
 
+            // Styled (ASS) subtitles are drawn by libass over the picture where the device wants it; a touch device starts without.
+            IUiComponent LibassField()
+            {
+                if (!Subtitles.Any(track => track.IsStyled)) return new Span();
+                var toggle = new Toggle("player.libass", true);
+                toggle.Control.Attribute("data-setting", "libass");
+                return toggle;
+            }
+
             IUiComponent TranslateStatus() => new P().Class("player__translate-status").Attribute("data-role", "translate-status").Attribute("aria-live", "polite").Attribute("hidden", "hidden");
 
             IUiComponent QualityField(string pane) => ChoiceField("quality", pane, "playback.quality", false, [.. Qualities.Select(value => Choice(((byte)value).ToString(CultureInfo.InvariantCulture),
@@ -318,7 +327,7 @@ namespace Jularr.Frontend.Framework
                     new Div(
                         Pane("basic", AudioField("basic"), SubtitleField("basic"), SpeedField("basic"), QualityField("basic")),
                         Pane("audio", AudioField("audio"), new Div(OffsetField("audio", "player.offset.audio", "audio"), OffsetField("subtitle", "player.offset.subtitles", "audio")).Class("player__pair"), SpeedField("audio")),
-                        Pane("subtitles", new Div(SubtitleField("subtitles"), SecondSubtitleField("subtitles")).Class("player__pair"), TranslateStatus(), new Div(OffsetField("subtitle", "player.offset.subtitles", "subtitles"), OffsetField("audio", "player.offset.audio", "subtitles")).Class("player__pair"), SpeedField("subtitles")),
+                        Pane("subtitles", new Div(SubtitleField("subtitles"), SecondSubtitleField("subtitles")).Class("player__pair"), TranslateStatus(), LibassField(), new Div(OffsetField("subtitle", "player.offset.subtitles", "subtitles"), OffsetField("audio", "player.offset.audio", "subtitles")).Class("player__pair"), SpeedField("subtitles")),
                         Pane("playback", [QualityField("playback"), SpeedField("playback"), FitField(), .. PreferenceFields()]),
                         Pane("info", Facts())
                     ).Class("player__settings-body"),
