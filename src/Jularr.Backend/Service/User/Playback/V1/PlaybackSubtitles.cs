@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.User.Playback.V1
 {
-    // Subtitles as WebVTT: SubRip and WebVTT files directly, everything else once through FFmpeg into the playback cache.
+    // Subtitles as WebVTT: SubRip and WebVTT files directly, everything else once through FFmpeg into the playback cache. Styled (ASS) subtitles keep their ASS text.
     internal sealed class PlaybackSubtitles(MediaTranscoder transcoder, StorageAccess storage, IOptions<MediaOptions> options)
     {
         // Embedded subtitles read the whole media file; few conversions run at once.
@@ -15,12 +15,20 @@ namespace Jularr.Backend.Service.User.Playback.V1
 
         public bool CanConvert => transcoder.IsAvailable;
 
-        public async Task<string> ReadAsync(StorageFiles files, string path, int? streamIndex, string cacheKey, CancellationToken ct)
+        public async Task<string> ReadAsync(StorageFiles files, string path, int? streamIndex, string cacheKey, bool styled, CancellationToken ct)
         {
             var extension = Path.GetExtension(path).ToLowerInvariant();
             if (streamIndex is null && (await files.GetAsync(path, ct))?.Length > PlaybackTracks.MaximumSubtitleBytes)
             {
                 throw new ServiceUnavailableException("playback_subtitle_unavailable");
+            }
+
+            if (styled && streamIndex is null)
+            {
+                await using var stream = await files.OpenReadAsync(path, ct);
+                using var bytes = new MemoryStream();
+                await stream.CopyToAsync(bytes, ct);
+                return PlaybackTracks.Decode(bytes.ToArray());
             }
 
             if (streamIndex is null && extension is ".srt" or ".vtt")
@@ -38,7 +46,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
             }
 
             var folder = Path.Combine(options.Value.TranscodeCachePath, "subtitles");
-            var cached = Path.Combine(folder, cacheKey + ".vtt");
+            var cached = Path.Combine(folder, cacheKey + (styled ? ".ass" : ".vtt"));
             if (File.Exists(cached))
             {
                 return await File.ReadAllTextAsync(cached, ct);
@@ -55,7 +63,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 }
 
                 using var input = storage.Input(files, path);
-                if (!await transcoder.ConvertSubtitleAsync(input.Location, streamIndex is null ? "ass" : null, streamIndex, pending, ct))
+                if (!await transcoder.ConvertSubtitleAsync(input.Location, streamIndex is null ? "ass" : null, streamIndex, pending, ct, styled ? "ass" : "webvtt"))
                 {
                     throw new ServiceUnavailableException("playback_subtitle_unavailable");
                 }

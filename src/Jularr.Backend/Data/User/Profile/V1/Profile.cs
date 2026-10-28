@@ -85,8 +85,9 @@ namespace Jularr.Backend.Data.User.Profile.V1
 
     public sealed class ReadProfileResultV1 : BaseResponse
     {
-        public ReadProfileResultV1(long id, string displayName, long uiLocaleId, bool hasPin, bool autoplayPreviews = true, string accentHex = "#8040f7", string? firstContentLanguage = null, string? secondContentLanguage = null)
+        public ReadProfileResultV1(long id, string displayName, long uiLocaleId, bool hasPin, bool autoplayPreviews = true, string accentHex = "#8040f7", string? firstContentLanguage = null, string? secondContentLanguage = null, bool keepScreenOn = true)
         {
+            KeepScreenOn = keepScreenOn;
             FirstContentLanguage = firstContentLanguage;
             SecondContentLanguage = secondContentLanguage;
             AutoplayPreviews = autoplayPreviews;
@@ -119,5 +120,8 @@ namespace Jularr.Backend.Data.User.Profile.V1
 
         // Whether a card that lingers on a touch device plays its preview by itself; the profile's playback preference.
         public bool AutoplayPreviews { get; }
+
+        // Whether the screen stays on while a video plays or a book is read; the profile's playback preference.
+        public bool KeepScreenOn { get; }
     }
 }

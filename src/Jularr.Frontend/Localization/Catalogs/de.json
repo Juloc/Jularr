@@ -1686,6 +1686,14 @@
    "As in the file",
    "Wie in der Datei"
   ],
+  "playback.language.none": [
+   "None",
+   "Keine"
+  ],
+  "playback.secondSubtitleLanguage": [
+   "Second subtitle language",
+   "Sprache des zweiten Untertitels"
+  ],
   "playback.language.profile": [
    "Profile language",
    "Sprache des Profils"
@@ -1701,6 +1709,10 @@
   "playback.autoplayPreviews": [
    "Play previews automatically",
    "Vorschau automatisch abspielen"
+  ],
+  "playback.keepScreenOn": [
+   "Keep the screen on while playing or reading",
+   "Bildschirm beim Abspielen und Lesen anlassen"
   ],
   "player.next.countdown": [
    "Next episode in {0}",
@@ -5631,8 +5643,8 @@
    "Vorschaubilder beim Spulen"
   ],
   "instance.module.Translation": [
-   "Translate books in the reader",
-   "Bücher im Reader übersetzen"
+   "Translate books in the reader and subtitles in the player",
+   "Bücher im Reader und Untertitel im Player übersetzen"
   ],
   "instance.module.Ocr": [
    "Recognize the text of scanned books",
@@ -7231,6 +7243,30 @@
    "Subtitles",
    "Untertitel"
   ],
+  "player.subtitles.translate": [
+   "Translate to {0} (AI)",
+   "Ins {0} übersetzen (KI)"
+  ],
+  "player.subtitles.translating": [
+   "Translating… {0} %",
+   "Wird übersetzt… {0} %"
+  ],
+  "player.subtitles.translated": [
+   "{0} (AI)",
+   "{0} (KI)"
+  ],
+  "player.subtitles.translateFailed": [
+   "The translation did not work.",
+   "Die Übersetzung hat nicht geklappt."
+  ],
+  "player.libass": [
+   "Styled subtitles (libass)",
+   "Gestaltete Untertitel (libass)"
+  ],
+  "player.subtitles.second": [
+   "Second subtitle",
+   "Zweiter Untertitel"
+  ],
   "player.subtitles.off": [
    "Off",
    "Aus"
@@ -7327,6 +7363,10 @@
    "Reset",
    "Zurücksetzen"
   ],
+  "player.airplay": [
+   "AirPlay",
+   "AirPlay"
+  ],
   "player.cast": [
    "Cast to a device",
    "Auf ein Gerät übertragen"
@@ -7334,6 +7374,10 @@
   "player.casting": [
    "Casting to {0}",
    "Wird übertragen auf {0}"
+  ],
+  "player.status.cast_insecure": [
+   "Chromecast needs a secure address (https). Open Jularr over https to cast.",
+   "Chromecast braucht eine sichere Adresse (https). Öffne Jularr über https zum Übertragen."
   ],
   "player.status.cast_unreachable": [
    "A cast device cannot reach this address. Open Jularr under its network address.",
@@ -10717,6 +10761,10 @@
    "Playback ended because the server needed the capacity. Choose a lower quality to continue.",
    "Die Wiedergabe wurde beendet, weil der Server die Kapazität brauchte. Wähle eine niedrigere Qualität, um fortzufahren."
   ],
+  "player.status.playback_slow": [
+   "The connection is slow, so this plays in a lower quality.",
+   "Die Verbindung ist langsam, deshalb läuft das Video in niedrigerer Qualität."
+  ],
   "player.status.playback_reduced": [
    "The server is busy, so this plays in a lower quality.",
    "Der Server ist ausgelastet, deshalb läuft dies in niedrigerer Qualität."
@@ -12293,6 +12341,10 @@
   "jobs.worker.Health": [
    "Health",
    "Gesundheit"
+  ],
+  "jobs.worker.Translation": [
+   "Translation",
+   "Übersetzung"
   ],
   "jobs.health.summary": [
    "{0} of {1} services reachable",

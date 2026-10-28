@@ -151,7 +151,7 @@ namespace Jularr.Integrations.Logic.Media
         }
 
         // A text subtitle stream or file as WebVTT; bounded so a stuck read never holds a request.
-        public async Task<bool> ConvertSubtitleAsync(string inputPath, string? inputFormat, int? streamIndex, string outputPath, CancellationToken ct)
+        public async Task<bool> ConvertSubtitleAsync(string inputPath, string? inputFormat, int? streamIndex, string outputPath, CancellationToken ct, string outputFormat = "webvtt")
         {
             if (!IsAvailable)
             {
@@ -186,7 +186,7 @@ namespace Jularr.Integrations.Logic.Media
                 start.ArgumentList.Add("0:" + stream.ToString(CultureInfo.InvariantCulture));
             }
 
-            foreach (var argument in (string[])["-f", "webvtt", outputPath])
+            foreach (var argument in (string[])["-f", outputFormat, outputPath])
             {
                 start.ArgumentList.Add(argument);
             }
