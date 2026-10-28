@@ -66,6 +66,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 .TextAttribute("data-job-filter-problem", "import.job.filterProblem")
                 .TextAttribute("data-job-current", "import.job.current")
                 .TextAttribute("data-job-source", "import.job.source")
+                .TextAttribute("data-job-source-list", "admin.works.source.list")
                 .TextAttribute("data-job-query", "import.job.query")
                 .TextAttribute("data-job-candidates", "import.job.candidates")
                 .TextAttribute("data-job-attempt", "import.job.attempt")
@@ -374,7 +375,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                     new Span(new Text("admin.works.source." + row.MatchSource)).Class("media-import__detail")).Class("media-import__status-cell");
             }
 
-            if (row.Candidates.Count == 0 && row.StatusTypeId != MediaImportStatusType.Open)
+            if (row.Candidates.Count == 0 && row.StatusTypeId != MediaImportStatusType.Open && row.Choice != "list:book")
             {
                 return row.StatusTypeId == MediaImportStatusType.New
                     ? new Div(new Span(new Truncated(WithYear(row.MatchTitle, row.MatchYear))), new Span(new Truncated(Identity(row.Choice) ?? "")).Class("media-import__detail")).Class("media-import__status-cell")
@@ -387,7 +388,9 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             var options = new List<IUiComponent> { Item("", texts["import.choose"], selected == "") };
             options.AddRange(row.Candidates.Select(candidate => Item(candidate.Choice, string.Join(" · ", new[] { candidate.IsSuggested ? texts["import.match.suggested"] : texts["import.match.review"], WithYear(candidate.Title, candidate.ReleaseYear), candidate.Creator, texts["admin.works.source." + candidate.Source] }
                 .Where(text => !string.IsNullOrEmpty(text))), candidate.Choice == selected)));
+            if (row.CanUseListData) options.Add(Item("list:book", texts["import.match.list"], selected == "list:book"));
             var parts = new List<IUiComponent> { Field(new Select([.. options]).Attribute("name", name + "Choice").TextAttribute("aria-label", "import.choose")) };
+            if (row.CanUseListData) parts.Add(new Span(new Text("import.match.list.detail")).Class("media-import__detail"));
             if (row.StatusTypeId == MediaImportStatusType.Open)
             {
                 parts.Add(new Div(Field(new Input().Attribute("type", "text").Attribute("name", name + "Query").Attribute("maxlength", "200").Attribute("autocomplete", "off")

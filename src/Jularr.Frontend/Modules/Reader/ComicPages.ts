@@ -75,7 +75,7 @@ export function initializeComicPages(reader: HTMLElement): void {
             requestAnimationFrame(() => { stage.scrollTop = image(page).offsetTop - stage.offsetTop; });
         } else stage.replaceChildren(...current.map(image));
         updatePosition();
-        const active = settings.mode === 'paged' && !failed;
+        const active = settings.mode === 'paged' && settings.paging === 'book' && !failed;
         reader.dataset.bookPageCount = String(count); reader.dataset.bookPageBefore = '0';
         if (book && !book.update({ current: page, columns, minimum: 0, maximum: count - 1, group,
             next: (at, delta) => target(delta, at), number: at => at + 1, commit }, active)) failed = true;
@@ -99,7 +99,7 @@ export function initializeComicPages(reader: HTMLElement): void {
         marks.refresh();
         previous.hidden = page === 0;
         next.hidden = current.at(-1)! + 1 >= count;
-        reader.querySelectorAll<HTMLButtonElement>('[data-turn]').forEach(button => button.disabled = Number(button.dataset.turn) < 0 ? previous.hidden : next.hidden);
+        reader.querySelectorAll<HTMLButtonElement>('[data-turn]').forEach(button => button.disabled = Number(button.dataset.turn) < 0 ? previous.hidden === true : next.hidden === true);
         const address = new URL(location.href);
         address.searchParams.set('p', String(page));
         history.replaceState(null, '', address.pathname + address.search);

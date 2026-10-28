@@ -1,6 +1,6 @@
 # Jularr: the web host with every tool its features use; all state under /data, libraries under /media.
 
-FROM node:24-bookworm-slim AS frontend
+FROM node:26-bookworm-slim AS frontend
 WORKDIR /src/src/Jularr.Frontend
 COPY src/Jularr.Frontend/package.json src/Jularr.Frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund

@@ -22,6 +22,21 @@ namespace Jularr.Backend.Tests
         private static readonly DateTimeOffset Start = new(2026, 10, 20, 9, 0, 0, TimeSpan.Zero);
 
         [TestMethod]
+        public void Definitions_EveryGroupAndJob_HaveTheirTextOnTheJobsPage()
+        {
+            var keys = Jularr.Frontend.Localization.UiResources.English.Select(resource => resource.Key).ToHashSet();
+            foreach (var group in Enum.GetValues<WorkerGroupType>())
+            {
+                Assert.IsTrue(keys.Contains("jobs.worker." + group), "jobs.worker." + group);
+            }
+
+            foreach (var job in WorkerJobs.Definitions)
+            {
+                Assert.IsTrue(keys.Contains("jobs.job." + job.Key), "jobs.job." + job.Key);
+            }
+        }
+
+        [TestMethod]
         public void Definitions_CoverEveryWorkerAndTheSampler_AndStaggerTheirStart()
         {
             var jobs = WorkerJobs.Definitions;
@@ -31,9 +46,9 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(WorkerJobs.Of(group).Count > 0, group.ToString());
             }
 
-            // Fifteen workers and the sampler. Queues and interrupted downloads start at once; other workers have their own offset;
+            // Sixteen workers and the sampler. Queues and interrupted downloads start at once; other workers have their own offset;
             // a provider of the provider sync has no schedule of its own.
-            Assert.AreEqual(16, Enum.GetValues<WorkerGroupType>().Length);
+            Assert.AreEqual(17, Enum.GetValues<WorkerGroupType>().Length);
             foreach (var key in new[] { "operations", "backupQueue", "mediaImportQueue", "benchmarkQueue", "searchQueue", "downloads", "resources" })
             {
                 Assert.AreEqual(TimeSpan.Zero, WorkerJobs.Definition(key).StartDelay, key);
