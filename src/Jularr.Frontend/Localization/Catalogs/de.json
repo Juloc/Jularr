@@ -10710,6 +10710,10 @@
    "Reading copies",
    "Lesekopien"
   ],
+  "jobs.job.bookTranslations": [
+   "Book translations",
+   "Buchübersetzungen"
+  ],
   "reader.settings.view": [
    "View",
    "Ansicht"
@@ -10993,6 +10997,10 @@
   "jobs.about.readingCopies": [
    "Writes a reading copy (an EPUB) beside digital PDFs, so they read like a book.",
    "Schreibt neben digitale PDFs eine Lesekopie (EPUB), damit sie sich wie ein Buch lesen lassen."
+  ],
+  "jobs.about.bookTranslations": [
+   "Translates the books with the local TranslateGemma model into every language a profile uses, books being read first, so they open translated at once.",
+   "Übersetzt die Bücher mit dem lokalen TranslateGemma-Modell in jede Sprache, die ein Profil nutzt (angefangene Bücher zuerst), damit sie sofort übersetzt öffnen."
   ],
   "media.preview.trailer": [
    "Trailer",
