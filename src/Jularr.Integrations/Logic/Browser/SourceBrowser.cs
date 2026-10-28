@@ -593,7 +593,7 @@ namespace Jularr.Integrations.Logic.Browser
             if (_packages is not null && executable == _packages.ExecutablePath)
             {
                 // The optional managed package uses Linux headless mode and does not need a display server.
-                arguments += " --headless=new";
+                arguments += " --headless=new --disable-gpu";
             }
             if (_options.NoSandbox)
             {
