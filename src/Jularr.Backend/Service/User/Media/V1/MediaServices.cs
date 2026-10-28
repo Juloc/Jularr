@@ -169,7 +169,12 @@ namespace Jularr.Backend.Service.User.Media.V1
                     workProgress."ProgressStateId",
                     workProgress."ProgressPercent",
                     work."Rating",
-                    CASE WHEN work."Rating" IS NOT NULL THEN work."CatalogNamespace" END AS "RatingSource",
+                    -- A series' rating is TMDB's, also after its details came from TheTVDB; an AniList entry keeps AniList's.
+                    CASE
+                        WHEN work."Rating" IS NULL THEN NULL
+                        WHEN work."MediaTypeId" = 2 AND work."CatalogNamespace" IS DISTINCT FROM 'anilist' THEN 'tmdb_tv'
+                        ELSE work."CatalogNamespace"
+                    END AS "RatingSource",
                     work."OriginalTitle",
                     work."ReleasedOn",
                     work."OriginalLanguage",

@@ -84,7 +84,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             return await Context.ExecuteBatchAsync((ctx, ct) => WorkMetadataQueries.ReadWorkAsync(ctx, Parameters.WorkId, ct), CancellationToken);
         }
 
-        // Only Works mapped to TMDB, Open Library, AniList, MusicBrainz or IGDB can be refreshed; the mass editor does the same for each chosen title.
+        // Only Works mapped to TMDB, TheTVDB, Open Library, AniList, MusicBrainz or IGDB can be refreshed; the mass editor does the same for each chosen title.
         internal static async Task RefreshAsync(LogicContext context, WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games, long workId, CancellationToken ct)
         {
             var (work, identity) = await context.ExecuteBatchAsync(async (ctx, token) => (await WorkMetadataQueries.ReadWorkAsync(ctx, workId, token),
@@ -109,6 +109,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             else if (identity.Namespace == GameMetadata.Namespace)
             {
                 await games.ImportAsync(context, await games.ConnectAsync(context, ct), identity.Value, ct);
+            }
+            else if (work.MediaTypeId == MediaType.Series)
+            {
+                await metadata.ImportSeriesAsync(context, null, identity.Namespace, identity.Value, ct);
             }
             else
             {
@@ -176,6 +180,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             return ctx.ReadSql.ReadRequiredAsync<WorkDetailsV1>(sql, ct);
         }
 
+        // The identity a Work's details come from; a series is TheTVDB's and is found by its TMDB or IMDb id only while it holds no TheTVDB id.
         public static Task<WorkIdentityData?> ReadProviderIdentityAsync(LogicContext ctx, long workId, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -190,9 +195,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     JOIN "Works" AS work ON work."Id" = identity."WorkId"
                 WHERE
                     identity."WorkId" = @Id
-                    AND (identity."Namespace" IN ('tmdb_movie', 'tmdb_tv', 'openlibrary', 'musicbrainz', 'igdb') OR identity."Namespace" = 'anilist' AND work."MediaTypeId" = 3)
+                    AND (identity."Namespace" IN ('tmdb_movie', 'openlibrary', 'musicbrainz', 'igdb')
+                        OR identity."Namespace" IN ('tvdb', 'tmdb_tv', 'imdb') AND work."MediaTypeId" = 2
+                        OR identity."Namespace" = 'anilist' AND work."MediaTypeId" = 3)
                 ORDER BY
-                    identity."Namespace" = 'anilist'
+                    identity."Namespace" = 'anilist',
+                    identity."Namespace" = 'imdb',
+                    identity."Namespace" = 'tmdb_tv'
                 LIMIT 1;
                 """;
             sql.Parameters.Add(new WorkIdData(workId));

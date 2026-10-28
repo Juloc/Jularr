@@ -204,10 +204,24 @@ namespace Jularr.E2E.Tests
         private static IResult Tvdb(string path) => path switch
         {
             "login" => Json("""{"data":{"token":"e2e-tvdb-token"}}"""),
-            "series/990001/extended" => Json("""{"data":{"id":990001,"name":"Jularr Test Series","remoteIds":[]}}"""),
-            "series/990001/episodes/default" => Json("""{"data":{"episodes":[{"id":1,"seasonNumber":1,"number":1,"name":"Pilot","aired":"2020-04-01"},{"id":2,"seasonNumber":1,"number":2,"name":"Second","aired":"2020-04-08"}]},"links":{"next":null}}"""),
-            "series/990002/extended" => Json("""{"data":{"id":990002,"name":"Example Anime","remoteIds":[]}}"""),
-            "series/990002/episodes/default" => Json("""{"data":{"episodes":[{"id":3,"seasonNumber":1,"number":1,"name":"Beginning","aired":"2021-01-05"},{"id":4,"seasonNumber":1,"number":2,"name":"Ending","aired":"2021-01-12"}]},"links":{"next":null}}"""),
+            // Series and anime come from TheTVDB with all their facts; TMDB only names them in its lists and gives the rating.
+            "series/990001/extended" => Json("""
+                {"data":{"id":990001,"name":"Jularr Test Series","overview":"Two test episodes.","firstAired":"2020-04-01","year":"2020","originalLanguage":"eng","originalCountry":"deu",
+                "status":{"name":"Ended"},"remoteIds":[{"id":"99001","sourceName":"TheMovieDB.com"}],"genres":[{"name":"Drama"}],"originalNetwork":{"name":"Test Network"},
+                "artworks":[{"image":"https://artworks.thetvdb.com/banners/series.png","language":"eng","type":2,"score":10},{"image":"https://artworks.thetvdb.com/banners/series-backdrop.png","type":3,"score":10}],
+                "trailers":[{"url":"https://www.youtube.com/watch?v=aaaaaaaaaaa","language":"eng"}],
+                "characters":[{"name":"Lead","peopleId":9001,"peopleType":"Actor","personName":"Test Actor","sort":1}],
+                "seasons":[{"number":1,"type":{"type":"official"}}],
+                "translations":{"nameTranslations":[{"name":"Jularr Test Series","language":"eng"}],"overviewTranslations":[{"overview":"Two test episodes.","language":"eng"}]}}}
+                """),
+            "series/990001/episodes/default" => Json("""{"data":{"episodes":[{"id":1,"seasonNumber":1,"number":1,"name":"Pilot","aired":"2020-04-01","overview":"The first test episode."},{"id":2,"seasonNumber":1,"number":2,"name":"Second","aired":"2020-04-08"}]},"links":{"next":null}}"""),
+            "series/990002/extended" => Json("""
+                {"data":{"id":990002,"name":"Reidai Anime","overview":"Futatsu no tesuto.","firstAired":"2021-01-05","year":"2021","originalLanguage":"jpn","originalCountry":"jpn",
+                "remoteIds":[{"id":"99002","sourceName":"TheMovieDB.com"}],"genres":[{"name":"Animation"},{"name":"Anime"}],"seasons":[{"number":1,"type":{"type":"official"}}],
+                "translations":{"nameTranslations":[{"name":"Reidai Anime","language":"jpn"},{"name":"Example Anime","language":"eng"}],"overviewTranslations":[{"overview":"Two test episodes.","language":"eng"}]}}}
+                """),
+            "series/990002/episodes/default" => Json("""{"data":{"episodes":[{"id":3,"seasonNumber":1,"number":1,"name":"Hajimari","aired":"2021-01-05"},{"id":4,"seasonNumber":1,"number":2,"name":"Owari","aired":"2021-01-12"}]},"links":{"next":null}}"""),
+            "series/990002/episodes/default/eng" => Json("""{"data":{"episodes":[{"id":3,"seasonNumber":1,"number":1,"name":"Beginning","aired":"2021-01-05"},{"id":4,"seasonNumber":1,"number":2,"name":"Ending","aired":"2021-01-12"}]},"links":{"next":null}}"""),
             _ => Results.NotFound()
         };
 

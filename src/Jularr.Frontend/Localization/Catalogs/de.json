@@ -1262,10 +1262,6 @@
    "TMDB films",
    "TMDB-Filme"
   ],
-  "admin.catalog.tmdb_tv": [
-   "TMDB series",
-   "TMDB-Serien"
-  ],
   "admin.catalog.anilist": [
    "AniList",
    "AniList"

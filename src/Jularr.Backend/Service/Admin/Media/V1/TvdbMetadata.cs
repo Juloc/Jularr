@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Provider;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Provider;
@@ -19,7 +20,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         public async Task<TvdbSession> ConnectAsync(LogicContext context, CancellationToken ct) =>
             await LoginAsync(await context.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), ct), ct);
 
-        private async Task<TvdbSession> LoginAsync(ProviderCredentialData? credential, CancellationToken ct)
+        // For callers between batches: the key is read in its own short batch.
+        public async Task<TvdbSession> OpenAsync(LogicContext context, CancellationToken ct) =>
+            await LoginAsync(await context.ExecuteBatchAsync((ctx, token) => ctx.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), token), ct, mode: SqlAccessMode.ReadOnly), ct);
+
+        public async Task<TvdbSession> LoginAsync(ProviderCredentialData? credential, CancellationToken ct)
         {
             if (credential is not { IsEnabled: true, ProtectedSecret: { } secret })
             {
@@ -56,6 +61,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             {
                 return await client.FindSeriesByImdbAsync(session, imdbId, ct);
             }
+            catch (ArgumentException)
+            {
+                throw new DataValidationException("ImdbId", "invalid_type");
+            }
             catch (TvdbException exception)
             {
                 throw Translate(exception);
@@ -74,51 +83,20 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<IReadOnlyList<TvdbEpisode>> ReadEpisodesAsync(TvdbSession session, int tvdbId, CancellationToken ct)
+        // The default order without a language; with one, its translated names and summaries, none when TheTVDB has no translation in that language.
+        public async Task<IReadOnlyList<TvdbEpisode>> ReadEpisodesAsync(TvdbSession session, int tvdbId, string? language, CancellationToken ct)
         {
             try
             {
-                return await client.ReadEpisodesAsync(session, tvdbId, ct);
+                return await client.ReadEpisodesAsync(session, tvdbId, language, ct);
+            }
+            catch (TvdbException exception) when (language is not null && exception.Failure == TvdbFailure.NotFound)
+            {
+                return [];
             }
             catch (TvdbException exception)
             {
                 throw Translate(exception);
-            }
-        }
-
-        // The seasons and episodes TheTVDB names for a series found by its TVDB id or, failing that, its IMDb id; none when TVDB is not set up, does not know
-        // the series, disagrees with its IMDb id or is unavailable, so the caller keeps what it has.
-        public async Task<TvdbStructure?> TryReadStructureAsync(LogicContext context, int? tvdbId, string? imdbId, CancellationToken ct)
-        {
-            if (tvdbId is null && imdbId is null)
-            {
-                return null;
-            }
-
-            try
-            {
-                var credential = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), token), ct);
-                var session = await LoginAsync(credential, ct);
-                var id = tvdbId ?? await FindSeriesByImdbAsync(session, imdbId!, ct);
-                if (id is null)
-                {
-                    return null;
-                }
-
-                var series = await ReadSeriesAsync(session, id.Value, ct);
-                if (imdbId is not null && series.ImdbId is not null && !string.Equals(imdbId, series.ImdbId, StringComparison.OrdinalIgnoreCase))
-                {
-                    return null;
-                }
-
-                var episodes = await ReadEpisodesAsync(session, id.Value, ct);
-                return episodes.Count == 0 || episodes.GroupBy(episode => (episode.SeasonNumber, episode.EpisodeNumber)).Any(group => group.Count() != 1)
-                    ? null
-                    : new TvdbStructure(id.Value, episodes);
-            }
-            catch (Exception exception) when (exception is ServiceUnavailableException or KeyNotFoundException or DataValidationException)
-            {
-                return null;
             }
         }
 
@@ -131,6 +109,4 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             _ => new ServiceUnavailableException("metadata_unavailable")
         };
     }
-
-    internal sealed record TvdbStructure(int TvdbId, IReadOnlyList<TvdbEpisode> Episodes);
 }

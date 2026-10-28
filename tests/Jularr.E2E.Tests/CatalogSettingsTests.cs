@@ -19,8 +19,10 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(page.GetByText("Full local discovery is off", new() { Exact = false })).ToBeVisibleAsync();
 
             // Every catalog is a card: how it is kept (here only what Discover loaded), the titles and what is still to read.
+            // TMDB keeps only films whole; series come from TheTVDB.
             var cards = page.Locator(".card-grid .feature-card");
-            await Assertions.Expect(cards).ToHaveCountAsync(3);
+            await Assertions.Expect(cards).ToHaveCountAsync(2);
+            await Assertions.Expect(cards.Filter(new() { HasText = "TMDB series" })).ToHaveCountAsync(0);
             var aniList = cards.Filter(new() { HasText = "AniList" });
             await Assertions.Expect(aniList).ToContainTextAsync("Kept");
             Assert.IsTrue(await page.GetByRole(AriaRole.Button, new() { Name = "Sync now", Exact = true }).IsDisabledAsync(), "Sync now needs full local discovery.");
@@ -130,15 +132,15 @@ namespace Jularr.E2E.Tests
                 """);
             await page.GotoAsync("/Admin/Catalog");
 
-            // Seven catalogs, each a card with an icon tile and its display name; no card is named by a raw key.
+            // Six catalogs, each a card with an icon tile and its display name; no card is named by a raw key.
             var catalogRows = page.Locator(".card-grid .feature-card");
-            await Assertions.Expect(catalogRows).ToHaveCountAsync(7);
-            foreach (var name in new[] { "TMDB films", "TMDB series", "AniList", "TVDB", "Open Library", "MusicBrainz", "IGDB" })
+            await Assertions.Expect(catalogRows).ToHaveCountAsync(6);
+            foreach (var name in new[] { "TMDB films", "AniList", "TVDB", "Open Library", "MusicBrainz", "IGDB" })
             {
                 await Assertions.Expect(catalogRows.Filter(new() { HasText = name })).ToHaveCountAsync(1);
             }
 
-            await Assertions.Expect(catalogRows.Locator(".icon-tile .ui-icon")).ToHaveCountAsync(7);
+            await Assertions.Expect(catalogRows.Locator(".icon-tile .ui-icon")).ToHaveCountAsync(6);
 
             var text = await page.Locator("#app-content").InnerTextAsync();
             foreach (var key in new[] { "tmdb_movie", "tmdb_tv", "tvdb", "openlibrary", "musicbrainz", "igdb", "anilist", "admin.catalog." })

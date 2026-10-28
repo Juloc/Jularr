@@ -36,6 +36,7 @@ namespace Jularr.E2E.Tests
             {
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
                 ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
                 ["Providers:OpenLibrary"] = fakes.OpenLibrary.ToString(),
                 ["Providers:MusicBrainz"] = fakes.MusicBrainz.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library
@@ -234,6 +235,7 @@ namespace Jularr.E2E.Tests
             {
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
                 ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library
             });
             await using var session = await BrowserSession.StartAsync(jularr);

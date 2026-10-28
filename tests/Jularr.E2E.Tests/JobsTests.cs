@@ -30,6 +30,7 @@ namespace Jularr.E2E.Tests
             {
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
                 ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
                 ["Providers:OpenLibrary"] = fakes.OpenLibrary.ToString(),
                 ["Providers:AniList"] = fakes.AniList.ToString()
             });

@@ -47,37 +47,97 @@ namespace Jularr.Integrations.Logic.Tvdb
             };
         }
 
+        // Everything a series import needs in one read: translations, artworks, people, genres, networks, trailers, remote ids and the seasons of the aired order.
         public async Task<TvdbSeries> ReadSeriesAsync(TvdbSession session, int id, CancellationToken ct)
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(id);
-            using var document = await RequestAsync(HttpMethod.Get, "series/" + id.ToString(CultureInfo.InvariantCulture) + "/extended", session.Token, null, ct);
+            using var document = await RequestAsync(HttpMethod.Get, "series/" + id.ToString(CultureInfo.InvariantCulture) + "/extended?meta=translations&short=false", session.Token, null, ct);
             var data = Data(document.RootElement);
             if (Int(data, "id") != id || Text(data, "name") is not { } name)
             {
                 throw new TvdbException(TvdbFailure.InvalidResponse, "TVDB returned an invalid series.");
             }
 
+            // Remote identities name the series at IMDb and TMDB.
             string? imdbId = null;
-            var remoteIds = Child(data, "remoteIds");
-            if (remoteIds.ValueKind == JsonValueKind.Array)
+            int? tmdbId = null;
+            foreach (var item in Items(data, "remoteIds"))
             {
-                imdbId = remoteIds.EnumerateArray()
-                    .Where(item => Text(item, "sourceName") is { } source && source.Contains("IMDb", StringComparison.OrdinalIgnoreCase))
-                    .Select(item => Text(item, "id")).FirstOrDefault(value => value is not null);
+                var source = Text(item, "sourceName") ?? "";
+                if (imdbId is null && source.Contains("IMDb", StringComparison.OrdinalIgnoreCase))
+                {
+                    imdbId = Text(item, "id");
+                }
+                else if (tmdbId is null && source.Contains("TheMovieDB", StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(Text(item, "id"), NumberStyles.None, CultureInfo.InvariantCulture, out var tmdb) && tmdb > 0)
+                {
+                    tmdbId = tmdb;
+                }
             }
 
-            return new TvdbSeries(id, name, imdbId);
+            // Names and summaries per language; an alias is no translation.
+            var translations = Child(data, "translations");
+            var names = Items(translations, "nameTranslations").Where(item => Child(item, "isAlias").ValueKind != JsonValueKind.True)
+                .Select(item => (Language: Text(item, "language"), Text: Text(item, "name"))).Where(item => item.Language is not null && item.Text is not null)
+                .DistinctBy(item => item.Language).ToDictionary(item => item.Language!, item => item.Text, StringComparer.Ordinal);
+            var overviews = Items(translations, "overviewTranslations").Select(item => (Language: Text(item, "language"), Text: Text(item, "overview")))
+                .Where(item => item.Language is not null && item.Text is not null).DistinctBy(item => item.Language).ToDictionary(item => item.Language!, item => item.Text, StringComparer.Ordinal);
+            var languages = names.Keys.Concat(overviews.Keys).Distinct(StringComparer.Ordinal);
+
+            // Networks first, then the studios that made it.
+            var companies = Items(data, "companies").Select(item => (Name: Text(item, "name"), Type: Text(Child(item, "companyType"), "companyTypeName"))).ToArray();
+            var networks = new[] { Text(Child(data, "originalNetwork"), "name") }
+                .Concat(companies.Where(company => company.Type == "Network").Select(company => company.Name))
+                .Concat([Text(Child(data, "latestNetwork"), "name")])
+                .Concat(companies.Where(company => company.Type == "Studio").Select(company => company.Name))
+                .OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+            return new TvdbSeries(id, name, imdbId)
+            {
+                TmdbId = tmdbId,
+                Overview = Text(data, "overview"),
+                ImageUrl = Image(Text(data, "image")),
+                OriginalLanguage = Text(data, "originalLanguage"),
+                OriginalCountry = Text(data, "originalCountry"),
+                FirstAired = Date(data, "firstAired"),
+                Year = int.TryParse(Text(data, "year"), NumberStyles.None, CultureInfo.InvariantCulture, out var year) ? year : null,
+                Status = Text(Child(data, "status"), "name"),
+                Translations = [.. languages.Select(language => new TvdbTranslation(language, names.GetValueOrDefault(language), overviews.GetValueOrDefault(language)))],
+                Aliases = [.. Items(data, "aliases").Select(item => (Language: Text(item, "language"), Name: Text(item, "name"))).Where(item => item.Language is not null && item.Name is not null)
+                    .Select(item => new TvdbTranslation(item.Language!, item.Name, null))],
+                Artworks = [.. Items(data, "artworks").Select(item => (Type: Int(item, "type"), Image: Image(Text(item, "image")), Language: Text(item, "language"), Score: Number(item, "score")))
+                    .Where(item => item.Type is { } type && Enum.IsDefined((TvdbArtworkType)type) && item.Image is not null)
+                    .Select(item => new TvdbArtwork((TvdbArtworkType)item.Type!.Value, item.Image!, item.Language, item.Score ?? 0))],
+                Genres = [.. Items(data, "genres").Select(item => Text(item, "name")).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase)],
+                Networks = networks,
+                Trailers = [.. Items(data, "trailers").Select(item => (Key: YouTubeKey(Text(item, "url")), Language: Text(item, "language"))).Where(item => item.Key is not null)
+                    .Select(item => new TvdbTrailer(item.Key!, item.Language))],
+                Characters = [.. Items(data, "characters").Select(item => (Person: Text(item, "personName"), Role: Text(item, "peopleType"), Item: item))
+                    .Where(item => item.Person is not null && item.Role is not null)
+                    .Select(item => new TvdbCharacter(Int(item.Item, "peopleId") is > 0 and var person ? person : null, item.Person!, item.Role!, Text(item.Item, "name"),
+                        Image(Text(item.Item, "personImgURL")) ?? Image(Text(item.Item, "image")), Int(item.Item, "sort") ?? int.MaxValue))],
+                Seasons = [.. Items(data, "seasons").Where(item => Text(Child(item, "type"), "type") == "official")
+                    .Select(item => (Number: Int(item, "number"), Image: Image(Text(item, "image")))).Where(item => item.Number is >= 0)
+                    .DistinctBy(item => item.Number).Select(item => new TvdbSeason(item.Number!.Value, item.Image))]
+            };
         }
 
-        // Default is the series' TVDB episode order. Pagination is never replaced by a remote URL.
-        public async Task<IReadOnlyList<TvdbEpisode>> ReadEpisodesAsync(TvdbSession session, int seriesId, CancellationToken ct)
+        // Default is the series' TVDB episode order with names in the original language; a language (TheTVDB's code) reads its translations instead.
+        // Pagination is never replaced by a remote URL.
+        public async Task<IReadOnlyList<TvdbEpisode>> ReadEpisodesAsync(TvdbSession session, int seriesId, string? language, CancellationToken ct)
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(seriesId);
+            if (language is not null && (language.Length is < 2 or > 4 || !language.All(char.IsAsciiLetterLower)))
+            {
+                throw new ArgumentException("A TVDB language code is required.", nameof(language));
+            }
+
             var episodes = new List<TvdbEpisode>();
             var known = new HashSet<int>();
             for (var page = 0; page < 100; page++)
             {
-                var path = "series/" + seriesId.ToString(CultureInfo.InvariantCulture) + "/episodes/default?page=" + page.ToString(CultureInfo.InvariantCulture);
+                var path = "series/" + seriesId.ToString(CultureInfo.InvariantCulture) + "/episodes/default" + (language is null ? "" : "/" + language)
+                    + "?page=" + page.ToString(CultureInfo.InvariantCulture);
                 using var document = await RequestAsync(HttpMethod.Get, path, session.Token, null, ct);
                 var entries = Child(Data(document.RootElement), "episodes");
                 if (entries.ValueKind != JsonValueKind.Array)
@@ -94,9 +154,12 @@ namespace Jularr.Integrations.Logic.Tvdb
                     }
 
                     var absolute = Int(entry, "absoluteNumber");
-                    episodes.Add(new TvdbEpisode(id, season, number, absolute is > 0 ? absolute : null, Text(entry, "name"),
-                        DateOnly.TryParseExact(Text(entry, "aired"), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var aired) ? aired : null,
-                        Int(entry, "runtime") is > 0 and <= 1440 ? Int(entry, "runtime") : null));
+                    episodes.Add(new TvdbEpisode(id, season, number, absolute is > 0 ? absolute : null, Text(entry, "name"), Date(entry, "aired"),
+                        Int(entry, "runtime") is > 0 and <= 1440 ? Int(entry, "runtime") : null)
+                    {
+                        Overview = Text(entry, "overview"),
+                        ImageUrl = Image(Text(entry, "image"))
+                    });
                 }
 
                 if (Text(Child(document.RootElement, "links"), "next") is null)
@@ -177,5 +240,42 @@ namespace Jularr.Integrations.Logic.Tvdb
 
         private static int? Int(JsonElement parent, string property) =>
             Child(parent, property) is { ValueKind: JsonValueKind.Number } value && value.TryGetInt32(out var number) ? number : null;
+
+        private static double? Number(JsonElement parent, string property) =>
+            Child(parent, property) is { ValueKind: JsonValueKind.Number } value && value.TryGetDouble(out var number) ? number : null;
+
+        private static DateOnly? Date(JsonElement parent, string property) =>
+            DateOnly.TryParseExact(Text(parent, property), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
+
+        private static IEnumerable<JsonElement> Items(JsonElement parent, string property) =>
+            Child(parent, property) is { ValueKind: JsonValueKind.Array } list ? list.EnumerateArray() : [];
+
+        // youtube.com/watch?v=KEY, youtu.be/KEY or youtube.com/embed/KEY.
+        private static string? YouTubeKey(string? url)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var address))
+            {
+                return null;
+            }
+
+            var host = address.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) || address.Host.StartsWith("m.", StringComparison.OrdinalIgnoreCase)
+                ? address.Host[(address.Host.IndexOf('.') + 1)..] : address.Host;
+            var key = host.ToLowerInvariant() switch
+            {
+                "youtu.be" => address.AbsolutePath.Trim('/'),
+                "youtube.com" when address.AbsolutePath.StartsWith("/embed/", StringComparison.Ordinal) => address.AbsolutePath["/embed/".Length..].Trim('/'),
+                "youtube.com" => address.Query.TrimStart('?').Split('&').Select(pair => pair.Split('=', 2)).FirstOrDefault(pair => pair.Length == 2 && pair[0] == "v")?[1],
+                _ => null
+            };
+            return key is { Length: 11 } && key.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_') ? key : null;
+        }
+
+        // TheTVDB names images by an absolute address or by a path on its artwork host.
+        private static string? Image(string? value) => value switch
+        {
+            { Length: > 8 } url when url.StartsWith("https://", StringComparison.Ordinal) => url,
+            { Length: > 1 } path when path.StartsWith('/') && !path.StartsWith("//", StringComparison.Ordinal) => "https://artworks.thetvdb.com" + path,
+            _ => null
+        };
     }
 }

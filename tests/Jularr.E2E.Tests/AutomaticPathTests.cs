@@ -29,6 +29,7 @@ namespace Jularr.E2E.Tests
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
                 ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
                 ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library,
                 ["Media:FfmpegPath"] = ffmpeg ?? "",
                 ["Media:FfprobePath"] = Steps.FfprobeBeside(ffmpeg) ?? ""
@@ -99,6 +100,7 @@ namespace Jularr.E2E.Tests
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
                 ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
                 ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library
             });
             await using var session = await BrowserSession.StartAsync(jularr);
@@ -165,6 +167,7 @@ namespace Jularr.E2E.Tests
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
                 ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
                 ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
                 ["Providers:AniList"] = fakes.AniList.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library,
                 ["Media:FfmpegPath"] = ffmpeg ?? "",
@@ -237,6 +240,7 @@ namespace Jularr.E2E.Tests
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
                 ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
                 ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
                 ["Providers:OpenLibrary"] = fakes.OpenLibrary.ToString(),
                 ["Providers:Images:covers.openlibrary.org"] = fakes.Images.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library

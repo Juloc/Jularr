@@ -11,7 +11,9 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Provider;
 using Jularr.Backend.Service.Admin.Provider.V1;
+using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Tmdb;
+using Jularr.Integrations.Data.Tvdb;
 using Jularr.Integrations.Logic.Tmdb;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Memory;
@@ -19,7 +21,7 @@ using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
-    // TMDB lookups and imports; shared by Admin catalog work and the System refresh.
+    // Film imports from TMDB, series imports from TheTVDB with TMDB's rating, and TMDB lookups; shared by Admin catalog work and the System refresh.
     internal sealed class WorkMetadata
     {
         private readonly TmdbClient _tmdb;
@@ -45,19 +47,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         public async Task<TmdbConnection> ConnectAsync(LogicContext context, CancellationToken ct)
         {
             var (credential, locale) = await context.ExecuteBatchAsync(async (ctx, token) =>
-            {
-                var sql = new SqlStatement();
-                sql.Statement =
-                    """
-                    SELECT
-                        locale."Locale"
-                    FROM
-                        "InstanceSettings" AS settings
-                        JOIN "UiLocales" AS locale ON locale."Id" = settings."UiLocaleId";
-                    """;
-                var language = await ctx.ReadSql.ReadOptionalAsync<MetadataLanguageData>(sql, token);
-                return (await ctx.ReadProviderCredentialAsync(new ProviderParameters("tmdb"), token), language?.Locale ?? "en");
-            }, ct, mode: SqlAccessMode.ReadOnly);
+                (await ctx.ReadProviderCredentialAsync(new ProviderParameters("tmdb"), token), await ReadLocaleAsync(ctx, token)), ct, mode: SqlAccessMode.ReadOnly);
 
             // Without an enabled key there is no metadata provider.
             if (credential is not { IsEnabled: true, ProtectedSecret: { } secret })
@@ -83,6 +73,21 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             {
                 CryptographicOperations.ZeroMemory(clear);
             }
+        }
+
+        // The instance language metadata is read in, such as "de-DE".
+        private static async Task<string> ReadLocaleAsync(LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    locale."Locale"
+                FROM
+                    "InstanceSettings" AS settings
+                    JOIN "UiLocales" AS locale ON locale."Id" = settings."UiLocaleId";
+                """;
+            return (await ctx.ReadSql.ReadOptionalAsync<MetadataLanguageData>(sql, ct))?.Locale ?? "en";
         }
 
         public async Task<IReadOnlyList<TmdbSearchResult>> SearchAsync(TmdbConnection connection, MediaType mediaType, string query, int? year, CancellationToken ct, int page = 1)
@@ -201,53 +206,22 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        // preferredTvdbId is the series' own TheTVDB id where a person or Sonarr named it (folder, nfo); TMDB's link to TheTVDB is sometimes stale
-        // and must not decide which TheTVDB series gives the structure or which id the Work stores.
+        // A film comes from TMDB. A series comes from TheTVDB, found by preferredTvdbId, the series' own id a person or Sonarr named (folder, nfo), or else by
+        // TMDB's link to TheTVDB, which is sometimes stale and must not overrule the series' own.
         public async Task<long> ImportAsync(LogicContext context, TmdbConnection connection, MediaType mediaType, MediaSubtype? subtype, int tmdbId, CancellationToken ct, int? preferredTvdbId = null)
         {
+            if (mediaType == MediaType.Series)
+            {
+                var tvdbId = preferredTvdbId ?? await FindTvdbIdAsync(connection, tmdbId, ct) ?? throw new KeyNotFoundException("TheTVDB does not know this series.");
+                return await ImportSeriesAsync(context, subtype, tvdbId, tmdbId, ct);
+            }
+
             // Read everything before the short write batch.
-            TmdbWork work;
-            var units = new List<object>();
-            var people = new List<object>();
-            TvdbStructure? tvdb = null;
-            try
-            {
-                work = await _tmdb.ReadWorkAsync(connection, Kind(mediaType), tmdbId, ct);
-
-                // A series takes its seasons and episodes from TheTVDB only, like Sonarr; where TVDB cannot name them yet the Work is created without and the next scan asks again.
-                if (mediaType == MediaType.Series)
-                {
-                    tvdb = await _tvdb.TryReadStructureAsync(context, preferredTvdbId ?? work.TvdbId, work.ImdbId, ct);
-                }
-
-                if (tvdb is not null)
-                {
-                    foreach (var season in tvdb.Episodes.GroupBy(episode => episode.SeasonNumber).OrderBy(group => group.Key))
-                    {
-                        units.Add(new { Season = season.Key, Episode = (int?)null, Title = (string?)null, ReleasedOn = season.Min(episode => episode.Aired), Overview = (string?)null,
-                            ImageUrl = (string?)null, RuntimeMinutes = (int?)null });
-                        foreach (var episode in season.OrderBy(item => item.EpisodeNumber))
-                        {
-                            units.Add(new { Season = season.Key, Episode = (int?)episode.EpisodeNumber, Title = TextLimit.Cut(episode.Name, 500), ReleasedOn = episode.Aired, Overview = (string?)null,
-                                ImageUrl = (string?)null, RuntimeMinutes = episode.Runtime is > 0 and <= 1440 ? episode.Runtime : null });
-                        }
-                    }
-                }
-            }
-            catch (TmdbException exception)
-            {
-                throw Translate(exception);
-            }
-
+            var work = await ReadWorkAsync(connection, mediaType, tmdbId, ct);
             var identities = new List<object> { new { Namespace = Namespace(mediaType), Value = tmdbId.ToString(CultureInfo.InvariantCulture) } };
             if (work.ImdbId is { Length: > 0 and <= 64 } imdb)
             {
                 identities.Add(new { Namespace = "imdb", Value = imdb });
-            }
-
-            if ((preferredTvdbId ?? work.TvdbId ?? tvdb?.TvdbId) is { } tvdbId)
-            {
-                identities.Add(new { Namespace = "tvdb", Value = tvdbId.ToString(CultureInfo.InvariantCulture) });
             }
 
             // Texts are in the instance language; images, the trailer and studio names are language-neutral.
@@ -261,12 +235,12 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 new { Key = "Trailer", Value = details.TrailerKey, Localized = false },
                 new { Key = "Studio", Value = TextLimit.Cut(details.Studios.Count == 0 ? null : string.Join(", ", details.Studios), 4000), Localized = false }
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
-            people.InsertRange(0, WorkPeopleLogic.Rows(details.People));
+
             // Japanese animation is proposed as Anime unless a subtype was chosen.
             subtype ??= AniListMatching.IsAnime(work.GenreIds, work.OriginalLanguage, work.OriginCountries) ? MediaSubtype.Anime : null;
             var data = new WorkMetadataData(mediaType, subtype, Namespace(mediaType), tmdbId.ToString(CultureInfo.InvariantCulture), TextLimit.Cut(work.Title, 500)!,
                 work.OriginalTitle == work.Title ? null : TextLimit.Cut(work.OriginalTitle, 500), work.Year is >= 1800 and <= 2200 ? work.Year : null,
-                JsonSerializer.Serialize(identities), JsonSerializer.Serialize(units), JsonSerializer.Serialize(facts), "tmdb", work.ReleasedOn)
+                JsonSerializer.Serialize(identities), "[]", JsonSerializer.Serialize(facts), "tmdb", work.ReleasedOn)
             {
                 Translations = JsonSerializer.Serialize(work.Translations.Select(translation => new { translation.Language, translation.Region, translation.Title, translation.Overview })),
                 OriginalLanguage = work.OriginalLanguage is { Length: 2 } original && original.All(char.IsAsciiLetterLower) ? original : null
@@ -276,8 +250,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 var workId = await ctx.SaveWorkMetadataAsync(data, token);
                 await ctx.SaveWorkFranchiseAsync(new WorkFranchiseData(workId, work.CollectionId is null ? null : "tmdb", work.CollectionId?.ToString(CultureInfo.InvariantCulture),
                     TextLimit.Cut(work.CollectionName, 300), null), token);
-                await ctx.SaveWorkRuntimeAsync(new WorkRuntimeData(workId, mediaType == MediaType.Movie ? details.Runtime : null), token);
-                await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, "tmdb", people), token);
+                await ctx.SaveWorkRuntimeAsync(new WorkRuntimeData(workId, details.Runtime), token);
+                await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, "tmdb", WorkPeopleLogic.Rows(details.People)), token);
                 return workId;
             }, ct);
 
@@ -286,13 +260,199 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             return saved;
         }
 
-        // TMDB's daily id list in batches; false while TMDB has not published the day's list.
-        public async Task<bool> ReadIdListAsync(MediaType mediaType, DateOnly day, Func<IReadOnlyList<TmdbExportEntry>, Task> batch, CancellationToken ct)
+        // A series a caller knows by its TheTVDB, TMDB or IMDb id; the TMDB and IMDb ids lead to TheTVDB first.
+        public async Task<long> ImportSeriesAsync(LogicContext context, MediaSubtype? subtype, string @namespace, string value, CancellationToken ct)
+        {
+            var number = int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) && parsed > 0 ? parsed : (int?)null;
+            switch (@namespace)
+            {
+                case "tvdb" when number is { } tvdbId:
+                    return await ImportSeriesAsync(context, subtype, tvdbId, null, ct);
+                case "tmdb_tv" when number is { } tmdbId:
+                    var linked = await FindTvdbIdAsync(await ConnectAsync(context, ct), tmdbId, ct) ?? throw new KeyNotFoundException("TheTVDB does not know this series.");
+                    return await ImportSeriesAsync(context, subtype, linked, tmdbId, ct);
+                case "imdb":
+                    var found = await _tvdb.FindSeriesByImdbAsync(await _tvdb.OpenAsync(context, ct), value, ct) ?? throw new KeyNotFoundException("TheTVDB does not know this series.");
+                    return await ImportSeriesAsync(context, subtype, found, null, ct);
+                default:
+                    throw new KeyNotFoundException("No catalog names this series.");
+            }
+        }
+
+        // A series comes from TheTVDB only, like Sonarr: its titles and summaries in every language, artwork, people, genres, networks, trailer, seasons and episodes.
+        // TMDB gives only the rating, through the series' TMDB id: the one the caller found it by, else the one the Work holds, else TheTVDB's link; without one,
+        // or while TMDB fails, the Work keeps its rating and the import goes on. Without TheTVDB nothing changes.
+        public async Task<long> ImportSeriesAsync(LogicContext context, MediaSubtype? subtype, int tvdbId, int? tmdbTvId, CancellationToken ct)
+        {
+            // Read everything before the short write batch.
+            var (locale, stored, credential) = await context.ExecuteBatchAsync(async (ctx, token) =>
+                (await ReadLocaleAsync(ctx, token), await ReadSeriesIdentitiesAsync(ctx, tvdbId, token), await ctx.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), token)),
+                ct, mode: SqlAccessMode.ReadOnly);
+            var language = LanguageCodes.ToThreeLetter(locale) ?? "eng";
+            var session = await _tvdb.LoginAsync(credential, ct);
+            var series = await _tvdb.ReadSeriesAsync(session, tvdbId, ct);
+            var episodes = await _tvdb.ReadEpisodesAsync(session, tvdbId, null, ct);
+
+            // Texts in the instance language, else in English, else in the original; episodes in the original language need no second read.
+            var preferred = new[] { language, "eng" }.Distinct(StringComparer.Ordinal).ToArray();
+            var original = episodes.ToDictionary(episode => episode.Id);
+            var translated = new List<IReadOnlyDictionary<int, TvdbEpisode>>();
+            foreach (var code in preferred)
+            {
+                translated.Add(code == series.OriginalLanguage ? original : (await _tvdb.ReadEpisodesAsync(session, tvdbId, code, ct)).ToDictionary(episode => episode.Id));
+            }
+
+            string? Text(Func<TvdbTranslation, string?> value) =>
+                preferred.Select(code => series.Translations.FirstOrDefault(translation => translation.Language == code)).Select(translation => translation is null ? null : value(translation))
+                    .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
+            string? EpisodeText(TvdbEpisode episode, Func<TvdbEpisode, string?> value) =>
+                translated.Select(list => list.GetValueOrDefault(episode.Id)).Select(item => item is null ? null : value(item)).FirstOrDefault(text => !string.IsNullOrWhiteSpace(text))
+                    ?? value(episode);
+            int Rank(string? code) => code == language ? 0 : code == "eng" ? 1 : 2;
+
+            // A season holds its episodes only while TheTVDB numbers each one once; otherwise the Work goes without and the next import asks again.
+            var units = new List<object>();
+            if (episodes.Count > 0 && episodes.GroupBy(episode => (episode.SeasonNumber, episode.EpisodeNumber)).All(group => group.Count() == 1))
+            {
+                var seasonImages = series.Seasons.ToDictionary(season => season.Number, season => season.ImageUrl);
+                foreach (var season in episodes.GroupBy(episode => episode.SeasonNumber).OrderBy(group => group.Key))
+                {
+                    units.Add(new { Season = season.Key, Episode = (int?)null, Title = (string?)null, ReleasedOn = season.Min(episode => episode.Aired), Overview = (string?)null,
+                        ImageUrl = Address(seasonImages.GetValueOrDefault(season.Key)), RuntimeMinutes = (int?)null });
+                    foreach (var episode in season.OrderBy(item => item.EpisodeNumber))
+                    {
+                        units.Add(new { Season = season.Key, Episode = (int?)episode.EpisodeNumber, Title = TextLimit.Cut(EpisodeText(episode, item => item.Name), 500), ReleasedOn = episode.Aired,
+                            Overview = TextLimit.Cut(EpisodeText(episode, item => item.Overview), 4000), ImageUrl = Address(episode.ImageUrl), RuntimeMinutes = episode.Runtime });
+                    }
+                }
+            }
+
+            // The best artwork of a kind: in the instance language, else in English, else any, the best rated first.
+            string? Artwork(TvdbArtworkType type) => series.Artworks.Where(artwork => artwork.Type == type && Address(artwork.ImageUrl) is not null)
+                .OrderBy(artwork => Rank(artwork.Language)).ThenByDescending(artwork => artwork.Score).Select(artwork => artwork.ImageUrl).FirstOrDefault();
+            var facts = new[]
+            {
+                new { Key = "Overview", Value = TextLimit.Cut(Text(translation => translation.Overview) ?? series.Overview, 4000), Localized = true },
+                new { Key = "Poster", Value = Artwork(TvdbArtworkType.Poster) ?? Address(series.ImageUrl), Localized = false },
+                new { Key = "Backdrop", Value = Artwork(TvdbArtworkType.Background), Localized = false },
+                new { Key = "Genres", Value = TextLimit.Cut(series.Genres.Count == 0 ? null : string.Join(", ", series.Genres), 4000), Localized = true },
+                new { Key = "Trailer", Value = series.Trailers.OrderBy(trailer => Rank(trailer.Language)).Select(trailer => trailer.YouTubeKey).FirstOrDefault(), Localized = false },
+                new { Key = "Studio", Value = TextLimit.Cut(series.Networks.Count == 0 ? null : string.Join(", ", series.Networks), 4000), Localized = false }
+            }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
+
+            // Actors with their characters, then the people behind the series, in TheTVDB's order.
+            var people = series.Characters.OrderBy(character => character.Sort).Select(character => (Character: character, Role: character.Role switch
+            {
+                "Actor" => ProviderPerson.Actor,
+                "Guest Star" => ProviderPerson.GuestStar,
+                "Director" => ProviderPerson.Director,
+                "Writer" => ProviderPerson.Writer,
+                "Creator" => ProviderPerson.Creator,
+                _ => null
+            })).Where(item => item.Role is not null).Select(item => new ProviderPerson(item.Character.PersonId?.ToString(CultureInfo.InvariantCulture), item.Character.PersonName, item.Role!,
+                item.Role is ProviderPerson.Actor or ProviderPerson.GuestStar ? item.Character.Character : null, item.Character.ImageUrl));
+
+            // The rating alone still comes from TMDB.
+            var tmdbId = tmdbTvId ?? stored.TmdbTvId ?? series.TmdbId;
+            TmdbCatalogEntry? rated = null;
+            if (tmdbId is { } ratedId)
+            {
+                try
+                {
+                    rated = await ReadCatalogEntryAsync(await ConnectAsync(context, ct), MediaType.Series, ratedId, ct);
+                }
+                catch (ServiceUnavailableException)
+                {
+                    // Without TMDB the series keeps its rating.
+                }
+            }
+
+            var identities = new List<object> { new { Namespace = "tvdb", Value = tvdbId.ToString(CultureInfo.InvariantCulture) } };
+            if (tmdbId is { } tmdb)
+            {
+                identities.Add(new { Namespace = "tmdb_tv", Value = tmdb.ToString(CultureInfo.InvariantCulture) });
+            }
+
+            if ((stored.ImdbId ?? series.ImdbId) is { Length: > 0 and <= 64 } imdb)
+            {
+                identities.Add(new { Namespace = "imdb", Value = imdb });
+            }
+
+            // Japanese animation and TheTVDB's anime are proposed as Anime unless a subtype was chosen.
+            var originalLanguage = LanguageCodes.ToTwoLetter(series.OriginalLanguage);
+            subtype ??= AniListMatching.IsAnime(series.Genres, originalLanguage, series.OriginalCountry) ? MediaSubtype.Anime : null;
+            var title = TextLimit.Cut(Text(translation => translation.Name) ?? series.Name, 500)!;
+            var originalTitle = TextLimit.Cut(series.Translations.FirstOrDefault(translation => translation.Language == series.OriginalLanguage)?.Name ?? series.Name, 500);
+            var year = series.FirstAired?.Year ?? series.Year;
+            var data = new WorkMetadataData(MediaType.Series, subtype, "tvdb", tvdbId.ToString(CultureInfo.InvariantCulture), title, originalTitle == title ? null : originalTitle,
+                year is >= 1800 and <= 2200 ? year : null, JsonSerializer.Serialize(identities), JsonSerializer.Serialize(units), JsonSerializer.Serialize(facts), "tvdb", series.FirstAired)
+            {
+                Translations = JsonSerializer.Serialize(series.Translations.Select(translation => (Language: LanguageCodes.ToTwoLetter(translation.Language), Translation: translation))
+                    .Where(item => item.Language is not null).DistinctBy(item => item.Language)
+                    .Select(item => new { item.Language, Region = (string?)null, Title = item.Translation.Name, item.Translation.Overview })),
+                OriginalLanguage = originalLanguage is { Length: 2 } two && two.All(char.IsAsciiLetterLower) ? two : null
+            };
+            var rating = rated?.VoteAverage is > 0 and <= 10 ? Math.Round((decimal)rated.VoteAverage.Value, 2) : (decimal?)null;
+            var saved = await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                var workId = await ctx.SaveWorkMetadataAsync(data, token);
+                await ctx.SaveWorkFranchiseAsync(new WorkFranchiseData(workId, null, null, null, null), token);
+                await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, "tvdb", WorkPeopleLogic.Rows(people)), token);
+                await ctx.SaveWorkRatingAsync(new WorkRatingData(workId, rating, rating is null ? null : rated!.VoteCount is >= 0 ? rated.VoteCount : null), token);
+                return workId;
+            }, ct);
+
+            // The poster and backdrop are kept locally.
+            await _covers.StoreAsync(context, saved, ct);
+            return saved;
+        }
+
+        // The TMDB and IMDb ids of the Work that already holds a TheTVDB series; they stay its own.
+        private static async Task<(int? TmdbTvId, string? ImdbId)> ReadSeriesIdentitiesAsync(LogicContext ctx, int tvdbId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    identity."Namespace",
+                    identity."Value"
+                FROM
+                    "WorkExternalIdentities" AS known
+                    JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = known."WorkId" AND identity."Namespace" IN ('tmdb_tv', 'imdb')
+                WHERE
+                    known."Namespace" = @Namespace
+                    AND known."Value" = @Value;
+                """;
+            sql.Parameters.Add(new WorkIdentityProbeData("tvdb", tvdbId.ToString(CultureInfo.InvariantCulture)));
+            var identities = await ctx.ReadSql.ReadListAsync<WorkIdentityProbeData>(sql, ct);
+            return (int.TryParse(identities.FirstOrDefault(identity => identity.Namespace == "tmdb_tv")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var tmdb) && tmdb > 0 ? tmdb : null,
+                identities.FirstOrDefault(identity => identity.Namespace == "imdb")?.Value);
+        }
+
+        // TMDB's link from a series to TheTVDB; positive and negative answers are kept like the other identity lookups.
+        private async Task<int?> FindTvdbIdAsync(TmdbConnection connection, int tmdbId, CancellationToken ct)
+        {
+            var key = "metadata.identity.tvdb." + tmdbId.ToString(CultureInfo.InvariantCulture);
+            if (_cache.TryGetValue(key, out int? cached))
+            {
+                return cached;
+            }
+
+            var result = (await ReadCatalogEntryAsync(connection, MediaType.Series, tmdbId, ct) ?? throw new KeyNotFoundException("TMDB does not know this series.")).TvdbId;
+            _cache.Set(key, result, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = result is null ? TimeSpan.FromHours(12) : TimeSpan.FromDays(7), Size = 1 });
+            return result;
+        }
+
+        // Image addresses the catalog may keep.
+        private static string? Address(string? url) => url is { Length: <= 500 } && url.StartsWith("https://", StringComparison.Ordinal) ? url : null;
+
+        // TMDB's daily film id list in batches; false while TMDB has not published the day's list.
+        public async Task<bool> ReadMovieIdListAsync(DateOnly day, Func<IReadOnlyList<TmdbExportEntry>, Task> batch, CancellationToken ct)
         {
             var entries = new List<TmdbExportEntry>(IdListBatch);
             try
             {
-                await foreach (var entry in _tmdb.ReadIdExportAsync(Kind(mediaType), day, ct))
+                await foreach (var entry in _tmdb.ReadMovieIdExportAsync(day, ct))
                 {
                     entries.Add(entry);
                     if (entries.Count < IdListBatch) continue;
@@ -315,11 +475,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         private const int IdListBatch = 5000;
 
-        public async Task<(IReadOnlyList<int> Ids, int Pages)> ReadChangesAsync(TmdbConnection connection, MediaType mediaType, DateOnly from, DateOnly to, int page, CancellationToken ct)
+        public async Task<(IReadOnlyList<int> Ids, int Pages)> ReadMovieChangesAsync(TmdbConnection connection, DateOnly from, DateOnly to, int page, CancellationToken ct)
         {
             try
             {
-                return await _tmdb.ReadChangesAsync(connection, Kind(mediaType), from, to, page, ct);
+                return await _tmdb.ReadMovieChangesAsync(connection, from, to, page, ct);
             }
             catch (TmdbException exception)
             {

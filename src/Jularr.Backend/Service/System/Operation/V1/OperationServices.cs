@@ -891,8 +891,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             externalLookups++;
                             try
                             {
-                                provider ??= await _metadata.ConnectAsync(Context, CancellationToken);
-                                await _metadata.ImportAsync(Context, provider, mediaType, null, known.TmdbId, CancellationToken, known.TvdbId);
+                                await _metadata.ImportSeriesAsync(Context, null, known.Namespace, known.Value, CancellationToken);
                                 imported++;
                             }
                             catch (ServiceUnavailableException)
@@ -1127,10 +1126,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
         }
 
-        // The TMDB id, and the Work's own TheTVDB id if it has one, of a series none of whose episodes has a name yet; null when it has one or no TMDB id to read.
-        private async Task<(int TmdbId, int? TvdbId)?> ReadMissingStructureAsync(long workId)
-        {
-            var identities = await Context.ExecuteBatchAsync((ctx, ct) =>
+        // The identity a series none of whose episodes has a name yet is read by: its TheTVDB id, else its TMDB id; null when it has one or no id to read.
+        private Task<WorkIdentityProbeData?> ReadMissingStructureAsync(long workId) =>
+            Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
                 sql.Statement =
@@ -1141,17 +1139,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         AND NOT EXISTS (
                             SELECT 1 FROM "WorkUnits" AS unit
                             WHERE unit."WorkId" = identity."WorkId" AND unit."WorkUnitTypeId" = 2 AND unit."Title" IS NOT NULL
-                        );
+                        )
+                    ORDER BY identity."Namespace" <> 'tvdb'
+                    LIMIT 1;
                     """;
                 sql.Parameters.Add(new WorkIdData(workId));
-                return ctx.ReadSql.ReadListAsync<WorkIdentityProbeData>(sql, ct);
+                return ctx.ReadSql.ReadOptionalAsync<WorkIdentityProbeData>(sql, ct);
             }, CancellationToken);
-            var tmdb = identities.FirstOrDefault(identity => identity.Namespace == "tmdb_tv");
-            var tvdb = identities.FirstOrDefault(identity => identity.Namespace == "tvdb");
-            return tmdb is not null && int.TryParse(tmdb.Value, out var tmdbId) && tmdbId > 0
-                ? (tmdbId, tvdb is not null && int.TryParse(tvdb.Value, out var tvdbId) && tvdbId > 0 ? tvdbId : null)
-                : null;
-        }
 
         private async Task<PlexMatchHints> ReadPlexMatchAsync(StorageFiles storage, string directory, string folder)
         {

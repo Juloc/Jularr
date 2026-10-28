@@ -11,8 +11,8 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace Jularr.Backend.Service.System.Media.V1
 {
-    // Titles that came without their facts (a media server's sync names only the title, the year and ids) get their description, cover and cast from the catalog,
-    // and a title opened while its details were more than a day old gets them again; a few at a time, true while more are waiting.
+    // Titles that came without their facts (a media server's sync names only the title, the year and ids) or without details get their description, cover and cast
+    // from the catalog, and a title opened while its details were more than a day old gets them again; a few at a time, true while more are waiting.
     // A title is tried once a day: one the catalog cannot give anything stays as it is.
     public sealed class FillWorkMetadataV1 : SystemService<CoverParametersV1, NoData>
     {
@@ -42,20 +42,22 @@ namespace Jularr.Backend.Service.System.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Works with an identity a catalog knows and neither a description nor a cover, or opened with details a day old; a catalog title nobody opened is no such Work.
+            // Works with an identity a catalog knows and no details, neither a description nor a cover, or opened with details a day old; a catalog title nobody opened
+            // is no such Work, a library title without details is.
             var waiting = await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
                 sql.Statement =
                     """
                     SELECT
-                        work."Id"
+                        work."Id",
+                        work."MediaTypeId"
                     FROM
                         "Works" AS work
                     WHERE
                         work."MediaTypeId" IN (1, 2, 3, 6, 7)
                         AND (work."DetailedAt" IS NOT NULL OR EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id"))
-                        AND (work."DetailedAt" < work."ViewedAt" - interval '1 day' OR NOT EXISTS (
+                        AND (work."DetailedAt" IS NULL OR work."DetailedAt" < work."ViewedAt" - interval '1 day' OR NOT EXISTS (
                             SELECT
                                 1
                             FROM
@@ -77,19 +79,26 @@ namespace Jularr.Backend.Service.System.Media.V1
                         work."Id"
                     LIMIT 200;
                     """;
-                return ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
+                return ctx.ReadSql.ReadListAsync<WorkIdentityCandidateData>(sql, ct);
             }, CancellationToken);
             var due = waiting.Where(work => !_cache.TryGetValue(Key(work.Id), out _)).ToArray();
-            foreach (var work in due.Take(PassSize))
+            var unavailable = new HashSet<MediaType>();
+            var filled = 0;
+            foreach (var work in due)
             {
+                // A catalog that is not there now (TheTVDB for series, TMDB for films) holds back only its own kind of title.
+                if (filled == PassSize) break;
+                if (unavailable.Contains(work.MediaTypeId)) continue;
+                filled++;
                 try
                 {
                     await FillAsync(work.Id);
                 }
                 catch (ServiceUnavailableException)
                 {
-                    // The provider is not there now; the title is not marked and the next pass asks again.
-                    return new UpdateResult(false);
+                    // The title is not marked and the next pass asks again.
+                    unavailable.Add(work.MediaTypeId);
+                    continue;
                 }
                 catch (Exception exception) when (exception is KeyNotFoundException or DataValidationException)
                 {
@@ -99,12 +108,13 @@ namespace Jularr.Backend.Service.System.Media.V1
                 _cache.Set(Key(work.Id), true, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = RetryAfter, Size = 1 });
             }
 
-            return new UpdateResult(due.Length > PassSize);
+            return new UpdateResult(unavailable.Count == 0 && due.Length > PassSize);
         }
 
         private static string Key(long workId) => "metadata.fill." + workId.ToString(CultureInfo.InvariantCulture);
 
-        // A Work with a provider identity is refreshed like the Work page's Refresh; a film or series known only by its IMDb or TheTVDB id is found through TMDB first.
+        // A Work with a provider identity is refreshed like the Work page's Refresh, a series by its TheTVDB, TMDB or IMDb id; a film known only by its IMDb id
+        // is found through TMDB first.
         private async Task FillAsync(long workId)
         {
             var known = await Context.ExecuteBatchAsync((ctx, ct) => WorkMetadataQueries.ReadProviderIdentityAsync(ctx, workId, ct), CancellationToken);
@@ -115,7 +125,7 @@ namespace Jularr.Backend.Service.System.Media.V1
             }
 
             var work = await Context.ExecuteBatchAsync((ctx, ct) => WorkMetadataQueries.ReadWorkAsync(ctx, workId, ct), CancellationToken);
-            if (work.MediaTypeId is not (MediaType.Movie or MediaType.Series))
+            if (work.MediaTypeId != MediaType.Movie)
             {
                 return;
             }
@@ -132,18 +142,17 @@ namespace Jularr.Backend.Service.System.Media.V1
                         "WorkExternalIdentities" AS identity
                     WHERE
                         identity."WorkId" = @Id
-                        AND identity."Namespace" IN ('imdb', 'tvdb');
+                        AND identity."Namespace" = 'imdb';
                     """;
                 sql.Parameters.Add(new WorkIdData(workId));
                 return ctx.ReadSql.ReadListAsync<WorkIdentityProbeData>(sql, ct);
             }, CancellationToken);
             var connection = await _metadata.ConnectAsync(Context, CancellationToken);
-            foreach (var identity in identities.OrderBy(item => item.Namespace == "imdb" ? 0 : 1))
+            foreach (var identity in identities)
             {
                 if (await _metadata.FindExternalAsync(connection, work.MediaTypeId, identity.Namespace, identity.Value, CancellationToken) is { } tmdbId)
                 {
-                    await _metadata.ImportAsync(Context, connection, work.MediaTypeId, null, tmdbId, CancellationToken,
-                        work.MediaTypeId == MediaType.Series && identities.FirstOrDefault(item => item.Namespace == "tvdb") is { } tvdb && int.TryParse(tvdb.Value, out var tvdbId) ? tvdbId : null);
+                    await _metadata.ImportAsync(Context, connection, work.MediaTypeId, null, tmdbId, CancellationToken);
                     return;
                 }
             }

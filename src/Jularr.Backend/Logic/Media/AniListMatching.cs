@@ -22,6 +22,11 @@ namespace Jularr.Backend.Logic.Media
         public static bool IsAnime(IReadOnlyList<int> genreIds, string? originalLanguage, IReadOnlyList<string> originCountries) =>
             genreIds.Contains(16) && (originalLanguage == "ja" || originCountries.Contains("JP", StringComparer.Ordinal));
 
+        // TheTVDB's Anime genre, or its animation from Japan (country "jpn").
+        public static bool IsAnime(IReadOnlyList<string> genres, string? originalLanguage, string? originalCountry) =>
+            genres.Contains("Anime", StringComparer.OrdinalIgnoreCase)
+            || genres.Contains("Animation", StringComparer.OrdinalIgnoreCase) && (originalLanguage == "ja" || string.Equals(originalCountry, "jpn", StringComparison.OrdinalIgnoreCase));
+
         public static MediaSubtype? Subtype(string? format) => format switch
         {
             "MANGA" or "ONE_SHOT" => MediaSubtype.Manga,

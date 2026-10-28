@@ -217,6 +217,8 @@ namespace Jularr.Integrations.Data.Tmdb
         public int? VoteCount { get; }
         public string? ImdbId { get; }
         public bool IsAdult { get; }
+        // A series' link to TheTVDB.
+        public int? TvdbId { get; init; }
     }
 
     // A language (ISO 639-1), its region (ISO 3166-1) and the texts TMDB has in it.

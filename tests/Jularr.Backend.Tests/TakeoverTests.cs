@@ -12,6 +12,7 @@ using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Servarr;
 using Jularr.Integrations.Logic.Tmdb;
+using Jularr.Integrations.Logic.Tvdb;
 using Jularr.Integrations.Logic.OpenLibrary;
 using Jularr.Integrations.Logic.MusicBrainz;
 using Microsoft.Extensions.DependencyInjection;
@@ -124,13 +125,13 @@ namespace Jularr.Backend.Tests
             {
                 services.AddHttpClient<ServarrApiClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
                 services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
+                services.AddHttpClient<TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
                 services.AddHttpClient<MusicBrainzClient>().ConfigurePrimaryHttpMessageHandler(() => music);
                 services.AddHttpClient<OpenLibraryClient>().ConfigurePrimaryHttpMessageHandler(() => books);
             });
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
-            var tmdb = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
-            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(TmdbToken));
+            await SaveSeriesKeysAsync(host);
 
             // Prowlarr hands over its indexers only.
             var prowlarr = await RunAsync(host, true, TakeoverSourceType.Prowlarr, "http://prowlarr.example.test:9696");
@@ -227,11 +228,11 @@ namespace Jularr.Backend.Tests
             {
                 services.AddHttpClient<ServarrApiClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
                 services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
+                services.AddHttpClient<TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
             });
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
-            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb' """))!;
-            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(TmdbToken));
+            await SaveSeriesKeysAsync(host);
             var mount = (long)(await host.ScalarAsync("""INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") VALUES ('New import', 3, '/srv/new', FALSE) RETURNING "Id" """))!;
             var libraries = new BaseDataList<TakeoverLibraryV1>([new("/new", "Imported series", mount, "series")]);
             using var preview = await host.SendAsync(HttpMethod.Post, Takeover, new RunTakeoverDataV1(TakeoverSourceType.Sonarr, "http://sonarr.example.test:8989", RadarrKey, false, newLibraries: libraries));
@@ -328,6 +329,17 @@ namespace Jularr.Backend.Tests
         }
 
         // Prowlarr, Sonarr, Lidarr and Readarr by their hosts, with the TMDB series Sonarr names.
+        // Series come from TheTVDB; TMDB still names them and gives their rating.
+        private static async Task SaveSeriesKeysAsync(Host host)
+        {
+            foreach (var key in new[] { "tmdb", "tvdb" })
+            {
+                var provider = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = '" + key + "'"))!;
+                using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1(TmdbToken));
+                Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            }
+        }
+
         private sealed class FakeArrs : HttpMessageHandler
         {
             public bool WithoutSeriesId { get; init; }
@@ -359,9 +371,20 @@ namespace Jularr.Backend.Tests
                 {
                     return Task.FromResult(uri.AbsolutePath switch
                     {
-                        "/3/tv/1399" => Json("""{"id":1399,"name":"Example Show","first_air_date":"2020-04-01","seasons":[{"season_number":1,"name":"Season 1","air_date":"2020-04-01","episode_count":1}]}"""),
-                        "/3/tv/1399/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"One","air_date":"2020-04-01"}]}"""),
+                        "/3/tv/1399" => Json("""{"id":1399,"name":"Example Show","first_air_date":"2020-04-01","external_ids":{"tvdb_id":81189},"seasons":[{"season_number":1,"name":"Season 1","air_date":"2020-04-01","episode_count":1}]}"""),
                         "/3/search/tv" => Json("""{"page":1,"total_pages":1,"results":[{"id":1399,"name":"Example Show","first_air_date":"2020-04-01"}]}"""),
+                        _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+                    });
+                }
+
+                // TheTVDB describes the series Sonarr hands over.
+                if (uri.Host == "api4.thetvdb.com")
+                {
+                    return Task.FromResult(uri.AbsolutePath switch
+                    {
+                        "/v4/login" => Json("""{"data":{"token":"tvdb-test-token"}}"""),
+                        "/v4/series/81189/extended" => Json("""{"data":{"id":81189,"name":"Example Show","firstAired":"2020-04-01","remoteIds":[{"sourceName":"TheMovieDB.com","id":"1399"}]}}"""),
+                        "/v4/series/81189/episodes/default" => Json("""{"data":{"episodes":[{"id":1,"seasonNumber":1,"number":1,"name":"One","aired":"2020-04-01"}]},"links":{"next":null}}"""),
                         _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                     });
                 }

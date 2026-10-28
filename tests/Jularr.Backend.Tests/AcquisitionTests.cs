@@ -3136,7 +3136,10 @@ namespace Jularr.Backend.Tests
                 return path switch
                 {
                     "/v4/login" => Json("""{"data":{"token":"tvdb-test-token"}}"""),
-                    "/v4/series/81189/extended" => Json("""{"data":{"id":81189,"name":"Example Show","remoteIds":[{"sourceName":"IMDb","id":"tt0903747"}]}}"""),
+                    "/v4/series/81189/extended" => Json("""
+                        {"data":{"id":81189,"name":"Beispiel Serie","originalLanguage":"deu","firstAired":"2020-04-01","remoteIds":[{"sourceName":"IMDb","id":"tt0903747"},{"sourceName":"TheMovieDB.com","id":"1399"}],
+                        "translations":{"nameTranslations":[{"name":"Example Show","language":"eng"}]}}}
+                        """),
                     "/v4/search/remoteid/tt0903747" => Json("""{"data":[{"series":{"id":81189}}]}"""),
                     "/v4/series/81189/episodes/default" => Json($$$"""{"data":{"episodes":[{"id":1,"seasonNumber":0,"number":1,"name":"Pilot extra","aired":"2020-01-01"},{"id":2,"seasonNumber":1,"number":1,"name":"One","aired":"2020-04-01","runtime":42},{"id":3,"seasonNumber":1,"number":2,"name":"Two","aired":"2020-04-08"},{"id":4,"seasonNumber":1,"number":3,"name":"Three","aired":"2020-04-15"},{"id":5,"seasonNumber":2,"number":1,"name":"Four","aired":"2021-04-01"},{"id":6,"seasonNumber":2,"number":2,"name":"Five","aired":"{{{future}}}"}]},"links":{"next":null}}"""),
                     _ => new HttpResponseMessage(HttpStatusCode.NotFound)

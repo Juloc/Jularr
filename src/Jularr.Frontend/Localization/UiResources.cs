@@ -328,7 +328,6 @@ namespace Jularr.Frontend.Localization
             new("admin.catalog.nothingKept", "Discover keeps nothing locally and always asks the providers."),
             new("admin.catalog.off", "Full local discovery is off; Discover keeps only what it loaded."),
             new("admin.catalog.tmdb_movie", "TMDB films"),
-            new("admin.catalog.tmdb_tv", "TMDB series"),
             new("admin.catalog.anilist", "AniList"),
             new("admin.catalog.tvdb", "TVDB"),
             new("admin.catalog.openlibrary", "Open Library"),

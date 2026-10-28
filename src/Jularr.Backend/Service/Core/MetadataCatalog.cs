@@ -67,7 +67,7 @@ namespace Jularr.Backend.Service.Core
             return await MarkKnownAsync(context, results, ct);
         }
 
-        // Discover's anime: AniList finds and shows seasons; Works, requests and every action use the TMDB series.
+        // Discover's anime: AniList finds and shows seasons; Works, requests and every action use the series, found through TMDB and imported from TheTVDB.
         public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAnimeAsync(string query, CancellationToken ct) =>
             [.. (await aniList.SearchAsync(AniListMediaType.Anime, AniListMatching.Formats(MediaType.Series, MediaSubtype.Anime), query, ct)).Select(AniListAnime)];
 
@@ -291,7 +291,7 @@ namespace Jularr.Backend.Service.Core
 
         public async Task<long> ImportAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string? @namespace, string externalId, CancellationToken ct)
         {
-            // An anime season is requested as its TMDB series.
+            // An anime season is requested as its series.
             if (mediaType == MediaType.Series && @namespace == AniListMetadata.Namespace)
             {
                 var media = await ReadAnimeEntryAsync(int.TryParse(externalId, NumberStyles.None, CultureInfo.InvariantCulture, out var aniListId) ? aniListId
@@ -300,6 +300,12 @@ namespace Jularr.Backend.Service.Core
                 return await FindAnimeSeriesAsync(connection, media, ct) is { } tmdbId
                     ? await metadata.ImportAsync(context, connection, MediaType.Series, MediaSubtype.Anime, tmdbId, ct)
                     : throw new KeyNotFoundException("TMDB does not know this anime.");
+            }
+
+            // Every other series comes from TheTVDB, also one a TMDB search or list named.
+            if (mediaType == MediaType.Series)
+            {
+                return await metadata.ImportSeriesAsync(context, subtype, @namespace ?? WorkMetadata.Namespace(MediaType.Series), externalId, ct);
             }
 
             // Importing an existing mapping refreshes the same Work.

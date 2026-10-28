@@ -14,7 +14,7 @@ namespace Jularr.Backend.Logic.Media
             var allowed = mediaType switch
             {
                 MediaType.Movie => data.Namespace == "tmdb_movie",
-                MediaType.Series => data.Namespace == "tmdb_tv",
+                MediaType.Series => data.Namespace is "tvdb" or "tmdb_tv",
                 MediaType.Book => data.Namespace is "openlibrary" or "anilist",
                 MediaType.Music => data.Namespace == "musicbrainz",
                 MediaType.Game => data.Namespace == "igdb",
@@ -122,6 +122,23 @@ namespace Jularr.Backend.Logic.Media
                     "Works"
                 SET
                     "RuntimeMinutes" = COALESCE(@RuntimeMinutes, "RuntimeMinutes")
+                WHERE
+                    "Id" = @Id;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        public static async Task SaveWorkRatingAsync(this LogicContext ctx, WorkRatingData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Works"
+                SET
+                    "Rating" = COALESCE(@Rating, "Rating"),
+                    "Votes" = CASE WHEN @Rating::numeric IS NULL THEN "Votes" ELSE @Votes END
                 WHERE
                     "Id" = @Id;
                 """;
@@ -336,7 +353,7 @@ namespace Jularr.Backend.Logic.Media
 
             workId = (await ctx.ReadRequiredAsync<WorkIdData>(sql, ct)).Id;
 
-            // Provider titles are replaced; manual titles are never touched.
+            // Provider titles are replaced; manual titles are never touched. A series' titles and facts come from TheTVDB alone, so TMDB's earlier ones go with them.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -351,10 +368,11 @@ namespace Jularr.Backend.Logic.Media
                     DELETE FROM
                         "WorkTitles" AS title
                     USING
-                        provider
+                        "Providers" AS replaced
                     WHERE
                         title."WorkId" = @Id
-                        AND title."ProviderId" = provider."Id"
+                        AND title."ProviderId" = replaced."Id"
+                        AND (replaced."Key" = @ProviderKey OR @MediaTypeId = 2 AND replaced."Key" = 'tmdb')
                         AND NOT title."IsManual"
                 )
                 INSERT INTO
@@ -412,7 +430,7 @@ namespace Jularr.Backend.Logic.Media
                 WHERE
                     fact."WorkId" = @Id
                     AND fact."ProviderId" = provider."Id"
-                    AND provider."Key" = @ProviderKey
+                    AND (provider."Key" = @ProviderKey OR @MediaTypeId = 2 AND provider."Key" = 'tmdb')
                     AND NOT fact."IsManual";
                 """;
             sql.Parameters.Add(data);

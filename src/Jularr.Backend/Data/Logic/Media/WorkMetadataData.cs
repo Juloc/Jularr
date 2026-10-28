@@ -121,6 +121,26 @@ namespace Jularr.Backend.Data.Logic.Media
         public int? RuntimeMinutes { get; }
     }
 
+    // A rating on a scale of ten and its number of votes; a catalog that gives none now keeps the stored one.
+    internal sealed class WorkRatingData : BaseData
+    {
+        public WorkRatingData(long id, decimal? rating, int? votes)
+        {
+            Id = id;
+            Rating = rating;
+            Votes = votes;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
+        public decimal? Rating { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Votes))]
+        public int? Votes { get; }
+    }
+
     // A book's catalog editions, found again by language and format.
     internal sealed class WorkEditionsData : BaseData
     {

@@ -20,7 +20,7 @@ using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
 namespace Jularr.Backend.Tests
 {
-    // Full local discovery for TMDB: the daily id list fills the catalog, entries are read by popularity, changes are read again.
+    // Full local discovery for TMDB films (series come from TheTVDB): the daily id list fills the catalog, entries are read by popularity, changes are read again.
     [TestClass]
     public sealed class ExternalWorkSyncTests
     {
@@ -59,12 +59,13 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(true, await host.ScalarAsync(Catalog("tmdb_movie", "604", "\"CatalogNamespace\" = 'tmdb_movie' AND \"DetailedAt\" IS NULL")),
                 "A catalog title is a minimal Work without details.");
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Value\" IN ('9', '10', '999')"));
-            Assert.AreEqual("tt0944947", await host.ScalarAsync(Catalog("tmdb_tv", "1399", "(SELECT imdb.\"Value\" FROM \"WorkExternalIdentities\" AS imdb WHERE imdb.\"WorkId\" = work.\"Id\" AND imdb.\"Namespace\" = 'imdb')")));
+            Assert.IsFalse(tmdb.Requests.Any(request => request.AbsolutePath.Contains("tv", StringComparison.Ordinal)), "TMDB's series are no longer kept whole.");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CatalogNamespace\" = 'tmdb_tv'"));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CatalogNamespace\" IS NOT NULL AND \"FetchedAt\" IS NULL"));
-            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncs\" WHERE \"ListedOn\" = '2026-10-19'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncs\" WHERE \"ListedOn\" = '2026-10-19'"));
             // The following pass finds no pending details and publishes the complete catalogs.
             await RunAsync(host);
-            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncs\" WHERE \"CompletedAt\" IS NOT NULL"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncs\" WHERE \"CompletedAt\" IS NOT NULL"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM pg_stats WHERE schemaname = current_schema() AND tablename = 'Works' AND attname = 'TrendingRank'"),
                 "Completing the initial catalog must prepare its ranking statistics before local discovery uses it.");
             Assert.IsFalse(tmdb.Requests.Any(request => request.AbsolutePath.EndsWith("/changes", StringComparison.Ordinal)), "The first pass reads everything anyway.");
@@ -163,11 +164,11 @@ namespace Jularr.Backend.Tests
             }
 
             // Caching is on and the full catalog off by default.
-            Assert.AreEqual("anilist:Standard,openlibrary:Standard,tmdb_movie:Standard,tmdb_tv:Standard", await TiersAsync());
+            Assert.AreEqual("anilist:Standard,openlibrary:Standard,tmdb_movie:Standard", await TiersAsync());
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'LocalDiscovery'");
-            Assert.AreEqual("anilist:Full,openlibrary:Standard,tmdb_movie:Full,tmdb_tv:Full", await TiersAsync());
+            Assert.AreEqual("anilist:Full,openlibrary:Standard,tmdb_movie:Full", await TiersAsync());
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" IN ('LocalDiscovery', 'DiscoverCache')");
-            Assert.AreEqual("anilist:Lean,openlibrary:Lean,tmdb_movie:Lean,tmdb_tv:Lean", await TiersAsync());
+            Assert.AreEqual("anilist:Lean,openlibrary:Lean,tmdb_movie:Lean", await TiersAsync());
         }
 
         [TestMethod]
@@ -238,7 +239,8 @@ namespace Jularr.Backend.Tests
 
             // With the full catalog a catalog with a full list is kept whole, the others keep Discover's lists; each card keeps its pace, pause and windows.
             var html = await PageAsync();
-            foreach (var (@namespace, mode) in new[] { ("anilist", "Whole"), ("tmdb_movie", "Whole"), ("tmdb_tv", "Whole"), ("openlibrary", "Kept") })
+            Assert.IsFalse(html.Contains("id=\"catalog-tmdb_tv\"", StringComparison.Ordinal), "TMDB's series catalog has no card.");
+            foreach (var (@namespace, mode) in new[] { ("anilist", "Whole"), ("tmdb_movie", "Whole"), ("openlibrary", "Kept") })
             {
                 var card = Card(html, @namespace);
                 StringAssert.Contains(card, ">" + mode + "<", @namespace);
@@ -316,7 +318,6 @@ namespace Jularr.Backend.Tests
                             """{"adult":false,"id":604,"original_title":"The Matrix Reloaded","popularity":40,"video":false}""",
                             """{"adult":false,"id":999,"original_title":"Gone","popularity":1,"video":false}"""
                         },
-                        "/p/exports/tv_series_ids_10_19_2026.json.gz" => ["""{"id":1399,"original_name":"Game of Thrones","popularity":80}"""],
                         _ => null
                     };
                     return Task.FromResult(lines is null ? new HttpResponseMessage(HttpStatusCode.NotFound) : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Gzip(lines)) });
@@ -327,9 +328,7 @@ namespace Jularr.Backend.Tests
                 {
                     "/3/movie/603" => """{"id":603,"title":"Matrix","original_title":"The Matrix","release_date":"1999-03-31","overview":"Ein Hacker.","poster_path":"/matrix.jpg","popularity":60,"vote_average":8.2,"imdb_id":"tt0133093"}""",
                     "/3/movie/604" => """{"id":604,"title":"Matrix Reloaded","original_title":"The Matrix Reloaded","release_date":"2003-05-15","vote_average":0}""",
-                    "/3/tv/1399" => """{"id":1399,"name":"Game of Thrones","original_name":"Game of Thrones","first_air_date":"2011-04-17","external_ids":{"imdb_id":"tt0944947"}}""",
                     "/3/movie/changes" => """{"results":[{"id":603,"adult":false}],"page":1,"total_pages":1}""",
-                    "/3/tv/changes" => """{"results":[],"page":1,"total_pages":1}""",
                     _ => null
                 };
                 return Task.FromResult(body is null ? new HttpResponseMessage(HttpStatusCode.NotFound)

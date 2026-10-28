@@ -23,7 +23,7 @@ namespace Jularr.Backend.Logic.Media
         }
 
         // Catalogs with a full list may be kept whole; on the full tier every other one keeps Discover's lists.
-        public static readonly IReadOnlySet<string> FullSyncCatalogs = new HashSet<string>(StringComparer.Ordinal) { "tmdb_movie", "tmdb_tv", "anilist" };
+        public static readonly IReadOnlySet<string> FullSyncCatalogs = new HashSet<string>(StringComparer.Ordinal) { "tmdb_movie", "anilist" };
 
         public static CachingTier CatalogTier(CachingTier tier, string @namespace) => tier == CachingTier.Full && !FullSyncCatalogs.Contains(@namespace) ? CachingTier.Standard : tier;
 
@@ -63,7 +63,8 @@ namespace Jularr.Backend.Logic.Media
             }
 
             // A list or search that knows less than an earlier read keeps what was known; only secure image addresses are kept.
-            // A Work keeps its title, year and subtype once it has details or a person chose its subtype, and another catalog's Work keeps its catalog fields.
+            // A Work keeps its title, year and subtype once it has details or a person chose its subtype, a list without a subtype never clears one,
+            // and another catalog's Work keeps its catalog fields.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -113,7 +114,7 @@ namespace Jularr.Backend.Logic.Media
                         "CanonicalTitle" = CASE WHEN work."DetailedAt" IS NULL THEN item."Title" ELSE work."CanonicalTitle" END,
                         "ReleaseYear" = CASE WHEN work."DetailedAt" IS NULL THEN coalesce(item."ReleaseYear", work."ReleaseYear") ELSE work."ReleaseYear" END,
                         "MediaSubtypeId" = CASE
-                            WHEN work."DetailedAt" IS NULL AND NOT work."IsMediaSubtypeManual" AND work."MediaTypeId" = @MediaTypeId THEN @MediaSubtypeId::smallint
+                            WHEN work."DetailedAt" IS NULL AND NOT work."IsMediaSubtypeManual" AND work."MediaTypeId" = @MediaTypeId THEN coalesce(@MediaSubtypeId::smallint, work."MediaSubtypeId")
                             ELSE work."MediaSubtypeId"
                         END,
                         "OriginalTitle" = coalesce(item."OriginalTitle", work."OriginalTitle"),
