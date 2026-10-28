@@ -510,19 +510,16 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             var shown = _layout.Where(shelf => !shelf.IsHidden).Select(shelf => shelf.HomeShelfTypeId).ToHashSet();
-            var continueTask = (texts.CanPlay() || texts.CanRead()) && shown.Overlaps([HomeShelfType.ContinueWatching, HomeShelfType.ContinueListening, HomeShelfType.ContinueReading])
-                ? continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted)
-                : Task.FromResult<BaseDataList<ContinueItemV1>?>(null);
+            var continueTask = ReadWhenAsync((texts.CanPlay() || texts.CanRead()) && shown.Overlaps([HomeShelfType.ContinueWatching, HomeShelfType.ContinueListening, HomeShelfType.ContinueReading]),
+                () => continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted));
 
             // One chosen type narrows the read; several are filtered when shown.
             var recentType = Chosen.Select(scope => scope.MediaTypeId).Distinct().ToList() is [var single] ? single : (MediaType?)null;
-            var recentTask = shown.Contains(HomeShelfType.RecentlyAdded)
-                ? library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(recentType is { } only ? [only] : null, pageSize: 20), HttpContext.RequestAborted)
-                : Task.FromResult<PageResult<LibraryItemV1>?>(null);
+            var recentTask = ReadWhenAsync(shown.Contains(HomeShelfType.RecentlyAdded),
+                () => library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(recentType is { } only ? [only] : null, pageSize: 20), HttpContext.RequestAborted));
             var heroFeed = Feed is null ? DiscoverFeedType.Trending : FeedType;
-            var keptTask = View is null && string.IsNullOrWhiteSpace(Query) && heroFeed is not null
-                ? readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(new ReadDiscoverShelvesDataV1(selected?.Slug), HttpContext.RequestAborted)
-                : Task.FromResult<BaseDataList<DiscoverShelfV1>?>(null);
+            var keptTask = ReadWhenAsync(View is null && string.IsNullOrWhiteSpace(Query) && heroFeed is not null,
+                () => readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(new ReadDiscoverShelvesDataV1(selected?.Slug), HttpContext.RequestAborted));
             await Task.WhenAll(continueTask, recentTask, keptTask);
 
             _continue = (await continueTask) ?? _continue;
@@ -532,6 +529,9 @@ namespace Jularr.Frontend.Pages.User.Discover
                 await LoadHeroAsync(selected, await keptTask);
             }
         }
+
+        // A read that is only started when its shelf is shown; otherwise null.
+        private static async Task<TResult?> ReadWhenAsync<TResult>(bool shown, Func<Task<TResult>> read) where TResult : class => shown ? await read() : null;
 
         // Provider metadata stays cached; current local status is one bounded read for all known cards.
         private async Task LoadAvailabilityAsync()
@@ -798,8 +798,10 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var href = item.WorkId is { } workId ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
                 : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
-            var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId), item.Rating)
-                .HoverPreview(item.WorkId is { } held ? MediaPreviewAddress.Work(held) : MediaPreviewAddress.Catalog(scope.Slug, item.Namespace, item.ExternalId));
+            // A Narō web novel says so beside the published light novels; the local catalog keeps no preview of it.
+            var webNovel = item.Namespace == DiscoverCatalog.DiscoverCatalogModel.WebNovelSource;
+            var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, webNovel ? "discover.webNovel" : MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId), item.Rating)
+                .HoverPreview(item.WorkId is { } held ? MediaPreviewAddress.Work(held) : webNovel ? null : MediaPreviewAddress.Catalog(scope.Slug, item.Namespace, item.ExternalId));
             if (item.MediaStateTypeId is { } state) card.State(state);
             if (item.WorkId is { } id && _availabilityByWork.TryGetValue(id, out var availability))
                 card.Availability(new MediaAvailability(assets, availability.AvailabilityStateId, availability.AvailableUnits, availability.MonitoredUnits));

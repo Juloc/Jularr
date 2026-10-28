@@ -51,8 +51,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
     // An audio or subtitle choice; image subtitles are listed but not yet supported.
     public sealed class PlaybackTrackV1 : BaseResponse
     {
-        public PlaybackTrackV1(string key, MediaTrackType mediaTrackTypeId, string? language, string? title, int? channels, bool isDefault, bool isForced, bool isSupported, bool isSelected)
+        public PlaybackTrackV1(string key, MediaTrackType mediaTrackTypeId, string? language, string? title, int? channels, bool isDefault, bool isForced, bool isSupported, bool isSelected, bool isStyled = false, string? languageCode = null)
         {
+            LanguageCode = languageCode;
+            IsStyled = isStyled;
             IsSelected = isSelected;
             Key = key;
             MediaTrackTypeId = mediaTrackTypeId;
@@ -88,18 +90,107 @@ namespace Jularr.Backend.Data.User.Playback.V1
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsSupported))]
         public bool IsSupported { get; }
 
+        // The language as two letters (the stream may say "ger" or "deu"), what the profile's language choices are written in.
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language))]
+        public string? LanguageCode { get; }
+
+        // An ASS or SSA subtitle: the player draws it with its styles and positions instead of plain WebVTT lines.
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsStyled))]
+        public bool IsStyled { get; }
+
         // The track the profile's preferences pick; one audio and at most one subtitle track.
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsSelected))]
         public bool IsSelected { get; }
     }
 
-    public sealed class PlaybackSubtitleParametersV1 : BaseParameters
+    // The track to translate, in which language it is written and which language is wanted.
+    public sealed class StartSubtitleTranslationDataV1 : BaseData
     {
-        public PlaybackSubtitleParametersV1(long mediaAssetId, string key)
+        public StartSubtitleTranslationDataV1(string sourceKey, string? sourceLanguage, string? language)
+        {
+            SourceKey = sourceKey;
+            SourceLanguage = sourceLanguage;
+            Language = language;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TrackKey))]
+        public string SourceKey { get; }
+
+        // No source language is taken as English.
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language))]
+        public string? SourceLanguage { get; }
+
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language))]
+        public string? Language { get; }
+    }
+
+    // How far a translation of a subtitle is; its key is the track key to ask for the subtitle once it is done.
+    public sealed class SubtitleTranslationV1 : BaseResponse
+    {
+        public SubtitleTranslationV1(string key, string state, int done, int total)
+        {
+            Key = key;
+            State = state;
+            Done = done;
+            Total = total;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TrackKey))]
+        public string Key { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TranslationState))]
+        public string State { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TranslationCues))]
+        public int Done { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TranslationCues))]
+        public int Total { get; }
+    }
+
+    // A font the played file carries.
+    public sealed class PlaybackFontV1 : BaseResponse
+    {
+        public PlaybackFontV1(int key, string name)
+        {
+            Key = key;
+            Name = name;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.FontKey))]
+        public int Key { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.FontName))]
+        public string Name { get; }
+    }
+
+    public sealed class PlaybackFontParametersV1 : BaseParameters
+    {
+        public PlaybackFontParametersV1(long mediaAssetId, int key)
         {
             MediaAssetId = mediaAssetId;
             Key = key;
         }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.FontKey))]
+        public int Key { get; }
+    }
+
+    public sealed class PlaybackSubtitleParametersV1 : BaseParameters
+    {
+        public PlaybackSubtitleParametersV1(long mediaAssetId, string key, bool styled = false)
+        {
+            MediaAssetId = mediaAssetId;
+            Key = key;
+            Styled = styled;
+        }
+
+        // The subtitle as ASS text, for the tracks that are ASS or SSA.
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.Styled))]
+        public bool Styled { get; }
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
         public long MediaAssetId { get; }
@@ -110,16 +201,17 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
     public sealed class PlaybackSubtitleV1 : BaseResponse, ITextOutput
     {
-        public PlaybackSubtitleV1(string text)
+        public PlaybackSubtitleV1(string text, bool styled = false)
         {
             Text = text;
+            ContentType = styled ? "text/x-ssa; charset=utf-8" : "text/vtt; charset=utf-8";
         }
 
         [JsonIgnore]
         public string Text { get; }
 
         [JsonIgnore]
-        public string ContentType => "text/vtt; charset=utf-8";
+        public string ContentType { get; }
     }
 
     public sealed class PlaybackPlaylistV1 : BaseResponse, ITextOutput

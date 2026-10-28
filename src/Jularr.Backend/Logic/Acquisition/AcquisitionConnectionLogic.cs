@@ -238,6 +238,12 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 throw new DataValidationException(nameof(data.BaseUrl), "invalid_url");
             }
+
+            // Narō is asked at its own hosts only; the address names the novel site.
+            if (data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Narou && new Uri(baseUrl) is not { Scheme: "https", Host: "ncode.syosetu.com", AbsolutePath: "/" })
+            {
+                throw new DataValidationException(nameof(data.BaseUrl), "invalid_url");
+            }
         }
 
         // Download clients and subtitle providers need a key; indexers, catalogs and news servers may be open.

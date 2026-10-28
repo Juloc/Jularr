@@ -1110,7 +1110,7 @@ namespace Jularr.Backend.Tests
                     "/v4/login" => """{"data":{"token":"tvdb-test-token"}}""",
                     "/v4/search/remoteid/tt2000001" => """{"data":[{"series":{"id":4001}}]}""",
                     "/v4/series/4001/extended" => """{"data":{"id":4001,"name":"Show 1","remoteIds":[{"sourceName":"IMDb","id":"tt2000001"}]}}""",
-                    "/v4/series/4001/episodes/default" => """{"data":{"episodes":[{"id":10,"seasonNumber":0,"number":1,"name":"Special from TVDB"},{"id":11,"seasonNumber":1,"number":1,"name":"First from TVDB"},{"id":12,"seasonNumber":1,"number":2,"name":"Second from TVDB"}]},"links":{"next":null}}""",
+                    "/v4/series/4001/episodes/default/eng" => """{"data":{"episodes":[{"id":10,"seasonNumber":0,"number":1,"name":"Special from TVDB"},{"id":11,"seasonNumber":1,"number":1,"name":"First from TVDB"},{"id":12,"seasonNumber":1,"number":2,"name":"Second from TVDB"}]},"links":{"next":null}}""",
                     _ => null
                 };
                 return Task.FromResult(json is null ? new HttpResponseMessage(HttpStatusCode.NotFound) :

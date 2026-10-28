@@ -32,6 +32,7 @@ using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
 
@@ -175,11 +176,13 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     {
         private readonly WorkMetadata _metadata;
         private readonly AniListMetadata _aniList;
+        private readonly ILogger<RefreshWantedMetadataV1> _logger;
 
-        internal RefreshWantedMetadataV1(WorkMetadata metadata, AniListMetadata aniList)
+        internal RefreshWantedMetadataV1(WorkMetadata metadata, AniListMetadata aniList, ILogger<RefreshWantedMetadataV1> logger)
         {
             _metadata = metadata;
             _aniList = aniList;
+            _logger = logger;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -250,7 +253,20 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     var connection = await _metadata.ConnectAsync(Context, CancellationToken);
                     foreach (var identity in stale.Where(identity => identity.Namespace != AniListMetadata.Namespace))
                     {
-                        await _metadata.ImportAsync(Context, connection, MediaType.Series, null, int.Parse(identity.Value, CultureInfo.InvariantCulture), CancellationToken);
+                        try
+                        {
+                            await _metadata.ImportAsync(Context, connection, MediaType.Series, null, int.Parse(identity.Value, CultureInfo.InvariantCulture), CancellationToken);
+                        }
+                        catch (DataValidationException exception)
+                        {
+                            // An identity that belongs to another Work must not hold back the others; it is asked again after a day.
+                            _logger.LogWarning(exception, "Metadata of Work {WorkId} ({Namespace} {Value}) conflicts with another Work and is skipped until its next daily refresh.", identity.WorkId, identity.Namespace, identity.Value);
+                            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                            {
+                                await ctx.TouchWorkIdentityAsync(identity, ct);
+                                return true;
+                            }, CancellationToken);
+                        }
                     }
                 }
             }
@@ -839,7 +855,25 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 {
                     await paths.PrepareIncompleteAsync(download.OperationId, CancellationToken, download.MediaTypeId, download.MediaSubtypeId);
                     File.Delete(path + ".part");
-                    await _direct.DownloadAsync(connection, download, path + ".part", paths, CancellationToken);
+                    if (await _direct.DownloadAsync(connection, download, path + ".part", paths, CancellationToken) is { } pass)
+                    {
+                        // A pass kept its part; the next job continues where it ended.
+                        var progress = new[]
+                        {
+                            new
+                            {
+                                download.OperationId, ProgressPercent = pass.Total > 0 ? (short?)Math.Min(99, pass.Done * 100 / pass.Total) : null, SizeBytes = (long?)null,
+                                RemainingBytes = (long?)null, EtaSeconds = (int?)null, DownloadStateTypeId = (byte)DownloadStateType.Downloading
+                            }
+                        };
+                        await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                        {
+                            await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(JsonSerializer.Serialize(progress)), ct);
+                            return true;
+                        }, CancellationToken);
+                        return;
+                    }
+
                     // A file of an earlier attempt is replaced; it never stays beside the new one.
                     File.Delete(path);
                     File.Move(path + ".part", path);

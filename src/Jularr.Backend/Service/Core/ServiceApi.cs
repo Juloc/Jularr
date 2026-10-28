@@ -33,6 +33,7 @@ using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Nas;
 using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Newznab;
+using Jularr.Integrations.Logic.Narou;
 using Jularr.Integrations.Logic.Nyaa;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Qbittorrent;
@@ -223,6 +224,8 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<PlaybackTranscodes>();
             services.TryAddSingleton<PlaybackCastTokens>();
             services.TryAddTransient<PlaybackSubtitles>();
+            services.TryAddTransient<PlaybackFonts>();
+            services.TryAddSingleton<SubtitleTranslations>();
             services.TryAddTransient<WantedAcquisition>();
             services.TryAddTransient<MetadataCatalog>();
             services.TryAddSingleton<ExternalFeedCache>();
@@ -237,6 +240,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<GameRomIdentification>();
             services.TryAddTransient<MusicTagIdentification>();
             services.TryAddTransient<AniListMetadata>();
+            services.TryAddTransient<NarouMetadata>();
             services.TryAddTransient<AniListMatcher>();
             services.TryAddTransient<AniListAccounts>();
             services.TryAddTransient<MusicMetadata>();
@@ -371,6 +375,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<OpenSubtitlesClient>(services, 30, 12, agent: true);
             AddClient<SubDlClient>(services, 30, 12, agent: true);
     AddClient<NyaaClient>(services, 30, 16, agent: true, handler: PublicNetwork.CreateHandler);
+            AddClient<NarouClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
 
             // Covers come from the providers' image hosts only, over public addresses.
             var covers = new CoverMirrors(new Dictionary<string, Uri>(providers.Images, StringComparer.OrdinalIgnoreCase));
