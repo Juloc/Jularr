@@ -142,6 +142,10 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(reader).ToHaveAttributeAsync("data-mode", "scroll");
                 await Assertions.Expect(reader).ToHaveAttributeAsync("data-book-ready", "false");
                 await Assertions.Expect(mode.Locator("[data-mode-icon=scroll]")).ToBeVisibleAsync();
+                // The first chapter scrolls down to the way on to the next one; there is no way back before it, and no arrows beside it.
+                await Assertions.Expect(page.Locator("[data-chapter-edge=next]")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("[data-chapter-edge=previous]")).ToHaveCountAsync(0);
+                await Assertions.Expect(page.Locator(".reader__side--forward")).ToBeHiddenAsync();
 
                 // Scroll → flat pages: paged text on the plain paper, turned at once without a book.
                 await mode.ClickAsync();
@@ -150,8 +154,12 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(mode).ToHaveAttributeAsync("aria-label", "Reading mode: Flat pages");
                 await Assertions.Expect(reader).ToHaveAttributeAsync("data-book-ready", "false");
                 await Assertions.Expect(paper).ToHaveCSSAsync("opacity", "1");
-                await page.Locator("[data-turn='1']").ClickAsync();
+                // The arrows beside the page turn it; on the first page the way back is greyed out, the chapter links are not shown.
+                await Assertions.Expect(page.Locator("[data-chapter-edge=next]")).ToBeHiddenAsync();
+                await Assertions.Expect(page.Locator(".reader__side--back")).ToHaveCSSAsync("opacity", "0.35");
+                await page.Locator(".reader__side--forward").ClickAsync();
                 await Assertions.Expect(reader).ToHaveAttributeAsync("data-page", "3");
+                await Assertions.Expect(page.Locator(".reader__side--back")).ToHaveCSSAsync("opacity", "1");
                 Assert.AreEqual(0, await page.Locator(".reader-book__turn").CountAsync(), "Flat pages turn without paper leaves.");
                 await Evidence.SaveAsync(page, "reader-mode-flat");
 

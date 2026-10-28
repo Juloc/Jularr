@@ -176,7 +176,9 @@ namespace Jularr.Frontend.Pages.User.Reader
                     new Span(new ValueText(Percent(current.CharactersBefore, current.TotalCharacters))).Class("reader__position").Attribute("data-role", "position"))
                 .Class("reader__context")).Class("reader__bottom");
             var view = new ReaderFrame(assets, texts,
-                top, contents, new ReaderSection(current), bottom,
+                top, contents, new ReaderSection(current,
+                    index > 0 ? "?s=" + (index - 1).ToString(CultureInfo.InvariantCulture) + "&f=1" : null,
+                    index + 1 < document.SectionCount ? "?s=" + (index + 1).ToString(CultureInfo.InvariantCulture) : null), bottom,
                 notes,
                 searching,
                 settings,

@@ -33,6 +33,11 @@ if (first && !first.dataset.format && first.querySelector('[data-role=content]')
 
 // The address a reader opens at: the page's own, or the chapter it is about to show in place.
 function start(reader: HTMLElement, address = new URL(location.href)): void {
+    // The arrows beside the page press the bar's page buttons, which every book format already handles.
+    reader.addEventListener('click', event => {
+        const side = (event.target as Element | null)?.closest?.<HTMLElement>('[data-side-turn]');
+        if (side) reader.querySelector<HTMLButtonElement>(`[data-role=turn-tools] [data-turn="${side.dataset.sideTurn}"]`)?.click();
+    });
     if (reader.dataset.format === 'pdf') initializeReaderChrome(reader);
     else if (reader.dataset.format === 'pages') initializeOriginalPages(reader);
     else if (reader.dataset.format === 'comic') initializeComicPages(reader);
