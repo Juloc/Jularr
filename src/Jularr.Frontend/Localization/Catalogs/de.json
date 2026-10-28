@@ -7251,6 +7251,18 @@
    "Picture in picture",
    "Bild-in-Bild"
   ],
+  "player.cast": [
+   "Cast to a device",
+   "Auf ein Gerät übertragen"
+  ],
+  "player.casting": [
+   "Casting to {0}",
+   "Wird übertragen auf {0}"
+  ],
+  "player.status.cast_unreachable": [
+   "A cast device cannot reach this address. Open Jularr under its network address.",
+   "Ein Cast-Gerät erreicht diese Adresse nicht. Öffne Jularr über die Netzwerkadresse."
+  ],
   "player.fullscreen": [
    "Fullscreen",
    "Vollbild"

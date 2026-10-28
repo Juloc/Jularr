@@ -315,6 +315,12 @@ namespace Jularr.E2E.Tests
             Assert.AreEqual("paused", await page.EvaluateAsync<string>("() => navigator.mediaSession.playbackState"));
             Assert.IsFalse(string.IsNullOrWhiteSpace(await page.EvaluateAsync<string>("() => navigator.mediaSession.metadata?.title ?? ''")), "The media session names no title.");
 
+            // The Cast button is offered on a secure page; this test's loopback address is one a device cannot reach, and it says so without loading Google's library.
+            await page.Locator("[data-action=cast]").ClickAsync();
+            await Assertions.Expect(page.Locator("[data-role=status]")).ToContainTextAsync("cannot reach this address");
+            Assert.AreEqual(0, await page.Locator("script[src*=gstatic]").CountAsync(), "The cast library must load only for a reachable address.");
+            await page.EvaluateAsync("() => { document.querySelector('[data-role=status]').hidden = true; }");
+
             await page.Locator("[data-action=mute]").ClickAsync();
             Assert.IsTrue(await video.EvaluateAsync<bool>("video => video.muted"));
             await page.Locator("[data-action=mute]").ClickAsync();
