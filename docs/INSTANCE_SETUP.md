@@ -54,7 +54,7 @@ the setup addresses redirect to the application (the finished state is remembere
 
 ## Playback cache safety
 
-Video transcoding uses `Media:TranscodeCachePath` (by default `/data/jularr-transcode` where `/data` exists, otherwise a Jularr subfolder under the system temp directory). `Media:MaxTranscodeCacheBytes` defaults to 2 GiB and `Media:TranscodeCacheFreeSpaceReserveBytes` to 1 GiB; both can be configured through the standard `Media__...` environment variables. FFmpeg jobs are stopped when the cache exceeds its budget or storage becomes unavailable, and further segment requests fail instead of writing unchecked. The periodic check is a runtime safety budget, **not** a filesystem-enforced hard quota; operators must choose a suitable bounded volume for stricter isolation. Full UI selection and a mandatory explicit cache location remain separate pre-release work.
+Video transcoding uses `Media:TranscodeCachePath` (by default `/data/jularr-transcode` where `/data` exists, otherwise a Jularr subfolder under the system temp directory). `Media:MaxTranscodeCacheBytes` defaults to 2 GiB and `Media:TranscodeCacheFreeSpaceReserveBytes` to 1 GiB; both can be configured through the standard `Media__...` environment variables. FFmpeg jobs are stopped when the cache exceeds its budget or storage becomes unavailable, and further segment requests fail instead of writing unchecked. The periodic check is a runtime safety budget, **not** a filesystem-enforced hard quota; operators must choose a suitable bounded volume for stricter isolation. Full UI selection and a mandatory explicit cache location remain separate work.
 
 ## Verification
 

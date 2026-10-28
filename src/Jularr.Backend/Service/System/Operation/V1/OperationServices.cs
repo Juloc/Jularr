@@ -138,7 +138,6 @@ namespace Jularr.Backend.Service.System.Operation.V1
         private readonly WorkMetadata _metadata;
         private readonly ILogger<ExecuteLibraryScanV1> _logger;
         private readonly MetadataCatalog _catalog;
-        private bool _bookCatalogUnavailable;
 
         internal ExecuteLibraryScanV1(StorageAccess storage, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music, WorkMetadata metadata, ILogger<ExecuteLibraryScanV1> logger, MetadataCatalog catalog)
         {

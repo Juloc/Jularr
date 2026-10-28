@@ -5,7 +5,7 @@ contains 73 named tables and explicitly declares `definitionComplete: false`.
 It is the agreed entity/relationship foundation, not a complete installation script.
 Null definitions are unresolved, not PostgreSQL nullability declarations.
 
-| Scope | Fresh clean-start baseline |
+| Scope | Baseline (schema version 1) |
 | --- | --- |
 | Accounts/Profile/authentication | Original Accounts, AccountRoleTypes, Profiles, AccountProfiles, password/passkey/TOTP/recovery/external-login/challenge/session tables and UiLocales are present. AccountProfiles retains its composite key and no CanManage field. |
 | Media foundation | MediaTypes, Works, WorkTitles and WatchlistEntries use original identities and contracts. Seven media types; Anime is a classification, not an eighth type. |

@@ -114,6 +114,30 @@ namespace Jularr.E2E.Tests
                 await page.WaitForFunctionAsync("() => [...document.querySelector('video').textTracks].some(track => track.mode === 'showing' && track.cues?.length > 0)");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
 
+                // Subtitles move against the picture in the browser; the audio moves through a new conversion that plays on, and back to zero the same way.
+                await page.Locator("[data-action=settings]").ClickAsync();
+                var panel = page.Locator("#player-settings");
+                await panel.GetByRole(AriaRole.Tab, new() { Name = "Subtitles", Exact = true }).ClickAsync();
+                var cueStart = await page.Locator("video").EvaluateAsync<double>("video => [...video.textTracks].find(track => track.mode === 'showing').cues[0].startTime");
+                await panel.Locator("[data-setting=subtitle-offset]").FillAsync("500");
+                await page.WaitForFunctionAsync("start => [...document.querySelector('video').textTracks].find(track => track.mode === 'showing').cues[0].startTime > start + 0.4", cueStart);
+                await panel.Locator("[data-action=subtitle-offset-reset]").ClickAsync();
+                await page.WaitForFunctionAsync("start => Math.abs([...document.querySelector('video').textTracks].find(track => track.mode === 'showing').cues[0].startTime - start) < 0.01", cueStart);
+                await panel.GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
+                var delayed = await page.RunAndWaitForResponseAsync(async () =>
+                {
+                    await panel.Locator("[data-setting=audio-offset]").FillAsync("250");
+                    await page.Keyboard.PressAsync("Tab");
+                }, response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioOffsetMs\":250", StringComparison.Ordinal) == true, new() { Timeout = Steps.MediaTimeout });
+                Assert.AreEqual(200, delayed.Status);
+                var delayedAt = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
+                await page.WaitForFunctionAsync("at => document.querySelector('video').currentTime > at + 1", delayedAt, new() { Timeout = Steps.MediaTimeout });
+                var restored = await page.RunAndWaitForResponseAsync(() => panel.Locator("[data-action=audio-offset-reset]").ClickAsync(),
+                    response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioOffsetMs\":0", StringComparison.Ordinal) == true, new() { Timeout = Steps.MediaTimeout });
+                Assert.AreEqual(200, restored.Status);
+                await page.Keyboard.PressAsync("Escape");
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+
                 // The file's chapters name its intro and credits: a Skip button while the intro plays (the new plan of the audio choice above kept the markers), then the chapter menu.
                 await page.EvaluateAsync("() => { const video = document.querySelector('video'); video.pause(); video.currentTime = 2.5; }");
                 var skip = page.Locator("[data-action=skip]");
@@ -129,6 +153,7 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(4, await chapters.CountAsync());
                 CollectionAssert.AreEqual(new[] { "Cold open", "Opening", "Part A", "End Credits" }, (await chapters.Locator("span:first-child").AllTextContentsAsync()).ToArray());
                 await Assertions.Expect(chapters.Nth(2)).ToHaveAttributeAsync("aria-pressed", "true");
+                await Assertions.Expect(page.Locator("[data-role=chapter-now]")).ToHaveTextAsync("Part A");
                 await Evidence.SaveAsync(page, "player-chapters-menu");
                 await chapters.Nth(1).ClickAsync();
                 await page.WaitForFunctionAsync("() => { const time = document.querySelector('video').currentTime; return time >= 2 && time < 3; }");
@@ -151,7 +176,7 @@ namespace Jularr.E2E.Tests
                 await AssertEpisodesFirstAsync(page);
                 await AssertSettingsFitAsync(page, "wide");
                 await page.Locator("[data-action=fullscreen]").ClickAsync();
-                await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player')");
+                await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player-main')");
                 await AssertEpisodesFirstAsync(page);
                 await AssertSettingsFitAsync(page, "fullscreen");
                 await page.Locator("[data-action=fullscreen]").ClickAsync();
@@ -240,6 +265,22 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(await page.Locator("[data-status=failed]").TextContentAsync(), await status.TextContentAsync());
                 Assert.IsTrue(await page.Locator("video").EvaluateAsync<bool>("video => video.error !== null"), "The video reported no error.");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+
+                // The next episode opens inside the same page and fullscreen stays on.
+                await page.GotoAsync(details);
+                await page.Locator(".episode-card", new() { HasText = "Pilot" }).Locator("a[href^='/Player/']").First.ClickAsync();
+                await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 1", null, new() { Timeout = Steps.MediaTimeout });
+                await page.Locator("[data-action=fullscreen]").ClickAsync();
+                await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player-main')");
+                var firstUrl = page.Url;
+                await page.EvaluateAsync("() => { window.__sameDocument = true; }");
+                await page.Locator("[data-action=next]").ClickAsync();
+                await page.WaitForURLAsync(url => url != firstUrl);
+                await Assertions.Expect(page.Locator("[data-role=status]")).ToBeVisibleAsync(new() { Timeout = Steps.MediaTimeout });
+                Assert.IsTrue(await page.EvaluateAsync<bool>("() => window.__sameDocument === true"), "The next episode reloaded the page.");
+                Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.fullscreenElement === document.querySelector('.player-main')"), "Fullscreen ended with the episode.");
+                await page.Locator("[data-action=fullscreen]").ClickAsync();
+                await page.WaitForFunctionAsync("() => !document.fullscreenElement");
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
             {
@@ -310,7 +351,7 @@ namespace Jularr.E2E.Tests
                 if (mode == "fullscreen")
                 {
                     await page.Locator("[data-action=fullscreen]").ClickAsync();
-                    await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player')");
+                    await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player-main')");
                 }
 
                 await Assertions.Expect(skip).ToBeVisibleAsync();

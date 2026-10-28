@@ -148,6 +148,57 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Search_RunningBrowserSession_SkipsSeparateHttpRequestsAcrossQueries()
+        {
+            var pages = new Pages(_ => throw new AssertFailedException("An active source session must stay in Chrome."));
+            using var http = new HttpClient(pages);
+            var browser = new Browser { IsRunning = true, Page = Fixture("search-list.html") };
+            var client = new AnnasArchiveClient(http, new NoSourceGateResolver(), browser);
+            using var context = new AnnasArchiveSearchContext();
+            var site = new Uri("https://annas-archive.gl/");
+
+            Assert.AreEqual(1, (await client.SearchAsync(site, "first", default, context)).Count);
+            Assert.AreEqual(1, (await client.SearchAsync(site, "first", default, context)).Count);
+            Assert.AreEqual(1, (await client.SearchAsync(site, "second", default, context)).Count);
+            Assert.AreEqual(1, (await client.SearchAsync(site, "third", default)).Count);
+            Assert.AreEqual(3, browser.Reads);
+            Assert.AreEqual(0, pages.Calls.Count);
+        }
+
+        [TestMethod]
+        public async Task SlowDownload_RunningBrowserSession_KeepsCountdownAndFileLinkWithoutHttpProbe()
+        {
+            var pages = new Pages(_ => throw new AssertFailedException("A slow page must reuse the active Chrome session."));
+            using var http = new HttpClient(pages);
+            var browser = new Browser { IsRunning = true, Page = "<html><body>Please wait 90 seconds before downloading.</body></html>" };
+            var client = new AnnasArchiveClient(http, new NoSourceGateResolver(), browser);
+            var site = new Uri("https://annas-archive.gl/");
+            var waiting = await client.ReadSlowPageAsync(site, "2bb80dfcf9d670598bd71910e1001ecc", default);
+            Assert.AreEqual(TimeSpan.FromSeconds(90), waiting.Wait);
+            Assert.IsNull(waiting.File);
+
+            browser.Page = "<html><a href='https://files.example.test/book.epub'>Download</a></html>";
+            var ready = await client.ReadSlowPageAsync(site, "2bb80dfcf9d670598bd71910e1001ecc", default);
+            Assert.AreEqual(new Uri("https://files.example.test/book.epub"), ready.File);
+            Assert.AreEqual(2, browser.SingleReads);
+            Assert.AreEqual(0, pages.Calls.Count);
+        }
+
+        [TestMethod]
+        public async Task SlowDownload_RunningBrowserCannotRead_DoesNotRepeatRequestsOutsideItsSession()
+        {
+            var pages = new Pages(_ => throw new AssertFailedException("A browser check must not trigger separate HTTP retries."));
+            using var http = new HttpClient(pages);
+            var browser = new Browser { IsRunning = true };
+            var client = new AnnasArchiveClient(http, new NoSourceGateResolver(), browser);
+            var error = await Assert.ThrowsExactlyAsync<AnnasArchiveException>(() =>
+                client.ReadSlowPageAsync(new Uri("https://annas-archive.gl/"), "2bb80dfcf9d670598bd71910e1001ecc", default));
+            Assert.AreEqual(AnnasArchiveFailure.Gate, error.Failure);
+            Assert.AreEqual(1, browser.SingleReads);
+            Assert.AreEqual(0, pages.Calls.Count);
+        }
+
+        [TestMethod]
         public async Task Search_UntrustedFinalOrigin_IsRejected()
         {
             var pages = new Pages(_ => new HttpResponseMessage(HttpStatusCode.OK)
@@ -191,14 +242,21 @@ namespace Jularr.Backend.Tests
         private sealed class Browser : ISourceBrowser
         {
             public int Reads { get; private set; }
+            public int SingleReads { get; private set; }
+            public bool IsRunning { get; init; }
+            public string? Page { get; set; }
             public bool IsAvailable => true;
-            public SourceBrowserStatus Status => new(null, null, "", false, null, null, null, null, null, 0);
+            public SourceBrowserStatus Status => new(null, null, "", IsRunning, null, null, null, null, null, 0);
             public IReadOnlyList<SourceBrowserEvent> Events => [];
-            public Task<string?> ReadPageAsync(Uri uri, CancellationToken ct) => throw new InvalidOperationException("Search must use the bounded mirror batch.");
+            public Task<string?> ReadPageAsync(Uri uri, CancellationToken ct)
+            {
+                SingleReads++;
+                return Task.FromResult(Page);
+            }
             public Task<BrowserPage?> ReadPagesAsync(IReadOnlyList<Uri> addresses, CancellationToken ct)
             {
                 Reads++;
-                return Task.FromResult<BrowserPage?>(null);
+                return Task.FromResult(Page is { } html ? new BrowserPage(addresses[0], html) : null);
             }
             public Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct) => throw new NotSupportedException();
             public Task<SourceBrowserStatus> StartAsync(CancellationToken ct) => Task.FromResult(Status);

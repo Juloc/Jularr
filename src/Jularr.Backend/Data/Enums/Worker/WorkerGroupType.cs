@@ -18,6 +18,7 @@ namespace Jularr.Backend.Data.Enums.Worker
         Download = 13,
         Provider = 14,
         Derivation = 15,
-        Health = 16
+        Health = 16,
+        Translation = 17
     }
 }
