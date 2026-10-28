@@ -9,6 +9,7 @@ using Jularr.Backend.Logic.Reading;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Reading.V1;
 using Jularr.Integrations.Logic.Ocr;
+using Jularr.Integrations.Logic.Pdf;
 using Microsoft.Extensions.DependencyInjection;
 using SkiaSharp;
 using UglyToad.PdfPig;
@@ -48,19 +49,15 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(page.Lines[index].Confidence > 0.8);
             }
 
-            // A page the PDF shows turned is read upright: the same lines, found in the turned picture.
-            var turned = engine.Read(TypesetPage(Sentences), 90);
-            Assert.AreEqual(page.Height, turned.Width);
-            Assert.AreEqual(page.Width, turned.Height);
-
-            // A scanned PDF of such pages reflows like text: the sentence open at a page's end goes on on the next.
+            // A scanned PDF of such pages, drawn by PDFium, reflows like text: the sentence open at a page's end goes on on the next.
             var pdf = ScannedPdf(pages: 2);
             var recognized = new Dictionary<int, RecognizedPage>();
+            using (var rendering = PdfRendering.Open(pdf))
             using (var document = PdfDocument.Open(pdf))
             {
                 foreach (var scanned in document.GetPages())
                 {
-                    recognized[scanned.Number] = PdfScanPages.Read(scanned, engine.Read);
+                    recognized[scanned.Number] = PdfScanPages.Read(scanned, rendering, engine.Read);
                 }
             }
 
@@ -182,6 +179,80 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html.ToString(), Sentences[0]);
         }
 
+        // The text of a scanned page is erased from a copy of it; what is left in a large connected area is its picture, and short text in the picture's rows is
+        // its label, not running text. A caption below it stays text.
+        [TestMethod]
+        public void ScanAnalysis_FindsThePicture_AndItsLabels()
+        {
+            using var page = IllustratedPage();
+            var lines = PdfScanAnalysis.Analyse(page, Read(page), []);
+
+            var picture = lines.Single(line => line.Kind == RecognizedLine.Picture);
+            Assert.AreEqual(0.24, picture.Left, 0.03);
+            Assert.AreEqual(0.40, picture.Top, 0.03);
+            Assert.AreEqual(0.77, picture.Right, 0.03);
+            Assert.AreEqual(0.63, picture.Bottom, 0.03);
+            Assert.AreEqual(RecognizedLine.Label, lines.Single(line => line.Text == "ALWAYS").Kind);
+            Assert.IsNull(lines.Single(line => line.Text == "He shouted.").Kind);
+            Assert.IsTrue(lines.Where(line => Sentences.Contains(line.Text)).All(line => line.Kind is null));
+        }
+
+        // Where the recognizer is unsure of a word, the scan's own recognition layer at the same place wins; quotes it dropped come back from there; straight
+        // quotes become typographic ones.
+        [TestMethod]
+        public void ScanAnalysis_TakesTheLayersWord_WhereTheRecognizerWasUnsure()
+        {
+            using var page = new SKBitmap(1000, 1000);
+            page.Erase(SKColors.White);
+            OcrCharacter[] characters = [.. "1ne heavier Drinking it's".Select((character, index) =>
+                new OcrCharacter(character.ToString(), 100 + index * 20, index < 3 ? 0.4f : 0.99f))];
+            var read = new OcrPage(1000, 1000, [new OcrLine(90, 100, 600, 130, "1ne heavier Drinking it's", 0.9f) { Characters = characters }]);
+            PdfLayerWord[] layer = [new("The", 0.09, 0.1, 0.15, 0.13), new("“Drinking”", 0.32, 0.1, 0.5, 0.13)];
+
+            var line = PdfScanAnalysis.Analyse(page, read, layer).Single();
+            Assert.AreEqual("The heavier “Drinking” it’s", line.Text);
+        }
+
+        // A scan's picture is cut out of the page PDFium draws and stands in the text with its caption; the page's text reads as text.
+        [TestMethod]
+        public void ScannedPage_WithAPicture_ReadsAsTextWithThePictureAndItsCaption()
+        {
+            byte[] pdf;
+            using (var page = IllustratedPage())
+            using (var image = SKImage.FromBitmap(page))
+            using (var png = image.Encode(SKEncodedImageFormat.Png, 100))
+            {
+                var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+                foreach (var _ in Enumerable.Range(0, 2))
+                {
+                    builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4).AddPng(png.ToArray(), new UglyToad.PdfPig.Core.PdfRectangle(0, 0, 595, 842));
+                }
+
+                pdf = builder.Build();
+            }
+
+            using var rendering = PdfRendering.Open(pdf);
+            var recognized = new Dictionary<int, RecognizedPage>();
+            using (var document = PdfDocument.Open(pdf))
+            {
+                foreach (var scanned in document.GetPages())
+                {
+                    recognized[scanned.Number] = PdfScanPages.Read(scanned, rendering, Read);
+                    Assert.AreEqual(RecognizedPage.Recognized, recognized[scanned.Number].Reason);
+                }
+            }
+
+            var book = PdfBook.Read(new MemoryStream(pdf), recognized, rendering);
+            Assert.IsFalse(book.WantsRecognition);
+            var blocks = book.Chapters.SelectMany(chapter => chapter.Blocks).ToArray();
+            var figures = blocks.Where(block => block.Image is not null).ToArray();
+            Assert.AreEqual(2, figures.Length);
+            Assert.IsTrue(figures.All(figure => figure.Caption == "He shouted." && figure.Figure == ReadingHtml.WideFigure));
+            Assert.IsTrue(book.Images.All(picture => picture.MediaType == "image/jpeg" && SKBitmap.Decode(picture.Bytes) is { Width: > 300 }));
+            Assert.IsFalse(blocks.Any(block => block.Text?.Contains("ALWAYS", StringComparison.Ordinal) == true || block.Text?.Contains("He shouted", StringComparison.Ordinal) == true));
+            StringAssert.Contains(blocks.First(block => block.Text is not null).Text, Sentences[0]);
+        }
+
         [TestMethod]
         [DataRow(20, null, new[] { 1, 2, 3 }, 4, 17)]
         [DataRow(20, 15, new[] { 15, 16 }, 17, 18)]
@@ -244,6 +315,40 @@ namespace Jularr.Backend.Tests
             return builder.Build();
         }
 
+        // A page of a book: three lines of text, a drawing with a label in its rows and a caption below it.
+        private static SKBitmap IllustratedPage()
+        {
+            var bitmap = new SKBitmap(1240, 1754);
+            using var canvas = new SKCanvas(bitmap);
+            canvas.Clear(new SKColor(245, 238, 222));
+            using var font = new SKFont(SKTypeface.FromFamilyName("Times New Roman") ?? SKTypeface.Default, 30);
+            using var ink = new SKPaint { Color = new SKColor(30, 28, 28), IsAntialias = true, StrokeWidth = 4 };
+            for (var index = 0; index < Sentences.Length; index++)
+            {
+                canvas.DrawText(Sentences[index], 120, 240 + index * 48, SKTextAlign.Left, font, ink);
+            }
+
+            // The drawing: hatching and a frame from 300 to 900 across and 700 to 1100 down.
+            for (var x = 300; x <= 900; x += 14)
+            {
+                canvas.DrawLine(x, 700, x + 60, 1100, ink);
+            }
+
+            canvas.DrawRect(300, 700, 600, 400, new SKPaint { Color = ink.Color, Style = SKPaintStyle.Stroke, StrokeWidth = 6 });
+            canvas.DrawText("ALWAYS", 340, 1090, SKTextAlign.Left, font, new SKPaint { Color = new SKColor(30, 20, 140), IsAntialias = true });
+            canvas.DrawText("He shouted.", 520, 1170, SKTextAlign.Left, font, ink);
+            return bitmap;
+        }
+
+        // What a recognizer reads on the illustrated page, in the pixels of the picture it is given.
+        private static OcrPage Read(SKBitmap page)
+        {
+            var (x, y) = (page.Width / 1240.0, page.Height / 1754.0);
+            OcrLine Line(int left, int top, int right, int bottom, string text) => new((int)(left * x), (int)(top * y), (int)(right * x), (int)(bottom * y), text, 0.95f);
+            return new OcrPage(page.Width, page.Height, [.. Sentences.Select((text, index) => Line(110, 210 + index * 48, 1110, 250 + index * 48, text)),
+                Line(330, 1062, 470, 1098, "ALWAYS"), Line(510, 1142, 690, 1178, "He shouted.")]);
+        }
+
         // Each page reads as a chapter number and one paragraph in the picture's pixels; a noisy page reads as the symbols a recognizer makes of a drawing.
         private sealed class FakeRecognizer : IPageRecognizer
         {
@@ -251,7 +356,7 @@ namespace Jularr.Backend.Tests
             public int[] NoisyPages { get; init; } = [];
             private int _calls;
 
-            public Task<Func<byte[], int, OcrPage>> RecognizerAsync(string? language, CancellationToken ct) => Task.FromResult<Func<byte[], int, OcrPage>>((_, _) =>
+            public Task<Func<SKBitmap, OcrPage>> RecognizerAsync(string? language, CancellationToken ct) => Task.FromResult<Func<SKBitmap, OcrPage>>(_ =>
             {
                 var number = Interlocked.Increment(ref Pages);
 

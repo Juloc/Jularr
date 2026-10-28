@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Jularr.Integrations.Logic.Pdf;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Core;
 
@@ -10,8 +11,15 @@ namespace Jularr.Backend.Logic.Reading
     internal static partial class PdfBook
     {
         // Raised when the converted output changes; old documents are prepared again.
-        public const int AnalyzerVersion = 4;
+        public const int AnalyzerVersion = 5;
         public const int MaximumPages = 5000;
+
+        // PDFium draws a scan from the file's bytes in memory; larger files stay with their recognition layer and the original pages.
+        public const long MaximumRenderBytes = 512L * 1024 * 1024;
+
+        // A scan's pictures are cut from the page drawn with this longer side; a caption stands within this share of the page below its picture.
+        private const int PictureSide = 2400;
+        private const double CaptionReach = 0.06;
 
         // Pictures smaller than an icon are decoration; a book keeps a bounded number of bounded pictures.
         private const double MinimumImagePoints = 48;
@@ -45,10 +53,11 @@ namespace Jularr.Backend.Logic.Reading
         [GeneratedRegex(@"[.!?”""’)…:]$")]
         private static partial Regex SentenceEnd();
 
-        // Scanned pages the recognizer has read are given by page number; a page it left out, or read to nothing reliable, stays with the original.
-        public static PdfBookContent Read(Stream stream, IReadOnlyDictionary<int, RecognizedPage>? recognized = null)
+        // Scanned pages the recognizer has read are given by page number; a page it left out, or read to nothing reliable, stays with the original. Their pictures
+        // are cut from the pages PDFium draws.
+        public static PdfBookContent Read(Stream stream, IReadOnlyDictionary<int, RecognizedPage>? recognized = null, PdfRendering? rendering = null)
         {
-            var state = new BookState();
+            var state = new BookState { Rendering = rendering };
             List<List<PdfLine>> pages;
             try
             {
@@ -78,7 +87,10 @@ namespace Jularr.Backend.Logic.Reading
                 .SelectMany(page => page.Zip(page.Skip(1), (upper, lower) => Math.Round(upper.Bottom - lower.Bottom))).Where(gap => gap > 0).DefaultIfEmpty(body * 1.2));
             var left = Mode(lines.Select(line => Math.Round(line.Left)));
             var right = lines.Select(line => line.Right).Order().ElementAt((int)(lines.Length * 0.9));
-            return new PdfBookContent(Chapters(pages, body, spacing, left, right), state.Images, state.Reports, PdfQuality.Judge(state.Reports, false), PdfQuality.Judge(state.Reports, true));
+            return new PdfBookContent(Chapters(pages, body, spacing, left, right), state.Images, state.Reports, PdfQuality.Judge(state.Reports, false), PdfQuality.Judge(state.Reports, true))
+            {
+                WantsRecognition = state.Unrecognized > 0
+            };
         }
 
         // Faults of a file PdfPig cannot make sense of.
@@ -146,18 +158,39 @@ namespace Jularr.Backend.Logic.Reading
             var quality = PdfQuality.Score(words.Select(word => word.Text));
             result.Quality = quality;
 
-            // A scan without any text: the lines the recognizer read, where they hold together.
+            // A scan, without text or with a hidden recognition layer: the lines the recognizer read where they hold together, and the pictures it found.
             string? unreliable = null;
-            if (words.Count == 0 && recognized is not null && recognized.TryGetValue(scan.Number, out var read) && read.Reason == RecognizedPage.Recognized)
+            var isScan = (words.Count == 0 || hidden) && scan.Pictures.Any(picture => picture.Box.Area >= area * FullPage);
+            if (isScan && recognized is not null && recognized.TryGetValue(scan.Number, out var read) && read.Reason == RecognizedPage.Recognized)
             {
                 var recognizedWords = read.Words(scan.Box);
                 result.Quality = PdfQuality.Score(recognizedWords.SelectMany(word => word.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries)));
-                if (!read.IsUncertain && ScanText(scan, recognizedWords, result, RecognizedPage.Recognized))
+                var pictures = state.Rendering is null ? [] : read.Lines.Where(line => line.Kind == RecognizedLine.Picture).ToList();
+                if (!read.IsUncertain && (recognizedWords.Count > 0 ? ScanText(scan, recognizedWords, result, RecognizedPage.Recognized) : pictures.Count > 0))
                 {
+                    ScanPictures(state, scan, pictures, result);
                     return;
                 }
 
+                // Text that does not hold together: the pictures alone, else the page as it was.
+                if (pictures.Count > 0)
+                {
+                    result.Items.Clear();
+                    ScanPictures(state, scan, pictures, result);
+                    if (result.Items.Count > 0)
+                    {
+                        result.Kind = PdfPageKind.Figure;
+                        result.Reason = "scan-pictures";
+                        return;
+                    }
+                }
+
                 unreliable = read.IsUncertain ? "unreliable-uncertain" : result.Reason;
+            }
+            else if (isScan && (recognized is null || !recognized.ContainsKey(scan.Number)))
+            {
+                // A scan the recognizer has not read yet: its own layer or the original meanwhile.
+                state.Unrecognized++;
             }
 
             var full = scan.Pictures.Where(picture => picture.Box.Area >= area * FullPage).ToList();
@@ -312,6 +345,57 @@ namespace Jularr.Backend.Logic.Reading
             if (result.Kind == PdfPageKind.Text && lines.Count > 0 && quality < 0.4)
             {
                 result.Reason = "junk-text";
+            }
+        }
+
+        // The pictures a recognizer found on a scanned page, cut out of the drawn page with the scan's paper tint taken out, where they stood; the short text right
+        // below one is its caption. A picture over most of the page is a plate, shown as a page of its own.
+        private static void ScanPictures(BookState state, PdfPageScan scan, IReadOnlyList<RecognizedLine> pictures, PageResult result)
+        {
+            if (pictures.Count == 0 || state.Rendering is null)
+            {
+                return;
+            }
+
+            using var drawn = state.Rendering.Render(scan.Number, PictureSide);
+            foreach (var picture in pictures)
+            {
+                if (state.Images.Count >= MaximumImages)
+                {
+                    break;
+                }
+
+                var box = new PdfBox(scan.Box.Left + picture.Left * scan.Box.Width, scan.Box.Top - picture.Bottom * scan.Box.Height, scan.Box.Left + picture.Right * scan.Box.Width,
+                    scan.Box.Top - picture.Top * scan.Box.Height);
+                var bytes = PdfScanAnalysis.Cut(drawn, picture);
+                if (bytes.Length > MaximumImageBytes)
+                {
+                    continue;
+                }
+
+                var share = box.Area / Math.Max(1, scan.Box.Area);
+                var kind = share >= PageFigureShare ? ReadingHtml.PageFigure
+                    : box.Width >= scan.Box.Width * WideFigureWidth && box.Height >= scan.Box.Height * WideFigureHeight ? ReadingHtml.WideFigure : null;
+
+                // The caption: the nearest short text below the picture, with the lines that follow it closely.
+                var below = result.Items.Where(line => line.Image is null && line.Figure is null && line.Top <= box.Bottom + scan.Box.Height * 0.01
+                    && box.Bottom - line.Top < scan.Box.Height * CaptionReach).OrderByDescending(line => line.Top).ToList();
+                var used = new List<PdfLine>();
+                foreach (var line in below)
+                {
+                    if ((used.Count > 0 && used[^1].Bottom - line.Top > line.Size * 1.2) || used.Sum(other => other.Text.Length) + line.Text.Length > 300)
+                    {
+                        break;
+                    }
+
+                    used.Add(line);
+                }
+
+                var caption = used.Count == 0 ? null : string.Join(' ', used.Select(line => line.Text));
+                var path = "pdf/images/" + state.Images.Count.ToString("D5", CultureInfo.InvariantCulture) + ".jpg";
+                state.Images.Add(new PdfImage(path, "image/jpeg", bytes));
+                result.Items.RemoveAll(used.Contains);
+                result.Items.Add(new PdfLine(box.Top, 0, scan.Box.Height) { Image = path, Figure = kind, Alt = caption ?? "", Caption = caption });
             }
         }
 
@@ -553,6 +637,10 @@ namespace Jularr.Backend.Logic.Reading
             public List<PdfImage> Images { get; } = [];
             public List<PdfPageReport> Reports { get; } = [];
             public long TextCharacters { get; set; }
+            public PdfRendering? Rendering { get; init; }
+
+            // Scanned pages the recognizer has not read yet.
+            public int Unrecognized { get; set; }
         }
 
         private sealed class PageResult
@@ -575,7 +663,11 @@ namespace Jularr.Backend.Logic.Reading
 
     internal sealed record PdfImage(string Path, string MediaType, byte[] Bytes);
 
-    internal sealed record PdfBookContent(IReadOnlyList<PdfChapter> Chapters, IReadOnlyList<PdfImage> Images, IReadOnlyList<PdfPageReport> Pages, PdfVerdict Reading, PdfVerdict Ebook);
+    internal sealed record PdfBookContent(IReadOnlyList<PdfChapter> Chapters, IReadOnlyList<PdfImage> Images, IReadOnlyList<PdfPageReport> Pages, PdfVerdict Reading, PdfVerdict Ebook)
+    {
+        // Scanned pages wait for the recognizer, which reads them anew and finds their pictures.
+        public bool WantsRecognition { get; init; }
+    }
 
     // A PDF of scanned pages: it stays with its original pages, until a recognizer has read them.
     internal sealed class PdfWithoutTextException() : Exception("The PDF has no text layer.");

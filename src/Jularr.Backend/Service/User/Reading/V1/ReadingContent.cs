@@ -13,6 +13,7 @@ using Jularr.Backend.Logic.Reading;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
+using Jularr.Integrations.Logic.Pdf;
 using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Usenet;
 
@@ -161,10 +162,31 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
             // Only a PDF with text becomes a document; a scan waits for recognition where the Ocr module reads it, a page at a time.
             var recognized = await context.ExecuteBatchAsync((ctx, token) => ReadRecognizedAsync(ctx, source, token), ct);
+
+            // Pictures the recognizer found on scanned pages are cut from the pages PDFium draws.
+            PdfRendering? rendering = null;
+            if (recognized.Values.Any(page => page.Lines.Any(line => line.Kind == RecognizedLine.Picture)) && file.Length <= PdfBook.MaximumRenderBytes)
+            {
+                using var copy = new MemoryStream();
+                await file.CopyToAsync(copy, ct);
+                file.Position = 0;
+                try
+                {
+                    rendering = PdfRendering.Open(copy.ToArray());
+                }
+                catch (InvalidDataException)
+                {
+                    // Without a drawing the scan's pictures stay with the original pages.
+                }
+            }
+
             PdfBookContent book;
             try
             {
-                book = PdfBook.Read(file, recognized);
+                using (rendering)
+                {
+                    book = PdfBook.Read(file, recognized, rendering);
+                }
             }
             catch (PdfWithoutTextException)
             {
@@ -180,6 +202,13 @@ namespace Jularr.Backend.Service.User.Reading.V1
             if (book.Reading.Reason == "no_text")
             {
                 throw new ServiceUnavailableException("reading_pdf_without_text");
+            }
+
+            // Scanned pages with their own recognition layer read meanwhile from it; the recognizer reads them anew and finds their pictures where the Ocr module is on.
+            if (book.WantsRecognition)
+            {
+                var recognition = new ReadingRecognitionData(source.StoredFileId, source.SizeBytes, source.ModifiedAt);
+                await context.ExecuteBatchAsync((ctx, token) => ctx.RequestReadingRecognitionAsync(recognition, token), ct);
             }
 
             var save = new ReadingDocumentSaveData(source.StoredFileId, source.SizeBytes, source.ModifiedAt, hash, PdfBook.AnalyzerVersion, ReadingFormatType.Pdf, null, null,
