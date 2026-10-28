@@ -74,8 +74,11 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         return blocks.map(block => block.querySelector("[data-b]") ? "" : block.innerText);
     }
 
+    // A picture stays; only its caption takes the translation.
     function show(translated: string[]) {
-        translated.forEach((text, index) => { if (text.length > 0) blocks[index].textContent = text; });
+        translated.forEach((text, index) => {
+            if (text.length > 0) (blocks[index].querySelector("figcaption") ?? blocks[index]).textContent = text;
+        });
         reader.dataset.translated = "true";
     }
 
