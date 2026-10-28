@@ -17,6 +17,7 @@ using Jularr.Integrations.Data.OpenLibrary;
 using Jularr.Integrations.Data.Tmdb;
 using Jularr.Integrations.Logic.Igdb;
 using Jularr.Integrations.Logic.MusicBrainz;
+using Jularr.Integrations.Logic.Narou;
 using Jularr.Integrations.Logic.OpenLibrary;
 using Jularr.Integrations.Logic.Tmdb;
 using Microsoft.Extensions.Caching.Memory;
@@ -31,7 +32,12 @@ namespace Jularr.Backend.Service.Core
         private static readonly SemaphoreSlim BooksGate = new(1, 1);
         private static readonly SemaphoreSlim AniListGate = new(1, 1);
 
-        public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string query, int? year, CancellationToken ct)
+        // Narō is asked for the Japanese titles of only the first few light novel entries a search finds.
+        private const int EditionLookups = 3;
+
+        // The language names a linked web novel by its edition's English, romanized or Japanese title.
+        public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string query, int? year, CancellationToken ct,
+            string? language = null)
         {
             // Books come from Open Library, Manga and Light Novels also from AniList, albums from MusicBrainz, games from IGDB, video from TMDB.
             var results = new List<MetadataSearchResultV1>();
@@ -50,20 +56,29 @@ namespace Jularr.Backend.Service.Core
 
                 if (subtype is MediaSubtype.Manga or MediaSubtype.LightNovel)
                 {
-                    results.AddRange((await aniList.SearchBooksAsync(subtype.Value, query, year, ct)).Select(AniListBook));
+                    var editions = await aniList.SearchBooksAsync(subtype.Value, query, year, ct);
 
-                    // Narō's web novels by title or ncode, each its own title beside the published editions.
+                    // Narō's web novels by title or ncode, each its own title beside the published editions; one that is clearly an edition's original follows it under its name.
+                    IReadOnlyList<(NarouNovel Novel, AniListMedia? Edition)> novels = [];
                     if (subtype == MediaSubtype.LightNovel && await NarouMetadata.IsEnabledAsync(context, ct))
                     {
                         try
                         {
-                            results.AddRange((await narou.SearchAsync(query, ct)).Select(WebNovel));
+                            novels = await SearchWebNovelsAsync(query, editions, ct);
                         }
                         catch (ServiceUnavailableException)
                         {
                             // Narō's failure leaves the other catalogs' results.
                         }
                     }
+
+                    foreach (var edition in editions)
+                    {
+                        results.Add(AniListBook(edition));
+                        results.AddRange(novels.Where(item => item.Edition == edition).Select(item => WebNovel(item.Novel, item.Edition, language)));
+                    }
+
+                    results.AddRange(novels.Where(item => item.Edition is null).Select(item => WebNovel(item.Novel, null, language)));
                 }
                 else if (failure is not null)
                 {
@@ -93,26 +108,44 @@ namespace Jularr.Backend.Service.Core
             return await MarkKnownAsync(context, results, ct);
         }
 
+        // The query's novels and, for an English or romanized query, those under the Japanese titles of the editions found; a novel found only through an edition shows when it clearly is its original.
+        private async Task<IReadOnlyList<(NarouNovel Novel, AniListMedia? Edition)>> SearchWebNovelsAsync(string query, IReadOnlyList<AniListMedia> editions, CancellationToken ct)
+        {
+            var found = new List<NarouNovel>(await narou.SearchAsync(query, ct));
+            if (!NarouClient.IsNcode(query.Trim()))
+            {
+                var asked = AniListMatching.Normalize(query);
+                foreach (var title in editions.Select(edition => edition.NativeTitle).OfType<string>().Select(AniListMatching.Normalize)
+                    .Where(title => title.Length > 0 && title != asked).Distinct(StringComparer.Ordinal).Take(EditionLookups))
+                {
+                    found.AddRange((await narou.SearchAsync(title, ct)).Where(novel => AniListMatching.LinkWebNovel(editions, novel.Title, novel.Writer).Match is not null));
+                }
+            }
+
+            return [.. found.DistinctBy(novel => novel.Ncode).Select(novel => (novel, AniListMatching.LinkWebNovel(editions, novel.Title, novel.Writer).Match))];
+        }
+
         // Discover's anime: AniList finds and shows seasons; Works, requests and every action use the TMDB series.
         public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAnimeAsync(LogicContext context, string query, CancellationToken ct) =>
             await MarkKnownAsync(context, [.. (await aniList.SearchAsync(AniListMediaType.Anime, AniListMatching.Formats(MediaType.Series, MediaSubtype.Anime), query, ct)).Select(AniListAnime)], ct);
 
         // One catalog title as its catalog describes it; its page never trusts what a link says.
-        public async Task<DiscoverCatalogEntryV1> ReadEntryAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string @namespace, string externalId, CancellationToken ct)
+        public async Task<DiscoverCatalogEntryV1> ReadEntryAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string @namespace, string externalId, CancellationToken ct,
+            string? language = null)
         {
             if (mediaType == MediaType.Series && subtype == MediaSubtype.Anime && @namespace == AniListMetadata.Namespace)
             {
                 return await ReadAnimeAsync(context, AniListId(externalId), ct);
             }
 
-            var key = $"metadata.catalog.entry.{@namespace}.{externalId}";
+            var key = $"metadata.catalog.entry.{@namespace}.{externalId}" + (@namespace == NarouMetadata.Namespace ? "." + language : "");
             if (!cache.TryGetValue(key, out MetadataSearchResultV1? entry))
             {
                 entry = (mediaType, @namespace) switch
                 {
                     (MediaType.Book, BookMetadata.Namespace) => Book(await books.ReadAsync(externalId, ct)),
                     (MediaType.Book, NarouMetadata.Namespace) when subtype == MediaSubtype.LightNovel && await NarouMetadata.IsEnabledAsync(context, ct) =>
-                        WebNovel(await narou.ReadAsync(externalId, ct)),
+                        await WebNovelAsync(externalId, language, ct),
                     (MediaType.Book, AniListMetadata.Namespace) when subtype is MediaSubtype.Manga or MediaSubtype.LightNovel =>
                         AniListBook(await aniList.ReadAsync(AniListMediaType.Manga, AniListId(externalId), ct)),
                     (MediaType.Music, MusicMetadata.Namespace) => Album((await music.ReadAsync(externalId, ct)).Album),
@@ -317,8 +350,16 @@ namespace Jularr.Backend.Service.Core
         private static MetadataSearchResultV1 Book(OpenLibraryResult result) => new(BookMetadata.Namespace, result.WorkId, TextLimit.Cut(result.Title, 500)!, null,
             result.Year is >= 1800 and <= 2200 ? result.Year : null, null, null, TextLimit.Cut(string.Join(", ", result.Authors), 4000), OpenLibraryClient.CoverUrl(result.CoverId));
 
-        private static MetadataSearchResultV1 WebNovel(NarouNovel novel) => new(NarouMetadata.Namespace, novel.Ncode, TextLimit.Cut(novel.Title, 500)!, null,
+        // A web novel goes by its own Japanese title, or by its edition's name with the Japanese one beside it.
+        private static MetadataSearchResultV1 WebNovel(NarouNovel novel, AniListMedia? edition, string? language) => new(NarouMetadata.Namespace, novel.Ncode,
+            TextLimit.Cut(edition is null ? novel.Title : AniListMetadata.Title(edition, language), 500)!, edition is null ? null : TextLimit.Cut(novel.Title, 500),
             novel.FirstYear is >= 1800 and <= 2200 ? novel.FirstYear : null, TextLimit.Cut(novel.Story, 4000), null, TextLimit.Cut(novel.Writer, 4000));
+
+        private async Task<MetadataSearchResultV1> WebNovelAsync(string ncode, string? language, CancellationToken ct)
+        {
+            var novel = await narou.ReadAsync(ncode, ct);
+            return WebNovel(novel, await narou.FindEditionAsync(novel, ct), language);
+        }
 
         private static MetadataSearchResultV1 AniListBook(AniListMedia result) => new(AniListMetadata.Namespace, result.Id.ToString(CultureInfo.InvariantCulture),
             TextLimit.Cut(AniListMetadata.Title(result), 500)!, TextLimit.Cut(result.RomajiTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null,

@@ -1,5 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using Jularr.Backend.Data;
+using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
@@ -9,6 +13,7 @@ using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Service.System.Acquisition.V1;
+using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.Narou;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
@@ -96,10 +101,67 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((Title, 3), (document.Title, document.SectionCount));
         }
 
-        private static async Task<Host> CreateHostAsync(string storage, string downloads, NarouClientTests.FakeNarou narou)
+        [TestMethod]
+        public async Task WebNovel_FoundByItsEditionsEnglishName_TakesThatNameOnlyWhenTitleAndWriterAgree()
         {
-            var host = await LibraryTests.CreateHostAsync(storage, razor: true, settings: new Dictionary<string, string> { ["Storage:LocalPaths:2"] = downloads },
-                services: services => services.AddHttpClient<NarouClient>().ConfigurePrimaryHttpMessageHandler(() => narou));
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var narou = new NarouClientTests.FakeNarou { Word = Title };
+            var aniList = new FakeAniList();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, narou, aniList);
+
+            // The English name finds the published edition on AniList and, through its Japanese title, the web novel right after it under the same name.
+            using var found = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/search", new SearchDiscoverCatalogDataV1(MediaType.Book, "Library Reincarnation", MediaSubtype.LightNovel));
+            Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
+            var items = (await found.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.ToList();
+            CollectionAssert.AreEqual(new[] { "anilist:4242:Library Reincarnation", "syosetu:" + Ncode + ":Library Reincarnation" },
+                items.Select(item => item.Namespace + ":" + item.ExternalId + ":" + item.Title).ToArray());
+            Assert.AreEqual(2, narou.Requests.Count);
+            using var entry = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/entry", new ReadDiscoverCatalogEntryDataV1(MediaType.Book, "syosetu", Ncode, MediaSubtype.LightNovel));
+            Assert.AreEqual("Library Reincarnation", (await entry.Content.ReadFromJsonAsync<DiscoverCatalogEntryV1>())!.Title);
+
+            // Requested, the web novel is its own Work under its ncode and is called by the edition's name; the edition stays a Work of its own.
+            var novelId = await RequestAsync(host, "syosetu", Ncode);
+            var editionId = await RequestAsync(host, "anilist", "4242");
+            Assert.AreNotEqual(novelId, editionId);
+            Assert.AreEqual($"{editionId}:4242", await host.ScalarAsync("""SELECT string_agg("WorkId" || ':' || "Value", ',') FROM "WorkExternalIdentities" WHERE "Namespace" = 'anilist'"""));
+            Assert.AreEqual((short)1, await host.ScalarAsync($"""SELECT "IdentityMatchStatusTypeId" FROM "WorkIdentityMatches" WHERE "WorkId" = {novelId}"""));
+            Assert.AreEqual("Library Reincarnation", await host.ScalarAsync($"""SELECT "Title" FROM "ProfileWorks" WHERE "WorkId" = {novelId} LIMIT 1"""));
+            Assert.AreEqual(Title, await host.ScalarAsync($"""SELECT "CanonicalTitle" FROM "Works" WHERE "Id" = {novelId}"""));
+
+            // Another writer's novel of the same title is only proposed; a person confirms it on the matches page and it takes the name, not the edition.
+            narou.Api = NarouClientTests.FakeNarou.Novel.Replace("N1234AB", "N5678CD", StringComparison.Ordinal).Replace("山田太郎", "別人", StringComparison.Ordinal);
+            var otherId = await RequestAsync(host, "syosetu", "n5678cd");
+            using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/matches");
+            var review = (await listed.Content.ReadFromJsonAsync<PageResult<IdentityReviewV1>>())!.Items.Single();
+            Assert.AreEqual((otherId, true, 4242), (review.WorkId, review.IsWebNovel, review.CandidateIds.Single()));
+            StringAssert.Contains(review.CandidateLabels.Single(), "Library Reincarnation · " + Title + " · 山田太郎");
+            Assert.AreEqual(Title, await host.ScalarAsync($"""SELECT "Title" FROM "ProfileWorks" WHERE "WorkId" = {otherId} LIMIT 1"""));
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works/Matches");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "Web novel");
+            StringAssert.Contains(html, "Library Reincarnation");
+            using var confirmed = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/works/{otherId}/matches", new ResolveIdentityReviewDataV1(4242));
+            Assert.AreEqual(HttpStatusCode.OK, confirmed.StatusCode, await confirmed.Content.ReadAsStringAsync());
+            Assert.AreEqual("Library Reincarnation", await host.ScalarAsync($"""SELECT "Title" FROM "ProfileWorks" WHERE "WorkId" = {otherId} LIMIT 1"""));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "WorkExternalIdentities" WHERE "Namespace" = 'anilist'"""));
+        }
+
+        private static async Task<long> RequestAsync(Host host, string source, string id)
+        {
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/requests", new RequestDiscoverCatalogDataV1(MediaType.Book, source, id, 1, MediaSubtype.LightNovel));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            return (long)(await host.ScalarAsync($"""SELECT "WorkId" FROM "WorkExternalIdentities" WHERE "Namespace" = '{source}' AND "Value" = '{id}'"""))!;
+        }
+
+        private static async Task<Host> CreateHostAsync(string storage, string downloads, NarouClientTests.FakeNarou narou, FakeAniList? aniList = null)
+        {
+            var host = await LibraryTests.CreateHostAsync(storage, razor: true, settings: new Dictionary<string, string> { ["Storage:LocalPaths:2"] = downloads }, services: services =>
+            {
+                services.AddHttpClient<NarouClient>().ConfigurePrimaryHttpMessageHandler(() => narou);
+                if (aniList is not null) services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList);
+            });
 
             // Narō's catalog is off until the Owner switches it on.
             using (var off = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/search", new SearchDiscoverCatalogDataV1(MediaType.Book, "転生したら", MediaSubtype.LightNovel)))
@@ -123,6 +185,25 @@ namespace Jularr.Backend.Tests
                 new SaveAcquisitionConnectionDataV1("Narō", AcquisitionConnectionType.Narou, "https://ncode.syosetu.com", null, true, 50, [], null, null, null));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             return host;
+        }
+
+        // AniList's published edition of the web novel, found by its English or its Japanese title.
+        private sealed class FakeAniList : HttpMessageHandler
+        {
+            private const string Edition = """
+                {"id":4242,"type":"MANGA","format":"NOVEL","countryOfOrigin":"JP","title":{"romaji":"Tensei shitara Toshokan datta Ken","english":"Library Reincarnation","native":"転生したら図書館だった件"},
+                "synonyms":[],"startDate":{"year":2020},"volumes":2,"staff":{"edges":[{"role":"Story","node":{"id":77,"name":{"full":"Taro Yamada","native":"山田太郎"}}}]},"relations":{"edges":[]}}
+                """;
+
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+                var variables = body.RootElement.GetProperty("variables");
+                var json = !variables.TryGetProperty("search", out var search) ? "{\"data\":{\"Media\":" + Edition + "}}"
+                    : search.GetString() is "Library Reincarnation" or Title ? "{\"data\":{\"Page\":{\"media\":[" + Edition + "]}}}"
+                    : "{\"data\":{\"Page\":{\"media\":[]}}}";
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+            }
         }
     }
 }

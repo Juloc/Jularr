@@ -78,6 +78,19 @@ namespace Jularr.Backend.Logic.Media
             return exact.Length == 1 ? (exact[0], exact) : (null, exact.Length > 0 ? exact : fitting.Take(5).ToArray());
         }
 
+        // A Narō web novel belongs to the one light novel entry with its Japanese title and its writer among the entry's story credits;
+        // a title or a writer alone only proposes the entry to a person.
+        public static (AniListMedia? Match, IReadOnlyList<AniListMedia> Candidates) LinkWebNovel(IReadOnlyList<AniListMedia> results, string title, string? writer)
+        {
+            var name = Normalize(title);
+            var author = writer is null ? "" : Normalize(writer);
+            var novels = results.Where(result => result.Format is { } format && NovelFormats.Contains(format)).ToArray();
+            var titled = novels.Where(result => name.Length > 0 && result.NativeTitle is { } native && Normalize(native) == name).ToArray();
+            var credited = novels.Where(result => author.Length > 0 && result.NativeAuthors.Any(native => Normalize(native) == author)).ToArray();
+            var strong = titled.Intersect(credited).ToArray();
+            return strong.Length == 1 ? (strong[0], strong) : (null, [.. titled.Union(credited).Take(5)]);
+        }
+
         // Consecutive entries fill the regular seasons in order; an entry running past its season ends the alignment.
         public static IReadOnlyList<(int Season, int AniListId, int Offset)> Align(IReadOnlyList<(int Season, int Episodes)> seasons, IReadOnlyList<(int Id, int? Episodes)> chain)
         {
