@@ -187,6 +187,13 @@ namespace Jularr.Backend.Logic.Reading
 
                 unreliable = read.IsUncertain ? "unreliable-uncertain" : result.Reason;
             }
+            else if (isScan && recognized?.GetValueOrDefault(scan.Number)?.Reason == RecognizedPage.Blank)
+            {
+                // A scan of an empty page (the back of a plate): nothing to show in the text.
+                result.Kind = PdfPageKind.Blank;
+                result.Reason = "blank";
+                return;
+            }
             else if (isScan && (recognized is null || !recognized.ContainsKey(scan.Number)))
             {
                 // A scan the recognizer has not read yet: its own layer or the original meanwhile.

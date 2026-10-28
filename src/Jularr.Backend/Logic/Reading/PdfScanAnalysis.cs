@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Jularr.Integrations.Logic.Ocr;
 using Jularr.Integrations.Logic.Pdf;
 using SkiaSharp;
@@ -7,7 +8,7 @@ namespace Jularr.Backend.Logic.Reading
     // One scanned page as the recognizer read it, made into what a reader needs: its lines (where the recognizer was unsure, the scan's own recognition layer
     // at the same place wins; quotes it dropped come back from there) and its illustrations. The text is erased from a small copy of the page, filled with
     // the paper around each line; what is left in large connected areas is a picture. Short lines in a picture's rows are its labels, not running text.
-    internal static class PdfScanAnalysis
+    internal static partial class PdfScanAnalysis
     {
         // The work copy for erasing and finding pictures is about this many pixels high.
         private const int WorkHeight = 1000;
@@ -96,8 +97,22 @@ namespace Jularr.Backend.Logic.Reading
             }
 
             End();
-            return string.Join(' ', words);
+
+            // An opening quote read apart from its word ("“ A") belongs to it; a quote read twice ("””") is one.
+            for (var index = words.Count - 2; index >= 0; index--)
+            {
+                if (words[index] is "“" or "‘")
+                {
+                    words[index] += words[index + 1];
+                    words.RemoveAt(index + 1);
+                }
+            }
+
+            return Doubled().Replace(string.Join(' ', words), "$1");
         }
+
+        [GeneratedRegex(@"([“”‘’])\1+")]
+        private static partial Regex Doubled();
 
         private static string Letters(string word) => new([.. word.Where(char.IsLetterOrDigit)]);
 

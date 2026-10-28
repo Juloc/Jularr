@@ -211,6 +211,11 @@ namespace Jularr.Backend.Tests
 
             var line = PdfScanAnalysis.Analyse(page, read, layer).Single();
             Assert.AreEqual("The heavier “Drinking” it’s", line.Text);
+
+            // An opening quote read apart from its word joins it; a closing quote read twice is one.
+            OcrCharacter[] caption = [.. "\" A horse.\"\"".Select((character, index) => new OcrCharacter(character.ToString(), 100 + index * 20, 0.99f))];
+            var captioned = new OcrPage(1000, 1000, [new OcrLine(90, 300, 400, 330, "\" A horse.\"\"", 0.9f) { Characters = caption }]);
+            Assert.AreEqual("“A horse.”", PdfScanAnalysis.Analyse(page, captioned, []).Single().Text);
         }
 
         // A scan's picture is cut out of the page PDFium draws and stands in the text with its caption; the page's text reads as text.
