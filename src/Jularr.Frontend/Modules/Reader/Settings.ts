@@ -195,7 +195,7 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
         const requested = button.dataset.readerOpenSettings ?? 'all';
         reader.querySelectorAll<HTMLElement>('[data-panel]').forEach(panel => {
             if (panel.dataset.panel === 'contents') return;
-            const open = panel.dataset.panel === name && (panel.hidden || name === 'settings' && panel.dataset.currentGroup !== requested);
+            const open = panel.dataset.panel === name && (panel.hidden === true || name === 'settings' && panel.dataset.currentGroup !== requested);
             panel.hidden = !open;
             expanded(panel.dataset.panel!, open);
             if (open) openers.set(name, button);
