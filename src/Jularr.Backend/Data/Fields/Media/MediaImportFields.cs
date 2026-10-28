@@ -11,6 +11,8 @@ namespace Jularr.Backend.Data.Fields.Media
 
         public static readonly FileField File = new() { MaximumBytes = MaximumBytes, Extensions = [".json"] };
         public static readonly StringField Json = new() { MaximumLength = MaximumBytes };
+        // Internal batched lookups may escape each Unicode character as six JSON characters.
+        public static readonly StringField LookupJson = new() { MaximumLength = MaximumBytes * 6 };
         public static readonly EnumField Action = new(typeof(MediaImportActionType));
         public static readonly EnumField StatusTypeId = new(typeof(MediaImportStatusType));
         public static readonly EnumField OutcomeTypeId = new(typeof(MediaImportOutcomeType));
@@ -18,7 +20,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly BoolField Include = new();
         public static readonly BoolField Flag = new();
 
-        // A provider entry as "namespace:id".
+        // A provider entry as "namespace:id", a local Work as "local:id", or the explicit "list:book" choice.
         public static readonly StringField Choice = new() { MaximumLength = 100, Trim = true, Format = StringFormat.SingleLine };
         public static readonly StringField Query = new() { MaximumLength = 200, Trim = true, Format = StringFormat.SingleLine };
         public static readonly StringField Key = new() { MaximumLength = 16, Format = StringFormat.SingleLine };

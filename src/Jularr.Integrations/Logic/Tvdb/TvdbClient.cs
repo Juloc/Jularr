@@ -10,6 +10,8 @@ namespace Jularr.Integrations.Logic.Tvdb
     // Read-only TVDB API v4 access. No Work, unit or progress writes occur here.
     internal sealed class TvdbClient(HttpClient httpClient)
     {
+        private const string TitleLanguage = "eng";
+
         public async Task<TvdbSession> LoginAsync(string apiKey, string? pin, CancellationToken ct)
         {
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -69,15 +71,29 @@ namespace Jularr.Integrations.Logic.Tvdb
             return new TvdbSeries(id, name, imdbId);
         }
 
-        // Default is the series' TVDB episode order. Pagination is never replaced by a remote URL.
+        // Episode titles are asked in English, like Sonarr; TVDB names them in the series' original language otherwise (Japanese for most anime).
+        // An episode without an English title keeps its original-language name.
         public async Task<IReadOnlyList<TvdbEpisode>> ReadEpisodesAsync(TvdbSession session, int seriesId, CancellationToken ct)
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(seriesId);
+            var english = await ReadEpisodePagesAsync(session, seriesId, "/" + TitleLanguage, ct);
+            if (english.All(episode => episode.Name is not null))
+            {
+                return english;
+            }
+
+            var original = (await ReadEpisodePagesAsync(session, seriesId, "", ct)).ToDictionary(episode => episode.Id);
+            return [.. english.Select(episode => episode.Name is null && original.TryGetValue(episode.Id, out var named) ? episode.WithName(named.Name) : episode)];
+        }
+
+        // Default is the series' TVDB episode order. Pagination is never replaced by a remote URL.
+        private async Task<List<TvdbEpisode>> ReadEpisodePagesAsync(TvdbSession session, int seriesId, string languagePath, CancellationToken ct)
+        {
             var episodes = new List<TvdbEpisode>();
             var known = new HashSet<int>();
             for (var page = 0; page < 100; page++)
             {
-                var path = "series/" + seriesId.ToString(CultureInfo.InvariantCulture) + "/episodes/default?page=" + page.ToString(CultureInfo.InvariantCulture);
+                var path = "series/" + seriesId.ToString(CultureInfo.InvariantCulture) + "/episodes/default" + languagePath + "?page=" + page.ToString(CultureInfo.InvariantCulture);
                 using var document = await RequestAsync(HttpMethod.Get, path, session.Token, null, ct);
                 var entries = Child(Data(document.RootElement), "episodes");
                 if (entries.ValueKind != JsonValueKind.Array)
