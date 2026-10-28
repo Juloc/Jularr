@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Enums.Acquisition;
@@ -63,7 +64,7 @@ namespace Jularr.Backend.Tests
             var profile = new MultipartFormDataContent
             {
                 { new StringContent("Home"), "Name" },
-                { new StringContent("[Interface]\nPrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\nAddress = 10.66.0.2/32\nDNS = 10.66.0.1\n[Peer]\nPublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\nEndpoint = vpn.example.test:51820\nAllowedIPs = 0.0.0.0/0\n"), "Configuration" }
+                { new StringContent("[Interface]\nPrivateKey = " + Key() + "\nAddress = 10.66.0.2/32\nDNS = 10.66.0.1\n[Peer]\nPublicKey = " + Key() + "\nEndpoint = vpn.example.test:51820\nAllowedIPs = 0.0.0.0/0\n"), "Configuration" }
             };
             using (var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/network/vpn/profiles", profile))
             {
@@ -90,5 +91,8 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "Add torrent engine");
             StringAssert.Contains(html, "Proven now: no file data can leave");
         }
+
+        // A throwaway WireGuard key per run: any 32 bytes; no key lives in the repository.
+        private static string Key() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     }
 }
