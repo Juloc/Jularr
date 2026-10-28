@@ -165,7 +165,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
         }
 
         // Actions on the selected titles; script shows it while selecting.
-        private IUiComponent BulkBar(string csrf)
+        private IUiComponent BulkBar(string? csrf)
         {
             var actions = new List<IUiComponent>
             {
@@ -186,7 +186,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
         private static HtmlElement Opener(HtmlElement button) => button.Attribute("popovertarget", PickerId);
 
         // A card with the collections it is in; the buttons around it need script.
-        private IUiComponent EntryCard(FavoriteEntry entry, string csrf, bool canCollect)
+        private IUiComponent EntryCard(FavoriteEntry entry, string? csrf, bool canCollect)
         {
             var id = entry.Id.ToString(CultureInfo.InvariantCulture);
             // With only favorites the heart toggles; with collections it opens the popover (the toggle stays without script).
@@ -224,7 +224,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
         }
 
         // One popover for every title: script fills in which titles it is for and which collections hold them.
-        private IUiComponent Picker(string csrf)
+        private IUiComponent Picker(string? csrf)
         {
             var options = _collections.Where(collection => !collection.IsSmart).Select(collection => (IUiComponent)new Label(
                 new Input().Attribute("type", "checkbox").Attribute("name", "collectionIds").Attribute("value", collection.Id.ToString(CultureInfo.InvariantCulture)),
@@ -253,7 +253,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
             return new MediaFilterDrawer(assets, "favorites-filter", "favorites.filter.title", "/Favorites", Scopes, ValidYear, Address(Current with { Types = [], Year = null, Page = 1 }), keep);
         }
 
-        private IUiComponent CreateDrawer(string csrf) => OnePane("favorites-create", "collections.new", "plus",
+        private IUiComponent CreateDrawer(string? csrf) => OnePane("favorites-create", "collections.new", "plus",
         [
             new Form<CreateCollectionDataV1>(form =>
             {
@@ -264,7 +264,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
         ], [new Button(new Text("common.close")).Attribute("data-drawer-close", "")]);
 
         // Rename and delete; a filter is edited on its own page.
-        private IUiComponent EditDrawer(CollectionV1 collection, string csrf)
+        private IUiComponent EditDrawer(CollectionV1 collection, string? csrf)
         {
             var body = new List<IUiComponent>
             {

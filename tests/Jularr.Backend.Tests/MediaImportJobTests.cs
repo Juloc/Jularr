@@ -13,6 +13,43 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class MediaImportJobTests
     {
+        [TestMethod]
+        public async Task DurableJob_ListBookChoice_KeepsExplicitAuthorsAndSurvivesReprocessing()
+        {
+            await using var host = await MediaImportTests.CreateHostAsync(new MediaImportTests.FakeProviders { IsUnavailable = true });
+            const string json = """{"version":1,"items":[{"type":"book","title":"An uncatalogued original","author":["First Author","Second Author"]}]}""";
+            var data = new MediaImportJobRequestV1(json, MediaImportActionType.Monitor, new([]),
+                new([new MediaImportChoiceV1(0, true, "list:book", null, null, null, null)]));
+            using var queued = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import/jobs", data);
+            Assert.AreEqual(HttpStatusCode.OK, queued.StatusCode, await queued.Content.ReadAsStringAsync());
+            var job = (await queued.Content.ReadFromJsonAsync<MediaImportJobCreatedV1>())!;
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                var claim = await scope.ServiceProvider.GetRequiredService<ClaimOperationV1>()
+                    .ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(OperationType.MediaImport), default);
+                Assert.IsNotNull(claim.OperationId);
+                var service = scope.ServiceProvider.GetRequiredService<ExecuteMediaImportJobV1>();
+                Assert.IsTrue((await service.ExecuteAsync<UpdateResult>(new OperationParametersV1(claim.OperationId.Value), default)).Success);
+            }
+            using var statusResponse = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/media-import/jobs/" + job.JobId);
+            var status = (await statusResponse.Content.ReadFromJsonAsync<MediaImportJobStatusV1>())!;
+            Assert.AreEqual(OperationStatusType.Completed, status.StatusTypeId);
+            Assert.AreEqual(MediaImportOutcomeType.AddedAndMonitored, status.Rows.Single().OutcomeTypeId);
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkPeople\""));
+            using var repeated = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-import/jobs", data);
+            Assert.AreEqual(HttpStatusCode.OK, repeated.StatusCode, await repeated.Content.ReadAsStringAsync());
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                var claim = await scope.ServiceProvider.GetRequiredService<ClaimOperationV1>()
+                    .ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(OperationType.MediaImport), default);
+                Assert.IsNotNull(claim.OperationId);
+                await scope.ServiceProvider.GetRequiredService<ExecuteMediaImportJobV1>()
+                    .ExecuteAsync<UpdateResult>(new OperationParametersV1(claim.OperationId.Value), default);
+            }
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+        }
+
         private const string Books = """
             {"version":1,"items":[
               {"type":"movie","ids":{"tmdb":"603"},"title":"The Matrix"},
