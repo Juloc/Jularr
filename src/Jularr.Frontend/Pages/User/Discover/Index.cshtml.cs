@@ -498,7 +498,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             {
                 // A search of series alone names the missing TheTVDB key.
                 _providerUnavailable = true;
-                if (exception.Code == "tvdb_key_missing") _providerNotice = "errors.tvdb_key_missing";
+                if (exception.Code == "tvdb_key_missing") _providerNotice = "discover.tvdbKeyMissing";
                 _results = selected is { IsCatalog: true } ? null : [];
                 _catalog = selected is { IsCatalog: true } ? [] : null;
                 return;

@@ -1255,8 +1255,8 @@
    "Discover speichert nichts lokal und fragt immer die Anbieter."
   ],
   "admin.catalog.off": [
-   "Full local discovery is off; Discover keeps only what it loaded.",
-   "Full local discovery ist aus; Discover behält nur, was es geladen hat."
+   "Keep full catalog is off; Discover keeps only what it loaded.",
+   "Vollen Katalog behalten ist aus; Discover behält nur, was es geladen hat."
   ],
   "admin.catalog.tmdb_movie": [
    "TMDB films",
@@ -1307,12 +1307,12 @@
    "Bilder anderer Titel"
   ],
   "admin.catalog.coversKeepDays": [
-   "Keep unused images for days",
-   "Ungenutzte Bilder aufbewahren (Tage)"
+   "Keep unused images for",
+   "Ungenutzte Bilder aufbewahren"
   ],
   "admin.catalog.coversMaximumMegabytes": [
-   "Largest size in MB, 0 keeps none",
-   "Größte Menge in MB, 0 speichert nichts"
+   "Largest size, 0 keeps none",
+   "Größte Menge, 0 speichert nichts"
   ],
   "admin.catalog.coversFormat": [
    "Cover format",
@@ -3581,6 +3581,10 @@
   "discover.providerUnavailable": [
    "Discovery is unavailable right now; your library still works.",
    "Entdecken ist gerade nicht verfügbar; deine Bibliothek funktioniert weiterhin."
+  ],
+  "discover.tvdbKeyMissing": [
+   "Series need a TVDB key.",
+   "Serien brauchen einen TVDB-Schlüssel."
   ],
   "discover.empty": [
    "Nothing to show here yet.",

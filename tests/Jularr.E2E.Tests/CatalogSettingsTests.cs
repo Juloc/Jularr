@@ -16,7 +16,7 @@ namespace Jularr.E2E.Tests
             var page = browser.Page;
             await Owner.SetUpAndSignInAsync(page);
             await page.GotoAsync("/Admin/Catalog");
-            await Assertions.Expect(page.GetByText("Full local discovery is off", new() { Exact = false })).ToBeVisibleAsync();
+            await Assertions.Expect(page.GetByText("Keep full catalog is off", new() { Exact = false })).ToBeVisibleAsync();
 
             // Every catalog is a card: how it is kept (here only what Discover loaded), the titles and what is still to read.
             // TMDB keeps only films whole; series come from TheTVDB, whose card budgets the details of the series lists and is never kept whole.
@@ -104,7 +104,7 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/Admin/Catalog");
             var aniList = page.Locator(".card-grid .feature-card").Filter(new() { HasText = "AniList" });
             await Assertions.Expect(aniList).ToContainTextAsync("Whole");
-            await Assertions.Expect(page.GetByText("Full local discovery is off", new() { Exact = false })).ToHaveCountAsync(0);
+            await Assertions.Expect(page.GetByText("Keep full catalog is off", new() { Exact = false })).ToHaveCountAsync(0);
             Assert.IsFalse(await page.GetByRole(AriaRole.Button, new() { Name = "Sync now", Exact = true }).IsDisabledAsync());
 
             // Off: the sub-options hide, the days stay; Discover asks the providers each time.
