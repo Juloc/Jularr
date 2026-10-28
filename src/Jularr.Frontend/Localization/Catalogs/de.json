@@ -1833,12 +1833,12 @@
    "Bibliothek zugewiesen"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted (paused)",
-   "Wird überwacht (pausiert)"
+   "Will be wanted",
+   "Wird überwacht"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted (paused)",
-   "Überwachung pausiert"
+   "Wanted",
+   "Überwacht"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",

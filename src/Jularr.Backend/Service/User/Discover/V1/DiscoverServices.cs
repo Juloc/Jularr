@@ -415,9 +415,12 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             // Every result is kept as the Work it is.
             await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
-            var results = Data.MediaSubtypeId == MediaSubtype.Anime ? await _catalog.SearchAnimeAsync(Data.Query, CancellationToken)
-                : await _catalog.SearchAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Query, null, CancellationToken);
-            var works = await MetadataCatalog.KeepAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, results, CancellationToken);
+            var works = Data.MediaSubtypeId == MediaSubtype.Anime
+                ? await MetadataCatalog.KeepAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, await _catalog.SearchAnimeAsync(Data.Query, CancellationToken), CancellationToken)
+                : Data.MediaTypeId == MediaType.Series
+                    ? await _catalog.SearchAndKeepSeriesAsync(Context, Data.MediaSubtypeId, Data.Query, CancellationToken)
+                    : await MetadataCatalog.KeepAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId,
+                        await _catalog.SearchAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Query, null, CancellationToken), CancellationToken);
             return await DiscoverQueries.CatalogItemsAsync(Context, works, Auth.ProfileId!.Value, CancellationToken);
         }
     }

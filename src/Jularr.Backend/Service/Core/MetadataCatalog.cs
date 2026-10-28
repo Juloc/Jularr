@@ -71,6 +71,10 @@ namespace Jularr.Backend.Service.Core
             return await MarkKnownAsync(context, results, ct);
         }
 
+        // TheTVDB's series search kept as Works; its IMDb and TMDB ids find a series of the library that does not hold its TheTVDB id yet.
+        public async Task<IReadOnlyList<ExternalWorkData>> SearchAndKeepSeriesAsync(LogicContext context, MediaSubtype? subtype, string query, CancellationToken ct) =>
+            await KeepWorksAsync(context, new ExternalWorkListData("tvdb", MediaType.Series, subtype), await metadata.SearchSeriesAsync(context, query, null, ct), ct);
+
         // Discover's anime: AniList finds and shows seasons; Works, requests and every action use the series of TheTVDB.
         public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAnimeAsync(string query, CancellationToken ct) =>
             [.. (await aniList.SearchAsync(AniListMediaType.Anime, AniListMatching.Formats(MediaType.Series, MediaSubtype.Anime), query, ct)).Select(AniListAnime)];

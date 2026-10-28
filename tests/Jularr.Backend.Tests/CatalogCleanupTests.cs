@@ -139,6 +139,47 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Cleanup_KeepsTitlesWhoseFilesAreOffline_AndEveryPersonsEdit()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Series", MediaType.Series);
+
+            // Old titles with details: 50 has only a file the offline NAS cannot show, 51 hides a provider relation to the catalog title 52, 53 has episode groups,
+            // 54 a season an administrator mapped; 55 has nothing.
+            var ids = "ARRAY[50, 51, 53, 54, 55]";
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "CatalogNamespace", "FetchedAt", "DetailedAt", "ViewedAt")
+                SELECT id, 2, 'Series ' || id, 'tvdb', {Old}, {Old}, {Old} FROM unnest({ids}) AS id;
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "CatalogNamespace", "FetchedAt", "CreatedAt") VALUES (52, 2, 'Hidden relation target', 'tvdb', {Old}, {Old});
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT id, 'tvdb', 't' || id FROM unnest({ids} || 52) AS id;
+                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual", "ProviderId") SELECT id, 'Alt ' || id, FALSE, (SELECT min("Id") FROM "Providers") FROM unnest({ids}) AS id;
+                WITH edition AS (INSERT INTO "WorkEditions" ("WorkId") VALUES (50) RETURNING "Id", "WorkId"),
+                version AS (INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId") SELECT "WorkId", "Id" FROM edition RETURNING "Id", "WorkId"),
+                asset AS (INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT "WorkId", "Id", 1 FROM version RETURNING "Id")
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MissingSince", "MediaAssetId")
+                SELECT {rootId}, 'Series 50/S01E01.mkv', 1, {Old}, {Old}, {Old}, "Id" FROM asset;
+                INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey", "IsSuppressed") VALUES (51, 52, 1, 'tvdb', TRUE);
+                INSERT INTO "WorkUnitGroups" ("WorkId", "Name", "FirstNumber", "LastNumber") VALUES (53, 'Arc', 1, 5);
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (541, 54, 1, 1);
+                INSERT INTO "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value", "IsManual") VALUES (541, 'anilist', '5401', TRUE);
+                """);
+
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<CleanCatalogTitlesV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default);
+            }
+
+            Assert.AreEqual("50:true,51:true,52:false,53:true,54:true", await host.ScalarAsync("""
+                SELECT string_agg(work."Id" || ':' || (work."DetailedAt" IS NOT NULL), ',' ORDER BY work."Id") FROM "Works" AS work WHERE work."Id" BETWEEN 50 AND 54
+                """), "Tied titles keep their details; the hidden relation's target keeps its row.");
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" WHERE "Id" = 55 AND "DetailedAt" IS NOT NULL"""), "A title without any tie loses its details.");
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "WorkRelations" WHERE "WorkId" = 51 AND "RelatedWorkId" = 52 AND "IsSuppressed" """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "WorkUnitExternalIdentities" WHERE "WorkUnitId" = 541"""));
+        }
+
+        [TestMethod]
         public async Task Cleanup_WhileDiscoverIsDetailedAhead_KeepsTheDetailsOfEveryDiscoverListTitle_AndNoneWithoutCaching()
         {
             await using var host = await AuthenticationTests.Host.CreateAsync(library: true);

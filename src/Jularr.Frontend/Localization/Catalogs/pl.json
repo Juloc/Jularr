@@ -1281,12 +1281,12 @@
    "Brak jednoznacznego dopasowania"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted (paused)",
-   "Będzie monitorowane (wstrzymane)"
+   "Will be wanted",
+   "Będzie monitorowane"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted (paused)",
-   "Monitorowanie wstrzymane"
+   "Wanted",
+   "Monitorowane"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",

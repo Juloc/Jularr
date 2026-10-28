@@ -30,7 +30,7 @@ namespace Jularr.Backend.Tests
         private const string TmdbToken = "eyJ-takeover-token";
 
         [TestMethod]
-        public async Task Takeover_RadarrPreviewThenApply_ImportsInventoryAndPausesNewMonitoringUntilExplicitRelease()
+        public async Task Takeover_RadarrPreviewThenApply_ImportsInventoryIntoTheLibraryWithRadarrsMonitoring()
         {
             var radarr = new FakeRadarr();
             await using var host = await Host.CreateAsync(razor: true, library: true, services: services =>
@@ -72,18 +72,22 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(3L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
             Assert.AreEqual("https://readable.example.test", await host.ScalarAsync("SELECT \"BaseUrl\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Readable'"));
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"ProtectedApiKey\" IS NULL FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Open'"));
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
-            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsPaused\" FROM \"WantedItems\""), "Takeover alone must not start automatic acquisition.");
+            // Every title taken over is in the library at once, monitored as Radarr monitored it.
+            Assert.AreEqual("Ignored:true,Owned:false,The Matrix:false", await host.ScalarAsync("""
+                SELECT string_agg(work."CanonicalTitle" || ':' || wanted."IsPaused", ',' ORDER BY work."CanonicalTitle")
+                FROM "WantedItems" AS wanted JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                """));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" AS work WHERE NOT EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS tie WHERE tie."WorkId" = work."Id")"""));
             var again = await RunAsync(host, true);
             Assert.AreEqual("takeover_exists", again.Single(item => item.Name == "Readable").OutcomeKey);
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\""));
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\""));
             var signal = host.Services.GetRequiredService<AcquisitionSearchSignal>();
-            Assert.IsFalse(signal.TakeRequest(), "Taking over inventory must not wake automatic search.");
+            Assert.IsFalse(signal.TakeRequest(), "Taking over inventory leaves the search to its next cycle.");
 
-            // Explicitly releasing monitoring uses the existing target editor; a repeated takeover must preserve that choice.
-            var wantedId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"WantedItems\""))!;
+            // Releasing an unmonitored title uses the existing target editor; a repeated takeover must preserve that choice.
+            var wantedId = (long)(await host.ScalarAsync("""SELECT wanted."Id" FROM "WantedItems" AS wanted JOIN "Works" AS work ON work."Id" = wanted."WorkId" WHERE work."CanonicalTitle" = 'Ignored'"""))!;
             await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = now() + interval '1 day' WHERE \"Id\" = " + wantedId);
             using var released = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/" + wantedId, new UpdateWantedDataV1(false, 1));
             Assert.AreEqual(HttpStatusCode.OK, released.StatusCode, await released.Content.ReadAsStringAsync());
@@ -98,7 +102,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
             Assert.IsFalse(signal.TakeRequest(), "A stale update must not wake automatic search.");
             await RunAsync(host, true);
-            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsPaused\" FROM \"WantedItems\""));
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsPaused\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId));
 
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Takeover");
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());

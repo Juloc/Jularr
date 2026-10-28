@@ -37,13 +37,24 @@ namespace Jularr.Backend.Logic.Media
                         1,
                         identity."Value"
                     FROM
-                        "WorkExternalIdentities" AS identity
-                        JOIN "Works" AS work ON work."Id" = identity."WorkId"
+                        -- Recommendations are prepared for Works with details or a tie to the library, not for every catalog title.
+                        (
+                            SELECT
+                                work."Id"
+                            FROM
+                                "Works" AS work
+                            WHERE
+                                work."DetailedAt" IS NOT NULL
+                            UNION
+                            SELECT
+                                library."WorkId"
+                            FROM
+                                "WorkLibraryRelations" AS library
+                        ) AS kept
+                        JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = kept."Id"
                     WHERE
                         identity."Namespace" IN ('tmdb_movie', 'tmdb_tv')
                         AND CASE WHEN identity."Value" ~ '^[1-9][0-9]{0,9}$' THEN identity."Value"::bigint BETWEEN 1 AND 2147483647 ELSE FALSE END
-                        -- Recommendations are prepared for Works with details or a tie to the library, not for every catalog title.
-                        AND (work."DetailedAt" IS NOT NULL OR EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id"))
                 ), localized AS (
                     SELECT
                         candidate."Namespace",

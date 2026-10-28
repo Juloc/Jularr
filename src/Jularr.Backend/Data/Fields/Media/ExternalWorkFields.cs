@@ -41,5 +41,8 @@ namespace Jularr.Backend.Data.Fields.Media
         // Whether Discover keeps its lists (the Caching module is on).
         public static readonly BoolField KeepsDiscoverLists = new();
         public static readonly BoolField AreDetailsUnavailable = new();
+        // Whether something ties a Work to the library (WorkLibraryRelations).
+        public static readonly BoolField IsInLibrary = new();
+        public static readonly BoolField HoldsValue = new();
     }
 }

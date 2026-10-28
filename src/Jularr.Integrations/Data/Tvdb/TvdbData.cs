@@ -98,13 +98,25 @@ namespace Jularr.Integrations.Data.Tvdb
         public int? Runtime { get; } = runtime;
         public string? Overview { get; init; }
         public string? ImageUrl { get; init; }
+
+        public TvdbEpisode WithName(string? other) => new(Id, SeasonNumber, EpisodeNumber, AbsoluteNumber, other, Aired, Runtime) { Overview = Overview, ImageUrl = ImageUrl };
     }
 
-    // One series of TheTVDB's search with its names and summaries by TheTVDB's language code.
+    // A person TheTVDB credits, with the ids IMDb and TMDB know the person by.
+    internal sealed class TvdbPerson(int id, string? imdbId, int? tmdbId)
+    {
+        public int Id { get; } = id;
+        public string? ImdbId { get; } = imdbId;
+        public int? TmdbId { get; } = tmdbId;
+    }
+
+    // One series of TheTVDB's search with its names and summaries by TheTVDB's language code, and the ids IMDb and TMDB know the series by.
     internal sealed class TvdbSearchResult(int id, string name)
     {
         public int Id { get; } = id;
         public string Name { get; } = name;
+        public string? ImdbId { get; init; }
+        public int? TmdbId { get; init; }
         public int? Year { get; init; }
         public string? Overview { get; init; }
         public string? ImageUrl { get; init; }

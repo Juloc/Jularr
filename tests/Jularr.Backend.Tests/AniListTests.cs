@@ -133,6 +133,8 @@ namespace Jularr.Backend.Tests
                 SELECT 40, "ActiveProfileId", 41, 1 FROM "AccountSessions" WHERE "ActiveProfileId" IS NOT NULL ORDER BY "CreatedAt" DESC LIMIT 1;
                 INSERT INTO "Notifications" ("ProfileId", "NotificationTypeId", "WorkId", "Subject")
                 SELECT "ActiveProfileId", 3, 40, 'Example Quest 2' FROM "AccountSessions" WHERE "ActiveProfileId" IS NOT NULL ORDER BY "CreatedAt" DESC LIMIT 1;
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (700, 10), (701, 40);
+                INSERT INTO "AcquisitionReleases" ("WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId") VALUES (701, 'nzb:quest-two', 'Example Quest 2 S01', 4);
                 """);
             await RunAsync(host);
 
@@ -144,6 +146,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("10:2", await host.ScalarAsync("""SELECT "WorkId" || ':' || "SeasonNumber" FROM "ExternalWorkFeedItems" WHERE "FeedId" = 1 AND "Position" = 1"""));
             Assert.AreEqual(10L, await host.ScalarAsync("""SELECT "WorkId" FROM "AcquisitionRequests" """));
             Assert.AreEqual(10L, await host.ScalarAsync("""SELECT "WorkId" FROM "Notifications" """));
+            Assert.AreEqual(700L, await host.ScalarAsync("""SELECT "WantedItemId" FROM "AcquisitionReleases" WHERE "ReleaseIdentity" = 'nzb:quest-two'"""),
+                "The season's blocked release stays with the series' wanted entry.");
         }
 
         [TestMethod]

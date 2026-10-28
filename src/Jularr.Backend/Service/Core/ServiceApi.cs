@@ -227,6 +227,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<Jularr.Backend.Service.Admin.Media.V1.MediaImportProcessor>();
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<TvdbMetadata>();
+            services.TryAddSingleton<TvdbConnectionState>();
             services.TryAddTransient<PlexServer>();
             services.TryAddTransient<MediaServers>();
             services.TryAddTransient<LibraryReplacements>();

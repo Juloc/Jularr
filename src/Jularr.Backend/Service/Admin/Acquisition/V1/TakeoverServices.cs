@@ -246,8 +246,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 }));
             }
 
-            // Import existing movies/series without starting downloads; missing monitored titles of every media type become wanted.
-            // Previously imported provider ids never use the limited catalog-import budget.
+            // Movies and series come over whole, the missing monitored titles of every other media type; every title taken over belongs to the library at once,
+            // monitored as Sonarr, Radarr or their kin monitored it. Previously imported provider ids never use the limited catalog-import budget.
             var taken = 0;
             foreach (var title in titles.Where(item => item.IsMonitored && item.IsMissing || mediaType is MediaType.Movie or MediaType.Series)
                 .OrderByDescending(item => item.IsMonitored && item.IsMissing))
@@ -356,16 +356,13 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     taken++;
                 }
 
-                if (wantsDownload)
+                // A monitored title is wanted and searched, an unmonitored one is wanted paused; a target the title already has stays as it is.
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 {
-                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
-                    {
-                        await ctx.EnsureWantedItemAsync(new WantedTakeoverData(workId, sourceProfileId is { } profileId && profileIds.TryGetValue((profileId, sourceMetadataId), out var id) ? id : null,
-                            SourceRoot(title) is { } root
-                                && chosen.TryGetValue(Folder(root.Path), out var libraryRootId) ? libraryRootId : null), ct);
-                        return true;
-                    }, CancellationToken);
-                }
+                    await ctx.EnsureWantedItemAsync(new WantedTakeoverData(workId, sourceProfileId is { } profileId && profileIds.TryGetValue((profileId, sourceMetadataId), out var id) ? id : null,
+                        SourceRoot(title) is { } root && chosen.TryGetValue(Folder(root.Path), out var libraryRootId) ? libraryRootId : null, !title.IsMonitored), ct);
+                    return true;
+                }, CancellationToken);
 
                 items.Add(new TakeoverItemV1(type, name, existingWork is not null ? "takeover_exists" : wantsDownload ? "takeover_wanted" : "takeover_added", null));
             }

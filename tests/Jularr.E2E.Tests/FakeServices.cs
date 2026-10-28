@@ -225,6 +225,7 @@ namespace Jularr.E2E.Tests
                 "translations":{"nameTranslations":[{"name":"Jularr Test Series","language":"eng"}],"overviewTranslations":[{"overview":"Two test episodes.","language":"eng"}]}}}
                 """),
             "series/990001/episodes/default" => Json("""{"data":{"episodes":[{"id":1,"seasonNumber":1,"number":1,"name":"Pilot","aired":"2020-04-01","overview":"The first test episode."},{"id":2,"seasonNumber":1,"number":2,"name":"Second","aired":"2020-04-08"}]},"links":{"next":null}}"""),
+            "series/990001/episodes/default/eng" => Json("""{"data":{"episodes":[{"id":1,"seasonNumber":1,"number":1,"name":"Pilot","aired":"2020-04-01","overview":"The first test episode."},{"id":2,"seasonNumber":1,"number":2,"name":"Second","aired":"2020-04-08"}]},"links":{"next":null}}"""),
             "series/990002/extended" => Json("""
                 {"data":{"id":990002,"name":"Reidai Anime","overview":"Futatsu no tesuto.","firstAired":"2021-01-05","year":"2021","originalLanguage":"jpn","originalCountry":"jpn",
                 "remoteIds":[{"id":"99002","sourceName":"TheMovieDB.com"}],"genres":[{"name":"Animation"},{"name":"Anime"}],"seasons":[{"number":1,"type":{"type":"official"}}],

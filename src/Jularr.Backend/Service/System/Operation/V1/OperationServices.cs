@@ -705,7 +705,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             var sql = new SqlStatement();
                             sql.Statement =
                                 """
-                                SELECT work."Id"
+                                SELECT
+                                    work."Id",
+                                    EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id") AS "IsInLibrary"
                                 FROM "Works" AS work
                                 WHERE work."MediaTypeId" = @MediaTypeId
                                     AND (
@@ -746,13 +748,20 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                             AND (@ReleaseYear::integer IS NULL OR work."ReleaseYear" = @ReleaseYear)
                                         )
                                     )
-                                ORDER BY work."Id"
+                                ORDER BY "IsInLibrary" DESC, work."Id"
                                 LIMIT 2;
                                 """;
                             sql.Parameters.Add(new WorkFolderMatchData(mediaType, parsed.Title, parsed.Year, supplied));
-                            return ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
+                            return ctx.ReadSql.ReadListAsync<WorkLibraryCandidateData>(sql, ct);
                         }, CancellationToken);
-                        workId = candidates.Count == 1 ? candidates[0].Id : null;
+
+                        // The one Work of the library a title names wins over catalog titles of the same name; two of the library, or two catalog titles, are unclear.
+                        workId = candidates switch
+                        {
+                            [var only] => only.Id,
+                            [{ IsInLibrary: true } library, { IsInLibrary: false }] => library.Id,
+                            _ => (long?)null
+                        };
 
                         // An identity the Work does not carry completely is checked with the provider, never guessed from the part that matches or from the title:
                         // the provider names one series for every id, and importing it extends the Work that already holds one of them.

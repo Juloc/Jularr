@@ -32,7 +32,8 @@ namespace Jularr.Backend.Logic.Media
 
         // The one owner of catalog rows: every title a list, search or relation names is a Work with its identity, found again by that identity.
         // An anime entry AniList knows as a season of a series is that series with the season, also while an earlier entry of its own still waits to be merged into it.
-        // A TheTVDB series a TMDB list or Sonarr named keeps TMDB's and IMDb's ids as well; a series Work known only by that TMDB id is the same Work and takes the TheTVDB id.
+        // A TheTVDB series a TMDB list, TheTVDB's search or Sonarr named keeps TMDB's and IMDb's ids as well; a series Work known only by that TMDB or IMDb id is the
+        // same Work and takes the TheTVDB id.
         public static async Task<IReadOnlyList<ExternalWorkSavedData>> SaveExternalWorksAsync(this LogicContext ctx, ExternalWorkBatchData data, CancellationToken ct)
         {
             if (data.Values.Length == 0) return [];
@@ -64,8 +65,8 @@ namespace Jularr.Backend.Logic.Media
             }
 
             // A list or search that knows less than an earlier read keeps what was known; only secure image addresses are kept.
-            // A Work keeps its title, year and subtype once it has details or a person chose its subtype, a list without a subtype never clears one,
-            // and another catalog's Work keeps its catalog fields.
+            // A Work keeps its title, year and subtype once it has details, belongs to the library or a person chose its subtype, a list without a subtype never
+            // clears one, and another catalog's Work keeps its catalog fields.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -97,20 +98,24 @@ namespace Jularr.Backend.Logic.Media
                         coalesce(identity."WorkId", linked."WorkId") AS "KnownWorkId",
                         linked."WorkId" IS NOT NULL AS "IsLinked",
                         season."WorkId" AS "SeriesWorkId",
-                        season."SeasonNumber"
+                        season."SeasonNumber",
+                        EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = coalesce(identity."WorkId", linked."WorkId")) AS "IsInLibrary"
                     FROM
                         item
                         LEFT JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = @Namespace AND identity."Value" = item."Value"
                         LEFT JOIN LATERAL (
                             SELECT
-                                tmdb."WorkId"
+                                other."WorkId"
                             FROM
-                                "WorkExternalIdentities" AS tmdb
-                                JOIN "Works" AS work ON work."Id" = tmdb."WorkId" AND work."MediaTypeId" = 2
+                                "WorkExternalIdentities" AS other
+                                JOIN "Works" AS work ON work."Id" = other."WorkId" AND work."MediaTypeId" = 2
                             WHERE
-                                tmdb."Namespace" = 'tmdb_tv'
-                                AND tmdb."Value" = item."TmdbValue"
-                                AND NOT EXISTS (SELECT 1 FROM "WorkExternalIdentities" AS own WHERE own."WorkId" = tmdb."WorkId" AND own."Namespace" = @Namespace)
+                                (other."Namespace" = 'tmdb_tv' AND other."Value" = item."TmdbValue" OR other."Namespace" = 'imdb' AND other."Value" = item."ImdbValue")
+                                AND NOT EXISTS (SELECT 1 FROM "WorkExternalIdentities" AS own WHERE own."WorkId" = other."WorkId" AND own."Namespace" = @Namespace)
+                            ORDER BY
+                                other."Namespace" = 'tmdb_tv' DESC,
+                                other."WorkId"
+                            LIMIT 1
                         ) AS linked ON identity."WorkId" IS NULL
                         LEFT JOIN LATERAL (
                             SELECT
@@ -128,10 +133,11 @@ namespace Jularr.Backend.Logic.Media
                         "Works" AS work
                     SET
                         "CatalogNamespace" = @Namespace,
-                        "CanonicalTitle" = CASE WHEN work."DetailedAt" IS NULL THEN item."Title" ELSE work."CanonicalTitle" END,
-                        "ReleaseYear" = CASE WHEN work."DetailedAt" IS NULL THEN coalesce(item."ReleaseYear", work."ReleaseYear") ELSE work."ReleaseYear" END,
+                        "CanonicalTitle" = CASE WHEN work."DetailedAt" IS NULL AND NOT resolved."IsInLibrary" THEN item."Title" ELSE work."CanonicalTitle" END,
+                        "ReleaseYear" = CASE WHEN work."DetailedAt" IS NULL AND NOT resolved."IsInLibrary" THEN coalesce(item."ReleaseYear", work."ReleaseYear") ELSE work."ReleaseYear" END,
                         "MediaSubtypeId" = CASE
-                            WHEN work."DetailedAt" IS NULL AND NOT work."IsMediaSubtypeManual" AND work."MediaTypeId" = @MediaTypeId THEN coalesce(@MediaSubtypeId::smallint, work."MediaSubtypeId")
+                            WHEN work."DetailedAt" IS NULL AND NOT resolved."IsInLibrary" AND NOT work."IsMediaSubtypeManual" AND work."MediaTypeId" = @MediaTypeId
+                                THEN coalesce(@MediaSubtypeId::smallint, work."MediaSubtypeId")
                             ELSE work."MediaSubtypeId"
                         END,
                         "OriginalTitle" = coalesce(item."OriginalTitle", work."OriginalTitle"),
@@ -838,7 +844,7 @@ namespace Jularr.Backend.Logic.Media
         }
 
         // Entries just read replace what the catalog knew. An entry the provider no longer has takes its Work along while that Work is only a catalog title;
-        // a Work with details, a tie to the library or a relation pointing at it stays and is not read again.
+        // a Work with details, a tie to the library, a file record or a relation pointing at it stays and is not read again.
         public static async Task<int> DetailExternalWorksAsync(this LogicContext ctx, ExternalWorkEntriesData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -855,6 +861,7 @@ namespace Jularr.Backend.Logic.Media
                     AND work."CatalogNamespace" = @Namespace
                     AND work."DetailedAt" IS NULL
                     AND NOT EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id")
+                    AND NOT EXISTS (SELECT 1 FROM "MediaAssets" AS asset WHERE asset."WorkId" = work."Id")
                     AND NOT EXISTS (SELECT 1 FROM "WorkRelations" AS relation WHERE relation."RelatedWorkId" = work."Id");
                 """;
             sql.Parameters.Add(data);
@@ -878,7 +885,7 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(data);
             changed += await ctx.ExecuteAsyncForAffectedRows(sql, ct);
 
-            // Title, year and date belong to the details once a Work has them; the catalog fields are the catalog's.
+            // Title, year and date belong to the details once a Work has them, and to the library's Work; the catalog fields are the catalog's.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -886,10 +893,10 @@ namespace Jularr.Backend.Logic.Media
                     "Works" AS work
                 SET
                     "CatalogNamespace" = @Namespace,
-                    "CanonicalTitle" = CASE WHEN work."DetailedAt" IS NULL THEN left(entry."Title", 500) ELSE work."CanonicalTitle" END,
-                    "ReleasedOn" = CASE WHEN work."DetailedAt" IS NULL THEN entry."ReleasedOn" ELSE work."ReleasedOn" END,
+                    "CanonicalTitle" = CASE WHEN work."DetailedAt" IS NULL AND NOT library."IsInLibrary" THEN left(entry."Title", 500) ELSE work."CanonicalTitle" END,
+                    "ReleasedOn" = CASE WHEN work."DetailedAt" IS NULL AND NOT library."IsInLibrary" THEN entry."ReleasedOn" ELSE work."ReleasedOn" END,
                     "ReleaseYear" = CASE
-                        WHEN work."DetailedAt" IS NOT NULL THEN work."ReleaseYear"
+                        WHEN work."DetailedAt" IS NOT NULL OR library."IsInLibrary" THEN work."ReleaseYear"
                         WHEN extract(year FROM entry."ReleasedOn") BETWEEN 1800 AND 2200 THEN extract(year FROM entry."ReleasedOn")::smallint
                     END,
                     "OriginalTitle" = left(entry."OriginalTitle", 500),
@@ -905,6 +912,10 @@ namespace Jularr.Backend.Logic.Media
                     jsonb_to_recordset(@Entries::jsonb) AS entry ("Value" text, "Title" text, "OriginalTitle" text, "ReleasedOn" date, "Overview" text, "ImageUrl" text,
                         "BackdropUrl" text, "Popularity" real, "Rating" double precision, "Votes" integer, "ImdbId" text, "IsAdult" boolean)
                     JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = @Namespace AND identity."Value" = entry."Value"
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS tie WHERE tie."WorkId" = identity."WorkId") AS "IsInLibrary"
+                    ) AS library
                 WHERE
                     work."Id" = identity."WorkId"
                     AND (work."CatalogNamespace" IS NULL OR work."CatalogNamespace" = @Namespace)

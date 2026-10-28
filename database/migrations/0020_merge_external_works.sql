@@ -224,15 +224,14 @@ DROP TABLE "ExternalWorks";
 -- The full sync reads the catalog entries it has not read yet (no FetchedAt), most popular first.
 CREATE INDEX "IX_Works_CatalogUnread" ON "Works" ("CatalogNamespace", "Popularity" DESC NULLS LAST, "Id") WHERE "CatalogNamespace" IS NOT NULL AND "FetchedAt" IS NULL;
 
--- What ties a Work to the library: a present file, a request, a wanted entry, a favorite, a collection, progress, an entry on a connected AniList list,
--- the Plex library, or a person's edit (a manual title, fact, identity, subtype, series or relation). A Work without any is a catalog title.
--- One row per tie; ask it with EXISTS for one Work.
+-- What ties a Work to the library: a file record (also while its storage is offline or the file is missing), a request, a wanted entry, a favorite,
+-- a collection, progress, an entry on a connected AniList list, the Plex library, or a person's edit (a manual title, fact, identity, subtype, series,
+-- relation, hidden relation, episode group or season mapping). A Work without any is a catalog title. One row per tie; ask it with EXISTS for one Work.
 CREATE VIEW "WorkLibraryRelations" AS
 SELECT
     asset."WorkId"
 FROM
     "MediaAssets" AS asset
-    JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
 UNION ALL
 SELECT
     request."WorkId"
@@ -308,10 +307,25 @@ FROM
     "WorkRelations" AS relation
 WHERE
     relation."SourceKey" = 'manual'
+    OR relation."IsSuppressed"
 UNION ALL
 SELECT
     relation."RelatedWorkId"
 FROM
     "WorkRelations" AS relation
 WHERE
-    relation."SourceKey" = 'manual';
+    relation."SourceKey" = 'manual'
+    OR relation."IsSuppressed"
+UNION ALL
+SELECT
+    unitGroup."WorkId"
+FROM
+    "WorkUnitGroups" AS unitGroup
+UNION ALL
+SELECT
+    unit."WorkId"
+FROM
+    "WorkUnitExternalIdentities" AS mapped
+    JOIN "WorkUnits" AS unit ON unit."Id" = mapped."WorkUnitId"
+WHERE
+    mapped."IsManual";

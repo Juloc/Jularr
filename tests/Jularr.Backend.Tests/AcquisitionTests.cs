@@ -2422,6 +2422,34 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task DailyRefresh_ATitleWhoseIdentityConflicts_IsSkippedAndTheOthersStillRefresh()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet { Results = FakeUsenet.SeriesResults });
+            await host.Fixture.RunSqlAsync("UPDATE \"LibraryRoots\" SET \"MediaTypeId\" = 2");
+            var tmdb = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(FakeUsenet.TmdbToken));
+            await SaveTvdbKeyAsync(host);
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, "1399"));
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+
+            // Another Work of the library holds the series' TheTVDB id, so the Work, refreshed by its TMDB id, cannot be imported again.
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (600, {work.Id});
+                INSERT INTO "Works" ("Id", "CanonicalTitle", "MediaTypeId") VALUES (601, 'Other', 2);
+                INSERT INTO "WantedItems" ("Id", "WorkId", "IsPaused") VALUES (602, 601, TRUE);
+                UPDATE "WorkExternalIdentities" SET "WorkId" = 601 WHERE "WorkId" = {work.Id} AND "Namespace" = 'tvdb';
+                UPDATE "WorkExternalIdentities" SET "UpdatedAt" = now() - interval '2 days' WHERE "WorkId" = {work.Id} AND "Namespace" = 'tmdb_tv';
+                """);
+            await RunAsync<RefreshWantedMetadataV1>(host);
+
+            // It waits for the next day instead of heading the queue every cycle.
+            Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"UpdatedAt\" > now() - interval '1 day' FROM \"WorkExternalIdentities\" WHERE \"WorkId\" = {work.Id} AND \"Namespace\" = 'tmdb_tv'"));
+            Assert.AreEqual(work.Id + ":601", await host.ScalarAsync("SELECT string_agg(\"WorkId\"::text, ':' ORDER BY \"Namespace\") FROM \"WorkExternalIdentities\" WHERE \"Namespace\" IN ('tvdb', 'tmdb_tv') AND \"WorkId\" IN (601, " + work.Id + ")"));
+        }
+
+        [TestMethod]
         public async Task Unmonitoring_TheLastMissingEpisode_CompletesTheRequest()
         {
             using var storage = new TemporaryDirectory();

@@ -1170,6 +1170,28 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Scan_WithoutProviderId_PrefersTheLibrarysWork_OverACatalogTitleOfTheSameName()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Same Name (2020)", "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Same Name - S01E01.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+
+            // A catalog title of TheTVDB with the same name and year comes first; only the library's Work is wanted.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (8001, 2, 'Same Name', 2020, 'tvdb'), (8002, 2, 'Same Name', 2020, NULL);
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (8001, 'tvdb', '8001');
+                INSERT INTO "WantedItems" ("WorkId") VALUES (8002);
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(8002L, await host.ScalarAsync("""SELECT asset."WorkId" FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId" """));
+        }
+
+        [TestMethod]
         public async Task Scan_UnknownSecondProviderId_DoesNotGuessFromTheFirst()
         {
             using var storage = new TemporaryDirectory();

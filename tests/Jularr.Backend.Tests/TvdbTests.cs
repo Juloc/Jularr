@@ -147,6 +147,30 @@ namespace Jularr.Backend.Tests
             """;
 
         [TestMethod]
+        public async Task Episodes_AreAskedInEnglish_SoAnimeTitlesAreNotJapanese()
+        {
+            var paths = new List<string>();
+            using var client = CreateClient((request, _) =>
+            {
+                paths.Add(request.RequestUri!.AbsolutePath);
+                return Reply("""{"data":{"episodes":[{"id":12,"seasonNumber":1,"number":1,"name":"Assassin From the White Room"}]},"links":{"next":null}}""");
+            });
+            var result = await new TvdbClient(client).ReadEpisodesAsync(new TvdbSession("session"), 123, CancellationToken.None);
+            CollectionAssert.AreEqual(new[] { "/v4/series/123/episodes/default/eng" }, paths);
+            Assert.AreEqual("Assassin From the White Room", result.Single().Name);
+        }
+
+        [TestMethod]
+        public async Task Episodes_WithoutEnglishTitle_KeepTheirOriginalName()
+        {
+            using var client = CreateClient((request, _) => request.RequestUri!.AbsolutePath.EndsWith("/eng", StringComparison.Ordinal)
+                ? Reply("""{"data":{"episodes":[{"id":1,"seasonNumber":1,"number":1,"name":"Contract and Payment"},{"id":2,"seasonNumber":1,"number":2,"name":null}]},"links":{"next":null}}""")
+                : Reply("""{"data":{"episodes":[{"id":1,"seasonNumber":1,"number":1,"name":"契約と代償"},{"id":2,"seasonNumber":1,"number":2,"name":"嘘"}]},"links":{"next":null}}"""));
+            var result = await new TvdbClient(client).ReadEpisodesAsync(new TvdbSession("session"), 123, CancellationToken.None);
+            CollectionAssert.AreEqual(new[] { "Contract and Payment", "嘘" }, result.Select(episode => episode.Name).ToArray());
+        }
+
+        [TestMethod]
         public async Task Unauthorized_FailsWithoutRevealingCredential()
         {
             using var client = CreateClient((_, _) => Reply("{}", HttpStatusCode.Unauthorized));

@@ -10,6 +10,8 @@ namespace Jularr.Integrations.Logic.Tvdb
     // Read-only TVDB API v4 access. No Work, unit or progress writes occur here.
     internal sealed class TvdbClient(HttpClient httpClient)
     {
+        private const string TitleLanguage = "eng";
+
         public async Task<TvdbSession> LoginAsync(string apiKey, string? pin, CancellationToken ct)
         {
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -71,8 +73,11 @@ namespace Jularr.Integrations.Logic.Tvdb
                 .Select(item => (Item: item, Id: int.TryParse(Text(item, "tvdb_id"), NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : (int?)null, Name: Text(item, "name")))
                 .Where(item => item.Id is not null && item.Name is not null && (Text(item.Item, "type") ?? "series") == "series")
                 .DistinctBy(item => item.Id)
+                .Select(item => (item.Id, item.Name, item.Item, Remote: RemoteIds(Items(item.Item, "remote_ids"))))
                 .Select(item => new TvdbSearchResult(item.Id!.Value, item.Name!)
                 {
+                    ImdbId = item.Remote.ImdbId,
+                    TmdbId = item.Remote.TmdbId,
                     Year = int.TryParse(Text(item.Item, "year"), NumberStyles.None, CultureInfo.InvariantCulture, out var started) ? started : null,
                     Overview = Text(item.Item, "overview"),
                     ImageUrl = Image(Text(item.Item, "image_url")),
@@ -94,21 +99,7 @@ namespace Jularr.Integrations.Logic.Tvdb
             }
 
             // Remote identities name the series at IMDb and TMDB.
-            string? imdbId = null;
-            int? tmdbId = null;
-            foreach (var item in Items(data, "remoteIds"))
-            {
-                var source = Text(item, "sourceName") ?? "";
-                if (imdbId is null && source.Contains("IMDb", StringComparison.OrdinalIgnoreCase))
-                {
-                    imdbId = Text(item, "id");
-                }
-                else if (tmdbId is null && source.Contains("TheMovieDB", StringComparison.OrdinalIgnoreCase)
-                    && int.TryParse(Text(item, "id"), NumberStyles.None, CultureInfo.InvariantCulture, out var tmdb) && tmdb > 0)
-                {
-                    tmdbId = tmdb;
-                }
-            }
+            var (imdbId, tmdbId) = RemoteIds(Items(data, "remoteIds"));
 
             // Names and summaries per language; an alias is no translation.
             var translations = Child(data, "translations");
@@ -155,6 +146,35 @@ namespace Jularr.Integrations.Logic.Tvdb
                     .Select(item => (Number: Int(item, "number"), Image: Image(Text(item, "image")))).Where(item => item.Number is >= 0)
                     .DistinctBy(item => item.Number).Select(item => new TvdbSeason(item.Number!.Value, item.Image))]
             };
+        }
+
+        // A person's IMDb and TMDB ids, by which another catalog may already know the person.
+        public async Task<TvdbPerson> ReadPersonAsync(TvdbSession session, int id, CancellationToken ct)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(id);
+            using var document = await RequestAsync(HttpMethod.Get, "people/" + id.ToString(CultureInfo.InvariantCulture) + "/extended", session.Token, null, ct);
+            var data = Data(document.RootElement);
+            if (Int(data, "id") != id)
+            {
+                throw new TvdbException(TvdbFailure.InvalidResponse, "TVDB returned an invalid person.");
+            }
+
+            var (imdbId, tmdbId) = RemoteIds(Items(data, "remoteIds"));
+            return new TvdbPerson(id, imdbId is { Length: <= 64 } imdb && imdb.StartsWith("nm", StringComparison.Ordinal) ? imdb : null, tmdbId);
+        }
+
+        // Episode titles are asked in English, like Sonarr; TVDB names them in the series' original language otherwise (Japanese for most anime).
+        // An episode without an English title keeps its original-language name.
+        public async Task<IReadOnlyList<TvdbEpisode>> ReadEpisodesAsync(TvdbSession session, int seriesId, CancellationToken ct)
+        {
+            var english = await ReadEpisodesAsync(session, seriesId, TitleLanguage, ct);
+            if (english.All(episode => episode.Name is not null))
+            {
+                return english;
+            }
+
+            var original = (await ReadEpisodesAsync(session, seriesId, null, ct)).ToDictionary(episode => episode.Id);
+            return [.. english.Select(episode => episode.Name is null && original.TryGetValue(episode.Id, out var named) ? episode.WithName(named.Name) : episode)];
         }
 
         // Default is the series' TVDB episode order with names in the original language; a language (TheTVDB's code) reads its translations instead.
@@ -284,6 +304,28 @@ namespace Jularr.Integrations.Logic.Tvdb
 
         private static IEnumerable<JsonElement> Items(JsonElement parent, string property) =>
             Child(parent, property) is { ValueKind: JsonValueKind.Array } list ? list.EnumerateArray() : [];
+
+        // The first IMDb and TMDB ids of TheTVDB's remote identities.
+        private static (string? ImdbId, int? TmdbId) RemoteIds(IEnumerable<JsonElement> items)
+        {
+            string? imdbId = null;
+            int? tmdbId = null;
+            foreach (var item in items)
+            {
+                var source = Text(item, "sourceName") ?? "";
+                if (imdbId is null && source.Contains("IMDb", StringComparison.OrdinalIgnoreCase))
+                {
+                    imdbId = Text(item, "id");
+                }
+                else if (tmdbId is null && source.Contains("TheMovieDB", StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(Text(item, "id"), NumberStyles.None, CultureInfo.InvariantCulture, out var tmdb) && tmdb > 0)
+                {
+                    tmdbId = tmdb;
+                }
+            }
+
+            return (imdbId, tmdbId);
+        }
 
         // youtube.com/watch?v=KEY, youtu.be/KEY or youtube.com/embed/KEY.
         private static string? YouTubeKey(string? url)

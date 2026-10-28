@@ -103,6 +103,10 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.OriginalLanguage))]
         public string? OriginalLanguage { get; init; }
+
+        // The subtype the provider's data suggests (Japanese animation as Anime); it names the subtype of a new title only, a refresh never changes one.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? ClassifiedSubtypeId { get; init; }
     }
 
     // A movie's length; a provider that knows none keeps the stored one.
@@ -178,6 +182,33 @@ namespace Jularr.Backend.Data.Logic.Media
         // JSON rows of ExternalId, Name, ImageUrl, PersonRoleId, Position, Credit and, for a unit, WorkUnitTypeId, ParentNumber and Number.
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.People))]
         public string People { get; }
+    }
+
+    // People a provider credits, by its ids: JSON rows of ExternalId, Name and ImageUrl and, once looked up, the TmdbId and ImdbId other catalogs know them by.
+    internal sealed class ProviderPeopleData : BaseData
+    {
+        public ProviderPeopleData(string @namespace, string people)
+        {
+            Namespace = @namespace;
+            People = people;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.PersonNamespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.People))]
+        public string People { get; }
+    }
+
+    internal sealed class ProviderPersonIdData : BaseData
+    {
+        public ProviderPersonIdData(string externalId)
+        {
+            ExternalId = externalId;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
+        public string ExternalId { get; }
     }
 
     internal sealed class WorkIdentityCandidateData : BaseData

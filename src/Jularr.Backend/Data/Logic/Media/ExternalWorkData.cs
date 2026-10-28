@@ -134,6 +134,53 @@ namespace Jularr.Backend.Data.Logic.Media
         public long[] PlaceholderWorkIds { get; }
     }
 
+    internal sealed class WorkIdsData : BaseData
+    {
+        public WorkIdsData(long[] workIds)
+        {
+            WorkIds = workIds;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Ids))]
+        public long[] WorkIds { get; }
+    }
+
+    // A Work a title or folder may name, and whether something ties it to the library.
+    internal sealed class WorkLibraryCandidateData : BaseData
+    {
+        public WorkLibraryCandidateData(long id, bool isInLibrary)
+        {
+            Id = id;
+            IsInLibrary = isInLibrary;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsInLibrary))]
+        public bool IsInLibrary { get; }
+    }
+
+    // A Work that shares a provider id with another: whether it is in the library and whether it holds the provider's own id.
+    internal sealed class WorkTwinData : BaseData
+    {
+        public WorkTwinData(long id, bool isInLibrary, bool holdsValue)
+        {
+            Id = id;
+            IsInLibrary = isInLibrary;
+            HoldsValue = holdsValue;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsInLibrary))]
+        public bool IsInLibrary { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.HoldsValue))]
+        public bool HoldsValue { get; }
+    }
+
     // The Work a saved catalog title is; an anime season is its series with the season.
     internal sealed class ExternalWorkSavedData : BaseData
     {

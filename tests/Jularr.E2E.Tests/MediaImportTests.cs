@@ -39,19 +39,19 @@ namespace Jularr.E2E.Tests
                 await page.Locator("[data-import-apply]").ClickAsync();
                 await Assertions.Expect(page.Locator("[data-import-job-state]")).ToHaveTextAsync("Import complete", new() { Timeout = 60_000 });
                 await Assertions.Expect(page.Locator("[data-import-job-rows] > li")).ToContainTextAsync("Added");
-                Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"Works\""));
+                Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CatalogNamespace\" IS NULL"));
                 Assert.AreEqual(2L, await jularr.ScalarAsync("SELECT count(*) FROM \"WorkPeople\""));
                 Assert.AreEqual(0L, await jularr.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
                 await page.GotoAsync("/Admin/Import");
                 await page.Locator("[name=Json]").FillAsync(json);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Preview import"));
                 await Assertions.Expect(page.Locator("main table tbody tr")).ToContainTextAsync("Matching title and author already in the library");
-                var id = (long)(await jularr.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+                var id = (long)(await jularr.ScalarAsync("SELECT \"Id\" FROM \"Works\" WHERE \"CatalogNamespace\" IS NULL"))!;
                 await page.Locator("select[name='Choices[0].Choice']").SelectOptionAsync("local:" + id);
                 await FlipAsync(page.Locator("input[type=checkbox][name='Choices[0].Include']"));
                 await page.Locator("[data-import-apply]").ClickAsync();
                 await Assertions.Expect(page.Locator("[data-import-job-state]")).ToHaveTextAsync("Import complete", new() { Timeout = 60_000 });
-                Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"Works\""));
+                Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CatalogNamespace\" IS NULL"));
                 await Evidence.SaveAsync(page, "book-list-repeat-reused");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }

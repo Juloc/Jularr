@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -262,8 +263,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 string? Text(IReadOnlyDictionary<string, string> texts) => texts.GetValueOrDefault(language) ?? texts.GetValueOrDefault("eng");
                 var title = TextLimit.Cut(Text(result.Names) ?? result.Name, 500)!;
                 var original = TextLimit.Cut(result.OriginalLanguage is { } code ? result.Names.GetValueOrDefault(code) ?? result.Name : result.Name, 500);
+
+                // TheTVDB's IMDb and TMDB ids find a series of the library that does not hold its TheTVDB id yet.
                 return new ExternalWorkData("tvdb", result.Id.ToString(CultureInfo.InvariantCulture), title, original == title ? null : original,
-                    result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(Text(result.Overviews) ?? result.Overview, 4000), null, Address(result.ImageUrl), null, null);
+                    result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(Text(result.Overviews) ?? result.Overview, 4000), null, Address(result.ImageUrl), null, null)
+                {
+                    TmdbValue = result.TmdbId?.ToString(CultureInfo.InvariantCulture),
+                    ImdbValue = result.ImdbId is { Length: <= 64 } imdb && imdb.StartsWith("tt", StringComparison.Ordinal) ? imdb : null
+                };
             })];
         }
 
@@ -348,14 +355,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 new { Key = "Studio", Value = TextLimit.Cut(details.Studios.Count == 0 ? null : string.Join(", ", details.Studios), 4000), Localized = false }
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
 
-            // Japanese animation is proposed as Anime unless a subtype was chosen.
-            subtype ??= AniListMatching.IsAnime(work.GenreIds, work.OriginalLanguage, work.OriginCountries) ? MediaSubtype.Anime : null;
+            // Japanese animation is proposed as Anime for a new title unless a subtype was chosen.
             var data = new WorkMetadataData(mediaType, subtype, Namespace(mediaType), tmdbId.ToString(CultureInfo.InvariantCulture), TextLimit.Cut(work.Title, 500)!,
                 work.OriginalTitle == work.Title ? null : TextLimit.Cut(work.OriginalTitle, 500), work.Year is >= 1800 and <= 2200 ? work.Year : null,
                 JsonSerializer.Serialize(identities), "[]", JsonSerializer.Serialize(facts), "tmdb", work.ReleasedOn)
             {
                 Translations = JsonSerializer.Serialize(work.Translations.Select(translation => new { translation.Language, translation.Region, translation.Title, translation.Overview })),
-                OriginalLanguage = work.OriginalLanguage is { Length: 2 } original && original.All(char.IsAsciiLetterLower) ? original : null
+                OriginalLanguage = work.OriginalLanguage is { Length: 2 } original && original.All(char.IsAsciiLetterLower) ? original : null,
+                ClassifiedSubtypeId = AniListMatching.IsAnime(work.GenreIds, work.OriginalLanguage, work.OriginCountries) ? MediaSubtype.Anime : null
             };
             var saved = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
@@ -386,8 +393,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         public async Task<long> ImportSeriesAsync(LogicContext context, MediaSubtype? subtype, int tvdbId, int? tmdbTvId, CancellationToken ct)
         {
             // Read everything before the short write batch.
-            var (locale, stored, credential) = await context.ExecuteBatchAsync(async (ctx, token) =>
-                (await ReadLocaleAsync(ctx, token), await ReadSeriesIdentitiesAsync(ctx, tvdbId, token), await ctx.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), token)),
+            var (locale, stored, credential, budget) = await context.ExecuteBatchAsync(async (ctx, token) =>
+                (await ReadLocaleAsync(ctx, token), await ReadSeriesIdentitiesAsync(ctx, tvdbId, token), await ctx.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), token),
+                    (await ctx.ReadExternalWorkSyncAsync("tvdb", token))?.RequestsPerMinute ?? 0),
                 ct, mode: SqlAccessMode.ReadOnly);
             var language = LanguageCodes.ToThreeLetter(locale) ?? "eng";
             var session = await _tvdb.LoginAsync(credential, ct);
@@ -446,7 +454,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
 
             // Actors with their characters, then the people behind the series, in TheTVDB's order.
-            var people = series.Characters.OrderBy(character => character.Sort).Select(character => (Character: character, Role: character.Role switch
+            var credited = series.Characters.OrderBy(character => character.Sort).Select(character => (Character: character, Role: character.Role switch
             {
                 "Actor" => ProviderPerson.Actor,
                 "Guest Star" => ProviderPerson.GuestStar,
@@ -454,8 +462,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 "Writer" => ProviderPerson.Writer,
                 "Creator" => ProviderPerson.Creator,
                 _ => null
-            })).Where(item => item.Role is not null).Select(item => new ProviderPerson(item.Character.PersonId?.ToString(CultureInfo.InvariantCulture), item.Character.PersonName, item.Role!,
-                item.Role is ProviderPerson.Actor or ProviderPerson.GuestStar ? item.Character.Character : null, item.Character.ImageUrl));
+            })).Where(item => item.Role is not null).ToArray();
+            var links = await LookUpPeopleAsync(context, session, credited.Select(item => item.Character).ToArray(), budget, ct);
+            var people = credited.Select(item => new ProviderPerson(item.Character.PersonId is { } personId && !links.Skipped.Contains(personId) ? personId.ToString(CultureInfo.InvariantCulture) : null,
+                item.Character.PersonName, item.Role!, item.Role is ProviderPerson.Actor or ProviderPerson.GuestStar ? item.Character.Character : null, item.Character.ImageUrl));
 
             // The rating alone still comes from TMDB.
             var tmdbId = tmdbTvId ?? stored.TmdbTvId ?? series.TmdbId;
@@ -483,9 +493,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 identities.Add(new { Namespace = "imdb", Value = imdb });
             }
 
-            // Japanese animation and TheTVDB's anime are proposed as Anime unless a subtype was chosen.
+            // Japanese animation and TheTVDB's anime are proposed as Anime for a new title unless a subtype was chosen.
             var originalLanguage = LanguageCodes.ToTwoLetter(series.OriginalLanguage);
-            subtype ??= AniListMatching.IsAnime(series.Genres, originalLanguage, series.OriginalCountry) ? MediaSubtype.Anime : null;
             var title = TextLimit.Cut(Text(translation => translation.Name) ?? series.Name, 500)!;
             var originalTitle = TextLimit.Cut(series.Translations.FirstOrDefault(translation => translation.Language == series.OriginalLanguage)?.Name ?? series.Name, 500);
             var year = series.FirstAired?.Year ?? series.Year;
@@ -495,13 +504,19 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 Translations = JsonSerializer.Serialize(series.Translations.Select(translation => (Language: LanguageCodes.ToTwoLetter(translation.Language), Translation: translation))
                     .Where(item => item.Language is not null).DistinctBy(item => item.Language)
                     .Select(item => new { item.Language, Region = (string?)null, Title = item.Translation.Name, item.Translation.Overview })),
-                OriginalLanguage = originalLanguage is { Length: 2 } two && two.All(char.IsAsciiLetterLower) ? two : null
+                OriginalLanguage = originalLanguage is { Length: 2 } two && two.All(char.IsAsciiLetterLower) ? two : null,
+                ClassifiedSubtypeId = AniListMatching.IsAnime(series.Genres, originalLanguage, series.OriginalCountry) ? MediaSubtype.Anime : null
             };
             var rating = rated?.VoteAverage is > 0 and <= 10 ? Math.Round((decimal)rated.VoteAverage.Value, 2) : (decimal?)null;
             var saved = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 var workId = await ctx.SaveWorkMetadataAsync(data, token);
                 await ctx.SaveWorkFranchiseAsync(new WorkFranchiseData(workId, null, null, null, null), token);
+                if (links.Found.Count > 0)
+                {
+                    await ctx.LinkProviderPeopleAsync(new ProviderPeopleData("tvdb", JsonSerializer.Serialize(links.Found)), token);
+                }
+
                 await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, "tvdb", WorkPeopleLogic.Rows(people)), token);
                 await ctx.SaveWorkRatingAsync(new WorkRatingData(workId, rating, rating is null ? null : rated!.VoteCount is >= 0 ? rated.VoteCount : null), token);
                 return workId;
@@ -510,6 +525,50 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             // The poster and backdrop are kept locally.
             await _covers.StoreAsync(context, saved, ct);
             return saved;
+        }
+
+        // People TheTVDB credits whom no person holds by their TheTVDB id yet are looked up once for their IMDb and TMDB ids, a few at a time and within TheTVDB's
+        // requests a minute. Those the budget or TheTVDB leave out now are Skipped: they stay people without an id until a later import asks again.
+        private async Task<(IReadOnlyList<object> Found, IReadOnlySet<int> Skipped)> LookUpPeopleAsync(LogicContext context, TvdbSession session, IReadOnlyList<TvdbCharacter> credited,
+            int budget, CancellationToken ct)
+        {
+            var named = credited.Where(character => character.PersonId is not null).GroupBy(character => character.PersonId!.Value).ToDictionary(group => group.Key, group => group.First());
+            if (named.Count == 0)
+            {
+                return ([], new HashSet<int>());
+            }
+
+            var probe = new ProviderPeopleData("tvdb", JsonSerializer.Serialize(named.Keys.Select(id => new { ExternalId = id.ToString(CultureInfo.InvariantCulture) })));
+            var unknown = (await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnknownProviderPeopleAsync(probe, token), ct, mode: SqlAccessMode.ReadOnly))
+                .Select(row => int.Parse(row.ExternalId, NumberStyles.None, CultureInfo.InvariantCulture)).ToArray();
+            var found = new ConcurrentDictionary<int, TvdbPerson>();
+            var stopped = false;
+            await Parallel.ForEachAsync(unknown, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct }, async (personId, token) =>
+            {
+                if (Volatile.Read(ref stopped) || !_tvdb.TryTakeBudget(budget))
+                {
+                    return;
+                }
+
+                try
+                {
+                    found[personId] = await _tvdb.ReadPersonAsync(session, personId, token);
+                }
+                catch (ServiceUnavailableException)
+                {
+                    // TheTVDB limits or fails now; the rest wait for a later import.
+                    Volatile.Write(ref stopped, true);
+                }
+            });
+
+            return ([.. found.Values.Select(person => (object)new
+            {
+                ExternalId = person.Id.ToString(CultureInfo.InvariantCulture),
+                Name = named[person.Id].PersonName,
+                ImageUrl = named[person.Id].ImageUrl,
+                TmdbId = person.TmdbId?.ToString(CultureInfo.InvariantCulture),
+                person.ImdbId
+            })], unknown.Where(personId => !found.ContainsKey(personId)).ToHashSet());
         }
 
         // The TMDB and IMDb ids of the Work that already holds a TheTVDB series; they stay its own.

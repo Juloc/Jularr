@@ -65,7 +65,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 throw new DataValidationException("ImdbId", "in_use");
             }
 
-            var remote = await _tvdb.ReadEpisodesAsync(session, tvdbId.Value, null, CancellationToken);
+            var remote = await _tvdb.ReadEpisodesAsync(session, tvdbId.Value, CancellationToken);
             if (remote.GroupBy(item => (item.SeasonNumber, item.EpisodeNumber)).Any(group => group.Count() != 1))
             {
                 throw new DataValidationException("TvdbId", "in_use");
