@@ -29,3 +29,11 @@ test('There is no second subtitle without a language, in the first one\'s langua
     assert.equal(exports.pickSecondSubtitle([options[1]], 'en', 's5', 'de'), undefined);
     assert.equal(exports.SecondSubtitleLine, -4);
 });
+
+test('A translation starts from the shown first subtitle, else from the first full track in another language', () => {
+    assert.equal(exports.pickTranslationSource(options, 's5', 'de').key, 's5');
+    assert.equal(exports.pickTranslationSource(options, 's4', 'de').key, 's5');
+    assert.equal(exports.pickTranslationSource(options, '', 'de').key, 's5');
+    assert.equal(exports.pickTranslationSource([options[3], options[1]], '', 'de').key, 's5');
+    assert.equal(exports.pickTranslationSource([options[0], options[2]], '', 'de'), undefined);
+});

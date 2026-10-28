@@ -103,6 +103,51 @@ namespace Jularr.Backend.Data.User.Playback.V1
         public bool IsSelected { get; }
     }
 
+    // The track to translate, in which language it is written and which language is wanted.
+    public sealed class StartSubtitleTranslationDataV1 : BaseData
+    {
+        public StartSubtitleTranslationDataV1(string sourceKey, string? sourceLanguage, string? language)
+        {
+            SourceKey = sourceKey;
+            SourceLanguage = sourceLanguage;
+            Language = language;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TrackKey))]
+        public string SourceKey { get; }
+
+        // No source language is taken as English.
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language))]
+        public string? SourceLanguage { get; }
+
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language))]
+        public string? Language { get; }
+    }
+
+    // How far a translation of a subtitle is; its key is the track key to ask for the subtitle once it is done.
+    public sealed class SubtitleTranslationV1 : BaseResponse
+    {
+        public SubtitleTranslationV1(string key, string state, int done, int total)
+        {
+            Key = key;
+            State = state;
+            Done = done;
+            Total = total;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TrackKey))]
+        public string Key { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TranslationState))]
+        public string State { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TranslationCues))]
+        public int Done { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TranslationCues))]
+        public int Total { get; }
+    }
+
     public sealed class PlaybackSubtitleParametersV1 : BaseParameters
     {
         public PlaybackSubtitleParametersV1(long mediaAssetId, string key, bool styled = false)

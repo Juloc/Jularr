@@ -244,11 +244,13 @@ namespace Jularr.Backend.Service.User.Playback.V1
     {
         private readonly StorageAccess _storage;
         private readonly PlaybackSubtitles _subtitles;
+        private readonly SubtitleTranslations _translations;
 
-        internal ReadPlaybackSubtitleV1(StorageAccess storage, PlaybackSubtitles subtitles)
+        internal ReadPlaybackSubtitleV1(StorageAccess storage, PlaybackSubtitles subtitles, SubtitleTranslations translations)
         {
             _storage = storage;
             _subtitles = subtitles;
+            _translations = translations;
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PlaybackSubtitleV1>()];
@@ -257,50 +259,15 @@ namespace Jularr.Backend.Service.User.Playback.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // A subtitle file of the asset, or a text stream of its played file.
-            var (streamIndex, fileId) = PlaybackTracks.ParseKey(Parameters.Key);
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    file."Id" AS "StoredFileId",
-                    file."RelativePath",
-                    file."ModifiedAt",
-                    root."RelativePath" AS "RootRelativePath",
-                    mount."Id" AS "StorageMountId",
-                    track."Codec"
-                FROM
-                    "MediaAssets" AS asset
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
-                    JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
-                    JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
-                    JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
-                    LEFT JOIN "MediaTracks" AS track ON track."StoredFileId" = file."Id" AND track."StreamIndex" = @StreamIndex AND track."MediaTrackTypeId" = 3
-                WHERE
-                    asset."Id" = @MediaAssetId
-                    AND file."MissingSince" IS NULL
-                    AND (file."Id" = @StoredFileId AND file."RelativePath" ~* '\.(srt|vtt|ass|ssa)$'
-                        OR @StoredFileId::bigint IS NULL AND track."StreamIndex" IS NOT NULL AND file."Id" = (
-                            SELECT
-                                media."Id"
-                            FROM
-                                "StoredFiles" AS media
-                            WHERE
-                                media."MediaAssetId" = asset."Id"
-                                AND media."MissingSince" IS NULL
-                                AND NOT media."IsSubtitle"
-                            ORDER BY
-                                media."Id"
-                            LIMIT 1
-                        ));
-                """;
-            sql.Parameters.Add(new PlaybackSubtitleLookupData(Parameters.MediaAssetId, Auth.ProfileId!.Value, streamIndex, fileId));
-            var source = await Context.ReadSql.ReadOptionalAsync<PlaybackSubtitleSourceData>(sql, CancellationToken) ?? throw new KeyNotFoundException("The subtitle was not found.");
-            if (streamIndex is not null && !PlaybackTracks.IsText(source.Codec))
+            if (SubtitleTranslationLogic.TryParseKey(Parameters.Key, out var language, out var sourceKey))
             {
-                throw new KeyNotFoundException("The subtitle was not found.");
+                // A translated subtitle exists once its translation is done; the source track must be one this profile may read.
+                var (translatedSource, sourceStream) = await PlaybackSubtitleSources.FindAsync(sql => Context.ReadSql.ReadOptionalAsync<PlaybackSubtitleSourceData>(sql, CancellationToken), Parameters.MediaAssetId, Auth.ProfileId!.Value, sourceKey);
+                var translated = _translations.Path(PlaybackSubtitleSources.CacheKey(translatedSource, sourceStream, language));
+                return File.Exists(translated) ? new PlaybackSubtitleV1(await File.ReadAllTextAsync(translated, CancellationToken)) : throw new KeyNotFoundException("The subtitle was not found.");
             }
 
+            var (source, streamIndex) = await PlaybackSubtitleSources.FindAsync(sql => Context.ReadSql.ReadOptionalAsync<PlaybackSubtitleSourceData>(sql, CancellationToken), Parameters.MediaAssetId, Auth.ProfileId!.Value, Parameters.Key);
             // ASS comes as it is only from tracks that are ASS or SSA.
             if (Parameters.Styled && !(streamIndex is not null ? PlaybackTracks.IsStyled(source.Codec) : PlaybackTracks.IsStyledFile(source.RelativePath)))
             {

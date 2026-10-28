@@ -5631,8 +5631,8 @@
    "Vorschaubilder beim Spulen"
   ],
   "instance.module.Translation": [
-   "Translate books in the reader",
-   "Bücher im Reader übersetzen"
+   "Translate books in the reader and subtitles in the player",
+   "Bücher im Reader und Untertitel im Player übersetzen"
   ],
   "instance.module.Ocr": [
    "Recognize the text of scanned books",
@@ -7230,6 +7230,22 @@
   "player.subtitles": [
    "Subtitles",
    "Untertitel"
+  ],
+  "player.subtitles.translate": [
+   "Translate to {0} (AI)",
+   "Ins {0} übersetzen (KI)"
+  ],
+  "player.subtitles.translating": [
+   "Translating… {0} %",
+   "Wird übersetzt… {0} %"
+  ],
+  "player.subtitles.translated": [
+   "{0} (AI)",
+   "{0} (KI)"
+  ],
+  "player.subtitles.translateFailed": [
+   "The translation did not work.",
+   "Die Übersetzung hat nicht geklappt."
   ],
   "player.subtitles.second": [
    "Second subtitle",

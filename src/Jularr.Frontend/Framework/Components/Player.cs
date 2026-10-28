@@ -12,7 +12,7 @@ namespace Jularr.Frontend.Framework
         string? TrickplayUrl = null, PlayerPreferences? Preferences = null, IReadOnlyList<PlayerMarker>? Markers = null, IReadOnlyList<PlayerChapter>? Chapters = null);
 
     // What the profile and the device chose before playing: the speed, whether the next episode follows (after a countdown of that many seconds, none for music), and the quality in use.
-    public sealed record PlayerPreferences(decimal Speed, bool AutoplayNext, int CountdownSeconds, string QualityKey, string SpeedUrl, string IntroSkip = "Button", string OutroSkip = "Button", string? SecondSubtitleLanguage = null);
+    public sealed record PlayerPreferences(decimal Speed, bool AutoplayNext, int CountdownSeconds, string QualityKey, string SpeedUrl, string IntroSkip = "Button", string OutroSkip = "Button", string? SecondSubtitleLanguage = null, string? TranslateUrl = null, string? ProfileLanguage = null);
 
     // A stretch of the video the viewer may skip (Intro, Credits, Recap or Preview), in seconds.
     public sealed record PlayerMarker(string Kind, double Start, double End);
@@ -167,6 +167,11 @@ namespace Jularr.Frontend.Framework
                 .Attribute("data-speed-url", source.Preferences?.SpeedUrl ?? "")
                 .Attribute("data-skip-intro", source.Preferences?.IntroSkip ?? "Button")
                 .Attribute("data-second-language", source.Preferences?.SecondSubtitleLanguage ?? "")
+                .Attribute("data-translate-url", TranslateLanguage is null ? "" : source.Preferences!.TranslateUrl!)
+                .Attribute("data-translate-language", TranslateLanguage ?? "")
+                .Attribute("data-translating-label", texts["player.subtitles.translating"])
+                .Attribute("data-translated-label", texts["player.subtitles.translated"])
+                .Attribute("data-translate-failed-label", texts["player.subtitles.translateFailed"])
                 .Attribute("data-skip-outro", source.Preferences?.OutroSkip ?? "Button")
                 .Attribute("data-markers", JsonSerializer.Serialize((source.Markers ?? []).Select(marker => new { kind = marker.Kind, start = marker.Start, end = marker.End })))
                 .WriteTo(writer, encoder, texts);
@@ -218,7 +223,14 @@ namespace Jularr.Frontend.Framework
 
             // A second language above the first; the player starts it from the profile's choice and a track picked here replaces it.
             IUiComponent SecondSubtitleField(string pane) => ChoiceField("subtitle2", pane, "player.subtitles.second", !Subtitles.Any(track => track.IsSupported),
-                [Choice("", new Text("player.subtitles.off"), true, false), .. Subtitles.Select(track => Choice(track.Key, new ValueText(track.Label), false, !track.IsSupported, track.Language, false, track.IsForced))]);
+                [Choice("", new Text("player.subtitles.off"), true, false), .. Subtitles.Select(track => Choice(track.Key, new ValueText(track.Label), false, !track.IsSupported, track.Language, false, track.IsForced)),
+                    .. TranslateOption()]);
+
+            // A language the profile wants and the file lacks can be made by the local model, where the administrator has switched translation on.
+            IEnumerable<HtmlElement> TranslateOption() => TranslateLanguage is { } language
+                ? [Choice("translate", new ValueText(string.Format(CultureInfo.CurrentCulture, texts["player.subtitles.translate"], LanguageLabel.Name(language) ?? language)), false, false)] : [];
+
+            IUiComponent TranslateStatus() => new P().Class("player__translate-status").Attribute("data-role", "translate-status").Attribute("aria-live", "polite").Attribute("hidden", "hidden");
 
             IUiComponent QualityField(string pane) => ChoiceField("quality", pane, "playback.quality", false, [.. Qualities.Select(value => Choice(((byte)value).ToString(CultureInfo.InvariantCulture),
                 new Text("playback.quality." + value), value.ToString() == (source.Preferences?.QualityKey ?? "Automatic"), false))]);
@@ -306,7 +318,7 @@ namespace Jularr.Frontend.Framework
                     new Div(
                         Pane("basic", AudioField("basic"), SubtitleField("basic"), SpeedField("basic"), QualityField("basic")),
                         Pane("audio", AudioField("audio"), OffsetField("audio", "player.offset.audio")),
-                        Pane("subtitles", SubtitleField("subtitles"), SecondSubtitleField("subtitles"), OffsetField("subtitle", "player.offset.subtitles")),
+                        Pane("subtitles", SubtitleField("subtitles"), SecondSubtitleField("subtitles"), TranslateStatus(), OffsetField("subtitle", "player.offset.subtitles")),
                         Pane("playback", [QualityField("playback"), SpeedField("playback"), FitField(), .. PreferenceFields()]),
                         Pane("info", Facts())
                     ).Class("player__settings-body"),
@@ -345,6 +357,11 @@ namespace Jularr.Frontend.Framework
         }
 
         // The speed as the player writes it: 1, 1.25 and so on.
+        // The language the local model can translate a subtitle into: the profile's second language or its own, when the file has no track in it.
+        private string? TranslateLanguage => source.Preferences is { TranslateUrl: not null } preferences
+            && (string.IsNullOrEmpty(preferences.SecondSubtitleLanguage) ? preferences.ProfileLanguage : preferences.SecondSubtitleLanguage) is { Length: > 0 } language
+            && Subtitles.Any(track => track.IsSupported) && !Subtitles.Any(track => track.Language == language) ? language : null;
+
         private string Speed => (source.Preferences?.Speed ?? 1m).ToString("0.##", CultureInfo.InvariantCulture);
 
         private IReadOnlyList<PlayerTrack> Audio => source.AudioTracks ?? [];

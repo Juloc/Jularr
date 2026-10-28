@@ -22,6 +22,9 @@ namespace Jularr.Backend.Data.Fields.Playback
         public static readonly BoolField IsSupported = new();
         // A subtitle in a styled format (ASS/SSA) that the browser draws itself; the asking client wants it as it is, not as WebVTT.
         public static readonly BoolField IsStyled = new();
+        // A subtitle translated by the local model: none, queued, running, done or failed, and how many cues are translated of all.
+        public static readonly StringField TranslationState = new(NpgsqlDbType.Varchar) { MaximumLength = 16 };
+        public static readonly IntField TranslationCues = new() { Minimum = 0, Maximum = 100_000 };
         public static readonly BoolField Styled = new();
         public static readonly BoolField IsSelected = new();
         public static readonly BoolField IsReduced = new();

@@ -5,7 +5,7 @@ import { inserted, keepAddress, pushAddress, releaseAddress, visit } from "../Na
 import type { CastSender, CastState } from "./Cast";
 import { awake, focus } from "../Playback/MediaFocus";
 import type { StyledSubtitles } from "./StyledSubtitles";
-import { pickSecondSubtitle, SecondSubtitleLine, type SubtitleOption } from "./Subtitles";
+import { pickSecondSubtitle, pickTranslationSource, SecondSubtitleLine, type SubtitleOption } from "./Subtitles";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
@@ -514,6 +514,46 @@ async function start(player: HTMLElement): Promise<void> {
         for (const track of Array.from(video.querySelectorAll<HTMLTrackElement>("track[data-second]"))) track.track.mode = firstSubtitleShown ? "showing" : "hidden";
     }
 
+    // The local model translates a subtitle into the profile's language: the server works in the background, the player follows its status and then shows the result as the second subtitle.
+    let translating = false;
+    async function translateSubtitle(): Promise<void> {
+        const url = player.dataset.translateUrl;
+        const language = player.dataset.translateLanguage;
+        if (!url || !language || translating) return;
+        const options: SubtitleOption[] = Array.from(player.querySelectorAll<HTMLOptionElement>("select[data-setting=subtitle] option:not([value=\"\"]):not(:disabled)"))
+            .map(option => ({ key: option.value, language: option.dataset.language, forced: option.dataset.forced === "true" }));
+        const source = pickTranslationSource(options, player.querySelector<HTMLSelectElement>("select[data-setting=subtitle]")?.value ?? "", language);
+        const status = player.querySelector<HTMLElement>("[data-role=translate-status]");
+        const say = (message: string) => { if (status) { status.textContent = message; status.hidden = message === ""; } };
+        if (!source) { say(player.dataset.translateFailedLabel ?? ""); return; }
+        translating = true;
+        const headers = { "Content-Type": "application/json", RequestVerificationToken: antiforgery };
+        try {
+            let result = await (await fetch(url, { method: "POST", credentials: "same-origin", headers, signal, body: JSON.stringify({ sourceKey: source.key, sourceLanguage: source.language ?? null, language }) })).json() as { key: string; state: string; done: number; total: number };
+            while (result.state === "queued" || result.state === "running") {
+                say((player.dataset.translatingLabel ?? "").replace("{0}", String(result.total > 0 ? Math.floor(result.done * 100 / result.total) : 0)));
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                if (signal.aborted) return;
+                result = await (await fetch(`${url}/${encodeURIComponent(result.key)}`, { credentials: "same-origin", signal })).json();
+            }
+            if (result.state !== "done") throw new Error("failed");
+            const label = (player.dataset.translatedLabel ?? "{0}").replace("{0}", new Intl.DisplayNames(document.documentElement.lang || undefined, { type: "language" }).of(language) ?? language);
+            player.querySelectorAll<HTMLSelectElement>("select[data-setting=subtitle2]").forEach(select => {
+                if (!Array.from(select.options).some(option => option.value === result.key)) {
+                    const option = new Option(label, result.key);
+                    option.dataset.language = language;
+                    select.add(option, select.options[select.options.length - 1]);
+                }
+            });
+            say("");
+            showSecondSubtitle(result.key);
+        } catch {
+            if (!signal.aborted) say(player.dataset.translateFailedLabel ?? "");
+        } finally {
+            translating = false;
+        }
+    }
+
     // The profile's second language starts beside the preferred first subtitle.
     function startSecondSubtitle(primaryKey: string, primaryLanguage: string | undefined): void {
         const options: SubtitleOption[] = Array.from(player.querySelectorAll<HTMLOptionElement>("select[data-setting=subtitle2] option:not([value=\"\"]):not(:disabled)"))
@@ -783,7 +823,7 @@ async function start(player: HTMLElement): Promise<void> {
                 showSubtitle(field.value, option?.dataset.language);
                 break;
             }
-            case "subtitle2": showSecondSubtitle(field.value); break;
+            case "subtitle2": if (field.value === "translate") { setChoice("subtitle2", secondKey); void translateSubtitle(); } else showSecondSubtitle(field.value); break;
             case "speed-range": case "speed-number": setSpeed(Number(field.value), true); break;
             case "fit": for (const mode of ["cover", "original"]) player.classList.toggle(`player--fit-${mode}`, field.value === mode); break;
             case "autoplay": autoplay = (field as HTMLInputElement).checked; break;
