@@ -219,6 +219,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<PlaybackTranscodes>();
             services.TryAddSingleton<PlaybackCastTokens>();
             services.TryAddTransient<PlaybackSubtitles>();
+            services.TryAddTransient<PlaybackFonts>();
             services.TryAddSingleton<SubtitleTranslations>();
             services.TryAddTransient<WantedAcquisition>();
             services.TryAddTransient<MetadataCatalog>();
