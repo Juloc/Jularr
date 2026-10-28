@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Net;
 using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Jularr.Backend.Data.Admin.Network.V1;
@@ -14,16 +15,18 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class VpnTunnelTests
     {
-        private const string Key = "yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=";
+        // Throwaway keys made per run: a WireGuard key is any 32 bytes, and no key lives in the repository.
+        private static readonly string Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        private static readonly string PeerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
 
-        private const string Profile = """
+        private static readonly string Profile = $"""
             [Interface]
-            PrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=
+            PrivateKey = {Key}
             Address = 10.66.0.2/32, fd00::2/128
             DNS = 10.66.0.1
 
             [Peer]
-            PublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=
+            PublicKey = {PeerKey}
             Endpoint = vpn.example.test:51820
             AllowedIPs = 0.0.0.0/0, ::/0
             """;
