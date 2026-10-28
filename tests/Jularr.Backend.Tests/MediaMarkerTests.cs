@@ -72,6 +72,37 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Chapters_WithImplausibleStretch_GiveNoMarker()
+        {
+            // The file of #1596: one chapter "Credits" over the whole episode and a three-second rest.
+            Assert.AreEqual(0, MediaMarkers.FromChapters([new(0, 0, 1_416_999, "Credits"), new(1, 1_416_999, 1_419_961, "Chapter")], 1_420_031).Count);
+
+            // Credits over more than half of the file, an intro of ten minutes: no marker; a later fitting run of the kind still counts.
+            Assert.AreEqual(0, MediaMarkers.FromChapters([new(0, 100_000, 900_000, "Ending")], 1_420_000).Count);
+            Assert.AreEqual(0, MediaMarkers.FromChapters([new(0, 10_000, 610_000, "Opening")], 1_420_000).Count);
+            var later = MediaMarkers.FromChapters([new(0, 0, 900_000, "Credits"), new(1, 900_000, 1_000_000, "Part B"), new(2, 1_300_000, 1_420_000, "Ending")], 1_420_000).Single();
+            Assert.AreEqual((MediaMarkerKind.Credits, 1_300_000L, 1_420_000L), (later.MediaMarkerKindTypeId, later.StartMs, later.EndMs));
+        }
+
+        [TestMethod]
+        public void ChapterList_LeavesOutAStretchThatCannotBeWhatItsTitleSays()
+        {
+            // The file of #1596: a "Credits" chapter over the whole episode and a three-second rest give no list.
+            Assert.AreEqual(0, MediaMarkers.UsableChapters([new(0, 0, 1_416_999, "Credits"), new(1, 1_416_999, 1_419_961, "Chapter")]).Count);
+
+            // A real chapter list stays as it is, and so does an unusual one without marker titles.
+            var real = new MediaChapterRow[] { new(0, 0, 90_000, "Opening"), new(1, 90_000, 1_300_000, "Part A"), new(2, 1_300_000, 1_420_000, "Ending") };
+            Assert.AreEqual(3, MediaMarkers.UsableChapters(real).Count);
+            Assert.AreEqual(2, MediaMarkers.UsableChapters([new(0, 0, 700_000, "Part A"), new(1, 700_000, 1_400_000, "Part B")]).Count);
+            Assert.AreEqual(0, MediaMarkers.UsableChapters([new(0, 0, 1_400_000, "Part A")]).Count);
+
+            // A stored marker from the chapters is checked again when it is read; one a person set is not.
+            Assert.IsFalse(MediaMarkers.IsUsable(MediaMarkerKind.Credits, MediaMarkerSource.Chapter, 0, 1_417_000, 1_420_031));
+            Assert.IsTrue(MediaMarkers.IsUsable(MediaMarkerKind.Credits, MediaMarkerSource.Manual, 0, 1_417_000, 1_420_031));
+            Assert.IsTrue(MediaMarkers.IsUsable(MediaMarkerKind.Credits, MediaMarkerSource.Chapter, 1_300_000, 1_420_000, 1_420_031));
+        }
+
+        [TestMethod]
         public void SidecarFile_Edl_ReadsKnownActionsWithinItsLimits()
         {
             var text = "# markers\r\n0 0 0\r\n12.5\t95  4\r\n1300 1440 5\n\n  3.5 4.5 6  \n10 20 7\n10 20 3\n999 1000 4\nbad line\n5 3 4\n-1 5 4\n1 2 3 4\n1e3 2e3 4\n";

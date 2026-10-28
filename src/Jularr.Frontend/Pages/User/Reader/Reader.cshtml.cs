@@ -481,7 +481,7 @@ namespace Jularr.Frontend.Pages.User.Reader
 
         private IUiComponent Header(string title, string chapter, long workId, IUiComponent[] tools, IUiComponent? chapters = null) => new Header(
             new Div(
-                new A(new Icon("chevron-left", assets)).Class("button button--icon").Attribute("aria-label", texts["common.back"])
+                new A(new Icon("chevron-left", assets)).Class("button button--icon").Attribute("aria-label", texts["common.back"]).Attribute("data-reader-back", "")
                     .Attribute("href", "/Details/" + workId.ToString(CultureInfo.InvariantCulture)),
                 new A(MediaImage.Or(assets, _work?.PosterUrl, "", 28, 40, priority: true)).Class("reader__cover").Attribute("href", "/Details/" + workId.ToString(CultureInfo.InvariantCulture))
                         .Attribute("aria-label", title),
