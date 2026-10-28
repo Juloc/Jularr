@@ -16,3 +16,11 @@ test('A touch screen with a short side under 600 px is a phone in either orienta
     assert.equal(exports.deviceKind(false, 390, 844), 'pointer');
     assert.equal(exports.deviceKind(false, 1920, 1080), 'pointer');
 });
+
+test('libass is the device\'s own choice; without one it is on for a pointer device and off for a touch device', () => {
+    assert.equal(exports.libassWanted('on', 'phone'), true);
+    assert.equal(exports.libassWanted('off', 'pointer'), false);
+    assert.equal(exports.libassWanted(null, 'pointer'), true);
+    assert.equal(exports.libassWanted(null, 'phone'), false);
+    assert.equal(exports.libassWanted(null, 'tablet'), false);
+});
