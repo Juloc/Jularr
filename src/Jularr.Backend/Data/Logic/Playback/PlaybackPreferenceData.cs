@@ -8,9 +8,11 @@ namespace Jularr.Backend.Data.Logic.Playback
     internal sealed class PlaybackPreferenceData : BaseData
     {
         public PlaybackPreferenceData(long profileId, string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext,
-            SkipMode introSkipModeTypeId, SkipMode outroSkipModeTypeId, bool autoplayPreviews)
+            SkipMode introSkipModeTypeId, SkipMode outroSkipModeTypeId, bool autoplayPreviews, bool keepScreenOn, string? secondSubtitleLanguage)
         {
             ProfileId = profileId;
+            SecondSubtitleLanguage = secondSubtitleLanguage;
+            KeepScreenOn = keepScreenOn;
             AutoplayPreviews = autoplayPreviews;
             AudioLanguage = audioLanguage;
             SubtitleLanguage = subtitleLanguage;
@@ -47,6 +49,12 @@ namespace Jularr.Backend.Data.Logic.Playback
 
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayPreviews))]
         public bool AutoplayPreviews { get; }
+
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.KeepScreenOn))]
+        public bool KeepScreenOn { get; }
+
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language))]
+        public string? SecondSubtitleLanguage { get; }
     }
 
     // The profile and the device asking.
