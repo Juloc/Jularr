@@ -19,6 +19,7 @@ namespace Jularr.Backend.Logic.Playback
         public const int MaximumSidecarBytes = 65_536;
         public const int MaximumSidecarLines = 200;
         private const decimal MaximumSeconds = 86_400m;
+        private const long MaximumIntroMs = 300_000;
 
         [GeneratedRegex(@"^(recap|previously( on)?|story so far|last time)\b", RegexOptions.CultureInvariant)]
         private static partial Regex RecapPattern();
@@ -83,13 +84,26 @@ namespace Jularr.Backend.Logic.Playback
                     end = ordered[index].EndMs;
                 }
 
-                if (Fit(kind, MediaMarkerSource.Chapter, start, end, 1m, durationMs) is { } marker)
+                if (Fit(kind, MediaMarkerSource.Chapter, start, end, 1m, durationMs) is { } marker && IsPlausible(marker, durationMs))
                 {
                     markers.Add(marker);
                 }
             }
 
             return markers;
+        }
+
+        // A file may carry one chapter named "Credits" over the whole episode; a skip over most of the file is a tagging mistake, not a marker.
+        // Intro and recap stay short, credits and preview neither begin the file nor cover more than half of it.
+        private static bool IsPlausible(MediaMarkerRow marker, long? durationMs)
+        {
+            var length = marker.EndMs - marker.StartMs;
+            if (marker.MediaMarkerKindTypeId is MediaMarkerKind.Intro or MediaMarkerKind.Recap)
+            {
+                return length <= MaximumIntroMs;
+            }
+
+            return marker.StartMs > 0 && (durationMs is not { } duration || length * 2 <= duration);
         }
 
         // A sidecar file next to the video: one line per marker, "start end action" in seconds, the way Kodi's and Comskip's EDL files are written.
