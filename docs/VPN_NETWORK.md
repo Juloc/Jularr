@@ -1,4 +1,4 @@
-# Jularr VPN: universal network policy (first slice)
+# Jularr VPN: universal network path
 
 Owner decision (25 October 2026): a separate optional VPN network component; torrent
 traffic VPN-protected by default. Search, browser, direct HTTP and metadata traffic
@@ -6,55 +6,51 @@ may receive independent source/action routing rules. Import multiple user-provid
 WireGuard configurations, select priorities and country-constrained fallback
 profiles. Normal Jularr connectivity remains direct.
 
-## Implemented by this slice
+## Implemented
 
 - `WireGuardProfileLogic.Preview` strictly validates bounded single-peer WireGuard
-  client configurations. It checks key encoding, client addresses, DNS addresses,
-  endpoint/port and full-tunnel `AllowedIPs`. It rejects unknown directives,
-  shell hooks and split-tunnel configurations. Returned previews contain no
-  secrets; the submitted configuration is not stored by the preview API.
-- `POST /api/v1/admin/network/wireguard/preview` is accessible to authorized
-  instance settings administrators and returns **only** a validation preview,
-  never a connection/success claim. Input is a JSON object with
-  `configuration` containing the `.conf` text. The preview is not an upload
-  or a persisted VPN profile yet.
-- `NetworkRouteLogic` expresses action/source-specific choices, VPN-required
-  torrent default, per-profile priorities, approved profile IDs, exit-country
-  constraints, 90-second health freshness and fail-closed selection. Fallback is
-  considered only for transport or tunnel problems; HTTP 403/429, logins and
-  challenges are not reasons to rotate addresses.
-- Logic tests cover key rejection, dangerous directives, split tunnels,
-  verified health, source rules, country restrictions and safe fallback.
+  client configurations: key encoding, client addresses, DNS addresses, endpoint/port
+  and full-tunnel `AllowedIPs`; unknown directives, shell hooks and split tunnels are
+  rejected. `POST /api/v1/admin/network/wireguard/preview` returns only that preview.
+- Module `Vpn` (off by default, migration `0017_vpn_profiles`): `VpnProfiles` keeps
+  imported `wg0.conf` profiles (uploaded or pasted) with the configuration protected by
+  Data Protection; a profile needs a DNS server. Reads never return key material.
+  Services in [VpnProfileServices.cs](../src/Jularr.Backend/Service/Admin/Network/V1/VpnProfileServices.cs),
+  page `/Admin/Network`.
+- Runtime inside the one Jularr container, without a sidecar, capability or network
+  interface: [VpnTunnels.cs](../src/Jularr.Backend/Service/Core/VpnTunnels.cs) starts one
+  userspace WireGuard client per profile on demand ([wireproxy](https://github.com/pufferffish/wireproxy),
+  ISC, pinned by hash in the image; [WireproxyTunnel.cs](../src/Jularr.Integrations/Logic/Network/WireproxyTunnel.cs)).
+  Its only door is a SOCKS5 listener on loopback with a one-time sign-in; the
+  configuration file is removed once the helper runs and its output is discarded.
+- Binding: a client takes a `VpnLease` and opens connections and HTTP handlers through
+  it ([Socks5Connector.cs](../src/Jularr.Integrations/Logic/Network/Socks5Connector.cs);
+  HTTP uses a `ConnectCallback`, so there is no proxy setting to bypass). Host names go
+  to the tunnel unresolved, so DNS is answered by the profile's DNS server through the
+  tunnel. IPv6 destinations work only with an IPv6 route in the profile; otherwise they
+  are unreachable, never sent directly. A stopped or failed tunnel refuses new
+  connections (fail-closed); there is no direct path behind a lease.
+- Health while a tunnel runs (a timer only then): pings through the tunnel
+  (`Vpn:CheckAliveAddress`, default `1.1.1.1`, every 20 s, read from the helper's
+  `/readyz`), the WireGuard handshake and byte counters (`/metrics`, keys redacted),
+  and the exit address and country from `Vpn:ExitCheckAddress` (default
+  `https://ipinfo.io/json`) through the tunnel compared with the host's own address
+  (every 10 minutes and on Check). An exit equal to the host's address fails the
+  tunnel. `VpnTunnels.Health()` feeds `NetworkRouteLogic`. A tunnel without leases
+  stops after five minutes; switching the module off stops all tunnels.
+- Tests: `VpnTunnelTests` (SOCKS sign-in and unresolved names, proxy down without
+  touching the target, generated configuration, counters, module gate, import/check/
+  delete without key exposure, missing helper fails closed), `VpnNetworkPolicyTests`.
 
-## Not implemented yet — do not enable or claim VPN protection
+## Not implemented yet
 
-- Saving multiple profiles (including protected private keys), file-upload UI,
-  profile editing/removal, profile migration and secret rotation.
-- A WireGuard/OpenVPN process, an isolated network namespace, firewall/Kill-Switch
-  enforcement, DNS/IPv6 leak prevention, observed exit IP/country, and continuous
-  health reporting. The health record is a policy input, **not** a live probe.
-- Routing real HTTP, browser, search, NZB, native or external qBittorrent
-  transfers through the policy. The current external qBittorrent integration
-  and Gluetun lab have not been modified.
-- Retrying real jobs, UI event history, country verification, container lifecycle,
-  administrative password re-authentication and explicit unprotected torrent
-  override. Torrent Direct rules remain rejected.
-- Parsing of arbitrary wg-quick commands or imported `PostUp`/`PostDown`
-  scripts is deliberately unsupported. No uploaded text may be executed.
-
-## Next verified vertical slices
-
-1. Encrypted profile CRUD and upload UI, explicit management permissions and
-   migration/backup checks. Never return raw configurations or secrets.
-2. Managed WireGuard gateway + per-gateway network namespace, firewall before
-   connection, shutdown and restart; real Docker Debian fail-closed testing.
-3. Actual route enforcement at native download workers and per-source search;
-   external-client isolation must be explicitly configured and verified.
-4. Live egress IP/country/DNS probes, provider/server reporting, connection
-   metrics, structured event history and fallback tests. Zero claim of
-   protection until measurements confirm it.
-5. Password-verified, audited and conspicuously warned VPN-off override;
-   no silent direct routing when protection is required.
+- OpenVPN: no userspace OpenVPN client works without a TUN device and `NET_ADMIN`,
+  so it would break the minimal compose; not built.
+- UDP through the tunnel (wireproxy's SOCKS5 has only CONNECT): bound clients use TCP
+  only (no UDP trackers, DHT or uTP for torrents).
+- Per-source routing rules, priorities and country fallback as stored settings, and
+  routing search, browser, metadata or the external qBittorrent through the tunnel.
+- Password-verified, audited VPN-off override; profile editing and secret rotation.
 
 ## Acceptance for a future production-ready release
 

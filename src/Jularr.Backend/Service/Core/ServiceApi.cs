@@ -142,6 +142,11 @@ namespace Jularr.Backend.Service.Core
                 configuration.GetSection("Browser").Bind(options);
                 options.ProfilePath = Folder(options.ProfilePath, "browser");
             });
+            services.Configure<VpnOptions>(options =>
+            {
+                configuration.GetSection("Vpn").Bind(options);
+                options.WorkPath = Folder(options.WorkPath, "vpn");
+            });
 
             // Metadata mirrors.
             var providers = (configuration.GetSection("Providers").Get<ProviderOptions>() ?? new ProviderOptions()).Validated();
@@ -259,6 +264,7 @@ namespace Jularr.Backend.Service.Core
             services.AddSingleton<ISourceBrowser>(provider => provider.GetRequiredService<SourceBrowser>());
             services.AddSingleton<IBrowserInteraction>(provider => provider.GetRequiredService<SourceBrowser>());
             services.TryAddSingleton<BrowserAssistance>();
+            services.TryAddSingleton<VpnTunnels>();
             services.TryAddTransient<ReadingContent>();
             services.TryAddTransient<ReadingDerivation>();
             services.TryAddSingleton<ReadingActivity>();

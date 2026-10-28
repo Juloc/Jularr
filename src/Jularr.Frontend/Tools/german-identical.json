@@ -25,6 +25,7 @@
  "Direct Play",
  "Direct Stream",
  "Disc {0}",
+ "DNS",
  "Download",
  "Downloads",
  "Drama",
@@ -49,6 +50,7 @@
  "Info",
  "Intel Quick Sync",
  "Intro",
+ "IPv6",
  "ISBN",
  "Jellyfin",
  "Job",
@@ -127,6 +129,7 @@
  "VAAPI",
  "Version",
  "Video",
+ "VPN",
  "Wake-on-LAN",
  "WebP",
  "Zoom"
