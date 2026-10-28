@@ -319,6 +319,22 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(blocks.First(block => block.Text is not null).Text, Sentences[0]);
         }
 
+        // A page drawn by PDFium keeps its colours: an orange box stays orange, not blue.
+        [TestMethod]
+        public void Rendering_KeepsTheColoursOfThePage()
+        {
+            using var orange = new SKBitmap(200, 200);
+            orange.Erase(new SKColor(230, 110, 20));
+            using var image = SKImage.FromBitmap(orange);
+            using var png = image.Encode(SKEncodedImageFormat.Png, 100);
+            var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+            builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4).AddPng(png.ToArray(), new UglyToad.PdfPig.Core.PdfRectangle(0, 0, 595, 842));
+            using var rendering = PdfRendering.Open(builder.Build());
+            using var drawn = rendering.Render(1, 400);
+            var pixel = drawn.GetPixel(drawn.Width / 2, drawn.Height / 2);
+            Assert.IsTrue(pixel.Red > 200 && pixel.Blue < 60, pixel.ToString());
+        }
+
         [TestMethod]
         [DataRow(20, null, new[] { 1, 2, 3 }, 4, 17)]
         [DataRow(20, 15, new[] { 15, 16 }, 17, 18)]

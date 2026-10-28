@@ -67,7 +67,8 @@ namespace Jularr.Integrations.Logic.Pdf
                         throw new InvalidDataException("The page is too large to draw.");
                     }
 
-                    var bitmap = new SKBitmap(pixels.Width, pixels.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
+                    // PDFium writes red first when asked to reverse its byte order: the bitmap says so, or red and blue trade places.
+                    var bitmap = new SKBitmap(pixels.Width, pixels.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
                     var target = fpdfview.FPDFBitmapCreateEx(pixels.Width, pixels.Height, 4, bitmap.GetPixels(), bitmap.RowBytes);
                     try
                     {
