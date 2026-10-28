@@ -223,6 +223,26 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("“Found it!” he shouted.", PdfScanAnalysis.Analyse(page, found, []).Single().Text);
         }
 
+        // A line the recognizer drew across two columns and read poorly takes the layer's words, column by column; where the layer is noise (a picture's
+        // texture), the recognizer's reading stays.
+        [TestMethod]
+        public void ScanAnalysis_TakesTheLayersColumns_WhereTheRecognizerWasUnsureOfALine()
+        {
+            using var page = new SKBitmap(1000, 1000);
+            page.Erase(SKColors.White);
+            var read = new OcrPage(1000, 1000, [new OcrLine(50, 100, 950, 130, "Rule it's Rule 688: If", 0.58f)]);
+            PdfLayerWord[] layer = [new("Rule", 0.05, 0.1, 0.1, 0.125), new("No.", 0.11, 0.1, 0.14, 0.125), new("687:", 0.15, 0.1, 0.19, 0.125), new("If", 0.2, 0.1, 0.22, 0.125),
+                new("it's", 0.23, 0.1, 0.27, 0.125), new("fast,", 0.28, 0.1, 0.33, 0.125), new("Rule", 0.5, 0.1, 0.55, 0.125), new("No.", 0.56, 0.1, 0.59, 0.125),
+                new("688:", 0.6, 0.1, 0.64, 0.125), new("If", 0.65, 0.1, 0.67, 0.125), new("it's", 0.68, 0.1, 0.72, 0.125), new("in", 0.73, 0.1, 0.75, 0.125)];
+
+            var lines = PdfScanAnalysis.Analyse(page, read, layer);
+            CollectionAssert.AreEqual(new[] { "Rule No. 687: If it’s fast,", "Rule No. 688: If it’s in" }, lines.Select(line => line.Text).ToArray());
+
+            PdfLayerWord[] noise = [new("ee", 0.05, 0.1, 0.1, 0.125), new("Ll", 0.11, 0.1, 0.14, 0.125), new("rme|", 0.15, 0.1, 0.19, 0.125), new("Sue", 0.2, 0.1, 0.25, 0.125),
+                new("mln|fel", 0.3, 0.1, 0.4, 0.125), new("=S|", 0.45, 0.1, 0.5, 0.125)];
+            Assert.AreEqual("Rule it’s Rule 688: If", PdfScanAnalysis.Analyse(page, read, noise).Single().Text);
+        }
+
         // A scan's picture is cut out of the page PDFium draws and stands in the text with its caption; the page's text reads as text. The first and last
         // pages are the covers and show whole.
         [TestMethod]
