@@ -1061,7 +1061,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(view).ToBeHiddenAsync();
                 await page.Mouse.DblClickAsync(box.X + box.Width / 2, box.Y + box.Height / 2);
                 await Assertions.Expect(view).ToBeVisibleAsync();
-                Assert.IsTrue(await view.Locator(".reader-figure__image").EvaluateAsync<bool>("image => image.naturalWidth > 0 && image.getBoundingClientRect().width > innerWidth * 0.2"));
+                await page.WaitForFunctionAsync("() => { const image = document.querySelector('dialog.reader-figure .reader-figure__image'); return !!image && image.naturalWidth > 0 && image.getBoundingClientRect().width > innerWidth * 0.2; }");
                 var stage = view.Locator(".reader-figure__stage");
                 var picture = view.Locator(".reader-figure__image");
                 Assert.IsTrue(await picture.EvaluateAsync<bool>("image => image.clientWidth <= image.parentElement.clientWidth && image.clientHeight <= image.parentElement.clientHeight"));
