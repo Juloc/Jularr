@@ -64,7 +64,7 @@ namespace Jularr.Backend.Tests
             var cs = TestPostgres.ResolveConnectionString(nameof(WorkCatalogColumns_UpgradeKeepsWorksMarksThemDetailedAndAddsDefaults));
             var options = Backup(folder.Path, out _);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
-            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 14).ToArray()).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 19).ToArray()).StartAsync(CancellationToken.None);
             await InsertWorkAsync(cs);
             await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
             Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 501 AND "CanonicalTitle" = 'Kept Film' AND "DetailedAt" = "UpdatedAt" AND "ViewedAt" IS NOT NULL"""));
@@ -73,7 +73,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 501 AND "SearchText" @@ to_tsquery('simple', 'gehaltener') AND "SearchText" @@ to_tsquery('simple', 'kept')"""));
             Assert.AreEqual(3L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkSyncs" WHERE "CacheTier" = 2 AND "DetailsTrending" = FALSE"""));
             Assert.AreEqual((short)14, await ScalarAsync(cs, """SELECT "CatalogDetailKeepDays" FROM "InstanceSettings" WHERE "Id" = 1"""));
-            Assert.AreEqual(14, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0014_work_catalog_columns'"""));
+            Assert.AreEqual(19, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0019_work_catalog_columns'"""));
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
         }
 
@@ -84,7 +84,7 @@ namespace Jularr.Backend.Tests
             var cs = TestPostgres.ResolveConnectionString(nameof(LibraryTieIndexes_UpgradeKeepsTiesAndIndexesTheirMarkedRows));
             var options = Backup(folder.Path, out _);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
-            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 16).ToArray()).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 21).ToArray()).StartAsync(CancellationToken.None);
             await InsertWorkAsync(cs);
             await ExecuteAsync(cs,
                 """
@@ -95,7 +95,7 @@ namespace Jularr.Backend.Tests
             await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
             Assert.AreEqual(2L, await ScalarAsync(cs, """SELECT count(*) FROM pg_indexes WHERE indexname IN ('IX_WorkExternalIdentities_LibraryTie', 'IX_Works_ManualClass')"""));
             CollectionAssert.AreEqual(new long[] { 501, 502 }, (long[])(await ScalarAsync(cs, """SELECT array_agg(DISTINCT "WorkId" ORDER BY "WorkId") FROM "WorkLibraryRelations" """))!);
-            Assert.AreEqual(16, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0016_library_tie_indexes'"""));
+            Assert.AreEqual(21, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0021_library_tie_indexes'"""));
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
         }
 
@@ -106,7 +106,7 @@ namespace Jularr.Backend.Tests
             var cs = TestPostgres.ResolveConnectionString(nameof(MergeExternalWorks_UpgradeKeepsWhatPeopleMadeAsWorksAndDropsTheCache));
             var options = Backup(folder.Path, out _);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
-            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 15).ToArray()).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 20).ToArray()).StartAsync(CancellationToken.None);
             await InsertWorkAsync(cs);
             await ExecuteAsync(cs,
                 """
@@ -194,7 +194,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(DISTINCT "WorkId") FROM "WorkLibraryRelations" WHERE "WorkId" = 503"""));
             Assert.AreEqual(1L, await ScalarAsync(cs, $"""SELECT count(DISTINCT "WorkId") FROM "WorkLibraryRelations" WHERE "WorkId" = {reloaded}"""));
             Assert.AreEqual(0L, await ScalarAsync(cs, $"""SELECT count(*) FROM "WorkLibraryRelations" WHERE "WorkId" = {unmapped}"""));
-            Assert.AreEqual(15, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0015_merge_external_works'"""));
+            Assert.AreEqual(20, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0020_merge_external_works'"""));
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
         }
 
