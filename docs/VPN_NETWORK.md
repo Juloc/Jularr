@@ -12,7 +12,7 @@ profiles. Normal Jularr connectivity remains direct.
   client configurations: key encoding, client addresses, DNS addresses, endpoint/port
   and full-tunnel `AllowedIPs`; unknown directives, shell hooks and split tunnels are
   rejected. `POST /api/v1/admin/network/wireguard/preview` returns only that preview.
-- Module `Vpn` (off by default, migration `0014_vpn_profiles`): `VpnProfiles` keeps
+- Module `Vpn` (off by default, migration `0017_vpn_profiles`): `VpnProfiles` keeps
   imported `wg0.conf` profiles (uploaded or pasted) with the configuration protected by
   Data Protection; a profile needs a DNS server. Reads never return key material.
   Services in [VpnProfileServices.cs](../src/Jularr.Backend/Service/Admin/Network/V1/VpnProfileServices.cs),
