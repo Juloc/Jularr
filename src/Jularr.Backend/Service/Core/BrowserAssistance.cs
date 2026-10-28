@@ -117,14 +117,15 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        public async Task CloseAsync(Guid owner, Guid id, CancellationToken ct)
+        public async Task<long> CloseAsync(Guid owner, Guid id, CancellationToken ct)
         {
             await _gate.WaitAsync(ct);
             try
             {
-                Require(owner, id, active: false);
+                var lease = Require(owner, id, active: false);
                 await browser.EndManualAsync(ct);
                 _lease = null;
+                return lease.AcquisitionConnectionId;
             }
             finally
             {

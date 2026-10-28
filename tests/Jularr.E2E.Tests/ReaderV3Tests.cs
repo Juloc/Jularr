@@ -19,7 +19,7 @@ namespace Jularr.E2E.Tests
         ];
 
         // The tools of the header, the longest-staying first.
-        private static readonly string[] ToolOrder = ["language", "text", "speech", "bookmark", "search", "notes", "paper", "select", "chapters"];
+        private static readonly string[] ToolOrder = ["language", "text", "mode", "speech", "bookmark", "search", "notes", "paper", "select", "chapters"];
 
         [TestMethod]
         [Timeout(300_000)]
@@ -114,6 +114,59 @@ namespace Jularr.E2E.Tests
             catch
             {
                 await Evidence.SaveAsync(page, "reader-v3-header-failed");
+                throw;
+            }
+        }
+
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task ModeButton_CyclesBookScrollAndFlatPages_AndTheDeviceKeepsIt()
+        {
+            using var folders = new Folders("Books");
+            WriteReaderEpub(Path.Combine(folders.Library, "Books", "reader-v3.epub"), "The Midnight Archive", "Local fixture", 2, 36);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            try
+            {
+                await ReadingPathTests.AddBookAsync(page, folders, "The Midnight Archive");
+                await OpenReaderAsync(page, 1440, 900);
+                var reader = page.Locator(".reader");
+                var mode = page.Locator(".reader__top [data-reader-mode]");
+                var paper = page.Locator(".reader__paper");
+                await Assertions.Expect(mode).ToHaveAttributeAsync("aria-label", "Reading mode: Book");
+                await Assertions.Expect(mode.Locator("[data-mode-icon=book]")).ToBeVisibleAsync();
+
+                // Book → scroll: the text runs down, the book view is gone.
+                await mode.ClickAsync();
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-mode", "scroll");
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-book-ready", "false");
+                await Assertions.Expect(mode.Locator("[data-mode-icon=scroll]")).ToBeVisibleAsync();
+
+                // Scroll → flat pages: paged text on the plain paper, turned at once without a book.
+                await mode.ClickAsync();
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-mode", "paged");
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-paging", "flat");
+                await Assertions.Expect(mode).ToHaveAttributeAsync("aria-label", "Reading mode: Flat pages");
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-book-ready", "false");
+                await Assertions.Expect(paper).ToHaveCSSAsync("opacity", "1");
+                await page.Locator("[data-turn='1']").ClickAsync();
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-page", "3");
+                Assert.AreEqual(0, await page.Locator(".reader-book__turn").CountAsync(), "Flat pages turn without paper leaves.");
+                await Evidence.SaveAsync(page, "reader-mode-flat");
+
+                // The device keeps the mode; flat → book brings the book view back.
+                await page.ReloadAsync();
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-paging", "flat");
+                await Assertions.Expect(paper).ToHaveCSSAsync("opacity", "1");
+                await mode.ClickAsync();
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-paging", "book");
+                await Assertions.Expect(reader).ToHaveAttributeAsync("data-book-ready", "true");
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch
+            {
+                await Evidence.SaveAsync(page, "reader-mode-failed");
                 throw;
             }
         }
@@ -254,8 +307,9 @@ namespace Jularr.E2E.Tests
 
                 await OpenReaderAsync(page, 390, 844);
                 Assert.AreEqual("1", await reader.GetAttributeAsync("data-columns"));
-                var leftMargin = await page.Locator(".reader__content p").First.EvaluateAsync<double>("p => p.getBoundingClientRect().left - p.closest('.reader__content').getBoundingClientRect().left");
-                Assert.IsTrue(leftMargin >= 30, "Single-page text inset must be applied before pagination is measured.");
+                // The page's outer margin keeps the text off the paper's edge, and is applied before pagination is measured.
+                var leftMargin = await page.Locator(".reader__content p").First.EvaluateAsync<double>("p => { const reader = p.closest('.reader'), outer = parseFloat(getComputedStyle(reader).getPropertyValue('--reader-margin-outer')) || 0; return p.getBoundingClientRect().left - p.closest('.reader__paper').getBoundingClientRect().left >= outer - 1 ? outer : -1; }");
+                Assert.IsTrue(leftMargin >= 20, "Single-page text inset must be applied before pagination is measured.");
                 await Assertions.Expect(page.Locator("[data-role=pages]")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex(@"^(?:Pages 1–1 of \d+|Ch\. 1–1/\d+)$"));
                 await AssertPaperPositionsAsync(page, "390 single page");
                 await Evidence.SaveAsync(page, "reader-v3-single-390-light");
@@ -337,10 +391,12 @@ namespace Jularr.E2E.Tests
                 var reader = page.Locator(".reader");
 
                 // A scrolled text: the voice's line stays in view without anybody touching it.
-                await page.Locator("[data-action=settings]").ClickAsync();
-                await page.Locator("[data-panel=settings] [name=Mode]").SelectOptionAsync("scroll");
-                await page.Keyboard.PressAsync("Escape");
+                // The reading-mode button in the bar: book → scrolling, its name says so.
+                var mode = page.Locator(".reader__top [data-reader-mode]");
+                await Assertions.Expect(mode).ToHaveAttributeAsync("aria-label", "Reading mode: Book");
+                await mode.ClickAsync();
                 await Assertions.Expect(reader).ToHaveAttributeAsync("data-mode", "scroll");
+                await Assertions.Expect(mode).ToHaveAttributeAsync("aria-label", "Reading mode: Scroll");
                 var toggle = page.Locator("[data-speech-toggle]");
                 await Assertions.Expect(toggle).ToBeEnabledAsync();
                 await toggle.ClickAsync();
@@ -425,7 +481,9 @@ namespace Jularr.E2E.Tests
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookState === 'idle' && document.querySelectorAll('.reader-book__print > .reader__page-print').length >= 1");
             var sides = await page.EvaluateAsync<JsonElement>("""
                 () => {
-                    const columns = Number(document.querySelector('.reader').dataset.columns);
+                    const reader = document.querySelector('.reader'), columns = Number(reader.dataset.columns);
+                    // The text starts at the page's own margin: the outer one on the left page, the one at the spine on the right.
+                    const margin = side => parseFloat(getComputedStyle(reader).getPropertyValue(columns === 1 || side === 'left' ? '--reader-margin-outer' : '--reader-margin-inner')) || 0;
                     const measure = side => {
                         const sheet = document.querySelector(`[data-book-sheet=${side}]`).getBoundingClientRect();
                         const print = document.querySelector(`[data-book-page=${side}] .reader__page-print`);
@@ -433,6 +491,8 @@ namespace Jularr.E2E.Tests
                         const text = [...print.querySelectorAll('span')].filter(span => span.textContent.trim()).map(span => span.getBoundingClientRect());
                         const number = print.querySelector('[data-book-number]').getBoundingClientRect();
                         return { sheetLeft: sheet.left, width: sheet.width, textLeft: Math.min(...text.map(rect => rect.left)) - sheet.left,
+                            // The print stands at the page's margin, moved by at most half of what the stack takes from the paper's width.
+                            inPrint: Math.min(...text.map(rect => rect.left)) - print.getBoundingClientRect().left, shift: print.getBoundingClientRect().left - sheet.left - margin(side),
                             numberCentre: (number.left + number.right) / 2 - (sheet.left + sheet.width / 2) };
                     };
                     return { columns, left: columns === 2 ? measure('left') : null, right: measure('right') };
@@ -444,8 +504,10 @@ namespace Jularr.E2E.Tests
             {
                 var left = sides.GetProperty("left");
                 Assert.IsTrue(Math.Abs(left.GetProperty("numberCentre").GetDouble()) <= 2, $"{view}: the left page's number is centred on its paper ({left.GetProperty("numberCentre").GetDouble():F1}).");
-                Assert.IsTrue(Math.Abs(left.GetProperty("textLeft").GetDouble() - right.GetProperty("textLeft").GetDouble()) <= 2,
-                    $"{view}: both text boxes start the same distance from their own paper (left {left.GetProperty("textLeft").GetDouble():F1}, right {right.GetProperty("textLeft").GetDouble():F1}).");
+                Assert.IsTrue(Math.Abs(left.GetProperty("inPrint").GetDouble() - right.GetProperty("inPrint").GetDouble()) <= 2,
+                    $"{view}: both text boxes start the same way in their print (left {left.GetProperty("inPrint").GetDouble():F1}, right {right.GetProperty("inPrint").GetDouble():F1}).");
+                foreach (var side in new[] { left, right })
+                    Assert.IsTrue(Math.Abs(side.GetProperty("shift").GetDouble()) <= 12, $"{view}: each print stands at its page's margin ({side.GetProperty("shift").GetDouble():F1}).");
             }
 
             Assert.IsTrue(right.GetProperty("textLeft").GetDouble() > 8, $"{view}: the text keeps a margin.");

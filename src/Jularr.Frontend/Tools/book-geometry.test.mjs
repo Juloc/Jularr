@@ -6,7 +6,7 @@ import ts from 'typescript';
 
 const source = readFileSync(resolve(import.meta.dirname, '../Modules/Reader/BookGeometry.ts'), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
-const { foldPaper, curlPaper, paperSegments, paperShadow, bookDimensions, paperColour, paperProfile, paperOutline, printPlacement, simplifyOutline, shadowPenumbra } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
+const { foldPaper, curlPaper, paperSegments, paperShadow, bookDimensions, paperColour, paperProfile, paperOutline, printPlacement, stackSlope, simplifyOutline, shadowPenumbra } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
 const area = polygon => Math.abs(polygon.reduce((sum, a, i) => {
     const b = polygon[(i + 1) % polygon.length];
     return sum + a.x * b.y - a.y * b.x;
@@ -67,7 +67,7 @@ test('the broad contact shadow survives late holds and disappears only at contac
 
 test('moving curved edges discard redundant samples without exceeding 0.08 CSS pixels', () => {
     for (const width of [240, 430, 700]) for (const depth of [0, 12, 100]) for (const curve of [0, 24, 100]) {
-        const profile = paperProfile(depth, depth * .2, curve, 24), height = width * (profile.height + profile.lift) / 148;
+        const profile = paperProfile(depth, curve, 24), height = width * (profile.height + profile.lift) / 148;
         const full = paperOutline(profile).map(p => ({ x: p.x * width, y: p.y * height }));
         const lean = simplifyOutline(full);
         assert.ok(lean.length < full.length, 'Redundant vertices are removed without relaxing the geometric error bound.');
@@ -114,26 +114,25 @@ test('paper tint is deterministic; brightness changes the material, not the app 
     assert.match(paperColour('#ffffff', 38, 18), /^#[0-9a-f]{6}$/);
     assert.notEqual(paperColour('#ffffff', 38, 96), paperColour('#ffffff', 38, 18));
 });
-test('curved paper and cut edge share one physical cross-section and a continuous gutter', () => {
+test('the page stays flat whatever the stack; the stack hangs below it as one cut edge per side', () => {
     for (const count of [16, 320, 2000]) for (const read of [1, count / 2, count]) for (const angle of [4, 14, 24]) {
         const dimensions = bookDimensions(count, 100, read, 22);
-        const left = paperProfile(dimensions.leftMm, dimensions.centreMm, 24, angle);
-        const right = paperProfile(dimensions.rightMm, dimensions.centreMm, 24, angle);
-        assert.equal(left.points[0].y, right.points[0].y, 'Both paper blocks meet at the same spine elevation.');
+        const left = paperProfile(dimensions.leftMm, 24, angle);
+        const right = paperProfile(dimensions.rightMm, 24, angle);
+        assert.equal(left.points[0].y, right.points[0].y, 'Both pages meet at the same spine elevation.');
         assert.equal(left.height, right.height);
-        assert.ok(right.points.every(point => Number.isFinite(point.y) && point.y <= 0));
-        assert.ok(Math.abs(right.points[40].y + dimensions.rightMm * Math.sin(angle * Math.PI / 180)) < 1e-8);
+        assert.ok(right.points.every(point => Number.isFinite(point.y) && point.y <= 0 && point.y > -1), 'The page itself never rises with the stack.');
+        assert.equal(right.lift, paperProfile(0, 24, angle).lift, 'The page lifts the same at any reading position.');
+        assert.ok(Math.abs(right.drop - dimensions.rightMm * stackSlope) < 1e-8, 'The cut edge below the page is the stack height.');
         assert.equal(right.points.length, 41, 'Geometry complexity does not grow with leaf count.');
     }
-    assert.ok(paperProfile(12, 2, 100, 14).lift > paperProfile(12, 2, 0, 14).lift);
-    const steep = paperProfile(12, 2, 0, 14);
-    const rise = index => (steep.points[0].y - steep.points[index].y) / (steep.points[0].y - steep.points[40].y);
-    assert.ok(rise(4) > .5 && rise(12) > .9, 'The block rises immediately at the spine, reaching almost full thickness within the inner third.');
+    assert.ok(paperProfile(12, 100, 14).lift > paperProfile(12, 0, 14).lift);
+    assert.equal(paperProfile(12, 0, 14).lift, 0);
 });
 
 test('page-number rise follows the actual curved paper edge at the horizontal centre', () => {
     for (const depth of [0, 3.2, 28.8, 100]) for (const curve of [0, 24, 100]) for (const angle of [4, 14, 24]) {
-        const profile = paperProfile(depth, depth * .35, curve, angle);
+        const profile = paperProfile(depth, curve, angle);
         const lower = paperOutline(profile).slice(41).reverse();
         const i = lower.findIndex(p => p.x >= .5), a = lower[i - 1], b = lower[i];
         const y = a.y + (b.y - a.y) * (.5 - a.x) / (b.x - a.x);
@@ -148,13 +147,13 @@ test('the read stack grows and the unread stack shrinks with reading position, s
     assert.ok(start.rightMm > start.leftMm + 30 && end.leftMm > end.rightMm + 30, 'The thicker stack is the unread one at the start and the read one at the end.');
     assert.ok(Math.abs(half.leftMm - half.rightMm) < .2, 'Halfway the two stacks are alike.');
     assert.ok(Math.abs(start.leftMm + start.rightMm - (end.leftMm + end.rightMm)) < 1e-9, 'Reading moves leaves between the stacks; the block stays one.');
-    const sheet = (dimensions, side) => paperProfile(side === 'left' ? dimensions.leftMm : dimensions.rightMm, dimensions.centreMm, 24, 14);
-    assert.ok(sheet(start, 'right').lift > sheet(start, 'left').lift + 5 && sheet(end, 'left').lift > sheet(end, 'right').lift + 5, 'The thicker stack lifts its sheet higher.');
-    assert.ok(Math.abs(sheet(half, 'left').lift - sheet(half, 'right').lift) < .1);
+    const sheet = (dimensions, side) => paperProfile(side === 'left' ? dimensions.leftMm : dimensions.rightMm, 24, 14);
+    assert.ok(sheet(start, 'right').drop > sheet(start, 'left').drop + 5 && sheet(end, 'left').drop > sheet(end, 'right').drop + 5, 'The thicker stack hangs lower below its page.');
+    assert.ok(Math.abs(sheet(half, 'left').drop - sheet(half, 'right').drop) < .1);
 });
 // The text box as the renderer places it on one sheet, measured against that sheet's own paper contour (half-page pixels, from the spine).
 function printOnPaper(dimensions, side, half) {
-    const scale = half / 148, profile = paperProfile(side === 'left' ? dimensions.leftMm : dimensions.rightMm, dimensions.centreMm, 24, 14);
+    const scale = half / 148, profile = paperProfile(side === 'left' ? dimensions.leftMm : dimensions.rightMm, 24, 14);
     const place = printPlacement(profile, side, scale), body = half * profile.height / 148;
     const sheetTop = -profile.lift * scale, sheetHeight = body - sheetTop;
     const outline = paperOutline(profile), upper = outline.slice(0, 41), lower = outline.slice(41).reverse();
@@ -174,7 +173,8 @@ test('the text box follows each page\'s lifted paper: equal padding above, below
         assert.ok(Math.abs(left.centre) < 1e-6 && Math.abs(right.centre) < 1e-6, 'The print is centred on its paper whatever the width the stack leaves.');
     }
     const start = bookDimensions(1500, 100, 1, 22);
-    assert.ok(printOnPaper(start, 'left', 380).paperWidth - printOnPaper(start, 'right', 380).paperWidth > 10, 'The thick stack narrows its paper; the text moves with it.');
+    assert.ok(printOnPaper(start, 'right', 380).paperWidth < printOnPaper(start, 'left', 380).paperWidth, 'The thicker stack shows more of its block beside the page.');
+    assert.ok(Math.abs(printOnPaper(start, 'right', 380).above - printOnPaper(bookDimensions(1500, 100, 1500, 22), 'right', 380).above) < .25, 'The text stays where it is (within a fraction of a pixel) while the stack moves.');
 });
 test('rounded bend partitions the leaf and joins every projected patch without a hinge gap', () => {
     const width = 430, height = 610;
@@ -199,7 +199,7 @@ test('rounded bend partitions the leaf and joins every projected patch without a
 });
 test('a lifted leaf retains the same curved silhouette as the resting paper', () => {
     const width = 430, height = 610;
-    const outline = paperOutline(paperProfile(25, 2, 60, 20)).map(point => ({ x: point.x * width, y: point.y * height }));
+    const outline = paperOutline(paperProfile(25, 60, 20)).map(point => ({ x: point.x * width, y: point.y * height }));
     for (const fraction of [.01, .25, .5, .75, .99]) {
         const fold = foldPaper(width, height, { x: width * (1 - fraction * 2), y: height * .8 }, height, outline);
         const curl = curlPaper(width, height, fold, 12, 20, 16, outline);
@@ -232,7 +232,7 @@ test('corner bends taper while all patch/front/back boundaries stay continuous',
     const identity = [1, 0, 0, 1, 0, 0];
     for (const width of [250, 430]) for (const corner of [0, 1]) for (const fraction of [.02, .2, .5, .8, .98]) {
         const height = width * 210 / 148, gripY = height * corner;
-        const outline = paperOutline(paperProfile(20, 2, 35, 14)).map(p => ({ x: p.x * width, y: p.y * height }));
+        const outline = paperOutline(paperProfile(20, 35, 14)).map(p => ({ x: p.x * width, y: p.y * height }));
         const fold = foldPaper(width, height, { x: width * (1 - fraction * 2), y: gripY + (corner ? -1 : 1) * height * .2 }, gripY, outline);
         const paper = curlPaper(width, height, fold, width * .05, 14, 16, outline);
         const sum = area(paper.front) + area(paper.back) + paper.bands.reduce((total, band) => total + area(band.polygon), 0);
