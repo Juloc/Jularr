@@ -244,7 +244,7 @@
     &__save-error { top: 64px; left: 0; }
     [hidden] { display: none; }
     &--theater, &:fullscreen, &--fullscreen { max-width: none; padding: 0; height: 100dvh; grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); .player__stage { aspect-ratio: auto; height: 100%; border-radius: 0; } }
-    &:fullscreen, &--fullscreen { background: #000; }
+    &:fullscreen, &--fullscreen { background: #000; [data-action=theater] { display: none; } }
     // The video takes the touches itself: tap, double tap, hold and swipe are the player's gestures, not the browser's.
     &__video { touch-action: none; }
     // Volume, brightness and speed: a pill at the top centre with the icon and, for the two sliders, a bar and the level.
@@ -350,3 +350,14 @@
     .player__settings-pane { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
     html:has(.player__settings:popover-open, .player__chapters:popover-open) { overflow: hidden; }
 }
+
+// A phone (touch, short side under 600 px) has one arrangement whatever the width of its picture, so fullscreen keeps it: the transport floats over the middle with room
+// between its five buttons, the volume is the device's own, Episodes and Chapters stand where it was, Picture in Picture sits at the top, and a message stays out of the middle.
+.player--phone:not(.player--mini) {
+    .player__actions { grid-template-columns: auto 1fr; }
+    .player__transport { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); gap: 20px; }
+    .player__transport [data-action=back], .player__transport [data-action=forward] { display: inline-grid; }
+    .player__audio [data-action=mute], .player__volume, [data-action=theater] { display: none; }
+    .player__chapter-now { display: none; }
+}
+.player--touch:not(.player--mini) .player__status { inset: 52px auto auto 50%; width: max-content; max-width: calc(100% - 24px); margin: 0; padding: 6px 12px; font-size: .8rem; transform: translateX(-50%); pointer-events: none; }

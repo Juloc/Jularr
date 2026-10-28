@@ -5,6 +5,7 @@ import { inserted, keepAddress, pushAddress, releaseAddress, visit } from "../Na
 import type { CastSender, CastState } from "./Cast";
 import { awake, focus } from "../Playback/MediaFocus";
 import type { StyledSubtitles } from "./StyledSubtitles";
+import { deviceKind } from "./Device";
 import { Automatic, nextQuality, recordStall, StallSeconds, troubled } from "./AutoQuality";
 import { pickSecondSubtitle, pickTranslationSource, SecondSubtitleLine, type SubtitleOption } from "./Subtitles";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
@@ -114,6 +115,7 @@ async function start(player: HTMLElement): Promise<void> {
     let styledSubtitles: StyledSubtitles | undefined;
     let styledVersion = 0;
     let secondKey = "";
+    let statusTimer = 0;
     let firstSubtitleShown = false;
     // The profile's choices come with the page; the settings change them for this playback only, the quality is this playback's own (the device's applies until then).
     const preferredSpeed = Number(player.dataset.preferredSpeed) || 1;
@@ -618,7 +620,7 @@ async function start(player: HTMLElement): Promise<void> {
     });
     video.addEventListener("waiting", () => { if (!video.paused) showLoading(); });
     video.addEventListener("stalled", () => { if (!video.paused) showLoading(); });
-    video.addEventListener("seeking", () => { if (!video.paused) showLoading(); });
+    video.addEventListener("seeking", () => showLoading());
     video.addEventListener("canplay", stopLoading);
     video.addEventListener("seeked", () => { if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) stopLoading(); });
     video.addEventListener("playing", () => { recoveries = 0; stopLoading(); });
@@ -757,7 +759,7 @@ async function start(player: HTMLElement): Promise<void> {
         seeking = true;
         timeline.style.setProperty('--played', `${Number(timeline.value) / Math.max(1, Number(timeline.max)) * 100}%`);
     });
-    timeline.addEventListener('change', () => { if (casting) castSender?.seek(Number(timeline.value)); else video.currentTime = Number(timeline.value); seeking = false; wake(); });
+    timeline.addEventListener('change', () => { if (casting) castSender?.seek(Number(timeline.value)); else jumpTo(Number(timeline.value)); seeking = false; wake(); });
     timeline.addEventListener('pointercancel', () => { seeking = false; timeline.value = String(Math.floor(video.currentTime)); wake(); });
     void previews();
     volume.addEventListener("input", () => { video.volume = Number(volume.value); video.muted = video.volume === 0; });
@@ -918,6 +920,7 @@ async function start(player: HTMLElement): Promise<void> {
     // Chrome hides only while playing without an open panel.
     player.addEventListener("pointermove", event => { if (event.pointerType !== "touch") wake(); });
     player.addEventListener("pointerdown", event => { lastPointerType = event.pointerType; if (event.pointerType === "touch" && event.target !== video) wake(); }, { capture: true });
+    deviceLayout();
     touchGestures();
     mediaSession();
     castSupport();
@@ -970,7 +973,21 @@ async function start(player: HTMLElement): Promise<void> {
 
     function seek(seconds: number): void {
         if (casting) { castSender?.seek(Math.max(0, Math.min(castState.duration || 0, castState.currentTime + seconds))); return; }
-        video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + seconds));
+        jumpTo(Math.max(0, Math.min(video.duration || 0, video.currentTime + seconds)));
+    }
+
+    // A jump shows at once, playing or paused: the position moves before the picture is there, and the picture says that it is loading.
+    function jumpTo(time: number): void {
+        video.currentTime = time;
+        showPosition(time);
+        if (video.paused) showLoading();
+    }
+
+    function showPosition(time: number): void {
+        if (!Number.isFinite(time)) return;
+        timeline.value = String(Math.floor(time));
+        timeline.style.setProperty("--played", `${time / Math.max(1, Number(timeline.max)) * 100}%`);
+        player.querySelector("[data-role=time]")!.textContent = clock(time);
     }
 
     // The two offset fields: the audio asks the server for a new conversion that plays on from here, the subtitles move at once.
@@ -1373,6 +1390,20 @@ async function start(player: HTMLElement): Promise<void> {
         video.addEventListener("contextmenu", event => { if (lastPointerType === "touch") event.preventDefault(); });
     }
 
+    // A touch device gets a class for what it is, whatever the picture's width (a phone in fullscreen is wide): a phone, whose short side is under 600 px, has
+    // one arrangement of its own; Picture in Picture goes up beside Cast, Episodes and Chapters take the place of the volume, which is the device's own.
+    function deviceLayout(): void {
+        const kind = deviceKind(matchMedia("(pointer: coarse)").matches, screen.width, screen.height);
+        player.classList.toggle("player--touch", kind !== "pointer");
+        player.classList.toggle("player--phone", kind === "phone");
+        if (kind !== "phone") return;
+        const top = player.querySelector<HTMLElement>(".player__top");
+        const pip = player.querySelector<HTMLElement>("[data-action=pip]");
+        if (top && pip) top.insertBefore(pip, top.querySelector("[data-action=stop]"));
+        const left = player.querySelector<HTMLElement>(".player__audio");
+        if (left) for (const name of ["episodes", "chapters"]) { const button = player.querySelector<HTMLElement>(`[data-action=${name}]`); if (button) left.append(button); }
+    }
+
     function layout(): void {
         const wide = player.classList.contains('player--theater');
         player.querySelector('[data-action=theater]')!.setAttribute('aria-pressed', String(wide));
@@ -1402,7 +1433,11 @@ async function start(player: HTMLElement): Promise<void> {
         stopLoading();
         status.textContent = text("data-status", code) || text("data-status", "failed");
         status.hidden = false;
+        // A message goes away by itself (a waking drive says so as long as it takes) and by a tap, so it never stays over the picture.
+        clearTimeout(statusTimer);
+        if (code !== "storage_waking") statusTimer = window.setTimeout(() => { status.hidden = true; }, 8_000);
     }
+    status.addEventListener("click", () => { status.hidden = true; });
 
     // A message that goes away by itself.
     function notice(code: string): void {
