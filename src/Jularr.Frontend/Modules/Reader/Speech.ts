@@ -3,6 +3,8 @@ import { deviceVoice, initializeSpeechSettings, preferenceFor, type SpeechPrefer
 import { installedModels } from '../Speech/ModelStore';
 import type { NeuralSession } from '../Speech/NeuralSession';
 import { followDelta, minutesLeft, sentenceAround, timerMinutes } from './SpeechFollow';
+import { readerLifetime } from './Lifetime';
+import { awake, focus } from '../Playback/MediaFocus';
 
 // Text coordinates stay on canonical content. Highlights never wrap or mutate its nodes.
 export function speechRange(source: Range, start: number, length: number): Range | undefined {
@@ -61,6 +63,9 @@ export function initializeReadAloud(reader: HTMLElement, content: HTMLElement, r
     const changed = (state: SpeechState) => {
         if (state === 'idle' || state === 'failed') { setTimer(0); if (timerChoice) timerChoice.value = '0'; }
         reader.dataset.speechState = state;
+        // Reading aloud takes the focus from a playing video and holds the screen on; pausing or ending gives both up.
+        if (state === 'speaking' || state === 'loading') { awake.hold('read-aloud'); focus.claim('read-aloud', () => session?.pause()); }
+        else { awake.drop('read-aloud'); focus.release('read-aloud'); }
         transport.hidden = state === 'idle';
         toggle.setAttribute('aria-pressed', String(state === 'speaking' || state === 'paused' || state === 'loading'));
         pause.setAttribute('aria-pressed', String(state === 'paused'));
@@ -193,8 +198,10 @@ export function initializeReadAloud(reader: HTMLElement, content: HTMLElement, r
     const prints = new MutationObserver(paintWord);
     prints.observe(reader.querySelector('.reader-book')!, { childList: true, subtree: true });
     prints.observe(reader, { attributes: true, attributeFilter: ['data-book-state'] });
-    document.addEventListener('visibilitychange', () => { if (document.hidden) { preparing++; session?.pause(); if (pendingContext) stop(); } });
-    window.addEventListener('speech-model-removed', event => { if ((event as CustomEvent<string>).detail === neuralModel) stop(); });
-    window.addEventListener('pagehide', stop);
+    const signal = readerLifetime();
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { preparing++; session?.pause(); if (pendingContext) stop(); } }, { signal });
+    window.addEventListener('speech-model-removed', event => { if ((event as CustomEvent<string>).detail === neuralModel) stop(); }, { signal });
+    window.addEventListener('pagehide', stop, { signal });
+    signal.addEventListener('abort', () => { setTimer(0); stop(); });
     changed('idle');
 }

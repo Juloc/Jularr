@@ -1,4 +1,4 @@
-# Jularr clean start
+# Jularr
 
 Ein ASP.NET-Host: `Jularr.Frontend` startet Razor Pages und API.
 `Jularr.Backend` ist eine referenzierte .NET-Klassenbibliothek mit Services, Logic,
@@ -485,12 +485,12 @@ nur einer ausdrücklich gewählten einmaligen Übernahme (`/Admin/Acquisition/Ta
 Vorschau, dann Übernahme von Indexern, SABnzbd und fehlenden Titeln), nicht dem laufenden Betrieb.
 Der Player wird von Jularr selbst gehostet; vorhandene Dev-Technik ist Referenz.
 
-Der Update-Pfad ab dem ersten offiziellen Clean-Start-Release verwendet eine versionierte
+Der Update-Pfad verwendet eine versionierte
 Schemahistorie: das Schema ist eingefroren, Änderungen sind nummerierte Migrationen
 (`database/migrations`). Neue Migrationen laufen beim Start automatisch, nach einem
 automatischen Backup (Datenbank und Schlüssel); ohne Backup oder bei einer fehlgeschlagenen
 Migration wird alles zurückgerollt, Jularr startet nicht und zeigt eine Wartungsseite. Ablauf und
-verbleibende Release-Abnahme: [Datenbank-Migrationen](docs/DATABASE_MIGRATIONS.md).
+[Datenbank-Migrationen](docs/DATABASE_MIGRATIONS.md).
 Ein Release ist ein Git-Tag `vX.Y.Z`; der Workflow baut das Image und veröffentlicht `ghcr.io/juloc/jularr:X.Y.Z`
 (und `latest`): [Release](docs/RELEASE.md).
 

@@ -16,6 +16,8 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
+using Jularr.Workers;
+using Microsoft.Extensions.Logging.Abstractions;
 using Jularr.Backend.Data.Enums.Provider;
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Enums.Storage;
@@ -2888,7 +2890,7 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
             var wantedId = await CreateWantedMovieAsync(host);
 
-            // The button on the target's page searches like the schedule and grabs the winner without waiting for the next cycle.
+            // The button on the target's page starts a search run and returns at once; the run searches like the schedule and grabs the winner without waiting for the next cycle.
             var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId))!;
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + workId);
             var html = await page.Content.ReadAsStringAsync();
@@ -2896,9 +2898,15 @@ namespace Jularr.Backend.Tests
             using var searched = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + workId + "?handler=Automatic",
                 new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html) });
             Assert.AreEqual(HttpStatusCode.Redirect, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+            StringAssert.StartsWith(searched.Headers.Location!.OriginalString, "/Admin/Works?searchJob=");
+            Assert.AreEqual(0, usenet.Grabbed.Count);
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                await OperationWorker.RunNextAsync(scope.ServiceProvider, NullLogger.Instance, OperationType.AcquisitionSearch, CancellationToken.None);
+            }
+
             Assert.AreEqual(1, usenet.Grabbed.Count);
-            using var after = await host.SendAsync(HttpMethod.Get, searched.Headers.Location!.OriginalString);
-            StringAssert.Contains(await after.Content.ReadAsStringAsync(), "Downloading: " + Feature);
+            Assert.AreEqual("grabbed", await host.ScalarAsync($"SELECT \"OutcomeKey\" FROM \"AcquisitionSearchTargets\" WHERE \"WantedItemId\" = {wantedId}"));
 
             // While it downloads, the film is not searched again.
             using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search/automatic", new SearchWantedDataV1());
@@ -3143,7 +3151,7 @@ namespace Jularr.Backend.Tests
                         """),
                     "/v4/search/remoteid/tt0903747" => Json("""{"data":[{"series":{"id":81189}}]}"""),
                     "/v4/search" => Json("""{"data":[{"tvdb_id":"81189","name":"Beispiel Serie","year":"2020","type":"series","primary_language":"deu","translations":{"deu":"Beispiel Serie","eng":"Example Show"}}]}"""),
-                    "/v4/series/81189/episodes/default" => Json($$$"""{"data":{"episodes":[{"id":1,"seasonNumber":0,"number":1,"name":"Pilot extra","aired":"2020-01-01"},{"id":2,"seasonNumber":1,"number":1,"name":"One","aired":"2020-04-01","runtime":42},{"id":3,"seasonNumber":1,"number":2,"name":"Two","aired":"2020-04-08"},{"id":4,"seasonNumber":1,"number":3,"name":"Three","aired":"2020-04-15"},{"id":5,"seasonNumber":2,"number":1,"name":"Four","aired":"2021-04-01"},{"id":6,"seasonNumber":2,"number":2,"name":"Five","aired":"{{{future}}}"}]},"links":{"next":null}}"""),
+                    "/v4/series/81189/episodes/default" or "/v4/series/81189/episodes/default/eng" => Json($$$"""{"data":{"episodes":[{"id":1,"seasonNumber":0,"number":1,"name":"Pilot extra","aired":"2020-01-01"},{"id":2,"seasonNumber":1,"number":1,"name":"One","aired":"2020-04-01","runtime":42},{"id":3,"seasonNumber":1,"number":2,"name":"Two","aired":"2020-04-08"},{"id":4,"seasonNumber":1,"number":3,"name":"Three","aired":"2020-04-15"},{"id":5,"seasonNumber":2,"number":1,"name":"Four","aired":"2021-04-01"},{"id":6,"seasonNumber":2,"number":2,"name":"Five","aired":"{{{future}}}"}]},"links":{"next":null}}"""),
                     _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                 };
             }

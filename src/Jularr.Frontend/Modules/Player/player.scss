@@ -24,7 +24,7 @@
 }
 
 .player-page { background: var(--background); color: var(--text); }
-.player-main { width: 100%; min-height: 100dvh; }
+.player-main { width: 100%; min-height: 100dvh; &:fullscreen { background: #000; } }
 .player {
     display: grid;
     align-content: start;
@@ -94,7 +94,24 @@
         &:is(:hover, :focus-visible)::after { opacity: 1; }
         &:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     }
-    &__preview { position: absolute; bottom: calc(100% + 10px); z-index: 3; border-radius: 8px; background-repeat: no-repeat; background-color: #000; pointer-events: none; }
+    &__preview {
+        position: absolute; bottom: calc(100% + 10px); z-index: 3; display: grid; place-items: center;
+        border: 1px solid rgb(255 255 255 / 22%); border-radius: 8px; background-repeat: no-repeat;
+        background-color: #17181b; pointer-events: none; box-shadow: 0 4px 18px rgb(0 0 0 / 40%);
+        &[hidden] { display: none; }
+    }
+    // Without a thumbnail the preview is a small label: the target time and the chapter there.
+    &__preview:not(.player__preview--image) { width: max-content; max-width: 240px; padding: 6px 10px; gap: 2px; text-align: center; }
+    &__preview-chapter { max-width: 100%; overflow: hidden; color: #fff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; &[hidden] { display: none; } }
+
+    // On a thumbnail the chapter name sits at the top edge, the time at the bottom.
+    &__preview--image &__preview-chapter { position: absolute; top: 4px; left: 4px; max-width: calc(100% - 8px); padding: 2px 6px; border-radius: 5px; background: rgb(0 0 0 / 78%); }
+    &__chapter-now { min-height: 1.2em; padding: 0 2px; font-size: .8rem; opacity: .85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; &[hidden] { display: none; } }
+    &__preview-time {
+        padding: 4px 7px; border-radius: 5px; background: rgb(0 0 0 / 78%);
+        color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 650;
+    }
+    &__preview--image { place-items: end center; padding-bottom: 4px; box-sizing: border-box; }
     &__actions { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
     &__audio, &__transport, &__options { display: flex; align-items: center; gap: 2px; }
     &__transport { justify-content: center; }
@@ -137,6 +154,22 @@
     }
     &__settings-body { min-height: 0; overflow: hidden; padding: 6px 12px 10px; }
     &__settings-pane { display: grid; gap: 8px; align-content: start; }
+    // Info for the curious: the facts side by side in two columns, one column on a phone where the settings fill the screen.
+    &__info { display: grid; gap: 6px; align-content: start; }
+    &__facts {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 2px 14px; margin: 0; font-size: .7rem;
+        > div { display: grid; gap: 0; min-width: 0; }
+        dt { color: var(--muted); font-size: .62rem; font-weight: 650; line-height: 1.1; }
+        dd { margin: 0; min-height: 1.1em; overflow-wrap: anywhere; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+    }
+    &__offset { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+    &__offset-input {
+        width: 100%; min-width: 0; min-height: 34px; padding: 2px 10px; border: 1px solid var(--border); border-radius: var(--radius-control);
+        background: var(--surface); color: var(--text); text-align: end; font-variant-numeric: tabular-nums;
+        &:focus-visible { outline: none; border-color: var(--accent); }
+    }
+    &__offset-reset { min-height: 34px; padding: 0 12px; }
+    &__copy { justify-self: start; min-height: 26px; padding: 0 10px; font-size: .72rem; }
     &__pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     // Slider with its number; the dots below mark the usual speeds.
     &__speed {
@@ -170,11 +203,6 @@
             &[aria-pressed=true] { color: var(--accent-text); &::before { top: 5px; left: 5px; width: 6px; height: 6px; } }
             @each $value in (0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4) { &[data-speed="#{$value}"] { --p: #{math.div($value - 0.25, 3.75)}; } }
         }
-    }
-    &__facts {
-        display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 16px; margin: 0; padding-top: 4px;
-        dt { color: var(--muted); font-size: 12px; font-weight: 650; }
-        dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
     }
     &__option { width: 100%; justify-content: start; text-align: start; overflow-wrap: anywhere; }
     &__sidebar { contain: size; min-height: 0; overflow: auto; padding: 12px; border-radius: var(--radius-panel); background: var(--surface); border: 1px solid var(--accent-line); color: var(--text); }
@@ -210,17 +238,56 @@
     &--mini &__next { display: none; }
     // Skip offers sit where the next episode waits; the viewer decides, so the chrome fading does not hide them.
     &__skip { position: absolute; inset: auto 16px 96px auto; z-index: 3; @include above-timeline; }
-    &--mini &__skip, &--mini &__skipped, &--mini &__marks { display: none; }
+    &--mini &__skip, &--mini &__skipped, &--mini &__marks, &--mini [data-action=cast], &--mini [data-action=airplay] { display: none; }
     &__status, &__save-error { position: absolute; z-index: 4; max-width: calc(100% - 24px); margin: 12px; padding: 12px; border-radius: var(--radius-panel); background: var(--surface); color: var(--text); }
     &__status { inset: 50% auto auto 50%; transform: translate(-50%, -50%); }
     &__save-error { top: 64px; left: 0; }
     [hidden] { display: none; }
-    &--theater, &:fullscreen { max-width: none; padding: 0; height: 100dvh; grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); .player__stage { aspect-ratio: auto; height: 100%; border-radius: 0; } }
-    &:fullscreen { background: #000; }
+    &--theater, &:fullscreen, &--fullscreen { max-width: none; padding: 0; height: 100dvh; grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); .player__stage { aspect-ratio: auto; height: 100%; border-radius: 0; } }
+    &:fullscreen, &--fullscreen { background: #000; [data-action=theater] { display: none; } }
+    // The video takes the touches itself: tap, double tap, hold and swipe are the player's gestures, not the browser's.
+    &__video { touch-action: none; }
+    // Volume, brightness and speed: a pill at the top centre with the icon and, for the two sliders, a bar and the level.
+    &__gesture {
+        position: absolute; top: 16px; left: 50%; z-index: 4; display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-radius: 999px;
+        background: rgb(0 0 0 / 65%); color: #fff; font-size: .95rem; font-weight: 650; font-variant-numeric: tabular-nums; pointer-events: none; transform: translateX(-50%);
+        &[hidden] { display: none; }
+        .ui-icon { width: 20px; height: 20px; }
+        [data-gesture-icon] { display: none; }
+        &[data-kind=volume] [data-gesture-icon=volume], &[data-kind=muted] [data-gesture-icon=muted], &[data-kind=brightness] [data-gesture-icon=brightness] { display: inline-flex; }
+        &[data-kind=speed] .player__gesture-bar { display: none; }
+    }
+    &__gesture-bar { position: relative; width: 140px; height: 4px; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / 30%); }
+    &__gesture-fill { position: absolute; inset: 0 auto 0 0; width: calc(var(--level, 0) * 100%); background: #fff; }
+    &--mini &__gesture, &--mini &__seek, &--mini &__casting, &--mini [data-action=cast] { display: none; }
+    // While a device plays, the picture stays dark and says where; the controls drive the device.
+    &__casting { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; background: #000; color: #fff; font-size: 1.05rem; font-weight: 650; text-align: center; pointer-events: none; &[hidden] { display: none; } }
+    &--casting &__video { visibility: hidden; }
+    &--casting [data-action=cast] { color: var(--accent); }
+    // Seeking lights up the tapped half with a rounded inner edge, the arrows run toward the direction and the total says how far.
+    &__seek {
+        position: absolute; top: 0; bottom: 0; z-index: 2; display: grid; align-content: center; justify-items: center; gap: 6px; width: 38%;
+        background: rgb(255 255 255 / 22%); color: #fff; font-size: 1rem; font-weight: 650; font-variant-numeric: tabular-nums; pointer-events: none;
+        &[hidden] { display: none; }
+        &[data-side=left] { left: 0; border-radius: 0 50% 50% 0 / 0 50% 50% 0; }
+        &[data-side=right] { right: 0; border-radius: 50% 0 0 50% / 50% 0 0 50%; }
+        &--show { animation: player-seek-flash 700ms ease-out both; }
+    }
+    &__seek-arrows {
+        display: flex; gap: 2px; font-size: 1.1rem; line-height: 1;
+        span { opacity: .25; animation: player-seek-arrow 700ms ease-out both; }
+        span:nth-child(2) { animation-delay: 90ms; }
+        span:nth-child(3) { animation-delay: 180ms; }
+    }
+    &__seek[data-side=right] &__seek-arrows span::before { content: "▶"; }
+    &__seek[data-side=left] &__seek-arrows { flex-direction: row-reverse; }
+    &__seek[data-side=left] &__seek-arrows span::before { content: "◀"; }
     &__mini-only { display: none; }
     &--mini &__loading, &--mini &__feedback { display: none; }
 }
 @keyframes player-loading-spin { to { transform: rotate(360deg); } }
+@keyframes player-seek-flash { 0% { opacity: 0; } 15% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes player-seek-arrow { 0% { opacity: .25; } 40% { opacity: 1; } 100% { opacity: .25; } }
 @keyframes player-transport-feedback {
     0% { opacity: 0; transform: translate(-50%, -50%) scale(.82); }
     20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
@@ -264,6 +331,8 @@
     .player:not(.player--mini) .player__transport [data-action=back], .player:not(.player--mini) .player__transport [data-action=forward] { display: inline-grid; }
     .player__volume, [data-action=theater] { display: none; }
     .player--mini .player__heading { display: none; }
+    // The picture is low here and the transport floats over its middle: the chapter is named by the preview while dragging and in the chapter list.
+    .player__chapter-now { display: none; }
 }
 @media (max-width: 600px) {
     .player:not(.player--mini) .player__transport [data-action=back], .player:not(.player--mini) .player__transport [data-action=forward] { display: none; }
@@ -281,3 +350,14 @@
     .player__settings-pane { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
     html:has(.player__settings:popover-open, .player__chapters:popover-open) { overflow: hidden; }
 }
+
+// A phone (touch, short side under 600 px) has one arrangement whatever the width of its picture, so fullscreen keeps it: the transport floats over the middle with room
+// between its five buttons, the volume is the device's own, Episodes and Chapters stand where it was, Picture in Picture sits at the top, and a message stays out of the middle.
+.player--phone:not(.player--mini) {
+    .player__actions { grid-template-columns: auto 1fr; }
+    .player__transport { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); gap: 20px; }
+    .player__transport [data-action=back], .player__transport [data-action=forward] { display: inline-grid; }
+    .player__audio [data-action=mute], .player__volume, [data-action=theater] { display: none; }
+    .player__chapter-now { display: none; }
+}
+.player--touch:not(.player--mini) .player__status { inset: 52px auto auto 50%; width: max-content; max-width: calc(100% - 24px); margin: 0; padding: 6px 12px; font-size: .8rem; transform: translateX(-50%); pointer-events: none; }

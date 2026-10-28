@@ -1144,6 +1144,36 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
+        // Closing the source browser retries its unresolved links; ordinary download/import failures stay untouched.
+        public static Task<int> ResumeSourceDownloadsAsync(this LogicContext ctx, AcquisitionConnectionParameters data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Operations" AS operation
+                SET
+                    "AttentionKey" = NULL,
+                    "AttentionUrl" = NULL,
+                    "DownloadWaitUntil" = NULL
+                FROM
+                    "AcquisitionConnections" AS connection
+                WHERE
+                    operation."AcquisitionConnectionId" = @AcquisitionConnectionId
+                    AND connection."Id" = operation."AcquisitionConnectionId"
+                    AND connection."AcquisitionConnectionTypeId" = 5
+                    AND connection."IsEnabled"
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2)
+                    AND operation."AttentionKey" = 'source_manual_link'
+                    AND operation."AttentionUrl" IS NOT NULL
+                    AND operation."SourceLinkUrl" IS NULL
+                    AND operation."AttentionProposal" IS NULL;
+                """;
+            sql.Parameters.Add(data);
+            return ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task SetSourceLinkAsync(this LogicContext ctx, SourceLinkData data, CancellationToken ct)
         {
             // Files are fetched over HTTPS only.

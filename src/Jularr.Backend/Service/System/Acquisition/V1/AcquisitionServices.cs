@@ -32,6 +32,7 @@ using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
 
@@ -175,11 +176,13 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     {
         private readonly WorkMetadata _metadata;
         private readonly AniListMetadata _aniList;
+        private readonly ILogger<RefreshWantedMetadataV1> _logger;
 
-        internal RefreshWantedMetadataV1(WorkMetadata metadata, AniListMetadata aniList)
+        internal RefreshWantedMetadataV1(WorkMetadata metadata, AniListMetadata aniList, ILogger<RefreshWantedMetadataV1> logger)
         {
             _metadata = metadata;
             _aniList = aniList;
+            _logger = logger;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -266,6 +269,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     }
                     catch (Exception exception) when (exception is KeyNotFoundException or DataValidationException)
                     {
+                        // An identity that belongs to another Work must not hold back the others; it is asked again after a day.
+                        if (exception is DataValidationException)
+                        {
+                            _logger.LogWarning(exception, "Metadata of Work {WorkId} ({Namespace} {Value}) conflicts with another Work and is skipped until its next daily refresh.", identity.WorkId, identity.Namespace, identity.Value);
+                        }
+
                         await Context.ExecuteBatchAsync(async (ctx, ct) =>
                         {
                             await ctx.TouchWorkIdentityAsync(identity, ct);

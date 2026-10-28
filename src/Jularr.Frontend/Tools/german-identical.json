@@ -1,6 +1,7 @@
 [
  "AcoustID",
  "Admin",
+ "AirPlay",
  "Album",
  "AniList",
  "Anime",
@@ -16,6 +17,7 @@
  "Clean",
  "Client",
  "Comic",
+ "Container",
  "Cover",
  "CPU",
  "Dashboard",
@@ -55,7 +57,6 @@
  "Jobs: {0}",
  "JPEG XL",
  "Jularr",
- "Layout",
  "Limit",
  "Live",
  "Logs",

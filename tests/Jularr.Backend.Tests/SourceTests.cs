@@ -6,6 +6,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Account.V1;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Activity.V1;
+using Jularr.Backend.Data.Admin.Browser.V1;
 using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
@@ -397,6 +398,72 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("s1/b0", (await again.Content.ReadFromJsonAsync<Data.User.Reading.V1.ReadingDocumentV1>())!.Locator);
             using var reader = await host.SendAsync(HttpMethod.Get, "/Read/" + assetId);
             Assert.AreEqual(HttpStatusCode.OK, reader.StatusCode, await reader.Content.ReadAsStringAsync());
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_ClosingAssistanceResolvesWaitingDownloadsWithoutPastedLinks()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeSources { SlowGate = true };
+            using var browserPages = new HttpClient(sources, disposeHandler: false);
+            var browser = new BrowserAssistanceTests.Interaction
+            {
+                ReadHtml = async (address, ct) =>
+                {
+                    using var response = await browserPages.GetAsync(address, ct);
+                    return response.IsSuccessStatusCode ? await response.Content.ReadAsStringAsync(ct) : null;
+                }
+            };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources, browser);
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Browser'");
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas.example.test", null, true, 60, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var sourceId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Anna'"))!;
+            using var other = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Other", AcquisitionConnectionType.AnnasArchive,
+                "https://other.example.test", null, true, 60, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, other.StatusCode);
+            var otherId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Other'"))!;
+            await GrabAnnaAsync(host, await CreateWantedBookAsync(host));
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual("source_manual_link", await AttentionAsync());
+
+            // Closing a different source does not release this source's waiting jobs.
+            await CloseAsync(otherId);
+            Assert.AreEqual("source_manual_link", await AttentionAsync());
+            await CloseAsync(sourceId);
+            Assert.AreEqual(DBNull.Value, await AttentionAsync());
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual("source_manual_link", await AttentionAsync());
+
+            // Unrelated storage/import attention must not be retried by closing a browser.
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"AttentionKey\" = 'download_size_limit' WHERE \"OperationTypeId\" = 2");
+            await CloseAsync(sourceId);
+            Assert.AreEqual("download_size_limit", await AttentionAsync());
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"AttentionKey\" = 'source_manual_link' WHERE \"OperationTypeId\" = 2");
+
+            // The person completes the source's check; Jularr reads its countdown and file link itself.
+            sources.SlowGate = false;
+            await CloseAsync(sourceId);
+            await RunAsync<MonitorDownloadsV1>(host);
+            await WaitForSlowPageAsync(host);
+            Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Books", "Jane Austen", "Pride and Prejudice (1813)", "Pride and Prejudice.epub")));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"SourceLinkUrl\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            var assetId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"MediaAssets\" LIMIT 1"))!;
+            using var opened = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/assets/" + assetId + "/open");
+            Assert.AreEqual(HttpStatusCode.OK, opened.StatusCode, await opened.Content.ReadAsStringAsync());
+
+            Task<object?> AttentionAsync() => host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2");
+            async Task CloseAsync(long id)
+            {
+                using var openedView = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/browser/assistance/" + id);
+                Assert.AreEqual(HttpStatusCode.OK, openedView.StatusCode, await openedView.Content.ReadAsStringAsync());
+                var view = (await openedView.Content.ReadFromJsonAsync<BrowserViewV1>())!;
+                using var closed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/browser/assistance/" + view.LeaseId + "/close");
+                Assert.AreEqual(HttpStatusCode.OK, closed.StatusCode, await closed.Content.ReadAsStringAsync());
+            }
         }
 
         [TestMethod]
@@ -848,13 +915,18 @@ namespace Jularr.Backend.Tests
             return (await response.Content.ReadFromJsonAsync<BaseDataList<SourceCatalogItemV1>>())!;
         }
 
-        private static async Task<Host> CreateHostAsync(string storage, string downloads, FakeSources sources)
+        private static async Task<Host> CreateHostAsync(string storage, string downloads, FakeSources sources, BrowserAssistanceTests.Interaction? browser = null)
         {
             var host = await LibraryTests.CreateHostAsync(storage, razor: true, settings: new Dictionary<string, string>
             {
                 ["Storage:LocalPaths:2"] = downloads
             }, services: services =>
             {
+                if (browser is not null)
+                {
+                    services.AddSingleton<IBrowserInteraction>(browser);
+                    services.AddSingleton<ISourceBrowser>(browser);
+                }
                 services.AddHttpClient<OpdsClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
                 services.AddHttpClient<AnnasArchiveClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
             });

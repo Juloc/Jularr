@@ -242,6 +242,10 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(settings.Locator("[data-panel=basic] select[data-setting=quality]")).ToHaveValueAsync("2");
             await settings.GetByRole(AriaRole.Tab, new() { Name = "Info", Exact = true }).ClickAsync();
             await Assertions.Expect(settings.Locator("[data-role=fact-quality]")).ToHaveTextAsync("Original");
+            // The Info pane tells what the file is and what plays: probed streams from the server, measured values from the player.
+            await Assertions.Expect(settings.Locator("[data-role=fact-video]")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex(@"\d+\u00d7\d+"));
+            await Assertions.Expect(settings.Locator("[data-role=fact-frames]")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex(@"^\d+ / \d+( · [\d.]+)?$"));
+            await Assertions.Expect(settings.Locator("[data-role=fact-buffer]")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex(@"^\d+\.\d s$"));
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(settings).ToBeHiddenAsync();
 
@@ -269,10 +273,58 @@ namespace Jularr.E2E.Tests
             await Task.Delay(3200);
             Assert.IsTrue(await video.EvaluateAsync<bool>("video => !video.paused && video.currentTime > 2 && video.currentTime < 6"), "Holding the range must continue playback without seeking or pausing.");
             Assert.IsFalse(await page.Locator(".player").EvaluateAsync<bool>("player => player.classList.contains('player--idle')"), "Holding the seek control must keep the chrome visible.");
+            // Dragging names the target time, with or without thumbnails.
+            await Assertions.Expect(page.Locator("[data-role=preview]")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator("[data-role=preview] .player__preview-time")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex(@"^\d+:\d{2}"));
             await page.Mouse.UpAsync();
+            await Assertions.Expect(page.Locator("[data-role=preview]")).ToBeHiddenAsync();
             await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime > 6.5");
             await video.EvaluateAsync("video => video.pause()");
             Assert.IsTrue(await timeline.EvaluateAsync<bool>("input => input.style.getPropertyValue('--played').length > 0"));
+
+            // A finger on the picture: double tap left/right seeks, swipes change volume and brightness, holding plays at double speed; a double click stays the mouse's fullscreen.
+            var touched = await video.EvaluateAsync<string>("""
+                async video => {
+                    const box = video.getBoundingClientRect();
+                    const send = (type, x, y) => video.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', pointerId: 7, clientX: x, clientY: y, bubbles: true, isPrimary: true }));
+                    const tap = (x, y) => { send('pointerdown', x, y); send('pointerup', x, y); };
+                    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+                    const y = box.top + box.height / 2;
+                    const result = [];
+                    video.currentTime = 6;
+                    await wait(300);
+                    tap(box.right - 20, y); await wait(60); tap(box.right - 20, y); await wait(300);
+                    result.push('right ' + (video.currentTime > 6.5 || video.ended));
+                    const flash = document.querySelector('.player__seek[data-side=right]');
+                    result.push('flash ' + (!flash.hidden && flash.textContent.includes('+30 s')));
+                    tap(box.left + 20, y); await wait(60); tap(box.left + 20, y); await wait(300);
+                    result.push('left ' + (video.currentTime < 1));
+                    video.volume = 0.5;
+                    send('pointerdown', box.right - 30, y); send('pointermove', box.right - 30, y - 120); send('pointerup', box.right - 30, y - 120);
+                    result.push('volume ' + (video.volume > 0.7));
+                    send('pointerdown', box.left + 30, y); send('pointermove', box.left + 30, y - 120); send('pointerup', box.left + 30, y - 120);
+                    result.push('brightness ' + (video.style.filter.startsWith('brightness(') && document.querySelector('[data-role=gesture]').dataset.kind === 'brightness'));
+                    await video.play();
+                    send('pointerdown', box.left + box.width / 2, y); await wait(700);
+                    result.push('hold ' + (video.playbackRate === 2));
+                    send('pointerup', box.left + box.width / 2, y); await wait(100);
+                    result.push('release ' + (video.playbackRate === 1));
+                    video.pause();
+                    return result.join(',');
+                }
+                """);
+            Assert.AreEqual("right true,flash true,left true,volume true,brightness true,hold true,release true", touched);
+            Assert.IsFalse(await page.EvaluateAsync<bool>("() => !!document.fullscreenElement"), "A double tap must not toggle fullscreen.");
+
+            // The playback is media for the system: notification and lock screen name it and know its state.
+            Assert.AreEqual("paused", await page.EvaluateAsync<string>("() => navigator.mediaSession.playbackState"));
+            Assert.IsFalse(string.IsNullOrWhiteSpace(await page.EvaluateAsync<string>("() => navigator.mediaSession.metadata?.title ?? ''")), "The media session names no title.");
+
+            // The Cast button is offered on a secure page; this test's loopback address is one a device cannot reach, and it says so without loading Google's library.
+            await page.Locator("[data-action=cast]").ClickAsync();
+            await Assertions.Expect(page.Locator("[data-role=status]")).ToContainTextAsync("cannot reach this address");
+            Assert.AreEqual(0, await page.Locator("script[src*=gstatic]").CountAsync(), "The cast library must load only for a reachable address.");
+            await page.EvaluateAsync("() => { document.querySelector('[data-role=status]').hidden = true; }");
 
             await page.Locator("[data-action=mute]").ClickAsync();
             Assert.IsTrue(await video.EvaluateAsync<bool>("video => video.muted"));
@@ -288,7 +340,7 @@ namespace Jularr.E2E.Tests
             await page.Locator("[data-action=theater]").ClickAsync();
 
             await page.Locator("[data-action=fullscreen]").ClickAsync();
-            await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player')");
+            await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player-main')");
             await page.Locator("[data-action=settings]").ClickAsync();
             await Assertions.Expect(settings).ToBeVisibleAsync();
             await page.Keyboard.PressAsync("Escape");

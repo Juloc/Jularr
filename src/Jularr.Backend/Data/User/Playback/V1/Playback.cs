@@ -51,8 +51,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
     // An audio or subtitle choice; image subtitles are listed but not yet supported.
     public sealed class PlaybackTrackV1 : BaseResponse
     {
-        public PlaybackTrackV1(string key, MediaTrackType mediaTrackTypeId, string? language, string? title, int? channels, bool isDefault, bool isForced, bool isSupported, bool isSelected)
+        public PlaybackTrackV1(string key, MediaTrackType mediaTrackTypeId, string? language, string? title, int? channels, bool isDefault, bool isForced, bool isSupported, bool isSelected, bool isStyled = false, string? languageCode = null)
         {
+            LanguageCode = languageCode;
+            IsStyled = isStyled;
             IsSelected = isSelected;
             Key = key;
             MediaTrackTypeId = mediaTrackTypeId;
@@ -88,18 +90,76 @@ namespace Jularr.Backend.Data.User.Playback.V1
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsSupported))]
         public bool IsSupported { get; }
 
+        // The language as two letters (the stream may say "ger" or "deu"), what the profile's language choices are written in.
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language))]
+        public string? LanguageCode { get; }
+
+        // An ASS or SSA subtitle: the player draws it with its styles and positions instead of plain WebVTT lines.
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsStyled))]
+        public bool IsStyled { get; }
+
         // The track the profile's preferences pick; one audio and at most one subtitle track.
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsSelected))]
         public bool IsSelected { get; }
     }
 
+    // The track to translate, in which language it is written and which language is wanted.
+    public sealed class StartSubtitleTranslationDataV1 : BaseData
+    {
+        public StartSubtitleTranslationDataV1(string sourceKey, string? sourceLanguage, string? language)
+        {
+            SourceKey = sourceKey;
+            SourceLanguage = sourceLanguage;
+            Language = language;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TrackKey))]
+        public string SourceKey { get; }
+
+        // No source language is taken as English.
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language))]
+        public string? SourceLanguage { get; }
+
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language))]
+        public string? Language { get; }
+    }
+
+    // How far a translation of a subtitle is; its key is the track key to ask for the subtitle once it is done.
+    public sealed class SubtitleTranslationV1 : BaseResponse
+    {
+        public SubtitleTranslationV1(string key, string state, int done, int total)
+        {
+            Key = key;
+            State = state;
+            Done = done;
+            Total = total;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TrackKey))]
+        public string Key { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TranslationState))]
+        public string State { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TranslationCues))]
+        public int Done { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TranslationCues))]
+        public int Total { get; }
+    }
+
     public sealed class PlaybackSubtitleParametersV1 : BaseParameters
     {
-        public PlaybackSubtitleParametersV1(long mediaAssetId, string key)
+        public PlaybackSubtitleParametersV1(long mediaAssetId, string key, bool styled = false)
         {
             MediaAssetId = mediaAssetId;
             Key = key;
+            Styled = styled;
         }
+
+        // The subtitle as ASS text, for the tracks that are ASS or SSA.
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.Styled))]
+        public bool Styled { get; }
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
         public long MediaAssetId { get; }
@@ -110,16 +170,17 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
     public sealed class PlaybackSubtitleV1 : BaseResponse, ITextOutput
     {
-        public PlaybackSubtitleV1(string text)
+        public PlaybackSubtitleV1(string text, bool styled = false)
         {
             Text = text;
+            ContentType = styled ? "text/x-ssa; charset=utf-8" : "text/vtt; charset=utf-8";
         }
 
         [JsonIgnore]
         public string Text { get; }
 
         [JsonIgnore]
-        public string ContentType => "text/vtt; charset=utf-8";
+        public string ContentType { get; }
     }
 
     public sealed class PlaybackPlaylistV1 : BaseResponse, ITextOutput
@@ -191,8 +252,9 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
     public sealed class StartPlaybackDataV1 : BaseData
     {
-        public StartPlaybackDataV1(string[] containers, string[] videoCodecs, string[] audioCodecs, int? audioStreamIndex = null, PlaybackQuality? quality = null)
+        public StartPlaybackDataV1(string[] containers, string[] videoCodecs, string[] audioCodecs, int? audioStreamIndex = null, PlaybackQuality? quality = null, int audioOffsetMs = 0)
         {
+            AudioOffsetMs = audioOffsetMs;
             Quality = quality;
             Containers = containers;
             VideoCodecs = videoCodecs;
@@ -213,6 +275,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
         [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.StreamIndex), false)]
         public int? AudioStreamIndex { get; }
 
+        // The audio moved against the picture; any value other than zero is delivered through a conversion.
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.AudioOffsetMs))]
+        public int AudioOffsetMs { get; }
+
         // This playback's own quality; the device's applies without one.
         [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PlaybackQuality), false)]
         public PlaybackQuality? Quality { get; }
@@ -227,6 +293,149 @@ namespace Jularr.Backend.Data.User.Playback.V1
                 throw new DataValidationException(nameof(Containers), "out_of_range");
             }
         }
+    }
+
+    // The address a cast device plays this session from: HLS only, signed, ending with the session.
+    public sealed class PlaybackCastV1 : BaseResponse
+    {
+        public PlaybackCastV1(string url)
+        {
+            Url = url;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.CastUrl))]
+        public string Url { get; }
+    }
+
+    public sealed class CastPlaylistParametersV1 : BaseParameters
+    {
+        public CastPlaylistParametersV1(string castToken)
+        {
+            CastToken = castToken;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.CastToken))]
+        public string CastToken { get; }
+    }
+
+    public sealed class CastSegmentParametersV1 : BaseParameters
+    {
+        public CastSegmentParametersV1(string castToken, int index)
+        {
+            CastToken = castToken;
+            Index = index;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.CastToken))]
+        public string CastToken { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.SegmentIndex))]
+        public int Index { get; }
+    }
+
+    public sealed class CastPlaylistV1 : BaseResponse, ITextOutput, ICrossOriginOutput
+    {
+        public CastPlaylistV1(string text)
+        {
+            Text = text;
+        }
+
+        [JsonIgnore]
+        public string Text { get; }
+
+        [JsonIgnore]
+        public string ContentType => "application/vnd.apple.mpegurl";
+    }
+
+    public sealed class CastSegmentV1 : BaseResponse, IFileOutput, ICrossOriginOutput
+    {
+        public CastSegmentV1(Stream content)
+        {
+            Content = content;
+        }
+
+        [JsonIgnore]
+        public Stream Content { get; }
+
+        [JsonIgnore]
+        public string ContentType => "video/mp2t";
+    }
+
+    // The file of a playback as probed, and what a conversion does with its streams.
+    public sealed class PlaybackFactsV1 : BaseResponse
+    {
+        public PlaybackFactsV1(PlaybackModeType playbackModeTypeId, string? container, long? bitRate, string? videoCodec, int? videoWidth, int? videoHeight, int? bitDepth, string? dynamicRange,
+            string? audioCodec, int? audioChannels, string? audioLanguage, bool? copyVideo, bool? copyAudio, int? targetHeight, int? videoKilobits, int? audioKilobits, string? encoder)
+        {
+            PlaybackModeTypeId = playbackModeTypeId;
+            Container = container;
+            BitRate = bitRate;
+            VideoCodec = videoCodec;
+            VideoWidth = videoWidth;
+            VideoHeight = videoHeight;
+            BitDepth = bitDepth;
+            DynamicRange = dynamicRange;
+            AudioCodec = audioCodec;
+            AudioChannels = audioChannels;
+            AudioLanguage = audioLanguage;
+            CopyVideo = copyVideo;
+            CopyAudio = copyAudio;
+            TargetHeight = targetHeight;
+            VideoKilobits = videoKilobits;
+            AudioKilobits = audioKilobits;
+            Encoder = encoder;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.PlaybackModeTypeId))]
+        public PlaybackModeType PlaybackModeTypeId { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Container))]
+        public string? Container { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.BitRate))]
+        public long? BitRate { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Codec))]
+        public string? VideoCodec { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Width))]
+        public int? VideoWidth { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Height))]
+        public int? VideoHeight { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.BitDepth))]
+        public int? BitDepth { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.DynamicRange))]
+        public string? DynamicRange { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Codec))]
+        public string? AudioCodec { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Channels))]
+        public int? AudioChannels { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Language))]
+        public string? AudioLanguage { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.CopyVideo))]
+        public bool? CopyVideo { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.CopyAudio))]
+        public bool? CopyAudio { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TargetHeight))]
+        public int? TargetHeight { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.Kilobits))]
+        public int? VideoKilobits { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.Kilobits))]
+        public int? AudioKilobits { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.Encoder))]
+        public string? Encoder { get; }
     }
 
     public sealed class PlaybackPlanV1 : BaseResponse

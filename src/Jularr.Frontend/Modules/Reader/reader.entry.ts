@@ -14,14 +14,120 @@ import { initializeOriginalPages } from './OriginalPages';
 import { initializeViewChoice } from './ViewChoice';
 import { initializeProgressBar } from './ProgressBar';
 import { initializeNotes } from './Notes';
+import { endReaderLifetime, readerLifetime } from './Lifetime';
+import { handleChapters } from './ChapterNavigation';
+import { hasNewBuild } from '../Navigation/Navigation';
+import { regionSwapped } from '../Navigation/PageSwap';
+import { awake } from '../Playback/MediaFocus';
+import { leavesByHistory } from './BackTarget';
 
-const reader = document.querySelector<HTMLElement>('.reader');
-if (reader) {
+// What the browser really shows, for browsers without dynamic viewport units (their 100vh includes the toolbars).
+if (!CSS.supports('height', '100dvh')) {
+    const viewport = () => document.documentElement.style.setProperty('--reader-viewport', `${window.innerHeight}px`);
+    viewport();
+    window.addEventListener('resize', viewport);
+    window.visualViewport?.addEventListener('resize', viewport);
+}
+
+const first = document.querySelector<HTMLElement>('.reader');
+if (first) start(first);
+if (first && !first.dataset.format && first.querySelector('[data-role=content]')) openChaptersInPlace(location.pathname);
+
+// The address a reader opens at: the page's own, or the chapter it is about to show in place.
+function start(reader: HTMLElement, address = new URL(location.href)): void {
+    // An open book keeps the screen on, with or without read aloud, as long as the profile allows it.
+    awake.hold('reader');
+    readerLifetime().addEventListener('abort', () => awake.drop('reader'));
+    // Back leaves the book one step, to where the reader came from; the link to the title's details stays for a book that was opened without such a page.
+    reader.addEventListener('click', event => {
+        const back = (event.target as Element | null)?.closest?.<HTMLAnchorElement>('[data-reader-back]');
+        if (!back || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const navigation = (window as unknown as { navigation?: { entries(): { url: string | null }[]; currentEntry: { index: number } } }).navigation;
+        const previous = navigation ? navigation.entries()[navigation.currentEntry.index - 1]?.url ?? null : undefined;
+        if (!leavesByHistory({ previous, length: history.length, referrer: document.referrer, origin: location.origin })) return;
+        event.preventDefault();
+        history.back();
+    });
+    // The arrows beside the page press the bar's page buttons, which every book format already handles.
+    reader.addEventListener('click', event => {
+        const side = (event.target as Element | null)?.closest?.<HTMLElement>('[data-side-turn]');
+        if (side) reader.querySelector<HTMLButtonElement>(`[data-role=turn-tools] [data-turn="${side.dataset.sideTurn}"]`)?.click();
+    });
     if (reader.dataset.format === 'pdf') initializeReaderChrome(reader);
     else if (reader.dataset.format === 'pages') initializeOriginalPages(reader);
     else if (reader.dataset.format === 'comic') initializeComicPages(reader);
-    else if (reader.querySelector('[data-role=content]')) initializeText(reader);
+    else if (reader.querySelector('[data-role=content]')) initializeText(reader, address);
     initializeNotes(reader);
+}
+
+// Another chapter of this book opens in place: its reader is built hidden behind the current one and takes its place once the
+// book view has decided, so the page neither reloads nor flashes. Whatever cannot open this way loads as a page.
+function openChaptersInPlace(book: string): void {
+    let opening = 0;
+    const sameBook = (address: string) => {
+        const url = new URL(address, location.href);
+        return url.origin === location.origin && url.pathname === book;
+    };
+    const ready = (reader: HTMLElement) => new Promise<void>(resolve => {
+        const started = performance.now();
+        const check = () => {
+            // Shown once the book view has decided and the chapter stands where it was asked to open, never on its first page first.
+            const decided = (reader.dataset.mode !== 'paged' || reader.dataset.bookReady !== undefined) && reader.dataset.placed === 'true';
+            if (decided || performance.now() - started > 2000) window.setTimeout(resolve, 50);
+            else window.setTimeout(check, 16);
+        };
+        check();
+    });
+    const open = async (address: string, push: boolean): Promise<void> => {
+        const url = new URL(address, location.href);
+        const ticket = ++opening;
+        try {
+            const response = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/html' } });
+            const html = await response.text();
+            if (!response.ok || new URL(response.url).pathname !== url.pathname || hasNewBuild(document.documentElement.dataset.build, html)) throw new Error('Not a chapter of this book.');
+            const page = new DOMParser().parseFromString(html, 'text/html');
+            const next = page.querySelector<HTMLElement>('.reader');
+            const current = document.querySelector<HTMLElement>('.reader');
+            if (!current || !next || next.dataset.format || !next.querySelector('[data-role=content]')) throw new Error('Not a text chapter.');
+            if (ticket !== opening) return;
+            const fullscreen = document.fullscreenElement === current;
+            const box = current.getBoundingClientRect();
+            const incoming = document.adoptNode(next);
+            // Transparent, not invisible: the book prints only text that is visible.
+            Object.assign(incoming.style, { opacity: '0', pointerEvents: 'none' });
+            // The current reader stays on screen, out of the flow, while the next one lays out in its place.
+            Object.assign(current.style, { position: 'fixed', left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
+            current.before(incoming);
+            endReaderLifetime();
+            start(incoming, url);
+            await ready(incoming);
+            // The address changes with what is shown: never while two readers stand on the page.
+            current.remove();
+            Object.assign(incoming.style, { opacity: '', pointerEvents: '' });
+            // A chapter replaces the entry of the book instead of adding one, so Back leaves the book in one step.
+            if (push) history.replaceState({ readerChapter: true }, '', url);
+            document.title = page.title;
+            regionSwapped();
+            if (fullscreen) await incoming.requestFullscreen().catch(() => undefined);
+        } catch {
+            location.assign(url);
+        }
+    };
+    handleChapters(address => { if (sameBook(address)) void open(address, true); else location.assign(address); });
+    document.addEventListener('click', event => {
+        const link = (event.target as Element | null)?.closest?.<HTMLAnchorElement>('a[href]');
+        if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        if (link.target && link.target !== '_self' || link.hasAttribute('download') || !sameBook(link.href)) return;
+        if (!document.querySelector('.reader')?.contains(link)) return;
+        const url = new URL(link.href);
+        // A place in this very chapter is not another chapter.
+        if (url.search === location.search && url.hash) return;
+        event.preventDefault();
+        void open(link.href, true);
+    });
+    // Back and Forward between chapters are the reader's own; the app navigation must not restore an old copy of the page.
+    document.addEventListener('htmx:before:history:restore', event => { if (location.pathname === book) event.preventDefault(); });
+    window.addEventListener('popstate', () => { if (location.pathname === book) void open(location.href, false); });
 }
 
 // The page of the PDF a block stands on: its own anchor, the nearest one before it, or where its section begins; none for a book that is no PDF.
@@ -34,7 +140,7 @@ function pdfPageOf(block: HTMLElement | undefined, reader: HTMLElement): number 
     return Number.isInteger(from) && from >= 1 ? from : null;
 }
 
-function initializeText(reader: HTMLElement): void {
+function initializeText(reader: HTMLElement, address: URL): void {
     const content = reader.querySelector<HTMLElement>('[data-role=content]')!;
     const section = Number(reader.dataset.section);
     const blocks = Math.max(1, Number(reader.dataset.blocks));
@@ -42,6 +148,7 @@ function initializeText(reader: HTMLElement): void {
     const characters = Number(reader.dataset.characters);
     const total = Math.max(1, Number(reader.dataset.total));
     const sections = Number(reader.dataset.sections);
+    const signal = readerLifetime();
     let timer = 0;
     let paging: ReturnType<typeof initializePaperPages> | undefined;
     let progress = before / total;
@@ -65,18 +172,20 @@ function initializeText(reader: HTMLElement): void {
     initializeReadAloud(reader, content, range => paging!.reveal(range), () => paging!.current());
 
     initializeViewChoice(reader, () => pdfPageOf(paging!.current(), reader));
-    const query = new URLSearchParams(location.search);
+    const query = address.searchParams;
     const requested = query.get('b') ?? reader.dataset.startBlock ?? null;
     const fraction = query.has('f') ? Number(query.get('f')) : NaN;
     const match = /^s(\d+)\/b(\d+)$/.exec(reader.dataset.locator ?? '');
     const block = requested && /^\d+$/.test(requested) ? requested : match && Number(match[1]) === section ? match[2] : null;
+    const placed = () => requestAnimationFrame(() => { reader.dataset.placed = 'true'; });
     requestAnimationFrame(() => {
-        const target = location.hash ? document.getElementById(decodeURIComponent(location.hash.slice(1)))
+        const target = address.hash ? document.getElementById(decodeURIComponent(address.hash.slice(1)))
             : block !== null ? content.querySelector<HTMLElement>(`[data-b="${block}"]`) : null;
         if (target && content.contains(target)) paging!.reveal(target);
+        if (!Number.isFinite(fraction)) placed();
     });
     // The progress slider sends a share of the chapter, which is a page the same way as its own seek, once the fonts have settled the pages.
-    if (Number.isFinite(fraction)) void document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(() => paging!.seek(Math.min(1, Math.max(0, fraction))))));
+    if (Number.isFinite(fraction)) void document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(() => { paging!.seek(Math.min(1, Math.max(0, fraction))); placed(); })));
 
     // Existing translation and annotation services remain the only data owners.
     const translate = reader.dataset.translationUrl ? translator(reader, content, createTranslationWorker) : undefined;
@@ -167,20 +276,24 @@ function initializeText(reader: HTMLElement): void {
     reader.addEventListener('click', event => {
         if ((event.target as Element).closest('a[href]')) report(true);
     });
-    window.addEventListener('pagehide', () => report(true));
-    document.addEventListener('visibilitychange', () => { if (document.hidden) report(true); });
+    window.addEventListener('pagehide', () => report(true), { signal });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) report(true); }, { signal });
+    // Opening another chapter in place leaves this one as a page would: its place is saved once, then it stays silent.
+    signal.addEventListener('abort', () => { window.clearTimeout(timer); report(true); });
     function schedule(): void {
         window.clearTimeout(timer);
+        if (signal.aborted) return;
         timer = window.setTimeout(() => report(false), 1500);
     }
     function report(leaving: boolean): void {
+        if (signal.aborted && !leaving) return;
         const block = Number(paging?.current()?.dataset.b ?? 0);
         const atEnd = settings.mode === 'paged' ? paging?.end() : content.scrollTop + content.clientHeight >= content.scrollHeight - 4;
         const completed = section === sections - 1 && Boolean(atEnd);
         const progression = completed ? 1 : Math.min(1, (before + characters * (block / blocks)) / total);
         progress = progression;
-        marks?.refresh();
-        bar?.refresh();
+        // A reader that is leaving for another chapter only saves; its slider keeps showing where the reader asked to go.
+        if (!signal.aborted) { marks?.refresh(); bar?.refresh(); }
         save({ locator: `s${section}/b${block}`, progression: Number(progression.toFixed(4)), isCompleted: completed }, leaving);
     }
 }

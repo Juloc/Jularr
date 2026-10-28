@@ -38,6 +38,8 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(preferences.AutoplayNext);
             Assert.AreEqual((SkipMode.Button, SkipMode.Button), (preferences.IntroSkipModeTypeId, preferences.OutroSkipModeTypeId));
             Assert.IsTrue(preferences.AutoplayPreviews);
+            Assert.IsTrue(preferences.KeepScreenOn);
+            Assert.IsNull(preferences.SecondSubtitleLanguage);
             Assert.AreEqual(PlaybackQuality.Automatic, preferences.DeviceQuality);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ProfilePlaybackPreferences\""));
 
@@ -50,13 +52,15 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((1.50m, SubtitleMode.WhenForeign, true, true), (preferences.Speed, preferences.SubtitleModeTypeId, preferences.AutoplayNext, preferences.AutoplayPreviews));
 
             // A full save replaces them; the speed alone then leaves the languages as they are. Languages are lower-cased codes.
-            using var saved = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("DE", "fr", SubtitleMode.ForcedOnly, 0.75m, false, SkipMode.Automatic, SkipMode.Off, false));
+            using var saved = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("DE", "fr", SubtitleMode.ForcedOnly, 0.75m, false, SkipMode.Automatic, SkipMode.Off, false, false, "EN"));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             using var faster = await host.SendAsync(HttpMethod.Put, Route + "/speed", new SavePlaybackSpeedDataV1(2m));
             Assert.AreEqual(HttpStatusCode.OK, faster.StatusCode, await faster.Content.ReadAsStringAsync());
             preferences = await ReadAsync(host);
             Assert.AreEqual(("de", "fr", SubtitleMode.ForcedOnly, 2.00m, false, false), (preferences.AudioLanguage, preferences.SubtitleLanguage, preferences.SubtitleModeTypeId, preferences.Speed, preferences.AutoplayNext, preferences.AutoplayPreviews));
             Assert.AreEqual((SkipMode.Automatic, SkipMode.Off), (preferences.IntroSkipModeTypeId, preferences.OutroSkipModeTypeId));
+            Assert.IsFalse(preferences.KeepScreenOn);
+            Assert.AreEqual("en", preferences.SecondSubtitleLanguage);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ProfilePlaybackPreferences\""));
 
             // Unknown languages and speeds outside the player's range are refused; no language is allowed.
@@ -334,6 +338,19 @@ namespace Jularr.Backend.Tests
             var uncapped = MediaTranscoder.BuildArguments(new TranscodeRequest("/media/film.mkv", "/cache/s", 0, 6, 0, 1, false, true, ["-c:v", "libx264"], [])).ToList();
             CollectionAssert.DoesNotContain(uncapped, "-vf");
             CollectionAssert.DoesNotContain(uncapped, "-maxrate");
+        }
+
+        [TestMethod]
+        public void Transcoder_AudioOffset_DelaysOrTrimsTheEncodedAudio()
+        {
+            var later = MediaTranscoder.BuildArguments(new TranscodeRequest("/media/film.mkv", "/cache/s", 10, 6, 0, 1, true, false, [], []) { AudioOffsetMs = 250 }).ToList();
+            Assert.AreEqual("adelay=250:all=1", later[later.IndexOf("-af") + 1]);
+            var earlier = MediaTranscoder.BuildArguments(new TranscodeRequest("/media/film.mkv", "/cache/s", 0, 6, 0, 1, true, false, [], []) { AudioOffsetMs = -1500 }).ToList();
+            Assert.AreEqual("atrim=start=1.5,asetpts=PTS-STARTPTS", earlier[earlier.IndexOf("-af") + 1]);
+
+            // Copied audio cannot move, and no offset adds no filter.
+            CollectionAssert.DoesNotContain(MediaTranscoder.BuildArguments(new TranscodeRequest("/media/film.mkv", "/cache/s", 0, 6, 0, 1, true, true, [], []) { AudioOffsetMs = 250 }).ToList(), "-af");
+            CollectionAssert.DoesNotContain(MediaTranscoder.BuildArguments(new TranscodeRequest("/media/film.mkv", "/cache/s", 0, 6, 0, 1, true, false, [], [])).ToList(), "-af");
         }
 
         private static async Task<Host> CreateFilmHostAsync(LibraryTests.TemporaryDirectory storage, LibraryTests.TemporaryDirectory cache) =>

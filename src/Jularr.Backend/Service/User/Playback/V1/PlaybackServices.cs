@@ -9,6 +9,7 @@ using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Playback;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
@@ -196,14 +197,16 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 if (row.StoredFileId is { } fileId)
                 {
                     var (language, isForced) = PlaybackTracks.Describe(row.RelativePath!);
+                    // An ASS file is drawn by the player as it is, so it needs no conversion.
                     var supported = PlaybackTracks.IsTextFile(row.RelativePath!) && (_subtitles.CanConvert || row.RelativePath!.EndsWith(".srt", StringComparison.OrdinalIgnoreCase)
-                        || row.RelativePath!.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase));
-                    return new PlaybackTrackV1(PlaybackTracks.FileKey(fileId), MediaTrackType.Subtitle, language, null, null, false, isForced, supported, false);
+                        || row.RelativePath!.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase) || PlaybackTracks.IsStyledFile(row.RelativePath!));
+                    return new PlaybackTrackV1(PlaybackTracks.FileKey(fileId), MediaTrackType.Subtitle, language, null, null, false, isForced, supported, false, supported && PlaybackTracks.IsStyledFile(row.RelativePath!), LanguageCodes.ToTwoLetter(language));
                 }
 
                 // Another audio track and embedded text subtitles need FFmpeg.
                 var playable = row.MediaTrackTypeId == MediaTrackType.Audio ? row.IsDefault || _subtitles.CanConvert : PlaybackTracks.IsText(row.Codec) && _subtitles.CanConvert;
-                return new PlaybackTrackV1(PlaybackTracks.StreamKey(row.StreamIndex!.Value), row.MediaTrackTypeId, row.Language, row.Title, row.Channels, row.IsDefault, row.IsForced, playable, false);
+                return new PlaybackTrackV1(PlaybackTracks.StreamKey(row.StreamIndex!.Value), row.MediaTrackTypeId, row.Language, row.Title, row.Channels, row.IsDefault, row.IsForced, playable, false,
+                    row.MediaTrackTypeId == MediaTrackType.Subtitle && playable && PlaybackTracks.IsStyled(row.Codec), LanguageCodes.ToTwoLetter(row.Language));
             }).ToList();
 
             // The profile's preferences pick one audio and at most one subtitle track among the playable ones.
@@ -232,7 +235,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
             var audio = PlaybackTracks.ChooseAudio(choices, preference.AudioLanguage);
             var subtitle = PlaybackTracks.ChooseSubtitle(choices, preference, audio);
             return new BaseDataList<PlaybackTrackV1>([.. described.Select(track => new PlaybackTrackV1(track.Key, track.MediaTrackTypeId, track.Language, track.Title, track.Channels,
-                track.IsDefault, track.IsForced, track.IsSupported, track.Key == audio?.Key || track.Key == subtitle?.Key))]);
+                track.IsDefault, track.IsForced, track.IsSupported, track.Key == audio?.Key || track.Key == subtitle?.Key, track.IsStyled, track.LanguageCode))]);
         }
     }
 
@@ -241,11 +244,13 @@ namespace Jularr.Backend.Service.User.Playback.V1
     {
         private readonly StorageAccess _storage;
         private readonly PlaybackSubtitles _subtitles;
+        private readonly SubtitleTranslations _translations;
 
-        internal ReadPlaybackSubtitleV1(StorageAccess storage, PlaybackSubtitles subtitles)
+        internal ReadPlaybackSubtitleV1(StorageAccess storage, PlaybackSubtitles subtitles, SubtitleTranslations translations)
         {
             _storage = storage;
             _subtitles = subtitles;
+            _translations = translations;
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PlaybackSubtitleV1>()];
@@ -254,46 +259,17 @@ namespace Jularr.Backend.Service.User.Playback.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // A subtitle file of the asset, or a text stream of its played file.
-            var (streamIndex, fileId) = PlaybackTracks.ParseKey(Parameters.Key);
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    file."Id" AS "StoredFileId",
-                    file."RelativePath",
-                    file."ModifiedAt",
-                    root."RelativePath" AS "RootRelativePath",
-                    mount."Id" AS "StorageMountId",
-                    track."Codec"
-                FROM
-                    "MediaAssets" AS asset
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
-                    JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
-                    JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
-                    JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
-                    LEFT JOIN "MediaTracks" AS track ON track."StoredFileId" = file."Id" AND track."StreamIndex" = @StreamIndex AND track."MediaTrackTypeId" = 3
-                WHERE
-                    asset."Id" = @MediaAssetId
-                    AND file."MissingSince" IS NULL
-                    AND (file."Id" = @StoredFileId AND file."RelativePath" ~* '\.(srt|vtt|ass|ssa)$'
-                        OR @StoredFileId::bigint IS NULL AND track."StreamIndex" IS NOT NULL AND file."Id" = (
-                            SELECT
-                                media."Id"
-                            FROM
-                                "StoredFiles" AS media
-                            WHERE
-                                media."MediaAssetId" = asset."Id"
-                                AND media."MissingSince" IS NULL
-                                AND NOT media."IsSubtitle"
-                            ORDER BY
-                                media."Id"
-                            LIMIT 1
-                        ));
-                """;
-            sql.Parameters.Add(new PlaybackSubtitleLookupData(Parameters.MediaAssetId, Auth.ProfileId!.Value, streamIndex, fileId));
-            var source = await Context.ReadSql.ReadOptionalAsync<PlaybackSubtitleSourceData>(sql, CancellationToken) ?? throw new KeyNotFoundException("The subtitle was not found.");
-            if (streamIndex is not null && !PlaybackTracks.IsText(source.Codec))
+            if (SubtitleTranslationLogic.TryParseKey(Parameters.Key, out var language, out var sourceKey))
+            {
+                // A translated subtitle exists once its translation is done; the source track must be one this profile may read.
+                var (translatedSource, sourceStream) = await PlaybackSubtitleSources.FindAsync(sql => Context.ReadSql.ReadOptionalAsync<PlaybackSubtitleSourceData>(sql, CancellationToken), Parameters.MediaAssetId, Auth.ProfileId!.Value, sourceKey);
+                var translated = _translations.Path(PlaybackSubtitleSources.CacheKey(translatedSource, sourceStream, language));
+                return File.Exists(translated) ? new PlaybackSubtitleV1(await File.ReadAllTextAsync(translated, CancellationToken)) : throw new KeyNotFoundException("The subtitle was not found.");
+            }
+
+            var (source, streamIndex) = await PlaybackSubtitleSources.FindAsync(sql => Context.ReadSql.ReadOptionalAsync<PlaybackSubtitleSourceData>(sql, CancellationToken), Parameters.MediaAssetId, Auth.ProfileId!.Value, Parameters.Key);
+            // ASS comes as it is only from tracks that are ASS or SSA.
+            if (Parameters.Styled && !(streamIndex is not null ? PlaybackTracks.IsStyled(source.Codec) : PlaybackTracks.IsStyledFile(source.RelativePath)))
             {
                 throw new KeyNotFoundException("The subtitle was not found.");
             }
@@ -302,7 +278,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
             var path = StoragePath.Combine(source.RootRelativePath, source.RelativePath);
             var cacheKey = source.StoredFileId.ToString(CultureInfo.InvariantCulture) + "-" + (streamIndex is { } stream ? PlaybackTracks.StreamKey(stream) : "file") + "-"
                 + source.ModifiedAt.Ticks.ToString(CultureInfo.InvariantCulture);
-            return new PlaybackSubtitleV1(await _subtitles.ReadAsync(files, path, streamIndex, cacheKey, CancellationToken));
+            return new PlaybackSubtitleV1(await _subtitles.ReadAsync(files, path, streamIndex, cacheKey, Parameters.Styled, CancellationToken), Parameters.Styled);
         }
     }
 
@@ -468,7 +444,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
             // A device asking for smaller music converts it when it can; otherwise the original plays.
             var kilobits = _transcodes.IsAvailable && source.DurationMs is not null ? PlaybackLogic.AudioKilobits(target, tracks, source.BitRate) : null;
             var smaller = kilobits is null ? null : PlaybackLogic.PlanConversion(tracks, containers, videoCodecs, audioCodecs, audioStreamIndex, kilobits, target, source.BitRate);
-            direct &= smaller is null;
+            direct &= smaller is null && Data.AudioOffsetMs == 0;
             var conversion = direct ? null : smaller ?? PlaybackLogic.PlanConversion(tracks, containers, videoCodecs, audioCodecs, audioStreamIndex, null, target, source.BitRate);
             if (!direct && (conversion is null || source.DurationMs is null || !_transcodes.IsAvailable))
             {
@@ -505,10 +481,22 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 var chosen = _transcodes.Admit([.. candidates.Select(candidate => candidate.Weight)], limits.TranscodingPriority, limits.MaxTranscodes ?? _options.MaxTranscodes, index =>
                 {
                     var (plan, weight, _) = candidates[index];
-                    return new PlaybackTranscodeSource(sessionId, lookup.ProfileId, _storage.Input(files, path), plan.VideoStreamIndex, plan.AudioStreamIndex, plan.CopyVideo, plan.CopyAudio,
-                        source.DurationMs!.Value, plan.AudioKilobits, plan.MaxHeight, plan.VideoKilobits) { Weight = weight, HasPriority = limits.TranscodingPriority, Encoding = encoding };
+                    // Moving the audio re-encodes it, whatever the file offers.
+                    return new PlaybackTranscodeSource(sessionId, lookup.ProfileId, _storage.Input(files, path), plan.VideoStreamIndex, plan.AudioStreamIndex, plan.CopyVideo, plan.CopyAudio && Data.AudioOffsetMs == 0,
+                        source.DurationMs!.Value, plan.AudioKilobits ?? (Data.AudioOffsetMs != 0 ? 192 : null), plan.MaxHeight, plan.VideoKilobits)
+                    { Weight = weight, HasPriority = limits.TranscodingPriority, Encoding = encoding, AudioOffsetMs = Data.AudioOffsetMs };
                 });
                 conversion = candidates[chosen].Plan;
+                if (Data.AudioOffsetMs != 0 && conversion.CopyAudio)
+                {
+                    conversion = new PlaybackConversion(PlaybackModeType.Transcode, conversion.VideoStreamIndex, conversion.AudioStreamIndex, conversion.CopyVideo, false)
+                    {
+                        AudioKilobits = 192,
+                        MaxHeight = conversion.MaxHeight,
+                        VideoKilobits = conversion.VideoKilobits
+                    };
+                }
+
                 reduced = candidates[chosen].IsReduced;
             }
 

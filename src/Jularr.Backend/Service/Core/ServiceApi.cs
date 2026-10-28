@@ -74,6 +74,8 @@ namespace Jularr.Backend.Service.Core
         public const string AuthenticationNonceCookieName = "jularr.auth_nonce";
         public const string DevicePairingCookieName = "jularr.device_pairing";
         public const string DevicePairingRateLimit = "device-pairing";
+        // A cast device fetches a segment every few seconds, and several at once after a seek.
+        public const string CastRateLimit = "cast";
         public const string DeviceApprovalRateLimit = "device-approval";
         public const string SessionScheme = "jularr.session";
         public const string DeviceBearerScheme = "jularr.device";
@@ -215,7 +217,9 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<TranscodeHardware>();
             services.TryAddSingleton<AudioFingerprinter>();
             services.TryAddSingleton<PlaybackTranscodes>();
+            services.TryAddSingleton<PlaybackCastTokens>();
             services.TryAddTransient<PlaybackSubtitles>();
+            services.TryAddSingleton<SubtitleTranslations>();
             services.TryAddTransient<WantedAcquisition>();
             services.TryAddTransient<MetadataCatalog>();
             services.TryAddSingleton<ExternalFeedCache>();
@@ -385,6 +389,14 @@ namespace Jularr.Backend.Service.Core
                         QueueLimit = 0
                     }));
                 // A TV page asks every few seconds until a phone confirms it; several may share one address.
+                options.AddPolicy(CastRateLimit, http => RateLimitPartition.GetFixedWindowLimiter(
+                    http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 600,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0
+                    }));
                 options.AddPolicy(DevicePairingRateLimit, http => RateLimitPartition.GetFixedWindowLimiter(
                     http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                     _ => new FixedWindowRateLimiterOptions
@@ -530,7 +542,7 @@ namespace Jularr.Backend.Service.Core
 
                 if (definition.ServiceArea == ServiceArea.Public)
                 {
-                    route.RequireRateLimiting("public").WithMetadata(new RequestSizeLimitAttribute(16 * 1024));
+                    route.RequireRateLimiting(endpoint.RateLimit ?? "public").WithMetadata(new RequestSizeLimitAttribute(16 * 1024));
                 }
                 else if (endpoint.RateLimit is { } policy)
                 {
@@ -583,6 +595,13 @@ namespace Jularr.Backend.Service.Core
                 }
 
                 var result = await service.ExecuteAsync(parameters, default!, cancellationToken);
+
+                // A cast device plays from another origin.
+                if (result is ICrossOriginOutput)
+                {
+                    http.Response.Headers["Access-Control-Allow-Origin"] = "*";
+                    http.Response.Headers["Access-Control-Expose-Headers"] = "Content-Length, Content-Range, Accept-Ranges";
+                }
 
                 // Authorized files stream after the service committed.
                 if (result is ICacheableFileOutput stored)

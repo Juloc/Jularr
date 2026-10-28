@@ -105,6 +105,8 @@ namespace Jularr.Backend.Service.Core
             new("subtitles", WorkerGroupType.Subtitle, TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(100), canPauseWhileUsed: true),
             new("recognition", WorkerGroupType.Recognition, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(20), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             new("readingCopies", WorkerGroupType.Derivation, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(25), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
+            // Translates the library ahead of reading into the languages profiles use; it keeps going while Jularr is used, as readers profit from it.
+            new("bookTranslations", WorkerGroupType.Translation, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(50), canPauseWhileUsed: true),
 
             // Each catalog decides for itself whether it waits while Jularr is used.
             new("discoverFeeds", WorkerGroupType.Catalog, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(8)),

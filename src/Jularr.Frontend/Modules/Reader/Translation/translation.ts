@@ -1,3 +1,5 @@
+import { readerLifetime } from "../Lifetime";
+
 // Reader translation: a section's blocks in another language, from the shared cache or translated here and then shared.
 // A language is its code as Mozilla's models name it, such as "de" or "ja".
 export type Language = string;
@@ -53,6 +55,7 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
     let current: Language | "" = "";
     let revision = 0;
     let worker: Worker | undefined;
+    readerLifetime().addEventListener("abort", () => { worker?.terminate(); worker = undefined; });
     let loaded: string | undefined;
 
     function say(text: string | undefined) {
