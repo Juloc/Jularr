@@ -513,7 +513,7 @@ async function start(player: HTMLElement): Promise<void> {
         if (option?.dataset.styled === "true" && libassOn() && typeof WebAssembly === "object" && typeof OffscreenCanvas === "function") {
             const version = styledVersion;
             void import("./StyledSubtitles")
-                .then(module => module.showStyledSubtitles(video, (player.dataset.subtitleUrl ?? "") + encodeURIComponent(key) + "?styled=true", subtitleOffset / 1000))
+                .then(async module => module.showStyledSubtitles(video, (player.dataset.subtitleUrl ?? "") + encodeURIComponent(key) + "?styled=true", subtitleOffset / 1000, await embeddedFonts()))
                 .then(styled => { if (version === styledVersion) styledSubtitles = styled; else styled.destroy(); })
                 .catch(() => { if (version === styledVersion) showPlainSubtitle(key, language); });
             return;
@@ -591,6 +591,22 @@ async function start(player: HTMLElement): Promise<void> {
             .map(option => ({ key: option.value, language: option.dataset.language, forced: option.dataset.forced === "true" }));
         const second = pickSecondSubtitle(options, player.dataset.secondLanguage || undefined, primaryKey, primaryLanguage);
         if (second) showSecondSubtitle(second.key);
+    }
+
+    // The fonts the file carries, asked for once: the server takes them out of the file on the first ask.
+    let fontAddresses: Promise<string[]> | undefined;
+    function embeddedFonts(): Promise<string[]> {
+        fontAddresses ??= (async () => {
+            const base = (player.dataset.subtitleUrl ?? "").replace(/subtitles\/$/, "fonts");
+            try {
+                const response = await fetch(base, { credentials: "same-origin" });
+                if (!response.ok) return [];
+                return (await response.json() as { key: number }[]).map(font => `${base}/${font.key}`);
+            } catch {
+                return [];
+            }
+        })();
+        return fontAddresses;
     }
 
     // libass is the device's own choice (the Subtitles tab); a touch device starts with the plain lines.

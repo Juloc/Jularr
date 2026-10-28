@@ -148,6 +148,37 @@ namespace Jularr.Backend.Data.User.Playback.V1
         public int Total { get; }
     }
 
+    // A font the played file carries.
+    public sealed class PlaybackFontV1 : BaseResponse
+    {
+        public PlaybackFontV1(int key, string name)
+        {
+            Key = key;
+            Name = name;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.FontKey))]
+        public int Key { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.FontName))]
+        public string Name { get; }
+    }
+
+    public sealed class PlaybackFontParametersV1 : BaseParameters
+    {
+        public PlaybackFontParametersV1(long mediaAssetId, int key)
+        {
+            MediaAssetId = mediaAssetId;
+            Key = key;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.FontKey))]
+        public int Key { get; }
+    }
+
     public sealed class PlaybackSubtitleParametersV1 : BaseParameters
     {
         public PlaybackSubtitleParametersV1(long mediaAssetId, string key, bool styled = false)
