@@ -415,12 +415,13 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             // Every result is kept as the Work it is.
             await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
+            var language = Data.MediaSubtypeId == MediaSubtype.LightNovel ? await DiscoverQueries.ReadLanguageAsync(Context, Auth.ProfileId!.Value, CancellationToken) : null;
             var works = Data.MediaSubtypeId == MediaSubtype.Anime
                 ? await MetadataCatalog.KeepAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, await _catalog.SearchAnimeAsync(Data.Query, CancellationToken), CancellationToken)
                 : Data.MediaTypeId == MediaType.Series
                     ? await _catalog.SearchAndKeepSeriesAsync(Context, Data.MediaSubtypeId, Data.Query, CancellationToken)
                     : await MetadataCatalog.KeepAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId,
-                        await _catalog.SearchAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Query, null, CancellationToken), CancellationToken);
+                        await _catalog.SearchAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Query, null, CancellationToken, language), CancellationToken);
             return await DiscoverQueries.CatalogItemsAsync(Context, works, Auth.ProfileId!.Value, CancellationToken);
         }
     }
@@ -491,6 +492,25 @@ namespace Jularr.Backend.Service.User.Discover.V1
             return [.. DiscoverScopes.All.Where(scope => listed.Contains(scope.MediaTypeId.ToString())
                 && (scope.MediaSubtypeId is not { } subtype || listed.Contains(subtype.ToString())))];
         }
+
+        // The language of the profile's interface, which names a linked web novel.
+        public static Task<string?> ReadLanguageAsync(LogicContext context, long profileId, CancellationToken ct) =>
+            context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        lower(split_part(locale."Locale", '-', 1))
+                    FROM
+                        "Profiles" AS profile
+                        JOIN "UiLocales" AS locale ON locale."Id" = profile."UiLocaleId"
+                    WHERE
+                        profile."Id" = @ProfileId;
+                    """;
+                sql.Parameters.Add(new ProfileParameters(profileId));
+                return await ctx.ReadSql.ExecuteScalarAsync(sql, token) as string;
+            }, ct, mode: SqlAccessMode.ReadOnly);
 
         public static DiscoverItemV1 ToItem(MediaType mediaType, ExternalWorkShelfItemData work) => new(mediaType, TmdbId(work.Namespace, work.Value), work.WorkId, work.Title,
             work.ReleaseYear, work.Overview, work.ImageUrl, work.BackdropUrl, work.MediaStateTypeId ?? MediaStateType.NotRequested, work.PlexUrl, work.Rating);

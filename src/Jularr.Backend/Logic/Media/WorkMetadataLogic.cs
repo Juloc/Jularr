@@ -7,6 +7,9 @@ namespace Jularr.Backend.Logic.Media
 {
     internal static class WorkMetadataLogic
     {
+        // Narō's ncodes: web novels, never a published edition.
+        public const string WebNovelNamespace = "syosetu";
+
         // A Work matched to the wrong provider entry takes the chosen one: its provider identities, titles, facts and units without files go,
         // its files, requests and manual edits stay; the following metadata import fills it again.
         public static async Task RematchWorkAsync(this LogicContext ctx, WorkRematchData data, MediaType mediaType, CancellationToken ct)
@@ -373,7 +376,8 @@ namespace Jularr.Backend.Logic.Media
             }
 
             // A Book of the same subtype, title and year from another provider is the same Work; anything less clear becomes a new one.
-            if (workId is null && data.MediaTypeId == MediaType.Book)
+            // A Narō web novel and a published edition stay apart in both directions, whatever their titles.
+            if (workId is null && data.MediaTypeId == MediaType.Book && data.Namespace != WebNovelNamespace)
             {
                 sql = new SqlStatement();
                 sql.Statement =
@@ -393,7 +397,7 @@ namespace Jularr.Backend.Logic.Media
                                 "WorkExternalIdentities" AS identity
                             WHERE
                                 identity."WorkId" = work."Id"
-                                AND identity."Namespace" = @Namespace
+                                AND identity."Namespace" IN (@Namespace, 'syosetu')
                         )
                         AND EXISTS (
                             SELECT

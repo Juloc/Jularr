@@ -197,7 +197,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     identity."WorkId" = @Id
                     AND (identity."Namespace" IN ('tmdb_movie', 'openlibrary', 'musicbrainz', 'igdb')
                         OR identity."Namespace" IN ('tvdb', 'tmdb_tv', 'imdb') AND work."MediaTypeId" = 2
-                        OR identity."Namespace" = 'anilist' AND work."MediaTypeId" = 3)
+                        OR identity."Namespace" = 'anilist' AND work."MediaTypeId" = 3
+                        OR identity."Namespace" = 'syosetu' AND work."MediaTypeId" = 3)
                 ORDER BY
                     identity."Namespace" = 'anilist',
                     identity."Namespace" = 'imdb',

@@ -112,7 +112,8 @@ namespace Jularr.Frontend.Framework
                 [
                     new("storage.connections", "/Admin/Storage", Right("storage.read")),
                     new("downloadStorage.title", "/Admin/DownloadStorage", Acquisition, ["Acquisition"])
-                ])
+                ]),
+                new("network", "admin.vpn.title", "shield-check", [new("admin.vpn.title", "/Admin/Network", Admin, ["Vpn"])])
             ]),
             new("nav.group.instance",
             [

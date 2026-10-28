@@ -53,7 +53,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             if (DirectSources.IsDirect(connection.AcquisitionConnectionTypeId))
             {
                 var error = await _direct.TestAsync(connection, ct);
-                return (new AcquisitionConnectionTestV1(error is null, error, null, error is null ? ["Book"] : []), null);
+                string[] serves = connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Narou ? ["LightNovel"] : ["Book"];
+                return (new AcquisitionConnectionTestV1(error is null, error, null, error is null ? serves : []), null);
             }
 
             if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Nyaa)

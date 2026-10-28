@@ -133,6 +133,71 @@ namespace Jularr.Backend.Logic.Media
 
             // A season that waited as a Work of its own goes into the series now mapping it.
             await ctx.MergeAnimePlaceholdersAsync(data.WorkId, ct);
+
+            if (status != IdentityMatchStatusType.Matched || data.LinkedTitle is null)
+            {
+                return;
+            }
+
+            // A linked web novel keeps its Japanese name and is called by its entry's name in every other language; titles set by hand stay.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH provider AS (
+                    SELECT
+                        "Id"
+                    FROM
+                        "Providers"
+                    WHERE
+                        "Key" = @Namespace
+                ), removed AS (
+                    DELETE FROM
+                        "WorkTitles" AS title
+                    USING
+                        provider
+                    WHERE
+                        title."WorkId" = @WorkId
+                        AND title."ProviderId" = provider."Id"
+                        AND title."UiLocaleId" IS NOT NULL
+                        AND NOT title."IsManual"
+                )
+                INSERT INTO
+                    "WorkTitles" ("WorkId", "UiLocaleId", "Title", "ProviderId", "IsManual")
+                SELECT
+                    @WorkId,
+                    locale."Id",
+                    @LinkedTitle,
+                    provider."Id",
+                    FALSE
+                FROM
+                    provider
+                    CROSS JOIN "UiLocales" AS locale
+                WHERE
+                    lower(split_part(locale."Locale", '-', 1)) <> 'ja';
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // Whether a Work's AniList match was already made, proposed or decided.
+        public static async Task<bool> HasAniListMatchAsync(this LogicContext ctx, long workId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkIdentityMatches"
+                        WHERE
+                            "WorkId" = @Id
+                            AND "Namespace" = 'anilist'
+                    );
+                """;
+            sql.Parameters.Add(new WorkIdData(workId));
+            return (bool)(await ctx.ReadSql.ExecuteScalarAsync(sql, ct))!;
         }
 
         // An anime season no series held yet was a Work of its own: a series, anime, with only its AniList entry and nothing of its own.

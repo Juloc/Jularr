@@ -67,7 +67,7 @@ namespace Jularr.Backend.Tests
             using var setUp = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/acquisition/sources/setup");
             Assert.AreEqual(HttpStatusCode.OK, setUp.StatusCode, await setUp.Content.ReadAsStringAsync());
             var result = (await setUp.Content.ReadFromJsonAsync<SourceSetupResultV1>())!;
-            CollectionAssert.AreEqual(new[] { "gutenberg" }, result.Added);
+            CollectionAssert.AreEqual(new[] { "gutenberg", "narou" }, result.Added);
             CollectionAssert.IsSubsetOf(new[] { "annasarchive", "standardebooks", "newznab" }, result.NeedsAccount);
             Assert.IsTrue((await ReadCatalogAsync(host)).Single(item => item.Key == "gutenberg").IsConfigured);
             using var standard = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Standard Ebooks", AcquisitionConnectionType.Opds,
@@ -79,6 +79,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT \"AcquisitionConnectionTypeId\"::bigint FROM \"AcquisitionConnections\" ORDER BY \"Id\" LIMIT 1"));
             // Bulk setup must not silently activate download sources before a workspace is confirmed.
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT \"IsEnabled\"::int::bigint FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 3 LIMIT 1"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT \"IsEnabled\"::int::bigint FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 11"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"Providers\" WHERE \"Key\" = 'syosetu'"));
 
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Sources");
             var html = await page.Content.ReadAsStringAsync();

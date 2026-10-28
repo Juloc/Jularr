@@ -14,7 +14,7 @@ ALTER TABLE "Works"
     ADD COLUMN IF NOT EXISTS "TrendingRank" integer NULL CHECK ("TrendingRank" > 0),
     ADD COLUMN IF NOT EXISTS "IsAdult" boolean NOT NULL DEFAULT FALSE,
     -- The catalog the minimal row came from; NULL for a Work that never was a catalog row.
-    ADD COLUMN IF NOT EXISTS "CatalogNamespace" varchar(16) NULL CHECK ("CatalogNamespace" IN ('tmdb_movie', 'tmdb_tv', 'tvdb', 'openlibrary', 'anilist', 'musicbrainz', 'igdb')),
+    ADD COLUMN IF NOT EXISTS "CatalogNamespace" varchar(16) NULL CHECK ("CatalogNamespace" IN ('tmdb_movie', 'tmdb_tv', 'tvdb', 'openlibrary', 'anilist', 'musicbrainz', 'igdb', 'syosetu')),
     ADD COLUMN IF NOT EXISTS "FetchedAt" timestamptz NULL,
     -- Since when the details (child tables) exist; NULL means a minimal row only.
     ADD COLUMN IF NOT EXISTS "DetailedAt" timestamptz NULL,

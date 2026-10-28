@@ -208,6 +208,17 @@ namespace Jularr.Backend.Logic.Acquisition
         // A news server is a host with SSL and an optional port; everything else an HTTP address. The Anna's Archive member key travels in the address and only over HTTPS.
         private static void ValidateAddress(AcquisitionConnectionSaveData data)
         {
+            // Jularr's own torrent engine runs here and has no address.
+            if (data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent)
+            {
+                if (data.BaseUrl is not null || data.Host is not null || data.Port is not null || data.UseSsl is not null)
+                {
+                    throw new DataValidationException(nameof(data.BaseUrl), "invalid_transition");
+                }
+
+                return;
+            }
+
             if (data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
                 if (data.Host is null)
@@ -235,6 +246,12 @@ namespace Jularr.Backend.Logic.Acquisition
 
             var secure = data.AcquisitionConnectionTypeId is AcquisitionConnectionType.AnnasArchive or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl;
             if (secure && new Uri(baseUrl).Scheme != "https")
+            {
+                throw new DataValidationException(nameof(data.BaseUrl), "invalid_url");
+            }
+
+            // Narō is asked at its own hosts only; the address names the novel site.
+            if (data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Narou && new Uri(baseUrl) is not { Scheme: "https", Host: "ncode.syosetu.com", AbsolutePath: "/" })
             {
                 throw new DataValidationException(nameof(data.BaseUrl), "invalid_url");
             }

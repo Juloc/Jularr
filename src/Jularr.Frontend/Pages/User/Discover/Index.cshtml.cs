@@ -31,6 +31,9 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         private const string HeroPreferences = "discover-hero";
 
+        // Narō's catalog name: its titles are web novels, not published light novels.
+        private const string WebNovelSource = "syosetu";
+
         private readonly List<(MediaType Type, DiscoverFeedType Feed, IReadOnlyList<DiscoverItemV1> Items)> _shelves = [];
         private readonly List<(DiscoverScopeV1 Scope, DiscoverFeedType Feed, IReadOnlyList<DiscoverCatalogItemV1> Items)> _catalogShelves = [];
         private IReadOnlyList<DiscoverItemV1>? _results;
@@ -820,7 +823,9 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IUiComponent CatalogCard(DiscoverScopeV1 scope, DiscoverCatalogItemV1 item)
         {
             var href = CatalogHref(item);
-            var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId), item.Rating)
+            // A Narō web novel says so beside the published light novels.
+            var label = item.Namespace == WebNovelSource ? "discover.webNovel" : MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId);
+            var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, label, item.Rating)
                 .HoverPreview(MediaPreviewAddress.Work(item.WorkId)).State(item.MediaStateTypeId);
             if (_availabilityByWork.TryGetValue(item.WorkId, out var availability))
                 card.Availability(new MediaAvailability(assets, availability.AvailabilityStateId, availability.AvailableUnits, availability.MonitoredUnits));

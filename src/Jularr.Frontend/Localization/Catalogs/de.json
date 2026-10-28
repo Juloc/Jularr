@@ -4,6 +4,12 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "acquisition.connection.type.Narou": ["Shōsetsuka ni Narō (web novels)", "Shōsetsuka ni Narō (Web-Novels)"],
+  "hint.acquisition.Narou.placeholder": ["https://ncode.syosetu.com", "https://ncode.syosetu.com"],
+  "admin.works.source.syosetu": ["Narō", "Narō"],
+  "discover.webNovel": ["Web novel", "Web-Novel"],
+  "provider.name.syosetu": ["Shōsetsuka ni Narō", "Shōsetsuka ni Narō"],
+  "provider.hint.syosetu": ["Japanese web novels", "Japanische Web-Novels"],
   "admin.works.source.local": ["Library", "Bibliothek"],
   "admin.works.source.list": ["List data", "Angaben aus der Liste"],
   "import.match.list": ["Use the list's details", "Angaben aus der Liste übernehmen"],
@@ -9117,6 +9123,254 @@
   "errors.validation.not_allowed": [
    "This action is not available for this item.",
    "Diese Aktion ist für diesen Eintrag nicht verfügbar."
+  ],
+  "instance.module.Vpn": [
+   "VPN network path for downloaders (WireGuard)",
+   "VPN-Netzwerkpfad für Downloader (WireGuard)"
+  ],
+  "setup.module.help.Vpn": [
+   "Route chosen downloaders through a WireGuard tunnel inside Jularr; without the tunnel they send nothing.",
+   "Leitet gewählte Downloader durch einen WireGuard-Tunnel in Jularr; ohne Tunnel senden sie nichts."
+  ],
+  "admin.vpn.title": [
+   "VPN",
+   "VPN"
+  ],
+  "admin.vpn.actions": [
+   "VPN actions",
+   "VPN-Aktionen"
+  ],
+  "admin.vpn.add": [
+   "Add WireGuard profile",
+   "WireGuard-Profil hinzufügen"
+  ],
+  "admin.vpn.import": [
+   "Import",
+   "Importieren"
+  ],
+  "admin.vpn.name": [
+   "Name",
+   "Name"
+  ],
+  "admin.vpn.file": [
+   "wg0.conf file",
+   "wg0.conf-Datei"
+  ],
+  "admin.vpn.configuration": [
+   "Or paste the configuration",
+   "Oder Konfiguration einfügen"
+  ],
+  "admin.vpn.connected": [
+   "Connected",
+   "Verbunden"
+  ],
+  "admin.vpn.connecting": [
+   "Connecting",
+   "Verbindet"
+  ],
+  "admin.vpn.failed": [
+   "Failed",
+   "Fehlgeschlagen"
+  ],
+  "admin.vpn.stopped": [
+   "Not running",
+   "Läuft nicht"
+  ],
+  "admin.vpn.addresses": [
+   "Tunnel addresses",
+   "Tunneladressen"
+  ],
+  "admin.vpn.dns": [
+   "DNS",
+   "DNS"
+  ],
+  "admin.vpn.dnsThroughTunnel": [
+   "through the tunnel",
+   "durch den Tunnel"
+  ],
+  "admin.vpn.ipv6": [
+   "IPv6",
+   "IPv6"
+  ],
+  "admin.vpn.ipv6Tunnel": [
+   "Through the tunnel",
+   "Durch den Tunnel"
+  ],
+  "admin.vpn.ipv6Blocked": [
+   "Blocked (no IPv6 route in the profile)",
+   "Gesperrt (keine IPv6-Route im Profil)"
+  ],
+  "admin.vpn.killSwitch": [
+   "Kill switch",
+   "Kill-Switch"
+  ],
+  "admin.vpn.killSwitchBound": [
+   "Bound clients have no direct path",
+   "Gebundene Clients haben keinen direkten Weg"
+  ],
+  "admin.vpn.exit": [
+   "Exit address",
+   "Ausgangsadresse"
+  ],
+  "admin.vpn.exitHidden": [
+   "differs from this server",
+   "weicht von diesem Server ab"
+  ],
+  "admin.vpn.exitNotCompared": [
+   "not compared with this server",
+   "nicht mit diesem Server verglichen"
+  ],
+  "admin.vpn.exitCheckedAt": [
+   "Exit checked",
+   "Ausgang geprüft"
+  ],
+  "admin.vpn.alive": [
+   "Last ping through the tunnel",
+   "Letzter Ping durch den Tunnel"
+  ],
+  "admin.vpn.handshake": [
+   "Last handshake",
+   "Letzter Handshake"
+  ],
+  "admin.vpn.traffic": [
+   "Traffic",
+   "Datenverkehr"
+  ],
+  "admin.vpn.leases": [
+   "Bound clients",
+   "Gebundene Clients"
+  ],
+  "admin.vpn.check": [
+   "Check",
+   "Prüfen"
+  ],
+  "admin.vpn.stop": [
+   "Stop",
+   "Stoppen"
+  ],
+  "admin.vpn.delete": [
+   "Delete",
+   "Löschen"
+  ],
+  "admin.vpn.deleteTitle": [
+   "Delete this VPN profile?",
+   "Dieses VPN-Profil löschen?"
+  ],
+  "admin.vpn.checked": [
+   "Tunnel checked",
+   "Tunnel geprüft"
+  ],
+  "admin.vpn.checkFailed": [
+   "The tunnel check failed",
+   "Die Tunnelprüfung ist fehlgeschlagen"
+  ],
+  "admin.vpn.stopDone": [
+   "Tunnel stopped",
+   "Tunnel gestoppt"
+  ],
+  "errors.vpn_unavailable": [
+   "The VPN tunnel is not connected. Nothing bound to it is sent without it.",
+   "Der VPN-Tunnel ist nicht verbunden. Was an ihn gebunden ist, wird ohne ihn nicht gesendet."
+  ],
+  "errors.vpn_helper_missing": [
+   "The WireGuard helper wireproxy is not installed in this image.",
+   "Das WireGuard-Hilfsprogramm wireproxy ist in diesem Image nicht installiert."
+  ],
+  "errors.vpn_tunnel_unreachable": [
+   "Nothing came back through the VPN tunnel. Check the profile and its VPN server.",
+   "Durch den VPN-Tunnel kam keine Antwort. Prüfe das Profil und seinen VPN-Server."
+  ],
+  "errors.vpn_tunnel_stopped": [
+   "The VPN tunnel stopped. Check it again to restart it.",
+   "Der VPN-Tunnel wurde beendet. Prüfe ihn erneut, um ihn neu zu starten."
+  ],
+  "errors.vpn_exit_not_hidden": [
+   "Requests through the tunnel left with this server's own address, so the tunnel is not used.",
+   "Anfragen durch den Tunnel gingen mit der eigenen Adresse dieses Servers hinaus, der Tunnel wird also nicht genutzt."
+  ],
+  "errors.validation.wireguard_dns_required": [
+   "The WireGuard configuration needs a DNS server, so that names are resolved through the tunnel.",
+   "Die WireGuard-Konfiguration braucht einen DNS-Server, damit Namen durch den Tunnel aufgelöst werden."
+  ],
+  "acquisition.connection.type.Torrent": [
+   "Jularr torrent engine",
+   "Jularr-Torrent-Engine"
+  ],
+  "acquisition.connection.addTorrent": [
+   "Add torrent engine",
+   "Torrent-Engine hinzufügen"
+  ],
+  "downloadStorage.area.Torrent": [
+   "Jularr torrent engine",
+   "Jularr-Torrent-Engine"
+  ],
+  "sources.storage.torrentMissing": [
+   "Jularr's own torrent engine needs Incomplete and Complete folders plus a confirmed free-space reserve before it can download.",
+   "Jularrs eigene Torrent-Engine braucht Ordner für Unvollständig und Fertig sowie eine bestätigte Platzreserve, bevor sie herunterladen kann."
+  ],
+  "instance.module.Torrent": [
+   "Jularr's own torrent engine (download only, through the VPN)",
+   "Jularrs eigene Torrent-Engine (nur Download, über das VPN)"
+  ],
+  "setup.module.help.Torrent": [
+   "Download torrents without ever uploading a piece; it runs only through a verified VPN tunnel.",
+   "Lädt Torrents herunter, ohne je ein Stück hochzuladen; läuft nur durch einen geprüften VPN-Tunnel."
+  ],
+  "acquisition.torrent.lock": [
+   "Upload lock",
+   "Upload-Sperre"
+  ],
+  "acquisition.torrent.lockVerified": [
+   "Proven now: no file data can leave",
+   "Jetzt geprüft: keine Dateidaten können hinaus"
+  ],
+  "acquisition.torrent.lockFailed": [
+   "Check failed, the engine does not run",
+   "Prüfung fehlgeschlagen, die Engine läuft nicht"
+  ],
+  "acquisition.torrent.uploaded": [
+   "Sent to peers",
+   "An Peers gesendet"
+  ],
+  "acquisition.torrent.fileData": [
+   "file data",
+   "Dateidaten"
+  ],
+  "acquisition.torrent.control": [
+   "control messages",
+   "Steuernachrichten"
+  ],
+  "acquisition.torrent.refused": [
+   "frames refused",
+   "Frames abgewiesen"
+  ],
+  "acquisition.torrent.received": [
+   "Received",
+   "Empfangen"
+  ],
+  "acquisition.torrent.peers": [
+   "Connected peers",
+   "Verbundene Peers"
+  ],
+  "acquisition.torrent.vpn": [
+   "VPN",
+   "VPN"
+  ],
+  "acquisition.torrent.vpnVerified": [
+   "Verified tunnel ready",
+   "Geprüfter Tunnel bereit"
+  ],
+  "acquisition.torrent.vpnNone": [
+   "No verified tunnel, nothing is sent",
+   "Kein geprüfter Tunnel, nichts wird gesendet"
+  ],
+  "errors.torrent_module_off": [
+   "Jularr's torrent engine needs its module and the VPN module switched on.",
+   "Jularrs Torrent-Engine braucht ihr Modul und das VPN-Modul eingeschaltet."
+  ],
+  "errors.torrent_lock_failed": [
+   "The upload lock of the torrent engine did not prove itself, so it does not run.",
+   "Die Upload-Sperre der Torrent-Engine hat sich nicht bewiesen, deshalb läuft sie nicht."
   ],
   "errors.validation.invalid_wireguard_configuration": [
    "The WireGuard configuration cannot be used. It needs one interface, one peer and only supported keys.",

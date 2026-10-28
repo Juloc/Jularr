@@ -479,6 +479,18 @@ namespace Jularr.Backend.Tests
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 15"));
             Assert.AreEqual(1L, await ScalarAsync(cs,
                 "SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'ProfilePlaybackPreferences' AND column_name = 'SecondSubtitleLanguage'"));
+            Assert.AreEqual("0016_narou_source", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 16"));
+            Assert.AreEqual("Narou:syosetu", await ScalarAsync(cs,
+                "SELECT type.\"Key\" || ':' || provider.\"Key\" FROM \"AcquisitionConnectionTypes\" AS type, \"Providers\" AS provider WHERE type.\"Id\" = 11 AND provider.\"Key\" = 'syosetu'"));
+            Assert.AreEqual("0017_vpn_profiles", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 17"));
+            Assert.AreEqual(1L, await ScalarAsync(cs,
+                "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'VpnProfiles'"));
+            Assert.AreEqual("0018_native_torrent", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 18"));
+            Assert.AreEqual("Torrent", await ScalarAsync(cs,
+                "SELECT \"Key\" FROM \"AcquisitionConnectionTypes\" WHERE \"Id\" = 12"));
             Assert.AreEqual(2L, await ScalarAsync(cs,
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('MediaImportJobs','MediaImportJobRows')"));
             Assert.AreEqual(1L, await ScalarAsync(cs,

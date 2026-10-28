@@ -51,6 +51,32 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 }
             }
 
+            // A web novel is never its published edition: a clear entry only lends it its titles, the entry's id stays with the edition.
+            if (target.IsWebNovel)
+            {
+                AniListMedia? link;
+                IReadOnlyList<AniListMedia> found;
+                if (chosenId is { } choice)
+                {
+                    link = await aniList.ReadAsync(type, choice, ct);
+                    found = [link];
+                }
+                else
+                {
+                    (link, found) = AniListMatching.LinkWebNovel(await aniList.SearchAsync(type, formats, target.CanonicalTitle, ct), target.CanonicalTitle, target.Author);
+                }
+
+                var proposed = JsonSerializer.Serialize(found.Select(candidate => new
+                {
+                    candidate.Id, Title = AniListMetadata.Title(candidate), Native = candidate.NativeTitle, Author = candidate.NativeAuthors.FirstOrDefault(), candidate.Year, candidate.Format
+                }));
+                var status = link is not null ? IdentityMatchStatusType.Matched : found.Count == 0 ? IdentityMatchStatusType.NoMatch : IdentityMatchStatusType.Review;
+                return new IdentityMatchResultData(target.WorkId, AniListMetadata.Namespace, status, proposed, null, "[]", chosenId is not null)
+                {
+                    LinkedTitle = link is null ? null : TextLimit.Cut(AniListMetadata.Title(link), 500)
+                };
+            }
+
             // A person's choice is taken as it is; otherwise one clear candidate is.
             AniListMedia? match;
             IReadOnlyList<AniListMedia> candidates;
@@ -151,10 +177,21 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         WHERE
                             title."WorkId" = work."Id"
                             AND title."Title" <> work."CanonicalTitle"
-                    ) AS "Titles"
+                    ) AS "Titles",
+                    creator."Creator" AS "Author",
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkExternalIdentities" AS novel
+                        WHERE
+                            novel."WorkId" = work."Id"
+                            AND novel."Namespace" = 'syosetu'
+                    ) AS "IsWebNovel"
                 FROM
                     "Works" AS work
                     LEFT JOIN "WorkIdentityMatches" AS match ON match."WorkId" = work."Id" AND match."Namespace" = 'anilist'
+                    LEFT JOIN "WorkCreators" AS creator ON creator."WorkId" = work."Id"
                 WHERE
                     (work."Id" = @WorkId AND match."IdentityMatchStatusTypeId" = 2
                         OR @WorkId::bigint IS NULL
@@ -232,7 +269,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         WHERE
                             title."WorkId" = work."Id"
                             AND title."Title" <> work."CanonicalTitle"
-                    ) AS "Titles"
+                    ) AS "Titles",
+                    NULL::text AS "Author",
+                    FALSE AS "IsWebNovel"
                 FROM
                     "Works" AS work
                 WHERE

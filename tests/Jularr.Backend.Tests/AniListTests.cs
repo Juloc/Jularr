@@ -70,6 +70,24 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void LinkWebNovel_JapaneseTitleAndWriter_LinkOnlyTogether()
+        {
+            AniListMedia Novel(int id, string native, string author, string format = "NOVEL") =>
+                new(id, format, "Romaji " + id, "English " + id, native, [], 2020, null, 3, null, null, [], [], [], null, null) { NativeAuthors = [author] };
+            var results = new[] { Novel(1, "無職転生 ～異世界行ったら本気だす～", "理不尽な孫の手"), Novel(2, "無職転生", "別人"), Novel(3, "無職転生 ～異世界行ったら本気だす～", "理不尽な孫の手", "MANGA") };
+
+            // Narō's punctuation differs; title and writer together are the link, the manga is no edition of a novel.
+            var (match, candidates) = AniListMatching.LinkWebNovel(results, "無職転生　- 異世界行ったら本気だす -", "理不尽な孫の手");
+            Assert.AreEqual((1, 1), (match?.Id, candidates.Count));
+
+            // The title or the writer alone only proposes; nothing in common proposes nothing.
+            (match, candidates) = AniListMatching.LinkWebNovel(results, "無職転生", "理不尽な孫の手");
+            Assert.IsNull(match);
+            CollectionAssert.AreEquivalent(new[] { 1, 2 }, candidates.Select(candidate => candidate.Id).ToArray());
+            Assert.AreEqual(0, AniListMatching.LinkWebNovel(results, "コボルト転生 異世界で旅をする", "誰か").Candidates.Count);
+        }
+
+        [TestMethod]
         public async Task Matching_SeriesSeasonsAndReviews_FollowTheSequelChain()
         {
             using var storage = new LibraryTests.TemporaryDirectory();
