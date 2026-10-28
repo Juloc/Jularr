@@ -166,7 +166,8 @@ namespace Jularr.E2E.Tests
 
                 await Assertions.Expect(sonarr.Locator(".setup-source__fold", new() { HasTextRegex = new System.Text.RegularExpressions.Regex(@"^\s*Quality profiles") })).ToContainTextAsync("1");
                 Assert.AreEqual(profilesBefore, await jularr.ScalarAsync("SELECT count(*) FROM \"AcquisitionProfiles\""), "A preview writes nothing.");
-                Assert.AreEqual(0L, await jularr.ScalarAsync("SELECT count(*) FROM \"Works\""));
+                // Discover feeds may store catalog titles; the preview adds nothing to the library.
+                Assert.AreEqual(0L, await jularr.ScalarAsync("SELECT count(DISTINCT \"WorkId\") FROM \"WorkLibraryRelations\""));
                 await Evidence.SaveAsync(page, "setup-takeover-preview");
 
                 // The root folder needs a library: the form offers to create it on the connected storage; then the takeover brings the profile and the series.
@@ -175,7 +176,7 @@ namespace Jularr.E2E.Tests
                 await sonarr.GetByRole(AriaRole.Button, new() { Name = "Take over", Exact = true }).ClickAsync();
                 sonarr = page.Locator(".setup-source", new() { HasText = "Sonarr" });
                 await Assertions.Expect(sonarr).ToContainTextAsync("Taken over");
-                Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"Works\""));
+                Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(DISTINCT \"WorkId\") FROM \"WorkLibraryRelations\""));
                 Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"LibraryRoots\""));
                 Assert.AreEqual(0L, await jularr.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\" WHERE \"IsEnabled\" AND \"AcquisitionConnectionTypeId\" = 2"), "A takeover starts no download client.");
                 Assert.AreEqual(0, fakes.Grabbed.Count, "A takeover starts no downloads.");
