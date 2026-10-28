@@ -3317,6 +3317,7 @@ namespace Jularr.Frontend.Localization
             new("jobs.job.health", "Health check"),
             new("jobs.about.health", "Asks every configured service whether it answers. A service that does not makes the pass fail, and Activity tells you."),
             new("jobs.worker.Health", "Health"),
+            new("jobs.worker.Translation", "Translation"),
             new("jobs.health.summary", "{0} of {1} services reachable"),
             new("jobs.kpi.total", "Jobs"),
             new("jobs.area", "Area"),
