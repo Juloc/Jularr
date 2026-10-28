@@ -113,9 +113,11 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 // be resolved in this durable worker. Never silently replace a
                 // supplied ISBN or choose among ambiguous/weak matches.
                 MediaImportRowExecution? unresolved = null;
+                if (selected?.Include == true && string.IsNullOrWhiteSpace(selected.Choice) && row.Problem == "local_match")
+                    unresolved = new MediaImportRowExecution(new MediaImportResultRowV1(index, row.Item.Title, MediaImportOutcomeType.NeedsReview, false, null), false);
                 if (selected?.Include == true && string.IsNullOrWhiteSpace(selected.Choice)
                     && row.Item.Type == MediaType.Book && row.Item.Ids.Count == 0
-                    && row.Status == MediaImportStatusType.Open)
+                    && row.Status == MediaImportStatusType.Open && unresolved is null)
                 {
                     var searchQuery = string.Join(" ", new[] { input.Title, input.Creator }
                         .Where(part => !string.IsNullOrWhiteSpace(part)));
@@ -162,7 +164,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 }
                 else if (selected?.Include == true && string.IsNullOrWhiteSpace(selected.Choice)
                     && row.Item.Type == MediaType.Book && row.Item.Ids.Count > 0
-                    && row.Status == MediaImportStatusType.Open)
+                    && row.Status == MediaImportStatusType.Open && unresolved is null)
                 {
                     // The ISBN was already retried by the planner. Never silently
                     // substitute a title search for a supplied edition identity.
