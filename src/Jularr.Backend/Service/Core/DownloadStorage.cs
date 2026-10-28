@@ -44,7 +44,7 @@ namespace Jularr.Backend.Service.Core
 
                 if (!skipCapacityCheck) foreach (var path in new[] { sourceRoot, destinationRoot })
                 {
-                    if (StorageFileSystem.AvailableFreeSpace(path) is not { } available || available < settings.FreeSpaceReserveBytes.Value)
+                    if (StorageFileSystem.AvailableFreeSpace(path) is not { } available || available < settings.FreeSpaceReserveBytes!.Value)
                     {
                         throw new ServiceUnavailableException("download_storage_reserve");
                     }

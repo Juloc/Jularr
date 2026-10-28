@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Admin.Browser.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Core;
 
@@ -63,15 +64,23 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
     public sealed class CloseBrowserAssistanceV1 : AdminService<BrowserLeaseParametersV1, NoData>
     {
         private readonly BrowserAssistance _assistance;
-        internal CloseBrowserAssistanceV1(BrowserAssistance assistance) => _assistance = assistance;
+        private readonly WorkSignals _signals;
+        internal CloseBrowserAssistanceV1(BrowserAssistance assistance, WorkSignals signals)
+        {
+            _assistance = assistance;
+            _signals = signals;
+        }
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(BrowserLeaseParametersV1 parameters) => ModuleRequirement.All("Acquisition", "Browser");
         protected override ServicePermission GetPermission(BrowserLeaseParametersV1 parameters, Type resultType) => new("acquisition.manage");
         protected override async Task<IServiceOutput> OnExecute()
         {
-            await _assistance.CloseAsync(Auth.SessionPublicId ?? throw new SecurityException(), Parameters.LeaseId, CancellationToken);
+            var sourceId = await _assistance.CloseAsync(Auth.SessionPublicId ?? throw new SecurityException(), Parameters.LeaseId, CancellationToken);
+            await Context.ExecuteBatchAsync((ctx, ct) => ctx.ResumeSourceDownloadsAsync(new AcquisitionConnectionParameters(sourceId), ct), CancellationToken);
             return new UpdateResult(true);
         }
+
+        protected override void OnCommitted() => _signals.Downloads.Notify();
     }
 }

@@ -308,6 +308,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             string? EpisodeText(TvdbEpisode episode, Func<TvdbEpisode, string?> value) =>
                 translated.Select(list => list.GetValueOrDefault(episode.Id)).Select(item => item is null ? null : value(item)).FirstOrDefault(text => !string.IsNullOrWhiteSpace(text))
                     ?? value(episode);
+
+            // An episode's title is always English, like Sonarr, so file names do not depend on the instance language; without one it keeps its original name.
+            var englishEpisodes = translated[Array.IndexOf(preferred, "eng")];
+            string? EpisodeTitle(TvdbEpisode episode) => englishEpisodes.GetValueOrDefault(episode.Id)?.Name is { } english && !string.IsNullOrWhiteSpace(english) ? english : episode.Name;
             int Rank(string? code) => code == language ? 0 : code == "eng" ? 1 : 2;
 
             // A season holds its episodes only while TheTVDB numbers each one once; otherwise the Work goes without and the next import asks again.
@@ -321,7 +325,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         ImageUrl = Address(seasonImages.GetValueOrDefault(season.Key)), RuntimeMinutes = (int?)null });
                     foreach (var episode in season.OrderBy(item => item.EpisodeNumber))
                     {
-                        units.Add(new { Season = season.Key, Episode = (int?)episode.EpisodeNumber, Title = TextLimit.Cut(EpisodeText(episode, item => item.Name), 500), ReleasedOn = episode.Aired,
+                        units.Add(new { Season = season.Key, Episode = (int?)episode.EpisodeNumber, Title = TextLimit.Cut(EpisodeTitle(episode), 500), ReleasedOn = episode.Aired,
                             Overview = TextLimit.Cut(EpisodeText(episode, item => item.Overview), 4000), ImageUrl = Address(episode.ImageUrl), RuntimeMinutes = episode.Runtime });
                     }
                 }

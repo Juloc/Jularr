@@ -125,6 +125,7 @@ namespace Jularr.Frontend.Pages.User.Reader
             var top = Header(document.Title, current.Title ?? "", document.WorkId, [
                 .. canTranslate ? [Overflowing(Tool("globe", "reader.language", "language"), "language", 1)] : Array.Empty<IUiComponent>(),
                 Overflowing(AppearanceTool(false), "text", 2),
+                Overflowing(ModeTool(), "mode", 2),
                 Overflowing(new Button(new Icon("palette", assets)).IconOnly(texts["reader.settings.paper"]).Attribute("data-reader-open-settings", "paper").Attribute("aria-expanded", "false"), "paper", 7),
                 Overflowing(BookmarkTool(), "bookmark", 4),
                 Overflowing(Tool("pencil", "reader.notes", "notes"), "notes", 6),
@@ -175,7 +176,9 @@ namespace Jularr.Frontend.Pages.User.Reader
                     new Span(new ValueText(Percent(current.CharactersBefore, current.TotalCharacters))).Class("reader__position").Attribute("data-role", "position"))
                 .Class("reader__context")).Class("reader__bottom");
             var view = new ReaderFrame(assets, texts,
-                top, contents, new ReaderSection(current), bottom,
+                top, contents, new ReaderSection(current,
+                    index > 0 ? "?s=" + (index - 1).ToString(CultureInfo.InvariantCulture) + "&f=1" : null,
+                    index + 1 < document.SectionCount ? "?s=" + (index + 1).ToString(CultureInfo.InvariantCulture) : null), bottom,
                 notes,
                 searching,
                 settings,
@@ -188,6 +191,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                     .. canTranslate ? [MoreEntry(new Icon("globe", assets), "reader.language", "language")] : Array.Empty<IUiComponent>(),
                     MoreEntry(new Span(new ValueText("Aa")).Class("reader__type-icon"), "reader.appearance", "text"),
                     MoreEntry(new Icon("palette", assets), "reader.settings.paper", "paper"),
+                    MoreEntry(new Icon("book", assets), "reader.mode.toggle", "mode"),
                     MoreEntry(new Icon("bookmark", assets), "reader.bookmark", "bookmark"),
                     MoreEntry(new Icon("pencil", assets), "reader.notes", "notes"),
                     MoreEntry(new Icon("headphones", assets), "speech.title", "speech"),
@@ -430,7 +434,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 && int.TryParse(locator[1..], NumberStyles.None, CultureInfo.InvariantCulture, out var saved) ? saved : 0), 0, count - 1);
             var pages = "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/resource?path=";
             string Page(int number) => "?p=" + number.ToString(CultureInfo.InvariantCulture);
-            var top = Header(document.Title, "", document.WorkId, [Overflowing(AppearanceTool(true), "text", 1), Overflowing(BookmarkTool(), "bookmark", 2), Tool("player-more", "reader.more", "more").Attribute("data-overflow-more", "")]);
+            var top = Header(document.Title, "", document.WorkId, [Overflowing(AppearanceTool(true), "text", 1), Overflowing(ModeTool(), "mode", 2), Overflowing(BookmarkTool(), "bookmark", 2), Tool("player-more", "reader.more", "more").Attribute("data-overflow-more", "")]);
             var previous = new A(new Icon("player-previous", assets)).Class("button button--icon").Attribute("aria-label", texts["reader.previous"]).Attribute("href", Page(Math.Max(0, index - 1))).Attribute("data-role", "previous");
             var next = new A(new Icon("player-next", assets)).Class("button button--icon").Attribute("aria-label", texts["reader.next"]).Attribute("href", Page(Math.Min(count - 1, index + 1))).Attribute("data-role", "next");
             if (index == 0) previous.Attribute("hidden", "hidden");
@@ -452,7 +456,8 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Class("reader__panel").Attribute("data-panel", "contents").Attribute("aria-label", texts["reader.contents"]);
 
             var note = document.IsCached ? (IUiComponent)new Span() : new P(new Text("reader.notCached")).Class("reader__note").Attribute("role", "status");
-            var more = More([MoreEntry(new Span(new ValueText("Aa")).Class("reader__type-icon"), "reader.appearance", "text"), MoreEntry(new Icon("bookmark", assets), "reader.bookmark", "bookmark"), .. ViewEntries()]);
+            var more = More([MoreEntry(new Span(new ValueText("Aa")).Class("reader__type-icon"), "reader.appearance", "text"), MoreEntry(new Icon("book", assets), "reader.mode.toggle", "mode"),
+                MoreEntry(new Icon("bookmark", assets), "reader.bookmark", "bookmark"), .. ViewEntries()]);
             return new ReaderFrame(assets, texts, top, contents, stage, bottom, Settings(true), more,
                 new P(new Text("progress.saveFailed")).Attribute("data-role", "save-error").Attribute("role", "status").Attribute("hidden", "hidden"), note)
                 .Class("reader").Attribute("data-format", "comic")
@@ -492,6 +497,12 @@ namespace Jularr.Frontend.Pages.User.Reader
         private static HtmlElement Overflowing(HtmlElement tool, string key, int rank) => tool.Attribute("data-overflow", key).Attribute("data-overflow-rank", rank.ToString(CultureInfo.InvariantCulture));
 
         // Marks or clears the current place; the script keeps the pressed state with the page.
+        // Flat pages, the book or scrolling: one button cycles through them and shows the current one's icon.
+        private HtmlElement ModeTool() => new Button(new Span(new Icon("document", assets)).Attribute("data-mode-icon", "flat"),
+                new Span(new Icon("book", assets)).Attribute("data-mode-icon", "book"), new Span(new Icon("list", assets)).Attribute("data-mode-icon", "scroll"))
+            .IconOnly(texts["reader.mode.toggle"]).Attribute("data-reader-mode", "").TextAttribute("data-mode-label", "reader.mode.toggle")
+            .TextAttribute("data-label-flat", "reader.mode.flat").TextAttribute("data-label-book", "reader.mode.book").TextAttribute("data-label-scroll", "reader.mode.scroll");
+
         private HtmlElement BookmarkTool() => new Button(new Icon("bookmark", assets)).IconOnly(texts["reader.bookmark"])
             .Attribute("data-reader-bookmark", "").Attribute("aria-pressed", "false");
 
@@ -557,22 +568,21 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Select(data => data.Fit, "reader.original.fit", [new("page", texts["reader.original.fit.page"]), new("width", texts["reader.original.fit.width"])]), open: true)
             : SettingsGroup("navigation", "reader.settings.navigation", group => group
                 .Select(data => data.Preset, "reader.preset", [new("book", texts["reader.preset.book"]), new("novel", texts["reader.preset.novel"]), new("manga", texts["reader.preset.manga"])])
-                .Select(data => data.Mode, "reader.mode", [new("paged", texts["reader.mode.paged"]), new("scroll", texts["reader.mode.scroll"])])
                 .Select(data => data.Layout, "reader.layout", [new("auto", texts["reader.layout.auto"]), new("single", texts["reader.layout.single"]), new("spread", texts["reader.layout.spread"])])
                 .Select(data => data.Direction, "reader.comic.direction", [new("ltr", texts["reader.direction.ltr"]), new("rtl", texts["reader.direction.rtl"])]), open: true),
             images ? new Span() : SettingsGroup("text", "reader.settings.text", group => group
                 .Select(data => data.FontFamily, "reader.font", [new("serif", texts["reader.font.serif"]), new("sans", texts["reader.font.sans"])])
                 .Range(data => data.Size, "reader.sizePixels").Range(data => data.Spacing, "reader.spacing").Range(data => data.Paragraph, "reader.paragraph").Range(data => data.TextWidth, "reader.textWidth")
+                .Range(data => data.MarginTop, "reader.margin.top").Range(data => data.MarginBottom, "reader.margin.bottom")
+                .Range(data => data.MarginInner, "reader.margin.inner").Range(data => data.MarginOuter, "reader.margin.outer")
                 .Toggle(data => data.Indent, "reader.indent").Toggle(data => data.Hyphenation, "reader.hyphenation").Toggle(data => data.Illustrations, "reader.illustrations")
                 .Content(new P().Attribute("data-role", "book-pages").Attribute("role", "status").Attribute("hidden", "hidden")
                     .TextAttribute("data-calculating-label", "reader.bookPages.calculating").TextAttribute("data-paused-label", "reader.bookPages.paused")
                     .TextAttribute("data-ready-label", "reader.bookPages.ready").TextAttribute("data-unavailable-label", "reader.bookPages.unavailable"))),
             pages ? new Span() : SettingsGroup("paper", "reader.settings.paper", group => group
                 .Select(data => data.Surface, "reader.surface", [new("clean", texts["reader.surface.clean"]), new("paper", texts["reader.surface.paper"])])
+                .Select(data => data.Binding, "reader.binding", [new("soft", texts["reader.binding.soft"]), new("hard", texts["reader.binding.hard"])])
                 .Color(data => data.Colour, "reader.colour")),
-            pages ? new Span() : SettingsGroup("motion", "reader.settings.motion", group => group
-                .Select(data => data.Animation, "reader.animation", [new("system", texts["reader.animation.system"]), new("on", texts["reader.animation.on"]), new("off", texts["reader.animation.off"])])
-                .Content(new P(new Text("reader.animation.hint")))),
             new P(new Text("reader.settings.saveFailed")).Attribute("data-role", "reader-settings-save-error")
                 .Attribute("role", "alert").Attribute("hidden", "hidden")
             )

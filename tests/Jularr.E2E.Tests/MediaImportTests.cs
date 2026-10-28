@@ -10,6 +10,58 @@ namespace Jularr.E2E.Tests
     {
         private const string AlbumId = "0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b";
 
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task UncataloguedBook_ListDetailsAreExplicitAndRepeatOffersTheExistingBook()
+        {
+            using var folders = new Folders("Books");
+            await using var fakes = await FakeServices.StartAsync(folders.Downloads);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Providers:OpenLibrary"] = fakes.OpenLibrary.ToString()
+            });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            const string json = """{"version":1,"items":[{"type":"book","title":"Uncatalogued Example","author":["First Author","Second Author"]}]}""";
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await page.GotoAsync("/Admin/Import");
+                await page.Locator("[name=Json]").FillAsync(json);
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Preview import"));
+                var choice = page.Locator("select[name='Choices[0].Choice']");
+                await Assertions.Expect(choice).ToHaveValueAsync("");
+                await Assertions.Expect(page.Locator("main table tbody tr")).ToContainTextAsync("First Author, Second Author");
+                await Assertions.Expect(page.Locator("input[type=checkbox][name='Choices[0].Include']")).Not.ToBeCheckedAsync();
+                await choice.SelectOptionAsync("list:book");
+                await FlipAsync(page.Locator("input[type=checkbox][name='Choices[0].Include']"));
+                await Evidence.SaveAsync(page, "book-list-details-selected");
+                await page.Locator("[data-import-apply]").ClickAsync();
+                await Assertions.Expect(page.Locator("[data-import-job-state]")).ToHaveTextAsync("Import complete", new() { Timeout = 60_000 });
+                await Assertions.Expect(page.Locator("[data-import-job-rows] > li")).ToContainTextAsync("Added");
+                Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"Works\""));
+                Assert.AreEqual(2L, await jularr.ScalarAsync("SELECT count(*) FROM \"WorkPeople\""));
+                Assert.AreEqual(0L, await jularr.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+                await page.GotoAsync("/Admin/Import");
+                await page.Locator("[name=Json]").FillAsync(json);
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Preview import"));
+                await Assertions.Expect(page.Locator("main table tbody tr")).ToContainTextAsync("Matching title and author already in the library");
+                var id = (long)(await jularr.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+                await page.Locator("select[name='Choices[0].Choice']").SelectOptionAsync("local:" + id);
+                await FlipAsync(page.Locator("input[type=checkbox][name='Choices[0].Include']"));
+                await page.Locator("[data-import-apply]").ClickAsync();
+                await Assertions.Expect(page.Locator("[data-import-job-state]")).ToHaveTextAsync("Import complete", new() { Timeout = 60_000 });
+                Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"Works\""));
+                await Evidence.SaveAsync(page, "book-list-repeat-reused");
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "failure-book-list-details");
+                throw;
+            }
+        }
+
         private const string List = """
             {"version":1,"items":[
               {"type":"movie","ids":{"tmdb":"10378"},"title":"Big Buck Bunny","year":2008},
@@ -154,7 +206,7 @@ namespace Jularr.E2E.Tests
                 });
                 try
                 {
-                    await page.GetByRole(AriaRole.Button, new() { Name = "Update preview" }).ClickAsync(new() { NoWaitAfter = true });
+                    await page.GetByRole(AriaRole.Button, new() { Name = "Update preview" }).ClickAsync();
                     Assert.AreEqual("POST", (await streamedSearch).Method);
                     await Assertions.Expect(page.Locator("[data-import-apply]")).ToBeDisabledAsync();
                     await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Update preview" })).ToBeDisabledAsync();
