@@ -416,6 +416,14 @@ namespace Jularr.Backend.Tests
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 12"));
             Assert.AreEqual("0013_media_import_jobs", await ScalarAsync(cs,
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 13"));
+            Assert.AreEqual("0014_keep_screen_on", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 14"));
+            Assert.AreEqual(1L, await ScalarAsync(cs,
+                "SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'ProfilePlaybackPreferences' AND column_name = 'KeepScreenOn'"));
+            Assert.AreEqual("0015_second_subtitle_language", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 15"));
+            Assert.AreEqual(1L, await ScalarAsync(cs,
+                "SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'ProfilePlaybackPreferences' AND column_name = 'SecondSubtitleLanguage'"));
             Assert.AreEqual(2L, await ScalarAsync(cs,
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('MediaImportJobs','MediaImportJobRows')"));
             Assert.AreEqual(1L, await ScalarAsync(cs,

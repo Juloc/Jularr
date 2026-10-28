@@ -11,7 +11,7 @@ const files = Object.values(manifest).flatMap(entry => [entry.file, ...(entry.cs
 
 test("all published assets exist with content fingerprints", () => {
     for (const file of [...new Set([...files, icons.file])]) {
-        assert.match(file, /^assets\/[A-Za-z0-9_./-]+-[A-Za-z0-9_-]{8,}\.(?:css|js|svg|png|jpe?g|webp|avif|txt|wasm|data)$/i, file);
+        assert.match(file, /^assets\/[A-Za-z0-9_./-]+-[A-Za-z0-9_-]{8,}\.(?:css|js|svg|png|jpe?g|webp|avif|txt|woff2|wasm|data)$/i, file);
         assert.ok(existsSync(join(build, file)), "missing compiled " + file);
     }
 });
