@@ -222,6 +222,16 @@ namespace Jularr.Backend.Tests
             StringAssert.StartsWith(vtt, "WEBVTT");
             StringAssert.Contains(vtt, "00:00:01.000 --> 00:00:02.000");
             StringAssert.Contains(vtt, "Grüße");
+            // An ASS file is marked styled and arrives as it is; a SubRip file has no styles to ask for.
+            var styledFile = tracks.Single(track => track.Language == "en" && track.Key.StartsWith('f'));
+            Assert.IsTrue(styledFile.IsStyled);
+            Assert.IsFalse(sidecar.IsStyled);
+            using var styled = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/" + assetId + "/subtitles/" + styledFile.Key + "?styled=true");
+            Assert.AreEqual(HttpStatusCode.OK, styled.StatusCode, await styled.Content.ReadAsStringAsync());
+            Assert.AreEqual("text/x-ssa", styled.Content.Headers.ContentType!.MediaType);
+            Assert.AreEqual("[Script Info]", await styled.Content.ReadAsStringAsync());
+            using var notStyled = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/" + assetId + "/subtitles/" + sidecar.Key + "?styled=true");
+            Assert.AreEqual(HttpStatusCode.NotFound, notStyled.StatusCode);
             using var image = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/" + assetId + "/subtitles/s4");
             Assert.AreEqual(HttpStatusCode.NotFound, image.StatusCode);
 
