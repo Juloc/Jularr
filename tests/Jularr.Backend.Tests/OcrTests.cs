@@ -140,6 +140,24 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(await PrepareAsync(host));
         }
 
+        // Two copies of the same book share one document, which names only the copy opened last: each copy is prepared once, not in turn forever.
+        [TestMethod]
+        public async Task Books_ArePreparedOnce_WhenTheLibraryHoldsTwoCopies()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var (_, second) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var books = Path.Combine(storage.Path, "1", "Books");
+            File.Copy(Path.Combine(books, "First Book", "First Book.epub"), Path.Combine(books, "Second Book", "Second Book.epub"), overwrite: true);
+            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"SizeBytes\" = " + new FileInfo(Path.Combine(books, "Second Book", "Second Book.epub")).Length
+                + " WHERE \"MediaAssetId\" = " + second);
+
+            Assert.IsTrue(await PrepareAsync(host));
+            Assert.IsTrue(await PrepareAsync(host));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\""));
+            Assert.IsFalse(await PrepareAsync(host));
+        }
+
         [TestMethod]
         [DataRow("The man was sure that it is the end of the day and he went with them to the house of the old woman.", "en")]
         [DataRow("Der Mann sagte, dass er nicht mit ihr zu der Stadt gehen will, und das ist ein Problem, das sich nicht löst.", "de")]

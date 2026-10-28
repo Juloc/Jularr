@@ -16,8 +16,9 @@ namespace Jularr.Backend.Service.System.Reading.V1
     // at once. One book per call; a person opening a book comes first. Answers whether it prepared one.
     public sealed class PrepareReadingBooksV1 : SystemService<ReadingPreparationParametersV1, NoData>
     {
-        // Files that cannot be prepared (no text without the Ocr module, not a readable book) are not tried again until Jularr starts again or they change.
-        private static readonly ConcurrentDictionary<(long StoredFileId, long SizeBytes, DateTime ModifiedAt), bool> Declined = new();
+        // Files already prepared or that cannot be (no text without the Ocr module, not a readable book) are not tried again until Jularr starts again
+        // or they change: a copy of the same content shares its document, which names only the file opened last, so the copy never counts as prepared.
+        private static readonly ConcurrentDictionary<(long StoredFileId, long SizeBytes, DateTime ModifiedAt), bool> Settled = new();
 
         private readonly ReadingContent _content;
         private readonly ReadingActivity _activity;
@@ -108,15 +109,17 @@ namespace Jularr.Backend.Service.System.Reading.V1
                 return ctx.ReadSql.ReadListAsync<ReadingSourceData>(sql, ct);
             }, CancellationToken);
 
-            var book = books.FirstOrDefault(candidate => !Declined.ContainsKey((candidate.StoredFileId, candidate.SizeBytes, candidate.ModifiedAt)));
+            var book = books.FirstOrDefault(candidate => !Settled.ContainsKey((candidate.StoredFileId, candidate.SizeBytes, candidate.ModifiedAt)));
             if (book is null)
             {
                 return new UpdateResult(false);
             }
 
+            var key = (book.StoredFileId, book.SizeBytes, book.ModifiedAt);
             try
             {
                 await _content.OpenAsync(Context, book, CancellationToken);
+                Settled[key] = true;
             }
             catch (ServiceUnavailableException exception) when (exception.Code is "reading_pdf_recognizing")
             {
@@ -129,7 +132,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
             }
             catch (ServiceUnavailableException)
             {
-                Declined[(book.StoredFileId, book.SizeBytes, book.ModifiedAt)] = true;
+                Settled[key] = true;
             }
 
             return new UpdateResult(true);
