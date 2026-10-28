@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { test } from 'node:test';
-import ts from 'typescript';
+import ts from './transpile.mjs';
 
 const source = readFileSync(new URL('../Modules/Playback/MediaFocus.ts', import.meta.url), 'utf8');
 const script = ts.transpileModule(source.slice(0, source.indexOf('// The two shared instances')), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
