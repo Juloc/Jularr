@@ -2839,6 +2839,7 @@ namespace Jularr.Frontend.Localization
             new("player.next", "Next"),
             new("player.forward30", "Forward 30 seconds"),
             new("player.timeline", "Playback position"),
+            new("player.brightness.auto", "Auto"),
             new("player.mute", "Mute"),
             new("player.volume", "Volume"),
             new("player.speed", "Playback speed"),

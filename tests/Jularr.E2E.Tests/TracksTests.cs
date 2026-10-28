@@ -151,7 +151,7 @@ namespace Jularr.E2E.Tests
                 await AssertEpisodesFirstAsync(page);
                 await AssertSettingsFitAsync(page, "wide");
                 await page.Locator("[data-action=fullscreen]").ClickAsync();
-                await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player')");
+                await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player-main')");
                 await AssertEpisodesFirstAsync(page);
                 await AssertSettingsFitAsync(page, "fullscreen");
                 await page.Locator("[data-action=fullscreen]").ClickAsync();
@@ -240,6 +240,22 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(await page.Locator("[data-status=failed]").TextContentAsync(), await status.TextContentAsync());
                 Assert.IsTrue(await page.Locator("video").EvaluateAsync<bool>("video => video.error !== null"), "The video reported no error.");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+
+                // The next episode opens inside the same page and fullscreen stays on.
+                await page.GotoAsync(details);
+                await page.Locator(".episode-card", new() { HasText = "Pilot" }).Locator("a[href^='/Player/']").First.ClickAsync();
+                await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 1", null, new() { Timeout = Steps.MediaTimeout });
+                await page.Locator("[data-action=fullscreen]").ClickAsync();
+                await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player-main')");
+                var firstUrl = page.Url;
+                await page.EvaluateAsync("() => { window.__sameDocument = true; }");
+                await page.Locator("[data-action=next]").ClickAsync();
+                await page.WaitForURLAsync(url => url != firstUrl);
+                await Assertions.Expect(page.Locator("[data-role=status]")).ToBeVisibleAsync(new() { Timeout = Steps.MediaTimeout });
+                Assert.IsTrue(await page.EvaluateAsync<bool>("() => window.__sameDocument === true"), "The next episode reloaded the page.");
+                Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.fullscreenElement === document.querySelector('.player-main')"), "Fullscreen ended with the episode.");
+                await page.Locator("[data-action=fullscreen]").ClickAsync();
+                await page.WaitForFunctionAsync("() => !document.fullscreenElement");
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
             {
@@ -310,7 +326,7 @@ namespace Jularr.E2E.Tests
                 if (mode == "fullscreen")
                 {
                     await page.Locator("[data-action=fullscreen]").ClickAsync();
-                    await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player')");
+                    await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player-main')");
                 }
 
                 await Assertions.Expect(skip).ToBeVisibleAsync();

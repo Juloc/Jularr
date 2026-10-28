@@ -64,6 +64,7 @@ test('player planning network failure displays the localized status', async () =
     const player = {
         dataset: { startUrl: '/start', antiforgery: 'test' },
         classList: { toggle() {}, contains: () => false },
+        closest: () => null,
         querySelectorAll: () => [],
         querySelector: selector => selector === '[data-role=status]' ? status : selector === '[data-status=failed]' ? { textContent: 'Localized failure' }
             : selector === '#player-sidebar' ? null : { dataset: {}, addEventListener() {}, setAttribute() {} }
@@ -76,6 +77,7 @@ test('player planning network failure displays the localized status', async () =
         // Provide the browser timer APIs so this fixture reaches the actual fetch.
         window: { setTimeout: () => 1 },
         clearTimeout() {},
+        AbortController,
         fetch: () => { requests++; return Promise.reject(new Error('Offline')); }
     });
     await new Promise(resolve => setImmediate(resolve));

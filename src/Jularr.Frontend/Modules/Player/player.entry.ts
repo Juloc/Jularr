@@ -1,7 +1,7 @@
 import "./player.scss";
 import { updateRangeValue } from "../../Framework/Components/Range";
 import { progressReporter } from "../Tracking/Progress";
-import { keepAddress, pushAddress, releaseAddress, visit } from "../Navigation/PageSwap";
+import { inserted, keepAddress, pushAddress, releaseAddress, visit } from "../Navigation/PageSwap";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
@@ -41,8 +41,15 @@ async function start(player: HTMLElement): Promise<void> {
     const mute = player.querySelector<HTMLButtonElement>("[data-action=mute]")!;
     const loading = player.querySelector<HTMLElement>("[data-role=loading]")!;
     const feedback = player.querySelector<HTMLElement>("[data-role=transport-feedback]")!;
+    const gesture = player.querySelector<HTMLElement>("[data-role=gesture]")!;
+    // Fullscreen belongs to the page's main element, which stays when the next episode replaces the player inside it.
+    const host = player.closest<HTMLElement>(".player-main") ?? player;
+    // Everything that listens beyond the player's own elements ends with it.
+    const lifetime = new AbortController();
+    const { signal } = lifetime;
     let loadingTimer = 0;
     let feedbackTimer = 0;
+    let lastPointerType = "mouse";
 
     // Avoid showing a spinner for very short buffer/seek events.
     function stopLoading(): void {
@@ -135,8 +142,8 @@ async function start(player: HTMLElement): Promise<void> {
     player.querySelector('#player-chapters')?.addEventListener('toggle', wake);
     player.querySelectorAll<HTMLInputElement>('[data-setting=speed-range]').forEach(updateRangeValue);
     sidebar?.addEventListener('toggle', wake);
-    narrow.addEventListener('change', layout);
-    document.addEventListener('fullscreenchange', layout);
+    narrow.addEventListener('change', layout, { signal });
+    document.addEventListener('fullscreenchange', () => { layout(); orient(); }, { signal });
     try { player.classList.toggle('player--theater', localStorage.getItem('jularr.player.layout') === 'wide'); } catch { /* Storage is optional. */ }
     layout();
 
@@ -169,7 +176,7 @@ async function start(player: HTMLElement): Promise<void> {
         }, ended);
         if (ended) plan = null;
     };
-    setInterval(() => { if (!video.paused) report(false); }, ReportInterval);
+    const reportTimer = setInterval(() => { if (!video.paused) report(false); }, ReportInterval);
     // The pause before an end is no position worth saving.
     video.addEventListener("pause", () => { if (!video.ended) report(false); });
     video.addEventListener("ended", () => {
@@ -178,7 +185,7 @@ async function start(player: HTMLElement): Promise<void> {
         // The mini player stops where it is.
         const href = player.querySelector<HTMLElement>("[data-action=next][data-href]")?.dataset.href;
         if (!href || player.classList.contains("player--mini")) return;
-        if (countdownSeconds === 0) location.assign(href);
+        if (countdownSeconds === 0) void openEpisode(href);
         else if (autoplay) startCountdown(href);
     });
     video.addEventListener("play", stopCountdown);
@@ -194,7 +201,7 @@ async function start(player: HTMLElement): Promise<void> {
         next.dataset.href = href;
         next.dataset.timer = String(window.setInterval(() => {
             countdown--;
-            if (countdown <= 0) { stopCountdown(); location.assign(href); } else tick();
+            if (countdown <= 0) { stopCountdown(); void openEpisode(href); } else tick();
         }, 1000));
     }
 
@@ -203,14 +210,51 @@ async function start(player: HTMLElement): Promise<void> {
         delete next.dataset.timer;
         next.hidden = true;
     }
-    document.addEventListener("visibilitychange", () => { if (document.hidden) report(false); });
-    window.addEventListener("pagehide", event => report(!event.persisted, false));
+    document.addEventListener("visibilitychange", () => { if (document.hidden) report(false); }, { signal });
+    window.addEventListener("pagehide", event => report(!event.persisted, false), { signal });
 
     function go(direction: "previous" | "next") {
         const href = player.querySelector<HTMLElement>(`[data-action=${direction}][data-href]`)?.dataset.href;
         if (!href) return;
         report(true, false);
-        location.assign(href);
+        void openEpisode(href);
+    }
+
+    // The next episode replaces the player inside the page's main element; in fullscreen this keeps fullscreen, otherwise the page changes as always.
+    async function openEpisode(href: string): Promise<void> {
+        if (document.fullscreenElement !== host || host === player || player.classList.contains("player--mini")) { location.assign(href); return; }
+        try {
+            const response = await fetch(href, { credentials: "same-origin", headers: { Accept: "text/html" } });
+            const address = new URL(response.url);
+            if (!response.ok || address.origin !== location.origin) throw new Error("episode");
+            const page = new DOMParser().parseFromString(await response.text(), "text/html");
+            const main = page.querySelector<HTMLElement>(".player-main");
+            if (!main?.querySelector('.player[data-start-url]:not([data-start-url=""])')) throw new Error("episode");
+            dispose();
+            host.replaceChildren(...Array.from(main.childNodes));
+            document.title = page.title;
+            pushAddress(address.pathname + address.search);
+            inserted(host);
+            const replacement = host.querySelector<HTMLElement>('.player[data-start-url]:not([data-start-url=""])')!;
+            void start(replacement).catch(() => undefined);
+        } catch {
+            location.assign(href);
+        }
+    }
+
+    // The old playback ends without touching the file's progress: the next episode starts its own session.
+    function dispose(): void {
+        lifetime.abort();
+        clearInterval(reportTimer);
+        clearTimeout(idle);
+        clearTimeout(loadingTimer);
+        stopCountdown();
+        video.pause();
+        hls?.destroy();
+        hls = null;
+        hlsPlayer = null;
+        video.removeAttribute("src");
+        video.load();
     }
 
     // Always show the target time while hovering or dragging; trickplay images are optional.
@@ -565,7 +609,7 @@ async function start(player: HTMLElement): Promise<void> {
         back: () => seek(-10),
         forward: () => seek(30),
         mute: () => { video.muted = !video.muted; },
-        fullscreen: () => void (document.fullscreenElement ? document.exitFullscreen() : player.requestFullscreen()).catch(() => show('failed')),
+        fullscreen: () => void (document.fullscreenElement ? document.exitFullscreen() : host.requestFullscreen()).catch(() => show('failed')),
         pip: () => void (document.pictureInPictureElement ? document.exitPictureInPicture() : video.requestPictureInPicture()).catch(() => show('failed')),
         theater: () => {
             const wide = player.classList.toggle('player--theater');
@@ -578,7 +622,7 @@ async function start(player: HTMLElement): Promise<void> {
             if (choice) { setChoice('subtitle', choice.key); showSubtitle(choice.key, choice.language); }
         },
         close: () => void minimize(),
-        'next-now': () => { const href = next.dataset.href; stopCountdown(); if (href) location.assign(href); },
+        'next-now': () => { const href = next.dataset.href; stopCountdown(); if (href) void openEpisode(href); },
         'next-cancel': stopCountdown,
         skip: () => { if (offered) skipMarker(offered, false); },
         'skip-undo': undoSkip,
@@ -603,9 +647,10 @@ async function start(player: HTMLElement): Promise<void> {
 
         const action = target.closest<HTMLElement>("[data-action]")?.dataset.action;
         if (action && actions[action]) { if (action === 'close') event.preventDefault(); actions[action](); }
-        else if (target === video) actions.toggle();
+        else if (target === video && lastPointerType === "mouse") actions.toggle();
     });
-    video.addEventListener("dblclick", actions.fullscreen);
+    // A double click of the mouse toggles fullscreen; a double tap of a finger seeks (below).
+    video.addEventListener("dblclick", () => { if (lastPointerType === "mouse") actions.fullscreen(); });
 
     // The settings are native fields; the same choice shown in two panes stays one choice.
     settings.addEventListener("change", event => {
@@ -689,10 +734,12 @@ async function start(player: HTMLElement): Promise<void> {
         event.preventDefault();
         handler();
         wake();
-    });
+    }, { signal });
 
     // Chrome hides only while playing without an open panel.
-    player.addEventListener("pointermove", wake);
+    player.addEventListener("pointermove", event => { if (event.pointerType !== "touch") wake(); });
+    player.addEventListener("pointerdown", event => { lastPointerType = event.pointerType; if (event.pointerType === "touch" && event.target !== video) wake(); }, { capture: true });
+    touchGestures();
     // A mouse leaving the picture hides the controls at once; touch and open panels keep them.
     player.addEventListener("pointerleave", event => {
         if (event.pointerType !== "mouse" || video.paused || seeking || player.classList.contains("player--mini") || player.querySelector(":popover-open")) return;
@@ -756,10 +803,149 @@ async function start(player: HTMLElement): Promise<void> {
         }, IdleDelay);
     }
 
+    // A phone turns to landscape while the player is fullscreen, where the browser allows it (Android); leaving fullscreen releases it.
+    function orient(): void {
+        const orientation = screen.orientation as (ScreenOrientation & { lock?(orientation: string): Promise<void> }) | undefined;
+        if (!orientation || !matchMedia("(pointer: coarse)").matches) return;
+        if (document.fullscreenElement === host) void orientation.lock?.("landscape").catch(() => undefined);
+        else orientation.unlock?.();
+    }
+
+    // Touch: double tap left/right seeks back/forward, a swipe up or down changes the volume (right half) or the picture's brightness (left half),
+    // holding plays at double speed, a single tap shows or hides the controls.
+    function touchGestures(): void {
+        const DoubleTap = 320;
+        const Hold = 450;
+        const Slop = 14;
+        let start: { x: number; y: number; at: number; side: "left" | "center" | "right"; width: number; height: number } | null = null;
+        let kind: "" | "volume" | "brightness" | "speed" = "";
+        let origin = 0;
+        // The brightness slider rests at Auto on the bottom (no filter, the device decides); above it the picture goes from dim to bright.
+        const AutoBelow = 0.04;
+        const Dim = 0.3;
+        const Bright = 1.6;
+        let brightnessAt = 0;
+        const brightnessOf = (position: number) => Dim + (position - AutoBelow) / (1 - AutoBelow) * (Bright - Dim);
+        const positionOf = (value: number) => AutoBelow + (value - Dim) / (Bright - Dim) * (1 - AutoBelow);
+        let heldRate = 1;
+        let holdTimer = 0;
+        let tapTimer = 0;
+        let lastTap = 0;
+        let lastSide = "";
+        let hudTimer = 0;
+        let seekTotal = 0;
+        let seekTimer = 0;
+        let seekSide = "";
+        const text = gesture.querySelector<HTMLElement>("[data-role=gesture-text]")!;
+        const fill = gesture.querySelector<HTMLElement>(".player__gesture-fill")!;
+
+        const hud = (name: string, label: string, level?: number) => {
+            gesture.dataset.kind = name;
+            text.textContent = label;
+            if (level !== undefined) fill.style.setProperty("--level", String(Math.min(1, Math.max(0, level))));
+            gesture.hidden = false;
+            clearTimeout(hudTimer);
+        };
+        const hideHud = (delay = 600) => { clearTimeout(hudTimer); hudTimer = window.setTimeout(() => { gesture.hidden = true; }, delay); };
+        // The tapped half lights up with arrows and the total of this series of taps.
+        const seekBy = (side: "left" | "right") => {
+            const step = side === "left" ? -10 : 30;
+            if (seekSide !== side) seekTotal = 0;
+            seekSide = side;
+            seek(step);
+            seekTotal += step;
+            const flashes = Array.from(player.querySelectorAll<HTMLElement>(".player__seek"));
+            const flash = flashes.find(item => item.dataset.side === side)!;
+            for (const other of flashes) if (other !== flash) { other.hidden = true; other.classList.remove("player__seek--show"); }
+            flash.querySelector("[data-role=seek-text]")!.textContent = (seekTotal > 0 ? "+" : "−") + Math.abs(seekTotal) + " s";
+            flash.hidden = false;
+            flash.classList.remove("player__seek--show");
+            void flash.offsetWidth;
+            flash.classList.add("player__seek--show");
+            clearTimeout(seekTimer);
+            seekTimer = window.setTimeout(() => { flash.hidden = true; flash.classList.remove("player__seek--show"); seekTotal = 0; seekSide = ""; }, 700);
+            wake();
+        };
+        const toggleChrome = () => {
+            if (player.classList.contains("player--idle")) wake();
+            else if (!video.paused) { clearTimeout(idle); player.classList.add("player--idle"); }
+        };
+        const endHold = () => {
+            clearTimeout(holdTimer);
+            if (kind === "speed") video.playbackRate = heldRate;
+            if (kind) hideHud(kind === "speed" ? 0 : 700);
+            kind = "";
+        };
+
+        video.addEventListener("pointerdown", event => {
+            if (event.pointerType !== "touch" || player.classList.contains("player--mini")) return;
+            const bounds = video.getBoundingClientRect();
+            const x = event.clientX - bounds.left;
+            start = { x: event.clientX, y: event.clientY, at: Date.now(), side: x < bounds.width / 3 ? "left" : x > bounds.width * 2 / 3 ? "right" : "center", width: bounds.width, height: bounds.height };
+            kind = "";
+            try { video.setPointerCapture(event.pointerId); } catch { /* A finger that is already gone cannot be captured. */ }
+            holdTimer = window.setTimeout(() => {
+                if (!start || kind || video.paused) return;
+                kind = "speed";
+                heldRate = video.playbackRate;
+                video.playbackRate = 2;
+                hud("speed", "2× ▶▶");
+            }, Hold);
+        });
+        video.addEventListener("pointermove", event => {
+            if (event.pointerType !== "touch" || !start || kind === "speed") return;
+            const dx = event.clientX - start.x;
+            const dy = event.clientY - start.y;
+            if (!kind) {
+                if (Math.abs(dy) < Slop && Math.abs(dx) < Slop) return;
+                clearTimeout(holdTimer);
+                if (Math.abs(dy) <= Math.abs(dx)) { start = null; return; }
+                const left = start.x - video.getBoundingClientRect().left < start.width / 2;
+                kind = left ? "brightness" : "volume";
+                origin = left ? (brightnessAt === 0 ? positionOf(1) : brightnessAt) : video.muted ? 0 : video.volume;
+            }
+            const level = Math.min(1, Math.max(0, origin - dy / (start.height * 0.7)));
+            if (kind === "volume") {
+                video.muted = false;
+                video.volume = level;
+                hud(level === 0 ? "muted" : "volume", String(Math.round(level * 100)), level);
+            } else {
+                brightnessAt = level < AutoBelow ? 0 : level;
+                video.style.filter = brightnessAt === 0 ? "" : `brightness(${brightnessOf(level)})`;
+                hud("brightness", brightnessAt === 0 ? gesture.dataset.auto ?? "Auto" : String(Math.round(level * 100)), level);
+            }
+        });
+        const release = (event: PointerEvent) => {
+            if (event.pointerType !== "touch" || !start) return;
+            const tap = !kind && Date.now() - start.at < Hold && Math.abs(event.clientX - start.x) < Slop && Math.abs(event.clientY - start.y) < Slop;
+            const side = start.side;
+            start = null;
+            endHold();
+            if (!tap || event.type === "pointercancel") return;
+            const now = Date.now();
+            const second = now - lastTap < DoubleTap && lastSide === side;
+            if (side !== "center" && second) {
+                clearTimeout(tapTimer);
+                seekBy(side);
+                lastTap = now;
+                return;
+            }
+            lastTap = now;
+            lastSide = side;
+            clearTimeout(tapTimer);
+            if (side === "center") toggleChrome();
+            else tapTimer = window.setTimeout(toggleChrome, DoubleTap);
+        };
+        video.addEventListener("pointerup", release);
+        video.addEventListener("pointercancel", release);
+        video.addEventListener("contextmenu", event => { if (lastPointerType === "touch") event.preventDefault(); });
+    }
+
     function layout(): void {
         const wide = player.classList.contains('player--theater');
         player.querySelector('[data-action=theater]')!.setAttribute('aria-pressed', String(wide));
-        const overlay = wide || narrow.matches || document.fullscreenElement === player;
+        const overlay = wide || narrow.matches || document.fullscreenElement === host;
+        player.classList.toggle('player--fullscreen', document.fullscreenElement === host);
         player.querySelector<HTMLElement>('[data-action=episodes]')!.hidden = !sidebar || !overlay;
         if (!sidebar) return;
         if (sidebar.hasAttribute('popover')) sidebar.hidePopover();
