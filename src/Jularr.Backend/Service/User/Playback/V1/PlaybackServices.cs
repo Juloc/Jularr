@@ -196,14 +196,16 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 if (row.StoredFileId is { } fileId)
                 {
                     var (language, isForced) = PlaybackTracks.Describe(row.RelativePath!);
+                    // An ASS file is drawn by the player as it is, so it needs no conversion.
                     var supported = PlaybackTracks.IsTextFile(row.RelativePath!) && (_subtitles.CanConvert || row.RelativePath!.EndsWith(".srt", StringComparison.OrdinalIgnoreCase)
-                        || row.RelativePath!.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase));
-                    return new PlaybackTrackV1(PlaybackTracks.FileKey(fileId), MediaTrackType.Subtitle, language, null, null, false, isForced, supported, false);
+                        || row.RelativePath!.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase) || PlaybackTracks.IsStyledFile(row.RelativePath!));
+                    return new PlaybackTrackV1(PlaybackTracks.FileKey(fileId), MediaTrackType.Subtitle, language, null, null, false, isForced, supported, false, supported && PlaybackTracks.IsStyledFile(row.RelativePath!));
                 }
 
                 // Another audio track and embedded text subtitles need FFmpeg.
                 var playable = row.MediaTrackTypeId == MediaTrackType.Audio ? row.IsDefault || _subtitles.CanConvert : PlaybackTracks.IsText(row.Codec) && _subtitles.CanConvert;
-                return new PlaybackTrackV1(PlaybackTracks.StreamKey(row.StreamIndex!.Value), row.MediaTrackTypeId, row.Language, row.Title, row.Channels, row.IsDefault, row.IsForced, playable, false);
+                return new PlaybackTrackV1(PlaybackTracks.StreamKey(row.StreamIndex!.Value), row.MediaTrackTypeId, row.Language, row.Title, row.Channels, row.IsDefault, row.IsForced, playable, false,
+                    row.MediaTrackTypeId == MediaTrackType.Subtitle && playable && PlaybackTracks.IsStyled(row.Codec));
             }).ToList();
 
             // The profile's preferences pick one audio and at most one subtitle track among the playable ones.
@@ -232,7 +234,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
             var audio = PlaybackTracks.ChooseAudio(choices, preference.AudioLanguage);
             var subtitle = PlaybackTracks.ChooseSubtitle(choices, preference, audio);
             return new BaseDataList<PlaybackTrackV1>([.. described.Select(track => new PlaybackTrackV1(track.Key, track.MediaTrackTypeId, track.Language, track.Title, track.Channels,
-                track.IsDefault, track.IsForced, track.IsSupported, track.Key == audio?.Key || track.Key == subtitle?.Key))]);
+                track.IsDefault, track.IsForced, track.IsSupported, track.Key == audio?.Key || track.Key == subtitle?.Key, track.IsStyled))]);
         }
     }
 
@@ -298,11 +300,17 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 throw new KeyNotFoundException("The subtitle was not found.");
             }
 
+            // ASS comes as it is only from tracks that are ASS or SSA.
+            if (Parameters.Styled && !(streamIndex is not null ? PlaybackTracks.IsStyled(source.Codec) : PlaybackTracks.IsStyledFile(source.RelativePath)))
+            {
+                throw new KeyNotFoundException("The subtitle was not found.");
+            }
+
             var files = _storage.Open(await Context.ReadStorageMountAsync(source.StorageMountId, CancellationToken));
             var path = StoragePath.Combine(source.RootRelativePath, source.RelativePath);
             var cacheKey = source.StoredFileId.ToString(CultureInfo.InvariantCulture) + "-" + (streamIndex is { } stream ? PlaybackTracks.StreamKey(stream) : "file") + "-"
                 + source.ModifiedAt.Ticks.ToString(CultureInfo.InvariantCulture);
-            return new PlaybackSubtitleV1(await _subtitles.ReadAsync(files, path, streamIndex, cacheKey, CancellationToken));
+            return new PlaybackSubtitleV1(await _subtitles.ReadAsync(files, path, streamIndex, cacheKey, Parameters.Styled, CancellationToken), Parameters.Styled);
         }
     }
 

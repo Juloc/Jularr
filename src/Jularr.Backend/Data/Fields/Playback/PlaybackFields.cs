@@ -20,6 +20,9 @@ namespace Jularr.Backend.Data.Fields.Playback
         public static readonly StringField CastUrl = new(NpgsqlDbType.Text) { MaximumLength = 1200 };
         public static readonly StringField TrackKey = new(NpgsqlDbType.Varchar) { MaximumLength = 24, AllowBlank = false };
         public static readonly BoolField IsSupported = new();
+        // A subtitle in a styled format (ASS/SSA) that the browser draws itself; the asking client wants it as it is, not as WebVTT.
+        public static readonly BoolField IsStyled = new();
+        public static readonly BoolField Styled = new();
         public static readonly BoolField IsSelected = new();
         public static readonly BoolField IsReduced = new();
         // The audio runs later (positive) or earlier (negative) than the picture by this many milliseconds.

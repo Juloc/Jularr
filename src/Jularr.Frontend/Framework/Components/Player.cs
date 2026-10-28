@@ -21,7 +21,7 @@ namespace Jularr.Frontend.Framework
     public sealed record PlayerChapter(string? Title, double Start);
 
     // One audio or subtitle choice; unsupported ones stay visible but disabled.
-    public sealed record PlayerTrack(string Key, string Label, string? Language, bool IsSelected, bool IsSupported);
+    public sealed record PlayerTrack(string Key, string Label, string? Language, bool IsSelected, bool IsSupported, bool IsStyled = false);
 
     public sealed class UiPlayer(PlayerSource source, FrontendAssets assets) : IUiComponent
     {
@@ -213,7 +213,7 @@ namespace Jularr.Frontend.Framework
                 : ChoiceField("audio", pane, "player.audio", false, [.. Audio.Select(track => Choice(track.Key, new ValueText(track.Label), track.IsSelected, !track.IsSupported, track.Language))]);
 
             IUiComponent SubtitleField(string pane) => ChoiceField("subtitle", pane, "player.subtitles", !Subtitles.Any(track => track.IsSupported),
-                [Choice("", new Text("player.subtitles.off"), !Subtitles.Any(track => track.IsSelected), false), .. Subtitles.Select(track => Choice(track.Key, new ValueText(track.Label), track.IsSelected, !track.IsSupported, track.Language))]);
+                [Choice("", new Text("player.subtitles.off"), !Subtitles.Any(track => track.IsSelected), false), .. Subtitles.Select(track => Choice(track.Key, new ValueText(track.Label), track.IsSelected, !track.IsSupported, track.Language, track.IsStyled))]);
 
             IUiComponent QualityField(string pane) => ChoiceField("quality", pane, "playback.quality", false, [.. Qualities.Select(value => Choice(((byte)value).ToString(CultureInfo.InvariantCulture),
                 new Text("playback.quality." + value), value.ToString() == (source.Preferences?.QualityKey ?? "Automatic"), false))]);
@@ -319,11 +319,12 @@ namespace Jularr.Frontend.Framework
             }
 
             // The server marks the choice it made; an unsupported track stays visible but cannot be chosen.
-            HtmlElement Choice(string key, IUiComponent label, bool isChosen, bool isDisabled, string? language = null)
+            HtmlElement Choice(string key, IUiComponent label, bool isChosen, bool isDisabled, string? language = null, bool isStyled = false)
             {
                 var option = new OptionElement(label).Attribute("value", key);
                 if (isChosen) option.Attribute("selected", "selected").Attribute("data-chosen", "true");
                 if (language is not null) option.Attribute("data-language", language);
+                if (isStyled) option.Attribute("data-styled", "true");
                 if (isDisabled) option.Attribute("disabled", "disabled").Attribute("title", texts["player.track.unsupported"]);
                 return option;
             }

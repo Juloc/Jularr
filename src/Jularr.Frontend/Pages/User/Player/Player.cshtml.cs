@@ -123,7 +123,7 @@ namespace Jularr.Frontend.Pages.User.Player
             }
             if (track.IsForced) parts.Add(texts["player.subtitles.forced"]);
             var key = track.MediaTrackTypeId == MediaTrackType.Audio ? track.Key[1..] : track.Key;
-            return new PlayerTrack(key, string.Join(" · ", parts.Distinct(StringComparer.OrdinalIgnoreCase)), track.Language, track.IsSelected, track.IsSupported);
+            return new PlayerTrack(key, string.Join(" · ", parts.Distinct(StringComparer.OrdinalIgnoreCase)), track.Language, track.IsSelected, track.IsSupported, track.IsStyled);
         }
     }
 }

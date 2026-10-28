@@ -4,6 +4,7 @@ import { progressReporter } from "../Tracking/Progress";
 import { inserted, keepAddress, pushAddress, releaseAddress, visit } from "../Navigation/PageSwap";
 import type { CastSender, CastState } from "./Cast";
 import { awake, focus } from "../Playback/MediaFocus";
+import type { StyledSubtitles } from "./StyledSubtitles";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
@@ -108,6 +109,8 @@ async function start(player: HTMLElement): Promise<void> {
     let sourceReady = false;
     let sourcePosition = 0;
     let lastSubtitle: { key: string; language: string | undefined } | undefined;
+    let styledSubtitles: StyledSubtitles | undefined;
+    let styledVersion = 0;
     // The profile's choices come with the page; the settings change them for this playback only, the quality is this playback's own (the device's applies until then).
     const preferredSpeed = Number(player.dataset.preferredSpeed) || 1;
     const countdownSeconds = Number(player.dataset.countdown) || 0;
@@ -460,11 +463,27 @@ async function start(player: HTMLElement): Promise<void> {
         }
     }
 
-    // Subtitles are WebVTT tracks on the same video; Off removes them.
+    // Subtitles are WebVTT tracks on the same video, ASS and SSA ones are drawn by libass; Off removes them.
     function showSubtitle(key: string, language: string | undefined): void {
         video.querySelectorAll("track").forEach(track => track.remove());
+        styledVersion++;
+        styledSubtitles?.destroy();
+        styledSubtitles = undefined;
         player.querySelector('[data-action=subtitle-toggle]')!.setAttribute('aria-pressed', String(!!key));
         if (!key) return;
+        const option = Array.from(player.querySelectorAll<HTMLOptionElement>("select[data-setting=subtitle] option")).find(item => item.value === key);
+        if (option?.dataset.styled === "true" && typeof WebAssembly === "object" && typeof OffscreenCanvas === "function") {
+            const version = styledVersion;
+            void import("./StyledSubtitles")
+                .then(module => module.showStyledSubtitles(video, (player.dataset.subtitleUrl ?? "") + encodeURIComponent(key) + "?styled=true", subtitleOffset / 1000))
+                .then(styled => { if (version === styledVersion) styledSubtitles = styled; else styled.destroy(); })
+                .catch(() => { if (version === styledVersion) showPlainSubtitle(key, language); });
+            return;
+        }
+        showPlainSubtitle(key, language);
+    }
+
+    function showPlainSubtitle(key: string, language: string | undefined): void {
         const track = document.createElement("track");
         track.kind = "subtitles";
         track.src = (player.dataset.subtitleUrl ?? "") + encodeURIComponent(key);
@@ -557,7 +576,7 @@ async function start(player: HTMLElement): Promise<void> {
     }
     const controlsWatch = new MutationObserver(refreshSkip);
     controlsWatch.observe(player, { attributes: true, attributeFilter: ["class"] });
-    signal.addEventListener("abort", () => { clearTimeout(skipAgeTimer); controlsWatch.disconnect(); awake.drop("player"); focus.release("player"); });
+    signal.addEventListener("abort", () => { clearTimeout(skipAgeTimer); controlsWatch.disconnect(); awake.drop("player"); focus.release("player"); styledSubtitles?.destroy(); });
 
     // Jump to the end of the stretch, or to the next episode where credits run out and it follows by itself.
     function skipMarker(marker: Marker, automatic: boolean): void {
@@ -868,6 +887,7 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Every cue keeps its own times; the offset is added to those, so moving it again never adds up.
     function applySubtitleOffset(): void {
+        styledSubtitles?.setOffset(subtitleOffset / 1000);
         const cues = Array.from(video.textTracks).find(track => track.mode === "showing")?.cues;
         if (!cues) return;
         for (const cue of Array.from(cues)) {
