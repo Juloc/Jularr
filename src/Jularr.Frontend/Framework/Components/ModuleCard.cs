@@ -14,6 +14,7 @@ namespace Jularr.Frontend.Framework
             ["Requests"] = "requests",
             ["Acquisition"] = "download",
             ["Browser"] = "globe",
+            ["Vpn"] = "shield-check",
             ["Playback"] = "play",
             ["Reading"] = "book",
             ["Profiles"] = "users",
