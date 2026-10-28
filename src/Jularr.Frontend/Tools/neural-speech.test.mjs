@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { test } from 'node:test';
-import ts from 'typescript';
+import ts from './transpile.mjs';
 import Bunzip from '../Modules/Speech/Runtime/seek-bzip/index.js';
 
 function load(name, dependencies = {}, globals = {}) {

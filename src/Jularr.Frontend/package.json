@@ -10,10 +10,11 @@
     "verify:ui": "node Tools/verify-ui-resources.mjs"
   },
   "devDependencies": {
-    "@types/node": "^24.19.2",
+    "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
     "sass-embedded": "^1.106.1",
-    "typescript": "^6.0.3",
-    "vite": "^7.3.7"
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
   },
   "dependencies": {
     "hls.js": "1.7.3",
