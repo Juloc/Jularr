@@ -163,9 +163,9 @@ namespace Jularr.Backend.Service.User.Reading.V1
             // Only a PDF with text becomes a document; a scan waits for recognition where the Ocr module reads it, a page at a time.
             var recognized = await context.ExecuteBatchAsync((ctx, token) => ReadRecognizedAsync(ctx, source, token), ct);
 
-            // Pictures the recognizer found on scanned pages are cut from the pages PDFium draws.
+            // Pictures the recognizer found on scanned pages, and pages that show best whole, are cut from the pages PDFium draws.
             PdfRendering? rendering = null;
-            if (recognized.Values.Any(page => page.Lines.Any(line => line.Kind == RecognizedLine.Picture)) && file.Length <= PdfBook.MaximumRenderBytes)
+            if (recognized.Values.Any(page => page.Reason == RecognizedPage.Recognized) && file.Length <= PdfBook.MaximumRenderBytes)
             {
                 using var copy = new MemoryStream();
                 await file.CopyToAsync(copy, ct);

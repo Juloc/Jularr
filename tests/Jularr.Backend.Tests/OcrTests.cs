@@ -216,9 +216,15 @@ namespace Jularr.Backend.Tests
             OcrCharacter[] caption = [.. "\" A horse.\"\"".Select((character, index) => new OcrCharacter(character.ToString(), 100 + index * 20, 0.99f))];
             var captioned = new OcrPage(1000, 1000, [new OcrLine(90, 300, 400, 330, "\" A horse.\"\"", 0.9f) { Characters = caption }]);
             Assert.AreEqual("“A horse.”", PdfScanAnalysis.Analyse(page, captioned, []).Single().Text);
+
+            // A double quote that the recognizer closed with a single one closes as double.
+            OcrCharacter[] shouted = [.. "\"Found it!' he shouted.".Select((character, index) => new OcrCharacter(character.ToString(), 100 + index * 20, 0.99f))];
+            var found = new OcrPage(1000, 1000, [new OcrLine(90, 500, 600, 530, "\"Found it!' he shouted.", 0.9f) { Characters = shouted }]);
+            Assert.AreEqual("“Found it!” he shouted.", PdfScanAnalysis.Analyse(page, found, []).Single().Text);
         }
 
-        // A scan's picture is cut out of the page PDFium draws and stands in the text with its caption; the page's text reads as text.
+        // A scan's picture is cut out of the page PDFium draws and stands in the text with its caption; the page's text reads as text. The first and last
+        // pages are the covers and show whole.
         [TestMethod]
         public void ScannedPage_WithAPicture_ReadsAsTextWithThePictureAndItsCaption()
         {
@@ -228,7 +234,7 @@ namespace Jularr.Backend.Tests
             using (var png = image.Encode(SKEncodedImageFormat.Png, 100))
             {
                 var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
-                foreach (var _ in Enumerable.Range(0, 2))
+                foreach (var _ in Enumerable.Range(0, 4))
                 {
                     builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4).AddPng(png.ToArray(), new UglyToad.PdfPig.Core.PdfRectangle(0, 0, 595, 842));
                 }
@@ -251,8 +257,9 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(book.WantsRecognition);
             var blocks = book.Chapters.SelectMany(chapter => chapter.Blocks).ToArray();
             var figures = blocks.Where(block => block.Image is not null).ToArray();
-            Assert.AreEqual(2, figures.Length);
-            Assert.IsTrue(figures.All(figure => figure.Caption == "He shouted." && figure.Figure == ReadingHtml.WideFigure));
+            CollectionAssert.AreEqual(new[] { 1, 2, 3, 4 }, figures.Select(figure => figure.Page).ToArray());
+            Assert.IsTrue(figures.Where(figure => figure.Page is 1 or 4).All(cover => cover.Figure == ReadingHtml.PageFigure && cover.Caption is null));
+            Assert.IsTrue(figures.Where(figure => figure.Page is 2 or 3).All(figure => figure.Caption == "He shouted." && figure.Figure == ReadingHtml.WideFigure));
             Assert.IsTrue(book.Images.All(picture => picture.MediaType == "image/jpeg" && SKBitmap.Decode(picture.Bytes) is { Width: > 300 }));
             Assert.IsFalse(blocks.Any(block => block.Text?.Contains("ALWAYS", StringComparison.Ordinal) == true || block.Text?.Contains("He shouted", StringComparison.Ordinal) == true));
             StringAssert.Contains(blocks.First(block => block.Text is not null).Text, Sentences[0]);

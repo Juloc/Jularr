@@ -37,6 +37,9 @@ namespace Jularr.Backend.Logic.Reading
         // Pages whose layers together take fewer bytes than this are blank.
         private const int BlankScanBytes = 8000;
 
+        // A page with at least this many lines measures its own margins.
+        private const int PageMarginLines = 8;
+
         // A chapter without headings is split so no section grows unbounded.
         private const int MaximumParagraphs = 150;
 
@@ -67,6 +70,7 @@ namespace Jularr.Backend.Logic.Reading
                     throw new InvalidDataException("The PDF has too many pages.");
                 }
 
+                state.Pages = pdf.NumberOfPages;
                 pages = [.. pdf.GetPages().Select(page => ReadPage(page, state, recognized))];
             }
             catch (Exception exception) when (IsFault(exception))
@@ -166,23 +170,24 @@ namespace Jularr.Backend.Logic.Reading
                 var recognizedWords = read.Words(scan.Box);
                 result.Quality = PdfQuality.Score(recognizedWords.SelectMany(word => word.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries)));
                 var pictures = state.Rendering is null ? [] : read.Lines.Where(line => line.Kind == RecognizedLine.Picture).ToList();
-                if (!read.IsUncertain && (recognizedWords.Count > 0 ? ScanText(scan, recognizedWords, result, RecognizedPage.Recognized) : pictures.Count > 0))
+                var excerpt = string.Join(' ', recognizedWords.Select(word => word.Text));
+
+                // A cover (the first or last page with a picture) shows as the whole page; other pictures are cut out, their caption is text.
+                var cover = pictures.Count > 0 && (scan.Number == 1 || scan.Number == state.Pages);
+                if (!cover && !read.IsUncertain && (recognizedWords.Count > 0 ? ScanText(scan, recognizedWords, result, RecognizedPage.Recognized) : pictures.Count > 0))
                 {
                     ScanPictures(state, scan, pictures, result);
                     return;
                 }
 
-                // Text that does not hold together: the pictures alone, else the page as it was.
-                if (pictures.Count > 0)
+                // Text that does not hold together (a list of illustrations in columns) or a cover: the page as PDFium draws it, in place of the original.
+                result.Items.Clear();
+                if (state.Rendering is not null && WholePage(state, scan, excerpt) is { } whole)
                 {
-                    result.Items.Clear();
-                    ScanPictures(state, scan, pictures, result);
-                    if (result.Items.Count > 0)
-                    {
-                        result.Kind = PdfPageKind.Figure;
-                        result.Reason = "scan-pictures";
-                        return;
-                    }
+                    result.Items.Add(whole);
+                    result.Kind = PdfPageKind.Figure;
+                    result.Reason = cover ? "scan-cover" : "scan-page";
+                    return;
                 }
 
                 unreliable = read.IsUncertain ? "unreliable-uncertain" : result.Reason;
@@ -406,6 +411,26 @@ namespace Jularr.Backend.Logic.Reading
             }
         }
 
+        // A scanned page drawn whole as a picture of its own, its text as the alternative.
+        private static PdfLine? WholePage(BookState state, PdfPageScan scan, string text)
+        {
+            if (state.Images.Count >= MaximumImages || state.Rendering is null)
+            {
+                return null;
+            }
+
+            using var drawn = state.Rendering.Render(scan.Number, PictureSide);
+            var bytes = PdfScanAnalysis.Cut(drawn, new RecognizedLine(0, 0, 1, 1, "", 1, RecognizedLine.Picture));
+            if (bytes.Length is 0 or > MaximumImageBytes)
+            {
+                return null;
+            }
+
+            var path = "pdf/images/" + state.Images.Count.ToString("D5", CultureInfo.InvariantCulture) + ".jpg";
+            state.Images.Add(new PdfImage(path, "image/jpeg", bytes));
+            return new PdfLine(scan.Box.Top, 0, scan.Box.Height) { Image = path, Figure = ReadingHtml.PageFigure, Alt = text.Length > 600 ? text[..600] + "…" : text };
+        }
+
         // A readable picture becomes a resource and a line in the page's flow; null when the book has taken as many pictures as it keeps.
         private static PdfLine? Picture(BookState state, PdfPicture picture, PdfPageScan scan, string? figure, string alt, string? caption = null)
         {
@@ -528,7 +553,7 @@ namespace Jularr.Backend.Logic.Reading
             }
         }
 
-        private static List<PdfChapter> Chapters(List<List<PdfLine>> pages, double body, double spacing, double left, double right)
+        private static List<PdfChapter> Chapters(List<List<PdfLine>> pages, double body, double spacing, double bookLeft, double bookRight)
         {
             var chapters = new List<PdfChapter>();
             string? title = null;
@@ -564,6 +589,10 @@ namespace Jularr.Backend.Logic.Reading
 
             foreach (var page in pages)
             {
+                // A scanned book's left and right pages sit differently on the scan: a page with enough text has its own margins.
+                var text = page.Where(line => line.Image is null && line.Figure is null && line.Words.Count > 0).ToList();
+                var left = text.Count >= PageMarginLines ? Mode(text.Select(line => Math.Round(line.Left))) : bookLeft;
+                var right = text.Count >= PageMarginLines ? text.Select(line => line.Right).Order().ElementAt((int)(text.Count * 0.9)) : bookRight;
                 for (var index = 0; index < page.Count; index++)
                 {
                     var line = page[index];
@@ -648,6 +677,8 @@ namespace Jularr.Backend.Logic.Reading
 
             // Scanned pages the recognizer has not read yet.
             public int Unrecognized { get; set; }
+
+            public int Pages { get; set; }
         }
 
         private sealed class PageResult

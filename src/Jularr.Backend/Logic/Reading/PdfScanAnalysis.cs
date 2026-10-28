@@ -17,11 +17,22 @@ namespace Jularr.Backend.Logic.Reading
         public static IReadOnlyList<RecognizedLine> Analyse(SKBitmap page, OcrPage read, IReadOnlyList<PdfLayerWord> layer)
         {
             var (width, height) = ((double)read.Width, (double)read.Height);
+
+            // Words the page uses more than once: where the recognizer read a word the page has nowhere else and the layer one it has, the layer is right ("Ir" for "It").
+            var common = read.Lines.SelectMany(line => line.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Select(Key).Where(word => word.Length > 0)
+                .GroupBy(word => word).ToDictionary(group => group.Key, group => group.Count());
             var lines = read.Lines.Select(line => new RecognizedLine(Round(line.Left / width), Round(line.Top / height), Round(line.Right / width), Round(line.Bottom / height),
-                Text(line, layer, width, height), Math.Round(line.Confidence, 3))).Where(line => line.Text.Length > 0).ToList();
+                Text(line, layer, width, height, common), Math.Round(line.Confidence, 3))).Where(line => line.Text.Length > 0).ToList();
 
             using var work = Small(page);
             var pictures = Pictures(work, lines);
+
+            // The recognizer's boxes are grown well beyond the letters; the reading layout needs the line's own height and edges.
+            using (var rgba = Rgba(page))
+            {
+                var pixels = rgba.GetPixelSpan().ToArray();
+                lines = [.. lines.Select(line => Tight(pixels, rgba.Width, rgba.Height, line))];
+            }
 
             // Labels: short text in the rows of a picture (ALWAYS / SOMETIMES / NEVER under the drawings).
             var body = lines.Count == 0 ? 0.02 : lines.Select(line => line.Bottom - line.Top).Order().ElementAt(lines.Count / 2);
@@ -38,7 +49,7 @@ namespace Jularr.Backend.Logic.Reading
         }
 
         // A recognized line's text: its words, each checked against the scan's own layer where the recognizer was unsure of it.
-        private static string Text(OcrLine line, IReadOnlyList<PdfLayerWord> layer, double width, double height)
+        private static string Text(OcrLine line, IReadOnlyList<PdfLayerWord> layer, double width, double height, IReadOnlyDictionary<string, int> common)
         {
             if (line.Characters.Count == 0)
             {
@@ -55,24 +66,26 @@ namespace Jularr.Backend.Logic.Reading
                     return;
                 }
 
-                var word = Typeset(string.Concat(group.Select(character => character.Text)));
+                var word = Typeset(Inner(string.Concat(group.Select(character => character.Text))));
                 var (left, right) = (Math.Max(line.Left, group[0].Center - pitch * 0.7) / width, Math.Min(line.Right, group[^1].Center + pitch * 0.7) / width);
                 var (top, bottom) = (line.Top / height, line.Bottom / height);
                 var other = layer.Where(candidate => Overlap(candidate, left, top, right, bottom) > 0.5).Select(candidate => Typeset(candidate.Text)).FirstOrDefault();
                 if (other is not null && other != word)
                 {
-                    // Unsure: the layer's reading. Sure, but the same letters with more marks: the quotes and dashes the recognizer dropped.
+                    // Unsure: the layer's reading. Sure, but the same letters with more marks: the quotes and dashes the recognizer dropped. A word with a capital
+                    // inside ("conFess") or one the page has nowhere else while it uses the layer's often ("Ir" for "It", "Tuts" for "This" at a large initial).
                     if (group.Average(character => character.Probability) < UnsureWord
-                        || (other.Length > word.Length && Letters(other) == Letters(word)))
+                        || (other.Length > word.Length && Letters(other) == Letters(word))
+                        || (Key(other) == Key(word) && word.Skip(1).Any(char.IsUpper) && word.Skip(1).Any(char.IsLower))
+                        || (common.GetValueOrDefault(Key(word)) <= 1 && common.GetValueOrDefault(Key(other)) >= 2 && Math.Abs(Key(other).Length - Key(word).Length) <= 2))
                     {
                         word = other;
                     }
                 }
 
-                // A mark read apart from its word ("No ;") joins it where the layer prints them together, and is not doubled where the layer's word brought it.
-                if (word.All(char.IsPunctuation) && words.Count > 0
-                    && (words[^1].EndsWith(word, StringComparison.Ordinal) || layer.Any(candidate => Letters(candidate.Text) == Letters(words[^1]) && candidate.Text.EndsWith(word, StringComparison.Ordinal)
-                        && Overlap(candidate, left, top, right, bottom) > 0)))
+                // A closing mark read apart from its word ("No ;") joins it, as do other marks where the layer prints them together; one the layer's word brought is not doubled.
+                if (word.All(char.IsPunctuation) && words.Count > 0 && (word.All(",.;:!?”’".Contains) || words[^1].EndsWith(word, StringComparison.Ordinal)
+                    || layer.Any(candidate => Letters(candidate.Text) == Letters(words[^1]) && candidate.Text.EndsWith(word, StringComparison.Ordinal) && Overlap(candidate, left, top, right, bottom) > 0)))
                 {
                     words[^1] = words[^1].EndsWith(word, StringComparison.Ordinal) ? words[^1] : words[^1] + word;
                 }
@@ -108,13 +121,107 @@ namespace Jularr.Backend.Logic.Reading
                 }
             }
 
-            return Doubled().Replace(string.Join(' ', words), "$1");
+            return Closed(Doubled().Replace(string.Join(' ', words), "$1"));
         }
 
         [GeneratedRegex(@"([“”‘’])\1+")]
         private static partial Regex Doubled();
 
         private static string Letters(string word) => new([.. word.Where(char.IsLetterOrDigit)]);
+
+        private static string Key(string word) => Letters(word).ToLowerInvariant();
+
+        // A double quote opened on the line and closed by what the recognizer read as a single one after the sentence's mark ("…found it!’ he") closes as double.
+        private static string Closed(string line)
+        {
+            if (line.Count(character => character == '“') <= line.Count(character => character == '”'))
+            {
+                return line;
+            }
+
+            var index = line.LastIndexOf('’');
+            return index > 0 && ".,!?".Contains(line[index - 1]) && line.LastIndexOf('‘') < line.IndexOf('“') ? line[..index] + '”' + line[(index + 1)..] : line;
+        }
+
+        // A capital between small letters ("conFess") is a misread small one; names such as McDonald keep theirs.
+        private static string Inner(string word)
+        {
+            var characters = word.ToCharArray();
+            for (var index = 1; index < characters.Length - 1; index++)
+            {
+                if (char.IsUpper(characters[index]) && char.IsLower(characters[index - 1]) && char.IsLower(characters[index + 1])
+                    && !word.StartsWith("Mc", StringComparison.Ordinal) && !word.StartsWith("Mac", StringComparison.Ordinal))
+                {
+                    characters[index] = char.ToLowerInvariant(characters[index]);
+                }
+            }
+
+            return new string(characters);
+        }
+
+        // A text line's box around its own letters: the dense band of its x-height from the box's middle, widened for ascenders and descenders, and the
+        // columns that hold ink in it. A box without a clear band stays as it was.
+        private static RecognizedLine Tight(byte[] pixels, int w, int h, RecognizedLine line)
+        {
+            var box = new SKRectI((int)(line.Left * w), (int)(line.Top * h), Math.Min(w - 1, (int)(line.Right * w)), Math.Min(h - 1, (int)(line.Bottom * h)));
+            if (box.Width < 4 || box.Height < 4)
+            {
+                return line;
+            }
+
+            var paper = Ring(pixels, w, h, box);
+            bool Ink(int x, int y)
+            {
+                var index = (y * w + x) * 4;
+                return Math.Abs(pixels[index] - paper[0]) + Math.Abs(pixels[index + 1] - paper[1]) + Math.Abs(pixels[index + 2] - paper[2]) > 150;
+            }
+
+            var rows = new int[box.Height + 1];
+            for (var y = 0; y <= box.Height; y++)
+            {
+                for (var x = box.Left; x <= box.Right; x++)
+                {
+                    rows[y] += Ink(x, box.Top + y) ? 1 : 0;
+                }
+            }
+
+            // The densest row of the box's middle half and the rows around it that keep a sixth of its ink.
+            var middle = Enumerable.Range(box.Height / 4, box.Height / 2 + 1).MaxBy(y => rows[y]);
+            if (rows[middle] == 0)
+            {
+                return line;
+            }
+
+            var (first, last) = (middle, middle);
+            while (first > 0 && rows[first - 1] * 6 >= rows[middle])
+            {
+                first--;
+            }
+
+            while (last < box.Height && rows[last + 1] * 6 >= rows[middle])
+            {
+                last++;
+            }
+
+            var band = last - first + 1;
+            var (top, bottom) = (Math.Max(0, first - band * 0.35), Math.Min(box.Height, last + band * 0.3));
+            int left = box.Right, right = box.Left;
+            for (var y = first; y <= last; y++)
+            {
+                for (var x = box.Left; x <= box.Right; x++)
+                {
+                    if (Ink(x, box.Top + y))
+                    {
+                        (left, right) = (Math.Min(left, x), Math.Max(right, x));
+                    }
+                }
+            }
+
+            return right <= left ? line : line with
+            {
+                Left = Round((double)left / w), Top = Round((box.Top + top) / h), Right = Round((right + 1.0) / w), Bottom = Round((box.Top + bottom + 1) / h)
+            };
+        }
 
         // The share of the smaller box that both cover.
         private static double Overlap(PdfLayerWord word, double left, double top, double right, double bottom)
@@ -158,6 +265,21 @@ namespace Jularr.Backend.Logic.Reading
             var pixels = rgba.GetPixelSpan().ToArray();
             var paper = Ring(pixels, rgba.Width, rgba.Height, rect);
             var even = 255.0 / Math.Max(1, paper.Max());
+
+            // A drawing in black ink on tinted paper (the scan's uneven tint would show as a colour cast) comes out in grey on white paper.
+            var (coloured, counted) = (0, 0);
+            for (var y = 0; y < rect.Height; y += 3)
+            {
+                for (var x = 0; x < rect.Width; x += 3)
+                {
+                    var index = ((rect.Top + y) * rgba.Width + rect.Left + x) * 4;
+                    var balanced = Enumerable.Range(0, 3).Select(channel => pixels[index + channel] * 255.0 / Math.Max(1, paper[channel])).ToArray();
+                    coloured += balanced.Max() - balanced.Min() > 60 ? 1 : 0;
+                    counted++;
+                }
+            }
+
+            var grey = coloured < counted * 0.03;
             using var crop = new SKBitmap(rect.Width, rect.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
             var target = crop.GetPixelSpan();
             for (var y = 0; y < rect.Height; y++)
@@ -165,6 +287,14 @@ namespace Jularr.Backend.Logic.Reading
                 for (var x = 0; x < rect.Width; x++)
                 {
                     var (from, to) = (((rect.Top + y) * rgba.Width + rect.Left + x) * 4, (y * rect.Width + x) * 4);
+                    if (grey)
+                    {
+                        var light = (byte)Math.Min(255, (pixels[from] * 0.299 + pixels[from + 1] * 0.587 + pixels[from + 2] * 0.114) * 255
+                            / Math.Max(1, paper[0] * 0.299 + paper[1] * 0.587 + paper[2] * 0.114));
+                        (target[to], target[to + 1], target[to + 2], target[to + 3]) = (light, light, light, 255);
+                        continue;
+                    }
+
                     var (most, least) = (Math.Max(pixels[from], Math.Max(pixels[from + 1], pixels[from + 2])), Math.Min(pixels[from], Math.Min(pixels[from + 1], pixels[from + 2])));
                     var colour = most == 0 ? 0 : Math.Clamp((most - least) / (most * 0.25), 0, 1);
                     for (var channel = 0; channel < 3; channel++)

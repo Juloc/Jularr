@@ -25,7 +25,8 @@ namespace Jularr.Backend.Logic.Reading
         public IReadOnlyList<PdfWord> Words(PdfBox page)
         {
             var words = new List<PdfWord>();
-            foreach (var line in Text.Where(line => line.Confidence >= MinimumConfidence).OrderBy(line => line.Top).ThenBy(line => line.Left))
+            // Lines without a letter are page numbers and marks, not text.
+            foreach (var line in Text.Where(line => line.Confidence >= MinimumConfidence && line.Text.Any(char.IsLetter)).OrderBy(line => line.Top).ThenBy(line => line.Left))
             {
                 words.Add(new PdfWord(Box(line, page), line.Text, Box(line, page).Height * 0.7, true, words.Count));
             }
