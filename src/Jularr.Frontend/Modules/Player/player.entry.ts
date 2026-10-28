@@ -17,6 +17,9 @@ interface PlaybackPlan {
 
 const Modes = ["", "DirectPlay", "Remux", "Transcode"];
 const ReportInterval = 15_000;
+// Safari's own extension of the video element for AirPlay.
+interface AirPlayVideo extends HTMLVideoElement { webkitShowPlaybackTargetPicker?(): void; }
+
 const IdleDelay = 3_000;
 const MaxRecoveries = 5;
 const WakeRetries = 6;
@@ -637,6 +640,7 @@ async function start(player: HTMLElement): Promise<void> {
     const actions: Record<string, () => void> = {
         "audio-offset-reset": () => void setAudioOffset(0),
         "subtitle-offset-reset": () => setSubtitleOffset(0),
+        airplay: () => (video as AirPlayVideo).webkitShowPlaybackTargetPicker?.(),
         cast: () => void (casting ? castSender?.stop() : startCastRequest()),
         "copy-info": () => void copyInfo(),
         toggle: () => {
@@ -788,6 +792,7 @@ async function start(player: HTMLElement): Promise<void> {
     touchGestures();
     mediaSession();
     castSupport();
+    airplaySupport();
     infoPane();
     offsetFields();
     // A mouse leaving the picture hides the controls at once; touch and open panels keep them.
@@ -946,6 +951,13 @@ async function start(player: HTMLElement): Promise<void> {
     async function copyInfo(): Promise<void> {
         const lines = Array.from(player.querySelectorAll(".player__facts > div")).map(row => `${row.querySelector("dt")?.textContent}: ${row.querySelector("dd")?.textContent}`);
         try { await navigator.clipboard.writeText(lines.join("\n")); } catch { /* The browser refused the clipboard. */ }
+    }
+
+    // AirPlay is Safari's own picker: the button shows only while Safari reports a target, and the stream goes through the picture's own element.
+    function airplaySupport(): void {
+        const button = player.querySelector<HTMLElement>("[data-action=airplay]");
+        if (!button || typeof (video as AirPlayVideo).webkitShowPlaybackTargetPicker !== "function") return;
+        video.addEventListener("webkitplaybacktargetavailabilitychanged", event => { button.hidden = (event as Event & { availability?: string }).availability !== "available"; }, { signal });
     }
 
     // The Cast button shows where Chrome and a secure page allow it; Google's library loads only when it is pressed.

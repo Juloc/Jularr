@@ -114,6 +114,7 @@ namespace Jularr.Frontend.Framework
                                 new Button(new Icon("settings", assets)).IconOnly(texts["player.settings"]).Class("button button--icon player__button")
                                     .Attribute("data-action", "settings").Attribute("popovertarget", "player-settings"),
                                 Action("theater", "player.theater", "theater").Attribute("aria-pressed", "false"),
+                                Action("airplay", "player.airplay", "airplay").Attribute("hidden", "hidden"),
                                 Action("cast", "player.cast", "cast").Attribute("hidden", "hidden"),
                                 Action("pip", "player.pip", "pip").Attribute("hidden", "hidden"),
                                 Action("fullscreen", "player.fullscreen", "fullscreen")

@@ -2887,6 +2887,7 @@ namespace Jularr.Frontend.Localization
             new("player.offset.audio", "Audio delay (ms)"),
             new("player.offset.subtitles", "Subtitle delay (ms)"),
             new("player.offset.reset", "Reset"),
+            new("player.airplay", "AirPlay"),
             new("player.cast", "Cast to a device"),
             new("player.casting", "Casting to {0}"),
             new("player.status.cast_unreachable", "A cast device cannot reach this address. Open Jularr under its network address."),
