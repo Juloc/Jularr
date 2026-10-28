@@ -3,7 +3,7 @@ import { updateRangeValue } from "../../Framework/Components/Range";
 import { progressReporter } from "../Tracking/Progress";
 import { inserted, keepAddress, pushAddress, releaseAddress, visit } from "../Navigation/PageSwap";
 import type { CastSender, CastState } from "./Cast";
-import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, type Marker } from "./Skip";
+import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
 interface PlaybackPlan {
@@ -127,6 +127,8 @@ async function start(player: HTMLElement): Promise<void> {
     const chapters = Array.from(player.querySelectorAll<HTMLButtonElement>(".player__chapter[data-chapter]"));
     const handled = new Set<string>();
     let offered: Marker | null = null;
+    let skipAged = false;
+    let skipAgeTimer = 0;
     let currentChapter = -1;
     let undoPosition: number | null = null;
     let skippedTimer = 0;
@@ -534,15 +536,30 @@ async function start(player: HTMLElement): Promise<void> {
         }
         if (marker === offered) return;
         offered = marker;
-        skip.hidden = !marker;
+        ageSkip();
         if (marker) skip.querySelector<HTMLElement>("[data-role=skip-text]")!.textContent = text("data-skip-label", marker.kind);
     }
+
+    // The button shows for a few seconds when a stretch begins; afterwards it returns only while the controls are shown and the stretch lasts.
+    function ageSkip(): void {
+        clearTimeout(skipAgeTimer);
+        skipAged = false;
+        if (offered) skipAgeTimer = window.setTimeout(() => { skipAged = true; refreshSkip(); }, SkipShowSeconds * 1000);
+        refreshSkip();
+    }
+
+    function refreshSkip(): void {
+        skip.hidden = !skipShown(offered !== null, skipAged, !player.classList.contains("player--idle"));
+    }
+    const controlsWatch = new MutationObserver(refreshSkip);
+    controlsWatch.observe(player, { attributes: true, attributeFilter: ["class"] });
+    signal.addEventListener("abort", () => { clearTimeout(skipAgeTimer); controlsWatch.disconnect(); });
 
     // Jump to the end of the stretch, or to the next episode where credits run out and it follows by itself.
     function skipMarker(marker: Marker, automatic: boolean): void {
         handled.add(markerKey(marker));
-        skip.hidden = true;
         offered = null;
+        ageSkip();
         const hasNext = !!player.querySelector("[data-action=next][data-href]");
         const plan = skipPlan(marker, video.duration, hasNext, autoplay);
         const from = video.currentTime;
