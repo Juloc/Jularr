@@ -1,3 +1,5 @@
+import { readerLifetime } from './Lifetime';
+
 // Figures open in a full-screen view: a tap or click on the picture, Enter or Space on it. The wheel, a pinch, a double tap and the buttons zoom; dragging moves a zoomed picture.
 // A page only the original PDF shows stands in the text as a figure without a picture; it names the page and links to it.
 const MaximumScale = 8;
@@ -5,6 +7,7 @@ const TapDistance = 8;
 const TapDuration = 600;
 
 export function initializeFigures(reader: HTMLElement, content: HTMLElement): void {
+    const signal = readerLifetime();
     const dialog = reader.querySelector<HTMLDialogElement>('dialog.reader-figure');
     if (!dialog) return;
     const stage = dialog.querySelector<HTMLElement>('.reader-figure__stage')!;
@@ -62,7 +65,7 @@ export function initializeFigures(reader: HTMLElement, content: HTMLElement): vo
     // The image's actual fitted dimensions, not an entire viewport-sized object-fit box,
     // determine both the close-on-background area and the pan limits.
     image.addEventListener('load', paint);
-    window.addEventListener('resize', () => { if (dialog.open) paint(); });
+    window.addEventListener('resize', () => { if (dialog.open) paint(); }, { signal });
 
     // Taps and clicks on pictures, in the text and on the paper of the book view.
     let down: { image: HTMLImageElement; x: number; y: number; at: number } | undefined;

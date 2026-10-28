@@ -9,17 +9,15 @@ namespace Jularr.Frontend.Modules.Reader
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
         public string Preset { get; } = "book";
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
-        public string Mode { get; } = "paged";
-        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
         public string Layout { get; } = "auto";
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
         public string Direction { get; } = "ltr";
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
         public string Surface { get; } = "paper";
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
+        public string Binding { get; } = "soft";
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Colour))]
         public string Colour { get; } = "#f7f3ec";
-        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
-        public string Animation { get; } = "system";
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Size))]
         public int Size { get; } = 20;
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Spacing))]
@@ -30,6 +28,14 @@ namespace Jularr.Frontend.Modules.Reader
         public int Paragraph { get; } = 100;
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.TextWidth))]
         public int TextWidth { get; } = 68;
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Margin))]
+        public int MarginTop { get; } = 6;
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Margin))]
+        public int MarginBottom { get; } = 6;
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Margin))]
+        public int MarginInner { get; } = 8;
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Margin))]
+        public int MarginOuter { get; } = 7;
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Enabled))]
         public bool Indent { get; } = false;
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Enabled))]
@@ -55,6 +61,7 @@ namespace Jularr.Frontend.Modules.Reader
         public static readonly IntField Spacing = new() { Minimum = 120, Maximum = 220 };
         public static readonly IntField Paragraph = new() { Minimum = 0, Maximum = 200 };
         public static readonly IntField TextWidth = new() { Minimum = 40, Maximum = 90 };
+        public static readonly IntField Margin = new() { Minimum = 0, Maximum = 20 };
         public static readonly BoolField Enabled = new();
     }
 }

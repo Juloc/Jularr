@@ -84,9 +84,17 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 var known = Mirrors(site);
                 var available = _mirrors.Available(known);
                 var blocked = new List<Uri>();
+                var useBrowser = browser.IsAvailable && browser.Status.IsRunning;
                 AnnasArchiveException? last = null;
                 foreach (var mirror in available)
                 {
+                    // Once Chrome owns the source session, keep its cookies and page context.
+                    if (useBrowser)
+                    {
+                        blocked.Add(mirror);
+                        continue;
+                    }
+
                     try
                     {
                         // Use the shared bounded transport; inspect the final origin before parsing.
@@ -278,7 +286,10 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 string page;
                 try
                 {
-                    page = await DirectDownload.ReadPageAsync(http, SlowPageUri(site, md5, server), gates, browser, ct);
+                    var address = SlowPageUri(site, md5, server);
+                    page = browser.IsAvailable && browser.Status.IsRunning
+                        ? await browser.ReadPageAsync(address, ct) ?? throw new DirectDownloadException(DirectDownloadFailure.Gate, "The source browser could not read the download page.")
+                        : await DirectDownload.ReadPageAsync(http, address, gates, browser, ct);
                     if (page.Length > MaximumPageBytes)
                     {
                         throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The download page is too large.");
