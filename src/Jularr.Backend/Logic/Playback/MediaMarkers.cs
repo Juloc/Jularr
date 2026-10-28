@@ -93,6 +93,19 @@ namespace Jularr.Backend.Logic.Playback
             return markers;
         }
 
+        // The chapters the player lists: a stretch that cannot be what its title says (see below) is left out, and one chapter alone is no list.
+        public static IReadOnlyList<MediaChapterRow> UsableChapters(IReadOnlyList<MediaChapterRow> chapters)
+        {
+            var duration = chapters.Count == 0 ? 0 : chapters.Max(chapter => chapter.EndMs);
+            var usable = chapters.Where(chapter => KindOfChapter(chapter.Title) is not { } kind
+                || IsPlausible(new MediaMarkerRow(kind, MediaMarkerSource.Chapter, chapter.StartMs, chapter.EndMs, 1m), duration)).ToList();
+            return usable.Count >= 2 ? usable : [];
+        }
+
+        // A marker a person set or a sidecar names is theirs to decide; one read from the file's chapters must be plausible.
+        public static bool IsUsable(MediaMarkerKind kind, MediaMarkerSource source, long startMs, long endMs, long? durationMs) =>
+            source != MediaMarkerSource.Chapter || IsPlausible(new MediaMarkerRow(kind, source, startMs, endMs, 1m), durationMs);
+
         // A file may carry one chapter named "Credits" over the whole episode; a skip over most of the file is a tagging mistake, not a marker.
         // Intro and recap stay short, credits and preview neither begin the file nor cover more than half of it.
         private static bool IsPlausible(MediaMarkerRow marker, long? durationMs)

@@ -508,7 +508,8 @@ async function start(player: HTMLElement): Promise<void> {
         player.querySelector('[data-action=subtitle-toggle]')!.setAttribute('aria-pressed', String(!!key));
         if (!key) return;
         const option = Array.from(player.querySelectorAll<HTMLOptionElement>("select[data-setting=subtitle] option")).find(item => item.value === key);
-        if (option?.dataset.styled === "true" && typeof WebAssembly === "object" && typeof OffscreenCanvas === "function") {
+        // libass draws on a canvas over the picture; touch devices keep the plain WebVTT lines until that is proven steady there (the owner saw the picture flicker black on a phone).
+        if (option?.dataset.styled === "true" && !matchMedia("(pointer: coarse)").matches && typeof WebAssembly === "object" && typeof OffscreenCanvas === "function") {
             const version = styledVersion;
             void import("./StyledSubtitles")
                 .then(module => module.showStyledSubtitles(video, (player.dataset.subtitleUrl ?? "") + encodeURIComponent(key) + "?styled=true", subtitleOffset / 1000))
@@ -1436,13 +1437,18 @@ function capabilities(): { containers: string[]; videoCodecs: string[]; audioCod
     const video = (type: string) => probe.canPlayType(type) !== "";
     const supported = (types: Record<string, string>) => Object.keys(types).filter(name => video(types[name]));
     const hls = video("application/vnd.apple.mpegurl") || typeof MediaSource !== "undefined" && MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01E,mp4a.40.2"');
+    // A phone or tablet answers "maybe" for a Matroska file and then plays sound without a picture (HEVC in MKV on Android): there only the formats that
+    // are known to work are offered directly, anything else is delivered as HLS, and HEVC counts only where the media source takes it.
+    const touch = matchMedia("(pointer: coarse)").matches;
+    const hevc = 'video/mp4; codecs="hvc1.1.6.L120.90"';
+    const containers = supported({
+        mp4: "video/mp4", webm: "video/webm", mkv: "video/x-matroska", mp3: "audio/mpeg", ogg: "audio/ogg", flac: "audio/flac", wav: "audio/wav", aac: "audio/aac"
+    }).filter(name => !(touch && name === "mkv"));
     return {
-        containers: [...(hls ? ["hls"] : []), ...supported({
-            mp4: "video/mp4", webm: "video/webm", mkv: "video/x-matroska", mp3: "audio/mpeg", ogg: "audio/ogg", flac: "audio/flac", wav: "audio/wav", aac: "audio/aac"
-        })],
+        containers: [...(hls ? ["hls"] : []), ...containers],
         videoCodecs: supported({
-            h264: 'video/mp4; codecs="avc1.640028"', hevc: 'video/mp4; codecs="hvc1.1.6.L120.90"', vp9: 'video/webm; codecs="vp9"', av1: 'video/mp4; codecs="av01.0.05M.08"'
-        }),
+            h264: 'video/mp4; codecs="avc1.640028"', hevc, vp9: 'video/webm; codecs="vp9"', av1: 'video/mp4; codecs="av01.0.05M.08"'
+        }).filter(name => !(touch && name === "hevc" && !(typeof MediaSource !== "undefined" && MediaSource.isTypeSupported(hevc)))),
         audioCodecs: supported({
             aac: 'audio/mp4; codecs="mp4a.40.2"', mp3: "audio/mpeg", opus: 'audio/webm; codecs="opus"', vorbis: 'audio/webm; codecs="vorbis"',
             flac: "audio/flac", ac3: 'audio/mp4; codecs="ac-3"', eac3: 'audio/mp4; codecs="ec-3"'
