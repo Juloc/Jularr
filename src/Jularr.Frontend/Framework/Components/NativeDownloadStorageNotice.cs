@@ -9,7 +9,7 @@ namespace Jularr.Frontend.Framework
     public static class NativeDownloadStorageNotice
     {
         public static bool RequiresDirectStorage(AcquisitionConnectionType type) =>
-            type is AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Opds or AcquisitionConnectionType.AnnasArchive;
+            type is AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Opds or AcquisitionConnectionType.AnnasArchive or AcquisitionConnectionType.Narou;
 
         public static IUiComponent Message(DownloadStorageArea area, string link = "/Admin/DownloadStorage") =>
             new Div(

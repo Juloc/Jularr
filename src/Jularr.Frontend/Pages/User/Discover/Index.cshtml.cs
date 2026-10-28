@@ -798,8 +798,10 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var href = item.WorkId is { } workId ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
                 : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
-            var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId), item.Rating)
-                .HoverPreview(item.WorkId is { } held ? MediaPreviewAddress.Work(held) : MediaPreviewAddress.Catalog(scope.Slug, item.Namespace, item.ExternalId));
+            // A Narō web novel says so beside the published light novels; the local catalog keeps no preview of it.
+            var webNovel = item.Namespace == DiscoverCatalog.DiscoverCatalogModel.WebNovelSource;
+            var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, webNovel ? "discover.webNovel" : MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId), item.Rating)
+                .HoverPreview(item.WorkId is { } held ? MediaPreviewAddress.Work(held) : webNovel ? null : MediaPreviewAddress.Catalog(scope.Slug, item.Namespace, item.ExternalId));
             if (item.MediaStateTypeId is { } state) card.State(state);
             if (item.WorkId is { } id && _availabilityByWork.TryGetValue(id, out var availability))
                 card.Availability(new MediaAvailability(assets, availability.AvailabilityStateId, availability.AvailableUnits, availability.MonitoredUnits));

@@ -11,7 +11,7 @@ ON CONFLICT ("Key") DO NOTHING;
 INSERT INTO "InstanceModuleDependencies" ("ModuleKey", "RequiredKey") VALUES ('Torrent', 'Acquisition'), ('Torrent', 'Vpn')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO "AcquisitionConnectionTypes" ("Id", "Key", "AcquisitionConnectionRoleId") VALUES (11, 'Torrent', 2)
+INSERT INTO "AcquisitionConnectionTypes" ("Id", "Key", "AcquisitionConnectionRoleId") VALUES (12, 'Torrent', 2)
 ON CONFLICT ("Id") DO NOTHING;
 
 -- The engine has neither a web address nor a key: the two unnamed baseline checks that require them are replaced by named ones that know it.
@@ -31,9 +31,9 @@ BEGIN
     END LOOP;
 END $$;
 ALTER TABLE "AcquisitionConnections" ADD CONSTRAINT "AcquisitionConnections_TypeKey_check"
-    CHECK ("AcquisitionConnectionTypeId" IN (1, 3, 4, 5, 6, 11) OR "ProtectedApiKey" IS NOT NULL);
+    CHECK ("AcquisitionConnectionTypeId" IN (1, 3, 4, 5, 6, 11, 12) OR "ProtectedApiKey" IS NOT NULL);
 ALTER TABLE "AcquisitionConnections" ADD CONSTRAINT "AcquisitionConnections_TypeAddress_check"
-    CHECK (("AcquisitionConnectionTypeId" IN (6, 11)) = ("BaseUrl" IS NULL));
+    CHECK (("AcquisitionConnectionTypeId" IN (6, 12)) = ("BaseUrl" IS NULL));
 
 ALTER TABLE "DownloadStorageSettings" DROP CONSTRAINT "DownloadStorageSettings_DownloadStorageAreaId_check";
 ALTER TABLE "DownloadStorageSettings" ADD CONSTRAINT "DownloadStorageSettings_DownloadStorageAreaId_check"

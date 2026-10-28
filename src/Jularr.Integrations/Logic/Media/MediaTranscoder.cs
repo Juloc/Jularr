@@ -218,6 +218,52 @@ namespace Jularr.Integrations.Logic.Media
             }
         }
 
+        // Takes one attachment of a container (a font) out into a file of our own naming; the name inside the container is never used as a path.
+        // FFmpeg ends this run with a complaint that it has no output, the file is what counts.
+        public async Task DumpAttachmentAsync(string inputPath, int streamIndex, string outputPath, CancellationToken ct)
+        {
+            if (!IsAvailable)
+            {
+                throw new ProviderUnavailableException();
+            }
+
+            var start = new ProcessStartInfo(ExecutablePath!)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", InputProtocols(inputPath),
+                "-dump_attachment:" + streamIndex.ToString(CultureInfo.InvariantCulture), outputPath, "-i", inputPath])
+            {
+                start.ArgumentList.Add(argument);
+            }
+
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromMinutes(2));
+            try
+            {
+                using var process = Process.Start(start) ?? throw new ProviderUnavailableException();
+                var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+                var errors = process.StandardError.ReadToEndAsync(timeout.Token);
+                try
+                {
+                    await process.WaitForExitAsync(timeout.Token);
+                    await Task.WhenAll(output, errors);
+                }
+                catch (OperationCanceledException)
+                {
+                    process.Kill(true);
+                    ct.ThrowIfCancellationRequested();
+                }
+            }
+            catch (Win32Exception)
+            {
+                throw new ProviderUnavailableException();
+            }
+        }
+
         // Direct SMB inputs are exposed only through Jularr's loopback stream server.
         // FFmpeg must permit that HTTP transport, but never arbitrary remote URLs.
         private static string InputProtocols(string inputPath) =>

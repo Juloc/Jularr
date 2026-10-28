@@ -16,5 +16,6 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly StringArrayField CandidateLabels = new() { ItemMaximumLength = 500 };
         public static readonly BoolField IsDismissed = new();
         public static readonly BoolField IsManual = new();
+        public static readonly BoolField IsWebNovel = new();
     }
 }
