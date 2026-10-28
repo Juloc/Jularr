@@ -22,6 +22,21 @@ namespace Jularr.Backend.Tests
         private static readonly DateTimeOffset Start = new(2026, 10, 20, 9, 0, 0, TimeSpan.Zero);
 
         [TestMethod]
+        public void Definitions_EveryGroupAndJob_HaveTheirTextOnTheJobsPage()
+        {
+            var keys = Jularr.Frontend.Localization.UiResources.English.Select(resource => resource.Key).ToHashSet();
+            foreach (var group in Enum.GetValues<WorkerGroupType>())
+            {
+                Assert.IsTrue(keys.Contains("jobs.worker." + group), "jobs.worker." + group);
+            }
+
+            foreach (var job in WorkerJobs.Definitions)
+            {
+                Assert.IsTrue(keys.Contains("jobs.job." + job.Key), "jobs.job." + job.Key);
+            }
+        }
+
+        [TestMethod]
         public void Definitions_CoverEveryWorkerAndTheSampler_AndStaggerTheirStart()
         {
             var jobs = WorkerJobs.Definitions;

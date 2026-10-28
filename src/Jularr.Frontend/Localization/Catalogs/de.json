@@ -12288,6 +12288,10 @@
    "Health",
    "Gesundheit"
   ],
+  "jobs.worker.Translation": [
+   "Translation",
+   "Übersetzung"
+  ],
   "jobs.health.summary": [
    "{0} of {1} services reachable",
    "{0} von {1} Diensten erreichbar"
