@@ -2559,16 +2559,16 @@
    "2048"
   ],
   "hint.InstanceSettingsFields.ReadingCacheMegabytes.info": [
-   "Space for prepared books and comics; the oldest are removed first.",
-   "Platz für aufbereitete Bücher und Comics; die ältesten werden zuerst entfernt."
+   "Space for prepared comics; the oldest are removed first. Prepared books stay while their file does.",
+   "Platz für aufbereitete Comics; die ältesten werden zuerst entfernt. Aufbereitete Bücher bleiben, solange ihre Datei da ist."
   ],
   "hint.InstanceSettingsFields.ReadingCacheWorks.placeholder": [
    "100",
    "100"
   ],
   "hint.InstanceSettingsFields.ReadingCacheWorks.info": [
-   "Most books and comics kept prepared at once.",
-   "Höchstzahl an Büchern und Comics, die gleichzeitig aufbereitet bleiben."
+   "Most comics kept prepared at once; prepared books do not count.",
+   "Höchstzahl an Comics, die gleichzeitig aufbereitet bleiben; aufbereitete Bücher zählen nicht mit."
   ],
   "hint.InstanceSettingsFields.SubtitleLanguages.placeholder": [
    "de, en",
@@ -10782,6 +10782,10 @@
    "Reading copies",
    "Lesekopien"
   ],
+  "jobs.job.readingPreparation": [
+   "Book preparation",
+   "Bücher aufbereiten"
+  ],
   "jobs.job.readingCopies": [
    "Reading copies",
    "Lesekopien"
@@ -11069,6 +11073,10 @@
   "jobs.about.benchmarkQueue": [
    "Measures how fast this server transcodes video, to set the transcoding limits.",
    "Misst, wie schnell dieser Server Videos umwandelt, um die Grenzen der Umwandlung festzulegen."
+  ],
+  "jobs.about.readingPreparation": [
+   "Prepares every book before anyone opens it, new books first: text, pictures, chapters and language, scans read by the recognizer, so a book opens ready and can be translated ahead.",
+   "Bereitet jedes Buch auf, bevor es jemand öffnet, neue zuerst: Text, Bilder, Kapitel und Sprache, Scans liest die Texterkennung, damit ein Buch fertig aufgeht und vorab übersetzt werden kann."
   ],
   "jobs.about.readingCopies": [
    "Writes a reading copy (an EPUB) beside digital PDFs, so they read like a book.",

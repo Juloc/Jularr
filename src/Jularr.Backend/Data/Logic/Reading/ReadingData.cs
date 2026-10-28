@@ -86,6 +86,22 @@ namespace Jularr.Backend.Data.Logic.Reading
         public int PdfAnalyzerVersion { get; }
     }
 
+    // The analyzer versions a prepared document must have to count as current, for the books the background preparation looks for.
+    internal sealed class ReadingPreparationLookupData : BaseData
+    {
+        public ReadingPreparationLookupData(int analyzerVersion, int pdfAnalyzerVersion)
+        {
+            AnalyzerVersion = analyzerVersion;
+            PdfAnalyzerVersion = pdfAnalyzerVersion;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.AnalyzerVersion))]
+        public int AnalyzerVersion { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.AnalyzerVersion))]
+        public int PdfAnalyzerVersion { get; }
+    }
+
     internal sealed class ReadingOpenedData : BaseData
     {
         public ReadingOpenedData(long documentId, long mediaAssetId, long profileId)
