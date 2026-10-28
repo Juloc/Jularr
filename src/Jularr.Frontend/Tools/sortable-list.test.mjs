@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
-import ts from 'typescript';
+import ts from './transpile.mjs';
 
 function load(file, context = {}) {
     const source = readFileSync(new URL(file, import.meta.url), 'utf8');

@@ -79,7 +79,7 @@ export function initializeDurableJobs(): void {
         return panel.dataset[key] ?? reason;
     };
     const sourceName = (source: string): string => ({
-        library: "Jularr", openlibrary: "Open Library", catalog: "Metadata catalog",
+        library: "Jularr", local: "Jularr", list: panel.dataset.jobSourceList ?? "List data", openlibrary: "Open Library", catalog: "Metadata catalog",
         tmdb_movie: "TMDB", tmdb_tv: "TMDB", anilist: "AniList",
         igdb: "IGDB", musicbrainz: "MusicBrainz"
     } as Record<string, string>)[source] ?? source;

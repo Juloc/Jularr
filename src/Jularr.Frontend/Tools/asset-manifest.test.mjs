@@ -11,7 +11,7 @@ const files = Object.values(manifest).flatMap(entry => [entry.file, ...(entry.cs
 
 test("all published assets exist with content fingerprints", () => {
     for (const file of [...new Set([...files, icons.file])]) {
-        assert.match(file, /^assets\/[A-Za-z0-9_./-]+-[A-Za-z0-9_-]{8,}\.(?:css|js|svg|png|jpe?g|webp|avif|txt|wasm|data)$/i, file);
+        assert.match(file, /^assets\/[A-Za-z0-9_./-]+-[A-Za-z0-9_-]{8,}\.(?:css|js|svg|png|jpe?g|webp|avif|txt|woff2|wasm|data)$/i, file);
         assert.ok(existsSync(join(build, file)), "missing compiled " + file);
     }
 });
@@ -119,26 +119,26 @@ test("shared navigation stays single-row and the phone's sidebar is an off-canva
     assert.match(css, /\.navigation-tabs::-webkit-scrollbar\{display:none/);
     assert.doesNotMatch(css, /\.navigation-tabs\{[^}]*flex-wrap:wrap/);
     assert.match(css, /\.navigation-tabs__link--active[^{}]*\{background:var\(--accent-soft\);color:var\(--accent-text\)/);
-    assert.match(css, /@media\s*\(max-width:\s*640px\)\{[^@]*\.app-sidebar\{[^}]*transform:translate\(-105%\);visibility:hidden/);
-    assert.match(css, /@media\s*\(min-width:\s*641px\)\s*and \(max-width:\s*1120px\)\{\.app-layout\{--side:\s*67px/);
+    assert.match(css, /@media\s*(?:\(max-width:\s*640px\)|\(width<=640px\))\{[^@]*\.app-sidebar\{(?=[^}]*transform:translate\(-105%\))(?=[^}]*visibility:hidden)/);
+    assert.match(css, /@media\s*(?:\(min-width:\s*641px\)\s*and \(max-width:\s*1120px\)|\(641px<=width<=1120px\)|\(width>=641px\)\s*and \(width<=1120px\))\{\.app-layout\{--side:\s*67px/);
     assert.doesNotMatch(css, /\.mobile-navigation|\.mobile-link/);
-    assert.match(css, /body\{min-width:0/);
+    assert.match(css, /body\{(?=[^}]*min-width:0)/);
 });
 
 test("appearance choices wrap at their natural width and search keeps its own minimum height", () => {
     const appearance = readFileSync(join(build, manifest["Modules/Appearance/appearance.entry.scss"].file), "utf8");
-    assert.match(appearance, /\.appearance__choices>\.button\{[^}]*flex:1 0 auto;[^}]*max-width:100%;overflow-wrap:anywhere/);
+    assert.match(appearance, /\.appearance__choices>\.button\{(?=[^}]*flex:1 0 auto)(?=[^}]*max-width:100%)(?=[^}]*overflow-wrap:anywhere)/);
     assert.match(appearance, /\.appearance__color input\{[^}]*height:44px/);
 
     const shell = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
     assert.match(shell, /\.search-box__input\{[^}]*min-width:0;min-height:39px/);
     assert.match(shell, /--control-height:\s*37px/);
-    assert.match(shell, /\.search-box__input:focus-visible\{outline:none;border-color:var\(--accent-outline\)/);
+    assert.match(shell, /\.search-box__input:focus-visible\{(?=[^}]*outline:none)(?=[^}]*border-color:var\(--accent-outline\))/);
 });
 
 test("media shelf snap alignment includes its focus padding without visible scrollbars", () => {
     const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
-    assert.match(css, /\.media-shelf__items\{[^}]*padding:4px 2px 8px;[^}]*scroll-padding-inline:2px;scrollbar-width:none/);
+    assert.match(css, /\.media-shelf__items\{(?=[^}]*padding:4px 2px 8px)(?=[^}]*scroll-padding-inline:2px)(?=[^}]*scrollbar-width:none)/);
     assert.match(css, /\.media-shelf__items::-webkit-scrollbar\{display:none\}/);
 });
 
@@ -152,21 +152,21 @@ test("availability dots share one palette with their compact expanded symbols", 
     const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
     assert.match(css, /\.media-availability-badge\{[^}]*min-width:44px;height:44px/);
     assert.match(css, /\.media-availability-badge__body\{[^}]*max-width:12px;height:12px/);
-    assert.match(css, /\.media-availability--compact\{[^}]*width:16px;height:16px[^}]*background:none/);
+    assert.match(css, /\.media-availability--compact\{(?=[^}]*width:16px)(?=[^}]*height:16px)(?=[^}]*background:(?:none|0 0))/);
     assert.match(css, /--status-dot:\s*linear-gradient\(135deg, var\(--status-alternate\) 50%, var\(--status-color\) 50%\)/);
     assert.ok(css.includes(".media-availability--partialotheraudio .media-availability__track{color:var(--status-alternate)}"));
 });
 
 test("shared cards are small, softly rounded covers with single-line text below and one action over them", () => {
     const css = readFileSync(join(build, manifest["Pages/User/Library/Library.entry.scss"].file), "utf8");
-    assert.ok(css.includes(".media-image{display:block;width:100%;max-width:100%;height:auto;object-fit:cover}"));
-    assert.match(css, /\.media-card\{--card-width: 144px;--card-radius: 12px;/);
-    assert.match(css, /\.media-card__surface\{[^}]*overflow:hidden;border-radius:var\(--card-radius\)/);
+    assert.match(css, /\.media-image\{(?=[^}]*display:block)(?=[^}]*width:100%)(?=[^}]*max-width:100%)(?=[^}]*height:auto)(?=[^}]*object-fit:cover)/);
+    assert.match(css, /\.media-card\{--card-width:\s*144px;--card-radius:\s*12px;/);
+    assert.match(css, /\.media-card__surface\{(?=[^}]*overflow:hidden)(?=[^}]*border-radius:var\(--card-radius\))/);
     assert.match(css, /\.media-card__progress\{[^}]*height:3px/);
-    assert.match(css, /\.media-card__progress-shell\{[^}]*inset:auto 8px 6px[^}]*border-radius:999px/);
-    assert.match(css, /\.media-card__actions\{[^}]*position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center/);
-    assert.match(css, /\.media-card__title\{[^}]*overflow:hidden[^}]*text-overflow:ellipsis;white-space:nowrap/);
-    assert.match(css, /\.media-card__info\{[^}]*overflow:hidden[^}]*white-space:nowrap/);
+    assert.match(css, /\.media-card__progress-shell\{(?=[^}]*inset:auto 8px 6px)(?=[^}]*border-radius:999px)/);
+    assert.match(css, /\.media-card__actions\{(?=[^}]*position:absolute)(?=[^}]*inset:0)(?=[^}]*z-index:2)(?=[^}]*display:flex)(?=[^}]*align-items:center)(?=[^}]*justify-content:center)/);
+    assert.match(css, /\.media-card__title\{(?=[^}]*overflow:hidden)(?=[^}]*text-overflow:ellipsis)(?=[^}]*white-space:nowrap)/);
+    assert.match(css, /\.media-card__info\{(?=[^}]*overflow:hidden)(?=[^}]*white-space:nowrap)/);
     assert.match(css, /\.media-grid\{[^}]*minmax\(min\(100%,133px\),150px\)/);
     assert.doesNotMatch(css, /\.media-card__surface\[data-expanded\]/);
     assert.doesNotMatch(css, /media-card__genres|media-card__series|media-card__languages|media-card--minimal/);

@@ -73,7 +73,7 @@ Do not claim these optional/operational capabilities are implemented.
 ## Jularr's own download-only engine (module `Torrent`)
 
 Owner decision #1626: the engine never sends file data. Off by default; it needs `Acquisition` and
-`Vpn` (migration `0015_native_torrent`: connection type 11, workspace area 3). With the module off,
+`Vpn` (migration `0018_native_torrent`: connection type 11, workspace area 3). With the module off,
 or with no torrent job, nothing runs: [TorrentWorker](../src/Jularr.Workers/TorrentWorker.cs)
 sleeps on `WorkSignals.Torrents` until a grab wakes it; with jobs it looks every 30 s.
 
