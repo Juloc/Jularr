@@ -4,6 +4,33 @@ using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.Logic.Media
 {
+    internal sealed class MediaImportBookLookupData(string json) : BaseData
+    {
+        [DataField(typeof(MediaImportFields), nameof(MediaImportFields.LookupJson))]
+        public string Json { get; } = json;
+    }
+
+    internal sealed class MediaImportLocalBookData(int index, long workId, string title, string creator, int? releaseYear, bool hasTarget) : BaseData
+    {
+        [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Index))]
+        public int Index { get; } = index;
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; } = workId;
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string Title { get; } = title;
+
+        [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Creator))]
+        public string Creator { get; } = creator;
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; } = releaseYear;
+
+        [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Flag))]
+        public bool HasTarget { get; } = hasTarget;
+    }
+
     // A title of the library that one of the identities of a list names, and whether it already has a target to search for.
     internal sealed class MediaImportKnownData : BaseData
     {

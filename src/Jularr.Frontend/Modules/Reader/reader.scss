@@ -2,17 +2,24 @@
 @use './Figures';
 
 // Reuse the regular app navigation, with the document header as the only top bar.
+// The page is as tall as what the browser shows; a browser without dynamic viewport units gets the height the reader script
+// measures, as 100vh there includes the browser's own toolbars and pushed the bottom bar below the screen. The reader fills
+// what the page leaves it, so nothing above it can push the bar down either.
 .reader-page {
     overflow: hidden;
     .app-layout { grid-template-rows: minmax(0, 1fr); height: 100dvh; }
+    @supports not (height: 100dvh) { .app-layout { height: var(--reader-viewport, 100vh); } }
     .app-header { display: none; }
     .app-main { grid-row: 1; padding: 0; min-height: 0; }
+    .app-main > .page-screen { display: flex; flex-direction: column; gap: 0; height: 100%; }
+    .reader:not(:fullscreen) { flex: 1 1 0; min-height: 0; }
     &:has(.reader[data-view=theater]) {
         .app-layout { grid-template-columns: minmax(0, 1fr); }
         .app-sidebar { display: none; }
         .app-main { grid-column: 1; }
     }
     @media (max-width: 780px) { .app-main { width: 100%; flex: 1; } }
+    @media (max-width: 640px) { .app-layout { display: flex; flex-direction: column; } .app-main { min-height: 0; } }
 }
 
 .reader {
@@ -24,7 +31,7 @@
     position: relative;
     display: grid;
     grid-template: auto minmax(0, 1fr) auto / minmax(0, 1fr);
-    height: 100dvh;
+    height: 100%;
     container-type: inline-size;
     background: var(--surface);
     color: var(--text);
@@ -151,8 +158,13 @@
     &__content a { color: inherit; }
     &__content table { border-collapse: collapse; }
     &__content td, &__content th { border: 1px solid var(--border); padding: 4px 8px; }
-    &[data-mode=paged] &__content { columns: var(--reader-columns, 1); column-gap: clamp(36px, 3.4vw, 56px); column-fill: auto; overflow: hidden; }
-    &[data-mode=paged][data-columns="1"] &__content :is(p,h1,h2,h3,h4,h5,h6,blockquote,pre,table,figure,ul,ol,dl) { max-width: min(var(--reader-text-width, 68ch), calc(100% - 68px)); }
+    &[data-mode=paged] &__content { columns: var(--reader-columns, 1); column-gap: var(--reader-margin-gap, clamp(36px, 3.4vw, 56px)); column-fill: auto; overflow: hidden; }
+    // The page margins of a text are the Reader's own; text then needs no inset of its own, whatever element it is in. The side
+    // margins stay outside the column box, so its width remains the text width every page count and turn is measured with.
+    // Image books (comics, original pages) keep their pictures edge to edge.
+    &[data-mode=paged]:not([data-format]) &__content { width: auto; margin-inline: var(--reader-margin-outer, 0);
+        padding: var(--reader-margin-top, 24px) 0 var(--reader-margin-bottom, 24px); }
+    &[data-mode=paged] &__content :is(p,h1,h2,h3,h4,h5,h6,blockquote,pre,table,figure,ul,ol,dl) { max-width: min(var(--reader-text-width, 68ch), 100%); }
     &[data-mode=paged] &__content[data-pad]::after { content: ''; display: block; height: 1px; break-before: column; }
     &[data-direction=rtl][data-mode=paged] &__content { direction: rtl; }
     &__content [data-b] { unicode-bidi: plaintext; }
@@ -164,8 +176,27 @@
     &[data-mode=scroll] &__images { display: block; }
     &__page-print { position: absolute; height: 100%; overflow: hidden; pointer-events: none; }
     &[data-book-ready=true] &__paper { opacity: 0; pointer-events: none; }
+    // Each chapter is a new document: until the book view has decided, the flat page must not flash up before the book.
+    &[data-mode=paged]:not([data-format]):not([data-book-ready]) &__paper { opacity: 0; }
     &[data-selecting=true] &__paper { user-select: text; cursor: text; }
     &[data-selecting=true] [data-reader-select] { background: var(--accent-soft); color: var(--accent-text); }
+    // The reading-mode button shows the icon of the mode the reader is in.
+    [data-mode-icon] { display: none; }
+    &[data-mode=paged][data-paging=flat] [data-mode-icon=flat], &[data-mode=paged][data-paging=book] [data-mode-icon=book],
+    &[data-mode=scroll] [data-mode-icon=scroll] { display: contents; }
+    // Arrows beside the page, always there while paging: back on the left, on to the right (the other way round right to left).
+    &__side { position: absolute; z-index: 3; top: 50%; width: 36px; height: 36px; min-width: 0; padding: 0; transform: translateY(-50%);
+        border: 1px solid var(--border); border-radius: 50%; background: color-mix(in srgb, var(--surface) 88%, transparent); color: var(--text); }
+    &__side--back { left: max(4px, env(safe-area-inset-left)); }
+    &__side--forward { right: max(4px, env(safe-area-inset-right)); .ui-icon { transform: rotate(180deg); } }
+    &[data-direction=rtl] &__side--back { left: auto; right: max(4px, env(safe-area-inset-right)); .ui-icon { transform: rotate(180deg); } }
+    &[data-direction=rtl] &__side--forward { right: auto; left: max(4px, env(safe-area-inset-left)); .ui-icon { transform: none; } }
+    &[data-mode=scroll] &__side, &[data-selecting=true] &__side { display: none; }
+    &:has([data-role=turn-tools] [data-turn="-1"]:disabled) &__side--back,
+    &:has([data-role=turn-tools] [data-turn="1"]:disabled) &__side--forward { opacity: .35; pointer-events: none; }
+    // The ways to the previous and the next chapter at the top and the bottom of a scrolled text.
+    &__chapter-edge { display: none; }
+    &[data-mode=scroll] &__chapter-edge { display: flex; justify-content: center; width: fit-content; margin: 24px auto; }
     &[data-direction=rtl] &__page-controls { flex-direction: row-reverse; }
     &[data-direction=rtl] &__page-controls .ui-icon { transform: rotate(180deg); }
     &[data-direction=rtl] &__page-controls .reader__turn-next .ui-icon { transform: none; }
@@ -216,8 +247,9 @@
         .reader__top { top: 0; padding-top: max(14px, env(safe-area-inset-top)); }
         .reader__footer { bottom: 0; padding-bottom: max(14px, env(safe-area-inset-bottom)); }
         .reader__reveal { position: absolute; z-index: 6; left: calc(50% - 24px); display: grid; place-items: center; width: 48px; min-width: 0; min-height: 24px; height: 24px; padding: 2px 12px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
-        .reader__reveal--top { top: 0; border-top: 0; border-radius: 0 0 12px 12px; .ui-icon { transform: rotate(-90deg); } }
-        .reader__reveal--bottom { bottom: 0; border-bottom: 0; border-radius: 12px 12px 0 0; .ui-icon { transform: rotate(90deg); } }
+        // The handles stay clear of a notch and the gesture bar.
+        .reader__reveal--top { top: env(safe-area-inset-top); border-top: 0; border-radius: 0 0 12px 12px; .ui-icon { transform: rotate(-90deg); } }
+        .reader__reveal--bottom { bottom: env(safe-area-inset-bottom); border-bottom: 0; border-radius: 12px 12px 0 0; .ui-icon { transform: rotate(90deg); } }
         &[data-chrome=visible] {
             .reader__top { padding-top: max(28px, env(safe-area-inset-top)); }
             .reader__footer { padding-bottom: max(28px, env(safe-area-inset-bottom)); }

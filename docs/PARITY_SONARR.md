@@ -1,7 +1,7 @@
 # Sonarr parity
 
 Owner decisions of 19 October 2026, row by row. **Same**: Jularr already does it.
-**Differently**: Jularr solves it its own way. **Wanted**: to be built. **Later**: wanted after the first release.
+**Differently**: Jularr solves it its own way. **Wanted**: to be built. **Later**: wanted, not yet scheduled.
 **Not**: deliberately left out. Build state is tracked in the [feature matrix](FEATURE_MATRIX.md).
 
 ## Wanted
@@ -26,7 +26,7 @@ Owner decisions of 19 October 2026, row by row. **Same**: Jularr already does it
 | Search | Interactive search | Manual search and grab per target | Like Sonarr: per episode, season or film; quality, size, age, indexer, score and the rejection reason; filters; grab anyway; override the match |
 | Tools | Test parsing | – | A release name shows series/episode, quality, language, group, custom formats and score: the decision the import would make |
 | Import | Extra files | Subtitles | Subtitles plus selectable extensions (srt, ass, nfo …), renamed with the file |
-| Naming | Every token, separate anime format, season folders, multi-episode style, colon replacement | Films and series, a subset | **Before the first release**: every token of every *arr, per media type and subtype |
+| Naming | Every token, separate anime format, season folders, multi-episode style, colon replacement | Films and series, a subset | **Wanted**: every token of every *arr, per media type and subtype |
 | Download | Further Usenet clients | SABnzbd and the native downloader | SABnzbd now; NZBGet soon; NZBVortex, Pneumatic and blackhole later |
 | System | Tasks, log files, updates | – | Scheduled tasks (last/next run, run now), log files to view and download, an update notice with the change list (updating stays with the image) |
 | Access | Login, API key | Accounts, passkeys, device tokens | Differently; plus an API key per account for scripts and the webhook if needed |
@@ -44,8 +44,8 @@ Owner decisions of 19 October 2026, row by row. **Same**: Jularr already does it
 | Area | Sonarr | Decision |
 | --- | --- | --- |
 | Calendar | Day, week, month, forecast, agenda | The calendar page from the Owner's mockup |
-| Search | RSS sync | After the first release: in addition to the scheduled search, interval setting (15 minutes), per indexer, grabs at once |
-| Connect | Notifications, scripts, webhooks | After the first release: a webhook first, then every other target and scripts |
+| Search | RSS sync | Later: in addition to the scheduled search, interval setting (15 minutes), per indexer, grabs at once |
+| Connect | Notifications, scripts, webhooks | Later: a webhook first, then every other target and scripts |
 | Metadata | Kodi/Emby/Plex NFO and images written beside the files | A module later |
 | Import lists | AniList, Trakt, Plex watchlist and others | AniList as planned in #1257; Plex watchlist and Trakt later |
 | Tags | Auto-tagging | Later |

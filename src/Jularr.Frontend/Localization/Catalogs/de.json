@@ -4,6 +4,12 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "admin.works.source.local": ["Library", "Bibliothek"],
+  "admin.works.source.list": ["List data", "Angaben aus der Liste"],
+  "import.match.list": ["Use the list's details", "Angaben aus der Liste übernehmen"],
+  "import.match.list.detail": ["Adds the title, author and supplied ISBN without a verified catalog match. Missing metadata stays blank.", "Übernimmt Titel, Autor und vorhandene ISBN ohne bestätigten Katalogtreffer. Fehlende Metadaten bleiben leer."],
+  "import.problem.local_match": ["Matching title and author already in the library. Choose the existing book before importing.", "Titel und Autor passen zu einem vorhandenen Buch. Wähle vor dem Import das vorhandene Buch aus."],
+  "import.problem.local_ambiguous": ["Several existing books match. Choose which book to reuse.", "Mehrere vorhandene Bücher passen. Wähle aus, welches Buch verwendet werden soll."],
   "errors.validation.search_in_progress": ["A library search is already queued or running. Finish or cancel it before starting a different selection.", "Eine Bibliothekssuche läuft bereits oder wartet. Beende sie oder brich sie ab, bevor du eine andere Auswahl startest."],
   "errors.validation.no_search_targets": ["No monitored search targets match this selection. Monitoring was not changed.", "Die Auswahl enthält keine passenden überwachten Suchziele. Die Überwachung wurde nicht geändert."],
   "works.outcome.evidence_missing": ["Existing file evidence is incomplete; review it manually.", "Die vorhandene Datei ist nicht ausreichend erkannt; bitte manuell prüfen."],
@@ -1166,17 +1172,21 @@
    "Dark",
    "Dunkel"
   ],
-  "reader.mode": [
-   "Layout",
-   "Layout"
-  ],
   "reader.mode.scroll": [
    "Scroll",
    "Scrollen"
   ],
-  "reader.mode.paged": [
-   "Pages",
-   "Seiten"
+  "reader.mode.toggle": [
+   "Reading mode",
+   "Lesemodus"
+  ],
+  "reader.mode.flat": [
+   "Flat pages",
+   "Flache Seiten"
+  ],
+  "reader.mode.book": [
+   "Book",
+   "Buch"
   ],
   "reader.notCached": [
    "This book is still being saved for reading without the storage.",
@@ -7247,6 +7257,82 @@
    "Picture in picture",
    "Bild-in-Bild"
   ],
+  "player.info.container": [
+   "Container",
+   "Container"
+  ],
+  "player.info.bitrate": [
+   "File bit rate",
+   "Datei-Bitrate"
+  ],
+  "player.info.video": [
+   "Video (file)",
+   "Video (Datei)"
+  ],
+  "player.info.audiofile": [
+   "Audio (file)",
+   "Ton (Datei)"
+  ],
+  "player.info.videopath": [
+   "Video path",
+   "Videoweg"
+  ],
+  "player.info.audiopath": [
+   "Audio path",
+   "Tonweg"
+  ],
+  "player.info.frames": [
+   "Frames (decoded / dropped \u00b7 fps)",
+   "Bilder (dekodiert / verworfen \u00b7 fps)"
+  ],
+  "player.info.buffer": [
+   "Buffer ahead",
+   "Puffer voraus"
+  ],
+  "player.info.network": [
+   "Network (bandwidth \u00b7 segment)",
+   "Netzwerk (Bandbreite \u00b7 Segment)"
+  ],
+  "player.info.codecs": [
+   "Stream codecs",
+   "Stream-Codecs"
+  ],
+  "player.info.copy": [
+   "Copy details",
+   "Details kopieren"
+  ],
+  "player.info.copied": [
+   "Copied",
+   "Kopiert"
+  ],
+  "player.info.converted": [
+   "Converted",
+   "Umgewandelt"
+  ],
+  "player.offset.audio": [
+   "Audio delay (ms)",
+   "Ton-Verzögerung (ms)"
+  ],
+  "player.offset.subtitles": [
+   "Subtitle delay (ms)",
+   "Untertitel-Verzögerung (ms)"
+  ],
+  "player.offset.reset": [
+   "Reset",
+   "Zurücksetzen"
+  ],
+  "player.cast": [
+   "Cast to a device",
+   "Auf ein Gerät übertragen"
+  ],
+  "player.casting": [
+   "Casting to {0}",
+   "Wird übertragen auf {0}"
+  ],
+  "player.status.cast_unreachable": [
+   "A cast device cannot reach this address. Open Jularr under its network address.",
+   "Ein Cast-Gerät erreicht diese Adresse nicht. Öffne Jularr über die Netzwerkadresse."
+  ],
   "player.fullscreen": [
    "Fullscreen",
    "Vollbild"
@@ -10129,6 +10215,10 @@
    "Chapter {0}",
    "Kapitel {0}"
   ],
+  "player.brightness.auto": [
+   "Auto",
+   "Automatisch"
+  ],
   "work.tab.markers": [
    "Markers",
    "Marker"
@@ -10702,6 +10792,10 @@
    "Reading copies",
    "Lesekopien"
   ],
+  "jobs.job.bookTranslations": [
+   "Book translations",
+   "Buchübersetzungen"
+  ],
   "reader.settings.view": [
    "View",
    "Ansicht"
@@ -10985,6 +11079,10 @@
   "jobs.about.readingCopies": [
    "Writes a reading copy (an EPUB) beside digital PDFs, so they read like a book.",
    "Schreibt neben digitale PDFs eine Lesekopie (EPUB), damit sie sich wie ein Buch lesen lassen."
+  ],
+  "jobs.about.bookTranslations": [
+   "Translates the books with the local TranslateGemma model into every language a profile uses, books being read first, so they open translated at once.",
+   "Übersetzt die Bücher mit dem lokalen TranslateGemma-Modell in jede Sprache, die ein Profil nutzt (angefangene Bücher zuerst), damit sie sofort übersetzt öffnen."
   ],
   "media.preview.trailer": [
    "Trailer",
@@ -12189,6 +12287,10 @@
   "jobs.worker.Health": [
    "Health",
    "Gesundheit"
+  ],
+  "jobs.worker.Translation": [
+   "Translation",
+   "Übersetzung"
   ],
   "jobs.health.summary": [
    "{0} of {1} services reachable",
@@ -13570,29 +13672,21 @@
    "Paper",
    "Papier"
   ],
+  "reader.binding": [
+   "Binding",
+   "Einband"
+  ],
+  "reader.binding.soft": [
+   "Paperback",
+   "Taschenbuch"
+  ],
+  "reader.binding.hard": [
+   "Hardcover",
+   "Hardcover"
+  ],
   "reader.colour": [
    "Paper colour",
    "Papierfarbe"
-  ],
-  "reader.animation": [
-   "Page turn animation",
-   "Animation beim Umblättern"
-  ],
-  "reader.animation.system": [
-   "Follow system preference",
-   "Systemeinstellung befolgen"
-  ],
-  "reader.animation.on": [
-   "On · turn paper",
-   "An · Papier blättern"
-  ],
-  "reader.animation.off": [
-   "Off · instant pages",
-   "Aus · sofortige Seiten"
-  ],
-  "reader.animation.hint": [
-   "System mode respects reduced motion. Choose On to enable paper folding. Switch off Select text before dragging a page.",
-   "Der Systemmodus berücksichtigt reduzierte Bewegung. Wähle An, um das Papierfalten zu aktivieren. Schalte „Text markieren“ aus, bevor du eine Seite ziehst."
   ],
   "reader.sizePixels": [
    "Text size (px)",
@@ -13617,6 +13711,22 @@
   "reader.textWidth": [
    "Text width (characters)",
    "Textbreite (Zeichen)"
+  ],
+  "reader.margin.top": [
+   "Top margin (% of page width)",
+   "Oberer Rand (% der Seitenbreite)"
+  ],
+  "reader.margin.bottom": [
+   "Bottom margin (% of page width)",
+   "Unterer Rand (% der Seitenbreite)"
+  ],
+  "reader.margin.inner": [
+   "Inner margin at the spine (% of page width)",
+   "Innerer Rand am Falz (% der Seitenbreite)"
+  ],
+  "reader.margin.outer": [
+   "Outer margin (% of page width)",
+   "Äußerer Rand (% der Seitenbreite)"
   ],
   "reader.indent": [
    "Indent paragraphs",
@@ -13697,10 +13807,6 @@
   "reader.settings.paper": [
    "Paper & colour",
    "Papier & Farbe"
-  ],
-  "reader.settings.motion": [
-   "Page movement",
-   "Seitenbewegung"
   ],
   "reader.presentation": [
    "Reader view",
