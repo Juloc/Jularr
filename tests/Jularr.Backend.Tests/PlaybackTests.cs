@@ -490,6 +490,69 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Fonts_OfAMatroskaFile_AreTakenOutOnceAndServedOneByOne()
+        {
+            // Opt-in: JULARR_TEST_FFMPEG names an ffmpeg executable; ffprobe stands beside it.
+            if (Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG") is not { Length: > 0 } ffmpeg)
+            {
+                Assert.Inconclusive("JULARR_TEST_FFMPEG is not configured.");
+                return;
+            }
+
+            var ffprobe = Path.Combine(Path.GetDirectoryName(ffmpeg)!, OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe");
+            using var storage = new LibraryTests.TemporaryDirectory();
+            using var cache = new LibraryTests.TemporaryDirectory();
+            using var media = new LibraryTests.TemporaryDirectory();
+            var font = Path.Combine(media.Path, "Lettering.ttf");
+            byte[] fontBytes = [0, 1, 0, 0, 7, 7, 7, 7];
+            File.WriteAllBytes(font, fontBytes);
+            var mkv = Path.Combine(media.Path, "clip.mkv");
+            using (var generate = System.Diagnostics.Process.Start(ffmpeg, ["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:d=1", "-c:v", "mpeg4",
+                "-attach", font, "-metadata:s:t:0", "mimetype=application/x-truetype-font", mkv]))
+            {
+                await generate.WaitForExitAsync();
+                Assert.AreEqual(0, generate.ExitCode);
+            }
+
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, settings: new Dictionary<string, string>
+            {
+                ["Media:FfmpegPath"] = ffmpeg,
+                ["Media:FfprobePath"] = ffprobe,
+                ["Media:TranscodeCachePath"] = cache.Path
+            });
+            var (assetId, _) = await CreatePlayableAsync(host, storage.Path, wakeOnDemand: false);
+            File.Copy(mkv, Directory.GetFiles(storage.Path, "Film.mp4", SearchOption.AllDirectories).Single(), true);
+            var route = "/api/v1/playback/assets/" + assetId + "/fonts";
+
+            using var listed = await host.SendAsync(HttpMethod.Get, route);
+            Assert.AreEqual(HttpStatusCode.OK, listed.StatusCode, await listed.Content.ReadAsStringAsync());
+            var fonts = (await listed.Content.ReadFromJsonAsync<BaseDataList<PlaybackFontV1>>())!;
+            Assert.AreEqual(1, fonts.Count);
+            Assert.AreEqual("Lettering.ttf", fonts[0].Name);
+            using var bytes = await host.SendAsync(HttpMethod.Get, route + "/" + fonts[0].Key);
+            Assert.AreEqual(HttpStatusCode.OK, bytes.StatusCode);
+            CollectionAssert.AreEqual(fontBytes, await bytes.Content.ReadAsByteArrayAsync());
+
+            // The second ask reads the cache, and a number the file does not have is no font.
+            using var again = await host.SendAsync(HttpMethod.Get, route);
+            Assert.AreEqual(1, (await again.Content.ReadFromJsonAsync<BaseDataList<PlaybackFontV1>>())!.Count);
+            using var other = await host.SendAsync(HttpMethod.Get, route + "/99");
+            Assert.AreEqual(HttpStatusCode.NotFound, other.StatusCode);
+        }
+
+        [TestMethod]
+        public void AttachmentList_NamesTheFontsOfTheContainer_AndNothingElse()
+        {
+            var attachments = MediaProbeClient.ParseAttachments("""
+                {"streams":[{"index":0,"codec_type":"video"},{"index":8,"codec_type":"attachment","tags":{"filename":"Arial.ttf","mimetype":"application/x-truetype-font"}},
+                {"index":9,"codec_type":"attachment","tags":{"filename":"cover.jpg","mimetype":"image/jpeg"}},{"index":10,"codec_type":"attachment"}]}
+                """);
+            CollectionAssert.AreEqual(new[] { 8, 9, 10 }, attachments.Select(item => item.Index).ToArray());
+            Assert.AreEqual("Arial.ttf", attachments[0].FileName);
+            CollectionAssert.AreEqual(new[] { true, false, false }, attachments.Select(PlaybackFonts.IsFont).ToArray());
+        }
+
+        [TestMethod]
         public async Task Trickplay_RenderedSheets_ShowThePlayedFilesThumbnails()
         {
             using var storage = new LibraryTests.TemporaryDirectory();
