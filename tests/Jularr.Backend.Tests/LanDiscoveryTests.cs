@@ -7,7 +7,7 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class LanDiscoveryTests
     {
-        [DataTestMethod]
+        [TestMethod]
         [DataRow("10.1.2.3", true)]
         [DataRow("172.16.0.1", true)]
         [DataRow("172.31.255.254", true)]

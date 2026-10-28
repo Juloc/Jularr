@@ -281,6 +281,34 @@ namespace Jularr.Backend.Data.Logic.Playback
     }
 
     // Where a subtitle comes from: a subtitle file, or a text stream of the media file.
+    // A stored marker with where it came from and how long the file is, for the player to leave out one that cannot be right.
+    internal sealed class PlaybackMarkerRowData : BaseData
+    {
+        public PlaybackMarkerRowData(MediaMarkerKind mediaMarkerKindTypeId, MediaMarkerSource mediaMarkerSourceTypeId, long startMs, long endMs, long? durationMs)
+        {
+            MediaMarkerKindTypeId = mediaMarkerKindTypeId;
+            MediaMarkerSourceTypeId = mediaMarkerSourceTypeId;
+            StartMs = startMs;
+            EndMs = endMs;
+            DurationMs = durationMs;
+        }
+
+        [DataField(typeof(MediaMarkerFields), nameof(MediaMarkerFields.MediaMarkerKindTypeId))]
+        public MediaMarkerKind MediaMarkerKindTypeId { get; }
+
+        [DataField(typeof(MediaMarkerFields), nameof(MediaMarkerFields.MediaMarkerSourceTypeId))]
+        public MediaMarkerSource MediaMarkerSourceTypeId { get; }
+
+        [DataField(typeof(MediaMarkerFields), nameof(MediaMarkerFields.StartMs))]
+        public long StartMs { get; }
+
+        [DataField(typeof(MediaMarkerFields), nameof(MediaMarkerFields.EndMs))]
+        public long EndMs { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.DurationMs))]
+        public long? DurationMs { get; }
+    }
+
     internal sealed class PlaybackSubtitleSourceData : BaseData
     {
         public PlaybackSubtitleSourceData(long storedFileId, string relativePath, DateTime modifiedAt, string rootRelativePath, long storageMountId, string? codec)

@@ -117,21 +117,32 @@ namespace Jularr.E2E.Tests
                 await page.Locator("[data-action=settings]").ClickAsync();
                 var panel = page.Locator("#player-settings");
                 await panel.GetByRole(AriaRole.Tab, new() { Name = "Subtitles", Exact = true }).ClickAsync();
+                // Both delays and the speed stand in the Audio and the Subtitles tab.
+                foreach (var tab in new[] { "subtitles", "audio" })
+                {
+                    await panel.GetByRole(AriaRole.Tab, new() { Name = tab == "audio" ? "Audio" : "Subtitles", Exact = true }).ClickAsync();
+                    foreach (var field in new[] { "[data-setting=subtitle-offset]", "[data-setting=audio-offset]", "[data-setting=speed-range]" })
+                    {
+                        await Assertions.Expect(panel.Locator("[data-panel=" + tab + "] " + field)).ToBeVisibleAsync();
+                    }
+                }
+
+                await panel.GetByRole(AriaRole.Tab, new() { Name = "Subtitles", Exact = true }).ClickAsync();
                 var cueStart = await page.Locator("video").EvaluateAsync<double>("video => [...video.textTracks].find(track => track.mode === 'showing').cues[0].startTime");
-                await panel.Locator("[data-setting=subtitle-offset]").FillAsync("500");
+                await panel.Locator("[data-panel=subtitles] [data-setting=subtitle-offset]").FillAsync("500");
                 await page.WaitForFunctionAsync("start => [...document.querySelector('video').textTracks].find(track => track.mode === 'showing').cues[0].startTime > start + 0.4", cueStart);
-                await panel.Locator("[data-action=subtitle-offset-reset]").ClickAsync();
+                await panel.Locator("[data-panel=subtitles] [data-action=subtitle-offset-reset]").ClickAsync();
                 await page.WaitForFunctionAsync("start => Math.abs([...document.querySelector('video').textTracks].find(track => track.mode === 'showing').cues[0].startTime - start) < 0.01", cueStart);
                 await panel.GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
                 var delayed = await page.RunAndWaitForResponseAsync(async () =>
                 {
-                    await panel.Locator("[data-setting=audio-offset]").FillAsync("250");
+                    await panel.Locator("[data-panel=audio] [data-setting=audio-offset]").FillAsync("250");
                     await page.Keyboard.PressAsync("Tab");
                 }, response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioOffsetMs\":250", StringComparison.Ordinal) == true, new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual(200, delayed.Status);
                 var delayedAt = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
                 await page.WaitForFunctionAsync("at => document.querySelector('video').currentTime > at + 1", delayedAt, new() { Timeout = Steps.MediaTimeout });
-                var restored = await page.RunAndWaitForResponseAsync(() => panel.Locator("[data-action=audio-offset-reset]").ClickAsync(),
+                var restored = await page.RunAndWaitForResponseAsync(() => panel.Locator("[data-panel=audio] [data-action=audio-offset-reset]").ClickAsync(),
                     response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioOffsetMs\":0", StringComparison.Ordinal) == true, new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual(200, restored.Status);
                 await page.Keyboard.PressAsync("Escape");
