@@ -25,7 +25,7 @@ namespace Jularr.Frontend.Framework
 
     public sealed class UiPlayer(PlayerSource source, FrontendAssets assets) : IUiComponent
     {
-        private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "playback_capacity_exhausted", "playback_evicted", "playback_reduced", "not_found", "failed"];
+        private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "playback_capacity_exhausted", "playback_evicted", "playback_reduced", "cast_unreachable", "not_found", "failed"];
         private static readonly string[] Kinds = ["Intro", "Credits", "Recap", "Preview"];
         private static readonly string[] Presets = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "2", "3", "4"];
         private static readonly PlaybackQuality[] Qualities = Enum.GetValues<PlaybackQuality>();
@@ -53,6 +53,17 @@ namespace Jularr.Frontend.Framework
                     .Attribute("data-role", "loading").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
                 new Div(Icon("play"), Icon("pause")).Class("player__feedback")
                     .Attribute("data-role", "transport-feedback").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
+                // Touch gestures name what they do: the tapped half lights up while seeking; volume, brightness and speed show a pill at the top centre.
+                new Div(new Span(new Span(), new Span(), new Span()).Class("player__seek-arrows"), new Span().Attribute("data-role", "seek-text")).Class("player__seek")
+                    .Attribute("data-side", "left").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
+                new Div(new Span(new Span(), new Span(), new Span()).Class("player__seek-arrows"), new Span().Attribute("data-role", "seek-text")).Class("player__seek")
+                    .Attribute("data-side", "right").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
+                new Div(new Span().Attribute("data-role", "casting-text").Attribute("data-template", texts["player.casting"])).Class("player__casting")
+                    .Attribute("data-role", "casting").Attribute("aria-live", "polite").Attribute("hidden", "hidden"),
+                new Div(new Span(Icon("volume")).Attribute("data-gesture-icon", "volume"), new Span(Icon("muted")).Attribute("data-gesture-icon", "muted"),
+                    new Span(Icon("brightness")).Attribute("data-gesture-icon", "brightness"), new Div(new Div().Class("player__gesture-fill")).Class("player__gesture-bar"),
+                    new Span().Attribute("data-role", "gesture-text")).Class("player__gesture").Attribute("data-role", "gesture").Attribute("data-auto", texts["player.brightness.auto"])
+                    .Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
                 new Div(
                     new Div(
                         new A(Icon("close")).Class("button button--icon player__button").Attribute("href", source.BackHref).Attribute("aria-label", texts["common.back"]).Attribute("data-action", "close"),
@@ -75,6 +86,7 @@ namespace Jularr.Frontend.Framework
                             new Div().Class("player__preview").Attribute("data-role", "preview").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
                             new Span(new ValueText("0:00")).Attribute("data-role", "duration")
                         ).Class("player__progress"),
+                        Chapters.Count == 0 ? new Span() : new Span().Class("player__chapter-now").Attribute("data-role", "chapter-now").Attribute("hidden", "hidden"),
                         new Div(
                             new Div(
                                 new Button(new Span(Icon("volume")).Attribute("data-volume-icon", "3"), new Span(Icon("volume-medium")).Attribute("data-volume-icon", "2"),
@@ -102,6 +114,7 @@ namespace Jularr.Frontend.Framework
                                 new Button(new Icon("settings", assets)).IconOnly(texts["player.settings"]).Class("button button--icon player__button")
                                     .Attribute("data-action", "settings").Attribute("popovertarget", "player-settings"),
                                 Action("theater", "player.theater", "theater").Attribute("aria-pressed", "false"),
+                                Action("cast", "player.cast", "cast").Attribute("hidden", "hidden"),
                                 Action("pip", "player.pip", "pip").Attribute("hidden", "hidden"),
                                 Action("fullscreen", "player.fullscreen", "fullscreen")
                             ]).Class("player__options")
@@ -180,7 +193,7 @@ namespace Jularr.Frontend.Framework
                 new Header(new Span(new Text("player.tab.chapters")),
                     new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("popovertarget", "player-chapters").Attribute("popovertargetaction", "hide")),
                 new Div([.. Chapters.Select((chapter, index) => new Button(new Span(new ValueText(ChapterName(chapter, index))), new Span(new ValueText(Clock(chapter.Start))).Class("player__chapter-time"))
-                    .Class("button player__option player__chapter").Attribute("data-chapter", Seconds(chapter.Start)).Attribute("aria-pressed", "false"))]).Class("player__chapter-list")
+                    .Class("button player__option player__chapter").Attribute("data-chapter", Seconds(chapter.Start)).Attribute("data-title", ChapterName(chapter, index)).Attribute("aria-pressed", "false"))]).Class("player__chapter-list")
             ).Class("player__chapters").Attribute("id", "player-chapters").Attribute("popover", "auto").Attribute("role", "dialog").Attribute("aria-label", texts["player.tab.chapters"]);
 
             // Compact fields from the shared form surface: the label sits in the outline.
@@ -217,6 +230,16 @@ namespace Jularr.Frontend.Framework
                         .Attribute("aria-pressed", value == Speed ? "true" : "false"))]).Class("player__speed-points")).Class("player__speed"));
             }
 
+            // Audio and subtitles move against the picture in milliseconds: later with a plus, earlier with a minus.
+            IUiComponent OffsetField(string name, string labelKey)
+            {
+                var id = "player-offset-" + name;
+                return Surface(id, labelKey, new Div(
+                    new Input().Class("player__offset-input").Attribute("id", id).Attribute("type", "number").Attribute("min", "-10000").Attribute("max", "10000").Attribute("step", "50")
+                        .Attribute("value", "0").Attribute("inputmode", "numeric").Attribute("data-setting", name + "-offset"),
+                    new Button(new Text("player.offset.reset")).Class("button player__offset-reset").Attribute("data-action", name + "-offset-reset")).Class("player__offset"));
+            }
+
             IUiComponent FitField()
             {
                 var segments = new[] { "contain", "cover", "original" }.Select(value =>
@@ -247,11 +270,26 @@ namespace Jularr.Frontend.Framework
             }
 
             // What plays right now; the client fills in the delivery and the picture size.
-            IUiComponent Facts() => new Dl(
-                new Dt(new Text("player.delivery")), new Dd().Attribute("data-role", "mode"),
-                new Dt(new Text("player.picture")), new Dd().Attribute("data-role", "resolution"),
-                new Dt(new Text("player.audio")), new Dd(new ValueText(Audio.FirstOrDefault(track => track.IsSelected)?.Label ?? Audio.FirstOrDefault()?.Label ?? "")).Attribute("data-role", "fact-audio"),
-                new Dt(new Text("playback.quality")), new Dd(new Text("playback.quality." + (source.Preferences?.QualityKey ?? "Automatic"))).Attribute("data-role", "fact-quality")).Class("player__facts");
+            // The file as probed and what the server does with it come from the server, the rest is measured while the pane is open.
+            IUiComponent Fact(string key, string role, IUiComponent? value = null) => new Div(new Dt(new Text(key)), (value is null ? new Dd() : new Dd(value)).Attribute("data-role", role));
+            IUiComponent Facts() => new Div(
+                new Dl(
+                    Fact("player.delivery", "mode"),
+                    Fact("player.picture", "resolution"),
+                    Fact("player.info.container", "fact-container"),
+                    Fact("player.info.bitrate", "fact-bitrate"),
+                    Fact("player.info.video", "fact-video"),
+                    Fact("player.info.audiofile", "fact-audiofile"),
+                    Fact("player.audio", "fact-audio", new ValueText(Audio.FirstOrDefault(track => track.IsSelected)?.Label ?? Audio.FirstOrDefault()?.Label ?? "")),
+                    Fact("playback.quality", "fact-quality", new Text("playback.quality." + (source.Preferences?.QualityKey ?? "Automatic"))),
+                    Fact("player.info.videopath", "fact-videopath"),
+                    Fact("player.info.audiopath", "fact-audiopath"),
+                    Fact("player.info.frames", "fact-frames"),
+                    Fact("player.info.buffer", "fact-buffer"),
+                    Fact("player.info.codecs", "fact-codecs"),
+                    Fact("player.info.network", "fact-network")).Class("player__facts"),
+                new Button(new Text("player.info.copy")).Class("button player__copy").Attribute("data-action", "copy-info").Attribute("hidden", "hidden"))
+                .Class("player__info").Attribute("data-copied", texts["player.info.copied"]).Attribute("data-converted", texts["player.info.converted"]);
 
             IUiComponent Settings()
             {
@@ -261,8 +299,8 @@ namespace Jularr.Frontend.Framework
                         new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("popovertarget", "player-settings").Attribute("popovertargetaction", "hide")),
                     new Div(
                         Pane("basic", AudioField("basic"), SubtitleField("basic"), SpeedField("basic"), QualityField("basic")),
-                        Pane("audio", AudioField("audio")),
-                        Pane("subtitles", SubtitleField("subtitles")),
+                        Pane("audio", AudioField("audio"), OffsetField("audio", "player.offset.audio")),
+                        Pane("subtitles", SubtitleField("subtitles"), OffsetField("subtitle", "player.offset.subtitles")),
                         Pane("playback", [QualityField("playback"), SpeedField("playback"), FitField(), .. PreferenceFields()]),
                         Pane("info", Facts())
                     ).Class("player__settings-body"),

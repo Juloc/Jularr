@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { test } from 'node:test';
-import ts from 'typescript';
+import ts from './transpile.mjs';
 
 const compile = name => ts.transpileModule(readFileSync(new URL(`../Modules/Reader/${name}.ts`, import.meta.url), 'utf8'),
     { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
@@ -23,7 +23,7 @@ test('one column measurement counts the same scrolled LTR and RTL content withou
     assert.equal(exports.paperPageCount(content, 2, 40, false), 3);
 });
 
-function harness(fetchChapter, cached = new Map(), section = 1) {
+function harness(fetchChapter, cached = new Map(), section = 1, storage = undefined) {
     let currentImages = [], font = '20px serif';
     const events = new Map(), windowEvents = new Map(), documentEvents = new Map();
     const tasks = new Map();
@@ -57,10 +57,10 @@ function harness(fetchChapter, cached = new Map(), section = 1) {
         addEventListener(name, callback) { windowEvents.set(name, callback); }
     };
     const exports = {};
-    runInNewContext(compile('BookPages'), { exports, window, document, AbortController, TextDecoder,
+    runInNewContext(compile('BookPages'), { exports, window, document, AbortController, TextDecoder, ...storage ? { localStorage: storage } : {},
         performance: { now: () => clock }, clearTimeout: id => tasks.delete(id), fetch: fetchChapter,
         getComputedStyle: () => ({ font, letterSpacing: 'normal', getPropertyValue: () => '68ch' }),
-        require: name => name === './PaperMeasure' ? { paperPageCount: () => Number(measuring) } : {
+        require: name => name === './PaperMeasure' ? { paperPageCount: () => Number(measuring) } : name === './Lifetime' ? { readerLifetime: () => new AbortController().signal } : {
             readBookPageCounts: async key => cached.get(key)?.slice(),
             writeBookPageCounts: async (key, counts) => { cached.set(key, counts.slice()); }
         }
@@ -190,6 +190,26 @@ test('choosing the original language with a regional tag does not disable measur
     await h.advance();
     await h.advance();
     assert.equal(h.reader.dataset.bookPageCount, '11');
+});
+
+test('the drawn thickness keeps the last complete count across chapters and while a new layout is counted', async () => {
+    const values = new Map();
+    const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, String(value)) };
+    const fetchChapter = async url => new Response(JSON.stringify({ sectionIndex: Number(url.at(-1)), html: '4' }));
+    const first = harness(fetchChapter, new Map(), 1, storage);
+    first.counter.update(first.layout);
+    await first.advance();
+    await first.advance();
+    assert.equal(first.reader.dataset.bookThickPages, '11');
+    const next = harness(fetchChapter, new Map(), 2, storage);
+    assert.deepEqual([next.reader.dataset.bookThickPages, next.reader.dataset.bookThickBefore], ['11', '7'], 'a new chapter draws the book at once');
+    next.counter.update({ ...next.layout, pages: 4 });
+    assert.deepEqual([next.reader.dataset.bookPageState, next.reader.dataset.bookPageCount, next.reader.dataset.bookPageBefore], ['ready', '11', '7'],
+        'the same layout counts the next chapter synchronously, without a paused or chapter-only state');
+    first.setFont('26px sans-serif');
+    first.counter.update(first.layout);
+    assert.equal(first.reader.dataset.bookPageCount, undefined);
+    assert.equal(first.reader.dataset.bookThickPages, '11', 'counting a new layout keeps the thickness');
 });
 
 test('completed book pages survive chapter navigation and reload without a second background fetch', async () => {

@@ -246,7 +246,7 @@ namespace Jularr.Backend.Tests
             public override DateTimeOffset GetUtcNow() => Now;
         }
 
-        private sealed class Interaction : IBrowserInteraction, ISourceBrowser
+        internal sealed class Interaction : IBrowserInteraction, ISourceBrowser
         {
             public static readonly byte[] Picture = [0xff, 0xd8, 0xff, 0xd9];
             public bool HasManualControl { get; set; }
@@ -260,6 +260,7 @@ namespace Jularr.Backend.Tests
             public bool FailNextCapture { get; set; }
             public bool FailNextStart { get; set; }
             public string? Text { get; private set; }
+            public Func<Uri, CancellationToken, Task<string?>>? ReadHtml { get; init; }
             public Task<BrowserViewport> BeginManualAsync(Uri address, DateTimeOffset expiresAt, CancellationToken ct)
             {
                 Starts++;
@@ -294,8 +295,16 @@ namespace Jularr.Backend.Tests
                 HasManualControl = false;
                 return Task.CompletedTask;
             }
-            public Task<string?> ReadPageAsync(Uri uri, CancellationToken ct) => Task.FromResult<string?>(null);
-            public Task<BrowserPage?> ReadPagesAsync(IReadOnlyList<Uri> addresses, CancellationToken ct) => Task.FromResult<BrowserPage?>(null);
+            public Task<string?> ReadPageAsync(Uri uri, CancellationToken ct) =>
+                HasManualControl || ReadHtml is null ? Task.FromResult<string?>(null) : ReadHtml(uri, ct);
+            public async Task<BrowserPage?> ReadPagesAsync(IReadOnlyList<Uri> addresses, CancellationToken ct)
+            {
+                foreach (var address in addresses)
+                {
+                    if (await ReadPageAsync(address, ct) is { } html) return new BrowserPage(address, html);
+                }
+                return null;
+            }
             public Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct) => Task.CompletedTask;
             public Task<SourceBrowserStatus> StartAsync(CancellationToken ct) => Task.FromResult(Status);
             public Task StopAsync() => Task.CompletedTask;

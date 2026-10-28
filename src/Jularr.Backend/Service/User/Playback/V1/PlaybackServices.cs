@@ -468,7 +468,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
             // A device asking for smaller music converts it when it can; otherwise the original plays.
             var kilobits = _transcodes.IsAvailable && source.DurationMs is not null ? PlaybackLogic.AudioKilobits(target, tracks, source.BitRate) : null;
             var smaller = kilobits is null ? null : PlaybackLogic.PlanConversion(tracks, containers, videoCodecs, audioCodecs, audioStreamIndex, kilobits, target, source.BitRate);
-            direct &= smaller is null;
+            direct &= smaller is null && Data.AudioOffsetMs == 0;
             var conversion = direct ? null : smaller ?? PlaybackLogic.PlanConversion(tracks, containers, videoCodecs, audioCodecs, audioStreamIndex, null, target, source.BitRate);
             if (!direct && (conversion is null || source.DurationMs is null || !_transcodes.IsAvailable))
             {
@@ -505,10 +505,22 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 var chosen = _transcodes.Admit([.. candidates.Select(candidate => candidate.Weight)], limits.TranscodingPriority, limits.MaxTranscodes ?? _options.MaxTranscodes, index =>
                 {
                     var (plan, weight, _) = candidates[index];
-                    return new PlaybackTranscodeSource(sessionId, lookup.ProfileId, _storage.Input(files, path), plan.VideoStreamIndex, plan.AudioStreamIndex, plan.CopyVideo, plan.CopyAudio,
-                        source.DurationMs!.Value, plan.AudioKilobits, plan.MaxHeight, plan.VideoKilobits) { Weight = weight, HasPriority = limits.TranscodingPriority, Encoding = encoding };
+                    // Moving the audio re-encodes it, whatever the file offers.
+                    return new PlaybackTranscodeSource(sessionId, lookup.ProfileId, _storage.Input(files, path), plan.VideoStreamIndex, plan.AudioStreamIndex, plan.CopyVideo, plan.CopyAudio && Data.AudioOffsetMs == 0,
+                        source.DurationMs!.Value, plan.AudioKilobits ?? (Data.AudioOffsetMs != 0 ? 192 : null), plan.MaxHeight, plan.VideoKilobits)
+                    { Weight = weight, HasPriority = limits.TranscodingPriority, Encoding = encoding, AudioOffsetMs = Data.AudioOffsetMs };
                 });
                 conversion = candidates[chosen].Plan;
+                if (Data.AudioOffsetMs != 0 && conversion.CopyAudio)
+                {
+                    conversion = new PlaybackConversion(PlaybackModeType.Transcode, conversion.VideoStreamIndex, conversion.AudioStreamIndex, conversion.CopyVideo, false)
+                    {
+                        AudioKilobits = 192,
+                        MaxHeight = conversion.MaxHeight,
+                        VideoKilobits = conversion.VideoKilobits
+                    };
+                }
+
                 reduced = candidates[chosen].IsReduced;
             }
 

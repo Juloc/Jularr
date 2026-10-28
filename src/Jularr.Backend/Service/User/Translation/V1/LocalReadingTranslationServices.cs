@@ -41,6 +41,46 @@ namespace Jularr.Backend.Service.User.Translation.V1
             }
             catch (JsonException) { return null; }
         }
+
+        // Adds translated blocks to a section's cache under the document's row lock, so the Reader and the background job never
+        // lose each other's blocks; a block already translated stays. Never called while a model runs.
+        public static async Task<string[]> StoreAsync(LogicContext ctx, long documentId, string path, string html, string sourceLanguage,
+            string digest, int count, IReadOnlyDictionary<int, string> blocks, CancellationToken ct)
+        {
+            var lockSql = new SqlStatement();
+            lockSql.Statement =
+                """
+                SELECT document."Id" AS "DocumentId"
+                FROM "ReadingDocuments" AS document
+                WHERE document."Id" = @DocumentId FOR UPDATE;
+                """;
+            lockSql.Parameters.Add(new ReadingDocumentIdData(documentId));
+            await ctx.ReadRequiredAsync<ReadingDocumentIdData>(lockSql, ct);
+
+            var query = new SqlStatement();
+            query.Statement =
+                """
+                SELECT convert_from(resource."Bytes", 'UTF8') AS "Blocks"
+                FROM "ReadingResources" AS resource
+                WHERE resource."ReadingDocumentId" = @DocumentId AND resource."Path" = @Path;
+                """;
+            query.Parameters.Add(new ReadingTranslationPathData(documentId, path));
+            var existing = await ctx.ReadOptionalAsync<ReadingTranslationV1>(query, ct);
+            var texts = (existing is null ? null : Parse(existing.Blocks, html, sourceLanguage, digest, count))?.Texts ?? new string[count];
+            var changed = false;
+            foreach (var (index, value) in blocks)
+            {
+                if (!string.IsNullOrWhiteSpace(texts[index])) continue;
+                texts[index] = value;
+                changed = true;
+            }
+            if (changed)
+            {
+                var replacement = new LocalTranslationCache(Algorithm, sourceLanguage, SourceHash(html, sourceLanguage), digest, texts);
+                await ctx.SaveReadingResourceAsync(new ReadingResourceData(documentId, path, "application/json", Encoding.UTF8.GetBytes(JsonSerializer.Serialize(replacement))), ct);
+            }
+            return texts;
+        }
     }
 
     internal sealed record LocalTranslationCache(int AlgorithmVersion, string SourceLanguage, string SourceHash, string ModelDigest, string[] Texts);
@@ -209,27 +249,8 @@ namespace Jularr.Backend.Service.User.Translation.V1
                 // The row lock exists even when there is no resource yet. Never lock during inference.
                 return await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 {
-                    var lockSql = new SqlStatement();
-                    lockSql.Statement =
-                        """
-                        SELECT document."Id" AS "DocumentId"
-                        FROM "ReadingDocuments" AS document
-                        WHERE document."Id" = @DocumentId FOR UPDATE;
-                        """;
-                    lockSql.Parameters.Add(new ReadingDocumentIdData(Parameters.DocumentId));
-                    await ctx.ReadRequiredAsync<ReadingDocumentIdData>(lockSql, ct);
-
-                    var existing = await ctx.ReadOptionalAsync<ReadingTranslationV1>(query, ct);
-                    var cache = existing is null ? null : LocalReadingPaths.Parse(existing.Blocks, section.Html, Data.SourceLanguage, digest, nodes.Length);
-                    var texts = cache?.Texts ?? new string[nodes.Length];
-                    if (string.IsNullOrWhiteSpace(texts[Parameters.BlockIndex]))
-                    {
-                        texts[Parameters.BlockIndex] = value;
-                        var replacement = new LocalTranslationCache(LocalReadingPaths.Algorithm, Data.SourceLanguage,
-                            LocalReadingPaths.SourceHash(section.Html, Data.SourceLanguage), digest, texts);
-                        await ctx.SaveReadingResourceAsync(new ReadingResourceData(Parameters.DocumentId, path,
-                            "application/json", Encoding.UTF8.GetBytes(JsonSerializer.Serialize(replacement))), ct);
-                    }
+                    var texts = await LocalReadingPaths.StoreAsync(ctx, Parameters.DocumentId, path, section.Html, Data.SourceLanguage, digest, nodes.Length,
+                        new Dictionary<int, string> { [Parameters.BlockIndex] = value }, ct);
                     return (IServiceOutput)new LocalReadingBlockV1(texts[Parameters.BlockIndex]);
                 }, CancellationToken);
             }
