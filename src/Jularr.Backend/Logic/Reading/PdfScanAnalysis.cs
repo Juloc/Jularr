@@ -14,6 +14,10 @@ namespace Jularr.Backend.Logic.Reading
         private const int WorkHeight = 1000;
         private const float UnsureWord = 0.85f;
 
+        // A line read with less certainty than this as a whole gives way to the layer where the layer reads plausibly and holds more.
+        private const double UnsureLine = 0.8;
+        private const double PlausibleLayer = 0.8;
+
         public static IReadOnlyList<RecognizedLine> Analyse(SKBitmap page, OcrPage read, IReadOnlyList<PdfLayerWord> layer)
         {
             var (width, height) = ((double)read.Width, (double)read.Height);
@@ -23,6 +27,7 @@ namespace Jularr.Backend.Logic.Reading
                 .GroupBy(word => word).ToDictionary(group => group.Key, group => group.Count());
             var lines = read.Lines.Select(line => new RecognizedLine(Round(line.Left / width), Round(line.Top / height), Round(line.Right / width), Round(line.Bottom / height),
                 Text(line, layer, width, height, common), Math.Round(line.Confidence, 3))).Where(line => line.Text.Length > 0).ToList();
+            lines = Layered(lines, layer, width, height);
 
             using var work = Small(page);
             var pictures = Pictures(work, lines);
@@ -45,6 +50,54 @@ namespace Jularr.Backend.Logic.Reading
                 && (label.Left + label.Right) / 2 < Math.Max(one.Left, other.Left) && (label.Top + label.Bottom) / 2 > Math.Max(one.Top, other.Top) - body
                 && (label.Top + label.Bottom) / 2 < Math.Min(one.Bottom, other.Bottom) + body));
             result.AddRange(pictures);
+            return result;
+        }
+
+        // A line the recognizer was unsure of as a whole (a box it drew across two columns, small type beside large) takes the scan's own layer where that
+        // reads plausibly and holds more: the layer's words in its box that no surer line holds, as lines column by column and row by row.
+        private static List<RecognizedLine> Layered(List<RecognizedLine> lines, IReadOnlyList<PdfLayerWord> layer, double width, double height)
+        {
+            bool Inside(PdfLayerWord word, RecognizedLine line) => (word.Left + word.Right) / 2 is var x && x >= line.Left && x <= line.Right
+                && (word.Top + word.Bottom) / 2 is var y && y >= line.Top && y <= line.Bottom;
+            var sure = lines.Where(line => line.Confidence >= UnsureLine).ToList();
+            var result = new List<RecognizedLine>();
+            foreach (var line in lines)
+            {
+                var words = line.Confidence >= UnsureLine ? [] : layer.Where(word => Inside(word, line) && !sure.Any(other => Inside(word, other))).ToList();
+                if (words.Count < 2 || PdfQuality.Score(words.Select(word => word.Text)) < PlausibleLayer
+                    || words.Sum(word => Letters(word.Text).Length) <= Letters(line.Text).Length)
+                {
+                    result.Add(line);
+                    continue;
+                }
+
+                // Columns: a gap wider than a line's height between neighbouring words; rows within them by the words' middles.
+                var tall = words.Average(word => word.Bottom - word.Top) * height;
+                var columns = new List<List<PdfLayerWord>>();
+                foreach (var word in words.OrderBy(word => word.Left))
+                {
+                    var column = columns.FirstOrDefault(column => (word.Left - column.Max(other => other.Right)) * width <= tall * 1.2 && word.Left * width >= column.Min(other => other.Left) * width - tall);
+                    if (column is null)
+                    {
+                        columns.Add([word]);
+                    }
+                    else
+                    {
+                        column.Add(word);
+                    }
+                }
+
+                foreach (var column in columns)
+                {
+                    foreach (var row in column.GroupBy(word => Math.Round((word.Top + word.Bottom) / 2 * height / Math.Max(1, tall * 0.8))).OrderBy(row => row.Key))
+                    {
+                        var ordered = row.OrderBy(word => word.Left).ToList();
+                        result.Add(new RecognizedLine(Round(ordered.Min(word => word.Left)), Round(ordered.Min(word => word.Top)), Round(ordered.Max(word => word.Right)),
+                            Round(ordered.Max(word => word.Bottom)), string.Join(' ', ordered.Select(word => Typeset(word.Text))), UnsureLine));
+                    }
+                }
+            }
+
             return result;
         }
 
