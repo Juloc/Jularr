@@ -108,8 +108,10 @@ namespace Jularr.E2E.Tests
         }
 
         [TestMethod]
+        [DataRow(true)]
+        [DataRow(false)]
         [Timeout(300_000)]
-        public async Task TakeoverStep_ConnectsReadsAndShowsWhatItFoundThenTakesOver()
+        public async Task TakeoverStep_ConnectsReadsAndShowsWhatItFoundThenTakesOver(bool withTvdbKey)
         {
             using var folders = new Folders("Series");
             await using var fakes = await FakeServices.StartAsync(folders.Downloads);
@@ -135,11 +137,19 @@ namespace Jularr.E2E.Tests
                 await page.GetByRole(AriaRole.Button, new() { Name = "Continue", Exact = true }).ClickAsync();
                 await page.WaitForURLAsync("**/Setup/Takeover");
 
-                // Titles are identified through TMDB, so its key is asked for right in the step.
+                // Films are identified through TMDB and series through TheTVDB, so their keys are asked for right in the step.
                 var tmdb = page.Locator(".setup-source", new() { HasText = "TMDB" });
+                await Assertions.Expect(page.Locator(".setup-source", new() { HasText = "TVDB" })).ToHaveCountAsync(1);
                 await tmdb.Locator("[name=Secret]").FillAsync(FakeServices.TmdbToken);
                 await tmdb.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }).ClickAsync();
                 await Assertions.Expect(page.Locator(".setup-source", new() { HasText = "TMDB" })).ToHaveCountAsync(0);
+                if (withTvdbKey)
+                {
+                    var tvdb = page.Locator(".setup-source", new() { HasText = "TVDB" });
+                    await tvdb.Locator("[name=Secret]").FillAsync(FakeServices.TvdbKey);
+                    await tvdb.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }).ClickAsync();
+                    await Assertions.Expect(page.Locator(".setup-source", new() { HasText = "TVDB" })).ToHaveCountAsync(0);
+                }
 
                 // A wrong key is answered in plain words, in the card of that system only.
                 var sonarr = page.Locator(".setup-source", new() { HasText = "Sonarr" });
@@ -179,6 +189,14 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(sonarr).ToContainTextAsync("Taken over");
                 Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(DISTINCT \"WorkId\") FROM \"WorkLibraryRelations\""));
                 Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"LibraryRoots\""));
+
+                // The series is TheTVDB's with Sonarr's ids; without TheTVDB's key it comes over all the same and its details follow once the key is there.
+                Assert.AreEqual("imdb tmdb_tv tvdb", await jularr.ScalarAsync("""
+                    SELECT string_agg(identity."Namespace", ' ' ORDER BY identity."Namespace")
+                    FROM "WantedItems" AS wanted JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = wanted."WorkId"
+                    WHERE identity."Namespace" IN ('imdb', 'tmdb_tv', 'tvdb') AND identity."Value" IN ('tt9900001', '99001', '990001')
+                    """));
+                Assert.AreEqual(withTvdbKey, await jularr.ScalarAsync("SELECT work.\"DetailedAt\" IS NOT NULL FROM \"WantedItems\" AS wanted JOIN \"Works\" AS work ON work.\"Id\" = wanted.\"WorkId\""));
                 Assert.AreEqual(0L, await jularr.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\" WHERE \"IsEnabled\" AND \"AcquisitionConnectionTypeId\" = 2"), "A takeover starts no download client.");
                 Assert.AreEqual(0, fakes.Grabbed.Count, "A takeover starts no downloads.");
                 await Evidence.SaveAsync(page, "setup-takeover-done");

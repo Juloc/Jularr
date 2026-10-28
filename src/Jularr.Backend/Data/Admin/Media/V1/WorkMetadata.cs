@@ -86,7 +86,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
             WorkId = workId;
         }
 
-        // The provider: tmdb_movie, tvdb, tmdb_tv (a series TMDB found, imported from TheTVDB), openlibrary, anilist, musicbrainz or igdb.
+        // The provider: tmdb_movie, tvdb, openlibrary, anilist, musicbrainz or igdb.
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
         public string Namespace { get; }
 

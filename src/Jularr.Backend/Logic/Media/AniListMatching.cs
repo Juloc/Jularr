@@ -2,8 +2,8 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Logic.Media;
 using Jularr.Integrations.Data.AniList;
-using Jularr.Integrations.Data.Tmdb;
 
 namespace Jularr.Backend.Logic.Media
 {
@@ -119,13 +119,13 @@ namespace Jularr.Backend.Logic.Media
             return aligned;
         }
 
-        // The TMDB series of an anime's first season: exactly one result named like it and, where known, started within a year.
-        public static int? ChooseSeries(IReadOnlyList<TmdbSearchResult> results, AniListMedia first)
+        // The TheTVDB series of an anime's first season: exactly one search result named like it and, where known, started within a year.
+        public static int? ChooseSeries(IReadOnlyList<ExternalWorkData> results, AniListMedia first)
         {
             var names = Names(first).Where(name => name.Length > 0).ToHashSet(StringComparer.Ordinal);
             var exact = results.Where(result => (names.Contains(Normalize(result.Title)) || result.OriginalTitle is { } original && names.Contains(Normalize(original)))
-                && (first.Year is null || result.Year is null || Math.Abs(result.Year.Value - first.Year.Value) <= 1)).ToArray();
-            return exact.Length == 1 ? exact[0].Id : null;
+                && (first.Year is null || result.ReleaseYear is null || Math.Abs(result.ReleaseYear.Value - first.Year.Value) <= 1)).ToArray();
+            return exact.Length == 1 && int.TryParse(exact[0].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : null;
         }
 
         private static IEnumerable<string> Names(AniListMedia media) =>

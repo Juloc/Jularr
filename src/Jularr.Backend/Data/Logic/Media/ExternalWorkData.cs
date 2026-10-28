@@ -68,6 +68,10 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.SeasonNumber), false)]
         public int? SeasonNumber { get; }
+
+        // TMDB's and IMDb's ids of a TheTVDB series a TMDB list or Sonarr named; the Work keeps them as further identities.
+        public string? TmdbValue { get; init; }
+        public string? ImdbValue { get; init; }
     }
 
     // Whether a Work the profile may open has its details yet; a series that is only an anime season names its AniList entry.
@@ -187,6 +191,8 @@ namespace Jularr.Backend.Data.Logic.Media
             ImageUrls = works.Select(work => work.ImageUrl).ToArray();
             BackdropUrls = works.Select(work => work.BackdropUrl).ToArray();
             Ratings = works.Select(work => work.Rating ?? 0).ToArray();
+            TmdbValues = works.Select(work => work.TmdbValue).ToArray();
+            ImdbValues = works.Select(work => work.ImdbValue).ToArray();
         }
 
         public string Namespace { get; }
@@ -203,6 +209,8 @@ namespace Jularr.Backend.Data.Logic.Media
         public string?[] ImageUrls { get; }
         public string?[] BackdropUrls { get; }
         public decimal[] Ratings { get; }
+        public string?[] TmdbValues { get; }
+        public string?[] ImdbValues { get; }
     }
 
     // One Discover shelf of a whole catalog, or a scope to search without a list: Shelf numbers it within the request.

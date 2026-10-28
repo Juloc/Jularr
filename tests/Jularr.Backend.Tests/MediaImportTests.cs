@@ -327,6 +327,33 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Import_Series_IsTheTvdbSeries_ByItsOwnIdImdbsIdOrItsTitle()
+        {
+            await using var host = await CreateHostAsync(new FakeProviders());
+            var list = """
+                {"version":1,"items":[
+                  {"type":"series","ids":{"imdb":"tt0081189"}},
+                  {"type":"series","ids":{"tvdb":"81189"}},
+                  {"type":"series","title":"Fake Show"}
+                ]}
+                """;
+
+            // An IMDb id finds TheTVDB's series, the same one the TheTVDB id names; a title proposes TheTVDB's search results.
+            var preview = await PreviewAsync(host, list);
+            CollectionAssert.AreEqual(new[] { MediaImportStatusType.New, MediaImportStatusType.Duplicate, MediaImportStatusType.Open }, preview.Rows.Select(row => row.StatusTypeId).ToArray());
+            Assert.AreEqual("tvdb:81189", preview.Rows[0].Choice);
+            Assert.AreEqual(0, preview.Rows[1].DuplicateOf);
+            Assert.AreEqual("tvdb:81189", preview.Rows[2].Candidates.Single().Choice);
+
+            // The series is TheTVDB's with TMDB's id beside it.
+            await RunAsync(host, list, MediaImportActionType.AddOnly);
+            Assert.AreEqual("tmdb_tv:1399 tvdb:81189", await host.ScalarAsync("""
+                SELECT string_agg(identity."Namespace" || ':' || identity."Value", ' ' ORDER BY identity."Namespace") FROM "WorkExternalIdentities" AS identity JOIN "Works" AS work ON work."Id" = identity."WorkId"
+                WHERE work."MediaTypeId" = 2
+                """));
+        }
+
+        [TestMethod]
         public async Task Import_AddOnlyThenMonitor_KeepsOneWorkAndGivesItATargetLater()
         {
             await using var host = await CreateHostAsync(new FakeProviders());
@@ -750,12 +777,16 @@ namespace Jularr.Backend.Tests
                     });
                 }
 
-                // TheTVDB describes the series TMDB names.
+                // TheTVDB describes the series TMDB names and finds it by its IMDb id and its name.
                 if (uri.Host == "api4.thetvdb.com")
                 {
                     return Task.FromResult(uri.AbsolutePath switch
                     {
                         "/v4/login" => Json("""{"data":{"token":"tvdb-test-token"}}"""),
+                        "/v4/search/remoteid/tt0081189" => Json("""{"data":[{"series":{"id":81189}}]}"""),
+                        "/v4/search" when uri.Query.Contains("Fake%20Show", StringComparison.Ordinal)
+                            => Json("""{"data":[{"tvdb_id":"81189","name":"Fake Show","year":"2020","type":"series","translations":{"eng":"Fake Show"}}]}"""),
+                        "/v4/search" => Json("""{"data":[]}"""),
                         "/v4/series/81189/extended" => Json("""{"data":{"id":81189,"name":"Fake Show","overview":"A show.","firstAired":"2020-01-01","remoteIds":[{"sourceName":"TheMovieDB.com","id":"1399"}]}}"""),
                         "/v4/series/81189/episodes/default" => Json("""{"data":{"episodes":[]},"links":{"next":null}}"""),
                         _ => new HttpResponseMessage(HttpStatusCode.NotFound)

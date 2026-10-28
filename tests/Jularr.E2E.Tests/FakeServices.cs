@@ -147,7 +147,7 @@ namespace Jularr.E2E.Tests
                 }
             });
             app.MapGet("/tmdb/3/{**path}", Tmdb);
-            app.MapMethods("/tvdb/v4/{**path}", ["GET", "POST"], Tvdb);
+            app.MapMethods("/tvdb/v4/{**path}", ["GET", "POST"], (HttpRequest request, string path) => Tvdb(request, path));
             app.MapGet("/images/{**path}", () =>
             {
                 Interlocked.Increment(ref services._imageRequests);
@@ -201,13 +201,23 @@ namespace Jularr.E2E.Tests
             };
         }
 
-        private static IResult Tvdb(string path) => path switch
+        private static IResult Tvdb(HttpRequest request, string path) => path switch
         {
             "login" => Json("""{"data":{"token":"e2e-tvdb-token"}}"""),
+            // Series are searched at TheTVDB.
+            "search" when request.Query["query"].ToString().Contains("Test Series", StringComparison.OrdinalIgnoreCase) => Json("""
+                {"data":[{"tvdb_id":"990001","name":"Jularr Test Series","year":"2020","type":"series","primary_language":"eng","image_url":"https://artworks.thetvdb.com/banners/series.png",
+                "translations":{"eng":"Jularr Test Series"},"overviews":{"eng":"Two test episodes."}}]}
+                """),
+            "search" when request.Query["query"].ToString().Contains("Anime", StringComparison.OrdinalIgnoreCase) => Json("""
+                {"data":[{"tvdb_id":"990002","name":"Reidai Anime","year":"2021","type":"series","primary_language":"jpn","translations":{"jpn":"Reidai Anime","eng":"Example Anime"},
+                "overviews":{"eng":"Two test episodes."}}]}
+                """),
+            "search" => Json("""{"data":[]}"""),
             // Series and anime come from TheTVDB with all their facts; TMDB only names them in its lists and gives the rating.
             "series/990001/extended" => Json("""
                 {"data":{"id":990001,"name":"Jularr Test Series","overview":"Two test episodes.","firstAired":"2020-04-01","year":"2020","originalLanguage":"eng","originalCountry":"deu",
-                "status":{"name":"Ended"},"remoteIds":[{"id":"99001","sourceName":"TheMovieDB.com"}],"genres":[{"name":"Drama"}],"originalNetwork":{"name":"Test Network"},
+                "status":{"name":"Ended"},"remoteIds":[{"id":"99001","sourceName":"TheMovieDB.com"},{"id":"tt9900001","sourceName":"IMDB"}],"genres":[{"name":"Drama"}],"originalNetwork":{"name":"Test Network"},
                 "artworks":[{"image":"https://artworks.thetvdb.com/banners/series.png","language":"eng","type":2,"score":10},{"image":"https://artworks.thetvdb.com/banners/series-backdrop.png","type":3,"score":10}],
                 "trailers":[{"url":"https://www.youtube.com/watch?v=aaaaaaaaaaa","language":"eng"}],
                 "characters":[{"name":"Lead","peopleId":9001,"peopleType":"Actor","personName":"Test Actor","sort":1}],
@@ -323,7 +333,7 @@ namespace Jularr.E2E.Tests
             {
                 "indexer" or "downloadclient" => Json("[]"),
                 "rootfolder" => Json("""[{"path":"/tv","defaultQualityProfileId":4}]"""),
-                "series" => Json("""[{"title":"Jularr Test Series","year":2020,"tmdbId":99001,"monitored":true,"qualityProfileId":4,"path":"/tv/Jularr Test Series","statistics":{"episodeFileCount":0,"episodeCount":2}}]"""),
+                "series" => Json("""[{"title":"Jularr Test Series","year":2020,"tvdbId":990001,"tmdbId":99001,"imdbId":"tt9900001","monitored":true,"qualityProfileId":4,"path":"/tv/Jularr Test Series","statistics":{"episodeFileCount":0,"episodeCount":2}}]"""),
                 "qualityprofile" => Json("""
                     [{"id":4,"name":"Web 1080p","upgradeAllowed":false,"cutoff":1002,"minFormatScore":0,"items":[
                       {"quality":{"id":4,"name":"HDTV-720p","source":"television","resolution":720},"items":[],"allowed":false},

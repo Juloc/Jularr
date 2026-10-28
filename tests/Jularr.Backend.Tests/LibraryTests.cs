@@ -808,11 +808,11 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Scan_UnknownImdbId_ResolvesViaTmdbOnceAndImportsEpisode()
+        public async Task Scan_UnknownImdbId_ResolvesViaTvdbOnceAndImportsEpisode()
         {
             using var storage = new TemporaryDirectory();
-            var source = new FakeTmdbIdentity();
-            await using var host = await CreateSeriesHostAsync(storage.Path, source);
+            var source = new FakeTvdbSeries();
+            await using var host = await CreateSeriesHostAsync(storage.Path, new FakeTmdbIdentity(), source);
 
             var mountId = await CreateMountAsync(host);
             var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Example Show - tt39551287", "Season 1");
@@ -828,9 +828,9 @@ namespace Jularr.Backend.Tests
                 JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = asset."WorkId"
                 WHERE identity."Namespace" = 'imdb' AND identity."Value" = 'tt39551287';
                 """));
-            Assert.AreEqual(1, source.FindRequests);
+            Assert.AreEqual(1, source.RemoteRequests);
             await ScanAsync(host, rootId);
-            Assert.AreEqual(1, source.FindRequests);
+            Assert.AreEqual(1, source.RemoteRequests);
         }
 
         [TestMethod]
@@ -1055,12 +1055,12 @@ namespace Jularr.Backend.Tests
 
         // TheTVDB names the series 4001 with a special and two episodes; TMDB would name only one episode.
         // Series scans: TMDB names the series, TheTVDB describes them; both keys are set.
-        private static async Task<Host> CreateSeriesHostAsync(string storagePath, HttpMessageHandler tmdb)
+        private static async Task<Host> CreateSeriesHostAsync(string storagePath, HttpMessageHandler tmdb, FakeTvdbSeries? tvdb = null)
         {
             var host = await CreateHostAsync(storagePath, services: services =>
             {
                 services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => tmdb);
-                services.AddHttpClient<Jularr.Integrations.Logic.Tvdb.TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTvdbSeries());
+                services.AddHttpClient<Jularr.Integrations.Logic.Tvdb.TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => tvdb ?? new FakeTvdbSeries());
             });
             foreach (var key in new[] { "tmdb", "tvdb" })
             {
@@ -1073,12 +1073,16 @@ namespace Jularr.Backend.Tests
         }
 
         // TheTVDB knows Show 1 as 4001 (and as 9999, an id TMDB does not link yet) with a special and two episodes, Show n of FakeTmdbSeries as 7000 + n
-        // and Example Show as 24680, each with one episode.
+        // and Example Show as 24680, each with one episode; it finds a series by its IMDb id and Show 1 by its name.
         private sealed class FakeTvdbSeries : HttpMessageHandler
         {
+            public int RemoteRequests { get; private set; }
+
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 var path = request.RequestUri!.AbsolutePath;
+                if (path.StartsWith("/v4/search/remoteid/", StringComparison.Ordinal)) RemoteRequests++;
+                var remote = path.StartsWith("/v4/search/remoteid/tt20000", StringComparison.Ordinal) && int.TryParse(path[^2..], out var show) && show > 1 ? 7000 + show : (int?)null;
                 var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
                 var id = parts is ["v4", "series", var value, ..] && int.TryParse(value, out var number) ? number : 0;
                 var (name, imdb, tmdb) = id switch
@@ -1092,6 +1096,11 @@ namespace Jularr.Backend.Tests
                 {
                     "/v4/login" => """{"data":{"token":"tvdb-test-token"}}""",
                     "/v4/search/remoteid/tt2000001" => """{"data":[{"series":{"id":4001}}]}""",
+                    "/v4/search/remoteid/tt39551287" => """{"data":[{"series":{"id":24680}}]}""",
+                    _ when remote is { } found => $$$"""{"data":[{"series":{"id":{{{found}}}}}]}""",
+                    "/v4/search" when request.RequestUri!.Query.Contains("Show%201", StringComparison.Ordinal)
+                        => """{"data":[{"tvdb_id":"4001","name":"Show 1","year":"2020","type":"series","translations":{"eng":"Show 1"}}]}""",
+                    "/v4/search" => """{"data":[]}""",
                     "/v4/series/4001/episodes/default" => """{"data":{"episodes":[{"id":10,"seasonNumber":0,"number":1,"name":"Special from TVDB"},{"id":11,"seasonNumber":1,"number":1,"name":"First from TVDB"},{"id":12,"seasonNumber":1,"number":2,"name":"Second from TVDB"}]},"links":{"next":null}}""",
                     _ when name is null => null,
                     _ when parts is [.., "extended"] => $$$"""{"data":{"id":{{{id}}},"name":"{{{name}}}","firstAired":"2020-01-01","remoteIds":[{"sourceName":"IMDB","id":"{{{imdb}}}"},{"sourceName":"TheMovieDB.com","id":"{{{tmdb}}}"}]}}""",
@@ -1183,21 +1192,14 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
         }
 
+        // TMDB gives Example Show's rating.
         private sealed class FakeTmdbIdentity : HttpMessageHandler
         {
-            public int FindRequests { get; private set; }
-
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 var path = request.RequestUri!.AbsolutePath;
-                if (path == "/3/find/tt39551287")
-                {
-                    FindRequests++;
-                }
-
                 var json = path switch
                 {
-                    "/3/find/tt39551287" => """{"movie_results":[],"tv_results":[{"id":1399}]}""",
                     "/3/tv/1399" => """{"id":1399,"name":"Example Show","first_air_date":"2020-01-01","external_ids":{"imdb_id":"tt39551287","tvdb_id":24680},"seasons":[{"season_number":1,"name":"Season 1","episode_count":1}]}""",
                     _ => null
                 };

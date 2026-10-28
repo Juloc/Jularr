@@ -42,6 +42,24 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Search_SeriesOnly_WithYearPageAndNamesPerLanguage()
+        {
+            using var client = CreateClient((request, _) =>
+            {
+                Assert.AreEqual("/v4/search", request.RequestUri!.AbsolutePath);
+                StringAssert.Contains(request.RequestUri.Query, "query=The%20Show&type=series&year=2020&offset=20&limit=20");
+                return Reply("""
+                    {"data":[{"tvdb_id":"81189","name":"Die Serie","year":"2020","type":"series","primary_language":"deu","image_url":"/banners/81189.jpg","overview":"Eine Serie.",
+                    "translations":{"deu":"Die Serie","eng":"The Show"},"overviews":{"eng":"A show."}},
+                    {"tvdb_id":"81189","name":"Die Serie","type":"series"},{"tvdb_id":"5","name":"A film","type":"movie"},{"name":"No id","type":"series"}]}
+                    """);
+            });
+            var result = (await new TvdbClient(client).SearchSeriesAsync(new TvdbSession("session"), "The Show", 2020, 20, 20, CancellationToken.None)).Single();
+            Assert.AreEqual((81189, "Die Serie", (int?)2020, "deu", "https://artworks.thetvdb.com/banners/81189.jpg"), (result.Id, result.Name, result.Year, result.OriginalLanguage, result.ImageUrl));
+            Assert.AreEqual(("The Show", "A show."), (result.Names["eng"], result.Overviews["eng"]));
+        }
+
+        [TestMethod]
         public async Task Episodes_IncludeSpecialsAndAllPages_WithoutRepeats()
         {
             using var client = CreateClient((request, _) =>

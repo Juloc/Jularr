@@ -11,7 +11,6 @@ using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Integrations.Data.AniList;
 using Jularr.Integrations.Data.OpenLibrary;
-using Jularr.Integrations.Data.Tmdb;
 using Jularr.Integrations.Logic.OpenLibrary;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -30,7 +29,7 @@ namespace Jularr.Backend.Service.Core
 
         public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string query, int? year, CancellationToken ct)
         {
-            // Books come from Open Library, Manga and Light Novels from AniList only, albums from MusicBrainz, games from IGDB, video from TMDB.
+            // Books come from Open Library, Manga and Light Novels from AniList only, albums from MusicBrainz, games from IGDB, films from TMDB, series from TheTVDB.
             var results = new List<MetadataSearchResultV1>();
             if (BookMetadata.Handles(mediaType))
             {
@@ -56,6 +55,11 @@ namespace Jularr.Backend.Service.Core
                 results.AddRange((await music.SearchAsync(query, year, ct)).Select(result => new MetadataSearchResultV1(MusicMetadata.Namespace, result.Id,
                     result.Title, null, result.Year is >= 1800 and <= 2200 ? result.Year : null, result.PrimaryType, null, result.Artist)));
             }
+            else if (mediaType == MediaType.Series)
+            {
+                results.AddRange((await metadata.SearchSeriesAsync(context, query, year, ct)).Select(result => new MetadataSearchResultV1(result.Namespace, result.Value, result.Title,
+                    result.OriginalTitle, result.ReleaseYear, result.Overview, null, null, result.ImageUrl)));
+            }
             else
             {
                 var connection = await metadata.ConnectAsync(context, ct);
@@ -67,7 +71,7 @@ namespace Jularr.Backend.Service.Core
             return await MarkKnownAsync(context, results, ct);
         }
 
-        // Discover's anime: AniList finds and shows seasons; Works, requests and every action use the series, found through TMDB and imported from TheTVDB.
+        // Discover's anime: AniList finds and shows seasons; Works, requests and every action use the series of TheTVDB.
         public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAnimeAsync(string query, CancellationToken ct) =>
             [.. (await aniList.SearchAsync(AniListMediaType.Anime, AniListMatching.Formats(MediaType.Series, MediaSubtype.Anime), query, ct)).Select(AniListAnime)];
 
@@ -77,10 +81,11 @@ namespace Jularr.Backend.Service.Core
             return media.Format is { } format && AniListMatching.Formats(MediaType.Series, MediaSubtype.Anime).Contains(format) ? media : throw new KeyNotFoundException("Not an anime series.");
         }
 
-        // The series of an entry is the one of its first season, along the prequels; kept for a while either way.
-        private async Task<int?> FindAnimeSeriesAsync(TmdbConnection connection, AniListMedia media, CancellationToken ct)
+        // The TheTVDB series of an entry is the one of its first season, along the prequels; kept for a while either way.
+        // An AniList-to-TheTVDB mapping belongs before the title search, once there is one.
+        private async Task<int?> FindAnimeSeriesAsync(LogicContext context, AniListMedia media, CancellationToken ct)
         {
-            var key = "metadata.anime.series." + media.Id.ToString(CultureInfo.InvariantCulture);
+            var key = "metadata.anime.tvdb." + media.Id.ToString(CultureInfo.InvariantCulture);
             if (cache.TryGetValue(key, out int? cached))
             {
                 return cached;
@@ -116,10 +121,11 @@ namespace Jularr.Backend.Service.Core
                 first = previous;
             }
 
+            // Without a mapping, TheTVDB's title search names the series.
             int? found = null;
             foreach (var query in new[] { first.EnglishTitle, first.RomajiTitle }.OfType<string>().Distinct(StringComparer.Ordinal))
             {
-                found = AniListMatching.ChooseSeries(await metadata.SearchAsync(connection, MediaType.Series, query, null, ct), first);
+                found = AniListMatching.ChooseSeries(await metadata.SearchSeriesAsync(context, query, null, ct), first);
                 if (found is not null)
                 {
                     break;
@@ -296,10 +302,9 @@ namespace Jularr.Backend.Service.Core
             {
                 var media = await ReadAnimeEntryAsync(int.TryParse(externalId, NumberStyles.None, CultureInfo.InvariantCulture, out var aniListId) ? aniListId
                     : throw new KeyNotFoundException("Invalid AniList id."), ct);
-                var connection = await metadata.ConnectAsync(context, ct);
-                return await FindAnimeSeriesAsync(connection, media, ct) is { } tmdbId
-                    ? await metadata.ImportAsync(context, connection, MediaType.Series, MediaSubtype.Anime, tmdbId, ct)
-                    : throw new KeyNotFoundException("TMDB does not know this anime.");
+                return await FindAnimeSeriesAsync(context, media, ct) is { } tvdbId
+                    ? await metadata.ImportSeriesAsync(context, MediaSubtype.Anime, tvdbId, null, ct)
+                    : throw new KeyNotFoundException("TheTVDB does not know this anime.");
             }
 
             // Every other series comes from TheTVDB, also one a TMDB search or list named.

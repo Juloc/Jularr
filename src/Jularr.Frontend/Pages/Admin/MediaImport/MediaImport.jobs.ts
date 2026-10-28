@@ -80,7 +80,7 @@ export function initializeDurableJobs(): void {
     };
     const sourceName = (source: string): string => ({
         library: "Jularr", openlibrary: "Open Library", catalog: "Metadata catalog",
-        tmdb_movie: "TMDB", tmdb_tv: "TMDB", anilist: "AniList",
+        tmdb_movie: "TMDB", tmdb_tv: "TMDB", tvdb: "TVDB", anilist: "AniList",
         igdb: "IGDB", musicbrainz: "MusicBrainz"
     } as Record<string, string>)[source] ?? source;
     const classification = (row: JobRow): string => {

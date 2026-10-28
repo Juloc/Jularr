@@ -1,6 +1,8 @@
 using System.Globalization;
+using System.Text.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
@@ -267,10 +269,14 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     continue;
                 }
 
-                var matchedSeries = mediaType == MediaType.Series && title.TmdbId is null ? await FindSeriesAsync(title) : null;
+                // A series is TheTVDB's, by Sonarr's own id; TMDB's id leads there too, and without either the title and year must name one series.
+                var matchedSeries = mediaType == MediaType.Series && title.TvdbId is null && title.TmdbId is null ? await FindSeriesAsync(title) : null;
                 var identity = mediaType switch
                 {
-                    MediaType.Movie or MediaType.Series => (title.TmdbId?.ToString(CultureInfo.InvariantCulture) ?? matchedSeries) is { } tmdbId ? (mediaType == MediaType.Movie ? "tmdb_movie" : "tmdb_tv", tmdbId) : default,
+                    MediaType.Movie => title.TmdbId is { } movieId ? ("tmdb_movie", movieId.ToString(CultureInfo.InvariantCulture)) : default,
+                    MediaType.Series => title.TvdbId is { } tvdbId ? ("tvdb", tvdbId.ToString(CultureInfo.InvariantCulture))
+                        : title.TmdbId is { } seriesId ? ("tmdb_tv", seriesId.ToString(CultureInfo.InvariantCulture))
+                        : matchedSeries is { } found ? ("tvdb", found) : default,
                     MediaType.Music => title.ExternalId is { } album ? ("musicbrainz", album) : default,
                     _ => ("openlibrary", "")
                 };
@@ -292,15 +298,31 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     continue;
                 }
 
+                // A series may already be a Work by any of Sonarr's ids.
+                var titleIds = new List<object> { new { Namespace = identity.Item1, Value = externalId } };
+                if (mediaType == MediaType.Series)
+                {
+                    if (title.TvdbId is { } tvdb) titleIds.Add(new { Namespace = "tvdb", Value = tvdb.ToString(CultureInfo.InvariantCulture) });
+                    if (title.TmdbId is { } tmdb) titleIds.Add(new { Namespace = "tmdb_tv", Value = tmdb.ToString(CultureInfo.InvariantCulture) });
+                    if (title.ImdbId is { } imdb) titleIds.Add(new { Namespace = "imdb", Value = imdb });
+                }
+
                 var existingWork = await Context.ExecuteBatchAsync((ctx, ct) =>
                 {
                     var sql = new SqlStatement();
                     sql.Statement =
                         """
-                        SELECT identity."WorkId" AS "Id"
-                        FROM "WorkExternalIdentities" AS identity
-                        WHERE identity."Namespace" = @Namespace AND identity."Value" = @Value;
+                        SELECT
+                            identity."WorkId" AS "Id"
+                        FROM
+                            "WorkExternalIdentities" AS identity
+                            JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = identity."Namespace" AND item."Value" = identity."Value"
+                        ORDER BY
+                            identity."Namespace" = @Namespace DESC,
+                            identity."WorkId"
+                        LIMIT 1;
                         """;
+                    sql.Parameters.Add(new WorkIdentityLookupData(JsonSerializer.Serialize(titleIds)));
                     sql.Parameters.Add(new WorkIdentityProbeData(identity.Item1, externalId));
                     return ctx.ReadSql.ReadOptionalAsync<WorkIdData>(sql, ct);
                 }, CancellationToken);
@@ -310,7 +332,25 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     continue;
                 }
 
-                var workId = existingWork?.Id ?? await _catalog.ImportAsync(Context, mediaType, null, identity.Item1, externalId, CancellationToken);
+                long workId;
+                try
+                {
+                    workId = existingWork?.Id ?? await _catalog.ImportAsync(Context, mediaType, null, identity.Item1, externalId, CancellationToken);
+                }
+                catch (ServiceUnavailableException) when (mediaType == MediaType.Series)
+                {
+                    // Without TheTVDB (no key yet, or out of reach) the series comes over with Sonarr's ids, title and year; its details follow once TheTVDB answers.
+                    if (title.TvdbId is not { } tvdbId)
+                    {
+                        items.Add(new TakeoverItemV1(type, name, "takeover_next_run", null));
+                        continue;
+                    }
+
+                    var series = new ExternalWorkData("tvdb", tvdbId.ToString(CultureInfo.InvariantCulture), Limit(title.Title, 500), null, title.Year is >= 1800 and <= 2200 ? title.Year : null,
+                        null, null, null, null, null) { TmdbValue = title.TmdbId?.ToString(CultureInfo.InvariantCulture), ImdbValue = title.ImdbId };
+                    workId = (await MetadataCatalog.KeepWorksAsync(Context, new ExternalWorkListData("tvdb", MediaType.Series, null), [series], CancellationToken)).Single().WorkId!.Value;
+                }
+
                 if (existingWork is null)
                 {
                     taken++;
@@ -373,11 +413,20 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         private static string Limit(string value, int length) => value.Length <= length ? value : value[..length];
 
+        // The one TheTVDB series of that title and year; none while TheTVDB cannot search.
         private async Task<string?> FindSeriesAsync(ServarrTitle title)
         {
-            var found = (await _catalog.SearchAsync(Context, MediaType.Series, null, title.Title, title.Year, CancellationToken))
-                .Where(result => result.Namespace == "tmdb_tv" && TitleMatcher.Matches(title.Title, result.Title)
-                    && title.Year is { } year && result.ReleaseYear == year).ToArray();
+            IReadOnlyList<MetadataSearchResultV1> results;
+            try
+            {
+                results = await _catalog.SearchAsync(Context, MediaType.Series, null, title.Title, title.Year, CancellationToken);
+            }
+            catch (ServiceUnavailableException)
+            {
+                return null;
+            }
+
+            var found = results.Where(result => result.Namespace == "tvdb" && TitleMatcher.Matches(title.Title, result.Title) && title.Year is { } year && result.ReleaseYear == year).ToArray();
             return found.Length == 1 ? found[0].ExternalId : null;
         }
 

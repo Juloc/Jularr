@@ -63,7 +63,7 @@ namespace Jularr.Backend.Tests
                 """);
 
             // Minimal rows of Open Library: 30 old, 31 in a feed, 32 relation target of a Work with details, 34 recent, 35 favorite, 36 old, 37 trending, 38 target of an unused Work;
-            // 33 of AniList, kept whole.
+            // 33 of AniList, kept whole; TheTVDB's series, a catalog without sync settings: 39 old, 40 favorite.
             await host.Fixture.RunSqlAsync($"""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "CatalogNamespace", "FetchedAt", "TrendingRank")
                 VALUES (30, 1, 'Lean old', 'tmdb_movie', {Old}, NULL), (31, 1, 'In a feed', 'tmdb_movie', {Old}, NULL), (32, 1, 'Related', 'tmdb_movie', {Old}, NULL),
@@ -74,6 +74,9 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey") VALUES (22, 32, 1, 'tmdb'), (20, 38, 1, 'tmdb');
                 INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId") SELECT (SELECT min("Id") FROM "Profiles"), 35;
                 UPDATE "Works" SET "CatalogNamespace" = 'openlibrary' WHERE "Id" IN (30, 31, 32, 34, 35, 36, 37, 38);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "CatalogNamespace", "FetchedAt") VALUES (39, 2, 'Series old', 'tvdb', {Old}), (40, 2, 'Series favorite', 'tvdb', {Old});
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (39, 'tvdb', '39'), (40, 'tvdb', '40');
+                INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId") SELECT (SELECT min("Id") FROM "Profiles"), 40;
                 -- Work 20 belongs to a catalog kept whole: it keeps its row once its details are gone; without the full catalog the row would go as well.
                 UPDATE "Works" SET "CatalogNamespace" = 'anilist' WHERE "Id" = 20;
                 """);
@@ -109,9 +112,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"Id\" = 24 AND \"DetailedAt\" IS NULL"));
 
             // A catalog not kept whole loses unused minimal rows; a feed, a relation target of a Work with details, a whole catalog, a recent row, a tie and a trending rank keep them.
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"Id\" IN (30, 36, 38)"), "Unused minimal rows of a catalog not kept whole are deleted.");
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"WorkId\" IN (30, 36, 38)"));
-            foreach (var (id, reason) in new[] { (31, "In a feed"), (32, "Target of a Work with details"), (33, "The full catalog keeps AniList whole"), (34, "Used recently"), (35, "Favorite"), (37, "Trending") })
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"Id\" IN (30, 36, 38, 39)"), "Unused minimal rows of a catalog not kept whole are deleted.");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"WorkId\" IN (30, 36, 38, 39)"));
+            foreach (var (id, reason) in new[] { (31, "In a feed"), (32, "Target of a Work with details"), (33, "The full catalog keeps AniList whole"), (34, "Used recently"), (35, "Favorite"), (37, "Trending"),
+                (40, "A favorite series of TheTVDB") })
             {
                 Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"Works\" WHERE \"Id\" = {id}"), reason);
             }
@@ -127,7 +131,7 @@ namespace Jularr.Backend.Tests
             using var list = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works?pageSize=100");
             Assert.AreEqual(HttpStatusCode.OK, list.StatusCode, await list.Content.ReadAsStringAsync());
             var listed = (await list.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.Admin.Media.V1.WorkListItemV1>>())!.Items.Select(item => item.Id).Order().ToArray();
-            CollectionAssert.AreEqual(new long[] { 1, 2, 3, 4, 5, 6, 7, 8, 35 }, listed);
+            CollectionAssert.AreEqual(new long[] { 1, 2, 3, 4, 5, 6, 7, 8, 35, 40 }, listed);
             using var system = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system");
             var health = (await system.Content.ReadFromJsonAsync<SystemHealthV1>())!;
             Assert.AreEqual(10L, health.CatalogWorks, "Works 20 to 24, 31, 32, 33, 34 and 37 are catalog only.");

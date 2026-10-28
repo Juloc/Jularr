@@ -7,6 +7,9 @@ namespace Jularr.Backend.Logic.Media
 {
     internal static class ExternalFeedLogic
     {
+        // The catalog a list's titles belong to: TMDB's series lists give only the order of TheTVDB series.
+        public static string CatalogOf(string feedNamespace) => feedNamespace == "tmdb_tv" ? "tvdb" : feedNamespace;
+
         public static async Task<IReadOnlyList<ExternalFeedData>> ReadMissingExternalFeedsAsync(this LogicContext ctx, ExternalFeedRefreshData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -165,12 +168,12 @@ namespace Jularr.Backend.Logic.Media
                 return null;
             }
 
-            // Each Work under the feed's own identity of it; an anime season under the entry of that season. A Work's own cover comes before the catalog's.
+            // Each Work under its identity in the list's catalog; an anime season under the entry of that season. A Work's own cover comes before the catalog's.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
-                    feed."Namespace",
+                    CASE feed."Namespace" WHEN 'tmdb_tv' THEN 'tvdb' ELSE feed."Namespace" END AS "Namespace",
                     coalesce(season."Value", identity."Value") AS "Value",
                     work."CanonicalTitle" AS "Title",
                     work."OriginalTitle",
@@ -187,7 +190,8 @@ namespace Jularr.Backend.Logic.Media
                     "ExternalWorkFeeds" AS feed
                     JOIN "ExternalWorkFeedItems" AS item ON item."FeedId" = feed."Id"
                     JOIN "Works" AS work ON work."Id" = item."WorkId"
-                    LEFT JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = work."Id" AND identity."Namespace" = feed."Namespace"
+                    LEFT JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = work."Id"
+                        AND identity."Namespace" = CASE feed."Namespace" WHEN 'tmdb_tv' THEN 'tvdb' ELSE feed."Namespace" END
                     LEFT JOIN LATERAL (
                         SELECT
                             mapped."Value"
@@ -231,7 +235,7 @@ namespace Jularr.Backend.Logic.Media
                 throw new SecurityException("Discover keeps no lists without the Caching module.");
             }
 
-            var list = new ExternalWorkListData(feed.Namespace, feed.MediaTypeId, feed.MediaSubtypeId);
+            var list = new ExternalWorkListData(CatalogOf(feed.Namespace), feed.MediaTypeId, feed.MediaSubtypeId);
             var saved = await ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, works, feed.DiscoverFeedTypeId == DiscoverFeedType.Trending && feed.Page == 1 && feed.SourceValue is null), ct);
             var data = new ExternalFeedUpdateData(feed, works, saved);
 
@@ -397,7 +401,7 @@ namespace Jularr.Backend.Logic.Media
                                 "WorkExternalIdentities" AS identity
                             WHERE
                                 identity."WorkId" = work."Id"
-                                AND (identity."Namespace" IN ('tmdb_movie', 'tmdb_tv', 'openlibrary', 'musicbrainz', 'igdb') OR identity."Namespace" = 'anilist' AND work."MediaTypeId" = 3))
+                                AND (identity."Namespace" IN ('tmdb_movie', 'tvdb', 'openlibrary', 'musicbrainz', 'igdb') OR identity."Namespace" = 'anilist' AND work."MediaTypeId" = 3))
                     ORDER BY
                         work."Id",
                         item."Position",

@@ -2007,8 +2007,12 @@
    "noch keine Bibliothek"
   ],
   "setup.check.tmdb": [
-   "Movies and series need a TMDB key.",
-   "Filme und Serien brauchen einen TMDB-Schlüssel."
+   "Films need a TMDB key.",
+   "Filme brauchen einen TMDB-Schlüssel."
+  ],
+  "setup.check.tvdb": [
+   "Series need a TVDB key.",
+   "Serien brauchen einen TVDB-Schlüssel."
   ],
   "setup.check.indexer": [
    "Arr+ has no indexer yet.",
@@ -8675,6 +8679,10 @@
   "errors.metadata_rate_limited": [
    "TMDB limits requests right now. Please try again shortly.",
    "TMDB begrenzt gerade die Anfragen. Bitte versuche es gleich erneut."
+  ],
+  "errors.tvdb_key_missing": [
+   "Series need a TVDB key.",
+   "Serien brauchen einen TVDB-Schlüssel."
   ],
   "errors.reading_unavailable": [
    "This book is not saved for reading while its storage is offline.",

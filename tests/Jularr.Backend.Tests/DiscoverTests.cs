@@ -97,7 +97,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task Discover_FeedsSearchAndRequest_ResolveOneCanonicalWork()
         {
-            await using var host = await CreateHostAsync();
+            await using var host = await CreateHostAsync(tvdb: new FakeTvdb());
 
             // Feeds come from TMDB with the viewer state of each title.
             using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
@@ -149,7 +149,7 @@ namespace Jularr.Backend.Tests
         public async Task Catalog_KeepsWhatDiscoverLoaded_AndAnswersTrendingWithoutCheckingAge()
         {
             var tmdb = new FakeTmdb();
-            await using var host = await CreateHostAsync(fake: tmdb);
+            await using var host = await CreateHostAsync(fake: tmdb, tvdb: new FakeTvdb());
 
             // A trending list is kept in its order; searches keep their titles too.
             using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
@@ -158,8 +158,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("https://image.tmdb.org/t/p/w1280/backdrop.jpg", await host.ScalarAsync("SELECT work.\"BackdropUrl\" FROM \"Works\" AS work JOIN \"WorkExternalIdentities\" AS identity ON identity.\"WorkId\" = work.\"Id\" WHERE identity.\"Namespace\" = 'tmdb_movie' AND identity.\"Value\" = '603'"));
             using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("Matrix"));
             Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode);
-            Assert.AreEqual("The Matrix Show", await host.ScalarAsync("SELECT work.\"CanonicalTitle\" FROM \"Works\" AS work JOIN \"WorkExternalIdentities\" AS identity ON identity.\"WorkId\" = work.\"Id\" WHERE identity.\"Namespace\" = 'tmdb_tv' AND identity.\"Value\" = '1399'"));
-            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT work.\"TrendingRank\" FROM \"Works\" AS work JOIN \"WorkExternalIdentities\" AS identity ON identity.\"WorkId\" = work.\"Id\" WHERE identity.\"Namespace\" = 'tmdb_tv' AND identity.\"Value\" = '1399'"));
+            Assert.AreEqual("The Matrix Show", await host.ScalarAsync("SELECT work.\"CanonicalTitle\" FROM \"Works\" AS work JOIN \"WorkExternalIdentities\" AS identity ON identity.\"WorkId\" = work.\"Id\" WHERE identity.\"Namespace\" = 'tvdb' AND identity.\"Value\" = '81189'"));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT work.\"TrendingRank\" FROM \"Works\" AS work JOIN \"WorkExternalIdentities\" AS identity ON identity.\"WorkId\" = work.\"Id\" WHERE identity.\"Namespace\" = 'tvdb' AND identity.\"Value\" = '81189'"));
 
             // While the list is fresh the catalog answers, also for a catalog of its own (AniList).
             await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"CanonicalTitle\" = 'The Matrix (kept)' WHERE \"Id\" = (SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_movie' AND \"Value\" = '603')");
@@ -174,7 +174,7 @@ namespace Jularr.Backend.Tests
             await TimeWarmReadsAsync("AniList trending; 0 local Works, 1 result", () => host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime)));
 
             // Existing catalog entries remain usable without any provider call, regardless of age.
-            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"FetchedAt\" = now() - interval '7 hours', \"TrendingRank\" = 1 WHERE \"CatalogNamespace\" = 'tmdb_tv'");
+            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"FetchedAt\" = now() - interval '7 hours', \"TrendingRank\" = 1 WHERE \"CatalogNamespace\" = 'tvdb'");
             tmdb.IsUnavailable = true;
             using var stale = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Series, DiscoverFeedType.Trending));
             Assert.AreEqual(HttpStatusCode.OK, stale.StatusCode, await stale.Content.ReadAsStringAsync());
@@ -186,7 +186,7 @@ namespace Jularr.Backend.Tests
         public async Task Catalog_WithoutTheCachingModule_KeepsNoListsAndAsksTheProviders()
         {
             var tmdb = new FakeTmdb();
-            await using var host = await CreateHostAsync(fake: tmdb);
+            await using var host = await CreateHostAsync(fake: tmdb, tvdb: new FakeTvdb());
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'DiscoverCache'");
             using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
             var shown = (await feed.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single();
@@ -569,6 +569,85 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow(true)]
+        [DataRow(false)]
+        public async Task Series_TmdbListsGiveTheOrder_EachEntryIsItsTheTvdbSeries_AndOneWithoutIsLeftOut(bool caching)
+        {
+            var tmdb = new FakeTmdb { WithUnlinkedShow = true };
+            await using var host = await CreateHostAsync(fake: tmdb, tvdb: new FakeTvdb());
+            if (!caching) await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'DiscoverCache'");
+
+            // TMDB names two series; the one TMDB links to TheTVDB is shown as TheTVDB's series with TMDB's id beside it, the other is left out.
+            using var trending = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Series, DiscoverFeedType.Trending));
+            Assert.AreEqual(HttpStatusCode.OK, trending.StatusCode, await trending.Content.ReadAsStringAsync());
+            var shown = (await trending.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single();
+            Assert.AreEqual(("The Matrix Show", (int?)null), (shown.Title, shown.TmdbId));
+            Assert.AreEqual("tvdb:81189 tmdb_tv:1399", await host.ScalarAsync($"""
+                SELECT string_agg(identity."Namespace" || ':' || identity."Value", ' ' ORDER BY identity."Namespace" DESC) FROM "WorkExternalIdentities" AS identity WHERE identity."WorkId" = {shown.WorkId}
+                """));
+            Assert.AreEqual("tvdb", await host.ScalarAsync($"SELECT \"CatalogNamespace\" FROM \"Works\" WHERE \"Id\" = {shown.WorkId}"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+
+            // Another list finds the link on the Work, so TMDB is asked for it once; the cards of both lists are the same Work.
+            using var top = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Series, DiscoverFeedType.Top));
+            Assert.AreEqual(shown.WorkId, (await top.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().WorkId);
+            Assert.AreEqual(1, tmdb.Requests.Count(request => request.AbsolutePath == "/3/tv/1399"));
+            Assert.AreEqual(caching ? 2L : 0L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkFeeds\" WHERE \"Namespace\" = 'tmdb_tv'"));
+
+            // A library series known only by TMDB's id is the same Work: it takes TheTVDB's id and no second Work appears.
+            await host.Fixture.RunSqlAsync($"""
+                DELETE FROM "WorkExternalIdentities" WHERE "WorkId" = {shown.WorkId} AND "Namespace" = 'tvdb';
+                UPDATE "Works" SET "CatalogNamespace" = NULL WHERE "Id" = {shown.WorkId};
+                DELETE FROM "ExternalWorkFeeds";
+                """);
+            using var linked = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Series, DiscoverFeedType.New));
+            Assert.AreEqual(shown.WorkId, (await linked.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().WorkId);
+            Assert.AreEqual(shown.WorkId, await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tvdb' AND \"Value\" = '81189'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+
+            // Opening it takes TheTVDB's details into the same Work.
+            using var opened = await host.SendAsync(HttpMethod.Post, "/api/v1/works/" + shown.WorkId + "/open");
+            Assert.AreEqual(HttpStatusCode.OK, opened.StatusCode, await opened.Content.ReadAsStringAsync());
+            Assert.AreEqual(24L, await host.ScalarAsync($"SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkId\" = {shown.WorkId} AND \"WorkUnitTypeId\" = 2"));
+        }
+
+        [TestMethod]
+        public async Task Series_SearchAsksTheTvdb_AndWithoutItsKeySaysSo_WhileFilmsStillWork()
+        {
+            var tvdb = new FakeTvdb();
+            await using var host = await CreateHostAsync(tvdb: tvdb);
+
+            // The series search is TheTVDB's; its result is a catalog title of TheTVDB in the instance language.
+            using var series = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("Matrix", MediaType.Series));
+            Assert.AreEqual(HttpStatusCode.OK, series.StatusCode, await series.Content.ReadAsStringAsync());
+            var found = (await series.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single();
+            Assert.AreEqual(("The Matrix Show", 2020, "https://artworks.thetvdb.com/banners/show.jpg"), (found.Title, found.ReleaseYear, found.PosterUrl));
+            Assert.AreEqual("tvdb:81189", await host.ScalarAsync($"SELECT \"CatalogNamespace\" || ':' || (SELECT \"Value\" FROM \"WorkExternalIdentities\" WHERE \"WorkId\" = {found.WorkId}) FROM \"Works\" WHERE \"Id\" = {found.WorkId}"));
+            var asked = tvdb.Requests.Single(request => request.AbsolutePath == "/v4/search");
+            Assert.AreEqual("series", QueryHelpers.ParseQuery(asked.Query)["type"].ToString());
+
+            // Adding a series by hand searches TheTVDB too, with the year.
+            using var admin = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/metadata/search", new AdminMedia.SearchMetadataDataV1(MediaType.Series, "Matrix", 2020));
+            Assert.AreEqual(HttpStatusCode.OK, admin.StatusCode, await admin.Content.ReadAsStringAsync());
+            var entry = (await admin.Content.ReadFromJsonAsync<BaseDataList<AdminMedia.MetadataSearchResultV1>>())!.Single();
+            Assert.AreEqual(("tvdb", "81189"), (entry.Namespace, entry.ExternalId));
+            Assert.AreEqual("2020", QueryHelpers.ParseQuery(tvdb.Requests.Last(request => request.AbsolutePath == "/v4/search").Query)["year"].ToString());
+
+            // Without TheTVDB's key a search of series names the missing key, films are still found and a search of both keeps the films.
+            await host.Fixture.RunSqlAsync("UPDATE \"Providers\" SET \"ProtectedSecret\" = NULL WHERE \"Key\" = 'tvdb'");
+            using var missing = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("Other", MediaType.Series));
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, missing.StatusCode);
+            StringAssert.Contains(await missing.Content.ReadAsStringAsync(), "tvdb_key_missing");
+            using var adminMissing = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/metadata/search", new AdminMedia.SearchMetadataDataV1(MediaType.Series, "Other"));
+            StringAssert.Contains(await adminMissing.Content.ReadAsStringAsync(), "tvdb_key_missing");
+            using var films = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("Matrix", MediaType.Movie));
+            Assert.AreEqual("The Matrix", (await films.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().Title);
+            using var both = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("Matrix"));
+            Assert.AreEqual(HttpStatusCode.OK, both.StatusCode, await both.Content.ReadAsStringAsync());
+            Assert.IsTrue((await both.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Any(item => item.Title == "The Matrix"));
+        }
+
+        [TestMethod]
         public async Task Anime_AniListSeason_IsItsOwnWorkUntilASeriesMapsIt_ThenOpensTheSeriesAtThatSeason()
         {
             await using var host = await CreateHostAsync(razor: true);
@@ -649,7 +728,7 @@ namespace Jularr.Backend.Tests
             var answer = await requested.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, answer);
             StringAssert.Contains(string.Join(' ', requested.Headers.GetValues("HX-Trigger")), "Requested");
-            var series = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"))!;
+            var series = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tvdb' AND \"Value\" = '81189'"))!;
             Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"WorkId\" = {series}"));
             Assert.AreEqual(series, await host.ScalarAsync("SELECT \"RelatedWorkId\" FROM \"WorkRelations\" WHERE \"WorkId\" = 700"));
             Assert.IsFalse(answer.Contains("state-chip__label\">Not in library<", StringComparison.Ordinal));
@@ -672,7 +751,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task Razor_HomeLibraryAndProviderTitle_RenderRealData()
         {
-            await using var host = await CreateHostAsync(razor: true);
+            await using var host = await CreateHostAsync(razor: true, tvdb: new FakeTvdb());
 
             using var home = await host.SendAsync(HttpMethod.Get, "/");
             var html = await home.Content.ReadAsStringAsync();
@@ -993,8 +1072,8 @@ namespace Jularr.Backend.Tests
             var tmdb = new FakeTmdb();
             await using var host = await CreateHostAsync(fake: tmdb, tvdb: new FakeTvdb());
             await host.Fixture.RunSqlAsync("""
-                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (970, 2, 'The Matrix Show', 2020, 'tmdb_tv'), (971, 1, 'The Matrix', 1999, 'tmdb_movie');
-                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (970, 'tmdb_tv', '1399'), (971, 'tmdb_movie', '603');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (970, 2, 'The Matrix Show', 2020, 'tvdb'), (971, 1, 'The Matrix', 1999, 'tmdb_movie');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (970, 'tvdb', '81189'), (970, 'tmdb_tv', '1399'), (971, 'tmdb_movie', '603');
                 """);
 
             // The series' request brings its seasons and episodes into the same Work before the request exists.
@@ -1033,7 +1112,7 @@ namespace Jularr.Backend.Tests
             // The request is the series': it comes from its catalog with its episodes, AniList maps its seasons, and the season's Work goes into it.
             using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/works/800/requests", new CreateRequestDataV1(1));
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
-            var series = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"))!;
+            var series = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tvdb' AND \"Value\" = '81189'"))!;
             Assert.AreEqual(series, await host.ScalarAsync("SELECT \"WorkId\" FROM \"AcquisitionRequests\""));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"Id\" = 800"));
             Assert.AreEqual(2m, await host.ScalarAsync("""SELECT season."Number" FROM "WorkUnitExternalIdentities" AS mapped JOIN "WorkUnits" AS season ON season."Id" = mapped."WorkUnitId" WHERE mapped."Value" = '21'"""));
@@ -1102,15 +1181,24 @@ namespace Jularr.Backend.Tests
             }
         }
 
-        // TheTVDB knows The Matrix Show (81189) with two seasons of twelve episodes.
+        // TheTVDB knows The Matrix Show (81189) with two seasons of twelve episodes and finds it by its name.
         private sealed class FakeTvdb : HttpMessageHandler
         {
+            public List<Uri> Requests { get; } = [];
+
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
+                Requests.Add(request.RequestUri!);
                 var episodes = string.Join(',', Enumerable.Range(0, 24).Select(index => $$"""{"id":{{100 + index}},"seasonNumber":{{1 + index / 12}},"number":{{1 + index % 12}},"name":"Episode {{1 + index}}"}"""));
+                var query = QueryHelpers.ParseQuery(request.RequestUri!.Query).GetValueOrDefault("query").ToString();
                 var json = request.RequestUri!.AbsolutePath switch
                 {
                     "/v4/login" => """{"data":{"token":"tvdb-test-token"}}""",
+                    "/v4/search" when query.Contains("Matrix", StringComparison.OrdinalIgnoreCase) => """
+                        {"data":[{"tvdb_id":"81189","name":"The Matrix Show","year":"2020","type":"series","primary_language":"eng","image_url":"https://artworks.thetvdb.com/banners/show.jpg",
+                        "translations":{"eng":"The Matrix Show","deu":"Die Matrix-Serie"},"overviews":{"eng":"A show."}}]}
+                        """,
+                    "/v4/search" => """{"data":[]}""",
                     "/v4/series/81189/extended" => """{"data":{"id":81189,"name":"The Matrix Show","remoteIds":[]}}""",
                     "/v4/series/81189/episodes/default" => "{\"data\":{\"episodes\":[" + episodes + "]},\"links\":{\"next\":null}}",
                     _ => null
@@ -1124,6 +1212,10 @@ namespace Jularr.Backend.Tests
         {
             public List<Uri> Requests { get; } = [];
             public bool IsUnavailable { get; set; }
+
+            // TMDB's series lists also name a show it links to no TheTVDB series.
+            public bool WithUnlinkedShow { get; init; }
+            private const string Unlinked = """{"id":1400,"name":"Unlinked Show","original_name":"Unlinked Show","first_air_date":"2021-01-01","overview":"No TheTVDB id."}""";
             private const string MovieDetails = """ "genres":[{"id":28,"name":"Action"},{"id":878,"name":"Science Fiction"}],"runtime":136,"production_companies":[{"name":"Village Roadshow"}],"videos":{"results":[{"site":"YouTube","type":"Teaser","key":"aaaaaaaaaaa"},{"site":"YouTube","type":"Trailer","key":"vKQi3bBA1y8","official":true}]},"credits":{"cast":[{"id":6384,"name":"Keanu Reeves","character":"Neo","profile_path":"/neo.jpg"}],"crew":[{"id":9339,"name":"Lana Wachowski","job":"Director"},{"id":1,"name":"Someone","job":"Gaffer"}]} """;
             private const string Movie = """{"id":603,"title":"The Matrix","original_title":"The Matrix","release_date":"1999-03-31","overview":"A hacker learns the truth.","poster_path":"/poster.jpg","backdrop_path":"/backdrop.jpg"}""";
             private const string Show = """{"id":1399,"name":"The Matrix Show","original_name":"The Matrix Show","first_air_date":"2020-01-01","overview":"A show.","poster_path":"/show.jpg"}""";
@@ -1140,7 +1232,8 @@ namespace Jularr.Backend.Tests
                 var body = request.RequestUri!.AbsolutePath switch
                 {
                     "/3/trending/movie/week" or "/3/movie/top_rated" or "/3/discover/movie" or "/3/movie/upcoming" or "/3/search/movie" => "{\"results\":[" + Movie + "]}",
-                    "/3/trending/tv/week" or "/3/tv/top_rated" or "/3/discover/tv" or "/3/search/tv" => "{\"results\":[" + Show + "]}",
+                    "/3/trending/tv/week" or "/3/tv/top_rated" or "/3/discover/tv" or "/3/search/tv" => "{\"results\":[" + (WithUnlinkedShow ? Unlinked + "," : "") + Show + "]}",
+                    "/3/tv/1400" => Unlinked[..^1] + ",\"external_ids\":{},\"seasons\":[]}",
                     "/3/movie/603" => Movie[..^1] + ",\"external_ids\":{\"imdb_id\":\"tt0133093\"},\"belongs_to_collection\":{\"id\":2344,\"name\":\"The Matrix Collection\"}," + MovieDetails
                         + ",\"original_language\":\"en\",\"translations\":{\"translations\":[{\"iso_639_1\":\"de\",\"iso_3166_1\":\"AT\",\"data\":{\"title\":\"Matrix (AT)\",\"overview\":\"\"}},"
                         + "{\"iso_639_1\":\"de\",\"iso_3166_1\":\"DE\",\"data\":{\"title\":\"Matrix\",\"overview\":\"Ein Hacker erfährt die Wahrheit.\"}}]}}",

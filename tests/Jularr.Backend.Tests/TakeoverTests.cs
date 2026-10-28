@@ -9,7 +9,9 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.System.Media.V1;
 using Jularr.Integrations.Logic.Servarr;
 using Jularr.Integrations.Logic.Tmdb;
 using Jularr.Integrations.Logic.Tvdb;
@@ -219,6 +221,45 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Sonarr_WithoutTheTvdbKey_TakesTheSeriesWithItsIds_AndItsDetailsFollowOnceTheKeyIsThere()
+        {
+            var arr = new FakeArrs();
+            await using var host = await Host.CreateAsync(library: true, services: services =>
+            {
+                services.AddHttpClient<ServarrApiClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
+                services.AddHttpClient<TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
+            });
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            await SaveSeriesKeysAsync(host, "tmdb");
+
+            // Without TheTVDB's key the missing series is still wanted, as TheTVDB's series with Sonarr's TheTVDB, TMDB and IMDb ids and no details yet.
+            var sonarr = await RunAsync(host, true, TakeoverSourceType.Sonarr, "http://sonarr.example.test:8989");
+            Assert.AreEqual("takeover_wanted", sonarr.Single(item => item.Name == "Example Show (2020)").OutcomeKey);
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\""))!;
+            Assert.AreEqual("imdb:tt0081189 tmdb_tv:1399 tvdb:81189", await host.ScalarAsync($"""
+                SELECT string_agg(identity."Namespace" || ':' || identity."Value", ' ' ORDER BY identity."Namespace") FROM "WorkExternalIdentities" AS identity WHERE identity."WorkId" = {workId}
+                """));
+            Assert.AreEqual("Example Show 2020", await host.ScalarAsync($"SELECT \"CanonicalTitle\" || ' ' || \"ReleaseYear\" FROM \"Works\" WHERE \"Id\" = {workId} AND \"DetailedAt\" IS NULL"));
+
+            // A second run finds it by its ids.
+            var again = await RunAsync(host, true, TakeoverSourceType.Sonarr, "http://sonarr.example.test:8989");
+            Assert.AreEqual("takeover_exists", again.Single(item => item.Name == "Example Show (2020)").OutcomeKey);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"MediaTypeId\" = 2"));
+
+            // Once the key is there the metadata job brings TheTVDB's details into the same Work.
+            await SaveSeriesKeysAsync(host, "tvdb");
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<FillWorkMetadataV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default);
+            }
+            Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"DetailedAt\" IS NOT NULL FROM \"Works\" WHERE \"Id\" = {workId}"));
+            Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkId\" = {workId} AND \"WorkUnitTypeId\" = 2"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"MediaTypeId\" = 2"));
+        }
+
+        [TestMethod]
         [DataRow(false)]
         [DataRow(true)]
         public async Task SeriesWithoutId_UseTitleAndYear_AndUnsupportedProfilesBlockTitles(bool unsupported)
@@ -328,11 +369,11 @@ namespace Jularr.Backend.Tests
             private static HttpResponseMessage Json(string json) => new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
         }
 
-        // Prowlarr, Sonarr, Lidarr and Readarr by their hosts, with the TMDB series Sonarr names.
-        // Series come from TheTVDB; TMDB still names them and gives their rating.
-        private static async Task SaveSeriesKeysAsync(Host host)
+        // Prowlarr, Sonarr, Lidarr and Readarr by their hosts, with the series Sonarr names by its TheTVDB, TMDB and IMDb ids.
+        // Series come from TheTVDB; TMDB gives their rating.
+        private static async Task SaveSeriesKeysAsync(Host host, params string[] keys)
         {
-            foreach (var key in new[] { "tmdb", "tvdb" })
+            foreach (var key in keys.Length == 0 ? ["tmdb", "tvdb"] : keys)
             {
                 var provider = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = '" + key + "'"))!;
                 using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1(TmdbToken));
@@ -383,6 +424,7 @@ namespace Jularr.Backend.Tests
                     return Task.FromResult(uri.AbsolutePath switch
                     {
                         "/v4/login" => Json("""{"data":{"token":"tvdb-test-token"}}"""),
+                        "/v4/search" => Json("""{"data":[{"tvdb_id":"81189","name":"Example Show","year":"2020","type":"series","primary_language":"eng","translations":{"eng":"Example Show"}}]}"""),
                         "/v4/series/81189/extended" => Json("""{"data":{"id":81189,"name":"Example Show","firstAired":"2020-04-01","remoteIds":[{"sourceName":"TheMovieDB.com","id":"1399"}]}}"""),
                         "/v4/series/81189/episodes/default" => Json("""{"data":{"episodes":[{"id":1,"seasonNumber":1,"number":1,"name":"One","aired":"2020-04-01"}]},"links":{"next":null}}"""),
                         _ => new HttpResponseMessage(HttpStatusCode.NotFound)
@@ -395,7 +437,7 @@ namespace Jularr.Backend.Tests
                     ("sonarr.example.test", "/api/v3/indexer") => Json(Indexer.Replace("NAME", "Prowled", StringComparison.Ordinal).Replace("HOST", "prowled", StringComparison.Ordinal)),
                     ("sonarr.example.test", "/api/v3/downloadclient") => Json(Client("tvCategory")),
                     ("sonarr.example.test", "/api/v3/rootfolder") => Json("[]"),
-                    ("sonarr.example.test", "/api/v3/series") => Json("""[{"title":"Example Show","year":2020,"tmdbId":1399,"monitored":true,"qualityProfileId":4,"statistics":{"episodeFileCount":0,"episodeCount":1}}]"""),
+                    ("sonarr.example.test", "/api/v3/series") => Json("""[{"title":"Example Show","year":2020,"tvdbId":81189,"tmdbId":1399,"imdbId":"tt0081189","monitored":true,"qualityProfileId":4,"statistics":{"episodeFileCount":0,"episodeCount":1}}]"""),
                     ("sonarr.example.test", "/api/v3/qualityprofile") => Json("""
                         [{"id":4,"name":"HD-1080p","upgradeAllowed":true,"cutoff":1002,"minFormatScore":0,"items":[
                           {"quality":{"id":4,"name":"HDTV-720p","source":"television","resolution":720},"items":[],"allowed":false},

@@ -47,6 +47,41 @@ namespace Jularr.Integrations.Logic.Tvdb
             };
         }
 
+        // Series only, a year narrows the search; a page of results starts at offset.
+        public async Task<IReadOnlyList<TvdbSearchResult>> SearchSeriesAsync(TvdbSession session, string query, int? year, int offset, int limit, CancellationToken ct)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(query);
+            ArgumentOutOfRangeException.ThrowIfNegative(offset);
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+            var path = "search?query=" + Uri.EscapeDataString(query) + "&type=series" + (year is { } value ? "&year=" + value.ToString(CultureInfo.InvariantCulture) : "")
+                + "&offset=" + offset.ToString(CultureInfo.InvariantCulture) + "&limit=" + limit.ToString(CultureInfo.InvariantCulture);
+            using var document = await RequestAsync(HttpMethod.Get, path, session.Token, null, ct);
+            var data = Data(document.RootElement);
+            if (data.ValueKind != JsonValueKind.Array)
+            {
+                throw new TvdbException(TvdbFailure.InvalidResponse, "TVDB returned no search results.");
+            }
+
+            static IReadOnlyDictionary<string, string> Texts(JsonElement parent, string property) =>
+                Child(parent, property) is { ValueKind: JsonValueKind.Object } texts
+                    ? texts.EnumerateObject().Where(item => item.Value.ValueKind == JsonValueKind.String && item.Value.GetString()?.Trim() is { Length: > 0 })
+                        .ToDictionary(item => item.Name, item => item.Value.GetString()!.Trim(), StringComparer.Ordinal)
+                    : new Dictionary<string, string>();
+            return [.. data.EnumerateArray()
+                .Select(item => (Item: item, Id: int.TryParse(Text(item, "tvdb_id"), NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : (int?)null, Name: Text(item, "name")))
+                .Where(item => item.Id is not null && item.Name is not null && (Text(item.Item, "type") ?? "series") == "series")
+                .DistinctBy(item => item.Id)
+                .Select(item => new TvdbSearchResult(item.Id!.Value, item.Name!)
+                {
+                    Year = int.TryParse(Text(item.Item, "year"), NumberStyles.None, CultureInfo.InvariantCulture, out var started) ? started : null,
+                    Overview = Text(item.Item, "overview"),
+                    ImageUrl = Image(Text(item.Item, "image_url")),
+                    OriginalLanguage = Text(item.Item, "primary_language"),
+                    Names = Texts(item.Item, "translations"),
+                    Overviews = Texts(item.Item, "overviews")
+                })];
+        }
+
         // Everything a series import needs in one read: translations, artworks, people, genres, networks, trailers, remote ids and the seasons of the aired order.
         public async Task<TvdbSeries> ReadSeriesAsync(TvdbSession session, int id, CancellationToken ct)
         {

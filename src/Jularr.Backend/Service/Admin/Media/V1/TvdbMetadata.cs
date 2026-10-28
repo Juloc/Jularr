@@ -26,9 +26,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         public async Task<TvdbSession> LoginAsync(ProviderCredentialData? credential, CancellationToken ct)
         {
+            // Without an enabled key there are no series details and no series search.
             if (credential is not { IsEnabled: true, ProtectedSecret: { } secret })
             {
-                throw new ServiceUnavailableException("metadata_unavailable");
+                throw new ServiceUnavailableException("tvdb_key_missing");
             }
 
             byte[] clear;
@@ -64,6 +65,22 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             catch (ArgumentException)
             {
                 throw new DataValidationException("ImdbId", "invalid_type");
+            }
+            catch (TvdbException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
+        public async Task<IReadOnlyList<TvdbSearchResult>> SearchSeriesAsync(TvdbSession session, string query, int? year, int offset, int limit, CancellationToken ct)
+        {
+            try
+            {
+                return await client.SearchSeriesAsync(session, query, year, offset, limit, ct);
+            }
+            catch (TvdbException exception) when (exception.Failure == TvdbFailure.NotFound)
+            {
+                return [];
             }
             catch (TvdbException exception)
             {

@@ -34,7 +34,10 @@ namespace Jularr.Frontend.Pages.Setup.Takeover
         private static readonly HashSet<string> Warnings = ["takeover_profile_unsupported", "takeover_format_skipped", "takeover_no_match", "takeover_no_id", "takeover_needs_key", "takeover_no_library",
             "takeover_not_monitored", "takeover_no_qualities", "takeover_next_run"];
 
-        private ProviderDetailsV1? _tmdb;
+        // Films are identified through TMDB, series through TheTVDB.
+        private static readonly string[] KeyProviders = ["tmdb", "tvdb"];
+
+        private IReadOnlyList<ProviderDetailsV1> _keyed = [];
         private TakeoverSourceType? _ran;
         private string? _seal;
 
@@ -47,20 +50,20 @@ namespace Jularr.Frontend.Pages.Setup.Takeover
             page.Asset("Framework/Components/PasswordReveal.entry.ts");
             page.Asset("Framework/Components/Truncated.entry.ts");
             var cards = new List<IUiComponent>();
-            if (_tmdb is { HasSecret: false } tmdb) cards.Add(TmdbCard());
+            cards.AddRange(_keyed.Where(provider => !provider.HasSecret).Select(provider => KeyCard(provider.Key)));
             cards.AddRange(Sources.Select(Card));
             page.Content.Add(new CardGrid([.. cards]).Class("card-grid setup-sources"));
         }
 
-        // Titles are identified through TMDB, so a takeover of movies and series needs its key; it is typed here, in the card.
-        private IUiComponent TmdbCard()
+        // A takeover of films needs TMDB's key and one of series TheTVDB's; each missing key is typed here, in its card.
+        private IUiComponent KeyCard(string provider)
         {
             var form = new Form<SaveProviderSecretDataV1>(fields =>
             {
                 fields.Password(item => item.Secret, "admin.providers.secret", "new-password", new FieldHelp(Trailing: new PasswordReveal(assets)));
                 fields.Submit(new Button(new Text("common.save")).Soft());
-            }, "/Setup/Takeover?handler=Tmdb", Csrf, new SaveProviderSecretDataV1(null), _ran is null ? FormError : null);
-            return new FeatureCard(new IconTile(new Icon("globe", assets, 18), UiTone.Accent), Texts["provider.name.tmdb"], Texts["provider.hint.tmdb"],
+            }, "/Setup/Takeover?handler=Key&provider=" + provider, Csrf, new SaveProviderSecretDataV1(null), _ran is null ? FormError : null);
+            return new FeatureCard(new IconTile(new Icon("globe", assets, 18), UiTone.Accent), Texts["provider.name." + provider], Texts["provider.hint." + provider],
                 new StateChip(new Text("providers.key.missing"), UiTone.Warning, new Icon("alert", assets, 14)), [form], []).Class("feature-card setup-source");
         }
 
@@ -170,11 +173,12 @@ namespace Jularr.Frontend.Pages.Setup.Takeover
             return Page();
         }
 
-        // The TMDB key, saved with the providers' own step service.
-        public async Task<IActionResult> OnPostTmdbAsync(string? secret)
+        // The TMDB or TheTVDB key, saved with the providers' own step service.
+        public async Task<IActionResult> OnPostKeyAsync([BindRequired] string provider, string? secret)
         {
+            if (!KeyProviders.Contains(provider)) return NotFound();
             var progress = await readProgress.ExecuteAsync<SetupProgressV1>(new SetupProgressParametersV1(), HttpContext.RequestAborted);
-            await saveProviders.ExecuteAsync<UpdateResult>(new SetupProgressParametersV1(), new SaveSetupProvidersDataV1(progress.Version, new BaseDataList<SetupProviderInputV1>([new SetupProviderInputV1("tmdb", true, secret, null)])), HttpContext.RequestAborted);
+            await saveProviders.ExecuteAsync<UpdateResult>(new SetupProgressParametersV1(), new SaveSetupProvidersDataV1(progress.Version, new BaseDataList<SetupProviderInputV1>([new SetupProviderInputV1(provider, true, secret, null)])), HttpContext.RequestAborted);
             return LocalRedirect("/Setup/Takeover");
         }
 
@@ -182,7 +186,8 @@ namespace Jularr.Frontend.Pages.Setup.Takeover
         protected override async Task LoadDataAsync()
         {
             await base.LoadDataAsync();
-            _tmdb = (await providers.ExecuteAsync<PageResult<ProviderDetailsV1>>(new ReadProvidersParametersV1(1, 100), HttpContext.RequestAborted)).Items.FirstOrDefault(provider => provider.Key == "tmdb");
+            _keyed = [.. (await providers.ExecuteAsync<PageResult<ProviderDetailsV1>>(new ReadProvidersParametersV1(1, 100), HttpContext.RequestAborted)).Items
+                .Where(provider => KeyProviders.Contains(provider.Key)).OrderBy(provider => Array.IndexOf(KeyProviders, provider.Key))];
             if (Request.HasFormContentType && Request.Form.TryGetValue("takeoverSourceTypeId", out var value) && Enum.TryParse<TakeoverSourceType>(value, out var source)) _ran = source;
         }
     }

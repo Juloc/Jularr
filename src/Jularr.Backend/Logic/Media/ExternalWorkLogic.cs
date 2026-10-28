@@ -32,6 +32,7 @@ namespace Jularr.Backend.Logic.Media
 
         // The one owner of catalog rows: every title a list, search or relation names is a Work with its identity, found again by that identity.
         // An anime entry AniList knows as a season of a series is that series with the season, also while an earlier entry of its own still waits to be merged into it.
+        // A TheTVDB series a TMDB list or Sonarr named keeps TMDB's and IMDb's ids as well; a series Work known only by that TMDB id is the same Work and takes the TheTVDB id.
         public static async Task<IReadOnlyList<ExternalWorkSavedData>> SaveExternalWorksAsync(this LogicContext ctx, ExternalWorkBatchData data, CancellationToken ct)
         {
             if (data.Values.Length == 0) return [];
@@ -79,22 +80,38 @@ namespace Jularr.Backend.Logic.Media
                         CASE WHEN entry."ImageUrl" ~ '^https://' AND length(entry."ImageUrl") <= 500 THEN entry."ImageUrl" END AS "ImageUrl",
                         CASE WHEN entry."BackdropUrl" ~ '^https://' AND length(entry."BackdropUrl") <= 500 THEN entry."BackdropUrl" END AS "BackdropUrl",
                         nullif(entry."Rating", 0) AS "Rating",
-                        CASE WHEN @IsTrending THEN entry."Rank"::integer END AS "TrendingRank"
+                        CASE WHEN @IsTrending THEN entry."Rank"::integer END AS "TrendingRank",
+                        entry."TmdbValue",
+                        entry."ImdbValue"
                     FROM
-                        unnest(@Values, @Titles, @OriginalTitles, @ReleaseYears, @Overviews, @Creators, @ImageUrls, @BackdropUrls, @Ratings) WITH ORDINALITY
-                            AS entry ("Value", "Title", "OriginalTitle", "ReleaseYear", "Overview", "Creator", "ImageUrl", "BackdropUrl", "Rating", "Rank")
+                        unnest(@Values, @Titles, @OriginalTitles, @ReleaseYears, @Overviews, @Creators, @ImageUrls, @BackdropUrls, @Ratings, @TmdbValues, @ImdbValues) WITH ORDINALITY
+                            AS entry ("Value", "Title", "OriginalTitle", "ReleaseYear", "Overview", "Creator", "ImageUrl", "BackdropUrl", "Rating", "TmdbValue", "ImdbValue", "Rank")
                     ORDER BY
                         entry."Value",
                         entry."Rank"
                 ), resolved AS (
                     SELECT
                         item."Value",
-                        identity."WorkId" AS "KnownWorkId",
+                        item."TmdbValue",
+                        item."ImdbValue",
+                        coalesce(identity."WorkId", linked."WorkId") AS "KnownWorkId",
+                        linked."WorkId" IS NOT NULL AS "IsLinked",
                         season."WorkId" AS "SeriesWorkId",
                         season."SeasonNumber"
                     FROM
                         item
                         LEFT JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = @Namespace AND identity."Value" = item."Value"
+                        LEFT JOIN LATERAL (
+                            SELECT
+                                tmdb."WorkId"
+                            FROM
+                                "WorkExternalIdentities" AS tmdb
+                                JOIN "Works" AS work ON work."Id" = tmdb."WorkId" AND work."MediaTypeId" = 2
+                            WHERE
+                                tmdb."Namespace" = 'tmdb_tv'
+                                AND tmdb."Value" = item."TmdbValue"
+                                AND NOT EXISTS (SELECT 1 FROM "WorkExternalIdentities" AS own WHERE own."WorkId" = tmdb."WorkId" AND own."Namespace" = @Namespace)
+                        ) AS linked ON identity."WorkId" IS NULL
                         LEFT JOIN LATERAL (
                             SELECT
                                 unit."WorkId",
@@ -179,6 +196,42 @@ namespace Jularr.Backend.Logic.Media
                         fresh."Value"
                     FROM
                         fresh
+                ), links AS (
+                    INSERT INTO
+                        "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                    SELECT
+                        resolved."KnownWorkId",
+                        @Namespace,
+                        resolved."Value"
+                    FROM
+                        resolved
+                    WHERE
+                        resolved."IsLinked"
+                    UNION ALL
+                    SELECT
+                        coalesce(resolved."KnownWorkId", fresh."WorkId"),
+                        'tmdb_tv',
+                        resolved."TmdbValue"
+                    FROM
+                        resolved
+                        LEFT JOIN fresh ON fresh."Value" = resolved."Value"
+                    WHERE
+                        resolved."TmdbValue" IS NOT NULL
+                        AND resolved."SeriesWorkId" IS NULL
+                        AND coalesce(resolved."KnownWorkId", fresh."WorkId") IS NOT NULL
+                    UNION ALL
+                    SELECT
+                        coalesce(resolved."KnownWorkId", fresh."WorkId"),
+                        'imdb',
+                        resolved."ImdbValue"
+                    FROM
+                        resolved
+                        LEFT JOIN fresh ON fresh."Value" = resolved."Value"
+                    WHERE
+                        resolved."ImdbValue" IS NOT NULL
+                        AND resolved."SeriesWorkId" IS NULL
+                        AND coalesce(resolved."KnownWorkId", fresh."WorkId") IS NOT NULL
+                    ON CONFLICT DO NOTHING
                 )
                 SELECT
                     resolved."Value",

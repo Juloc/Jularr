@@ -67,6 +67,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.metadata_unavailable", "The metadata source is not configured or cannot be reached."),
             new("errors.metadata_authentication_failed", "TMDB rejected the stored key."),
             new("errors.metadata_rate_limited", "TMDB limits requests right now. Please try again shortly."),
+            new("errors.tvdb_key_missing", "Series need a TVDB key."),
             new("errors.reading_unavailable", "This book is not saved for reading while its storage is offline."),
             new("errors.reading_invalid_file", "This book file cannot be opened."),
             new("errors.translation_unavailable", "Translation files cannot be fetched right now; the book stays in its language."),

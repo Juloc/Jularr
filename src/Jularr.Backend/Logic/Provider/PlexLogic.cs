@@ -165,7 +165,7 @@ namespace Jularr.Backend.Logic.Provider
                         item
                         LEFT JOIN jsonb_to_recordset(@Matches::jsonb) AS match ("Key" text, "WorkId" bigint) ON match."Key" = item."Key"
                 ), created AS (
-                    SELECT DISTINCT ON (matched."MediaTypeId", coalesce(matched."TmdbId", matched."ImdbId", matched."TvdbId"))
+                    SELECT DISTINCT ON (matched."MediaTypeId", coalesce(CASE matched."MediaTypeId" WHEN 2 THEN matched."TvdbId" END, matched."TmdbId", matched."ImdbId", matched."TvdbId"))
                         matched.*,
                         nextval(pg_get_serial_sequence('"Works"', 'Id')) AS "NewWorkId"
                     FROM
@@ -174,7 +174,7 @@ namespace Jularr.Backend.Logic.Provider
                         matched."WorkId" IS NULL
                     ORDER BY
                         matched."MediaTypeId",
-                        coalesce(matched."TmdbId", matched."ImdbId", matched."TvdbId"),
+                        coalesce(CASE matched."MediaTypeId" WHEN 2 THEN matched."TvdbId" END, matched."TmdbId", matched."ImdbId", matched."TvdbId"),
                         matched."Key"
                 ), works AS (
                     INSERT INTO

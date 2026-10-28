@@ -127,7 +127,7 @@ namespace Jularr.Backend.Tests
             // Missing essentials block the end; once nothing blocks, Finish closes the wizard.
             await host.Fixture.RunSqlAsync("UPDATE \"MediaTypes\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Movie'");
             using var blocked = await host.SendAsync(HttpMethod.Get, "/Setup/Overview");
-            StringAssert.Contains(await blocked.Content.ReadAsStringAsync(), "Movies and series need a TMDB key.");
+            StringAssert.Contains(await blocked.Content.ReadAsStringAsync(), "Films need a TMDB key.");
             await host.Fixture.RunSqlAsync("UPDATE \"MediaTypes\" SET \"IsEnabled\" = FALSE; UPDATE \"MediaSubtypes\" SET \"IsEnabled\" = FALSE");
             using var ready = await host.SendAsync(HttpMethod.Get, "/Setup/Overview");
             var readyHtml = await ready.Content.ReadAsStringAsync();
@@ -355,9 +355,9 @@ namespace Jularr.Backend.Tests
         {
             await using var host = await OwnerHostAsync();
 
-            // Straight from the start: Arr+ and the library are on, so storage, an indexer, a client, folders and the TMDB key are missing.
+            // Straight from the start: Arr+ and the library are on, so storage, an indexer, a client, folders and the keys of TMDB (films) and TheTVDB (series) are missing.
             var empty = await ProgressAsync(host);
-            foreach (var key in new[] { "storage", "indexer", "downloader", "tmdb", "library.type.Movie", "library.type.Series" })
+            foreach (var key in new[] { "storage", "indexer", "downloader", "tmdb", "tvdb", "library.type.Movie", "library.type.Series" })
             {
                 CollectionAssert.Contains(empty.Blockers, key);
             }
@@ -371,6 +371,7 @@ namespace Jularr.Backend.Tests
             var clicked = await ProgressAsync(host);
             CollectionAssert.IsSubsetOf(new[] { "storage", "indexer", "downloader" }, clicked.Blockers);
             CollectionAssert.DoesNotContain(clicked.Blockers, "tmdb");
+            CollectionAssert.DoesNotContain(clicked.Blockers, "tvdb");
             CollectionAssert.Contains(clicked.Warnings, "library.none");
             Assert.IsFalse(clicked.Blockers.Any(key => key.StartsWith("library.type.", StringComparison.Ordinal)));
 
@@ -414,7 +415,7 @@ namespace Jularr.Backend.Tests
                 SELECT 'Series', type."Id", NULL, mount."Id", 'Series'
                 FROM "MediaTypes" AS type CROSS JOIN "StorageMounts" AS mount
                 WHERE type."Key" = 'Series';
-                UPDATE "Providers" SET "ProtectedSecret" = '\x01'::bytea WHERE "Key" = 'tmdb';
+                UPDATE "Providers" SET "ProtectedSecret" = '\x01'::bytea WHERE "Key" = 'tvdb';
                 """);
             var progress = await ProgressAsync(host);
 

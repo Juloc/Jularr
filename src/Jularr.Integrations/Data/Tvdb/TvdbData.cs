@@ -100,6 +100,19 @@ namespace Jularr.Integrations.Data.Tvdb
         public string? ImageUrl { get; init; }
     }
 
+    // One series of TheTVDB's search with its names and summaries by TheTVDB's language code.
+    internal sealed class TvdbSearchResult(int id, string name)
+    {
+        public int Id { get; } = id;
+        public string Name { get; } = name;
+        public int? Year { get; init; }
+        public string? Overview { get; init; }
+        public string? ImageUrl { get; init; }
+        public string? OriginalLanguage { get; init; }
+        public IReadOnlyDictionary<string, string> Names { get; init; } = new Dictionary<string, string>();
+        public IReadOnlyDictionary<string, string> Overviews { get; init; } = new Dictionary<string, string>();
+    }
+
     internal enum TvdbFailure : byte
     {
         Unavailable = 1,

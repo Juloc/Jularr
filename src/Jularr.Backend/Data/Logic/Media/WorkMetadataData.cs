@@ -284,6 +284,22 @@ namespace Jularr.Backend.Data.Logic.Media
         public string Value { get; }
     }
 
+    // The TheTVDB id a Work holds next to TMDB's id of the same series.
+    internal sealed class SeriesIdentityLinkData : BaseData
+    {
+        public SeriesIdentityLinkData(string tmdbValue, string tvdbValue)
+        {
+            TmdbValue = tmdbValue;
+            TvdbValue = tvdbValue;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
+        public string TmdbValue { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
+        public string TvdbValue { get; }
+    }
+
     // JSON rows of Namespace and Value.
     internal sealed class WorkIdentityLookupData : BaseData
     {

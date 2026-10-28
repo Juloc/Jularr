@@ -21,7 +21,7 @@ using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
-    // Film imports from TMDB, series imports from TheTVDB with TMDB's rating, and TMDB lookups; shared by Admin catalog work and the System refresh.
+    // Film imports from TMDB, series imports and search from TheTVDB with TMDB's rating, and TMDB lookups; shared by Admin catalog work and the System refresh.
     internal sealed class WorkMetadata
     {
         private readonly TmdbClient _tmdb;
@@ -186,7 +186,119 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             {
                 results = [];
             }
-            return [.. results.Select(result => ExternalWork(feed.Namespace, result))];
+            return await ExternalWorksAsync(context, connection, feed.MediaTypeId, results, ct);
+        }
+
+        // TMDB's lists name films and series; a series is the TheTVDB series TMDB's id leads to, through the Work that already holds both ids or else TMDB's link,
+        // and keeps TMDB's id as its second identity. A series without a TheTVDB id is left out.
+        public async Task<IReadOnlyList<ExternalWorkData>> ExternalWorksAsync(LogicContext context, TmdbConnection connection, MediaType mediaType, IReadOnlyList<TmdbSearchResult> results,
+            CancellationToken ct)
+        {
+            if (mediaType == MediaType.Movie)
+            {
+                return [.. results.Select(result => ExternalWork(Namespace(MediaType.Movie), result))];
+            }
+
+            var values = results.Select(result => result.Id.ToString(CultureInfo.InvariantCulture)).ToArray();
+            var known = await context.ExecuteBatchAsync((ctx, token) => ReadTvdbLinksAsync(ctx, values, token), ct, mode: SqlAccessMode.ReadOnly);
+            var works = new List<ExternalWorkData>();
+            foreach (var result in results)
+            {
+                var tmdbValue = result.Id.ToString(CultureInfo.InvariantCulture);
+                var tvdbId = known.TryGetValue(tmdbValue, out var linked) ? linked : null;
+                try
+                {
+                    tvdbId ??= await FindTvdbIdAsync(connection, result.Id, ct);
+                }
+                catch (KeyNotFoundException)
+                {
+                    // TMDB no longer knows the entry.
+                }
+
+                if (tvdbId is not { } id)
+                {
+                    continue;
+                }
+
+                var entry = ExternalWork("tvdb", result);
+                works.Add(new ExternalWorkData("tvdb", id.ToString(CultureInfo.InvariantCulture), entry.Title, entry.OriginalTitle, entry.ReleaseYear, entry.Overview, null, entry.ImageUrl,
+                    entry.BackdropUrl, null, entry.Rating) { TmdbValue = tmdbValue });
+            }
+
+            return [.. works.DistinctBy(work => work.Value)];
+        }
+
+        // The TheTVDB ids Works hold next to these TMDB series ids.
+        private static async Task<IReadOnlyDictionary<string, int?>> ReadTvdbLinksAsync(LogicContext ctx, IReadOnlyList<string> tmdbValues, CancellationToken ct)
+        {
+            if (tmdbValues.Count == 0) return new Dictionary<string, int?>();
+
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    tmdb."Value" AS "TmdbValue",
+                    tvdb."Value" AS "TvdbValue"
+                FROM
+                    "WorkExternalIdentities" AS tmdb
+                    JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = tmdb."Namespace" AND item."Value" = tmdb."Value"
+                    JOIN "WorkExternalIdentities" AS tvdb ON tvdb."WorkId" = tmdb."WorkId" AND tvdb."Namespace" = 'tvdb';
+                """;
+            sql.Parameters.Add(new WorkIdentityLookupData(JsonSerializer.Serialize(tmdbValues.Select(value => new { Namespace = "tmdb_tv", Value = value }))));
+            return (await ctx.ReadSql.ReadListAsync<SeriesIdentityLinkData>(sql, ct)).ToDictionary(link => link.TmdbValue,
+                link => int.TryParse(link.TvdbValue, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : (int?)null, StringComparer.Ordinal);
+        }
+
+        // TheTVDB's series search in the instance language, a page of twenty; each result is a title of TheTVDB's catalog.
+        public async Task<IReadOnlyList<ExternalWorkData>> SearchSeriesAsync(LogicContext context, string query, int? year, CancellationToken ct, int page = 1)
+        {
+            var (locale, credential) = await context.ExecuteBatchAsync(async (ctx, token) =>
+                (await ReadLocaleAsync(ctx, token), await ctx.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), token)), ct, mode: SqlAccessMode.ReadOnly);
+            var language = LanguageCodes.ToThreeLetter(locale) ?? "eng";
+            var session = await _tvdb.LoginAsync(credential, ct);
+            var results = await _tvdb.SearchSeriesAsync(session, query, year, (Math.Max(page, 1) - 1) * SearchPageSize, SearchPageSize, ct);
+            return [.. results.Select(result =>
+            {
+                string? Text(IReadOnlyDictionary<string, string> texts) => texts.GetValueOrDefault(language) ?? texts.GetValueOrDefault("eng");
+                var title = TextLimit.Cut(Text(result.Names) ?? result.Name, 500)!;
+                var original = TextLimit.Cut(result.OriginalLanguage is { } code ? result.Names.GetValueOrDefault(code) ?? result.Name : result.Name, 500);
+                return new ExternalWorkData("tvdb", result.Id.ToString(CultureInfo.InvariantCulture), title, original == title ? null : original,
+                    result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(Text(result.Overviews) ?? result.Overview, 4000), null, Address(result.ImageUrl), null, null);
+            })];
+        }
+
+        private const int SearchPageSize = 20;
+
+        // The TheTVDB id of a series another id names: its own, IMDb's through TheTVDB, TMDB's through TMDB's link; null while the catalog knows none.
+        public async Task<int?> FindTvdbIdAsync(LogicContext context, string @namespace, string value, CancellationToken ct)
+        {
+            var number = int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) && parsed > 0 ? parsed : (int?)null;
+            try
+            {
+                switch (@namespace)
+                {
+                    case "tvdb":
+                        return number;
+                    case "tmdb_tv" when number is { } tmdbId:
+                        return await FindTvdbIdAsync(await ConnectAsync(context, ct), tmdbId, ct);
+                    case "imdb":
+                        var key = "metadata.identity.tvdb.imdb." + value;
+                        if (_cache.TryGetValue(key, out int? cached))
+                        {
+                            return cached;
+                        }
+
+                        var found = await _tvdb.FindSeriesByImdbAsync(await _tvdb.OpenAsync(context, ct), value, ct);
+                        _cache.Set(key, found, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = found is null ? TimeSpan.FromHours(12) : TimeSpan.FromDays(7), Size = 1 });
+                        return found;
+                    default:
+                        return null;
+                }
+            }
+            catch (KeyNotFoundException)
+            {
+                return null;
+            }
         }
 
         public static ExternalWorkData ExternalWork(string @namespace, TmdbSearchResult result) => new(@namespace, result.Id.ToString(CultureInfo.InvariantCulture),
@@ -263,20 +375,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         // A series a caller knows by its TheTVDB, TMDB or IMDb id; the TMDB and IMDb ids lead to TheTVDB first.
         public async Task<long> ImportSeriesAsync(LogicContext context, MediaSubtype? subtype, string @namespace, string value, CancellationToken ct)
         {
-            var number = int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) && parsed > 0 ? parsed : (int?)null;
-            switch (@namespace)
-            {
-                case "tvdb" when number is { } tvdbId:
-                    return await ImportSeriesAsync(context, subtype, tvdbId, null, ct);
-                case "tmdb_tv" when number is { } tmdbId:
-                    var linked = await FindTvdbIdAsync(await ConnectAsync(context, ct), tmdbId, ct) ?? throw new KeyNotFoundException("TheTVDB does not know this series.");
-                    return await ImportSeriesAsync(context, subtype, linked, tmdbId, ct);
-                case "imdb":
-                    var found = await _tvdb.FindSeriesByImdbAsync(await _tvdb.OpenAsync(context, ct), value, ct) ?? throw new KeyNotFoundException("TheTVDB does not know this series.");
-                    return await ImportSeriesAsync(context, subtype, found, null, ct);
-                default:
-                    throw new KeyNotFoundException("No catalog names this series.");
-            }
+            var tvdbId = await FindTvdbIdAsync(context, @namespace, value, ct) ?? throw new KeyNotFoundException("TheTVDB does not know this series.");
+            var tmdbId = @namespace == "tmdb_tv" && int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var tmdb) && tmdb > 0 ? tmdb : (int?)null;
+            return await ImportSeriesAsync(context, subtype, tvdbId, tmdbId, ct);
         }
 
         // A series comes from TheTVDB only, like Sonarr: its titles and summaries in every language, artwork, people, genres, networks, trailer, seasons and episodes.

@@ -83,6 +83,7 @@ namespace Jularr.Backend.Logic.Media
 
         // Deletes catalog rows without details of catalogs that are not kept whole that nothing uses for CatalogDetailKeepDays:
         // no library tie, no feed, no trending rank, and not the target of a relation of a title with details or a library tie.
+        // A catalog counts with its sync settings; TheTVDB's series and those left of TMDB's series catalog count without.
         public static async Task<int> DeleteUnusedCatalogTitlesAsync(this LogicContext ctx, CatalogCleanupData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -93,9 +94,10 @@ namespace Jularr.Backend.Logic.Media
                         work."Id"
                     FROM
                         "Works" AS work
-                        JOIN "ExternalWorkSyncs" AS sync ON sync."Namespace" = work."CatalogNamespace" AND sync."Namespace" <> ALL(@WholeCatalogs)
                     WHERE
-                        work."DetailedAt" IS NULL
+                        (work."CatalogNamespace" IN ('tvdb', 'tmdb_tv') OR EXISTS (SELECT 1 FROM "ExternalWorkSyncs" AS sync WHERE sync."Namespace" = work."CatalogNamespace"))
+                        AND work."CatalogNamespace" <> ALL(@WholeCatalogs)
+                        AND work."DetailedAt" IS NULL
                         AND work."TrendingRank" IS NULL
                         AND coalesce(work."ViewedAt", work."FetchedAt", work."CreatedAt") < now() - make_interval(days => (SELECT settings."CatalogDetailKeepDays"::integer FROM "InstanceSettings" AS settings))
                         AND NOT EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id")

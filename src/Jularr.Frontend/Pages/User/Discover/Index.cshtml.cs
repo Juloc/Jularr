@@ -41,6 +41,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private readonly Dictionary<long, WorkAvailabilityStateV1> _availabilityByWork = [];
         private IReadOnlyList<HomeShelfV1> _layout = [.. Enum.GetValues<HomeShelfType>().Select(type => new HomeShelfV1(type, false))];
         private bool _providerUnavailable;
+        private string _providerNotice = "discover.providerUnavailable";
         private IReadOnlyList<DiscoverScopeV1>? _scopes;
         private string? _feed;
         private string? _sort;
@@ -143,7 +144,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             if (_providerUnavailable && (_results is not null || _catalog is not null))
             {
-                page.Content.Add(new P(new Text("discover.providerUnavailable")).Attribute("role", "status"));
+                page.Content.Add(new P(new Text(_providerNotice)).Attribute("role", "status"));
             }
 
             // Every result is a Work and opens its page.
@@ -493,9 +494,11 @@ namespace Jularr.Frontend.Pages.User.Discover
                     return;
                 }
             }
-            catch (ServiceUnavailableException)
+            catch (ServiceUnavailableException exception)
             {
+                // A search of series alone names the missing TheTVDB key.
                 _providerUnavailable = true;
+                if (exception.Code == "tvdb_key_missing") _providerNotice = "errors.tvdb_key_missing";
                 _results = selected is { IsCatalog: true } ? null : [];
                 _catalog = selected is { IsCatalog: true } ? [] : null;
                 return;
