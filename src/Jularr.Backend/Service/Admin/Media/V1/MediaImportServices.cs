@@ -45,8 +45,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var profiles = await Context.ExecuteBatchAsync((ctx, ct) => MediaImportQueries.ReadProfilesAsync(ctx, ct), CancellationToken);
             var libraries = await Context.ExecuteBatchAsync((ctx, ct) => MediaImportQueries.ReadLibrariesAsync(ctx, ct), CancellationToken);
             var rows = plan.Rows.Select(row => new MediaImportRowV1(row.Item.Index, row.Item.TypeKey, row.Item.Type, row.Item.Subtype, row.Item.Title, row.Item.Year, row.Item.Creator, row.Status, row.Problem, row.ProblemDetail,
-                row.WorkId, row.MatchTitle, row.MatchYear, row.MatchSource, row.Import is { } import ? import.Namespace + ":" + import.Value : null, row.HasTarget, row.CanMonitor, row.IsIncluded,
-                row.Query, row.DuplicateOf, new BaseDataList<MediaImportCandidateV1>(row.Candidates), row.Action));
+                row.WorkId, row.MatchTitle, row.MatchYear, row.MatchSource, row.Choice ?? (row.Import is { } import ? import.Namespace + ":" + import.Value : null), row.HasTarget, row.CanMonitor, row.IsIncluded,
+                row.Query, row.DuplicateOf, new BaseDataList<MediaImportCandidateV1>(row.Candidates), row.Action, MediaImportPlanner.CanUseListData(row.Item)));
             return new MediaImportPreviewV1(json, new BaseDataList<MediaImportRowV1>(rows), new BaseDataList<MediaImportOptionV1>(profiles), new BaseDataList<MediaImportOptionV1>(libraries), plan.Unsearched, plan.ProviderFailure);
         }
     }
