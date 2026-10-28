@@ -20,7 +20,7 @@ $stopRequest = Join-Path $RootDirectory 'stop.request'
 $schemaMarker = Join-Path $RootDirectory 'schema.sha256'
 $settingsPath = Join-Path $RootDirectory 'preview.settings.json'
 $baseUrl = "https://localhost:$HttpsPort"
-$mutex = [System.Threading.Mutex]::new($false, 'Local\JularrCleanStartPreview')
+$mutex = [System.Threading.Mutex]::new($false, 'Local\JularrMainPreview')
 $app = $null
 $runningCommit = $null
 $runningDirectory = $null
@@ -160,10 +160,10 @@ try
             if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect preview checkout.' }
             if ($changes) { throw 'Preview checkout has local changes; automatic update refused.' }
 
-            & $GitPath -c "safe.directory=$trustedCheckout" -C $checkout fetch --quiet origin clean-start
-            if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch clean-start.' }
-            & $GitPath -c "safe.directory=$trustedCheckout" -C $checkout merge --ff-only --quiet origin/clean-start
-            if ($LASTEXITCODE -ne 0) { throw 'clean-start is not a fast-forward; manual review required.' }
+            & $GitPath -c "safe.directory=$trustedCheckout" -C $checkout fetch --quiet origin main
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch main.' }
+            & $GitPath -c "safe.directory=$trustedCheckout" -C $checkout merge --ff-only --quiet origin/main
+            if ($LASTEXITCODE -ne 0) { throw 'main is not a fast-forward; manual review required.' }
             $commit = (& $GitPath -c "safe.directory=$trustedCheckout" -C $checkout rev-parse HEAD).Trim()
             if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve preview commit.' }
 
@@ -255,7 +255,7 @@ try
                     ProcessId = $app.Id
                     StartedAt = [DateTimeOffset]::UtcNow.ToString('O')
                 } | ConvertTo-Json | Set-Content (Join-Path $RootDirectory 'status.json')
-                Write-Log "Running clean-start $commit"
+                Write-Log "Running main $commit"
             }
 
             # Setup repeats until it succeeded for this schema.
@@ -263,7 +263,7 @@ try
             {
                 Initialize-PreviewData
                 Get-SchemaHash | Set-Content -LiteralPath $schemaMarker
-                Write-Log "Preview data initialized for clean-start $runningCommit"
+                Write-Log "Preview data initialized for main $runningCommit"
             }
         }
         catch
