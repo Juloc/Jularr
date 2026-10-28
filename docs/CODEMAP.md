@@ -192,7 +192,7 @@ Behavior and integration tests are in [Jularr.Backend.Tests](../tests/Jularr.Bac
 ## Specifications and status
 
 - [Instance setup](INSTANCE_SETUP.md): current intended setup flow; check actual state in its Pages/Services and tests.
-- [Local preview](LOCAL_PREVIEW.md): isolated development preview and [runner](../scripts/run-clean-start-preview.ps1).
+- [Local preview](LOCAL_PREVIEW.md): isolated development preview and [runner](../scripts/run-main-preview.ps1).
 - [Documentation authority](DOCUMENTATION_POLICY.md): current rules versus historical [backend slices](BACKEND_NEXT.md), [packages](COMPLETION_PLAN.md), and [verification snapshot](FEATURE_MATRIX.md).
 
 Incomplete functionality is tracked in GitHub issues and the owning tests, not a stale list of unimplemented slices in this navigation index.

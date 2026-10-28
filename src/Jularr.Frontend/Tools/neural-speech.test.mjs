@@ -13,7 +13,7 @@ function load(name, dependencies = {}, globals = {}) {
         require: name => { if (!(name in dependencies)) throw new Error('Unexpected dependency: ' + name); return dependencies[name]; }, ...globals });
     return exports;
 }
-const archive = load('ModelArchive', { './Runtime/seek-bzip/index.js': { default: Bunzip } });
+const archive = load('ModelArchive', { './Runtime/seek-bzip/index.js': { __esModule: true, default: Bunzip } });
 const device = load('DeviceSession');
 
 test('Browser-port decoder checks the real bzip2 stream and CRC before accepting a synthetic model archive', () => {
