@@ -217,7 +217,7 @@ namespace Jularr.Backend.Tests
             {
                 UseShellExecute = false,
                 Arguments = $"--remote-debugging-port={port} --user-data-dir=\"{Path.Combine(folder.Path, "profile")}\" --no-first-run --no-default-browser-check about:blank"
-            });
+            }) ?? throw new InvalidOperationException("The browser did not start.");
 
             try
             {

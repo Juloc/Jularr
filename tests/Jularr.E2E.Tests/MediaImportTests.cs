@@ -153,7 +153,7 @@ namespace Jularr.E2E.Tests
                 });
                 try
                 {
-                    await page.GetByRole(AriaRole.Button, new() { Name = "Update preview" }).ClickAsync(new() { NoWaitAfter = true });
+                    await page.GetByRole(AriaRole.Button, new() { Name = "Update preview" }).ClickAsync();
                     Assert.AreEqual("POST", (await streamedSearch).Method);
                     await Assertions.Expect(page.Locator("[data-import-apply]")).ToBeDisabledAsync();
                     await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Update preview" })).ToBeDisabledAsync();

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { webcrypto } from 'node:crypto';
-import ts from 'typescript';
+import ts from './transpile.mjs';
 
 // Exercise only the pure formatting / identifier utilities; onPage is a browser lifecycle hook.
 const source = readFileSync(new URL('../Pages/User/Companion/Companion.entry.ts', import.meta.url), 'utf8')

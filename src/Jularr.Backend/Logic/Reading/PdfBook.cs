@@ -182,7 +182,7 @@ namespace Jularr.Backend.Logic.Reading
 
                 // Text that does not hold together (a list of illustrations in columns) or a cover: the page as PDFium draws it, in place of the original.
                 result.Items.Clear();
-                if (state.Rendering is not null && WholePage(state, scan, excerpt) is { } whole)
+                if (state.Rendering is not null && WholePage(state, scan, result.Quality >= 0.6 && !read.IsUncertain ? excerpt : "") is { } whole)
                 {
                     result.Items.Add(whole);
                     result.Kind = PdfPageKind.Figure;

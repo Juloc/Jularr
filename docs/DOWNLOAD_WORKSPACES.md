@@ -63,7 +63,7 @@ Real NAS, SABnzbd and qBittorrent hardware acceptance is tracked separately in
 [#1600](https://github.com/Juloc/Jularr/issues/1600). Do not automatically enable
 new destructive cleanup policies on unverified existing installations.
 
-## Release gates
+## Acceptance checks
 
 - [ ] Fresh and existing database upgrades verified, backup/rollback tested
 - [ ] Backend tests (including all shards), frontend, browser E2E, Docker image

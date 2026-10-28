@@ -3,7 +3,7 @@
 `Account.sql` installs one PostgreSQL baseline in one transaction. It is
 embedded as `Jularr.Database.Account.sql`. The host applies all baselines in installation order
 in one transaction when its database has no table yet ([DatabaseBaseline.cs](../src/Jularr.Backend/Service/Core/DatabaseBaseline.cs)).
-`Schema.sql` records the installation's ordered schema history (`DatabaseSchemaVersions`). The baseline is frozen from the first release:
+`Schema.sql` records the installation's ordered schema history (`DatabaseSchemaVersions`). The baseline is frozen:
 `baseline.sha256` is its hash, the test `Baseline_MatchesTheFrozenHash` fails on any edit, and later schema changes are numbered, embedded
 migrations in `migrations/` (`NNNN_short_name.sql`, from `0002`) applied after a backup; see [database migrations](../docs/DATABASE_MIGRATIONS.md).
 `Media.sql` also holds the provider catalog `ExternalWorks` (titles known from TMDB, AniList and the other catalogs, Works or not) and its full-sync state `ExternalWorkSyncs`.

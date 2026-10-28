@@ -1,9 +1,9 @@
 # Database migrations
 
 The schema is frozen: `database/*.sql` is schema version 1 and `database/baseline.sha256` holds its hash.
-From the first release the Owner only updates a running installation, so every later schema change is
+The Owner only updates a running installation, so every schema change is
 a new numbered migration. `DatabaseBaselineTests`/`DatabaseMigrationTests` fail when a baseline file changes
-(`Baseline_MatchesTheFrozenHash`). `node scripts/freeze-baseline.mjs` rewrites the hash and is for the release only.
+(`Baseline_MatchesTheFrozenHash`). `node scripts/freeze-baseline.mjs` rewrites the hash and is not part of ordinary work.
 
 ## Adding a migration
 
@@ -40,4 +40,4 @@ failing update. Recover by starting the previous version (the database is unchan
 Restore and update are separate: restore an older backup into a separate empty database with the matching key ring and image, then start the
 newer image on it; the ordinary startup backs it up and migrates it. There is no reverse DDL. Downgrading the image does not downgrade the database.
 
-Open release gate `#1201`: a real image/volume update N to N+1 and Owner VM/NAS/SAB acceptance still need the frozen release artifacts.
+A real image/volume update N to N+1 and Owner VM/NAS/SAB acceptance remain tracked in `#1201`.
