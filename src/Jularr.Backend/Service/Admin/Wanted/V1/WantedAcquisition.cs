@@ -18,6 +18,10 @@ using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Logic.Storage;
+using Jularr.Integrations.Logic.Torrent;
+using Jularr.Backend.Data.Logic.Instance;
+using Jularr.Backend.Logic.Instance;
+using Jularr.Backend.Data.Enums.Sql;
 using Microsoft.AspNetCore.DataProtection;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Data.Enums.Storage;
@@ -337,9 +341,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var isTorrent = offer.Transport == DownloadTransport.Torrent
                 || offer.DownloadUri?.Scheme.Equals("magnet", StringComparison.OrdinalIgnoreCase) == true
                 || offer.DownloadUri?.AbsolutePath.EndsWith(".torrent", StringComparison.OrdinalIgnoreCase) == true;
-            var compatibleTypes = isTorrent
-                ? new[] { AcquisitionConnectionType.Qbittorrent }
-                : new[] { AcquisitionConnectionType.Sabnzbd, AcquisitionConnectionType.Usenet };
+            // Jularr's own torrent engine takes torrents only while its module is on.
+            var compatibleTypes = !isTorrent ? new[] { AcquisitionConnectionType.Sabnzbd, AcquisitionConnectionType.Usenet }
+                : (await context.ExecuteBatchAsync((ctx, token) => ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["Torrent"]), token), ct, SqlAccessMode.ReadOnly)).Any(module => module.IsEnabled)
+                    ? new[] { AcquisitionConnectionType.Qbittorrent, AcquisitionConnectionType.Torrent }
+                    : new[] { AcquisitionConnectionType.Qbittorrent };
             var client = DownloadClientSelectionLogic.Select(clients, target.MediaTypeId, _time.GetUtcNow().UtcDateTime, compatibleTypes);
             if (client is null)
             {
@@ -359,9 +365,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             // Refuse native downloads before reserving an operation or using an indexer grab.
             DownloadStoragePaths? nativePaths = null;
-            if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
+            if (client.AcquisitionConnectionTypeId is AcquisitionConnectionType.Usenet or AcquisitionConnectionType.Torrent)
             {
-                nativePaths = await _downloads.OpenAsync(context, DownloadStorageArea.Usenet, ct);
+                nativePaths = await _downloads.OpenAsync(context, client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? DownloadStorageArea.Usenet : DownloadStorageArea.Torrent, ct);
             }
 
             // A grab counts against its indexer's daily limit.
@@ -401,6 +407,46 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 catch (NewznabException exception)
                 {
                     failure = exception.Failure == NewznabFailure.Unavailable ? "acquisition_unavailable" : "acquisition_grab_failed";
+                }
+                catch (IOException)
+                {
+                    failure = "acquisition_unavailable";
+                }
+
+                if (failure is not null && Directory.Exists(staging))
+                {
+                    Directory.Delete(staging, recursive: true);
+                }
+            }
+            else if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent)
+            {
+                // Jularr's own engine keeps the magnet or the checked .torrent in staging; peers are reached only later, through the VPN.
+                var staging = await nativePaths!.PrepareIncompleteAsync(operationId, ct, target.MediaTypeId, target.MediaSubtypeId);
+                try
+                {
+                    Directory.CreateDirectory(staging);
+                    if (offer.DownloadUri.Scheme.Equals("magnet", StringComparison.OrdinalIgnoreCase))
+                    {
+                        MagnetLink.Parse(offer.DownloadUri.OriginalString);
+                        await File.WriteAllTextAsync(Path.Combine(staging, TorrentDownloader.MagnetName), offer.DownloadUri.OriginalString, ct);
+                    }
+                    else
+                    {
+                        var file = Path.Combine(staging, TorrentDownloader.TorrentName);
+                        File.Delete(file);
+                        await _newznab.DownloadNzbAsync(offer.DownloadUri, file, ct, bytes => nativePaths.ReserveWrite(operationId, staging, bytes));
+                        TorrentMetainfo.Parse(await File.ReadAllBytesAsync(file, ct));
+                    }
+
+                    externalId = TorrentJob.ExternalId;
+                }
+                catch (NewznabException exception)
+                {
+                    failure = exception.Failure == NewznabFailure.Unavailable ? "acquisition_unavailable" : "acquisition_grab_failed";
+                }
+                catch (InvalidDataException)
+                {
+                    failure = "acquisition_grab_failed";
                 }
                 catch (IOException)
                 {
@@ -480,6 +526,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 return true;
             }, ct);
             _signals.Downloads.Notify();
+            if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent) _signals.Torrents.Notify();
         }
 
         private async Task RequireClientImportSourceAsync(LogicContext context, AcquisitionConnectionData client, CancellationToken ct)

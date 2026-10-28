@@ -9283,6 +9283,86 @@
    "The WireGuard configuration needs a DNS server, so that names are resolved through the tunnel.",
    "Die WireGuard-Konfiguration braucht einen DNS-Server, damit Namen durch den Tunnel aufgelöst werden."
   ],
+  "acquisition.connection.type.Torrent": [
+   "Jularr torrent engine",
+   "Jularr-Torrent-Engine"
+  ],
+  "acquisition.connection.addTorrent": [
+   "Add torrent engine",
+   "Torrent-Engine hinzufügen"
+  ],
+  "downloadStorage.area.Torrent": [
+   "Jularr torrent engine",
+   "Jularr-Torrent-Engine"
+  ],
+  "sources.storage.torrentMissing": [
+   "Jularr's own torrent engine needs Incomplete and Complete folders plus a confirmed free-space reserve before it can download.",
+   "Jularrs eigene Torrent-Engine braucht Ordner für Unvollständig und Fertig sowie eine bestätigte Platzreserve, bevor sie herunterladen kann."
+  ],
+  "instance.module.Torrent": [
+   "Jularr's own torrent engine (download only, through the VPN)",
+   "Jularrs eigene Torrent-Engine (nur Download, über das VPN)"
+  ],
+  "setup.module.help.Torrent": [
+   "Download torrents without ever uploading a piece; it runs only through a verified VPN tunnel.",
+   "Lädt Torrents herunter, ohne je ein Stück hochzuladen; läuft nur durch einen geprüften VPN-Tunnel."
+  ],
+  "acquisition.torrent.lock": [
+   "Upload lock",
+   "Upload-Sperre"
+  ],
+  "acquisition.torrent.lockVerified": [
+   "Proven now: no file data can leave",
+   "Jetzt geprüft: keine Dateidaten können hinaus"
+  ],
+  "acquisition.torrent.lockFailed": [
+   "Check failed, the engine does not run",
+   "Prüfung fehlgeschlagen, die Engine läuft nicht"
+  ],
+  "acquisition.torrent.uploaded": [
+   "Sent to peers",
+   "An Peers gesendet"
+  ],
+  "acquisition.torrent.fileData": [
+   "file data",
+   "Dateidaten"
+  ],
+  "acquisition.torrent.control": [
+   "control messages",
+   "Steuernachrichten"
+  ],
+  "acquisition.torrent.refused": [
+   "frames refused",
+   "Frames abgewiesen"
+  ],
+  "acquisition.torrent.received": [
+   "Received",
+   "Empfangen"
+  ],
+  "acquisition.torrent.peers": [
+   "Connected peers",
+   "Verbundene Peers"
+  ],
+  "acquisition.torrent.vpn": [
+   "VPN",
+   "VPN"
+  ],
+  "acquisition.torrent.vpnVerified": [
+   "Verified tunnel ready",
+   "Geprüfter Tunnel bereit"
+  ],
+  "acquisition.torrent.vpnNone": [
+   "No verified tunnel, nothing is sent",
+   "Kein geprüfter Tunnel, nichts wird gesendet"
+  ],
+  "errors.torrent_module_off": [
+   "Jularr's torrent engine needs its module and the VPN module switched on.",
+   "Jularrs Torrent-Engine braucht ihr Modul und das VPN-Modul eingeschaltet."
+  ],
+  "errors.torrent_lock_failed": [
+   "The upload lock of the torrent engine did not prove itself, so it does not run.",
+   "Die Upload-Sperre der Torrent-Engine hat sich nicht bewiesen, deshalb läuft sie nicht."
+  ],
   "errors.validation.invalid_wireguard_configuration": [
    "The WireGuard configuration cannot be used. It needs one interface, one peer and only supported keys.",
    "Die WireGuard-Konfiguration kann nicht verwendet werden. Sie braucht genau eine Schnittstelle, einen Peer und nur unterstützte Schlüssel."

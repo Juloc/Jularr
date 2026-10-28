@@ -72,6 +72,24 @@ namespace Jularr.Backend.Logic.Network
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1) throw new KeyNotFoundException("The VPN profile was not found.");
         }
 
+        // Every profile in the order a client tries them.
+        public static async Task<IReadOnlyList<VpnProfileSecretData>> ReadVpnProfileSecretsAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    profile."Id",
+                    profile."ProtectedConfiguration"
+                FROM
+                    "VpnProfiles" AS profile
+                ORDER BY
+                    profile."Id"
+                LIMIT 100;
+                """;
+            return await ctx.Sql.ReadListAsync<VpnProfileSecretData>(sql, ct);
+        }
+
         public static async Task<VpnProfileSecretData> ReadVpnProfileSecretAsync(this LogicContext ctx, long vpnProfileId, CancellationToken ct)
         {
             var sql = new SqlStatement();

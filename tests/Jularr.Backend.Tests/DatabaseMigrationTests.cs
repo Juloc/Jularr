@@ -217,6 +217,10 @@ namespace Jularr.Backend.Tests
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 17"));
             Assert.AreEqual(1L, await ScalarAsync(cs,
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'VpnProfiles'"));
+            Assert.AreEqual("0018_native_torrent", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 18"));
+            Assert.AreEqual("Torrent", await ScalarAsync(cs,
+                "SELECT \"Key\" FROM \"AcquisitionConnectionTypes\" WHERE \"Id\" = 12"));
             Assert.AreEqual(2L, await ScalarAsync(cs,
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('MediaImportJobs','MediaImportJobRows')"));
             Assert.AreEqual(1L, await ScalarAsync(cs,

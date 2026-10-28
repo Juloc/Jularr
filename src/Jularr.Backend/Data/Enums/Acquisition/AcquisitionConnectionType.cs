@@ -12,6 +12,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         SubDl = 8,
         Qbittorrent = 9,
         Nyaa = 10,
-        Narou = 11
+        Narou = 11,
+        Torrent = 12
     }
 }

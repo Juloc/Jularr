@@ -13,7 +13,12 @@ namespace Jularr.Frontend.Framework
 
         public static IUiComponent Message(DownloadStorageArea area, string link = "/Admin/DownloadStorage") =>
             new Div(
-                new Span(new Text(area == DownloadStorageArea.Direct ? "sources.storage.directMissing" : "sources.storage.usenetMissing")),
+                new Span(new Text(area switch
+                {
+                    DownloadStorageArea.Direct => "sources.storage.directMissing",
+                    DownloadStorageArea.Torrent => "sources.storage.torrentMissing",
+                    _ => "sources.storage.usenetMissing"
+                })),
                 new A(new Text("sources.storage.configure")).Class("button button--compact button--soft")
                     .Attribute("href", link)
             ).Class("native-storage-notice").Attribute("role", "status");

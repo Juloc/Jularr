@@ -257,6 +257,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<ArchiveTools>();
             services.TryAddSingleton<PostgresBackupTools>();
             services.TryAddTransient<UsenetJob>();
+            services.TryAddTransient<TorrentJob>();
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
             services.TryAddSingleton(provider => new BrowserPackages(provider.GetRequiredService<IOptions<BrowserOptions>>().Value));
             services.AddSingleton<SourceBrowser>(provider => new SourceBrowser(provider.GetRequiredService<IOptions<BrowserOptions>>().Value,
