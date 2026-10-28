@@ -295,6 +295,83 @@ namespace Jularr.Backend.Data.User.Playback.V1
         public string ContentType => "video/mp2t";
     }
 
+    // The file of a playback as probed, and what a conversion does with its streams.
+    public sealed class PlaybackFactsV1 : BaseResponse
+    {
+        public PlaybackFactsV1(PlaybackModeType playbackModeTypeId, string? container, long? bitRate, string? videoCodec, int? videoWidth, int? videoHeight, int? bitDepth, string? dynamicRange,
+            string? audioCodec, int? audioChannels, string? audioLanguage, bool? copyVideo, bool? copyAudio, int? targetHeight, int? videoKilobits, int? audioKilobits, string? encoder)
+        {
+            PlaybackModeTypeId = playbackModeTypeId;
+            Container = container;
+            BitRate = bitRate;
+            VideoCodec = videoCodec;
+            VideoWidth = videoWidth;
+            VideoHeight = videoHeight;
+            BitDepth = bitDepth;
+            DynamicRange = dynamicRange;
+            AudioCodec = audioCodec;
+            AudioChannels = audioChannels;
+            AudioLanguage = audioLanguage;
+            CopyVideo = copyVideo;
+            CopyAudio = copyAudio;
+            TargetHeight = targetHeight;
+            VideoKilobits = videoKilobits;
+            AudioKilobits = audioKilobits;
+            Encoder = encoder;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.PlaybackModeTypeId))]
+        public PlaybackModeType PlaybackModeTypeId { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Container))]
+        public string? Container { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.BitRate))]
+        public long? BitRate { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Codec))]
+        public string? VideoCodec { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Width))]
+        public int? VideoWidth { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Height))]
+        public int? VideoHeight { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.BitDepth))]
+        public int? BitDepth { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.DynamicRange))]
+        public string? DynamicRange { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Codec))]
+        public string? AudioCodec { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Channels))]
+        public int? AudioChannels { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Language))]
+        public string? AudioLanguage { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.CopyVideo))]
+        public bool? CopyVideo { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.CopyAudio))]
+        public bool? CopyAudio { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TargetHeight))]
+        public int? TargetHeight { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.Kilobits))]
+        public int? VideoKilobits { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.Kilobits))]
+        public int? AudioKilobits { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.Encoder))]
+        public string? Encoder { get; }
+    }
+
     public sealed class PlaybackPlanV1 : BaseResponse
     {
         public PlaybackPlanV1(Guid playbackSessionId, PlaybackModeType playbackModeTypeId, string streamUrl, long resumePositionMs, long? durationMs, int? audioStreamIndex,

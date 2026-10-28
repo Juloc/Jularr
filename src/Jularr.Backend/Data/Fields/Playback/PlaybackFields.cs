@@ -22,5 +22,11 @@ namespace Jularr.Backend.Data.Fields.Playback
         public static readonly BoolField IsSupported = new();
         public static readonly BoolField IsSelected = new();
         public static readonly BoolField IsReduced = new();
+        // The Info pane: what a conversion does with the video and the audio.
+        public static readonly BoolField CopyVideo = new() { Required = false };
+        public static readonly BoolField CopyAudio = new() { Required = false };
+        public static readonly IntField TargetHeight = new() { Minimum = 1, Maximum = 100_000, Required = false };
+        public static readonly IntField Kilobits = new() { Minimum = 1, Maximum = 10_000_000, Required = false };
+        public static readonly StringField Encoder = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
     }
 }
