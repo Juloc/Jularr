@@ -73,7 +73,7 @@ namespace Jularr.Integrations.Logic.Ocr
         }
 
         // Large type is detected word by word: pieces side by side on the same rows become their line again, so it is read in one go and in order. Only pieces
-        // of nearly one height a word space apart join; a gap wider than that (the gutter to another column) or type of another size keeps them apart.
+        // a word space apart (against the smaller one's height) join; a wider gap (the gutter to another column, small type beside large) keeps them apart.
         internal static List<SKRectI> Join(List<SKRectI> boxes)
         {
             var lines = boxes.OrderBy(box => box.Left).ToList();
@@ -87,8 +87,8 @@ namespace Jularr.Integrations.Logic.Ocr
                         var (one, other) = (lines[first], lines[second]);
                         var overlap = Math.Min(one.Bottom, other.Bottom) - Math.Max(one.Top, other.Top);
                         var gap = Math.Max(one.Left, other.Left) - Math.Min(one.Right, other.Right);
-                        var (low, high) = (Math.Min(one.Height, other.Height), Math.Max(one.Height, other.Height));
-                        if (high > low * 1.4f || overlap < low * 0.7f || gap > low * 0.6f)
+                        var low = Math.Min(one.Height, other.Height);
+                        if (overlap < low * 0.7f || gap > low * 0.6f)
                         {
                             continue;
                         }
