@@ -75,7 +75,7 @@ export function initializeComicPages(reader: HTMLElement): void {
             requestAnimationFrame(() => { stage.scrollTop = image(page).offsetTop - stage.offsetTop; });
         } else stage.replaceChildren(...current.map(image));
         updatePosition();
-        const active = settings.mode === 'paged' && !failed;
+        const active = settings.mode === 'paged' && settings.paging === 'book' && !failed;
         reader.dataset.bookPageCount = String(count); reader.dataset.bookPageBefore = '0';
         if (book && !book.update({ current: page, columns, minimum: 0, maximum: count - 1, group,
             next: (at, delta) => target(delta, at), number: at => at + 1, commit }, active)) failed = true;
