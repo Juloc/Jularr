@@ -205,9 +205,9 @@ namespace Jularr.E2E.Tests
         {
             "login" => Json("""{"data":{"token":"e2e-tvdb-token"}}"""),
             "series/990001/extended" => Json("""{"data":{"id":990001,"name":"Jularr Test Series","remoteIds":[]}}"""),
-            "series/990001/episodes/default" => Json("""{"data":{"episodes":[{"id":1,"seasonNumber":1,"number":1,"name":"Pilot","aired":"2020-04-01"},{"id":2,"seasonNumber":1,"number":2,"name":"Second","aired":"2020-04-08"}]},"links":{"next":null}}"""),
+            "series/990001/episodes/default/eng" => Json("""{"data":{"episodes":[{"id":1,"seasonNumber":1,"number":1,"name":"Pilot","aired":"2020-04-01"},{"id":2,"seasonNumber":1,"number":2,"name":"Second","aired":"2020-04-08"}]},"links":{"next":null}}"""),
             "series/990002/extended" => Json("""{"data":{"id":990002,"name":"Example Anime","remoteIds":[]}}"""),
-            "series/990002/episodes/default" => Json("""{"data":{"episodes":[{"id":3,"seasonNumber":1,"number":1,"name":"Beginning","aired":"2021-01-05"},{"id":4,"seasonNumber":1,"number":2,"name":"Ending","aired":"2021-01-12"}]},"links":{"next":null}}"""),
+            "series/990002/episodes/default/eng" => Json("""{"data":{"episodes":[{"id":3,"seasonNumber":1,"number":1,"name":"Beginning","aired":"2021-01-05"},{"id":4,"seasonNumber":1,"number":2,"name":"Ending","aired":"2021-01-12"}]},"links":{"next":null}}"""),
             _ => Results.NotFound()
         };
 
