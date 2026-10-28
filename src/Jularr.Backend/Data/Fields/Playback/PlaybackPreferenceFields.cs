@@ -12,5 +12,6 @@ namespace Jularr.Backend.Data.Fields.Playback
         public static readonly BoolField AutoplayNext = new();
         public static readonly EnumField SkipModeTypeId = new(typeof(SkipMode));
         public static readonly BoolField AutoplayPreviews = new();
+        public static readonly BoolField KeepScreenOn = new();
     }
 }
