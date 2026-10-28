@@ -49,7 +49,8 @@ profiles. Normal Jularr connectivity remains direct.
 - UDP through the tunnel (wireproxy's SOCKS5 has only CONNECT): bound clients use TCP
   only (no UDP trackers, DHT or uTP for torrents).
 - Per-source routing rules, priorities and country fallback as stored settings, and
-  routing search, browser, metadata or the external qBittorrent through the tunnel.
+  routing search, browser, metadata or the external qBittorrent through the tunnel. Bound so far:
+  Jularr's own torrent engine (profiles tried by id, see [torrents](TORRENT_ACQUISITION.md)).
 - Password-verified, audited VPN-off override; profile editing and secret rotation.
 
 ## Acceptance for a future production-ready release

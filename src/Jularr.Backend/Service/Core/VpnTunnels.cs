@@ -69,6 +69,7 @@ namespace Jularr.Backend.Service.Core
         {
             var tunnel = await EnsureAsync(profileId, protectedConfiguration, ct);
             if (tunnel.Phase != VpnTunnelPhase.Connected) throw new TunnelUnavailableException(tunnel.ErrorKey ?? "vpn_unavailable");
+            await tunnel.WaitAliveAsync(ct);
             return tunnel.Lease();
         }
 
@@ -191,6 +192,16 @@ namespace Jularr.Backend.Service.Core
                 // Connected only once a request through it reached the outside under another address than the host's.
                 await VerifyAsync(true, ct);
                 _timer = owner._time.CreateTimer(_ => _ = TickAsync(), null, HealthInterval, HealthInterval);
+            }
+
+            // A fresh tunnel counts as alive once its first ping came back through it.
+            public async Task WaitAliveAsync(CancellationToken ct)
+            {
+                for (var attempt = 0; _aliveAt is null && attempt < CheckAliveSeconds + 5 && _process is { IsRunning: true } process; attempt++)
+                {
+                    if (await process.IsAliveAsync(ct)) _aliveAt = owner._time.GetUtcNow();
+                    else await Task.Delay(TimeSpan.FromSeconds(1), owner._time, ct);
+                }
             }
 
             public VpnLease Lease()

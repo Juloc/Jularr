@@ -9,6 +9,8 @@ using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Instance;
+using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Newznab;
@@ -20,6 +22,8 @@ using Jularr.Integrations.Logic.Nyaa;
 using Jularr.Integrations.Data.Nyaa;
 using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Logic.Torrent;
+using Jularr.Integrations.Data.Network;
 using Jularr.Integrations.Data.Subtitles;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -239,10 +243,12 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     public sealed class TestAcquisitionConnectionV1 : AdminService<AcquisitionConnectionParametersV1, NoData>
     {
         private readonly AcquisitionConnectionProbe _probe;
+        private readonly TorrentJob _torrents;
 
-        internal TestAcquisitionConnectionV1(AcquisitionConnectionProbe probe)
+        internal TestAcquisitionConnectionV1(AcquisitionConnectionProbe probe, TorrentJob torrents)
         {
             _probe = probe;
+            _torrents = torrents;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -254,14 +260,32 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         {
             var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(Parameters.AcquisitionConnectionId, ct), CancellationToken);
 
-            // Keep remote I/O outside transactions.
-            var (result, capabilities) = await _probe.TestAsync(connection, CancellationToken);
+            // Keep remote I/O outside transactions. Jularr's own torrent engine is ready with its lock proven and a verified VPN tunnel.
+            var (result, capabilities) = connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent
+                ? (await TestTorrentEngineAsync(), null)
+                : await _probe.TestAsync(connection, CancellationToken);
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 await ctx.SaveAcquisitionConnectionCheckAsync(new AcquisitionConnectionCheckData(connection.Id, connection.Version, capabilities, result.ErrorKey), ct);
                 return true;
             }, CancellationToken);
             return result;
+        }
+
+        private async Task<AcquisitionConnectionTestV1> TestTorrentEngineAsync()
+        {
+            var modules = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["Torrent", "Vpn"]), ct), CancellationToken);
+            if (modules.Count(module => module.IsEnabled) != 2) return new AcquisitionConnectionTestV1(false, "torrent_module_off", null, []);
+            if (!await TorrentOutboundWire.VerifyLockAsync(CancellationToken)) return new AcquisitionConnectionTestV1(false, "torrent_lock_failed", null, []);
+            try
+            {
+                using var lease = await _torrents.AcquireRouteAsync(Context, CancellationToken);
+                return new AcquisitionConnectionTestV1(true, null, null, []);
+            }
+            catch (TunnelUnavailableException exception)
+            {
+                return new AcquisitionConnectionTestV1(false, exception.ReasonKey, null, []);
+            }
         }
     }
 

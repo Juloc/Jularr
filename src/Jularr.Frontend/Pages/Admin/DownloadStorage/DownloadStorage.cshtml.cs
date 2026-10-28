@@ -123,7 +123,8 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
         protected override async Task LoadDataAsync()
         {
             if (!IsSetup) _cleanupStats = await cleanup.ExecuteAsync<DirectCleanupStatsV1>(new DownloadStorageParametersV1(DownloadStorageArea.Direct), HttpContext.RequestAborted);
-            foreach (var area in Enum.GetValues<DownloadStorageArea>())
+            // The torrent engine's workspace exists only while its module is on.
+            foreach (var area in Enum.GetValues<DownloadStorageArea>().Where(area => area != DownloadStorageArea.Torrent || texts.Can(null, "Torrent")))
             {
                 var settings = await read.ExecuteAsync<DownloadStorageSettingsV1>(new DownloadStorageParametersV1(area), HttpContext.RequestAborted);
                 _settings[area] = settings;

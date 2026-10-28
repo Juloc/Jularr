@@ -512,8 +512,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     continue;
                 }
 
-                // Jularr's own Usenet downloads run in DownloadUsenetV1.
-                if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
+                // Jularr's own Usenet and torrent downloads run in DownloadUsenetV1 and DownloadTorrentsV1.
+                if (connection.AcquisitionConnectionTypeId is AcquisitionConnectionType.Usenet or AcquisitionConnectionType.Torrent)
                 {
                     continue;
                 }

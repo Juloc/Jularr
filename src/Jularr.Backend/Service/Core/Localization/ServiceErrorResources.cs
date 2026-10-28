@@ -99,6 +99,8 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.takeover_unreachable", "Nothing answered at that address. Check the address and that the app is running and reachable from Jularr."),
             new("errors.takeover_authentication_failed", "The address answered but refused the API key. Copy the key from the app's Settings, General page."),
             new("errors.acquisition_unavailable", "The indexer or download client could not be reached."),
+            new("errors.torrent_module_off", "Jularr's torrent engine needs its module and the VPN module switched on."),
+            new("errors.torrent_lock_failed", "The upload lock of the torrent engine did not prove itself, so it does not run."),
             new("errors.vpn_unavailable", "The VPN tunnel is not connected. Nothing bound to it is sent without it."),
             new("errors.vpn_helper_missing", "The WireGuard helper wireproxy is not installed in this image."),
             new("errors.vpn_tunnel_unreachable", "Nothing came back through the VPN tunnel. Check the profile and its VPN server."),

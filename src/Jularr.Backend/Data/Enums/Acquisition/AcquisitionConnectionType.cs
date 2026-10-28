@@ -11,6 +11,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         OpenSubtitles = 7,
         SubDl = 8,
         Qbittorrent = 9,
-        Nyaa = 10
+        Nyaa = 10,
+        Torrent = 11
     }
 }
