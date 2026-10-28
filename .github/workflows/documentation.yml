@@ -33,6 +33,6 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: '26'
       - name: Verify documentation links and statuses
         run: node scripts/verify-documentation.mjs

@@ -88,7 +88,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
                 var selected = _status?.ManualView?.AcquisitionConnectionId ?? sources[0].Id;
                 page.Content.Add(new Form<AcquisitionConnectionParametersV1>(form =>
                 {
-                    form.Select(item => item.AcquisitionConnectionId, "admin.browser.source", [.. sources.Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), new Uri(item.BaseUrl).Host))]);
+                    form.Select(item => item.AcquisitionConnectionId, "admin.browser.source", [.. sources.Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), item.BaseUrl is { } address ? new Uri(address).Host : item.Id.ToString(CultureInfo.InvariantCulture)))]);
                     form.Submit("admin.browser.manualOpen");
                 }, "/Admin/Browser?handler=OpenView", csrf, new AcquisitionConnectionParametersV1(selected)));
             }
