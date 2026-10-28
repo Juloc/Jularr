@@ -1,10 +1,14 @@
+using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Media;
+using Jularr.Integrations.Data.Common;
 using Microsoft.Extensions.Logging;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
@@ -28,13 +32,41 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 return Result(MediaImportOutcomeType.Excluded);
             }
 
-            if (!row.IsIncluded || row.Import is null && row.WorkId is null)
+            if (!row.IsIncluded || row.Import is null && row.WorkId is null && !row.UsesListData)
             {
                 return Result(MediaImportOutcomeType.Skipped);
             }
 
             var id = row.WorkId;
             var isNew = false;
+            if (row.UsesListData)
+            {
+                if (checkOwnerAsync is not null) await checkOwnerAsync();
+                var book = await context.ExecuteBatchAsync(async (ctx, token) =>
+                {
+                    // Only the short local creation is serialized; no provider I/O or long-running job holds this lock.
+                    var gate = new SqlStatement { Statement = "SELECT pg_advisory_xact_lock(9461824);" };
+                    await ctx.ExecuteAsyncForAffectedRows(gate, token);
+                    var local = await MediaImportQueries.ReadLocalBooksAsync(ctx, [row.Item], token);
+                    var identities = row.Item.Ids.SelectMany(identity => MediaImportParser.Isbn10(identity.Value) is { } ten
+                        ? new[] { identity, new MediaImportId("isbn", ten) } : [identity]);
+                    var known = await MediaImportQueries.ReadKnownAsync(ctx, new WorkIdentityLookupData(JsonSerializer.Serialize(identities)), token);
+                    if (local.Count > 1 || known.Any(hit => local.Count != 1 || hit.WorkId != local[0].WorkId)) return (Id: (long?)null, Created: false);
+                    var workId = local.Count == 1 ? local[0].WorkId
+                        : (await ctx.CreateWorkAsync(new WorkCreationData(MediaType.Book, null, false, row.Item.Title!, row.Item.Year), token)).Id;
+                    if (local.Count == 0)
+                    {
+                        var authors = row.Item.Authors ?? [row.Item.Creator!];
+                        await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, "manual", WorkPeopleLogic.Rows(authors.Select(name => new ProviderPerson(null, name, ProviderPerson.Author)))), token);
+                    }
+                    foreach (var isbn in row.Item.Ids)
+                        await ctx.SaveManualBookIsbnAsync(new WorkIdentityData("isbn", isbn.Value, workId), token);
+                    return (Id: (long?)workId, Created: local.Count == 0);
+                }, ct);
+                if (book.Id is null) return Result(MediaImportOutcomeType.NeedsReview);
+                id = book.Id;
+                isNew = book.Created;
+            }
             if (id is null)
             {
                 var import = row.Import!;
