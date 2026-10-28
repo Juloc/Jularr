@@ -9,6 +9,7 @@ using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Playback;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
@@ -199,13 +200,13 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     // An ASS file is drawn by the player as it is, so it needs no conversion.
                     var supported = PlaybackTracks.IsTextFile(row.RelativePath!) && (_subtitles.CanConvert || row.RelativePath!.EndsWith(".srt", StringComparison.OrdinalIgnoreCase)
                         || row.RelativePath!.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase) || PlaybackTracks.IsStyledFile(row.RelativePath!));
-                    return new PlaybackTrackV1(PlaybackTracks.FileKey(fileId), MediaTrackType.Subtitle, language, null, null, false, isForced, supported, false, supported && PlaybackTracks.IsStyledFile(row.RelativePath!));
+                    return new PlaybackTrackV1(PlaybackTracks.FileKey(fileId), MediaTrackType.Subtitle, language, null, null, false, isForced, supported, false, supported && PlaybackTracks.IsStyledFile(row.RelativePath!), LanguageCodes.ToTwoLetter(language));
                 }
 
                 // Another audio track and embedded text subtitles need FFmpeg.
                 var playable = row.MediaTrackTypeId == MediaTrackType.Audio ? row.IsDefault || _subtitles.CanConvert : PlaybackTracks.IsText(row.Codec) && _subtitles.CanConvert;
                 return new PlaybackTrackV1(PlaybackTracks.StreamKey(row.StreamIndex!.Value), row.MediaTrackTypeId, row.Language, row.Title, row.Channels, row.IsDefault, row.IsForced, playable, false,
-                    row.MediaTrackTypeId == MediaTrackType.Subtitle && playable && PlaybackTracks.IsStyled(row.Codec));
+                    row.MediaTrackTypeId == MediaTrackType.Subtitle && playable && PlaybackTracks.IsStyled(row.Codec), LanguageCodes.ToTwoLetter(row.Language));
             }).ToList();
 
             // The profile's preferences pick one audio and at most one subtitle track among the playable ones.
@@ -234,7 +235,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
             var audio = PlaybackTracks.ChooseAudio(choices, preference.AudioLanguage);
             var subtitle = PlaybackTracks.ChooseSubtitle(choices, preference, audio);
             return new BaseDataList<PlaybackTrackV1>([.. described.Select(track => new PlaybackTrackV1(track.Key, track.MediaTrackTypeId, track.Language, track.Title, track.Channels,
-                track.IsDefault, track.IsForced, track.IsSupported, track.Key == audio?.Key || track.Key == subtitle?.Key, track.IsStyled))]);
+                track.IsDefault, track.IsForced, track.IsSupported, track.Key == audio?.Key || track.Key == subtitle?.Key, track.IsStyled, track.LanguageCode))]);
         }
     }
 

@@ -12,7 +12,7 @@ namespace Jularr.Frontend.Framework
         string? TrickplayUrl = null, PlayerPreferences? Preferences = null, IReadOnlyList<PlayerMarker>? Markers = null, IReadOnlyList<PlayerChapter>? Chapters = null);
 
     // What the profile and the device chose before playing: the speed, whether the next episode follows (after a countdown of that many seconds, none for music), and the quality in use.
-    public sealed record PlayerPreferences(decimal Speed, bool AutoplayNext, int CountdownSeconds, string QualityKey, string SpeedUrl, string IntroSkip = "Button", string OutroSkip = "Button");
+    public sealed record PlayerPreferences(decimal Speed, bool AutoplayNext, int CountdownSeconds, string QualityKey, string SpeedUrl, string IntroSkip = "Button", string OutroSkip = "Button", string? SecondSubtitleLanguage = null);
 
     // A stretch of the video the viewer may skip (Intro, Credits, Recap or Preview), in seconds.
     public sealed record PlayerMarker(string Kind, double Start, double End);
@@ -21,7 +21,7 @@ namespace Jularr.Frontend.Framework
     public sealed record PlayerChapter(string? Title, double Start);
 
     // One audio or subtitle choice; unsupported ones stay visible but disabled.
-    public sealed record PlayerTrack(string Key, string Label, string? Language, bool IsSelected, bool IsSupported, bool IsStyled = false);
+    public sealed record PlayerTrack(string Key, string Label, string? Language, bool IsSelected, bool IsSupported, bool IsStyled = false, bool IsForced = false);
 
     public sealed class UiPlayer(PlayerSource source, FrontendAssets assets) : IUiComponent
     {
@@ -166,6 +166,7 @@ namespace Jularr.Frontend.Framework
                 .Attribute("data-countdown", (source.Preferences?.CountdownSeconds ?? 0).ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-speed-url", source.Preferences?.SpeedUrl ?? "")
                 .Attribute("data-skip-intro", source.Preferences?.IntroSkip ?? "Button")
+                .Attribute("data-second-language", source.Preferences?.SecondSubtitleLanguage ?? "")
                 .Attribute("data-skip-outro", source.Preferences?.OutroSkip ?? "Button")
                 .Attribute("data-markers", JsonSerializer.Serialize((source.Markers ?? []).Select(marker => new { kind = marker.Kind, start = marker.Start, end = marker.End })))
                 .WriteTo(writer, encoder, texts);
@@ -213,7 +214,11 @@ namespace Jularr.Frontend.Framework
                 : ChoiceField("audio", pane, "player.audio", false, [.. Audio.Select(track => Choice(track.Key, new ValueText(track.Label), track.IsSelected, !track.IsSupported, track.Language))]);
 
             IUiComponent SubtitleField(string pane) => ChoiceField("subtitle", pane, "player.subtitles", !Subtitles.Any(track => track.IsSupported),
-                [Choice("", new Text("player.subtitles.off"), !Subtitles.Any(track => track.IsSelected), false), .. Subtitles.Select(track => Choice(track.Key, new ValueText(track.Label), track.IsSelected, !track.IsSupported, track.Language, track.IsStyled))]);
+                [Choice("", new Text("player.subtitles.off"), !Subtitles.Any(track => track.IsSelected), false), .. Subtitles.Select(track => Choice(track.Key, new ValueText(track.Label), track.IsSelected, !track.IsSupported, track.Language, track.IsStyled, track.IsForced))]);
+
+            // A second language above the first; the player starts it from the profile's choice and a track picked here replaces it.
+            IUiComponent SecondSubtitleField(string pane) => ChoiceField("subtitle2", pane, "player.subtitles.second", !Subtitles.Any(track => track.IsSupported),
+                [Choice("", new Text("player.subtitles.off"), true, false), .. Subtitles.Select(track => Choice(track.Key, new ValueText(track.Label), false, !track.IsSupported, track.Language, false, track.IsForced))]);
 
             IUiComponent QualityField(string pane) => ChoiceField("quality", pane, "playback.quality", false, [.. Qualities.Select(value => Choice(((byte)value).ToString(CultureInfo.InvariantCulture),
                 new Text("playback.quality." + value), value.ToString() == (source.Preferences?.QualityKey ?? "Automatic"), false))]);
@@ -301,7 +306,7 @@ namespace Jularr.Frontend.Framework
                     new Div(
                         Pane("basic", AudioField("basic"), SubtitleField("basic"), SpeedField("basic"), QualityField("basic")),
                         Pane("audio", AudioField("audio"), OffsetField("audio", "player.offset.audio")),
-                        Pane("subtitles", SubtitleField("subtitles"), OffsetField("subtitle", "player.offset.subtitles")),
+                        Pane("subtitles", SubtitleField("subtitles"), SecondSubtitleField("subtitles"), OffsetField("subtitle", "player.offset.subtitles")),
                         Pane("playback", [QualityField("playback"), SpeedField("playback"), FitField(), .. PreferenceFields()]),
                         Pane("info", Facts())
                     ).Class("player__settings-body"),
@@ -319,12 +324,13 @@ namespace Jularr.Frontend.Framework
             }
 
             // The server marks the choice it made; an unsupported track stays visible but cannot be chosen.
-            HtmlElement Choice(string key, IUiComponent label, bool isChosen, bool isDisabled, string? language = null, bool isStyled = false)
+            HtmlElement Choice(string key, IUiComponent label, bool isChosen, bool isDisabled, string? language = null, bool isStyled = false, bool isForced = false)
             {
                 var option = new OptionElement(label).Attribute("value", key);
                 if (isChosen) option.Attribute("selected", "selected").Attribute("data-chosen", "true");
                 if (language is not null) option.Attribute("data-language", language);
                 if (isStyled) option.Attribute("data-styled", "true");
+                if (isForced) option.Attribute("data-forced", "true");
                 if (isDisabled) option.Attribute("disabled", "disabled").Attribute("title", texts["player.track.unsupported"]);
                 return option;
             }

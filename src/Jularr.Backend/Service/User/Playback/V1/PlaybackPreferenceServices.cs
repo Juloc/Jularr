@@ -31,6 +31,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     coalesce(preference."OutroSkipModeTypeId", 2)::smallint AS "OutroSkipModeTypeId",
                     coalesce(preference."AutoplayPreviews", TRUE) AS "AutoplayPreviews",
                     coalesce(preference."KeepScreenOn", TRUE) AS "KeepScreenOn",
+                    preference."SecondSubtitleLanguage",
                     CASE
                         WHEN lower(split_part(locale."Locale", '-', 1)) ~ '^[a-z]{2}$' THEN lower(split_part(locale."Locale", '-', 1))
                         ELSE 'en'
@@ -66,7 +67,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             await Context.SavePlaybackPreferencesAsync(new PlaybackPreferenceData(Auth.ProfileId!.Value, Data.AudioLanguage, Data.SubtitleLanguage, Data.SubtitleModeTypeId, Data.Speed,
-                Data.AutoplayNext, Data.IntroSkipModeTypeId, Data.OutroSkipModeTypeId, Data.AutoplayPreviews, Data.KeepScreenOn), CancellationToken);
+                Data.AutoplayNext, Data.IntroSkipModeTypeId, Data.OutroSkipModeTypeId, Data.AutoplayPreviews, Data.KeepScreenOn, Data.SecondSubtitleLanguage), CancellationToken);
             return new UpdateResult(true);
         }
     }

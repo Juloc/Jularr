@@ -51,8 +51,9 @@ namespace Jularr.Backend.Data.User.Playback.V1
     // An audio or subtitle choice; image subtitles are listed but not yet supported.
     public sealed class PlaybackTrackV1 : BaseResponse
     {
-        public PlaybackTrackV1(string key, MediaTrackType mediaTrackTypeId, string? language, string? title, int? channels, bool isDefault, bool isForced, bool isSupported, bool isSelected, bool isStyled = false)
+        public PlaybackTrackV1(string key, MediaTrackType mediaTrackTypeId, string? language, string? title, int? channels, bool isDefault, bool isForced, bool isSupported, bool isSelected, bool isStyled = false, string? languageCode = null)
         {
+            LanguageCode = languageCode;
             IsStyled = isStyled;
             IsSelected = isSelected;
             Key = key;
@@ -88,6 +89,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsSupported))]
         public bool IsSupported { get; }
+
+        // The language as two letters (the stream may say "ger" or "deu"), what the profile's language choices are written in.
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language))]
+        public string? LanguageCode { get; }
 
         // An ASS or SSA subtitle: the player draws it with its styles and positions instead of plain WebVTT lines.
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsStyled))]

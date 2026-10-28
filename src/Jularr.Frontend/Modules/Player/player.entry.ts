@@ -5,6 +5,7 @@ import { inserted, keepAddress, pushAddress, releaseAddress, visit } from "../Na
 import type { CastSender, CastState } from "./Cast";
 import { awake, focus } from "../Playback/MediaFocus";
 import type { StyledSubtitles } from "./StyledSubtitles";
+import { pickSecondSubtitle, SecondSubtitleLine, type SubtitleOption } from "./Subtitles";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
@@ -111,6 +112,8 @@ async function start(player: HTMLElement): Promise<void> {
     let lastSubtitle: { key: string; language: string | undefined } | undefined;
     let styledSubtitles: StyledSubtitles | undefined;
     let styledVersion = 0;
+    let secondKey = "";
+    let firstSubtitleShown = false;
     // The profile's choices come with the page; the settings change them for this playback only, the quality is this playback's own (the device's applies until then).
     const preferredSpeed = Number(player.dataset.preferredSpeed) || 1;
     const countdownSeconds = Number(player.dataset.countdown) || 0;
@@ -181,6 +184,7 @@ async function start(player: HTMLElement): Promise<void> {
     if (preferredSubtitle) {
         lastSubtitle = { key: preferredSubtitle.value, language: preferredSubtitle.dataset.language };
         showSubtitle(preferredSubtitle.value, preferredSubtitle.dataset.language);
+        startSecondSubtitle(preferredSubtitle.value, preferredSubtitle.dataset.language);
     }
     document.body.classList.add("player-active");
     const minimizeButton = player.querySelector<HTMLButtonElement>("[data-action=minimize]");
@@ -465,7 +469,10 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Subtitles are WebVTT tracks on the same video, ASS and SSA ones are drawn by libass; Off removes them.
     function showSubtitle(key: string, language: string | undefined): void {
-        video.querySelectorAll("track").forEach(track => track.remove());
+        video.querySelectorAll("track:not([data-second])").forEach(track => track.remove());
+        firstSubtitleShown = !!key;
+        if (key && key === secondKey) showSecondSubtitle("");
+        syncSecondSubtitle();
         styledVersion++;
         styledSubtitles?.destroy();
         styledSubtitles = undefined;
@@ -481,6 +488,38 @@ async function start(player: HTMLElement): Promise<void> {
             return;
         }
         showPlainSubtitle(key, language);
+    }
+
+    // A second language runs beside the first, a few lines above it; it shows only while the first subtitle is on.
+    function showSecondSubtitle(key: string): void {
+        video.querySelectorAll("track[data-second]").forEach(track => track.remove());
+        secondKey = key;
+        setChoice("subtitle2", key);
+        if (!key) return;
+        const track = document.createElement("track");
+        track.kind = "subtitles";
+        track.dataset.second = "true";
+        track.src = (player.dataset.subtitleUrl ?? "") + encodeURIComponent(key);
+        const raise = () => {
+            for (const cue of Array.from(track.track.cues ?? [])) { (cue as VTTCue).snapToLines = true; (cue as VTTCue).line = SecondSubtitleLine; }
+            applySubtitleOffset();
+        };
+        track.addEventListener("load", () => { raise(); syncSecondSubtitle(); });
+        track.addEventListener("error", () => { track.remove(); secondKey = ""; setChoice("subtitle2", ""); });
+        video.append(track);
+        syncSecondSubtitle();
+    }
+
+    function syncSecondSubtitle(): void {
+        for (const track of Array.from(video.querySelectorAll<HTMLTrackElement>("track[data-second]"))) track.track.mode = firstSubtitleShown ? "showing" : "hidden";
+    }
+
+    // The profile's second language starts beside the preferred first subtitle.
+    function startSecondSubtitle(primaryKey: string, primaryLanguage: string | undefined): void {
+        const options: SubtitleOption[] = Array.from(player.querySelectorAll<HTMLOptionElement>("select[data-setting=subtitle2] option:not([value=\"\"]):not(:disabled)"))
+            .map(option => ({ key: option.value, language: option.dataset.language, forced: option.dataset.forced === "true" }));
+        const second = pickSecondSubtitle(options, player.dataset.secondLanguage || undefined, primaryKey, primaryLanguage);
+        if (second) showSecondSubtitle(second.key);
     }
 
     function showPlainSubtitle(key: string, language: string | undefined): void {
@@ -744,6 +783,7 @@ async function start(player: HTMLElement): Promise<void> {
                 showSubtitle(field.value, option?.dataset.language);
                 break;
             }
+            case "subtitle2": showSecondSubtitle(field.value); break;
             case "speed-range": case "speed-number": setSpeed(Number(field.value), true); break;
             case "fit": for (const mode of ["cover", "original"]) player.classList.toggle(`player--fit-${mode}`, field.value === mode); break;
             case "autoplay": autoplay = (field as HTMLInputElement).checked; break;
@@ -888,13 +928,13 @@ async function start(player: HTMLElement): Promise<void> {
     // Every cue keeps its own times; the offset is added to those, so moving it again never adds up.
     function applySubtitleOffset(): void {
         styledSubtitles?.setOffset(subtitleOffset / 1000);
-        const cues = Array.from(video.textTracks).find(track => track.mode === "showing")?.cues;
-        if (!cues) return;
-        for (const cue of Array.from(cues)) {
-            let base = cueBase.get(cue);
-            if (!base) { base = { start: cue.startTime, end: cue.endTime }; cueBase.set(cue, base); }
-            cue.startTime = Math.max(0, base.start + subtitleOffset / 1000);
-            cue.endTime = Math.max(cue.startTime, base.end + subtitleOffset / 1000);
+        for (const showing of Array.from(video.textTracks).filter(track => track.mode === "showing")) {
+            for (const cue of Array.from(showing.cues ?? [])) {
+                let base = cueBase.get(cue);
+                if (!base) { base = { start: cue.startTime, end: cue.endTime }; cueBase.set(cue, base); }
+                cue.startTime = Math.max(0, base.start + subtitleOffset / 1000);
+                cue.endTime = Math.max(cue.startTime, base.end + subtitleOffset / 1000);
+            }
         }
     }
 

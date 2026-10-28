@@ -1674,6 +1674,14 @@
    "As in the file",
    "Wie in der Datei"
   ],
+  "playback.language.none": [
+   "None",
+   "Keine"
+  ],
+  "playback.secondSubtitleLanguage": [
+   "Second subtitle language",
+   "Sprache des zweiten Untertitels"
+  ],
   "playback.language.profile": [
    "Profile language",
    "Sprache des Profils"
@@ -7222,6 +7230,10 @@
   "player.subtitles": [
    "Subtitles",
    "Untertitel"
+  ],
+  "player.subtitles.second": [
+   "Second subtitle",
+   "Zweiter Untertitel"
   ],
   "player.subtitles.off": [
    "Off",
