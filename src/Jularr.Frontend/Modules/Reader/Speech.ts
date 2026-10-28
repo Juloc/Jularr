@@ -4,6 +4,7 @@ import { installedModels } from '../Speech/ModelStore';
 import type { NeuralSession } from '../Speech/NeuralSession';
 import { followDelta, minutesLeft, sentenceAround, timerMinutes } from './SpeechFollow';
 import { readerLifetime } from './Lifetime';
+import { awake, focus } from '../Playback/MediaFocus';
 
 // Text coordinates stay on canonical content. Highlights never wrap or mutate its nodes.
 export function speechRange(source: Range, start: number, length: number): Range | undefined {
@@ -62,6 +63,9 @@ export function initializeReadAloud(reader: HTMLElement, content: HTMLElement, r
     const changed = (state: SpeechState) => {
         if (state === 'idle' || state === 'failed') { setTimer(0); if (timerChoice) timerChoice.value = '0'; }
         reader.dataset.speechState = state;
+        // Reading aloud takes the focus from a playing video and holds the screen on; pausing or ending gives both up.
+        if (state === 'speaking' || state === 'loading') { awake.hold('read-aloud'); focus.claim('read-aloud', () => session?.pause()); }
+        else { awake.drop('read-aloud'); focus.release('read-aloud'); }
         transport.hidden = state === 'idle';
         toggle.setAttribute('aria-pressed', String(state === 'speaking' || state === 'paused' || state === 'loading'));
         pause.setAttribute('aria-pressed', String(state === 'paused'));
