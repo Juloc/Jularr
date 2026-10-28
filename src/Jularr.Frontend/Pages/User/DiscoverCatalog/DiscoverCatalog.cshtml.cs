@@ -18,6 +18,9 @@ namespace Jularr.Frontend.Pages.User.DiscoverCatalog
     public sealed class DiscoverCatalogModel(RequestDiscoverCatalogItemV1 request, ReadDiscoverScopesV1 readScopes, ReadDiscoverCatalogEntryV1 readEntry, ReadUiLocalesV1 locales,
         IAntiforgery antiforgery, UiText texts) : JularrPage
     {
+        // Narō's catalog name: its titles are web novels, not published light novels.
+        public const string WebNovelSource = "syosetu";
+
         private DiscoverScopeV1? _scope;
         private DiscoverCatalogEntryV1? _entry;
         private BaseDataList<UiLocaleDetailsV1>? _locales;
@@ -38,7 +41,9 @@ namespace Jularr.Frontend.Pages.User.DiscoverCatalog
             page.Navigation("nav.home");
             page.Asset("Pages/User/DiscoverItem/DiscoverItem.entry.scss");
             if (_entry is not { } entry) return;
-            var meta = string.Join(" · ", new[] { entry.ReleaseYear?.ToString(CultureInfo.InvariantCulture), entry.Author }.Where(value => !string.IsNullOrWhiteSpace(value)));
+            // A Narō web novel names itself and its ncode, apart from any published edition.
+            var source = Source == WebNovelSource ? texts["discover.webNovel"] + " " + ExternalId : null;
+            var meta = string.Join(" · ", new[] { entry.ReleaseYear?.ToString(CultureInfo.InvariantCulture), entry.Author, source }.Where(value => !string.IsNullOrWhiteSpace(value)));
             page.Content.Add(new MediaHero(entry.Title, entry.BackdropUrl, meta.Length == 0 ? null : meta, entry.Overview));
             if (entry.TrailerKey is { } trailer) page.Content.Add(new Div(new TrailerLink(trailer)).Class("discover-item__trailer"));
             page.Content.Add(new P(new Text("media.state." + MediaStateType.NotRequested)).Attribute("role", "status"));

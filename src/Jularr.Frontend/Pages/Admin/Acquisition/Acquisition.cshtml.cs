@@ -551,7 +551,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 {
                     form.Password(item => item.ApiKey, "acquisition.connection.memberKey", "new-password");
                 }
-                else if (type is not (AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Nyaa))
+                else if (type is not (AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Nyaa or AcquisitionConnectionType.Narou))
                 {
                     form.Password(item => item.ApiKey, "acquisition.connection.apiKey", "new-password");
                 }
