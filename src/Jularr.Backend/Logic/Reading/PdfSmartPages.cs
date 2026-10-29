@@ -50,9 +50,95 @@ namespace Jularr.Backend.Logic.Reading
 
             var blocks = Blocks(lines, w, h);
 
-            // The text-free page: every line box, with room for accents and descenders, filled with the paper around it.
+            // The text-free page: every line box, with room for accents and descenders, filled with the paper around it; the page's long rules stay.
+            var original = (byte[])pixels.Clone();
             PdfScanAnalysis.Erase(pixels, w, h, [.. lines.Select(line => Reach(pixels, w, h, Clamp(Grow(line.Box, Math.Max(2, line.Box.Height * 0.12)), w, h)))], Math.Max(8, w / 100));
+            Rules(original, pixels, w, h);
             return new PdfSmartPage(number, Encode(pixels, w, h), Math.Round((double)w / h, 4), blocks);
+        }
+
+        // Rules between columns and under headings run far beyond any line of text: their ink, longer than a sixth of the page in one direction and thin in
+        // the other, is put back where erasing a line crossed it.
+        private static void Rules(byte[] original, byte[] pixels, int w, int h)
+        {
+            var paper = PdfScanAnalysis.Ring(original, w, h, new SKRectI(w / 2 - 2, h - 12, w / 2 + 2, h - 8));
+            var ink = new bool[w * h];
+            for (var index = 0; index < w * h; index++)
+            {
+                var at = index * 4;
+                ink[index] = Math.Abs(original[at] - paper[0]) + Math.Abs(original[at + 1] - paper[1]) + Math.Abs(original[at + 2] - paper[2]) > 150;
+            }
+
+            var (tall, wide, thin) = (h / 6, w / 6, Math.Max(3, w / 200));
+            void Keep(int x, int y)
+            {
+                var at = (y * w + x) * 4;
+                (pixels[at], pixels[at + 1], pixels[at + 2]) = (original[at], original[at + 1], original[at + 2]);
+            }
+
+            for (var x = 0; x < w; x++)
+            {
+                for (int y = 0, run = 0; y <= h; y++)
+                {
+                    if (y < h && ink[y * w + x])
+                    {
+                        run++;
+                        continue;
+                    }
+
+                    // A run is a rule where the ink beside it ends within a few pixels: thin, unlike a picture's dark area.
+                    if (run >= tall && Thin(ink, w, x, y - run / 2, 1, 0, thin))
+                    {
+                        for (var back = y - run; back < y; back++)
+                        {
+                            Keep(x, back);
+                        }
+                    }
+
+                    run = 0;
+                }
+            }
+
+            for (var y = 0; y < h; y++)
+            {
+                for (int x = 0, run = 0; x <= w; x++)
+                {
+                    if (x < w && ink[y * w + x])
+                    {
+                        run++;
+                        continue;
+                    }
+
+                    if (run >= wide && Thin(ink, w, x - run / 2, y, 0, 1, Math.Max(3, h / 200)))
+                    {
+                        for (var back = x - run; back < x; back++)
+                        {
+                            Keep(back, y);
+                        }
+                    }
+
+                    run = 0;
+                }
+            }
+        }
+
+        // Whether the ink at a point is at most this many pixels thick across the run (dx, dy is the direction across).
+        private static bool Thin(bool[] ink, int w, int x, int y, int dx, int dy, int limit)
+        {
+            var h = ink.Length / w;
+            var thickness = 1;
+            foreach (var step in new[] { -1, 1 })
+            {
+                for (var (cx, cy) = (x + dx * step, y + dy * step); cx >= 0 && cy >= 0 && cx < w && cy < h && ink[cy * w + cx]; (cx, cy) = (cx + dx * step, cy + dy * step))
+                {
+                    if (++thickness > limit)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
         }
 
         // A box the recognizer drew may end inside the first or last letter of large type: it reaches on sideways while ink joins on, at most a line's height,

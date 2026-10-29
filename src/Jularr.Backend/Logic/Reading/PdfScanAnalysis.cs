@@ -451,8 +451,9 @@ namespace Jularr.Backend.Logic.Reading
             for (var column = 0; column < columns; column++)
             {
                 var x = box.Left + column;
-                var up = Median(pixels, covered, w, h, x, box.Top - band - 1, box.Top - 1);
-                var down = Median(pixels, covered, w, h, x, box.Bottom + 1, box.Bottom + band + 1);
+                // Paper only: a rule or a bar right above or below the line (another ink than the paper around it) is not drawn into it.
+                var up = Paper(Median(pixels, covered, w, h, x, box.Top - band - 1, box.Top - 1), ring);
+                var down = Paper(Median(pixels, covered, w, h, x, box.Bottom + 1, box.Bottom + band + 1), ring);
                 var (a, b) = (up ?? down ?? ring, down ?? up ?? ring);
                 for (var channel = 0; channel < 3; channel++)
                 {
@@ -475,6 +476,9 @@ namespace Jularr.Backend.Logic.Reading
                 }
             }
         }
+
+        private static int[]? Paper(int[]? sample, int[] ring) =>
+            sample is not null && Math.Abs(sample[0] - ring[0]) + Math.Abs(sample[1] - ring[1]) + Math.Abs(sample[2] - ring[2]) <= 120 ? sample : null;
 
         private static int[]? Median(byte[] pixels, int[] covered, int w, int h, int x, int from, int to)
         {
