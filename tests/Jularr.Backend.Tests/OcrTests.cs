@@ -266,6 +266,12 @@ namespace Jularr.Backend.Tests
             var line = PdfScanAnalysis.Analyse(page, read, layer).Single();
             Assert.AreEqual("The heavier “Drinking” it’s", line.Text);
 
+            // A doubled character the recognizer read once comes back from the layer.
+            OcrCharacter[] doubled = [.. "Rule No. 16:".Select((character, index) => new OcrCharacter(character.ToString(), 100 + index * 20, 0.99f))];
+            var rule = new OcrPage(1000, 1000, [new OcrLine(90, 700, 400, 730, "Rule No. 16:", 0.99f) { Characters = doubled }]);
+            PdfLayerWord[] numbered = [new("Rule", 0.09, 0.7, 0.17, 0.73), new("No.", 0.19, 0.7, 0.25, 0.73), new("116:", 0.27, 0.7, 0.35, 0.73)];
+            Assert.AreEqual("Rule No. 116:", PdfScanAnalysis.Analyse(page, rule, numbered).Single().Text);
+
             // An opening quote read apart from its word joins it; a closing quote read twice is one.
             OcrCharacter[] caption = [.. "\" A horse.\"\"".Select((character, index) => new OcrCharacter(character.ToString(), 100 + index * 20, 0.99f))];
             var captioned = new OcrPage(1000, 1000, [new OcrLine(90, 300, 400, 330, "\" A horse.\"\"", 0.9f) { Characters = caption }]);
