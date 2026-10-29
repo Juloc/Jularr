@@ -8,7 +8,11 @@ using Microsoft.AspNetCore.Http;
 namespace Jularr.E2E.Tests
 {
     // A release the fake indexer offers and the file, or folder of files, its finished download contains.
-    internal sealed record FakeRelease(string Title, string Guid, int Category, string File);
+    internal sealed record FakeRelease(string Title, string Guid, int Category, string File)
+    {
+        // The size the indexer states: a book or comic volume is a few MB, anything else keeps the old 400 MB, so a book stays inside the size limit per volume.
+        public long Length => Category is >= 7000 and < 8000 ? 4_000_000 : 400_000_000;
+    }
 
     // TMDB, a Newznab indexer and SABnzbd on loopback, so the separately started Jularr never needs a live service.
     internal sealed class FakeServices : IAsyncDisposable
@@ -379,7 +383,7 @@ namespace Jularr.E2E.Tests
             }
 
             var items = string.Concat(_offered.Select(release =>
-                $"""<item><title>{release.Title}</title><guid>{release.Guid}</guid><pubDate>Mon, 05 Oct 2026 10:00:00 +0000</pubDate><category>{release.Category}</category><enclosure url="{NzbAddress(release)}" length="400000000" /></item>"""));
+                $"""<item><title>{release.Title}</title><guid>{release.Guid}</guid><pubDate>Mon, 05 Oct 2026 10:00:00 +0000</pubDate><category>{release.Category}</category><enclosure url="{NzbAddress(release)}" length="{release.Length}" /></item>"""));
             return Results.Text("<rss><channel>" + items + "</channel></rss>", "application/xml");
         }
 
