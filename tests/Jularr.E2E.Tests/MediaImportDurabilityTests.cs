@@ -107,7 +107,7 @@ namespace Jularr.E2E.Tests
             Assert.IsTrue(completed, "A restarted server finishes the same durable import.");
             await Assertions.Expect(returned.Locator("[data-import-job-panel]")).ToBeVisibleAsync();
             await Assertions.Expect(returned.Locator("[data-import-job-progress]")).ToHaveJSPropertyAsync("value", count);
-            Assert.AreEqual((long)count, Convert.ToInt64(await jularr.ScalarAsync("SELECT count(*) FROM \"Works\";"), CultureInfo.InvariantCulture));
+            Assert.AreEqual((long)count, Convert.ToInt64(await jularr.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CatalogNamespace\" IS NULL;"), CultureInfo.InvariantCulture));
             Assert.AreEqual(0L, Convert.ToInt64(await jularr.ScalarAsync("SELECT count(*) FROM \"WantedItems\";"), CultureInfo.InvariantCulture));
             Assert.AreEqual(0L, Convert.ToInt64(await jularr.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\";"), CultureInfo.InvariantCulture));
         }

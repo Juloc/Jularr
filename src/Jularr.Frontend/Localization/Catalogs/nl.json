@@ -1281,12 +1281,12 @@
    "Geen duidelijke overeenkomst"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted (paused)",
-   "Wordt gevolgd (gepauzeerd)"
+   "Will be wanted",
+   "Wordt gevolgd"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted (paused)",
-   "Volgen gepauzeerd"
+   "Wanted",
+   "Gevolgd"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",

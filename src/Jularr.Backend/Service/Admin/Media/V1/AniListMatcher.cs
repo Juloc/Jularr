@@ -9,15 +9,47 @@ using Jularr.Integrations.Data.AniList;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
-    // Finds the AniList entries of one canonical Work: the Work's own entry, or for a series its seasons along the sequel chain.
+    // Finds the AniList entries of one canonical Work: the Work's own entry, or for a series the seasons the AniBridge mappings give its TheTVDB series,
+    // else its seasons along the sequel chain.
     internal sealed class AniListMatcher(AniListMetadata aniList)
     {
         private const int ChainLimit = 30;
+        private const int CandidateLimit = 5;
 
-        public async Task<IdentityMatchResultData> MatchAsync(IdentityMatchTargetData target, IReadOnlyList<SeasonEpisodesData> seasons, int? chosenId, CancellationToken ct)
+        public async Task<IdentityMatchResultData> MatchAsync(IdentityMatchTargetData target, IReadOnlyList<SeasonEpisodesData> seasons, IReadOnlyList<AnimeMappingData> mappings, int? chosenId,
+            CancellationToken ct)
         {
             var type = AniListMatching.Type(target.MediaTypeId, target.MediaSubtypeId) ?? throw new KeyNotFoundException("The Work has no AniList kind.");
             var formats = AniListMatching.Formats(target.MediaTypeId, target.MediaSubtypeId);
+
+            // The mappings name the entries of a series' seasons; conflicting ones wait for a person with what AniList says about them.
+            if (chosenId is null && target.MediaTypeId == MediaType.Series && mappings.Count > 0)
+            {
+                var (mapped, conflicts) = AniListMatching.FromMappings(mappings);
+                if (conflicts.Count > 0)
+                {
+                    var entries = new List<AniListMedia>();
+                    foreach (var conflict in conflicts.Take(CandidateLimit))
+                    {
+                        try
+                        {
+                            entries.Add(await aniList.ReadAsync(type, conflict, ct));
+                        }
+                        catch (KeyNotFoundException)
+                        {
+                            // An entry AniList no longer knows is no candidate.
+                        }
+                    }
+
+                    return new IdentityMatchResultData(target.WorkId, AniListMetadata.Namespace, IdentityMatchStatusType.Review, Candidates(entries), null, "[]", false);
+                }
+
+                if (mapped.Count > 0)
+                {
+                    return new IdentityMatchResultData(target.WorkId, AniListMetadata.Namespace, IdentityMatchStatusType.Matched, "[]", null,
+                        JsonSerializer.Serialize(mapped.Select(entry => new { entry.Season, Value = entry.AniListId.ToString(CultureInfo.InvariantCulture), entry.Offset })), false, true);
+                }
+            }
 
             // A web novel is never its published edition: a clear entry only lends it its titles, the entry's id stays with the edition.
             if (target.IsWebNovel)
@@ -58,7 +90,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 (match, candidates) = AniListMatching.Choose(await aniList.SearchAsync(type, formats, target.CanonicalTitle, ct), [target.CanonicalTitle, .. target.Titles], target.ReleaseYear, formats);
             }
 
-            var listed = JsonSerializer.Serialize(candidates.Select(candidate => new { candidate.Id, Title = AniListMetadata.Title(candidate), candidate.Year, candidate.Format }));
+            var listed = Candidates(candidates);
             var manual = chosenId is not null;
             if (match is null)
             {
@@ -121,7 +153,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 new(target.WorkId, AniListMetadata.Namespace, status, listed, value, mapped, manual);
         }
 
-        // New Works first, then automatic series for further seasons and earlier misses; one Work only while it waits for a person.
+        private static string Candidates(IEnumerable<AniListMedia> candidates) =>
+            JsonSerializer.Serialize(candidates.Select(candidate => new { candidate.Id, Title = AniListMetadata.Title(candidate), candidate.Year, candidate.Format }));
+
+        // New Works first, then automatic series for further seasons and earlier misses, and automatic series the AniBridge mappings name again since their
+        // last pass (a newly loaded release); one Work only while it waits for a person.
         public static Task<IReadOnlyList<IdentityMatchTargetData>> ReadTargetsAsync(LogicContext ctx, long? workId, int limit, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -170,7 +206,29 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                                     season."WorkId" = work."Id"
                                     AND mapped."IsManual"
                             )
-                            OR match."IdentityMatchStatusTypeId" = 3 AND match."CheckedAt" < now() - interval '30 days'))
+                            OR match."IdentityMatchStatusTypeId" = 3 AND match."CheckedAt" < now() - interval '30 days'
+                            OR match."IdentityMatchStatusTypeId" IN (1, 3) AND work."MediaTypeId" = 2
+                                AND match."CheckedAt" < (SELECT source."LoadedAt" FROM "AnimeMappingSources" AS source)
+                                AND EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "WorkExternalIdentities" AS tvdb
+                                        JOIN "AnimeMappings" AS mapping ON mapping."TvdbId" = CASE WHEN tvdb."Value" ~ '^[1-9][0-9]{0,8}$' THEN tvdb."Value"::integer END
+                                    WHERE
+                                        tvdb."WorkId" = work."Id"
+                                        AND tvdb."Namespace" = 'tvdb'
+                                )
+                                AND NOT EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "WorkUnits" AS season
+                                        JOIN "WorkUnitExternalIdentities" AS mapped ON mapped."WorkUnitId" = season."Id"
+                                    WHERE
+                                        season."WorkId" = work."Id"
+                                        AND mapped."IsManual"
+                                )))
                     AND (work."MediaSubtypeId" = 1 AND work."MediaTypeId" IN (1, 2) OR work."MediaSubtypeId" IN (2, 3))
                     AND NOT EXISTS (
                         SELECT
@@ -181,6 +239,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                             identity."WorkId" = work."Id"
                             AND identity."Namespace" = 'anilist'
                     )
+                    AND (work."DetailedAt" IS NOT NULL OR EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id"))
                 ORDER BY
                     match."CheckedAt" NULLS FIRST,
                     work."Id"
@@ -188,6 +247,49 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 """;
             sql.Parameters.Add(new IdentityMatchQueryData(workId, limit));
             return ctx.ReadSql.ReadListAsync<IdentityMatchTargetData>(sql, ct);
+        }
+
+        // An anime series that was never matched, such as one just imported for a season it holds.
+        public static Task<IdentityMatchTargetData?> ReadUnmatchedSeriesAsync(LogicContext ctx, long workId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    work."Id" AS "WorkId",
+                    work."MediaTypeId",
+                    work."MediaSubtypeId",
+                    work."CanonicalTitle",
+                    work."ReleaseYear"::integer AS "ReleaseYear",
+                    ARRAY(
+                        SELECT DISTINCT
+                            title."Title"
+                        FROM
+                            "WorkTitles" AS title
+                        WHERE
+                            title."WorkId" = work."Id"
+                            AND title."Title" <> work."CanonicalTitle"
+                    ) AS "Titles",
+                    NULL::text AS "Author",
+                    FALSE AS "IsWebNovel"
+                FROM
+                    "Works" AS work
+                WHERE
+                    work."Id" = @WorkId
+                    AND work."MediaTypeId" = 2
+                    AND work."MediaSubtypeId" = 1
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkIdentityMatches" AS match
+                        WHERE
+                            match."WorkId" = work."Id"
+                            AND match."Namespace" = 'anilist'
+                    );
+                """;
+            sql.Parameters.Add(new IdentityMatchQueryData(workId, 1));
+            return ctx.ReadSql.ReadOptionalAsync<IdentityMatchTargetData>(sql, ct);
         }
 
         // Regular seasons with the number of their episodes.

@@ -31,6 +31,9 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         private const string HeroPreferences = "discover-hero";
 
+        // Narō's catalog name: its titles are web novels, not published light novels.
+        private const string WebNovelSource = "syosetu";
+
         private readonly List<(MediaType Type, DiscoverFeedType Feed, IReadOnlyList<DiscoverItemV1> Items)> _shelves = [];
         private readonly List<(DiscoverScopeV1 Scope, DiscoverFeedType Feed, IReadOnlyList<DiscoverCatalogItemV1> Items)> _catalogShelves = [];
         private IReadOnlyList<DiscoverItemV1>? _results;
@@ -41,6 +44,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private readonly Dictionary<long, WorkAvailabilityStateV1> _availabilityByWork = [];
         private IReadOnlyList<HomeShelfV1> _layout = [.. Enum.GetValues<HomeShelfType>().Select(type => new HomeShelfV1(type, false))];
         private bool _providerUnavailable;
+        private string _providerNotice = "discover.providerUnavailable";
         private IReadOnlyList<DiscoverScopeV1>? _scopes;
         private string? _feed;
         private string? _sort;
@@ -143,10 +147,10 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             if (_providerUnavailable && (_results is not null || _catalog is not null))
             {
-                page.Content.Add(new P(new Text("discover.providerUnavailable")).Attribute("role", "status"));
+                page.Content.Add(new P(new Text(_providerNotice)).Attribute("role", "status"));
             }
 
-            // Catalog titles become Works only through a request.
+            // Every result is a Work and opens its page.
             if (_catalog is not null || _results is not null)
             {
                 var cards = new List<IUiComponent>();
@@ -417,7 +421,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             return Partial("_UiComponent", Definition.Content[0]);
         }
 
-        // Titles Discover keeps, while typing; a known title opens its Work.
+        // Titles Discover keeps, while typing; each opens its Work.
         public async Task<IActionResult> OnGetSuggestionsAsync()
         {
             if (!texts.CanReadMedia()) return Forbid();
@@ -432,9 +436,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IUiComponent Suggestion(DiscoverSuggestionV1 item)
         {
             var scope = Listed.First(scope => scope.Slug == item.ScopeSlug);
-            var href = item.WorkId is { } workId ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
-                : scope.IsCatalog ? "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId)
-                : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.ExternalId);
+            var href = "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture);
             var meta = texts["discover.type." + scope.Slug] + (item.ReleaseYear is { } year ? " · " + year.ToString(CultureInfo.InvariantCulture) : "");
             IUiComponent poster = item.PosterUrl is { } url
                 ? new Img().Class("discover-suggestion__poster").Attribute("data-no-cover", "poster").Attribute("src", CoverPaths.Sized(url, 96)).Attribute("alt", "").Attribute("loading", "lazy")
@@ -495,9 +497,11 @@ namespace Jularr.Frontend.Pages.User.Discover
                     return;
                 }
             }
-            catch (ServiceUnavailableException)
+            catch (ServiceUnavailableException exception)
             {
+                // A search of series alone names the missing TheTVDB key.
                 _providerUnavailable = true;
+                if (exception.Code == "tvdb_key_missing") _providerNotice = "discover.tvdbKeyMissing";
                 _results = selected is { IsCatalog: true } ? null : [];
                 _catalog = selected is { IsCatalog: true } ? [] : null;
                 return;
@@ -533,13 +537,13 @@ namespace Jularr.Frontend.Pages.User.Discover
         // A read that is only started when its shelf is shown; otherwise null.
         private static async Task<TResult?> ReadWhenAsync<TResult>(bool shown, Func<Task<TResult>> read) where TResult : class => shown ? await read() : null;
 
-        // Provider metadata stays cached; current local status is one bounded read for all known cards.
+        // Provider metadata stays cached; current local status is one bounded read for all cards.
         private async Task LoadAvailabilityAsync()
         {
             var ids = (_results ?? []).Concat(_shelves.SelectMany(shelf => shelf.Items)).Select(item => item.WorkId)
                 .Concat((_catalog ?? []).Select(entry => entry.Item.WorkId))
                 .Concat(_catalogShelves.SelectMany(shelf => shelf.Items).Select(item => item.WorkId))
-                .OfType<long>().Distinct().ToArray();
+                .Distinct().ToArray();
             foreach (var batch in ids.Chunk(500))
             {
                 var states = await readAvailability.ExecuteAsync<BaseDataList<WorkAvailabilityStateV1>>(new ReadWorkAvailabilityStatesParametersV1(batch), HttpContext.RequestAborted);
@@ -583,7 +587,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             _scopes ??= await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
 
         // Continued titles first, then each chosen type's best titles of the feed, one rank after the other across the types.
-        // Read from the whole catalogs; one source of the first type answers when none was kept.
+        // Read from the whole catalogs; series, which TheTVDB never gives whole, from Discover's series list (kept or asked live); one source of the first other type
+        // answers when none was found.
         private async Task LoadHeroAsync(DiscoverScopeV1? selected, BaseDataList<DiscoverShelfV1>? kept)
         {
             var slides = new List<HeroSlide>();
@@ -607,14 +612,19 @@ namespace Jularr.Frontend.Pages.User.Discover
                 var perScope = new List<List<HeroSlide>>();
                 foreach (var scope in Chosen.Where(scope => scope.Feeds.Contains(heroFeed)))
                 {
-                    if (kept.FirstOrDefault(shelf => shelf.ScopeSlug == scope.Slug && shelf.DiscoverFeedTypeId == heroFeed) is not { } shelf) continue;
-
                     // Titles with artwork lead; the others fill up.
                     var own = new List<HeroSlide>();
-                    var items = scope.IsCatalog
-                        ? Filtered(shelf.CatalogItems.Select(item => (scope, item))).Select(entry => entry.Item).OrderBy(item => item.PosterUrl is null).Take(3).Select((item, rank) => CatalogSlide(scope, item, heroFeed, rank))
-                        : Filtered(shelf.Items).OrderBy(item => item.BackdropUrl is null && item.PosterUrl is null).Take(3).Select((item, rank) => ItemSlide(scope, item, heroFeed, rank));
-                    own.AddRange(items);
+                    if (kept.FirstOrDefault(shelf => shelf.ScopeSlug == scope.Slug && shelf.DiscoverFeedTypeId == heroFeed) is { } shelf)
+                    {
+                        own.AddRange(scope.IsCatalog
+                            ? Filtered(shelf.CatalogItems.Select(item => (scope, item))).Select(entry => entry.Item).OrderBy(item => item.PosterUrl is null).Take(3).Select((item, rank) => CatalogSlide(scope, item, heroFeed, rank))
+                            : Filtered(shelf.Items).OrderBy(item => item.BackdropUrl is null && item.PosterUrl is null).Take(3).Select((item, rank) => ItemSlide(scope, item, heroFeed, rank)));
+                    }
+                    else if (IsSeriesList(scope) && await ReadHeroFeedAsync(scope, heroFeed) is { } listed)
+                    {
+                        own.AddRange(Filtered(listed).OrderBy(item => item.BackdropUrl is null && item.PosterUrl is null).Take(3).Select((item, rank) => ItemSlide(scope, item, heroFeed, rank)));
+                    }
+
                     if (own.Count > 0) perScope.Add(own);
                 }
 
@@ -623,7 +633,8 @@ namespace Jularr.Frontend.Pages.User.Discover
                     slides.AddRange(perScope.Where(own => own.Count > rank).Select(own => own[rank]));
                 }
 
-                if (!slides.Any(slide => !slide.IsContinue) && heroFeed == DiscoverFeedType.Trending)
+                // The series list does not stand in for the other types.
+                if (!slides.Any(slide => !slide.IsContinue && Chosen.Any(scope => scope.Slug == slide.Group && !IsSeriesList(scope))) && heroFeed == DiscoverFeedType.Trending)
                 {
                     await AddFallbackSlideAsync(slides, selected);
                 }
@@ -632,10 +643,28 @@ namespace Jularr.Frontend.Pages.User.Discover
             _hero = slides;
         }
 
-        // Without a catalog read whole, the first type that has trending titles asks its provider for one.
+        // Series come from TMDB's lists as TheTVDB's titles, never from a catalog read whole.
+        private static bool IsSeriesList(DiscoverScopeV1 scope) => scope is { IsCatalog: false, MediaTypeId: MediaType.Series };
+
+        // Discover's own list of the type: the kept one while the Caching module keeps lists, else the provider's answer; a provider that answers late never holds the page.
+        private async Task<IReadOnlyList<DiscoverItemV1>?> ReadHeroFeedAsync(DiscoverScopeV1 scope, DiscoverFeedType feed)
+        {
+            using var limit = CancellationTokenSource.CreateLinkedTokenSource(HttpContext.RequestAborted);
+            limit.CancelAfter(HeroLimit);
+            try
+            {
+                return await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(scope.MediaTypeId, feed), limit.Token);
+            }
+            catch (Exception exception) when (exception is ServiceUnavailableException || exception is OperationCanceledException && !HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                return null;
+            }
+        }
+
+        // Without a catalog read whole, the first other type that has trending titles asks its provider for one; the series list was asked already.
         private async Task AddFallbackSlideAsync(List<HeroSlide> slides, DiscoverScopeV1? selected)
         {
-            var scope = Chosen.FirstOrDefault(scope => scope.Feeds.Contains(DiscoverFeedType.Trending));
+            var scope = Chosen.FirstOrDefault(scope => scope.Feeds.Contains(DiscoverFeedType.Trending) && !IsSeriesList(scope));
             if (scope is null)
             {
                 return;
@@ -667,13 +696,11 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         private string Overline(DiscoverScopeV1? scope, string feedKey) => scope is null ? texts[feedKey] : texts["discover.type." + scope.Slug] + " · " + texts[feedKey];
 
-        // A known title opens its Work; any other opens its request.
+        // The title opens its Work, where one nobody asked for yet is requested.
         private HeroSlide CatalogSlide(DiscoverScopeV1 scope, DiscoverCatalogItemV1 item, DiscoverFeedType feed, int rank)
         {
-            var href = item.WorkId is { } workId
-                ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
-                : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
-            var requestable = item.WorkId is null && texts.CanRequest();
+            var href = CatalogHref(item);
+            var requestable = item.MediaStateTypeId == MediaStateType.NotRequested && texts.CanRequest();
             return new HeroSlide(item.Title, null, item.PosterUrl, Overline(scope, "discover.feed." + feed), item.Author, requestable ? "discover.action.request" : "media.details", href,
                 requestable ? "plus" : null, requestable ? href : null, scope.Slug, rank);
         }
@@ -767,7 +794,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         private IEnumerable<(DiscoverScopeV1 Scope, DiscoverCatalogItemV1 Item)> Filtered(IEnumerable<(DiscoverScopeV1 Scope, DiscoverCatalogItemV1 Item)> items)
         {
-            var narrowed = items.Where(entry => Fits(entry.Item.WorkId is not null, entry.Item.WorkId is null, entry.Item.ReleaseYear));
+            var narrowed = items.Where(entry => Fits(entry.Item.MediaStateTypeId == MediaStateType.Available, entry.Item.MediaStateTypeId == MediaStateType.NotRequested, entry.Item.ReleaseYear));
             return Sort switch
             {
                 "newest" => narrowed.OrderByDescending(entry => entry.Item.ReleaseYear),
@@ -786,28 +813,29 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var (actionKey, actionHref) = Action(item);
             var card = MediaCard.For(assets, item, DetailsHref(item));
-            if (item.WorkId is { } id && _availabilityByWork.TryGetValue(id, out var state))
+            if (_availabilityByWork.TryGetValue(item.WorkId, out var state))
                 card.Availability(new MediaAvailability(assets, state.AvailabilityStateId, state.AvailableUnits, state.MonitoredUnits));
             if (actionKey is not null && actionHref is not null) card.Action(ShortKey(actionKey)!, actionHref);
-            if (item.WorkId is { } workId) card.Bookmark(new MediaBookmark(assets, workId));
-            return card;
+            return card.Bookmark(new MediaBookmark(assets, item.WorkId));
         }
 
-        // A known title opens its Work; any other opens its request.
+        // The title opens its Work, where one nobody asked for yet is requested.
         private IUiComponent CatalogCard(DiscoverScopeV1 scope, DiscoverCatalogItemV1 item)
         {
-            var href = item.WorkId is { } workId ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
-                : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
-            // A Narō web novel says so beside the published light novels; the local catalog keeps no preview of it.
-            var webNovel = item.Namespace == DiscoverCatalog.DiscoverCatalogModel.WebNovelSource;
-            var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, webNovel ? "discover.webNovel" : MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId), item.Rating)
-                .HoverPreview(item.WorkId is { } held ? MediaPreviewAddress.Work(held) : webNovel ? null : MediaPreviewAddress.Catalog(scope.Slug, item.Namespace, item.ExternalId));
-            if (item.MediaStateTypeId is { } state) card.State(state);
-            if (item.WorkId is { } id && _availabilityByWork.TryGetValue(id, out var availability))
+            var href = CatalogHref(item);
+            // A Narō web novel says so beside the published light novels.
+            var label = item.Namespace == WebNovelSource ? "discover.webNovel" : MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId);
+            var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, label, item.Rating)
+                .HoverPreview(MediaPreviewAddress.Work(item.WorkId)).State(item.MediaStateTypeId);
+            if (_availabilityByWork.TryGetValue(item.WorkId, out var availability))
                 card.Availability(new MediaAvailability(assets, availability.AvailabilityStateId, availability.AvailableUnits, availability.MonitoredUnits));
-            if (item.WorkId is { } known) return card.Bookmark(new MediaBookmark(assets, known));
-            return texts.CanRequest() ? card.Action("discover.action.request", href) : card;
+            if (item.MediaStateTypeId == MediaStateType.NotRequested && texts.CanRequest()) card.Action("discover.action.request", href);
+            return card.Bookmark(new MediaBookmark(assets, item.WorkId));
         }
+
+        // An anime entry opens its series at its season.
+        private static string CatalogHref(DiscoverCatalogItemV1 item) =>
+            "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture) + (item.SeasonNumber is { } season ? "?season=" + season.ToString(CultureInfo.InvariantCulture) : "");
 
         // The word on an action is short: the icon and the verb.
         private static string? ShortKey(string? key) => key switch
@@ -826,9 +854,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             _ => (null, null)
         };
 
-        private string DetailsHref(DiscoverItemV1 item) => item.WorkId is { } workId
-            ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
-            : "/Discover/" + Listed.First(scope => scope.MediaTypeId == item.MediaTypeId && !scope.IsCatalog).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture);
+        private static string DetailsHref(DiscoverItemV1 item) => "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture);
 
         // Everything the address holds; links change one part and keep the rest.
         private sealed record State(IReadOnlyList<string> Types, string? Feed, string? Sort, string? Availability, string? Year, string? Query, DiscoverFeedType? View, int Page);

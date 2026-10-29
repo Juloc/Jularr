@@ -27,20 +27,22 @@ namespace Jularr.Backend.Tests
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList));
             await host.Fixture.RunSqlAsync("""
                 UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'AniList';
-                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear") VALUES (10, 2, 1, 'Example Quest', 2019), (50, 3, 2, 'Example Quest Manga', 2015);
-                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (50, 'anilist', '501');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "DetailedAt", "CatalogNamespace") VALUES
+                    (10, 2, 1, 'Example Quest', 2019, now(), NULL), (50, 3, 2, 'Example Quest Manga', 2015, now(), NULL), (70, 2, 1, 'Example Quest', 2019, NULL, 'tmdb_tv');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (50, 'anilist', '501'), (70, 'tmdb_tv', '7070');
                 INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (100, 10, 1, 1), (200, 10, 1, 2);
                 INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") SELECT 10, 100, 2, n FROM generate_series(1, 12) AS n;
                 INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") SELECT 10, 200, 2, n FROM generate_series(1, 12) AS n;
                 """);
 
-            // The matcher finds both seasons; relations wait for their own pass.
+            // The matcher finds both seasons of the library's series and leaves the catalog title nobody opened alone; relations wait for their own pass.
             await using (var scope = host.Services.CreateAsyncScope())
             {
                 await scope.ServiceProvider.GetRequiredService<MatchAniListV1>().ExecuteAsync<UpdateResult>(new MediaMatchParametersV1(), default);
             }
 
             Assert.AreEqual("1,2", await host.ScalarAsync("""SELECT string_agg("Value", ',' ORDER BY "Value") FROM "WorkUnitExternalIdentities" WHERE "Namespace" = 'anilist'"""));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WorkIdentityMatches" WHERE "WorkId" = 70"""));
             Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WorkRelations" """));
             Assert.AreEqual(true, await host.ScalarAsync("""SELECT "RelationsCheckedAt" IS NULL FROM "WorkIdentityMatches" WHERE "WorkId" = 10"""));
 
@@ -48,12 +50,15 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue((await RunRelationsAsync(host)).Success);
             var relations = await ReadAsync(host, 10);
             CollectionAssert.AreEquivalent(new[] { (WorkRelationType.SourceMaterial, "501"), (WorkRelationType.SideStory, "601"), (WorkRelationType.SpinOff, "602") },
-                relations.Select(relation => (relation.WorkRelationTypeId, relation.RelatedWorkId is null ? relation.ExternalId! : "501")).ToArray());
+                await EntriesAsync(host, relations));
             Assert.AreEqual(50L, relations.Single(relation => relation.WorkRelationTypeId == WorkRelationType.SourceMaterial).RelatedWorkId);
             Assert.IsTrue(relations.All(relation => relation.SourceKey == "anilist"));
-            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "ExternalWorks" WHERE "Namespace" = 'anilist' AND "Value" IN ('601', '602')"""));
+            Assert.AreEqual(2L, await host.ScalarAsync("""
+                SELECT count(*) FROM "Works" AS work JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = work."Id"
+                WHERE identity."Namespace" = 'anilist' AND identity."Value" IN ('601', '602') AND work."CatalogNamespace" = 'anilist' AND work."DetailedAt" IS NULL
+                """), "The titles a provider relates are kept as catalog Works.");
             Assert.AreEqual(false, await host.ScalarAsync("""SELECT "RelationsCheckedAt" IS NULL FROM "WorkIdentityMatches" WHERE "WorkId" = 10"""));
-            Assert.AreEqual((WorkRelationType.Adaptation, 10L), (await ReadAsync(host, 50)).Select(relation => (relation.WorkRelationTypeId, relation.RelatedWorkId!.Value)).Single());
+            Assert.AreEqual((WorkRelationType.Adaptation, 10L), (await ReadAsync(host, 50)).Select(relation => (relation.WorkRelationTypeId, relation.RelatedWorkId)).Single());
 
             // Nothing is read again before the Work is due; a new match makes it due at once.
             var reads = aniList.Reads;
@@ -68,8 +73,9 @@ namespace Jularr.Backend.Tests
             await DueAgainAsync(host);
             await RunRelationsAsync(host);
             relations = await ReadAsync(host, 10);
-            Assert.IsFalse(relations.Any(relation => relation.ExternalId == "601"));
-            Assert.IsFalse(relations.Any(relation => relation.ExternalId == "602"));
+            var shown = await EntriesAsync(host, relations);
+            Assert.IsFalse(shown.Any(entry => entry.Value == "601"));
+            Assert.IsFalse(shown.Any(entry => entry.Value == "602"));
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "WorkRelations" WHERE "WorkId" = 10 AND "IsSuppressed" """));
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "WorkRelations" WHERE "WorkId" = 10 AND "SourceKey" = 'anilist' AND NOT "IsSuppressed" """));
 
@@ -140,6 +146,18 @@ namespace Jularr.Backend.Tests
         }
 
         // A matched Work whose relations were read a while ago, and the AniList answers read again.
+        // The AniList entry each related Work holds, with the relation's type.
+        private static async Task<(WorkRelationType Type, string Value)[]> EntriesAsync(Host host, IEnumerable<WorkRelationV1> relations)
+        {
+            var entries = new List<(WorkRelationType, string)>();
+            foreach (var relation in relations)
+            {
+                entries.Add((relation.WorkRelationTypeId, (string)(await host.ScalarAsync($"""SELECT "Value" FROM "WorkExternalIdentities" WHERE "WorkId" = {relation.RelatedWorkId} AND "Namespace" = 'anilist'"""))!));
+            }
+
+            return [.. entries];
+        }
+
         private static Task DueAgainAsync(Host host)
         {
             ((Microsoft.Extensions.Caching.Memory.MemoryCache)host.Services.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>()).Clear();

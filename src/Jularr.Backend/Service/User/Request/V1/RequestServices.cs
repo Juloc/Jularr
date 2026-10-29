@@ -8,6 +8,7 @@ using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.User.Request.V1
@@ -256,20 +257,26 @@ namespace Jularr.Backend.Service.User.Request.V1
     public sealed class CreateRequestV1 : UserService<CreateRequestParametersV1, CreateRequestDataV1>
     {
         private readonly AcquisitionSearchSignal _searchSignal;
+        private readonly MetadataCatalog _catalog;
         private bool _newlyApproved;
 
-        internal CreateRequestV1(AcquisitionSearchSignal searchSignal)
+        internal CreateRequestV1(AcquisitionSearchSignal searchSignal, MetadataCatalog catalog)
         {
             _searchSignal = searchSignal;
+            _catalog = catalog;
         }
-        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<CreateRequestResultV1>()];
         protected override ModuleRequirement GetInstanceModules(CreateRequestParametersV1 parameters) => ModuleRequirement.All("Requests");
         protected override ServicePermission GetPermission(CreateRequestParametersV1 parameters, Type resultType) => new("profile.requests.update");
 
-        protected override async Task<IServiceOutput> OnCreate()
+        protected override async Task<IServiceOutput> OnExecute()
         {
-            var (request, newlyApproved) = await Context.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(Parameters.WorkId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, Data.GamePlatformId, Data.AcquisitionProfileId, Auth.AccountRoleTypeId == AccountRoleType.Owner), CancellationToken);
+            // A catalog title first takes its details, an anime season no series holds yet becomes its series; the request is saved even while the catalog cannot answer.
+            await Context.ExecuteBatchAsync(async (ctx, ct) => { await ctx.RequireWorkNotExcludedAsync(Parameters.WorkId, ct); return true; }, CancellationToken);
+            var workId = await _catalog.PrepareRequestAsync(Context, Parameters.WorkId, Auth.ProfileId!.Value, CancellationToken);
+            var (request, newlyApproved) = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value,
+                Auth.AccountId!.Value, Data.UiLocaleId, Data.GamePlatformId, Data.AcquisitionProfileId, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct), CancellationToken);
             _newlyApproved = newlyApproved;
             return new CreateRequestResultV1(request.Id);
         }

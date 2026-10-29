@@ -313,31 +313,35 @@ namespace Jularr.Backend.Tests
                 return (await found.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.First(item => item.ExternalId == "OL66554W");
             }
 
+            // The found book is kept as a catalog Work; nobody asked for it yet.
             var book = await FindAsync();
-            Assert.IsNull(book.WorkId);
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'openlibrary' AND \"Value\" = 'OL66554W'"))!;
+            Assert.AreEqual((workId, MediaStateType.NotRequested), (book.WorkId, book.MediaStateTypeId));
             using var films = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/search", new SearchDiscoverCatalogDataV1(MediaType.Movie, "Pride and Prejudice"));
             Assert.AreEqual(HttpStatusCode.BadRequest, films.StatusCode);
 
-            // The page lists it with its request page, which asks for the language.
+            // The page lists it with its Work's page, which asks for the language.
             using var page = await host.SendAsync(HttpMethod.Get, "/?type=books&q=Pride%20and%20Prejudice");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            StringAssert.Contains(html, "/Discover/books/openlibrary/OL66554W\"");
+            StringAssert.Contains(html, "href=\"/Details/" + workId + "\"");
+            Assert.IsFalse(html.Contains("/Discover/books/", StringComparison.Ordinal));
 
-            // The request page names the book as Open Library does, whatever a link claims.
-            using var item = await host.SendAsync(HttpMethod.Get, "/Discover/books/openlibrary/OL66554W?title=Confirm%20your%20password");
+            // The Work's page brings the book's details on its first open and names it as they do in the profile's language, whatever a link claims.
+            using var item = await host.SendAsync(HttpMethod.Get, "/Details/" + workId + "?title=Confirm%20your%20password");
             var form = await item.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, item.StatusCode, form);
-            StringAssert.Contains(form, "Pride and Prejudice");
+            StringAssert.Contains(form, "Stolz und Vorurteil");
             Assert.IsFalse(form.Contains("Confirm your password", StringComparison.Ordinal));
 
-            // Requesting imports the Work once; the catalog then knows it.
-            using var requested = await host.SendAsync(HttpMethod.Post, "/Discover/books/openlibrary/OL66554W",
+            // Requesting asks for that same Work; the catalog still answers with it.
+            using var requested = await host.SendAsync(HttpMethod.Post, "/Details/" + workId + "?handler=Request",
                 new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(form), ["UiLocaleId"] = "1" });
             Assert.AreEqual(HttpStatusCode.Redirect, requested.StatusCode, await requested.Content.ReadAsStringAsync());
-            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'openlibrary' AND \"Value\" = 'OL66554W'"))!;
             Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"WorkId\" = {workId}"));
-            Assert.AreEqual(workId, (await FindAsync()).WorkId);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'openlibrary' AND \"Value\" = 'OL66554W'"));
+            var asked = await FindAsync();
+            Assert.AreEqual((workId, MediaStateType.Requested), (asked.WorkId, asked.MediaStateTypeId));
 
             // Books trend globally on Open Library; other rankings are not offered.
             using var trending = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Book, DiscoverFeedType.Trending));

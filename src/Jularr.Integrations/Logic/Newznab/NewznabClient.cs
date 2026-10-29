@@ -166,12 +166,12 @@ namespace Jularr.Integrations.Logic.Newznab
                 using var response = await httpClient.GetAsync(nzb, HttpCompletionOption.ResponseHeadersRead, ct);
                 if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                 {
-                    throw new NewznabException(NewznabFailure.AuthenticationFailed, "The indexer refused the NZB.");
+                    throw new NewznabException(NewznabFailure.AuthenticationFailed, "The indexer refused the NZB.") { StatusCode = response.StatusCode };
                 }
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    throw new NewznabException(NewznabFailure.Unavailable, "The indexer did not deliver the NZB.");
+                    throw new NewznabException(NewznabFailure.Unavailable, "The indexer did not deliver the NZB.") { StatusCode = response.StatusCode };
                 }
 
                 await DirectDownload.SaveAsync(response, destination, NzbReader.MaximumBytes, ct, reserveWrite);

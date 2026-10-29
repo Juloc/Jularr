@@ -28,7 +28,8 @@ function setup(panel: HTMLElement): void {
     // The count of each group and the starting set the switches match, if any.
     function refresh(): void {
         for (const group of Array.from(panel.querySelectorAll<HTMLElement>(".option-group"))) {
-            const boxes = Array.from(group.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+            // Only the switches of modules and media types count; a module's own settings (the Caching module's) do not.
+            const boxes = Array.from(group.querySelectorAll<HTMLElement>("[data-module], [data-media]")).map(boxOf).filter((box): box is HTMLInputElement => box !== null);
             const count = group.querySelector<HTMLElement>("[data-option-count]");
             const active = boxes.filter(box => box.checked).length;
             if (count) count.textContent = (panel.dataset.setupCount ?? "{0}/{1}").replace("{0}", String(active)).replace("{1}", String(boxes.length));
@@ -57,7 +58,8 @@ function setup(panel: HTMLElement): void {
     panel.addEventListener("change", event => {
         const box = event.target instanceof HTMLInputElement && event.target.type === "checkbox" ? event.target : null;
         const row = box?.closest<HTMLElement>("[data-module], [data-media]");
-        if (!box || !row) return;
+        // A setting inside a module's card (the Caching module's) is no switch of the rules.
+        if (!box || !row || boxOf(row) !== box) return;
         modules().forEach(item => reason(item, ""));
 
         if (row.dataset.module) {

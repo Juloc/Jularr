@@ -34,6 +34,127 @@ namespace Jularr.Backend.Logic.Media
 
         public static WorkPeopleData Data(long workId, string @namespace, IEnumerable<object> rows) => new(workId, @namespace, JsonSerializer.Serialize(rows));
 
+        // The provider's people no person holds by its id yet.
+        public static Task<IReadOnlyList<ProviderPersonIdData>> ReadUnknownProviderPeopleAsync(this LogicContext ctx, ProviderPeopleData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT DISTINCT
+                    item."ExternalId"
+                FROM
+                    jsonb_to_recordset(@People::jsonb) AS item ("ExternalId" text)
+                WHERE
+                    item."ExternalId" IS NOT NULL
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "PersonExternalIdentities" AS identity
+                        WHERE
+                            identity."Namespace" = @Namespace
+                            AND identity."Value" = item."ExternalId"
+                    );
+                """;
+            sql.Parameters.Add(data);
+            return ctx.ReadSql.ReadListAsync<ProviderPersonIdData>(sql, ct);
+        }
+
+        // People just looked up by the provider's id: one another catalog already knows by the same TMDB or IMDb id takes the provider's id, the others become
+        // people with the provider's id and those TMDB and IMDb ids no person holds yet. Each person is looked up once, since its id is known afterwards.
+        public static async Task LinkProviderPeopleAsync(this LogicContext ctx, ProviderPeopleData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH link AS (
+                    SELECT DISTINCT ON (item."ExternalId")
+                        item."ExternalId",
+                        left(btrim(item."Name"), 300) AS "Name",
+                        CASE WHEN item."ImageUrl" ~ '^https://' AND length(item."ImageUrl") <= 500 THEN item."ImageUrl" END AS "ImageUrl",
+                        CASE WHEN item."TmdbId" ~ '^[1-9][0-9]{0,9}$' THEN item."TmdbId" END AS "TmdbId",
+                        CASE WHEN item."ImdbId" ~ '^nm[0-9]{5,10}$' THEN item."ImdbId" END AS "ImdbId"
+                    FROM
+                        jsonb_to_recordset(@People::jsonb) AS item ("ExternalId" text, "Name" text, "ImageUrl" text, "TmdbId" text, "ImdbId" text)
+                    WHERE
+                        item."ExternalId" IS NOT NULL
+                        AND length(btrim(item."Name")) > 0
+                        AND NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "PersonExternalIdentities" AS own
+                            WHERE
+                                own."Namespace" = @Namespace
+                                AND own."Value" = item."ExternalId"
+                        )
+                    ORDER BY
+                        item."ExternalId"
+                ), matched AS (
+                    SELECT DISTINCT ON (link."ExternalId")
+                        link."ExternalId",
+                        known."PersonId"
+                    FROM
+                        link
+                        JOIN "PersonExternalIdentities" AS known ON known."Namespace" = 'tmdb' AND known."Value" = link."TmdbId"
+                            OR known."Namespace" = 'imdb' AND known."Value" = link."ImdbId"
+                    ORDER BY
+                        link."ExternalId",
+                        known."Namespace" = 'tmdb' DESC,
+                        known."PersonId"
+                ), fresh AS (
+                    SELECT
+                        link."ExternalId",
+                        link."Name",
+                        link."ImageUrl",
+                        link."TmdbId",
+                        link."ImdbId",
+                        nextval(pg_get_serial_sequence('"People"', 'Id')) AS "PersonId"
+                    FROM
+                        link
+                    WHERE
+                        NOT EXISTS (SELECT 1 FROM matched WHERE matched."ExternalId" = link."ExternalId")
+                ), inserted AS (
+                    INSERT INTO
+                        "People" ("Id", "Name", "ImageUrl")
+                    SELECT
+                        fresh."PersonId",
+                        fresh."Name",
+                        fresh."ImageUrl"
+                    FROM
+                        fresh
+                )
+                INSERT INTO
+                    "PersonExternalIdentities" ("PersonId", "Namespace", "Value")
+                SELECT
+                    matched."PersonId",
+                    @Namespace,
+                    matched."ExternalId"
+                FROM
+                    matched
+                UNION ALL
+                SELECT
+                    fresh."PersonId",
+                    @Namespace,
+                    fresh."ExternalId"
+                FROM
+                    fresh
+                UNION ALL
+                SELECT
+                    fresh."PersonId",
+                    remote."Namespace",
+                    remote."Value"
+                FROM
+                    fresh
+                    CROSS JOIN LATERAL (VALUES ('tmdb', fresh."TmdbId"), ('imdb', fresh."ImdbId")) AS remote ("Namespace", "Value")
+                WHERE
+                    remote."Value" IS NOT NULL
+                ON CONFLICT DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task SaveWorkPeopleAsync(this LogicContext ctx, WorkPeopleData data, CancellationToken ct)
         {
             // Known ids keep their person, whose name and portrait the provider updates; new ids get one.

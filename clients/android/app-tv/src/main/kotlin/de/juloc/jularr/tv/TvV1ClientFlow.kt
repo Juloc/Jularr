@@ -44,6 +44,7 @@ internal class TvV1ClientFlow(
         val assetByUnit: Map<String, Long?>,
         val availableMovieAssets: List<TvWorkAvailabilityV1>,
         val hasMoreMovieAssets: Boolean = false,
+        val isRequestable: Boolean = false,
     )
 
     suspend fun home(): Home {
@@ -147,6 +148,7 @@ internal class TvV1ClientFlow(
                 title = work.canonicalTitle, isWatchlisted = work.isWatchlisted,
                 detail = null, episodeByUnit = emptyMap(), fractionalEpisodes = emptyList(),
                 assetByUnit = emptyMap(), availableMovieAssets = emptyList(),
+                isRequestable = work.isRequestable,
             )
         }
 
@@ -170,6 +172,7 @@ internal class TvV1ClientFlow(
             assetByUnit = episodes.associate { it.id.toString() to it.mediaAssetId },
             availableMovieAssets = moviePage.items,
             hasMoreMovieAssets = moviePage.hasMore,
+            isRequestable = work.isRequestable,
         )
     }
 

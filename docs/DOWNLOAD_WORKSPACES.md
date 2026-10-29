@@ -28,6 +28,15 @@ SABnzbd download jobs: torrent files are shown inline, while SABnzbd entries
 link to its guarded queue/history/files browser. The two provider file
 browsers have not yet been fully consolidated into a single component.
 
+Native Usenet NZB grabs report diagnostic warnings through `WantedAcquisition`.
+With Diagnostics enabled, these also appear in the existing application logs.
+Warnings identify the operation and indexer, HTTP status, timeout or transport
+error, or the workspace/transfer stage and I/O exception type and HResult.
+They omit URLs, response bodies and headers, paths and exception messages.
+The existing acquisition failure states and retry schedule remain unchanged;
+an I/O error during transfer can originate from reading or writing the NZB.
+Focused checks are in `UsenetTests`.
+
 ## Source cleanup safety
 
 A source folder is eligible for automatic SABnzbd post-import deletion only if:

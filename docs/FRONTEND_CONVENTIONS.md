@@ -371,13 +371,12 @@ See [Frontend UX decisions](FRONTEND_UX.md) for design tokens, layout, page iden
   opens the same panel by itself, one at a time, unless the profile switched `AutoplayPreviews` off (rendered as
   `data-autoplay-previews` on `#app-content`; data saver and offline also keep it off). It closes on leave, Escape, scrolling,
   resizing, a click elsewhere, a hidden document or page navigation, and drops its frame. The cached component
-  module owns the delegated handlers once across app-shell visits. List contracts carry no trailer IDs: the page asks one title at a
-  time (a Work's trailer is its `Trailer` fact, a TMDB title's and an anime season's come from their provider within 3 s, otherwise the
-  local catalog's description alone).
+  module owns the delegated handlers once across app-shell visits. List contracts carry no trailer IDs: the page asks one Work at a
+  time (its trailer is its `Trailer` fact; a catalog title without details shows its catalog entry's description alone, no provider is asked).
 - Bookmark mutations use the existing Details POST, typed Form, antiforgery and
   Backend watchlist service (the page is called Favorites). Return only to validated local URLs. If a list does not
   supply current membership, the icon links to management in Details, not a false toggle.
-  Provider-only titles without a canonical Work ID have no bookmark action yet.
+  Every Discover card is a Work and carries the bookmark.
   Shelves retain native touch/keyboard scrolling and local chevrons, no visible
   scrollbar or navigation-only server reads.
 - Truncated visible text (`text-overflow: ellipsis`, line clamping or text clipped by

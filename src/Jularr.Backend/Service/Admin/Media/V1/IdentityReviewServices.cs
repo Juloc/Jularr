@@ -84,7 +84,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var result = Data.AniListId is { } chosen
                 ? await _matcher.MatchAsync(target, target.MediaTypeId == MediaType.Series
                     ? await Context.ExecuteBatchAsync((ctx, ct) => AniListMatcher.ReadSeasonsAsync(ctx, target.WorkId, ct), CancellationToken)
-                    : [], chosen, CancellationToken)
+                    : [], [], chosen, CancellationToken)
                 : new IdentityMatchResultData(target.WorkId, AniListMetadata.Namespace, IdentityMatchStatusType.Dismissed, "[]", null, "[]", true);
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {

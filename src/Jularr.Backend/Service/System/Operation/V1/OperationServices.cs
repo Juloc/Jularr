@@ -705,7 +705,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             var sql = new SqlStatement();
                             sql.Statement =
                                 """
-                                SELECT work."Id"
+                                SELECT
+                                    work."Id",
+                                    EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id") AS "IsInLibrary"
                                 FROM "Works" AS work
                                 WHERE work."MediaTypeId" = @MediaTypeId
                                     AND (
@@ -746,13 +748,20 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                             AND (@ReleaseYear::integer IS NULL OR work."ReleaseYear" = @ReleaseYear)
                                         )
                                     )
-                                ORDER BY work."Id"
+                                ORDER BY "IsInLibrary" DESC, work."Id"
                                 LIMIT 2;
                                 """;
                             sql.Parameters.Add(new WorkFolderMatchData(mediaType, parsed.Title, parsed.Year, supplied));
-                            return ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
+                            return ctx.ReadSql.ReadListAsync<WorkLibraryCandidateData>(sql, ct);
                         }, CancellationToken);
-                        workId = candidates.Count == 1 ? candidates[0].Id : null;
+
+                        // The one Work of the library a title names wins over catalog titles of the same name; two of the library, or two catalog titles, are unclear.
+                        workId = candidates switch
+                        {
+                            [var only] => only.Id,
+                            [{ IsInLibrary: true } library, { IsInLibrary: false }] => library.Id,
+                            _ => (long?)null
+                        };
 
                         // An identity the Work does not carry completely is checked with the provider, never guessed from the part that matches or from the title:
                         // the provider names one series for every id, and importing it extends the Work that already holds one of them.
@@ -769,87 +778,132 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             externalLookups++;
                             try
                             {
-                                provider ??= await _metadata.ConnectAsync(Context, CancellationToken);
-                                int? tmdbId = null;
-                                var verified = true;
-                                foreach (var (source, value) in ids)
+                                if (mediaType == MediaType.Series)
                                 {
-                                    int? resolved;
-                                    try
+                                    // A series is TheTVDB's. Its own id (folder, nfo, as Sonarr names it) wins; otherwise IMDb's id through TheTVDB and TMDB's through
+                                    // TMDB's link, which must name the same series, and last the folder's title and year as one search result.
+                                    var ownTvdb = int.TryParse(ids.GetValueOrDefault("tvdb"), NumberStyles.None, CultureInfo.InvariantCulture, out var named) && named > 0 ? named : (int?)null;
+                                    var tmdbTv = int.TryParse(ids.GetValueOrDefault("tmdb_tv"), NumberStyles.None, CultureInfo.InvariantCulture, out var tmdbNamed) && tmdbNamed > 0 ? tmdbNamed : (int?)null;
+                                    var tvdbId = ownTvdb;
+                                    var verified = true;
+                                    foreach (var source in ownTvdb is null ? new[] { "imdb", "tmdb_tv" } : [])
                                     {
-                                        resolved = source switch
+                                        // An id the catalog cannot resolve (a brand new series it does not link yet) proves nothing against the others.
+                                        if (ids.GetValueOrDefault(source) is not { } value || await _metadata.FindTvdbIdAsync(Context, source, value, CancellationToken) is not { } resolved)
                                         {
-                                            "tmdb_movie" when mediaType == MediaType.Movie => int.TryParse(value, out var movieId) && movieId > 0 ? movieId : null,
-                                            "tmdb_tv" when mediaType == MediaType.Series => int.TryParse(value, out var seriesId) && seriesId > 0 ? seriesId : null,
-                                            "imdb" or "tvdb" => await _metadata.FindExternalAsync(provider, mediaType, source, value, CancellationToken),
-                                            _ => null
-                                        };
-                                    }
-                                    catch (KeyNotFoundException)
-                                    {
-                                        resolved = null;
-                                    }
-                                    // An id the catalog cannot resolve (a brand new series it does not link yet) proves nothing against the others;
-                                    // only ids that name different series stop the match.
-                                    if (resolved is null)
-                                    {
-                                        continue;
+                                            continue;
+                                        }
+
+                                        if (tvdbId is not null && tvdbId != resolved)
+                                        {
+                                            verified = false;
+                                            failures[key] = "the ids name different TheTVDB series (" + tvdbId + " and " + resolved + ")";
+                                            break;
+                                        }
+
+                                        tvdbId = resolved;
                                     }
 
-                                    if (tmdbId is not null && tmdbId != resolved)
+                                    if (verified && tvdbId is null && parsed.Year is { } year)
                                     {
-                                        verified = false;
-                                        failures[key] = "the ids name different TMDB series (" + tmdbId + " and " + resolved + ")";
-                                        break;
+                                        var hits = (await _metadata.SearchSeriesAsync(Context, parsed.Title, year, CancellationToken))
+                                            .Where(result => result.ReleaseYear == year && (TitleMatcher.Matches(parsed.Title, result.Title)
+                                                || result.OriginalTitle is { } original && TitleMatcher.Matches(parsed.Title, original)))
+                                            .ToArray();
+                                        tvdbId = hits.Length == 1 && int.TryParse(hits[0].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var hit) ? hit : null;
                                     }
 
-                                    tmdbId = resolved;
-                                }
-
-                                if (verified && tmdbId is { } id)
-                                {
-                                    var details = await _metadata.ReadWorkAsync(provider, mediaType, id, CancellationToken);
-                                    // The IMDb id must agree; TMDB's TheTVDB id may be a stale link, the series' own (folder, nfo) then wins for a series.
-                                    if ((ids.GetValueOrDefault("imdb") is not { } imdb || details.ImdbId is null || details.ImdbId.Equals(imdb, StringComparison.OrdinalIgnoreCase))
-                                        && (mediaType == MediaType.Series || ids.GetValueOrDefault("tvdb") is not { } tvdb || details.TvdbId is null || details.TvdbId.ToString() == tvdb))
+                                    if (verified && tvdbId is { } id)
                                     {
-                                        var folderTvdb = mediaType == MediaType.Series && int.TryParse(ids.GetValueOrDefault("tvdb"), out var named) && named > 0 ? named : (int?)null;
-                                        if (folderTvdb is { } ownTvdb)
+                                        // TMDB's stale link to TheTVDB that an earlier import stored gives way to the series' own id.
+                                        if (ownTvdb is { } own && tmdbTv is { } tmdb)
                                         {
                                             await Context.ExecuteBatchAsync(async (ctx, ct) =>
                                             {
-                                                await ctx.ReplaceStaleTvdbIdAsync(new WorkTvdbCorrectionData(id.ToString(CultureInfo.InvariantCulture), ids.GetValueOrDefault("imdb"),
-                                                    ownTvdb.ToString(CultureInfo.InvariantCulture)), ct);
+                                                await ctx.ReplaceStaleTvdbIdAsync(new WorkTvdbCorrectionData(tmdb.ToString(CultureInfo.InvariantCulture), ids.GetValueOrDefault("imdb"),
+                                                    own.ToString(CultureInfo.InvariantCulture)), ct);
                                                 return true;
                                             }, CancellationToken);
                                         }
 
-                                        workId = await _metadata.ImportAsync(Context, provider, mediaType, null, id, CancellationToken, folderTvdb);
+                                        workId = await _metadata.ImportSeriesAsync(Context, null, id, tmdbTv, CancellationToken);
                                         imported++;
                                     }
-                                    else
+                                    else if (verified)
                                     {
-                                        failures[key] = "TMDB " + id + " carries imdb " + (details.ImdbId ?? "none") + " and tvdb " + (details.TvdbId?.ToString() ?? "none");
+                                        failures[key] = "none of the ids resolves to a TheTVDB series";
                                     }
                                 }
-                                else if (!failures.ContainsKey(key))
+                                else
                                 {
-                                    failures[key] = "none of the ids resolves to a TMDB " + (mediaType == MediaType.Series ? "series" : "film");
-
-                                    // The catalog knows none of the ids (a title it has not linked to IMDb yet): the folder's title and year may still name
-                                    // exactly one entry, as Sonarr and Radarr match by name; two or none leave the file for a person.
-                                    if (parsed.Year is { } year)
+                                    provider ??= await _metadata.ConnectAsync(Context, CancellationToken);
+                                    int? tmdbId = null;
+                                    var verified = true;
+                                    foreach (var (source, value) in ids)
                                     {
-                                        var hits = (await _metadata.SearchAsync(provider, mediaType, parsed.Title, year, CancellationToken))
-                                            .Where(result => result.Year == year && (TitleMatcher.Matches(parsed.Title, result.Title)
-                                                || result.OriginalTitle is { } original && TitleMatcher.Matches(parsed.Title, original)))
-                                            .ToArray();
-                                        if (hits.Length == 1)
+                                        int? resolved;
+                                        try
                                         {
-                                            workId = await _metadata.ImportAsync(Context, provider, mediaType, null, hits[0].Id, CancellationToken,
-                                                mediaType == MediaType.Series && int.TryParse(ids.GetValueOrDefault("tvdb"), out var named) && named > 0 ? named : null);
+                                            resolved = source switch
+                                            {
+                                                "tmdb_movie" => int.TryParse(value, out var movieId) && movieId > 0 ? movieId : null,
+                                                "imdb" => await _metadata.FindExternalAsync(provider, mediaType, source, value, CancellationToken),
+                                                _ => null
+                                            };
+                                        }
+                                        catch (KeyNotFoundException)
+                                        {
+                                            resolved = null;
+                                        }
+
+                                        // An id the catalog cannot resolve proves nothing against the others; only ids that name different films stop the match.
+                                        if (resolved is null)
+                                        {
+                                            continue;
+                                        }
+
+                                        if (tmdbId is not null && tmdbId != resolved)
+                                        {
+                                            verified = false;
+                                            failures[key] = "the ids name different TMDB films (" + tmdbId + " and " + resolved + ")";
+                                            break;
+                                        }
+
+                                        tmdbId = resolved;
+                                    }
+
+                                    if (verified && tmdbId is { } id)
+                                    {
+                                        // The IMDb id must agree.
+                                        var details = await _metadata.ReadWorkAsync(provider, mediaType, id, CancellationToken);
+                                        if (ids.GetValueOrDefault("imdb") is not { } imdb || details.ImdbId is null || details.ImdbId.Equals(imdb, StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            workId = await _metadata.ImportAsync(Context, provider, mediaType, null, id, CancellationToken);
                                             imported++;
-                                            failures.Remove(key);
+                                        }
+                                        else
+                                        {
+                                            failures[key] = "TMDB " + id + " carries imdb " + details.ImdbId;
+                                        }
+                                    }
+                                    else if (verified)
+                                    {
+                                        failures[key] = "none of the ids resolves to a TMDB film";
+
+                                        // The catalog knows none of the ids (a title it has not linked to IMDb yet): the folder's title and year may still name
+                                        // exactly one entry, as Radarr matches by name; two or none leave the file for a person.
+                                        if (parsed.Year is { } year)
+                                        {
+                                            var hits = (await _metadata.SearchAsync(provider, mediaType, parsed.Title, year, CancellationToken))
+                                                .Where(result => result.Year == year && (TitleMatcher.Matches(parsed.Title, result.Title)
+                                                    || result.OriginalTitle is { } original && TitleMatcher.Matches(parsed.Title, original)))
+                                                .ToArray();
+                                            if (hits.Length == 1)
+                                            {
+                                                workId = await _metadata.ImportAsync(Context, provider, mediaType, null, hits[0].Id, CancellationToken);
+                                                imported++;
+                                                failures.Remove(key);
+                                            }
                                         }
                                     }
                                 }
@@ -890,8 +944,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             externalLookups++;
                             try
                             {
-                                provider ??= await _metadata.ConnectAsync(Context, CancellationToken);
-                                await _metadata.ImportAsync(Context, provider, mediaType, null, known.TmdbId, CancellationToken, known.TvdbId);
+                                await _metadata.ImportSeriesAsync(Context, null, known.Namespace, known.Value, CancellationToken);
                                 imported++;
                             }
                             catch (ServiceUnavailableException)
@@ -1126,10 +1179,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
         }
 
-        // The TMDB id, and the Work's own TheTVDB id if it has one, of a series none of whose episodes has a name yet; null when it has one or no TMDB id to read.
-        private async Task<(int TmdbId, int? TvdbId)?> ReadMissingStructureAsync(long workId)
-        {
-            var identities = await Context.ExecuteBatchAsync((ctx, ct) =>
+        // The identity a series none of whose episodes has a name yet is read by: its TheTVDB id, else its TMDB id; null when it has one or no id to read.
+        private Task<WorkIdentityProbeData?> ReadMissingStructureAsync(long workId) =>
+            Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
                 sql.Statement =
@@ -1140,17 +1192,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         AND NOT EXISTS (
                             SELECT 1 FROM "WorkUnits" AS unit
                             WHERE unit."WorkId" = identity."WorkId" AND unit."WorkUnitTypeId" = 2 AND unit."Title" IS NOT NULL
-                        );
+                        )
+                    ORDER BY identity."Namespace" <> 'tvdb'
+                    LIMIT 1;
                     """;
                 sql.Parameters.Add(new WorkIdData(workId));
-                return ctx.ReadSql.ReadListAsync<WorkIdentityProbeData>(sql, ct);
+                return ctx.ReadSql.ReadOptionalAsync<WorkIdentityProbeData>(sql, ct);
             }, CancellationToken);
-            var tmdb = identities.FirstOrDefault(identity => identity.Namespace == "tmdb_tv");
-            var tvdb = identities.FirstOrDefault(identity => identity.Namespace == "tvdb");
-            return tmdb is not null && int.TryParse(tmdb.Value, out var tmdbId) && tmdbId > 0
-                ? (tmdbId, tvdb is not null && int.TryParse(tvdb.Value, out var tvdbId) && tvdbId > 0 ? tvdbId : null)
-                : null;
-        }
 
         private async Task<PlexMatchHints> ReadPlexMatchAsync(StorageFiles storage, string directory, string folder)
         {

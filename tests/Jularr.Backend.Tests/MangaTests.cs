@@ -41,7 +41,7 @@ namespace Jularr.Backend.Tests
             using var found = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/metadata/search", new SearchMetadataDataV1(MediaType.Book, "Example Manga", mediaSubtypeId: MediaSubtype.Manga));
             Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
             var results = (await found.Content.ReadFromJsonAsync<BaseDataList<MetadataSearchResultV1>>())!;
-            CollectionAssert.AreEquivalent(new[] { "openlibrary", "anilist" }, results.Select(item => item.Namespace).ToArray());
+            CollectionAssert.AreEqual(new[] { "anilist" }, results.Select(item => item.Namespace).ToArray());
             var result = results.Single(item => item.Namespace == "anilist");
             Assert.AreEqual("101", result.ExternalId);
             Assert.AreEqual("Mika Example", result.Author);
