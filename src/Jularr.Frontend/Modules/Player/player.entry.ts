@@ -8,7 +8,7 @@ import type { StyledSubtitles } from "./StyledSubtitles";
 import { deviceKind, libassWanted } from "./Device";
 import { Automatic, nextQuality, recordStall, StallSeconds, troubled } from "./AutoQuality";
 import { pickSecondSubtitle, pickTranslationSource, SecondSubtitleLine, type SubtitleOption } from "./Subtitles";
-import { healed, AttemptsBeforeNotice, replanDelay } from "./Recovery";
+import { healed, AttemptsBeforeNotice, replanDelay, stallStep } from "./Recovery";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
@@ -95,7 +95,7 @@ async function start(player: HTMLElement): Promise<void> {
     const antiforgery = player.dataset.antiforgery ?? "";
     let plan: PlaybackPlan | null = null;
     let hls: { destroy(): void } | null = null;
-    let hlsPlayer: { recoverMediaError(): void } | null = null;
+    let hlsPlayer: { recoverMediaError(): void; startLoad(): void } | null = null;
     let save: (value: object, leaving?: boolean) => void = () => undefined;
     let switching = false;
     // A Chromecast showing this playback: its own session, its own position.
@@ -656,6 +656,30 @@ async function start(player: HTMLElement): Promise<void> {
     video.addEventListener("playing", () => { recoveries = 0; stopLoading(); });
     video.addEventListener("pause", stopLoading);
     video.addEventListener("ended", stopLoading);
+
+    // A picture that stands still while it should play, with no error at all (a segment the server never delivers), is what a reload would cure:
+    // the loader is nudged after twenty seconds, a fresh session is planned after sixty.
+    let watchedTime = -1;
+    let progressAt = performance.now();
+    let nudged = false;
+    window.setInterval(() => {
+        const now = performance.now();
+        if (video.paused || video.ended || !plan || casting || leaving || escalating || switching || Math.abs(video.currentTime - watchedTime) > 0.01) {
+            watchedTime = video.currentTime;
+            progressAt = now;
+            nudged = false;
+            return;
+        }
+        const step = stallStep((now - progressAt) / 1000);
+        if (step === "resume" && !nudged) {
+            nudged = true;
+            hlsPlayer?.startLoad();
+        } else if (step === "replan") {
+            progressAt = now;
+            nudged = false;
+            void escalate();
+        }
+    }, 2_000);
 
     // Transport state.
     video.addEventListener("play", () => setPlaying(true));

@@ -18,6 +18,10 @@ test('The player tells the person after six tries and keeps trying', () => {
     assert.equal(exports.AttemptsBeforeNotice, 6);
 });
 
+test('A picture that stands still is nudged after twenty seconds and planned again after sixty', () => {
+    assert.deepEqual([0, 19.9, 20, 59.9, 60, 300].map(exports.stallStep), ['none', 'none', 'resume', 'resume', 'replan', 'replan']);
+});
+
 test('A picture that plays on for twenty seconds after a repair is healed', () => {
     assert.equal(exports.healed(100, 119.9), false);
     assert.equal(exports.healed(100, 120), true);
