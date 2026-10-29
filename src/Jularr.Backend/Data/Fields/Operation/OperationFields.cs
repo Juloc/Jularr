@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Field;
 using Jularr.Backend.Data.Enums.Operation;
 using NpgsqlTypes;
@@ -8,6 +9,7 @@ namespace Jularr.Backend.Data.Fields.Operation
     {
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly LongArrayField Ids = new() { Minimum = 1, MaximumLength = 64 };
+        public static readonly LongArrayField QueueOrder = new() { Minimum = 1, MaximumLength = 10000 };
         public static readonly BoolField IsMissing = new();
         public static readonly EnumField OperationTypeId = new(typeof(OperationType));
         public static readonly EnumField OperationStatusTypeId = new(typeof(OperationStatusType));
@@ -29,6 +31,14 @@ namespace Jularr.Backend.Data.Fields.Operation
         public static readonly BoolField IsWaiting = new();
         public static readonly BoolField CanImportManually = new();
         public static readonly EnumField ActivityFilterTypeId = new(typeof(ActivityFilterType));
+        public static readonly EnumField DownloadClientKindId = new(typeof(DownloadClientKind)) { Required = false };
+        public static readonly EnumField DownloadBulkActionTypeId = new(typeof(DownloadBulkActionType));
+        public static readonly BoolField DownloadsOnly = new();
+        public static readonly BoolField FailedOnly = new();
+        public static readonly EnumField DownloadPriorityTypeId = new(typeof(DownloadPriorityType));
+        public static readonly IntField QueuePosition = new() { Minimum = 0, Required = false };
+        public static readonly LongArrayField SpeedSamples = new() { Minimum = 0, MaximumLength = 120 };
+        public static readonly StringField DownloadUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 4096, Format = StringFormat.SingleLine };
         public static readonly StringField Title = new() { MaximumLength = 1000 };
         public static readonly IntField ProgressPercent = new() { Minimum = 0, Maximum = 100, Required = false };
         public static readonly LongField SizeBytes = new() { Minimum = 0, Required = false };

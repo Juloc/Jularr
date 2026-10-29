@@ -84,6 +84,7 @@ namespace Jularr.Frontend.Framework
             [
                 new("downloads", "admin.menu.downloads", "download",
                 [
+                    new("admin.downloads.title", "/Admin/Downloads", Acquisition, ["Acquisition"]),
                     new("acquisition.role.Search", "/Admin/Acquisition", Acquisition, ["Acquisition"]),
                     new("acquisition.role.Download", "/Admin/Acquisition/Downloads", Acquisition, ["Acquisition"]),
                     new("acquisition.role.Subtitles", "/Admin/Acquisition/Subtitles", Acquisition, ["Acquisition", "Subtitles"]),

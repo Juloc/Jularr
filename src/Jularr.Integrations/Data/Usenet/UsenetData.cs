@@ -92,12 +92,16 @@ namespace Jularr.Integrations.Data.Usenet
     // What a download pass achieved; damaged and missing articles need repair.
     internal sealed class UsenetProgress
     {
-        public UsenetProgress(IReadOnlyCollection<string> done, IReadOnlyCollection<string> damaged, long downloadedBytes)
+        public UsenetProgress(IReadOnlyCollection<string> done, IReadOnlyCollection<string> damaged, long downloadedBytes, int sessions = 0)
         {
             Done = done;
             Damaged = damaged;
             DownloadedBytes = downloadedBytes;
+            Sessions = sessions;
         }
+
+        // How many connections the pass held open to the server.
+        public int Sessions { get; }
 
         public IReadOnlyCollection<string> Done { get; }
         public IReadOnlyCollection<string> Damaged { get; }

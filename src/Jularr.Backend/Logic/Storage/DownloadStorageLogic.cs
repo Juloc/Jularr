@@ -55,7 +55,8 @@ namespace Jularr.Backend.Logic.Storage
                     settings."MaxJobBytes",
                     settings."MaxWorkspaceBytes",
                     settings."MaxParallelJobs",
-                    settings."Version"
+                    settings."Version",
+                    settings."MaxBytesPerSecond"
                 FROM
                     "DownloadStorageSettings" AS settings
                 WHERE
@@ -63,6 +64,23 @@ namespace Jularr.Backend.Logic.Storage
                 """;
             sql.Parameters.Add(new DownloadStorageAreaData(area));
             return ctx.ReadSql.ReadRequiredAsync<DownloadStorageSettingsData>(sql, ct);
+        }
+
+        // The speed limit lives beside the workspace's other limits but changes on its own, without the settings' version.
+        public static async Task SetDownloadSpeedLimitAsync(this LogicContext ctx, DownloadSpeedLimitData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "DownloadStorageSettings" AS settings
+                SET
+                    "MaxBytesPerSecond" = @MaxBytesPerSecond
+                WHERE
+                    settings."DownloadStorageAreaId" = @DownloadStorageAreaId;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         public static async Task SaveDownloadStorageSettingsAsync(this LogicContext ctx, DownloadStorageSettingsData data, CancellationToken ct)

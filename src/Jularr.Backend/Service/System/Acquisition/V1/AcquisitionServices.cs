@@ -331,6 +331,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 jobs.AddRange(group.Where(download => download.ExternalId == UsenetJob.ExternalId && !download.IsPaused));
             }
 
+            // Across its news servers the downloader keeps the queue's order: priority first, then the order a person gave.
+            var order = downloads.Select((download, index) => (download.OperationId, index)).ToDictionary(item => item.OperationId, item => item.index);
+            jobs.Sort((left, right) => order[left.OperationId].CompareTo(order[right.OperationId]));
             var progressed = 0;
             await Parallel.ForEachAsync(jobs, new ParallelOptions { MaxDegreeOfParallelism = settings.MaxParallelJobs, CancellationToken = CancellationToken }, async (download, ct) =>
             {
@@ -643,7 +646,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                             job.SizeBytes,
                             job.RemainingBytes,
                             EtaSeconds = job.TimeLeftSeconds,
-                            DownloadStateTypeId = (byte)DownloadLogic.ReadDownloadState(job.Status)
+                            DownloadStateTypeId = (byte)DownloadLogic.ReadDownloadState(job.Status),
+
+                            // SABnzbd's own order and priority, as its queue shows them.
+                            DownloadPriorityTypeId = job.Priority is { } priority ? (byte?)(priority + 2) : null,
+                            QueuePosition = job.Index
                         };
                     })
                     .ToArray();

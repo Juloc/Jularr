@@ -61,8 +61,8 @@ Below History, specific to the selected client:
 
 Storage mounts and paths (Storage), release selection (Acquisition), post-download assignment problems (Activity), logs (System).
 
-## Open
+## Decided (owner, 2026-10-29)
 
-1. Speed limit per client or also one global limit?
-2. Priority levels offered (Low, Normal, High, Force)?
-3. Does **All** offer a global pause?
+1. The speed limit is per client.
+2. Priority levels: Low, Normal, High, Force.
+3. **All** offers a global pause.

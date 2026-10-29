@@ -373,8 +373,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 nativePaths = await _downloads.OpenAsync(context, client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? DownloadStorageArea.Usenet : DownloadStorageArea.Torrent, ct);
             }
 
-            // A grab counts against its indexer's daily limit.
-            if (!await context.ExecuteBatchAsync((ctx, token) => ctx.CountIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token), ct))
+            // A grab counts against its indexer's daily limit; a download added by hand (connection 0) has no indexer.
+            var manual = offer.ConnectionId <= 0;
+            if (!manual && !await context.ExecuteBatchAsync((ctx, token) => ctx.CountIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token), ct))
             {
                 throw new ServiceUnavailableException("acquisition_limit_reached");
             }
@@ -385,7 +386,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 ? EpisodeNumbering.Episodes(await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnitStatesAsync(target.WantedItemId, token), ct))
                 : [];
             var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(kind, offer.Title, episodes);
-            var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end,
+            var grab = new AcquisitionGrabData(target.WantedItemId, manual ? null : offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end,
                 requestedByAccountId: accountId) { IndexerFlags = [.. offer.IndexerFlags], RequiresActiveMonitoring = automatic };
             var operationId = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
@@ -524,11 +525,15 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // A refused grab releases the reservation and its indexer count; the target is searched again later.
             if (failure is not null)
             {
-                await context.ExecuteBatchAsync(async (ctx, token) =>
+                if (!manual)
                 {
-                    await ctx.ReturnIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token);
-                    return true;
-                }, ct);
+                    await context.ExecuteBatchAsync(async (ctx, token) =>
+                    {
+                        await ctx.ReturnIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token);
+                        return true;
+                    }, ct);
+                }
+
                 await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
                     await ctx.FailDownloadAsync(new DownloadFailureData(operationId, failure, DateTime.UtcNow.AddMinutes(30)), token);

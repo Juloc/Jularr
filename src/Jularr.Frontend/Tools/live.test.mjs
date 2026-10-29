@@ -77,6 +77,16 @@ test('without a percent the bar goes away, and an optional block shows only whil
     assert.equal(block.hidden, true);
 });
 
+test('a speed line takes its points from the entity and keeps them while the stream has none', () => {
+    const { applyLive } = load();
+    const line = element({ 'data-live-points': 'line', points: '0,10 360,10' });
+    const block = element({ 'data-live': 'downloads:all' }, [line]);
+    applyLive(page(block), { 'downloads:all': { phase: 'downloads', text: { line: '0,63 360,1' } } });
+    assert.equal(line.getAttribute('points'), '0,63 360,1');
+    applyLive(page(block), { 'downloads:all': { phase: 'downloads', text: {} } });
+    assert.equal(line.getAttribute('points'), '0,63 360,1');
+});
+
 test('the element that carries data-live-text itself is patched', () => {
     const { applyLive } = load();
     const button = element({ 'data-live': 'request-work:9', 'data-live-text': 'phase' });
