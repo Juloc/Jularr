@@ -95,8 +95,24 @@ namespace Jularr.E2E.Tests
             CollectionAssert.AreEqual(Array.Empty<string>(), fixture.Problems.ToArray());
         }
 
-        private sealed class Fixture(IPlaywright playwright, IBrowser browser, IPage page, string script, string style) : IAsyncDisposable
+        [TestMethod]
+        [DataRow(390)]
+        [DataRow(1440)]
+        [Timeout(90_000)]
+        public async Task DownloadReconnect_ReopensItsOperationInsteadOfTheSourceHomepage(int width)
         {
+            await using var fixture = await Fixture.StartAsync(width, active: false, operationId: 5115);
+            await Assertions.Expect(fixture.Reconnect).ToBeVisibleAsync();
+            await fixture.Reconnect.ClickAsync();
+            await Assertions.Expect(fixture.Feedback).ToHaveTextAsync("Ready");
+            Assert.AreEqual(1, fixture.Reopens);
+            await Evidence.SaveAsync(fixture.Page, "browser-download-reconnected-" + width);
+            CollectionAssert.AreEqual(Array.Empty<string>(), fixture.Problems.ToArray());
+        }
+
+        private sealed class Fixture(IPlaywright playwright, IBrowser browser, IPage page, string script, string style, long? operationId) : IAsyncDisposable
+        {
+            private string ReopenAddress => operationId is { } id ? "/Admin/Browser?handler=OpenDownloadView&operationId=" + id : "/Admin/Browser?handler=OpenView&acquisitionConnectionId=7";
             public IPage Page { get; } = page;
             public ILocator Feedback => Page.Locator("[data-browser-feedback]");
             public ILocator Image => Page.Locator("[data-browser-image]");
@@ -111,7 +127,7 @@ namespace Jularr.E2E.Tests
             public int Frames => Volatile.Read(ref _frames);
             public int Reopens => Volatile.Read(ref _reopens);
 
-            public static async Task<Fixture> StartAsync(int width, bool active = true)
+            public static async Task<Fixture> StartAsync(int width, bool active = true, long? operationId = null)
             {
                 var playwright = await Playwright.CreateAsync();
                 var browser = await playwright.Chromium.LaunchAsync();
@@ -120,7 +136,7 @@ namespace Jularr.E2E.Tests
                 using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root, "Assets", "Generated", "manifest.json")));
                 var script = manifest.RootElement.GetProperty("Pages/Admin/Browser/Browser.entry.ts").GetProperty("file").GetString()!;
                 var style = manifest.RootElement.GetProperty("Pages/Admin/Browser/Browser.entry.scss").GetProperty("file").GetString()!;
-                var fixture = new Fixture(playwright, browser, page, script, style);
+                var fixture = new Fixture(playwright, browser, page, script, style, operationId);
                 page.PageError += (_, error) => fixture.Problems.Enqueue(error);
                 var build = Path.GetFullPath(Path.Combine(root, "wwwroot", "build"));
                 await page.RouteAsync("https://browser.test/**", async route =>
@@ -147,7 +163,7 @@ namespace Jularr.E2E.Tests
                     {
                         if (route.Request.Method == "POST")
                         {
-                            StringAssert.Contains(uri.Query, "handler=OpenView&acquisitionConnectionId=7");
+                            Assert.AreEqual(fixture.ReopenAddress, uri.PathAndQuery);
                             Interlocked.Increment(ref fixture._reopens);
                             fixture.FrameStatus = 200;
                             active = true;
@@ -166,7 +182,7 @@ namespace Jularr.E2E.Tests
                      data-active="{{active.ToString().ToLowerInvariant()}}" data-width="800" data-height="600"
                      data-ready="Ready" data-retrying="Reconnecting" data-failed="Disconnected" data-denied="Access ended">
                   <p data-browser-feedback>Disconnected</p>
-                  <div data-browser-reconnect><form method="post" action="/Admin/Browser?handler=OpenView&amp;acquisitionConnectionId=7"><button>Reconnect</button></form></div>
+                  <div data-browser-reconnect><form method="post" action="{{System.Net.WebUtility.HtmlEncode(ReopenAddress)}}"><button>Reconnect</button></form></div>
                   <img class="remote-browser__image" data-browser-image alt="Source browser" width="800" height="600">
                   <label for="input">Source input</label><textarea id="input" data-browser-text data-browser-input></textarea>
                   <button type="button" data-browser-send data-browser-input>Send text</button>
