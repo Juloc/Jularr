@@ -9,6 +9,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Provider;
 using Jularr.Backend.Logic.Storage;
+using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Acquisition.V1
@@ -56,8 +57,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     else if (entry is { Availability: SourceAvailability.Ready, ConnectionType: { } type, DefaultBaseUrl: { } baseUrl })
                     {
                         // Do not auto-enable keyless native download sources before their storage is confirmed.
-                        var enabled = type is not (AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Opds or AcquisitionConnectionType.AnnasArchive) || directReady;
+                        var enabled = !DirectSources.IsDirect(type) || directReady;
                         await ctx.CreateAcquisitionConnectionAsync(new AcquisitionConnectionSaveData(null, entry.Name, type, baseUrl, null, enabled, 50, [], null, null, null, null, null, null, [], true, null, null), ct);
+
+                        // A source that also describes its titles switches its catalog on with it.
+                        if (entry.ProviderKey is { } catalog) await ctx.EnableProviderAsync(catalog, ct);
                         added.Add(entry.Key);
                     }
                     else if (entry is { Availability: SourceAvailability.Ready, ProviderKey: { } provider })
@@ -77,6 +81,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         // A source counts as set up when a connection points at its default address, any other connection of its kind counts for the generic entries.
         public bool IsConfigured(SourceCatalogEntry entry) => entry switch
         {
+            { ProviderKey: { } key, ConnectionType: { } type } => providers.Any(provider => provider.Key == key && provider.IsEnabled)
+                && connections.Any(connection => connection.AcquisitionConnectionTypeId == type),
             { ProviderKey: { } key } => providers.Any(provider => provider.Key == key && provider.IsEnabled),
             { ConnectionType: AcquisitionConnectionType.AnnasArchive } => connections.Any(connection => connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.AnnasArchive),
             { ConnectionType: { } type, DefaultBaseUrl: { } baseUrl } => connections.Any(connection => connection.AcquisitionConnectionTypeId == type && Points(connection, baseUrl)),
