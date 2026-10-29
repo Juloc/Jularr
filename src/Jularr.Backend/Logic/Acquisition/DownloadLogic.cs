@@ -742,6 +742,9 @@ namespace Jularr.Backend.Logic.Acquisition
                     AND (@OperationId::bigint IS NULL OR operation."Id" = @OperationId)
                     AND (operation."DownloadWaitUntil" IS NULL OR operation."DownloadWaitUntil" <= now())
                 ORDER BY
+                    -- A client takes its downloads by priority, then in the order a person gave them.
+                    operation."DownloadPriorityTypeId" DESC,
+                    operation."QueuePosition" NULLS LAST,
                     operation."AcquisitionConnectionId",
                     operation."Id";
                 """;
@@ -770,17 +773,21 @@ namespace Jularr.Backend.Logic.Acquisition
                     "SizeBytes" = coalesce(item."SizeBytes", operation."SizeBytes"),
                     "RemainingBytes" = item."RemainingBytes",
                     "EtaSeconds" = item."EtaSeconds",
-                    "DownloadStateTypeId" = item."DownloadStateTypeId"
+                    "DownloadStateTypeId" = item."DownloadStateTypeId",
+                    "DownloadPriorityTypeId" = coalesce(item."DownloadPriorityTypeId", operation."DownloadPriorityTypeId"),
+                    "QueuePosition" = coalesce(item."QueuePosition", operation."QueuePosition")
                 FROM
                     jsonb_to_recordset(@Progress::jsonb) AS item ("OperationId" bigint, "ProgressPercent" smallint, "SizeBytes" bigint, "RemainingBytes" bigint, "EtaSeconds" integer,
-                        "DownloadStateTypeId" smallint)
+                        "DownloadStateTypeId" smallint, "DownloadPriorityTypeId" smallint, "QueuePosition" integer)
                 WHERE
                     operation."Id" = item."OperationId"
                     AND operation."OperationTypeId" = 2
                     AND operation."OperationStatusTypeId" = 2
-                    AND (operation."ProgressPercent", operation."SizeBytes", operation."RemainingBytes", operation."EtaSeconds", operation."DownloadStateTypeId")
+                    AND (operation."ProgressPercent", operation."SizeBytes", operation."RemainingBytes", operation."EtaSeconds", operation."DownloadStateTypeId",
+                        operation."DownloadPriorityTypeId", operation."QueuePosition")
                         IS DISTINCT FROM (coalesce(item."ProgressPercent", operation."ProgressPercent"), coalesce(item."SizeBytes", operation."SizeBytes"), item."RemainingBytes",
-                        item."EtaSeconds", item."DownloadStateTypeId");
+                        item."EtaSeconds", item."DownloadStateTypeId", coalesce(item."DownloadPriorityTypeId", operation."DownloadPriorityTypeId"),
+                        coalesce(item."QueuePosition", operation."QueuePosition"));
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
@@ -848,6 +855,106 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public const string RemovedReasonKey = "download_removed";
 
+        // The open downloads of one client in the order it takes them: priority first, then the order a person gave, then the oldest.
+        public static Task<IReadOnlyList<DownloadQueueEntryData>> ReadDownloadQueueAsync(this LogicContext ctx, DownloadQueueScopeData scope, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    operation."Id" AS "OperationId",
+                    operation."DownloadPriorityTypeId",
+                    operation."QueuePosition"
+                FROM
+                    "Operations" AS operation
+                    JOIN "AcquisitionConnections" AS connection ON connection."Id" = operation."AcquisitionConnectionId"
+                WHERE
+                    operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2)
+                    AND (@AcquisitionConnectionId::bigint IS NULL OR connection."Id" = @AcquisitionConnectionId)
+                    AND (@DownloadClientKindId::smallint IS NULL OR CASE connection."AcquisitionConnectionTypeId" WHEN 6 THEN 1 WHEN 2 THEN 2 WHEN 9 THEN 3 WHEN 12 THEN 4 WHEN 3 THEN 5 WHEN 4 THEN 5 WHEN 5 THEN 5 WHEN 11 THEN 5 END = @DownloadClientKindId)
+                ORDER BY
+                    operation."DownloadPriorityTypeId" DESC,
+                    operation."QueuePosition" NULLS LAST,
+                    operation."Id"
+                LIMIT 10000;
+                """;
+            sql.Parameters.Add(scope);
+            return ctx.ReadSql.ReadListAsync<DownloadQueueEntryData>(sql, ct);
+        }
+
+        // Every download of the list takes its place in it, from 0.
+        public static async Task SaveDownloadQueueOrderAsync(this LogicContext ctx, DownloadQueueOrderData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Operations" AS operation
+                SET
+                    "QueuePosition" = item."Position" - 1
+                FROM
+                    unnest(@OperationIds::bigint[]) WITH ORDINALITY AS item ("Id", "Position")
+                WHERE
+                    operation."Id" = item."Id"
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2)
+                    AND operation."QueuePosition" IS DISTINCT FROM item."Position" - 1;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        public static async Task SetDownloadPriorityAsync(this LogicContext ctx, DownloadPriorityData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Operations" AS operation
+                SET
+                    "DownloadPriorityTypeId" = @DownloadPriorityTypeId
+                WHERE
+                    operation."Id" = ANY(@OperationIds)
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2);
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // The chosen finished downloads, or every completed one of a client, leave the history; what happened stays in the media history (ActivityEvents).
+        public static Task<int> DeleteFinishedDownloadsAsync(this LogicContext ctx, DownloadHistoryDeletionData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                DELETE FROM
+                    "Operations" AS operation
+                WHERE
+                    operation."OperationTypeId" = 2
+                    AND (
+                        @OperationIds::bigint[] IS NOT NULL AND operation."Id" = ANY(@OperationIds) AND operation."OperationStatusTypeId" IN (3, 4)
+                        OR @OperationIds::bigint[] IS NULL AND operation."OperationStatusTypeId" = 3
+                            AND (@AcquisitionConnectionId::bigint IS NULL OR operation."AcquisitionConnectionId" = @AcquisitionConnectionId)
+                            AND (
+                                @DownloadClientKindId::smallint IS NULL
+                                OR EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "AcquisitionConnections" AS connection
+                                    WHERE
+                                        connection."Id" = operation."AcquisitionConnectionId"
+                                        AND CASE connection."AcquisitionConnectionTypeId" WHEN 6 THEN 1 WHEN 2 THEN 2 WHEN 9 THEN 3 WHEN 12 THEN 4 WHEN 3 THEN 5 WHEN 4 THEN 5 WHEN 5 THEN 5 WHEN 11 THEN 5 END = @DownloadClientKindId
+                                )
+                            )
+                    );
+                """;
+            sql.Parameters.Add(data);
+            return ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         // A download still in the queue, whether it runs or waits; its client says what an action does.
         public static async Task<DownloadActionData?> ReadDownloadActionAsync(this LogicContext ctx, long operationId, CancellationToken ct)
         {
@@ -861,7 +968,9 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."AcquisitionConnectionTypeId",
                     operation."AttentionKey",
                     operation."AttentionProposal" IS NOT NULL AS "HasProposal",
-                    operation."DownloadStateTypeId"
+                    operation."DownloadStateTypeId",
+                    operation."DownloadPriorityTypeId",
+                    operation."QueuePosition"
                 FROM
                     "Operations" AS operation
                     JOIN "AcquisitionConnections" AS connection ON connection."Id" = operation."AcquisitionConnectionId"

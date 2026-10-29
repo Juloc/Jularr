@@ -617,6 +617,48 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((short)5, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""), "Removed without blocking, the release stays allowed.");
         }
 
+        // SABnzbd hears a priority, a move to the top and its speed limit through its own API; a download added by hand goes to it like a grab.
+        [TestMethod]
+        public async Task QueueAction_SabnzbdPriorityMoveLimitAndAdd_UseItsApi()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var operation = await GrabbedOperationAsync(host, usenet);
+            var sab = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'SAB'"))!;
+
+            using var prioritized = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/downloads/priority", new PrioritizeActivityDownloadsDataV1([operation], DownloadPriorityType.Force));
+            Assert.AreEqual(HttpStatusCode.OK, prioritized.StatusCode, await prioritized.Content.ReadAsStringAsync());
+            using var top = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/downloads", new ApplyActivityDownloadsDataV1([operation], DownloadBulkActionType.MoveToTop));
+            Assert.AreEqual(HttpStatusCode.OK, top.StatusCode, await top.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)4, await host.ScalarAsync($"SELECT \"DownloadPriorityTypeId\" FROM \"Operations\" WHERE \"Id\" = {operation}"));
+
+            // A forced download keeps running when its client is paused.
+            using var paused = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/queue/pause?downloadClientKindId=Sabnzbd", new PauseActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, paused.StatusCode, await paused.Content.ReadAsStringAsync());
+
+            var client = "downloadClientKindId=Sabnzbd&acquisitionConnectionId=" + sab;
+            using var limited = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/clients/speed-limit?" + client, new SetDownloadSpeedLimitDataV1(5_000_000));
+            Assert.AreEqual(HttpStatusCode.OK, limited.StatusCode, await limited.Content.ReadAsStringAsync());
+            using var limit = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/clients/speed-limit?" + client);
+            Assert.AreEqual(4882L * 1024, (await limit.Content.ReadFromJsonAsync<DownloadSpeedLimitV1>())!.MaxBytesPerSecond);
+            using var freed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/clients/speed-limit?" + client, new SetDownloadSpeedLimitDataV1(null));
+            Assert.AreEqual(HttpStatusCode.OK, freed.StatusCode, await freed.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new[] { "queue:priority:SABnzbd_nzo_1:2", "switch::SABnzbd_nzo_1:0", "config:speedlimit:4882K:", "config:speedlimit:0:" }, usenet.Commands);
+
+            // A torrent address is no NZB for SABnzbd; an NZB address goes to it as a grab of the wanted title, without an indexer.
+            var wanted = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"WantedItems\" ORDER BY \"Id\" LIMIT 1"))!;
+            using var refused = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/downloads/add?" + client, new AddActivityDownloadDataV1(wanted, "magnet:?xt=urn:btih:abc&dn=Other"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+            await host.Fixture.RunSqlAsync($"UPDATE \"Operations\" SET \"OperationStatusTypeId\" = 3, \"FinishedAt\" = now(), \"DownloadStateTypeId\" = NULL WHERE \"Id\" = {operation}");
+            using var added = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/downloads/add?" + client, new AddActivityDownloadDataV1(wanted, "https://nzb.example.test/get/Example.Movie.2005.1080p.WEB-DL.nzb"));
+            Assert.AreEqual(HttpStatusCode.OK, added.StatusCode, await added.Content.ReadAsStringAsync());
+            Assert.AreEqual("https://nzb.example.test/get/Example.Movie.2005.1080p.WEB-DL.nzb", usenet.Grabbed[^1]);
+            Assert.AreEqual("Example.Movie.2005.1080p.WEB-DL", await host.ScalarAsync("SELECT \"Title\" FROM \"AcquisitionReleases\" ORDER BY \"Id\" DESC LIMIT 1"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"AcquisitionConnectionId\" IS NULL FROM \"AcquisitionReleases\" ORDER BY \"Id\" DESC LIMIT 1"));
+        }
+
         // The Downloads page: a tab per switched-on client with its open downloads, one client's queue and history, the category and failed-only filters, and the Direct panel's link.
         [TestMethod]
         public async Task DownloadsPage_TabsQueueAndHistory_FollowTheClients()
@@ -631,8 +673,10 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "BaseUrl", "ProtectedApiKey", "IsEnabled") VALUES (903, 'Old qBit', 9, 'https://qbit.example.test', '\x00'::bytea, FALSE);
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (801, 1, 'Queue Film'), (802, 3, 'Queue Book');
                 INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (801, 801), (802, 802);
+                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual") VALUES (801, 'Queue Film', TRUE), (802, 'Queue Book', TRUE);
                 INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId")
-                VALUES (1, 801, 'q-1', 'Release 1', 1), (2, 801, 'q-2', 'Release 2', 1), (3, 802, 'q-3', 'Release 3', 1), (4, 801, 'q-4', 'Release 4', 3), (5, 801, 'q-5', 'Release 5', 2);
+                VALUES (1, 801, 'q-1', 'Release 1', 1), (2, 801, 'q-2', 'Release 2', 1), (3, 802, 'q-3', 'Release 3', 1), (4, 801, 'q-4', 'Release 4', 3), (5, 801, 'q-5', 'Release 5', 2),
+                    (6, 801, 'q-6', 'Release 6', 1), (7, 801, 'q-7', 'Release 7', 2);
                 INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId", "SizeBytes", "RemainingBytes", "EtaSeconds",
                     "DownloadStateTypeId", "AttentionKey", "AttentionUrl", "ErrorKey", "FinishedAt")
                 VALUES
@@ -640,7 +684,9 @@ namespace Jularr.Backend.Tests
                     (2, 2, 2, 2, 901, 1000, 900, NULL, 3, NULL, NULL, NULL, NULL),
                     (3, 2, 2, 3, 902, NULL, NULL, NULL, NULL, 'source_manual_link', 'https://books.example.test/dracula', NULL, NULL),
                     (4, 2, 4, 4, {sab}, NULL, NULL, NULL, NULL, NULL, NULL, 'download_failed', now()),
-                    (5, 2, 3, 5, 901, NULL, NULL, NULL, NULL, NULL, NULL, NULL, now());
+                    (5, 2, 3, 5, 901, NULL, NULL, NULL, NULL, NULL, NULL, NULL, now()),
+                    (6, 2, 1, 6, 901, NULL, NULL, NULL, 1, NULL, NULL, NULL, NULL),
+                    (7, 2, 3, 7, {sab}, NULL, NULL, NULL, NULL, NULL, NULL, NULL, now() - interval '1 hour');
                 """);
 
             using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/clients");
@@ -649,7 +695,7 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { DownloadClientKind.Usenet, DownloadClientKind.Sabnzbd, DownloadClientKind.Direct }, clients.Select(client => client.DownloadClientKindId).ToArray(),
                 "The switched-off qBittorrent has no tab.");
             var usenetTab = clients[0];
-            Assert.AreEqual((null, 901L, 1, 0, 1, 0), (usenetTab.AcquisitionConnectionId, usenetTab.SettingsConnectionId, usenetTab.QueueCount, usenetTab.ActiveCount, usenetTab.PausedCount, usenetTab.WarningCount));
+            Assert.AreEqual((null, 901L, 2, 0, 1, 0), (usenetTab.AcquisitionConnectionId, usenetTab.SettingsConnectionId, usenetTab.QueueCount, usenetTab.ActiveCount, usenetTab.PausedCount, usenetTab.WarningCount));
             var sabTab = clients[1];
             Assert.AreEqual((sab, 1, 1, 1, 50L, 500L), ((long)sabTab.AcquisitionConnectionId!, sabTab.QueueCount, sabTab.ActiveCount, sabTab.WarningCount, sabTab.BytesPerSecond, sabTab.RemainingBytes));
             Assert.AreEqual((1, 1), (clients[2].QueueCount, clients[2].WarningCount));
@@ -661,12 +707,35 @@ namespace Jularr.Backend.Tests
                 return [.. (await response.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Select(item => item.Id)];
             }
 
-            CollectionAssert.AreEqual(new long[] { 3, 2, 1 }, await IdsAsync("activityFilterTypeId=All"));
-            CollectionAssert.AreEqual(new long[] { 2 }, await IdsAsync("activityFilterTypeId=All&downloadClientKindId=Usenet"));
+            CollectionAssert.AreEqual(new long[] { 1, 2, 3, 6 }, await IdsAsync("activityFilterTypeId=All"), "The queue in the order its clients take it, the oldest first.");
+            CollectionAssert.AreEqual(new long[] { 2, 6 }, await IdsAsync("activityFilterTypeId=All&downloadClientKindId=Usenet"));
             CollectionAssert.AreEqual(new long[] { 1 }, await IdsAsync("activityFilterTypeId=All&downloadClientKindId=Sabnzbd&acquisitionConnectionId=" + sab));
             CollectionAssert.AreEqual(new long[] { 3 }, await IdsAsync("activityFilterTypeId=All&mediaTypeId=Book"));
             CollectionAssert.AreEqual(new long[] { 5 }, await IdsAsync("activityFilterTypeId=History&downloadClientKindId=Usenet"));
             CollectionAssert.AreEqual(new long[] { 4 }, await IdsAsync("activityFilterTypeId=History&failedOnly=true"));
+
+            // Jularr's own Usenet downloader: a priority, a download dragged before another (it takes that one's priority), and its speed limit.
+            using var prioritized = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/downloads/priority", new PrioritizeActivityDownloadsDataV1([2], DownloadPriorityType.High));
+            Assert.AreEqual(HttpStatusCode.OK, prioritized.StatusCode, await prioritized.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new long[] { 2 }, await IdsAsync("activityFilterTypeId=All&downloadPriorityTypeId=High"));
+            using var moved = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/6/move", new MoveActivityDownloadDataV1(2));
+            Assert.AreEqual(HttpStatusCode.OK, moved.StatusCode, await moved.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new long[] { 6, 2 }, await IdsAsync("activityFilterTypeId=All&downloadClientKindId=Usenet"));
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"DownloadPriorityTypeId\" FROM \"Operations\" WHERE \"Id\" = 6"));
+            using var limited = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/clients/speed-limit?downloadClientKindId=Usenet", new SetDownloadSpeedLimitDataV1(5_000_000));
+            Assert.AreEqual(HttpStatusCode.OK, limited.StatusCode, await limited.Content.ReadAsStringAsync());
+            using var limit = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/clients/speed-limit?downloadClientKindId=Usenet");
+            Assert.AreEqual(5_000_000L, (await limit.Content.ReadFromJsonAsync<DownloadSpeedLimitV1>())!.MaxBytesPerSecond);
+            using var servers = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/news-servers");
+            var server = (await servers.Content.ReadFromJsonAsync<BaseDataList<NewsServerV1>>())!.Single();
+            Assert.AreEqual((901L, 20, 0), (server.AcquisitionConnectionId, server.MaxConnections, server.Connections));
+
+            // The history: one entry deleted, then SABnzbd's completed ones cleared; its failed one stays.
+            using var deleted = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/history/delete", new DeleteActivityHistoryDataV1([5]));
+            Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
+            using var cleared = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/history/clear?downloadClientKindId=Sabnzbd&acquisitionConnectionId=" + sab);
+            Assert.AreEqual(HttpStatusCode.OK, cleared.StatusCode, await cleared.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new long[] { 4 }, await IdsAsync("activityFilterTypeId=History"));
 
             // The page: All and a tab per client, the phase on each row, and the Direct panel's link for the download that needs one.
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads");
@@ -678,12 +747,26 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(html.Contains("Client=Qbittorrent", StringComparison.Ordinal));
             StringAssert.Contains(html, "data-phase=\"downloading\"");
             StringAssert.Contains(html, "data-phase=\"failed\"");
+            using var usenetPage = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads?Client=Usenet");
+            var usenetHtml = await usenetPage.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, usenetPage.StatusCode, usenetHtml);
+            StringAssert.Contains(usenetHtml, "data-move-id=\"6\"");
+            StringAssert.Contains(usenetHtml, "name=\"maxBytesPerSecond\"");
+            StringAssert.Contains(usenetHtml, "data-live=\"downloads:Usenet\"");
+            StringAssert.Contains(usenetHtml, "data-live=\"news-server:901\"");
+            StringAssert.Contains(usenetHtml, "href=\"/Admin/Downloads?Client=Usenet&amp;add=true\"");
+            using var adding = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads?Client=Usenet&add=true&addq=Queue%20Book");
+            var addingHtml = await adding.Content.ReadAsStringAsync();
+            StringAssert.Contains(addingHtml, "name=\"wantedItemId\" value=\"802\"");
+            StringAssert.Contains(addingHtml, "handler=Add");
             using var direct = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads?Client=Direct");
             var directHtml = await direct.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, direct.StatusCode, directHtml);
             StringAssert.Contains(directHtml, "handler=SourceLink&amp;operationId=3");
             StringAssert.Contains(directHtml, "https://books.example.test/dracula");
             Assert.IsFalse(directHtml.Contains("Release 1", StringComparison.Ordinal), "Another client's download is not on the Direct tab.");
+            Assert.IsFalse(directHtml.Contains("add=true", StringComparison.Ordinal), "Direct sources take no download by hand.");
+            Assert.IsFalse(directHtml.Contains("maxBytesPerSecond", StringComparison.Ordinal), "Direct sources keep their own pace.");
         }
 
         // A waiting download is read again on request; one that is not waiting has nothing to retry.
@@ -3157,6 +3240,7 @@ namespace Jularr.Backend.Tests
             // What a person told SABnzbd: "queue:delete:id:1".
             public List<string> Commands { get; } = [];
             public bool FailCommands { get; set; }
+            public string SpeedLimit { get; set; } = "";
             public List<string> IndexerHosts { get; } = [];
             public DateTimeOffset? Published { get; set; }
             public string Queue { get; set; } = EmptyQueue;
@@ -3220,6 +3304,14 @@ namespace Jularr.Backend.Tests
                         if (FailCommands) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
                         Commands.Add($"{form["mode"]}:{form["name"]}:{form["value"]}:{form["del_files"]}");
                         return Json("""{"status":true}""");
+                    case "queue" when form["name"] is "priority":
+                    case "switch":
+                    case "config" when form["name"] is "speedlimit":
+                        Commands.Add($"{form["mode"]}:{form["name"]}:{form["value"]}:{form["value2"]}");
+                        if (form["name"] is "speedlimit") SpeedLimit = form["value"] is "0" ? "" : (long.Parse(form["value"]!.TrimEnd('K'), System.Globalization.CultureInfo.InvariantCulture) * 1024).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        return Json(form["mode"] == "config" ? """{"status":true}""" : """{"result":{"priority":0,"position":0}}""");
+                    case "queue" when form["limit"] == "1" && form["nzo_ids"] is null:
+                        return Json("{\"queue\":{\"speedlimit_abs\":\"" + SpeedLimit + "\",\"slots\":[]}}");
                     case "queue":
                         return Json(Queue);
                     case "history":

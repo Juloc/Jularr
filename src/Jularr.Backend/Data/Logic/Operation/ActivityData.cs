@@ -12,8 +12,9 @@ namespace Jularr.Backend.Data.Logic.Operation
     internal sealed class ActivityFilterData : BaseData
     {
         public ActivityFilterData(ActivityFilterType activityFilterTypeId, bool torrentOnly = false, bool downloadsOnly = false, bool failedOnly = false, DownloadClientKind? downloadClientKindId = null,
-            long? acquisitionConnectionId = null, MediaType? mediaTypeId = null)
+            long? acquisitionConnectionId = null, MediaType? mediaTypeId = null, DownloadPriorityType? downloadPriorityTypeId = null)
         {
+            DownloadPriorityTypeId = downloadPriorityTypeId;
             ActivityFilterTypeId = activityFilterTypeId;
             TorrentOnly = torrentOnly;
             DownloadsOnly = downloadsOnly;
@@ -43,6 +44,9 @@ namespace Jularr.Backend.Data.Logic.Operation
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
         public MediaType? MediaTypeId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadPriorityTypeId), false)]
+        public DownloadPriorityType? DownloadPriorityTypeId { get; }
     }
 
     internal sealed class OperationActionData : BaseData

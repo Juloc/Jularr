@@ -96,13 +96,17 @@
     --list-columns-medium: minmax(200px, 2.2fr) minmax(84px, .9fr) minmax(96px, .9fr) minmax(110px, .9fr) minmax(80px, .6fr);
 }
 
-.downloads-servers, .downloads-sources {
-    --list-columns: minmax(220px, 2fr) minmax(140px, 1fr) minmax(120px, 1fr);
-    --list-columns-medium: minmax(200px, 2fr) minmax(140px, 1fr) minmax(120px, 1fr);
-    --list-columns-narrow: minmax(180px, 2fr) minmax(130px, 1fr) minmax(110px, 1fr);
+.downloads-servers {
+    --list-columns: minmax(220px, 2fr) minmax(130px, 1fr) minmax(90px, .8fr) minmax(90px, .8fr) minmax(90px, .8fr);
+    --list-columns-medium: minmax(200px, 2fr) minmax(130px, 1fr) minmax(90px, .8fr) minmax(90px, .8fr);
+    --list-columns-narrow: minmax(180px, 2fr) minmax(130px, 1fr) minmax(80px, .8fr) minmax(80px, .8fr);
 }
 
-.downloads-sources { --list-columns: minmax(220px, 1.4fr) minmax(140px, .8fr) minmax(260px, 2fr); }
+.downloads-sources {
+    --list-columns: minmax(220px, 1.4fr) minmax(140px, .8fr) minmax(260px, 2fr);
+    --list-columns-medium: minmax(200px, 1.4fr) minmax(140px, .8fr) minmax(220px, 2fr);
+    --list-columns-narrow: minmax(180px, 1.4fr) minmax(130px, .8fr) minmax(200px, 2fr);
+}
 
 // One colour per phase, the same on the pill, the bar and the icon tile; never an edge stripe.
 .downloads-phase {
@@ -188,3 +192,60 @@
 }
 
 .downloads-source-link { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+
+// The speed card: the large figure, its short line and the client's limit as a small menu.
+.downloads-stat__line {
+    height: 28px;
+    margin: 4px 0;
+    color: var(--phase-downloading);
+
+    .sparkline { display: block; }
+}
+
+.downloads-limit {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    vertical-align: middle;
+}
+
+// A row of a client that reorders: its box and drag handle side by side; the dragged row floats above the others.
+.downloads-pick { display: inline-flex; gap: 4px; align-items: center; }
+
+.downloads-grip {
+    width: 24px;
+    min-height: 24px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--muted);
+    cursor: grab;
+    touch-action: none;
+}
+
+.downloads-row--dragging { position: relative; z-index: 1; background: var(--accent-soft); box-shadow: var(--shadow-overlay); cursor: grabbing; }
+
+.downloads-status { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+.downloads-priority {
+    padding: 1px 8px;
+    border-radius: var(--radius-control);
+    background: var(--field);
+    color: var(--muted);
+    font-size: var(--text-small);
+    font-weight: 650;
+
+    &--high { background: var(--accent-soft); color: var(--accent-text); }
+    &--force { background: var(--warning-soft); color: var(--warning); }
+}
+
+// The add dialog: the title search, the wanted titles as choices and the address.
+.downloads-add {
+    display: grid;
+    gap: 10px;
+
+    &__search { margin-bottom: 12px; }
+    &__titles { display: grid; gap: 6px; max-height: 240px; overflow: auto; }
+    &__label { color: var(--muted); font-size: var(--text-small); }
+    &__none { color: var(--muted); }
+    &__address { min-height: var(--field-height); }
+}

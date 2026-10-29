@@ -48,6 +48,40 @@ namespace Jularr.Frontend.Modules.Live
             new("queue", null, null, Texts(("active", Count(queue.ActiveCount)), ("speed", LiveFacts.Speed(queue.BytesPerSecond)), ("import", Count(queue.ImportCount)),
                 ("errors", Count(queue.ErrorCount))));
 
+        // The figures of the Downloads page for All or one client: speed, what is left and how long, what runs and what waits, and the speed line.
+        public static LiveEntity Downloads(UiText texts, IReadOnlyList<DownloadClientV1> clients)
+        {
+            var speed = clients.Sum(client => client.BytesPerSecond);
+            var remaining = clients.Sum(client => client.RemainingBytes);
+            var active = clients.Sum(client => client.ActiveCount);
+            var waiting = Math.Max(0, clients.Sum(client => client.QueueCount) - active);
+            return new LiveEntity("downloads", null, null, Texts(("speed", LiveFacts.Speed(speed)), ("remaining", ByteSize.Format(remaining)),
+                ("eta", speed > 0 && remaining > 0 ? string.Format(CultureInfo.CurrentCulture, texts["downloads.etaIn"], LiveFacts.Eta((int)Math.Min(int.MaxValue, remaining / speed))) : null),
+                ("active", Count(active)), ("waiting", string.Format(CultureInfo.CurrentCulture, texts["downloads.waiting"], waiting)),
+                ("line", Sparkline.Points([.. SpeedLine(clients).Select(value => (double)value)], height: SpeedLineHeight))));
+        }
+
+        public const int SpeedLineHeight = 28;
+
+        // The clients' lines added up, their newest samples aligned.
+        public static long[] SpeedLine(IReadOnlyList<DownloadClientV1> clients)
+        {
+            var length = clients.Count == 0 ? 0 : clients.Max(client => client.SpeedSamples.Length);
+            var line = new long[length];
+            foreach (var client in clients)
+            {
+                for (var index = 0; index < client.SpeedSamples.Length; index++) line[length - client.SpeedSamples.Length + index] += client.SpeedSamples[index];
+            }
+
+            return line;
+        }
+
+        // A news server's last pass: connections in use of those allowed, its pace and the share of missing articles.
+        public static LiveEntity NewsServer(UiText texts, NewsServerV1 server) =>
+            new("news-server", null, null, Texts(("connections", string.Format(CultureInfo.CurrentCulture, texts["downloads.connectionsOf"], server.Connections, server.MaxConnections)),
+                ("speed", LiveFacts.Speed(server.BytesPerSecond)),
+                ("missing", server.Articles > 0 ? (server.MissingArticles * 100d / server.Articles).ToString("0.##", CultureInfo.CurrentCulture) + "%" : "–")));
+
         // The figures of the administration menu; a figure that is zero or not readable has no text, so its badge hides.
         public static LiveEntity Menu(AdminCounts counts) =>
             new("menu", null, null, Texts([.. new[] { AdminCounter.OpenDownloads, AdminCounter.FailedJobs, AdminCounter.OpenRequests }
