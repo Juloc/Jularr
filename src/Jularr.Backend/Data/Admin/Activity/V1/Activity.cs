@@ -44,8 +44,9 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     public sealed class ActivityItemV1 : BaseResponse
     {
         public ActivityItemV1(long id, OperationType operationTypeId, OperationStatusType operationStatusTypeId, string title, long? workId, string? workTitle, int? progressPercent,
-            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false, string? indexerName = null, long? bytesPerSecond = null, bool canBrowseFiles = false, long? sabnzbdConnectionId = null)
+            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false, string? indexerName = null, long? bytesPerSecond = null, bool canBrowseFiles = false, long? sabnzbdConnectionId = null, string[]? unmatchedFiles = null)
         {
+            UnmatchedFiles = unmatchedFiles;
             IndexerName = indexerName;
             BytesPerSecond = bytesPerSecond;
             CanPause = canPause;
@@ -152,6 +153,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // It kept where its files are, so a person can import them by hand.
         [DataField(typeof(OperationFields), nameof(OperationFields.CanImportManually))]
         public bool CanImportManually { get; }
+
+        // The files of a volume pack that name no volume; they stayed in the download.
+        [DataField(typeof(OperationFields), nameof(OperationFields.UnmatchedFiles))]
+        public string[]? UnmatchedFiles { get; }
     }
 
     public sealed class ReadActivitySummaryParametersV1 : BaseParameters

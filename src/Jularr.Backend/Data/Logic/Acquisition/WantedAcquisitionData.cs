@@ -485,6 +485,22 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string RelativePath { get; }
     }
 
+    internal sealed class StoredFolderData : BaseData
+    {
+        public StoredFolderData(long libraryRootId, string folders)
+        {
+            LibraryRootId = libraryRootId;
+            Folders = folders;
+        }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id))]
+        public long LibraryRootId { get; }
+
+        // Folders below the root as a JSON array; an empty one is the root itself.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Payload))]
+        public string Folders { get; }
+    }
+
     internal sealed class WantedDueData : BaseData
     {
         public WantedDueData(DateTime now, int limit)

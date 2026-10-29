@@ -57,6 +57,7 @@
   "activity.views": ["Download views","Download-Ansichten"],
   "activity.files.noJobs": ["No torrent downloads on this page.","Auf dieser Seite gibt es keine Torrent-Downloads."],
   "activity.files": ["Files","Dateien"],
+  "activity.unmatched": ["Files without a volume","Dateien ohne Band"],
   "activity.files.view": ["View torrent files","Torrent-Dateien anzeigen"],
   "activity.files.empty": ["No torrent files were reported.","Keine Torrent-Dateien gefunden."],
   "activity.files.unavailable": ["The torrent client's file list is currently unavailable.","Die Dateiliste des Torrent-Clients ist derzeit nicht verfügbar."],
@@ -14314,6 +14315,10 @@
   "acquisition.outcome.import_target_conflict": [
    "All available import filenames are occupied. The existing library files were not overwritten.",
    "Alle möglichen Dateinamen für den Import sind belegt. Die vorhandenen Dateien der Bibliothek wurden nicht überschrieben."
+  ],
+  "acquisition.outcome.import_unmatched_files": [
+   "The matching volumes were imported; some files name no volume of the title and stayed in the download",
+   "Die passenden Bände wurden importiert; einige Dateien nennen keinen Band des Titels und blieben im Download"
   ],
   "acquisition.outcome.import_storage_full": [
    "Library space is insufficient or could not be checked",
