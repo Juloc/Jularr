@@ -33,7 +33,8 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             new(connection.HttpAddress, connection.Username, AcquisitionConnectionInput.Unprotect(protector, connection.ProtectedPassword));
 
         // Jularr's own downloaders wait when told to: their jobs are simply not run while paused.
-        public static bool IsNative(DownloadActionData download) => download.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet || DirectSources.IsDirect(download.AcquisitionConnectionTypeId);
+        public static bool IsNative(DownloadActionData download) => download.AcquisitionConnectionTypeId is AcquisitionConnectionType.Usenet or AcquisitionConnectionType.Torrent
+            || DirectSources.IsDirect(download.AcquisitionConnectionTypeId);
 
         // Tells the client, or marks the own downloader's job, to wait or to go on; false when the download cannot be paused.
         public static async Task<bool> SetPausedAsync(LogicContext context, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, IDataProtector protector, DownloadActionData download, bool isPaused, CancellationToken ct)
@@ -157,7 +158,12 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
         {
             try
             {
-                var area = download.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? DownloadStorageArea.Usenet : DownloadStorageArea.Direct;
+                var area = download.AcquisitionConnectionTypeId switch
+                {
+                    AcquisitionConnectionType.Usenet => DownloadStorageArea.Usenet,
+                    AcquisitionConnectionType.Torrent => DownloadStorageArea.Torrent,
+                    _ => DownloadStorageArea.Direct
+                };
                 var paths = await _downloads.OpenAsync(Context, area, CancellationToken);
                 paths.RemoveCompleted(download.OperationId);
             }

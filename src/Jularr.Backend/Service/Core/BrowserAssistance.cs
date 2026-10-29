@@ -20,7 +20,7 @@ namespace Jularr.Backend.Service.Core
             {
                 return _lease is { } lease && lease.Owner == owner
                     ? new BrowserViewV1(lease.Id, lease.Viewport.Width, lease.Viewport.Height, lease.AcquisitionConnectionId,
-                        lease.ExpiresAt > time.GetUtcNow() && browser.HasManualControl) : null;
+                        lease.ExpiresAt > time.GetUtcNow() && browser.HasManualControl, lease.OperationId) : null;
             }
             finally
             {
@@ -28,7 +28,7 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        public async Task<BrowserViewV1> OpenAsync(Guid owner, long acquisitionConnectionId, Uri address, CancellationToken ct)
+        public async Task<BrowserViewV1> OpenAsync(Guid owner, long acquisitionConnectionId, Uri address, CancellationToken ct, long? operationId = null)
         {
             await _gate.WaitAsync(ct);
             try
@@ -38,14 +38,14 @@ namespace Jularr.Backend.Service.Core
                 if (_lease is { } current && current.ExpiresAt > now && browser.HasManualControl)
                 {
                     if (current.Owner != owner) throw new ServiceUnavailableException("browser_assistance_busy");
-                    if (current.AcquisitionConnectionId == acquisitionConnectionId) continuing = current.Id;
+                    if (current.AcquisitionConnectionId == acquisitionConnectionId && current.OperationId == operationId) continuing = current.Id;
                 }
 
                 var expires = now.Add(IdleTimeout);
-                var viewport = await browser.BeginManualAsync(address, expires, ct);
-                var lease = new Lease(continuing ?? Guid.NewGuid(), owner, acquisitionConnectionId, expires, viewport);
+                var viewport = await browser.BeginManualAsync(address, expires, ct, opensPage: operationId is not null);
+                var lease = new Lease(continuing ?? Guid.NewGuid(), owner, acquisitionConnectionId, expires, viewport, operationId);
                 _lease = lease;
-                return new BrowserViewV1(lease.Id, viewport.Width, viewport.Height, acquisitionConnectionId, true);
+                return new BrowserViewV1(lease.Id, viewport.Width, viewport.Height, acquisitionConnectionId, true, operationId);
             }
             catch (SourceBrowserException exception)
             {
@@ -147,11 +147,12 @@ namespace Jularr.Backend.Service.Core
 
         public void Dispose() => _gate.Dispose();
 
-        private sealed class Lease(Guid id, Guid owner, long acquisitionConnectionId, DateTimeOffset expiresAt, BrowserViewport viewport)
+        private sealed class Lease(Guid id, Guid owner, long acquisitionConnectionId, DateTimeOffset expiresAt, BrowserViewport viewport, long? operationId)
         {
             public Guid Id { get; } = id;
             public Guid Owner { get; } = owner;
             public long AcquisitionConnectionId { get; } = acquisitionConnectionId;
+            public long? OperationId { get; } = operationId;
             public DateTimeOffset ExpiresAt { get; set; } = expiresAt;
             public BrowserViewport Viewport { get; } = viewport;
             public byte[]? Frame { get; set; }

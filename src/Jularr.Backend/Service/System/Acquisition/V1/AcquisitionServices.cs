@@ -528,8 +528,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     continue;
                 }
 
-                // Jularr's own Usenet downloads run in DownloadUsenetV1.
-                if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
+                // Jularr's own Usenet and torrent downloads run in DownloadUsenetV1 and DownloadTorrentsV1.
+                if (connection.AcquisitionConnectionTypeId is AcquisitionConnectionType.Usenet or AcquisitionConnectionType.Torrent)
                 {
                     continue;
                 }
@@ -855,7 +855,25 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 {
                     await paths.PrepareIncompleteAsync(download.OperationId, CancellationToken, download.MediaTypeId, download.MediaSubtypeId);
                     File.Delete(path + ".part");
-                    await _direct.DownloadAsync(connection, download, path + ".part", paths, CancellationToken);
+                    if (await _direct.DownloadAsync(connection, download, path + ".part", paths, CancellationToken) is { } pass)
+                    {
+                        // A pass kept its part; the next job continues where it ended.
+                        var progress = new[]
+                        {
+                            new
+                            {
+                                download.OperationId, ProgressPercent = pass.Total > 0 ? (short?)Math.Min(99, pass.Done * 100 / pass.Total) : null, SizeBytes = (long?)null,
+                                RemainingBytes = (long?)null, EtaSeconds = (int?)null, DownloadStateTypeId = (byte)DownloadStateType.Downloading
+                            }
+                        };
+                        await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                        {
+                            await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(JsonSerializer.Serialize(progress)), ct);
+                            return true;
+                        }, CancellationToken);
+                        return;
+                    }
+
                     // A file of an earlier attempt is replaced; it never stays beside the new one.
                     File.Delete(path);
                     File.Move(path + ".part", path);

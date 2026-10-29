@@ -33,6 +33,7 @@ using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Nas;
 using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Newznab;
+using Jularr.Integrations.Logic.Narou;
 using Jularr.Integrations.Logic.Nyaa;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Qbittorrent;
@@ -141,6 +142,11 @@ namespace Jularr.Backend.Service.Core
                 configuration.GetSection("Browser").Bind(options);
                 options.ProfilePath = Folder(options.ProfilePath, "browser");
             });
+            services.Configure<VpnOptions>(options =>
+            {
+                configuration.GetSection("Vpn").Bind(options);
+                options.WorkPath = Folder(options.WorkPath, "vpn");
+            });
 
             // Metadata mirrors.
             var providers = (configuration.GetSection("Providers").Get<ProviderOptions>() ?? new ProviderOptions()).Validated();
@@ -218,6 +224,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<PlaybackTranscodes>();
             services.TryAddSingleton<PlaybackCastTokens>();
             services.TryAddTransient<PlaybackSubtitles>();
+            services.TryAddTransient<PlaybackFonts>();
             services.TryAddSingleton<SubtitleTranslations>();
             services.TryAddTransient<WantedAcquisition>();
             services.TryAddTransient<MetadataCatalog>();
@@ -233,6 +240,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<GameRomIdentification>();
             services.TryAddTransient<MusicTagIdentification>();
             services.TryAddTransient<AniListMetadata>();
+            services.TryAddTransient<NarouMetadata>();
             services.TryAddTransient<AniListMatcher>();
             services.TryAddTransient<AniListAccounts>();
             services.TryAddTransient<MusicMetadata>();
@@ -249,6 +257,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<ArchiveTools>();
             services.TryAddSingleton<PostgresBackupTools>();
             services.TryAddTransient<UsenetJob>();
+            services.TryAddTransient<TorrentJob>();
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
             services.TryAddSingleton(provider => new BrowserPackages(provider.GetRequiredService<IOptions<BrowserOptions>>().Value));
             services.AddSingleton<SourceBrowser>(provider => new SourceBrowser(provider.GetRequiredService<IOptions<BrowserOptions>>().Value,
@@ -256,6 +265,7 @@ namespace Jularr.Backend.Service.Core
             services.AddSingleton<ISourceBrowser>(provider => provider.GetRequiredService<SourceBrowser>());
             services.AddSingleton<IBrowserInteraction>(provider => provider.GetRequiredService<SourceBrowser>());
             services.TryAddSingleton<BrowserAssistance>();
+            services.TryAddSingleton<VpnTunnels>();
             services.TryAddTransient<ReadingContent>();
             services.TryAddTransient<ReadingDerivation>();
             services.TryAddSingleton<ReadingActivity>();
@@ -366,6 +376,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<OpenSubtitlesClient>(services, 30, 12, agent: true);
             AddClient<SubDlClient>(services, 30, 12, agent: true);
     AddClient<NyaaClient>(services, 30, 16, agent: true, handler: PublicNetwork.CreateHandler);
+            AddClient<NarouClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
 
             // Covers come from the providers' image hosts only, over public addresses.
             var covers = new CoverMirrors(new Dictionary<string, Uri>(providers.Images, StringComparer.OrdinalIgnoreCase));
