@@ -134,7 +134,9 @@ namespace Jularr.Backend.Logic.Reading
                     if (group.Average(character => character.Probability) < UnsureWord
                         || (other.Length > word.Length && Letters(other) == Letters(word))
                         || (Key(other) == Key(word) && word.Skip(1).Any(char.IsUpper) && word.Skip(1).Any(char.IsLower))
-                        || (common.GetValueOrDefault(Key(word)) <= 1 && common.GetValueOrDefault(Key(other)) >= 2 && Math.Abs(Key(other).Length - Key(word).Length) <= 2))
+                        || (common.GetValueOrDefault(Key(word)) <= 1 && common.GetValueOrDefault(Key(other)) >= 2 && Math.Abs(Key(other).Length - Key(word).Length) <= 2)
+                        // The recognizer reads a doubled character once ("16" for "116", "wil" for "will"); the layer's word with it is right.
+                        || (Key(other).Length > Key(word).Length && Single(Key(other)) == Single(Key(word))))
                     {
                         word = other;
                     }
@@ -191,6 +193,9 @@ namespace Jularr.Backend.Logic.Reading
         private static string Letters(string word) => new([.. word.Where(char.IsLetterOrDigit)]);
 
         private static string Key(string word) => Letters(word).ToLowerInvariant();
+
+        // A word with each run of one character as that character once.
+        private static string Single(string word) => new([.. word.Where((character, index) => index == 0 || character != word[index - 1])]);
 
         // A double quote opened on the line and closed by what the recognizer read as a single one after the sentence's mark ("…found it!’ he") closes as double.
         private static string Closed(string line)
