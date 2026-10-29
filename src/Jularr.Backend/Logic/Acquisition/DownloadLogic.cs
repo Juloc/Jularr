@@ -224,7 +224,16 @@ namespace Jularr.Backend.Logic.Acquisition
                             release."IsEnabled"
                             AND (release."MediaTypeId" IS NULL OR release."MediaTypeId" = work."MediaTypeId")
                             AND (cardinality(release."TagIds") = 0 OR release."TagIds" && ARRAY(SELECT tag."TagId" FROM "WorkTags" AS tag WHERE tag."WorkId" = work."Id"))
-                    ), '[]')::text AS "ReleaseProfiles"
+                    ), '[]')::text AS "ReleaseProfiles",
+                    coalesce((
+                        SELECT
+                            jsonb_object_agg(rated."Name", rated."ReleaseGroupRatingId")
+                        FROM
+                            "ReleaseGroups" AS rated
+                        WHERE
+                            rated."MediaTypeId" = work."MediaTypeId"
+                            AND rated."ReleaseGroupRatingId" IS NOT NULL
+                    ), '{}')::text AS "ReleaseGroupRatings"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"

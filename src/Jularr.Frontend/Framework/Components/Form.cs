@@ -190,8 +190,9 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
+        // A choice that saves itself submits its form on change (Form.entry.ts); the form's button then serves browsers without script.
         public Form<TData> Select<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, IEnumerable<SelectOption> options, FieldHelp? help = null,
-            string? refreshAction = null, string? refreshLabelKey = null, FieldAffix? affix = null)
+            string? refreshAction = null, string? refreshLabelKey = null, FieldAffix? affix = null, bool submitOnChange = false)
         {
             var field = Declare(selector, FieldControl.Select, labelKey, help);
             var value = Value(field);
@@ -208,6 +209,7 @@ namespace Jularr.Frontend.Framework
                     if (option.Value == value) radio.Attribute("checked", "checked");
                     Configure(field, radio);
                     if (refreshAction is not null) radio.Attribute("data-form-refresh", refreshAction);
+                    if (submitOnChange) radio.Attribute("data-form-submit", "");
                     return new HtmlLabel(radio, new Span(new ValueText(option.Label))).Class("ui-segment");
                 }).ToArray<IUiComponent>();
                 AddField(field, new Div(segments).Class("ui-segments"), segmented: true);
@@ -228,6 +230,7 @@ namespace Jularr.Frontend.Framework
             var select = new HtmlSelect(items).Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name);
             Configure(field, select);
             if (refreshAction is not null) select.Attribute("data-form-refresh", refreshAction);
+            if (submitOnChange) select.Attribute("data-form-submit", "");
 
             // Every option's icon is written; the chosen one shows (Form.entry.ts follows the choice).
             if (affix?.Prefix is null && choices.Any(option => option.Icon is not null))

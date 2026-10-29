@@ -233,7 +233,7 @@ namespace Jularr.Backend.Logic.Acquisition
             var name = string.Join(' ', tokens.Where(token => !Noise.Contains(token) && !ReleaseWords.YearToken().IsMatch(token)));
             var book = ReadName(title);
             return new ReleaseInfo(title, name, null, null, null, null, null, null, false, false, null, ReleaseSource.Unknown, ReleaseVideoCodec.Unknown, null, ReleaseHdrFormat.None,
-                ReleaseAudioCodec.Unknown, null, [], [], false, false, null, 1, tokens.Contains("proper", StringComparer.OrdinalIgnoreCase),
+                ReleaseAudioCodec.Unknown, null, [], [], false, false, book.Group, 1, tokens.Contains("proper", StringComparer.OrdinalIgnoreCase),
                 tokens.Contains("repack", StringComparer.OrdinalIgnoreCase), null, title.ToLowerInvariant(), 1, [])
             {
                 DocumentFormat = format,

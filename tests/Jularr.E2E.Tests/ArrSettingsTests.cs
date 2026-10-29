@@ -23,7 +23,7 @@ namespace Jularr.E2E.Tests
                 await Owner.SetUpAndSignInAsync(page);
 
                 // One row of navigation joins every page of the acquisition settings, and no page offers a waiting time.
-                foreach (var label in new[] { "Quality profiles", "Custom formats", "Quality sizes", "Release profiles", "Tags", "Indexers", "Download clients" })
+                foreach (var label in new[] { "Quality profiles", "Custom formats", "Quality sizes", "Release profiles", "Release groups", "Tags", "Indexers", "Download clients" })
                 {
                     await page.GotoAsync("/Admin/Acquisition/Profiles");
                     await page.Locator(".navigation-tabs").GetByRole(AriaRole.Link, new() { Name = label, Exact = true }).ClickAsync();
@@ -97,6 +97,21 @@ namespace Jularr.E2E.Tests
                 await page.ReloadAsync();
                 Assert.AreEqual("x265", await Card(page, "Browser release").Locator("[name=Ignored]").InputValueAsync());
 
+                // A release group is found or added in one field; a click on its rating saves it at once, without a reload.
+                await page.GotoAsync("/Admin/Acquisition/Profiles?tab=groups&mediaTypeId=1");
+                await page.Locator(".release-groups-bar [name=Name]").FillAsync("Browser-Group");
+                await Steps.SubmitAsync(page, page.Locator(".release-groups-bar form").First);
+                var groupRow = Row(page, "Browser-Group");
+                await Assertions.Expect(groupRow).ToContainTextAsync("Not rated");
+                await Assertions.Expect(groupRow.Locator("[data-form-submit-fallback]")).ToBeHiddenAsync();
+                await page.EvaluateAsync("window.__groupProbe = 7");
+                await Steps.FollowAsync(page, groupRow.Locator(".ui-segment", new() { HasText = "Good" }));
+                await Assertions.Expect(page.Locator(".kpi-tile", new() { HasText = "Good" }).Locator(".kpi-tile__value")).ToHaveTextAsync("1");
+                Assert.AreEqual(7, await page.EvaluateAsync<int>("window.__groupProbe"), "The rating reloaded the page.");
+                await page.ReloadAsync();
+                await Assertions.Expect(Row(page, "Browser-Group").Locator("input[value='1']")).ToBeCheckedAsync();
+                await Assertions.Expect(Row(page, "Browser-Group")).Not.ToContainTextAsync("Not rated");
+
                 // A tag is a card whose label is its input; removing asks in a dialog with Cancel.
                 await page.GotoAsync("/Admin/Acquisition/Profiles?tab=tags");
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "New tag", Exact = true }));
@@ -113,11 +128,13 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".tag-card [name=Label]")).ToHaveValueAsync("renamed-tag");
 
                 await page.SetViewportSizeAsync(1440, 1000);
-                await page.GotoAsync("/Admin/Acquisition/Profiles?tab=formats&mediaTypeId=1");
                 var folder = Directory.CreateDirectory(Path.Combine(JularrInstance.Repository, "TestResults", "e2e")).FullName;
+                await page.GotoAsync("/Admin/Acquisition/Profiles?tab=groups&mediaTypeId=1");
+                await page.ScreenshotAsync(new() { Path = Path.Combine(folder, "arr-groups.png"), FullPage = true });
+                await page.GotoAsync("/Admin/Acquisition/Profiles?tab=formats&mediaTypeId=1");
                 await page.ScreenshotAsync(new() { Path = Path.Combine(folder, "arr-desktop.png"), FullPage = true });
                 await page.SetViewportSizeAsync(390, 844);
-                foreach (var tab in new[] { "profiles", "formats", "sizes", "release", "tags" })
+                foreach (var tab in new[] { "profiles", "formats", "sizes", "release", "groups", "tags" })
                 {
                     await page.GotoAsync("/Admin/Acquisition/Profiles?tab=" + tab + "&mediaTypeId=1");
                     Assert.IsTrue(await page.EvaluateAsync<bool>("document.documentElement.scrollWidth <= innerWidth + 1"), "Horizontal page overflow in " + tab);

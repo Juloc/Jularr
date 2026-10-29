@@ -8,6 +8,8 @@
     gap: 16px 24px;
 
     [data-form-refresh-submit][hidden] { display: none; }
+    // A choice that saves itself leaves no empty row of buttons behind.
+    &__actions:has(> [data-form-submit-fallback][hidden]:only-child) { display: none; }
 
     & > .field-error,
     & > .ui-field--wide,

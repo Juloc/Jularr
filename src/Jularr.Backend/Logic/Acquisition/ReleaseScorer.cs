@@ -105,6 +105,14 @@ namespace Jularr.Backend.Logic.Acquisition
                 rejections.Add(new ReleaseReason("FormatScoreBelowMinimum", formatScore.ToString(System.Globalization.CultureInfo.InvariantCulture)));
             }
 
+            // A release group rated good or bad adds the profile's points; the minimum above holds for the custom formats alone.
+            if (GroupRating(profile, candidate.Release) is { } rating and not ReleaseGroupRating.Blocked)
+            {
+                var points = rating == ReleaseGroupRating.Good ? profile.GoodGroupScore : profile.BadGroupScore;
+                formatScore += points;
+                formatPoints.Add(new ScorePoint("Group" + rating, candidate.Release.ReleaseGroup!.Trim(), points));
+            }
+
             var score = formatScore;
             return new ReleaseScoreResult(candidate, rejections.Count == 0, score, qualityKey, qualityRank, rejections, scoreReasons)
             {
@@ -113,6 +121,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 FormatPoints = formatPoints
             };
         }
+
+        // The rating of the release's group for the profile's media type; a release without a group or an unrated group has none.
+        public static ReleaseGroupRating? GroupRating(QualityProfile profile, ReleaseInfo release) =>
+            release.ReleaseGroup?.Trim() is { Length: > 0 } group && profile.GroupRatings.TryGetValue(group, out var rating) ? rating : null;
 
         public static IReadOnlyList<string> ValidateProfile(QualityProfile profile)
         {
