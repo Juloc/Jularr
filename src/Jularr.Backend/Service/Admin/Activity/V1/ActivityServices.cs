@@ -54,7 +54,17 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL
                         AND operation."AttentionUrl" IS NULL AS "CanRetryImport",
                     operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL AS "IsWaiting",
-                    operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionProposal" -> 'Source' IS NOT NULL AS "CanImportManually"
+                    operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionProposal" -> 'Source' IS NOT NULL AS "CanImportManually",
+                    connection."Id" AS "AcquisitionConnectionId",
+                    CASE
+                        WHEN connection."AcquisitionConnectionTypeId" = 6 THEN 1
+                        WHEN connection."AcquisitionConnectionTypeId" = 2 THEN 2
+                        WHEN connection."AcquisitionConnectionTypeId" = 9 THEN 3
+                        WHEN connection."AcquisitionConnectionTypeId" = 12 THEN 4
+                        WHEN connection."AcquisitionConnectionTypeId" IN (3, 4, 5, 11) THEN 5
+                    END::smallint AS "DownloadClientKindId",
+                    work."MediaTypeId",
+                    operation."OperationStatusTypeId" = 4 AND operation."DismissedAt" IS NULL AS "CanRetry"
                 FROM
                     "Operations" AS operation
                     LEFT JOIN "LibraryRoots" AS root ON root."Id" = operation."LibraryRootId"
@@ -66,20 +76,40 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     LEFT JOIN "Works" AS work ON work."Id" = wanted."WorkId"
                 WHERE
                     (
-                        @ActivityFilterTypeId = 1 AND state."ActivityFilterTypeId" <> 3
-                        OR state."ActivityFilterTypeId" = @ActivityFilterTypeId
+                        NOT @DownloadsOnly AND (
+                            @ActivityFilterTypeId = 1 AND state."ActivityFilterTypeId" <> 3
+                            OR state."ActivityFilterTypeId" = @ActivityFilterTypeId
+                        )
+                        -- The Downloads page: its queue is what is still open, its history every finished download.
+                        OR @DownloadsOnly AND operation."OperationTypeId" = 2 AND (
+                            @ActivityFilterTypeId = 3 AND operation."OperationStatusTypeId" IN (3, 4)
+                            OR @ActivityFilterTypeId <> 3 AND operation."OperationStatusTypeId" IN (1, 2)
+                        )
                     )
                     -- The Files view includes all supported external download clients.
                     AND (NOT @TorrentOnly OR connection."AcquisitionConnectionTypeId" IN (2, 9))
+                    AND (NOT @FailedOnly OR operation."OperationStatusTypeId" = 4)
+                    AND (@AcquisitionConnectionId::bigint IS NULL OR connection."Id" = @AcquisitionConnectionId)
+                    AND (@MediaTypeId::smallint IS NULL OR work."MediaTypeId" = @MediaTypeId)
+                    AND (
+                        @DownloadClientKindId::smallint IS NULL
+                        OR @DownloadClientKindId = 1 AND connection."AcquisitionConnectionTypeId" = 6
+                        OR @DownloadClientKindId = 2 AND connection."AcquisitionConnectionTypeId" = 2
+                        OR @DownloadClientKindId = 3 AND connection."AcquisitionConnectionTypeId" = 9
+                        OR @DownloadClientKindId = 4 AND connection."AcquisitionConnectionTypeId" = 12
+                        OR @DownloadClientKindId = 5 AND connection."AcquisitionConnectionTypeId" IN (3, 4, 5, 11)
+                    )
                 ORDER BY
-                    -- What needs a person comes first, then what runs, each newest first.
+                    -- What needs a person comes first, then what runs, each newest first; a finished download by when it ended.
                     @ActivityFilterTypeId <> 3 AND state."ActivityFilterTypeId" IN (4, 6) DESC,
+                    CASE WHEN @DownloadsOnly AND @ActivityFilterTypeId = 3 THEN operation."FinishedAt" END DESC NULLS LAST,
                     operation."CreatedAt" DESC,
                     operation."Id" DESC
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
-            sql.Parameters.Add(new ActivityFilterData(Parameters.ActivityFilterTypeId, Parameters.TorrentOnly));
+            sql.Parameters.Add(new ActivityFilterData(Parameters.ActivityFilterTypeId, Parameters.TorrentOnly, Parameters.DownloadsOnly, Parameters.FailedOnly, Parameters.DownloadClientKindId,
+                Parameters.AcquisitionConnectionId, Parameters.MediaTypeId));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<ActivityItemV1>(sql, CancellationToken);
         }
@@ -112,6 +142,72 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     JOIN "Operations" AS operation ON operation."Id" = state."OperationId";
                 """;
             return await Context.ReadSql.ReadRequiredAsync<ActivitySummaryV1>(sql, CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/admin/activity/clients")]
+    public sealed class ReadDownloadClientsV1 : AdminService<ReadDownloadClientsParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<DownloadClientV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadDownloadClientsParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(ReadDownloadClientsParametersV1 parameters, Type resultType) => new("media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Every switched-on client in the order of the Downloads page's tabs, with what its open downloads add up to.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH client AS (
+                    SELECT
+                        connection."Id",
+                        connection."Name",
+                        kind."DownloadClientKindId",
+                        CASE WHEN kind."DownloadClientKindId" IN (2, 3) THEN connection."Id" END AS "ClientConnectionId"
+                    FROM
+                        "AcquisitionConnections" AS connection
+                        CROSS JOIN LATERAL (
+                            SELECT
+                                CASE
+                                    WHEN connection."AcquisitionConnectionTypeId" = 6 THEN 1
+                                    WHEN connection."AcquisitionConnectionTypeId" = 2 THEN 2
+                                    WHEN connection."AcquisitionConnectionTypeId" = 9 THEN 3
+                                    WHEN connection."AcquisitionConnectionTypeId" = 12 THEN 4
+                                    ELSE 5
+                                END::smallint AS "DownloadClientKindId"
+                        ) AS kind
+                    WHERE
+                        connection."IsEnabled"
+                        AND connection."AcquisitionConnectionTypeId" IN (2, 3, 4, 5, 6, 9, 11, 12)
+                )
+                SELECT
+                    client."DownloadClientKindId",
+                    client."ClientConnectionId" AS "AcquisitionConnectionId",
+                    min(client."Id") AS "SettingsConnectionId",
+                    min(client."Name") AS "Name",
+                    count(operation."Id") FILTER (WHERE operation."OperationStatusTypeId" IN (1, 2))::integer AS "QueueCount",
+                    count(operation."Id") FILTER (WHERE operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NULL
+                        AND operation."DownloadStateTypeId" IN (2, 4))::integer AS "ActiveCount",
+                    count(operation."Id") FILTER (WHERE operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NULL
+                        AND operation."DownloadStateTypeId" = 3)::integer AS "PausedCount",
+                    count(operation."Id") FILTER (WHERE operation."OperationStatusTypeId" = 4 OR operation."AttentionKey" IS NOT NULL)::integer AS "WarningCount",
+                    coalesce(sum(operation."RemainingBytes" / operation."EtaSeconds") FILTER (WHERE operation."OperationStatusTypeId" IN (1, 2)
+                        AND operation."DownloadStateTypeId" = 2 AND operation."EtaSeconds" > 0), 0)::bigint AS "BytesPerSecond",
+                    coalesce(sum(operation."RemainingBytes") FILTER (WHERE operation."OperationStatusTypeId" IN (1, 2)), 0)::bigint AS "RemainingBytes"
+                FROM
+                    client
+                    LEFT JOIN "Operations" AS operation ON operation."AcquisitionConnectionId" = client."Id"
+                        AND operation."OperationTypeId" = 2
+                        AND (operation."OperationStatusTypeId" IN (1, 2) OR operation."OperationStatusTypeId" = 4 AND operation."DismissedAt" IS NULL)
+                GROUP BY
+                    client."DownloadClientKindId",
+                    client."ClientConnectionId"
+                ORDER BY
+                    client."DownloadClientKindId",
+                    min(client."Name"),
+                    client."ClientConnectionId";
+                """;
+            return new BaseDataList<DownloadClientV1>(await Context.ReadSql.ReadListAsync<DownloadClientV1>(sql, CancellationToken));
         }
     }
 

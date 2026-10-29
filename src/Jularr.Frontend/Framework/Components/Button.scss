@@ -58,5 +58,8 @@
         &:hover:not(:disabled) { border-color: var(--warning); color: var(--warning); }
     }
 
+    // A destructive icon (delete): the danger colour on the usual button.
+    &--danger { color: var(--danger); }
+
     &:disabled { opacity: .4; cursor: default; }
 }

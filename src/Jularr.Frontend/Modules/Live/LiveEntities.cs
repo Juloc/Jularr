@@ -39,7 +39,8 @@ namespace Jularr.Frontend.Modules.Live
             return new LiveEntity(phase, null, operation.ProgressPercent, Texts(("status", OperationStatus(texts, operation.IsWaiting, operation.OperationStatusTypeId, says || !running ? null : operation.DownloadStateTypeId)),
                 ("reason", says ? Reason(texts, operation.OperationTypeId, operation.ReasonKey) : null),
                 ("speed", says ? null : OperationSpeed(texts, operation.OperationStatusTypeId, operation.DownloadStateTypeId, operation.BytesPerSecond)),
-                ("detail", says ? null : OperationDetail(operation.ProgressPercent, operation.SizeBytes, operation.RemainingBytes, operation.EtaSeconds))));
+                ("detail", says ? null : OperationDetail(operation.ProgressPercent, operation.SizeBytes, operation.RemainingBytes, operation.EtaSeconds)),
+                ("percent", Percent(operation.ProgressPercent)), ("eta", says ? null : LiveFacts.Eta(operation.EtaSeconds))));
         }
 
         // The queue's tiles: how many run, the pace, how many import and how many failed.
@@ -72,6 +73,9 @@ namespace Jularr.Frontend.Modules.Live
         // The queue's size and time left: "42 % · 3.1 GB / 7.4 GB · 12 min".
         public static string OperationDetail(int? percent, long? sizeBytes, long? remainingBytes, int? etaSeconds) =>
             LiveFacts.Join(LiveFacts.Progress(percent, sizeBytes, remainingBytes), LiveFacts.Eta(etaSeconds));
+
+        // How far a download is, as its own column: "74%".
+        public static string Percent(int? percent) => percent is { } value ? value.ToString(CultureInfo.CurrentCulture) + "%" : "";
 
         // The queue's Status column as the page first renders it: waiting, else what the client does with a running download, else the job's status.
         public static string OperationStatus(UiText texts, bool isWaiting, OperationStatusType status, DownloadStateType? state = null) =>

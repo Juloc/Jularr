@@ -587,6 +587,105 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, usenet.Commands.Count, "A download waiting for a person is not told to pause.");
         }
 
+        // The dock's chosen rows: each is told as on its own; one client's pause leaves the others' downloads alone.
+        [TestMethod]
+        public async Task QueueAction_ChosenDownloadsAndOneClient_PauseResumeAndRemove()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var operation = await GrabbedOperationAsync(host, usenet);
+            async Task<object?> StateAsync() => await host.ScalarAsync($"SELECT \"DownloadStateTypeId\" FROM \"Operations\" WHERE \"Id\" = {operation}");
+
+            using var other = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/queue/pause?downloadClientKindId=Usenet", new PauseActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, other.StatusCode, await other.Content.ReadAsStringAsync());
+            Assert.AreNotEqual((short)3, await StateAsync(), "Another client's pause leaves SABnzbd's download running.");
+            Assert.AreEqual(0, usenet.Commands.Count);
+            using var own = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/queue/pause?downloadClientKindId=Sabnzbd", new PauseActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, own.StatusCode, await own.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)3, await StateAsync());
+
+            using var resumed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/downloads", new ApplyActivityDownloadsDataV1([operation, 999_999], DownloadBulkActionType.Resume));
+            Assert.AreEqual(HttpStatusCode.OK, resumed.StatusCode, await resumed.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)2, await StateAsync(), "A download that is not in the queue is skipped.");
+            CollectionAssert.AreEqual(new[] { "queue:pause:SABnzbd_nzo_1:", "queue:resume:SABnzbd_nzo_1:" }, usenet.Commands);
+
+            using var removed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/downloads", new ApplyActivityDownloadsDataV1([operation], DownloadBulkActionType.Remove));
+            Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            Assert.AreEqual("download_removed", await host.ScalarAsync($"SELECT \"ErrorKey\" FROM \"Operations\" WHERE \"Id\" = {operation}"));
+            Assert.AreEqual((short)5, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""), "Removed without blocking, the release stays allowed.");
+        }
+
+        // The Downloads page: a tab per switched-on client with its open downloads, one client's queue and history, the category and failed-only filters, and the Direct panel's link.
+        [TestMethod]
+        public async Task DownloadsPage_TabsQueueAndHistory_FollowTheClients()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
+            var sab = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'SAB'"))!;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "Host", "Port", "UseSsl", "MaxConnections") VALUES (901, 'News A', 6, 'news.example.test', 563, TRUE, 20);
+                INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "BaseUrl") VALUES (902, 'Gutenberg', 3, 'https://gutendex.example.test');
+                INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "BaseUrl", "ProtectedApiKey", "IsEnabled") VALUES (903, 'Old qBit', 9, 'https://qbit.example.test', '\x00'::bytea, FALSE);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (801, 1, 'Queue Film'), (802, 3, 'Queue Book');
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (801, 801), (802, 802);
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId")
+                VALUES (1, 801, 'q-1', 'Release 1', 1), (2, 801, 'q-2', 'Release 2', 1), (3, 802, 'q-3', 'Release 3', 1), (4, 801, 'q-4', 'Release 4', 3), (5, 801, 'q-5', 'Release 5', 2);
+                INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId", "SizeBytes", "RemainingBytes", "EtaSeconds",
+                    "DownloadStateTypeId", "AttentionKey", "AttentionUrl", "ErrorKey", "FinishedAt")
+                VALUES
+                    (1, 2, 2, 1, {sab}, 1000, 500, 10, 2, NULL, NULL, NULL, NULL),
+                    (2, 2, 2, 2, 901, 1000, 900, NULL, 3, NULL, NULL, NULL, NULL),
+                    (3, 2, 2, 3, 902, NULL, NULL, NULL, NULL, 'source_manual_link', 'https://books.example.test/dracula', NULL, NULL),
+                    (4, 2, 4, 4, {sab}, NULL, NULL, NULL, NULL, NULL, NULL, 'download_failed', now()),
+                    (5, 2, 3, 5, 901, NULL, NULL, NULL, NULL, NULL, NULL, NULL, now());
+                """);
+
+            using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/clients");
+            Assert.AreEqual(HttpStatusCode.OK, listed.StatusCode, await listed.Content.ReadAsStringAsync());
+            var clients = (await listed.Content.ReadFromJsonAsync<BaseDataList<DownloadClientV1>>())!;
+            CollectionAssert.AreEqual(new[] { DownloadClientKind.Usenet, DownloadClientKind.Sabnzbd, DownloadClientKind.Direct }, clients.Select(client => client.DownloadClientKindId).ToArray(),
+                "The switched-off qBittorrent has no tab.");
+            var usenetTab = clients[0];
+            Assert.AreEqual((null, 901L, 1, 0, 1, 0), (usenetTab.AcquisitionConnectionId, usenetTab.SettingsConnectionId, usenetTab.QueueCount, usenetTab.ActiveCount, usenetTab.PausedCount, usenetTab.WarningCount));
+            var sabTab = clients[1];
+            Assert.AreEqual((sab, 1, 1, 1, 50L, 500L), ((long)sabTab.AcquisitionConnectionId!, sabTab.QueueCount, sabTab.ActiveCount, sabTab.WarningCount, sabTab.BytesPerSecond, sabTab.RemainingBytes));
+            Assert.AreEqual((1, 1), (clients[2].QueueCount, clients[2].WarningCount));
+
+            async Task<long[]> IdsAsync(string query)
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?downloadsOnly=true&" + query);
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                return [.. (await response.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Select(item => item.Id)];
+            }
+
+            CollectionAssert.AreEqual(new long[] { 3, 2, 1 }, await IdsAsync("activityFilterTypeId=All"));
+            CollectionAssert.AreEqual(new long[] { 2 }, await IdsAsync("activityFilterTypeId=All&downloadClientKindId=Usenet"));
+            CollectionAssert.AreEqual(new long[] { 1 }, await IdsAsync("activityFilterTypeId=All&downloadClientKindId=Sabnzbd&acquisitionConnectionId=" + sab));
+            CollectionAssert.AreEqual(new long[] { 3 }, await IdsAsync("activityFilterTypeId=All&mediaTypeId=Book"));
+            CollectionAssert.AreEqual(new long[] { 5 }, await IdsAsync("activityFilterTypeId=History&downloadClientKindId=Usenet"));
+            CollectionAssert.AreEqual(new long[] { 4 }, await IdsAsync("activityFilterTypeId=History&failedOnly=true"));
+
+            // The page: All and a tab per client, the phase on each row, and the Direct panel's link for the download that needs one.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "href=\"/Admin/Downloads?Client=Usenet\"");
+            StringAssert.Contains(html, "href=\"/Admin/Downloads?Client=Sabnzbd&amp;ConnectionId=" + sab + "\"");
+            StringAssert.Contains(html, "href=\"/Admin/Downloads?Client=Direct\"");
+            Assert.IsFalse(html.Contains("Client=Qbittorrent", StringComparison.Ordinal));
+            StringAssert.Contains(html, "data-phase=\"downloading\"");
+            StringAssert.Contains(html, "data-phase=\"failed\"");
+            using var direct = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads?Client=Direct");
+            var directHtml = await direct.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, direct.StatusCode, directHtml);
+            StringAssert.Contains(directHtml, "handler=SourceLink&amp;operationId=3");
+            StringAssert.Contains(directHtml, "https://books.example.test/dracula");
+            Assert.IsFalse(directHtml.Contains("Release 1", StringComparison.Ordinal), "Another client's download is not on the Direct tab.");
+        }
+
         // A waiting download is read again on request; one that is not waiting has nothing to retry.
         [TestMethod]
         public async Task QueueAction_RetryImport_ReadsAWaitingDownloadAgain()

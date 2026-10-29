@@ -1,0 +1,190 @@
+// The Downloads page of the owner's mockup (variant B): the client tabs with the icon buttons in one row, the figures, the queue and history panels and the client's own panels.
+
+.downloads-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 16px;
+
+    .navigation-tabs {
+        width: max-content;
+        max-width: 100%;
+        padding: 4px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-control);
+        background: var(--surface);
+    }
+
+    &__actions { display: flex; gap: 10px; align-items: center; margin-left: auto; }
+}
+
+// Speed is the large figure; the others say what is left, what runs and how much room there is.
+.downloads-figures {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+
+    &--three { grid-template-columns: 1.6fr 1fr 1fr; }
+}
+
+.downloads-stat {
+    display: grid;
+    align-content: start;
+    gap: 2px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-inner);
+    background: var(--surface);
+
+    &__label, &__foot { color: var(--muted); font-size: var(--text-small); }
+    &__value { font-size: 20px; line-height: 1.1; }
+    &__value--large { font-size: 30px; }
+}
+
+@container (max-width: 720px) {
+    .downloads-figures, .downloads-figures--three { grid-template-columns: 1fr 1fr; }
+}
+
+.downloads-panel {
+    margin-bottom: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+
+    &__head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+
+        h2 { margin: 0; font-size: var(--text-heading); }
+    }
+
+    &__spacer { flex: 1; }
+    &__foot { padding: 0 16px 14px; }
+
+    // The list sits inside the panel: the panel's frame is its frame.
+    .list-panel { border: 0; border-radius: 0; box-shadow: none; }
+}
+
+.downloads-list .list-row { min-height: 52px; padding-block: 9px; }
+
+.downloads-queue {
+    --list-columns: minmax(200px, 2.6fr) minmax(70px, .8fr) minmax(100px, .9fr) minmax(130px, 1.3fr) minmax(60px, .6fr) minmax(70px, .7fr) minmax(60px, .6fr) minmax(100px, .9fr);
+    --list-columns-medium: minmax(200px, 2.4fr) minmax(70px, .8fr) minmax(100px, .9fr) minmax(130px, 1.2fr) minmax(70px, .7fr) minmax(100px, .9fr);
+    --list-columns-narrow: minmax(160px, 2fr) minmax(96px, .9fr) minmax(110px, 1.1fr) minmax(64px, .7fr) minmax(96px, .8fr);
+}
+
+.downloads-queue.downloads-list--all {
+    --list-columns: minmax(180px, 2.4fr) minmax(84px, .9fr) minmax(64px, .8fr) minmax(96px, .9fr) minmax(120px, 1.3fr) minmax(56px, .6fr) minmax(64px, .7fr) minmax(56px, .6fr) minmax(96px, .9fr);
+    --list-columns-medium: minmax(180px, 2.2fr) minmax(84px, .9fr) minmax(64px, .8fr) minmax(96px, .9fr) minmax(120px, 1.2fr) minmax(64px, .7fr) minmax(96px, .9fr);
+}
+
+.downloads-history {
+    --list-columns: minmax(200px, 2.4fr) minmax(96px, .9fr) minmax(120px, 1.2fr) minmax(56px, .6fr) minmax(110px, .9fr) minmax(80px, .6fr);
+    --list-columns-medium: minmax(200px, 2.4fr) minmax(96px, .9fr) minmax(110px, .9fr) minmax(80px, .6fr);
+    --list-columns-narrow: minmax(160px, 2fr) minmax(96px, .9fr) minmax(110px, .9fr) minmax(80px, .6fr);
+}
+
+.downloads-history.downloads-list--all {
+    --list-columns: minmax(200px, 2.2fr) minmax(84px, .9fr) minmax(96px, .9fr) minmax(120px, 1.2fr) minmax(56px, .6fr) minmax(110px, .9fr) minmax(80px, .6fr);
+    --list-columns-medium: minmax(200px, 2.2fr) minmax(84px, .9fr) minmax(96px, .9fr) minmax(110px, .9fr) minmax(80px, .6fr);
+}
+
+.downloads-servers, .downloads-sources {
+    --list-columns: minmax(220px, 2fr) minmax(140px, 1fr) minmax(120px, 1fr);
+    --list-columns-medium: minmax(200px, 2fr) minmax(140px, 1fr) minmax(120px, 1fr);
+    --list-columns-narrow: minmax(180px, 2fr) minmax(130px, 1fr) minmax(110px, 1fr);
+}
+
+.downloads-sources { --list-columns: minmax(220px, 1.4fr) minmax(140px, .8fr) minmax(260px, 2fr); }
+
+// One colour per phase, the same on the pill, the bar and the icon tile; never an edge stripe.
+.downloads-phase {
+    --phase-color: var(--phase-queued);
+
+    &[data-phase="downloading"], &[data-phase="running"] { --phase-color: var(--phase-downloading); }
+    &[data-phase="postprocessing"] { --phase-color: var(--phase-extracting); }
+    &[data-phase="paused"] { --phase-color: var(--phase-paused); }
+    &[data-phase="completed"] { --phase-color: var(--phase-completed); }
+    &[data-phase="failed"] { --phase-color: var(--phase-failed); }
+
+    &--tile .icon-tile { background: color-mix(in srgb, var(--phase-color) 14%, var(--surface)); color: var(--phase-color); }
+}
+
+.downloads-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: var(--radius-control);
+    background: color-mix(in srgb, var(--phase-color) 14%, var(--surface));
+    color: var(--phase-color);
+    font-size: var(--text-small);
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+.downloads-progress {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    min-width: 0;
+}
+
+.downloads-bar {
+    flex: 1;
+    min-width: 0;
+    height: 8px;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--radius-control);
+    appearance: none;
+    background: color-mix(in srgb, var(--phase-color) 16%, var(--surface));
+
+    &::-webkit-progress-bar { background: transparent; }
+    &::-webkit-progress-value { border-radius: var(--radius-control); background: var(--phase-color); }
+    &::-moz-progress-bar { border-radius: var(--radius-control); background: var(--phase-color); }
+    &[hidden] { display: none; }
+}
+
+.downloads-percent { min-width: 36px; font-weight: 650; text-align: right; }
+
+.downloads-kind {
+    padding: 1px 8px;
+    border-radius: var(--radius-small);
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: var(--text-small);
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+.downloads-toggle {
+    display: inline-block;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--field);
+    color: var(--text);
+    font-size: var(--text-small);
+    text-decoration: none;
+
+    &--on { border-color: var(--accent-edge); background: var(--accent-soft); color: var(--accent-text); }
+}
+
+// A client's settings at a glance: label above a quiet box, two columns.
+.downloads-facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
+    padding: 14px 16px;
+
+    &__label { display: block; margin-bottom: 4px; color: var(--muted); font-size: var(--text-small); }
+    &__value { min-height: var(--field-height); padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-inner); background: var(--field); overflow-wrap: anywhere; }
+}
+
+.downloads-source-link { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
