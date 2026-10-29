@@ -4,18 +4,16 @@ using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.User.Media.V1
 {
-    // A title related to a Work, as the Work sees it. The title is a Work the profile may open or a catalog title that is none (the namespace and id name it for Discover).
+    // A title related to a Work, as the Work sees it: a Work the profile may open.
     public sealed class WorkRelationV1 : BaseResponse
     {
-        public WorkRelationV1(long? workRelationId, WorkRelationType workRelationTypeId, string sourceKey, long? relatedWorkId, string? @namespace, string? externalId, MediaType mediaTypeId,
+        public WorkRelationV1(long? workRelationId, WorkRelationType workRelationTypeId, string sourceKey, long relatedWorkId, MediaType mediaTypeId,
             MediaSubtype? mediaSubtypeId, string title, int? releaseYear, string? posterUrl, MediaAvailabilityState? availabilityStateId = null, int availableUnits = 0, int monitoredUnits = 0)
         {
             WorkRelationId = workRelationId;
             WorkRelationTypeId = workRelationTypeId;
             SourceKey = sourceKey;
             RelatedWorkId = relatedWorkId;
-            Namespace = @namespace;
-            ExternalId = externalId;
             MediaTypeId = mediaTypeId;
             MediaSubtypeId = mediaSubtypeId;
             Title = title;
@@ -37,14 +35,8 @@ namespace Jularr.Backend.Data.User.Media.V1
         [DataField(typeof(WorkRelationFields), nameof(WorkRelationFields.SourceKey))]
         public string SourceKey { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
-        public long? RelatedWorkId { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace), false)]
-        public string? Namespace { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId), false)]
-        public string? ExternalId { get; }
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long RelatedWorkId { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
@@ -61,7 +53,7 @@ namespace Jularr.Backend.Data.User.Media.V1
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
         public string? PosterUrl { get; }
 
-        // What the library and the acquisition say of a related Work; none for a title that is no Work.
+        // What the library and the acquisition say of a related Work; none for a catalog title without details the profile has neither a file, a request nor a wanted entry of.
         [DataField(typeof(WorkFields), nameof(WorkFields.AvailabilityStateId), false)]
         public MediaAvailabilityState? AvailabilityStateId { get; }
 

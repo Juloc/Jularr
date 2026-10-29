@@ -1281,12 +1281,12 @@
    "明確な一致なし"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted (paused)",
-   "監視対象になります（一時停止）"
+   "Will be wanted",
+   "監視対象になります"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted (paused)",
-   "監視を一時停止"
+   "Wanted",
+   "監視中"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",

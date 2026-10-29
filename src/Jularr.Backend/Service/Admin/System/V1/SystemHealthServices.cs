@@ -47,7 +47,8 @@ namespace Jularr.Backend.Service.Admin.System.V1
                     (SELECT count(*) FROM "Operations" AS operation WHERE operation."OperationStatusTypeId" IN (1, 2)) AS "QueuedOperations",
                     (SELECT count(*) FROM "Operations" AS operation WHERE operation."OperationStatusTypeId" = 4 AND operation."DismissedAt" IS NULL) AS "FailedOperations",
                     (SELECT count(*) FROM "Profiles") AS "Profiles",
-                    (SELECT count(*) FROM "StorageMountHealth" AS health WHERE health."StorageHealthTypeId" IN (3, 4)) AS "StorageOffline";
+                    (SELECT count(*) FROM "StorageMountHealth" AS health WHERE health."StorageHealthTypeId" IN (3, 4)) AS "StorageOffline",
+                    (SELECT count(*) FROM "Works" AS work WHERE work."CatalogNamespace" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS tie WHERE tie."WorkId" = work."Id")) AS "CatalogWorks";
                 """;
             var totals = await Context.ReadSql.ReadRequiredAsync<SystemTotalsData>(sql, CancellationToken);
 
@@ -80,7 +81,7 @@ namespace Jularr.Backend.Service.Admin.System.V1
                 new("pgDump", _backups.CanBackUp)
             ];
             var lastBackup = _backupOptions.Path is { } path ? BackupFiles.Newest(path) : null;
-            return new SystemHealthV1(totals.DatabaseBytes, totals.QueuedOperations, totals.FailedOperations, totals.Profiles, totals.StorageOffline, lastBackup,
+            return new SystemHealthV1(totals.DatabaseBytes, totals.QueuedOperations, totals.FailedOperations, totals.Profiles, totals.StorageOffline, totals.CatalogWorks, lastBackup,
                 new BaseDataList<ToolStateV1>(tools), new BaseDataList<MediaTypeCountV1>(library));
         }
     }

@@ -192,7 +192,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Wanted series and Manga learn about new episodes and volumes once a day.
+            // Wanted series and Manga learn about new episodes and volumes once a day; a series by its TheTVDB id, by its TMDB id only while it has none.
             var stale = await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
@@ -205,16 +205,29 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     FROM
                         "WantedItems" AS wanted
                         JOIN "Works" AS work ON work."Id" = wanted."WorkId"
-                        JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = work."Id"
-                            AND (identity."Namespace" = 'tmdb_tv' OR identity."Namespace" = 'anilist' AND work."MediaTypeId" = 3 AND NOT EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "WorkExternalIdentities" AS book
-                                WHERE
-                                    book."WorkId" = work."Id"
-                                    AND book."Namespace" = 'openlibrary'
-                            ))
+                        JOIN LATERAL (
+                            SELECT
+                                known."Namespace",
+                                known."Value",
+                                known."WorkId",
+                                known."UpdatedAt"
+                            FROM
+                                "WorkExternalIdentities" AS known
+                            WHERE
+                                known."WorkId" = work."Id"
+                                AND (known."Namespace" IN ('tvdb', 'tmdb_tv') AND work."MediaTypeId" = 2 OR known."Namespace" = 'anilist' AND work."MediaTypeId" = 3 AND NOT EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "WorkExternalIdentities" AS book
+                                    WHERE
+                                        book."WorkId" = work."Id"
+                                        AND book."Namespace" = 'openlibrary'
+                                ))
+                            ORDER BY
+                                known."Namespace" <> 'tvdb'
+                            LIMIT 1
+                        ) AS identity ON TRUE
                     WHERE
                         NOT wanted."IsPaused"
                         AND identity."UpdatedAt" < now() - interval '1 day'
@@ -248,25 +261,25 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     }
                 }
 
-                if (stale.Any(identity => identity.Namespace != AniListMetadata.Namespace))
+                foreach (var identity in stale.Where(identity => identity.Namespace != AniListMetadata.Namespace))
                 {
-                    var connection = await _metadata.ConnectAsync(Context, CancellationToken);
-                    foreach (var identity in stale.Where(identity => identity.Namespace != AniListMetadata.Namespace))
+                    try
                     {
-                        try
+                        await _metadata.ImportSeriesAsync(Context, null, identity.Namespace, identity.Value, CancellationToken);
+                    }
+                    catch (Exception exception) when (exception is KeyNotFoundException or DataValidationException)
+                    {
+                        // An identity that belongs to another Work must not hold back the others; it is asked again after a day.
+                        if (exception is DataValidationException)
                         {
-                            await _metadata.ImportAsync(Context, connection, MediaType.Series, null, int.Parse(identity.Value, CultureInfo.InvariantCulture), CancellationToken);
-                        }
-                        catch (DataValidationException exception)
-                        {
-                            // An identity that belongs to another Work must not hold back the others; it is asked again after a day.
                             _logger.LogWarning(exception, "Metadata of Work {WorkId} ({Namespace} {Value}) conflicts with another Work and is skipped until its next daily refresh.", identity.WorkId, identity.Namespace, identity.Value);
-                            await Context.ExecuteBatchAsync(async (ctx, ct) =>
-                            {
-                                await ctx.TouchWorkIdentityAsync(identity, ct);
-                                return true;
-                            }, CancellationToken);
                         }
+
+                        await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                        {
+                            await ctx.TouchWorkIdentityAsync(identity, ct);
+                            return true;
+                        }, CancellationToken);
                     }
                 }
             }

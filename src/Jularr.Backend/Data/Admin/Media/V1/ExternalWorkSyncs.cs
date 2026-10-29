@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.Admin.Media.V1
@@ -34,14 +35,14 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         public TimeOnly EndsAt { get; }
     }
 
-    // A kept catalog with the Owner's choices and how far its full sync has come.
+    // A kept catalog with how much of it the Caching module keeps, the Owner's choices and how far its full sync has come.
     public sealed class ExternalWorkSyncV1 : BaseResponse
     {
-        public ExternalWorkSyncV1(string @namespace, bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, long entries, long pending, long version,
+        public ExternalWorkSyncV1(string @namespace, CachingTier tier, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, long entries, long pending, long version,
             BaseDataList<ExternalWorkSyncWindowV1> windows)
         {
             Namespace = @namespace;
-            IsEnabled = isEnabled;
+            Tier = tier;
             RequestsPerMinute = requestsPerMinute;
             PausesWhileUsed = pausesWhileUsed;
             ListedOn = listedOn;
@@ -54,8 +55,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
         public string Namespace { get; }
 
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsEnabled))]
-        public bool IsEnabled { get; }
+        // Derived from the Caching module and its sub-option for the whole instance; a catalog without a full list stays at the standard tier.
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Tier))]
+        public CachingTier Tier { get; }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.RequestsPerMinute))]
         public int RequestsPerMinute { get; }
@@ -81,17 +83,13 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class UpdateExternalWorkSyncDataV1 : BaseData
     {
-        public UpdateExternalWorkSyncDataV1(bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, long version, BaseDataList<ExternalWorkSyncWindowV1>? windows = null)
+        public UpdateExternalWorkSyncDataV1(int requestsPerMinute, bool pausesWhileUsed, long version, BaseDataList<ExternalWorkSyncWindowV1>? windows = null)
         {
-            IsEnabled = isEnabled;
             RequestsPerMinute = requestsPerMinute;
             PausesWhileUsed = pausesWhileUsed;
             Version = version;
             Windows = windows ?? new([]);
         }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsEnabled))]
-        public bool IsEnabled { get; }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.RequestsPerMinute))]
         public int RequestsPerMinute { get; }

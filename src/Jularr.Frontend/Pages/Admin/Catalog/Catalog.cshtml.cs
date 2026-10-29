@@ -13,9 +13,10 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Catalog
 {
-    // The provider catalogs of local discovery as cards: how each is kept, how far it has come and the Owner's choices for it as inputs inside the card.
-    public sealed class CatalogModel(ReadExternalWorkSyncsV1 read, UpdateExternalWorkSyncV1 update, ReadCoverCacheV1 readCovers, UpdateCoverCacheV1 updateCovers, ReadInstanceModulesV1 readModules, RunWorkerJobV1 run,
-        FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
+    // The provider catalogs as cards: how each is kept (from the Caching module and its sub-options), how far it has come and the Owner's choices for it as inputs
+    // inside the card; under them the images of other titles.
+    public sealed class CatalogModel(ReadExternalWorkSyncsV1 read, UpdateExternalWorkSyncV1 update, ReadCoverCacheV1 readCovers, UpdateCoverCacheV1 updateCovers,
+        ReadInstanceModulesV1 readModules, RunWorkerJobV1 run, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const int MaxWindows = 8;
 
@@ -73,24 +74,28 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
             page.Content.Add(new ActionDock(assets, "admin.catalog.actions", [new PostForm("/Admin/Catalog?handler=Sync", token, [], _isOn ? sync : sync.Disabled())]));
         }
 
-        // How a catalog is kept: asked live, the titles Discover loaded, or the whole catalog.
-        private string Mode(ExternalWorkSyncV1 sync) => _isOn && sync.IsEnabled ? "whole" : _keeps ? "kept" : "live";
+        // How a catalog is kept: asked live (Caching off), the lists Discover loaded (Caching on), or the whole catalog (its sub-option, for a catalog with a full list).
+        private static string Mode(ExternalWorkSyncV1 sync) => sync.Tier switch
+        {
+            CachingTier.Full => "whole",
+            CachingTier.Lean => "live",
+            _ => "kept"
+        };
 
         // One catalog: its mode and state in the head, what it holds, and its settings as inputs; adding or removing a window shows the draft of this card again, and only the pill keeps it.
         private IUiComponent Card(ExternalWorkSyncV1 sync, string? token)
         {
-            var state = sync.IsEnabled
+            var state = sync.Tier == CachingTier.Full
                 ? new StateChip(new Text("admin.catalog.state.active"), UiTone.Success, Glyph("check", 14))
                 : new StateChip(new Text("admin.catalog.state.off"), UiTone.Neutral, Glyph("pause", 14));
             var listed = sync.ListedOn is { } date ? new ValueText(date.ToString("d", CultureInfo.CurrentCulture)) : new ValueText("–");
             var body = new List<IUiComponent> { Fact("admin.catalog.entries", Number(sync.Entries)), Fact("admin.catalog.pending", Number(sync.Pending)), Fact("admin.catalog.listedOn", listed) };
 
-            var data = _draftNamespace == sync.Namespace ? _draft! : new UpdateExternalWorkSyncDataV1(sync.IsEnabled, sync.RequestsPerMinute, sync.PausesWhileUsed, sync.Version, sync.Windows);
+            var data = _draftNamespace == sync.Namespace ? _draft! : new UpdateExternalWorkSyncDataV1(sync.RequestsPerMinute, sync.PausesWhileUsed, sync.Version, sync.Windows);
             var address = "/Admin/Catalog?namespace=" + Uri.EscapeDataString(sync.Namespace);
             body.Add(new Form<UpdateExternalWorkSyncDataV1>(form =>
             {
                 form.Hidden(item => item.Version);
-                form.Toggle(item => item.IsEnabled, "admin.catalog.enabled");
                 form.Number(item => item.RequestsPerMinute, "admin.catalog.requestsPerMinute", affix: FieldAffix.Unit("unit.perMinute"));
                 form.Toggle(item => item.PausesWhileUsed, "admin.catalog.pausesWhileUsed");
                 form.Rows(item => item.Windows, (row, _) =>
@@ -122,10 +127,10 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync(string @namespace, bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, long version, List<WindowRow>? windows)
+        public async Task<IActionResult> OnPostAsync(string @namespace, int requestsPerMinute, bool pausesWhileUsed, long version, List<WindowRow>? windows)
         {
             _draftNamespace = @namespace;
-            _draft = Input(isEnabled, requestsPerMinute, pausesWhileUsed, version, windows);
+            _draft = Input(requestsPerMinute, pausesWhileUsed, version, windows);
             await update.ExecuteAsync<UpdateResult>(new ExternalWorkSyncParametersV1(@namespace), _draft, HttpContext.RequestAborted);
             return LocalRedirect("/Admin/Catalog");
         }
@@ -145,13 +150,13 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
             return LocalRedirect("/Admin/Catalog");
         }
 
-        public async Task<IActionResult> OnPostWindowsAsync(string @namespace, bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, long version, List<WindowRow>? windows, bool add)
+        public async Task<IActionResult> OnPostWindowsAsync(string @namespace, int requestsPerMinute, bool pausesWhileUsed, long version, List<WindowRow>? windows, bool add)
         {
             var rows = windows ?? [];
             if (add && rows.Count < MaxWindows) rows.Add(new(new TimeOnly(2, 0), new TimeOnly(6, 0)));
             else if (!add && rows.Count > 0) rows.RemoveAt(rows.Count - 1);
             _draftNamespace = @namespace;
-            _draft = Input(isEnabled, requestsPerMinute, pausesWhileUsed, version, rows);
+            _draft = Input(requestsPerMinute, pausesWhileUsed, version, rows);
             await LoadDataAsync();
             PreparePage();
             return Page();
@@ -167,8 +172,8 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
             _isOn = _keeps && modules.Any(module => module.Key == "LocalDiscovery" && module.IsEnabled);
         }
 
-        private static UpdateExternalWorkSyncDataV1 Input(bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, long version, List<WindowRow>? windows) =>
-            new(isEnabled, requestsPerMinute, pausesWhileUsed, version,
+        private static UpdateExternalWorkSyncDataV1 Input(int requestsPerMinute, bool pausesWhileUsed, long version, List<WindowRow>? windows) =>
+            new(requestsPerMinute, pausesWhileUsed, version,
                 new((windows ?? []).Where(row => row.StartsAt is not null && row.EndsAt is not null).Select(row => new ExternalWorkSyncWindowV1(row.StartsAt!.Value, row.EndsAt!.Value))));
 
         public sealed record WindowRow(TimeOnly? StartsAt, TimeOnly? EndsAt);

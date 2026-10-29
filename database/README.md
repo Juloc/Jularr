@@ -6,7 +6,7 @@ in one transaction when its database has no table yet ([DatabaseBaseline.cs](../
 `Schema.sql` records the installation's ordered schema history (`DatabaseSchemaVersions`). The baseline is frozen:
 `baseline.sha256` is its hash, the test `Baseline_MatchesTheFrozenHash` fails on any edit, and later schema changes are numbered, embedded
 migrations in `migrations/` (`NNNN_short_name.sql`, from `0002`) applied after a backup; see [database migrations](../docs/DATABASE_MIGRATIONS.md).
-`Media.sql` also holds the provider catalog `ExternalWorks` (titles known from TMDB, AniList and the other catalogs, Works or not) and its full-sync state `ExternalWorkSyncs`.
+`Media.sql` also holds the full-sync state of the provider catalogs, `ExternalWorkSyncs`. Since migration 0020 every catalog title is a Work (`Works.CatalogNamespace`, no details until `DetailedAt`); `ExternalWorks` is gone, and the view `WorkLibraryRelations` names what ties a Work to the library.
 
 `Instance.sql` follows `Account.sql` in a new installation. It adds the singleton
 InstanceSettings (Name, UiLocaleId, Version) and InstanceModules, using the shared English locale as

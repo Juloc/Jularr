@@ -18,11 +18,9 @@ class TvCatalogV1RoutesTest {
         assertEquals("/api/v1/discover/catalog/feed", TvCatalogV1Routes.DiscoverCatalogFeed)
         assertEquals("/api/v1/discover/suggestions", TvCatalogV1Routes.DiscoverSuggestions)
         assertEquals("/api/v1/localization/locales", TvCatalogV1Routes.RequestLocales)
-        assertEquals("/api/v1/discover/2/741/requests", TvCatalogV1Routes.discoverTmdbRequest(2, 741))
-        assertEquals("/api/v1/discover/catalog/requests", TvCatalogV1Routes.DiscoverCatalogRequest)
-        assertThrows(IllegalArgumentException::class.java) {
-            TvCatalogV1Routes.discoverTmdbRequest(3, 741)
-        }
+        assertEquals("/api/v1/works/741/open", TvCatalogV1Routes.openWork(741))
+        assertEquals("/api/v1/works/741/requests", TvCatalogV1Routes.workRequests(741))
+        assertThrows(IllegalArgumentException::class.java) { TvCatalogV1Routes.workRequests(0) }
         assertEquals("/api/v1/works/741", TvCatalogV1Routes.work(741))
         assertEquals("/api/v1/works/741/seasons", TvCatalogV1Routes.seasons(741))
         assertEquals("/api/v1/works/741/seasons/0/episodes", TvCatalogV1Routes.episodes(741, 0))

@@ -26,8 +26,8 @@ plus `src/Jularr.Backend/Data/Pagination.cs` and
 | Discover shelves | POST `/api/v1/discover/shelves` | body optional `scopeSlug`; JSON array of DiscoverShelfV1 |
 | Discover feed | POST `/api/v1/discover/feed` | body `mediaTypeId`, `discoverFeedTypeId`, `page`; JSON array of DiscoverItemV1 |
 | Discover search | POST `/api/v1/discover/search` | body `query`, optional `mediaTypeId`, `page`; JSON array of DiscoverItemV1 |
-| External TMDB details | POST `/api/v1/discover/{mediaTypeId}/{tmdbId}` | `DiscoverItemV1` for movie/series; `workId` may be null |
-| External catalog details | POST `/api/v1/discover/catalog/entry` | `DiscoverCatalogEntryV1`; body `mediaTypeId`, `namespace`, `externalId`, optional `mediaSubtypeId` |
+| Open a Work | POST `/api/v1/works/{workId}/open` | `{ areDetailsUnavailable }`; imports details on first open |
+| Request a Work | POST `/api/v1/works/{workId}/requests` | body `uiLocaleId`; `{ id }` |
 | Catalog search (books/manga/light novels/music/games/anime) | POST `/api/v1/discover/catalog/search` | body `mediaTypeId`, `query`, optional `mediaSubtypeId`; JSON array of DiscoverCatalogItemV1 |
 | Catalog feed | POST `/api/v1/discover/catalog/feed` | body `mediaTypeId`, `discoverFeedTypeId`, optional `mediaSubtypeId`; JSON array of DiscoverCatalogItemV1 |
 | Suggestions | POST `/api/v1/discover/suggestions` | body `query`, optional `scopeSlug`; JSON array of DiscoverSuggestionV1 |
@@ -47,9 +47,10 @@ The server's public JSON uses **camelCase** property names.
 Page numbers are 1-based; `pageSize` must be at most 100 and offset at most 100,000.
 No guessed total count or hasMore value is added to `TvPageV1`.
 
-The `/api/v1/discover/search` response can contain both local and external entries;
-external entries can have `workId = null`. External TMDB IDs and catalog namespace/externalId
-cannot be used as WorkIds. Catalog shelves return distinct `items` and `catalogItems`.
+Every Discover item, catalog item and suggestion carries a required `workId`
+(`seasonNumber` on mapped anime catalog items); `mediaStateTypeId` 3 means available.
+TMDB IDs and catalog namespace/externalId are not used to address anything.
+Catalog shelves return distinct `items` and `catalogItems`.
 
 ## How to integrate (other agent's files are untouched)
 
@@ -108,12 +109,9 @@ or persist session state.
    existing library, progress, watchlist and optional discovery calls. If the
    old TV layout needs different row contents, discuss an actual API gap before
    proposing any backend change. Do not invent recommendations.
-2. **Provider-only Discover results:** An external entry without `workId`
-   cannot open `/api/v1/works/{workId}`; do not use TMDB id as a WorkId. Instead,
-   use the existing `discoverTmdbItem(mediaTypeId, tmdbId)` or
-   `discoverCatalogEntry(mediaTypeId, namespace, externalId, mediaSubtypeId)`.
-   These return provider details without creating a local Work; navigation into
-   `/api/v1/works/{workId}` still requires a genuine non-null WorkId.
+2. **Discover results:** Every result has a `workId`. Call `openWork(workId)`
+   first (`true` means the details are unavailable), then read `work(workId)`;
+   request with `requestWork(workId, localeId)`.
 3. **Asset selection:** Episode endpoint exposes one playable MediaAssetId
    when its video is present, whereas availability may list several editions.
    `editions(workId)` gives WorkEditionIds and real file counts; the separate
@@ -140,8 +138,7 @@ verification is claimed.
 
 ## Incremental follow-up (22 October 2026)
 
-The separate catalog client additionally exposes the existing provider detail
-routes, server-side library/watchlist filters (type, subtype, year, progress),
+The separate catalog client additionally exposes server-side library/watchlist filters (type, subtype, year, progress),
 and real watchlist count. These are all **client-only** changes. The catalog
 backend is still read-only to this PR, and screen/controller integration remains
 owned by the parallel TV agent.

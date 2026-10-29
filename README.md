@@ -463,6 +463,7 @@ Vorschaubilder beim Spulen (Modul „Trickplay“, standardmäßig aus) rendert 
 mit FFmpeg nach `DataPath/trickplay`.
 Metadaten-Spiegel ersetzen die Adressen von TMDB, MusicBrainz, AniList und Open Library über
 `Providers:Tmdb`, `Providers:MusicBrainz`, `Providers:AniList` und `Providers:OpenLibrary` (HTTPS, auf dem eigenen Rechner auch HTTP).
+Anime finden ihre TheTVDB-Serie über die [AniBridge-Mappings](https://github.com/anibridge/anibridge-mappings) (MIT, täglich geladen, Modul „AniList“; Adresse `Providers:AnimeMappings`).
 Filme nennen ihre TMDB-Filmreihe (Modul „Franchises“, eigene Seite `/Franchise/{id}`). Jede Datei
 behält die Release-Angaben ihres Namens (Gruppe, Qualität, Edition, Proper); Admin → Bibliothek → Benennung
 legt die Namen von Film- und Folgendateien mit Sonarr-artigen Platzhaltern fest. Ein selbstsigniertes
