@@ -364,16 +364,19 @@ namespace Jularr.Backend.Logic.Reading
             })];
         }
 
-        // A block continues another whose sentence is not over where it starts right below it, overlapping it sideways, in nearly its size and colour.
+        // A block continues another whose sentence is not over where it starts right below it, overlapping it sideways, in its colour and nearly its size.
         private static bool Continues(Block before, Block after)
         {
             var text = string.Concat(before.Runs.Select(run => run.Text)).TrimEnd();
             var line = before.Area.Height / (double)Math.Max(1, before.Lines);
             var (one, other) = (before.Runs.MaxBy(run => run.Text.Length)?.Size ?? 0, after.Runs.MaxBy(run => run.Text.Length)?.Size ?? 0);
-            return text.Length > 0 && !".!?:”\"".Contains(text[^1]) && !before.IsLabel && !after.IsLabel
+            // A word broken at the line's end or a sentence going on in small letters runs on whatever the measured size or a label's look says.
+            var next = string.Concat(after.Runs.Select(run => run.Text)).TrimStart();
+            var runsOn = text.EndsWith('-') || next.Length > 0 && char.IsLower(next[0]);
+            return text.Length > 0 && !".!?:”\"".Contains(text[^1])
                 && after.Area.Top >= before.Area.Bottom - line * 0.5 && after.Area.Top - before.Area.Bottom < line * 0.8
-                && after.Area.Left < before.Area.Right && after.Area.Right > before.Area.Left
-                && Math.Abs(one - other) <= Math.Max(one, other) * 0.25 && before.Ink.Distance(after.Ink) < 120;
+                && after.Area.Left < before.Area.Right && after.Area.Right > before.Area.Left && before.Ink.Distance(after.Ink) < 120
+                && (runsOn || !before.IsLabel && !after.IsLabel && Math.Abs(one - other) <= Math.Max(one, other) * 0.25);
         }
 
         private static int Letters(Run run) => Math.Max(1, run.Text.Count(char.IsLetter));

@@ -90,6 +90,12 @@ namespace Jularr.Backend.Logic.Reading
                     html.Append('>');
                     foreach (var part in flows[index])
                     {
+                        // Parts read as one sentence: a space between them, none after a word broken at the line's end.
+                        if (part != flows[index][0] && !(flows[index][flows[index].IndexOf(part) - 1].Runs.LastOrDefault()?.Text.EndsWith('-') ?? false))
+                        {
+                            html.Append(' ');
+                        }
+
                         html.Append("<span data-part");
                         Box(html, part);
                         html.Append('>');

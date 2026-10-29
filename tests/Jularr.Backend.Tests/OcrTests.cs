@@ -366,14 +366,17 @@ namespace Jularr.Backend.Tests
             var page = new PdfSmartPage(5, [1], 0.8, [
                 new PdfSmartBlock(0.05, 0.1, 0.9, 0.05, 1, 0.03, 0, false, false, [Run("Of all love triangles, those involving at least one law-")]),
                 new PdfSmartBlock(0.5, 0.16, 0.4, 0.05, 1, 0.03, 0, false, false, [Run("enforcement official are the most fraught.")]) { Follows = 0 },
+                new PdfSmartBlock(0.5, 0.22, 0.4, 0.05, 1, 0.03, 0, false, false, [Run("Rule No. 9: Describing yourself as a hot-tub")]),
+                new PdfSmartBlock(0.55, 0.28, 0.4, 0.05, 1, 0.03, 0, false, false, [Run("guy on the first date.")]) { Follows = 2 },
                 new PdfSmartBlock(0.05, 0.9, 0.4, 0.02, 1, 0.012, 0, false, true, [Run("12 ESQUIRE")])]);
             var book = new PdfBookContent([], [], [], new PdfVerdict(true, ""), new PdfVerdict(true, "")) { SmartPages = [page] };
             var html = PdfBookHtml.Prepare(book, 7).SmartPages.Single();
-            Assert.AreEqual(2, html.Structure.Blocks);
+            Assert.AreEqual(3, html.Structure.Blocks);
             var document = new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html.Html);
             var first = document.QuerySelector("[data-b='0']")!;
             Assert.AreEqual(2, first.QuerySelectorAll("[data-part][data-box]").Length);
             Assert.AreEqual("Of all love triangles, those involving at least one law-enforcement official are the most fraught.", first.TextContent);
+            Assert.AreEqual("Rule No. 9: Describing yourself as a hot-tub guy on the first date.", document.QuerySelector("[data-b='1']")!.TextContent);
         }
 
         // The darkest grey in a part of a picture, given in fractions of it.
