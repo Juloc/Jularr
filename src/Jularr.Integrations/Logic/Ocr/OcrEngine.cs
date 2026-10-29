@@ -136,22 +136,6 @@ namespace Jularr.Integrations.Logic.Ocr
                     columns[index % w] += Math.Abs(light[index] - ground) > 60 ? 1 : 0;
                 }
 
-                var blank = columns.Select(count => count <= Math.Max(1, h / 30)).ToArray();
-                // A rule: a thin stroke over the region's whole height with space on both sides, unlike a letter's stem.
-                var (thin, aside) = (Math.Max(3, h / 8), Math.Max(2, h / 5));
-                bool Clear(int from, int to) => from >= 0 && to <= w && Enumerable.Range(from, to - from).All(x => columns[x] <= Math.Max(1, h / 30));
-                for (int x = 0; x < w;)
-                {
-                    var end = x;
-                    while (end < w && !blank[end]) end++;
-                    if (end > x && end - x <= thin && columns[x..end].Max() >= h * 0.4 && Clear(x - aside, x) && Clear(end, end + aside))
-                    {
-                        for (var each = x; each < end; each++) blank[each] = true;
-                    }
-
-                    x = end == x ? x + 1 : end;
-                }
-
                 // The height of the type in a stretch of columns: its rows of dense ink, not the stray ends of a line above or below.
                 int Tall(int from, int to)
                 {
@@ -169,14 +153,32 @@ namespace Jularr.Integrations.Logic.Ocr
                     return top < 0 ? 0 : Array.FindLastIndex(rows, count => count > dense) - top + 1;
                 }
 
-                // A gutter: empty wider than the region is high, or half that between type of different sizes.
+                // The detector grows its regions well beyond the letters: the type's own height is the measure.
+                var type = Math.Max(8, Tall(0, w));
+                var blank = columns.Select(count => count <= Math.Max(1, h / 30)).ToArray();
+                var rule = new bool[w];
+                // A rule: a thin stroke over the region's whole height with space on both sides, unlike a letter's stem.
+                var (thin, aside) = (Math.Max(3, type / 8), Math.Max(2, type / 5));
+                bool Clear(int from, int to) => from >= 0 && to <= w && Enumerable.Range(from, to - from).All(x => columns[x] <= Math.Max(1, h / 30));
+                for (int x = 0; x < w;)
+                {
+                    var end = x;
+                    while (end < w && !blank[end]) end++;
+                    if (end > x && end - x <= thin && columns[x..end].Max() >= type * 0.4 && Clear(x - aside, x) && Clear(end, end + aside))
+                    {
+                        for (var each = x; each < end; each++) (blank[each], rule[each]) = (true, true);
+                    }
+
+                    x = end == x ? x + 1 : end;
+                }
+
+                // A gutter: empty half again wider than the type is high (wider than a spaced word gap), or with a rule in it, half that.
                 var cuts = new List<(int From, int To)>();
                 for (int x = 0; x < w;)
                 {
                     var end = x;
                     while (end < w && blank[end]) end++;
-                    if (x > 0 && end < w && (end - x >= h * 0.9
-                        || end - x >= h * 0.5 && (Tall(x - h * 2, x), Tall(end, end + h * 2)) is var (left, right) && Math.Max(left, right) > Math.Min(left, right) * 1.4))
+                    if (x > 0 && end < w && (end - x >= type * 1.5 || end - x >= type * 0.5 && rule[x..end].Any(each => each)))
                     {
                         cuts.Add((x, end));
                     }
@@ -193,21 +195,48 @@ namespace Jularr.Integrations.Logic.Ocr
                 var from = 0;
                 foreach (var (start, end) in cuts.Append((w, w)))
                 {
-                    // The part's own rows of ink.
-                    var (top, bottom) = (h, -1);
+                    // The part's own line: of its bands of inked rows (small type beside large may show the ends of the lines above and below), the one
+                    // nearest the region's middle.
+                    var inked = new bool[h];
                     for (var y = 0; y < h; y++)
                     {
+                        var count = 0;
                         for (var x = from; x < start; x++)
                         {
-                            if (Math.Abs(light[y * w + x] - ground) > 60)
-                            {
-                                (top, bottom) = (Math.Min(top, y), Math.Max(bottom, y));
-                                break;
-                            }
+                            count += Math.Abs(light[y * w + x] - ground) > 60 ? 1 : 0;
                         }
+
+                        inked[y] = count > Math.Max(1, (start - from) / 200);
                     }
 
-                    if (bottom - top >= 4)
+                    // Every whole line of the part (a band clear of the region's edges, where lines above and below show their ends); else the band nearest
+                    // the middle.
+                    var bands = new List<(int Top, int Bottom)>();
+                    for (var y = 0; y < h;)
+                    {
+                        if (!inked[y])
+                        {
+                            y++;
+                            continue;
+                        }
+
+                        var last = y;
+                        while (last + 1 < h && (inked[last + 1] || last + 2 < h && inked[last + 2])) last++;
+                        if (last - y >= 4)
+                        {
+                            bands.Add((y, last));
+                        }
+
+                        y = last + 1;
+                    }
+
+                    var whole = bands.Where(band => band.Top > 1 && band.Bottom < h - 2).ToList();
+                    if (whole.Count == 0 && bands.Count > 0)
+                    {
+                        whole.Add(bands.MinBy(band => band.Top > h / 2 ? band.Top - h / 2 : band.Bottom < h / 2 ? h / 2 - band.Bottom : 0));
+                    }
+
+                    foreach (var (top, bottom) in whole)
                     {
                         var margin = Math.Max(2, (bottom - top) / 8);
                         result.Add(new SKRectI(box.Left + from, Math.Max(box.Top, box.Top + top - margin), box.Left + start, Math.Min(box.Bottom, box.Top + bottom + margin + 1)));
