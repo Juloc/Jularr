@@ -138,13 +138,13 @@ namespace Jularr.Integrations.Logic.Ocr
 
                 var blank = columns.Select(count => count <= Math.Max(1, h / 30)).ToArray();
                 // A rule: a thin stroke over the region's whole height with space on both sides, unlike a letter's stem.
-                var (thin, aside) = (Math.Max(2, h / 15), Math.Max(2, h / 4));
+                var (thin, aside) = (Math.Max(3, h / 8), Math.Max(2, h / 5));
                 bool Clear(int from, int to) => from >= 0 && to <= w && Enumerable.Range(from, to - from).All(x => columns[x] <= Math.Max(1, h / 30));
                 for (int x = 0; x < w;)
                 {
                     var end = x;
                     while (end < w && !blank[end]) end++;
-                    if (end > x && end - x <= thin && columns[x..end].Max() >= h * 0.85 && Clear(x - aside, x) && Clear(end, end + aside))
+                    if (end > x && end - x <= thin && columns[x..end].Max() >= h * 0.4 && Clear(x - aside, x) && Clear(end, end + aside))
                     {
                         for (var each = x; each < end; each++) blank[each] = true;
                     }
@@ -152,12 +152,31 @@ namespace Jularr.Integrations.Logic.Ocr
                     x = end == x ? x + 1 : end;
                 }
 
+                // The height of the type in a stretch of columns: its rows of dense ink, not the stray ends of a line above or below.
+                int Tall(int from, int to)
+                {
+                    var rows = new int[h];
+                    for (var y = 0; y < h; y++)
+                    {
+                        for (var x = Math.Max(0, from); x < Math.Min(w, to); x++)
+                        {
+                            rows[y] += Math.Abs(light[y * w + x] - ground) > 60 ? 1 : 0;
+                        }
+                    }
+
+                    var dense = rows.Max() * 0.15;
+                    var top = Array.FindIndex(rows, count => count > dense);
+                    return top < 0 ? 0 : Array.FindLastIndex(rows, count => count > dense) - top + 1;
+                }
+
+                // A gutter: empty wider than the region is high, or half that between type of different sizes.
                 var cuts = new List<(int From, int To)>();
                 for (int x = 0; x < w;)
                 {
                     var end = x;
                     while (end < w && blank[end]) end++;
-                    if (end - x >= h * 0.9 && x > 0 && end < w)
+                    if (x > 0 && end < w && (end - x >= h * 0.9
+                        || end - x >= h * 0.5 && (Tall(x - h * 2, x), Tall(end, end + h * 2)) is var (left, right) && Math.Max(left, right) > Math.Min(left, right) * 1.4))
                     {
                         cuts.Add((x, end));
                     }
