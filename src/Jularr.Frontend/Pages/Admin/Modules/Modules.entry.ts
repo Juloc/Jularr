@@ -29,7 +29,8 @@ function applyRules(): void {
 document.addEventListener("click", event => {
     const input = event.target instanceof HTMLInputElement ? event.target : null;
     const card = input?.closest<HTMLElement>("[data-module]");
-    if (!input || !card || input.type !== "checkbox") return;
+    // A setting inside a module's card (the Caching module's) is no switch of the rules.
+    if (!input || !card || input.type !== "checkbox" || card.querySelector<HTMLInputElement>("input[type=checkbox]") !== input) return;
 
     // The browser has already turned the box over; the rules read the state before the click.
     const wasOn = !input.checked;

@@ -14,12 +14,14 @@ ALTER TABLE "Works"
     ADD COLUMN IF NOT EXISTS "TrendingRank" integer NULL CHECK ("TrendingRank" > 0),
     ADD COLUMN IF NOT EXISTS "IsAdult" boolean NOT NULL DEFAULT FALSE,
     -- The catalog the minimal row came from; NULL for a Work that never was a catalog row.
-    ADD COLUMN IF NOT EXISTS "CatalogNamespace" varchar(16) NULL CHECK ("CatalogNamespace" IN ('tmdb_movie', 'tmdb_tv', 'tvdb', 'openlibrary', 'anilist', 'musicbrainz', 'igdb')),
+    ADD COLUMN IF NOT EXISTS "CatalogNamespace" varchar(16) NULL CHECK ("CatalogNamespace" IN ('tmdb_movie', 'tmdb_tv', 'tvdb', 'openlibrary', 'anilist', 'musicbrainz', 'igdb', 'syosetu')),
     ADD COLUMN IF NOT EXISTS "FetchedAt" timestamptz NULL,
     -- Since when the details (child tables) exist; NULL means a minimal row only.
     ADD COLUMN IF NOT EXISTS "DetailedAt" timestamptz NULL,
     -- The last time the Work page was opened; details nobody opens for a while are dropped.
     ADD COLUMN IF NOT EXISTS "ViewedAt" timestamptz NULL,
+    -- The last time the metadata fill asked a catalog for this Work; it asks again a day later at the earliest.
+    ADD COLUMN IF NOT EXISTS "MetadataTriedAt" timestamptz NULL,
     ADD COLUMN IF NOT EXISTS "SearchText" tsvector GENERATED ALWAYS AS (to_tsvector('simple', "CanonicalTitle" || ' ' || coalesce("OriginalTitle", ''))) STORED;
 
 -- Discover reads each list of a catalog's type in its own order; no subtype counts as 0.
@@ -31,8 +33,9 @@ CREATE INDEX IF NOT EXISTS "IX_Works_CatalogSearch" ON "Works" USING gin ("Searc
 -- A full sync reads titles without details in the order users are most likely to look for them.
 CREATE INDEX IF NOT EXISTS "IX_Works_CatalogUndetailed" ON "Works" ("CatalogNamespace", "Popularity" DESC NULLS LAST) WHERE "CatalogNamespace" IS NOT NULL AND "DetailedAt" IS NULL;
 
--- Existing Works already have their details and count as just opened, so the cleanup never drops them at once.
-UPDATE "Works" SET "DetailedAt" = "UpdatedAt", "ViewedAt" = now() WHERE "DetailedAt" IS NULL;
+-- Existing Works already have their details and count as just opened, so the cleanup never drops them at once; details and opening share
+-- one time, so no Work counts as opened with old details and the metadata fill does not read the whole library again.
+UPDATE "Works" SET "DetailedAt" = now(), "ViewedAt" = now() WHERE "DetailedAt" IS NULL;
 
 -- Cache tier per catalog: 1 lean, 2 standard, 3 full catalog; trending titles get their details in advance.
 ALTER TABLE "ExternalWorkSyncs"

@@ -78,6 +78,76 @@ namespace Jularr.Integrations.Logic.Media
             }
         }
 
+        // The files a container carries (the fonts of a Matroska file), read without analysing the rest.
+        public async Task<IReadOnlyList<MediaAttachment>> AttachmentsAsync(string location, CancellationToken ct)
+        {
+            if (!IsAvailable)
+            {
+                throw new ProviderUnavailableException();
+            }
+
+            var start = new ProcessStartInfo(ExecutablePath!)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            foreach (var argument in new[] { "-v", "error", "-print_format", "json", "-show_entries", "stream=index,codec_type:stream_tags=filename,mimetype", "--", location })
+            {
+                start.ArgumentList.Add(argument);
+            }
+
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(60));
+            try
+            {
+                using var process = Process.Start(start) ?? throw new ProviderUnavailableException();
+                var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+                var errors = process.StandardError.ReadToEndAsync(timeout.Token);
+                await process.WaitForExitAsync(timeout.Token);
+                await errors;
+                if (process.ExitCode != 0)
+                {
+                    return [];
+                }
+
+                return ParseAttachments(await output);
+            }
+            catch (OperationCanceledException)
+            {
+                ct.ThrowIfCancellationRequested();
+                return [];
+            }
+            catch (Win32Exception)
+            {
+                throw new ProviderUnavailableException();
+            }
+        }
+
+        internal static IReadOnlyList<MediaAttachment> ParseAttachments(string json)
+        {
+            var found = new List<MediaAttachment>();
+            using var document = JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty("streams", out var items) || items.ValueKind != JsonValueKind.Array)
+            {
+                return found;
+            }
+
+            foreach (var stream in items.EnumerateArray())
+            {
+                if (Text(stream, "codec_type") != "attachment" || !stream.TryGetProperty("index", out var index))
+                {
+                    continue;
+                }
+
+                var tags = stream.TryGetProperty("tags", out var values) && values.ValueKind == JsonValueKind.Object ? values : default;
+                found.Add(new MediaAttachment(index.GetInt32(), tags.ValueKind == JsonValueKind.Object ? Text(tags, "filename") : null, tags.ValueKind == JsonValueKind.Object ? Text(tags, "mimetype") : null));
+            }
+
+            return found;
+        }
+
         internal static MediaProbe Parse(string json)
         {
             using var document = JsonDocument.Parse(json);

@@ -8,6 +8,7 @@ using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Service.System.Media.V1;
@@ -19,7 +20,7 @@ using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
 namespace Jularr.Backend.Tests
 {
-    // Full local discovery for TMDB: the daily id list fills the catalog, entries are read by popularity, changes are read again.
+    // Full local discovery for TMDB films (series come from TheTVDB): the daily id list fills the catalog, entries are read by popularity, changes are read again.
     [TestClass]
     public sealed class ExternalWorkSyncTests
     {
@@ -44,6 +45,7 @@ namespace Jularr.Backend.Tests
             // Off by default: nothing is fetched.
             await Assert.ThrowsExactlyAsync<SecurityException>(() => RunAsync(host));
             Assert.AreEqual(0, tmdb.Requests.Count);
+            // Caching alone keeps no full catalog: its sub-option LocalDiscovery does.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'LocalDiscovery'");
 
             // The id list adds titles without adult ones and video extras; entries are read and gone ones leave.
@@ -57,12 +59,13 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(true, await host.ScalarAsync(Catalog("tmdb_movie", "604", "\"CatalogNamespace\" = 'tmdb_movie' AND \"DetailedAt\" IS NULL")),
                 "A catalog title is a minimal Work without details.");
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Value\" IN ('9', '10', '999')"));
-            Assert.AreEqual("tt0944947", await host.ScalarAsync(Catalog("tmdb_tv", "1399", "(SELECT imdb.\"Value\" FROM \"WorkExternalIdentities\" AS imdb WHERE imdb.\"WorkId\" = work.\"Id\" AND imdb.\"Namespace\" = 'imdb')")));
+            Assert.IsFalse(tmdb.Requests.Any(request => request.AbsolutePath.Contains("tv", StringComparison.Ordinal)), "TMDB's series are no longer kept whole.");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CatalogNamespace\" = 'tmdb_tv'"));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CatalogNamespace\" IS NOT NULL AND \"FetchedAt\" IS NULL"));
-            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncs\" WHERE \"ListedOn\" = '2026-10-19'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncs\" WHERE \"ListedOn\" = '2026-10-19'"));
             // The following pass finds no pending details and publishes the complete catalogs.
             await RunAsync(host);
-            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncs\" WHERE \"CompletedAt\" IS NOT NULL"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncs\" WHERE \"CompletedAt\" IS NOT NULL"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM pg_stats WHERE schemaname = current_schema() AND tablename = 'Works' AND attname = 'TrendingRank'"),
                 "Completing the initial catalog must prepare its ranking statistics before local discovery uses it.");
             Assert.IsFalse(tmdb.Requests.Any(request => request.AbsolutePath.EndsWith("/changes", StringComparison.Ordinal)), "The first pass reads everything anyway.");
@@ -117,15 +120,74 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void Windows_AndUse_DecideWhetherACatalogSyncs()
         {
-            var sync = new ExternalWorkSyncData("anilist", true, 20, true, null, null, null);
+            var sync = new ExternalWorkSyncData("anilist", 20, true, null, null, null);
             IReadOnlyList<ExternalWorkSyncWindowData> night = [new("anilist", new TimeOnly(22, 0), new TimeOnly(6, 0)), new("tmdb_movie", new TimeOnly(12, 0), new TimeOnly(13, 0))];
-            Assert.IsTrue(ExternalWorkLogic.MaySync(sync, [], new TimeOnly(15, 0), false), "Without windows a catalog syncs any time.");
-            Assert.IsTrue(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(23, 30), false));
-            Assert.IsTrue(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(5, 59), false), "A window past midnight ends the next day.");
-            Assert.IsFalse(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(12, 30), false), "Another catalog's window does not count.");
-            Assert.IsFalse(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(23, 30), true), "It waits while Jularr is used.");
-            Assert.IsTrue(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", true, 20, false, null, null, null), night, new TimeOnly(23, 30), true));
-            Assert.IsFalse(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", false, 20, false, null, null, null), [], new TimeOnly(23, 30), false));
+            Assert.IsTrue(ExternalWorkLogic.MaySync(CachingTier.Full, sync, [], new TimeOnly(15, 0), false), "Without windows a catalog syncs any time.");
+            Assert.IsTrue(ExternalWorkLogic.MaySync(CachingTier.Full, sync, night, new TimeOnly(23, 30), false));
+            Assert.IsTrue(ExternalWorkLogic.MaySync(CachingTier.Full, sync, night, new TimeOnly(5, 59), false), "A window past midnight ends the next day.");
+            Assert.IsFalse(ExternalWorkLogic.MaySync(CachingTier.Full, sync, night, new TimeOnly(12, 30), false), "Another catalog's window does not count.");
+            Assert.IsFalse(ExternalWorkLogic.MaySync(CachingTier.Full, sync, night, new TimeOnly(23, 30), true), "It waits while Jularr is used.");
+            var eager = new ExternalWorkSyncData("anilist", 20, false, null, null, null);
+            Assert.IsTrue(ExternalWorkLogic.MaySync(CachingTier.Full, eager, night, new TimeOnly(23, 30), true));
+            Assert.IsFalse(ExternalWorkLogic.MaySync(CachingTier.Standard, eager, [], new TimeOnly(23, 30), false), "Only the full catalog runs the full sync.");
+            Assert.IsFalse(ExternalWorkLogic.MaySync(CachingTier.Lean, eager, [], new TimeOnly(23, 30), false));
+            Assert.IsFalse(ExternalWorkLogic.MaySync(CachingTier.Full, new ExternalWorkSyncData("openlibrary", 20, false, null, null, null), [], new TimeOnly(23, 30), false),
+                "A catalog without a full list is never kept whole.");
+            Assert.IsFalse(ExternalWorkLogic.MaySync(CachingTier.Full, new ExternalWorkSyncData("tvdb", 120, false, null, null, null), [], new TimeOnly(23, 30), false),
+                "TheTVDB's card only budgets the details of the series lists.");
+        }
+
+        [TestMethod]
+        public void CachingTier_ComesFromTheModuleAndItsSubOption_ForTheWholeInstance()
+        {
+            Assert.AreEqual(CachingTier.Lean, ExternalWorkLogic.CachingTierOf(false, false));
+            Assert.AreEqual(CachingTier.Lean, ExternalWorkLogic.CachingTierOf(false, true), "The full catalog is a sub-option of the Caching module.");
+            Assert.AreEqual(CachingTier.Standard, ExternalWorkLogic.CachingTierOf(true, false));
+            Assert.AreEqual(CachingTier.Full, ExternalWorkLogic.CachingTierOf(true, true));
+            Assert.AreEqual(CachingTier.Full, ExternalWorkLogic.CatalogTier(CachingTier.Full, "anilist"));
+            Assert.AreEqual(CachingTier.Full, ExternalWorkLogic.CatalogTier(CachingTier.Full, "tmdb_movie"));
+            Assert.AreEqual(CachingTier.Standard, ExternalWorkLogic.CatalogTier(CachingTier.Full, "openlibrary"), "Without a full list a catalog keeps Discover's lists.");
+            Assert.AreEqual(CachingTier.Lean, ExternalWorkLogic.CatalogTier(CachingTier.Lean, "anilist"));
+        }
+
+        [TestMethod]
+        public async Task Syncs_ShowEachCatalogsTier_AsTheModulesSetIt()
+        {
+            await using var host = await Host.CreateAsync(library: true);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            await host.Fixture.RunSqlAsync("INSERT INTO \"ExternalWorkSyncs\" (\"Namespace\", \"RequestsPerMinute\") VALUES ('openlibrary', 30)");
+
+            async Task<string> TiersAsync()
+            {
+                using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/syncs");
+                Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+                return string.Join(',', (await read.Content.ReadFromJsonAsync<BaseDataList<ExternalWorkSyncV1>>())!.Select(sync => sync.Namespace + ":" + sync.Tier));
+            }
+
+            // Caching is on and the full catalog off by default.
+            Assert.AreEqual("anilist:Standard,openlibrary:Standard,tmdb_movie:Standard,tvdb:Standard", await TiersAsync());
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'LocalDiscovery'");
+            Assert.AreEqual("anilist:Full,openlibrary:Standard,tmdb_movie:Full,tvdb:Standard", await TiersAsync(), "TheTVDB has no full list and is never kept whole.");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" IN ('LocalDiscovery', 'DiscoverCache')");
+            Assert.AreEqual("anilist:Lean,openlibrary:Lean,tmdb_movie:Lean,tvdb:Lean", await TiersAsync());
+        }
+
+        [TestMethod]
+        public async Task Settings_RefuseAnyoneButTheOwner()
+        {
+            await using var host = await Host.CreateAsync(library: true);
+            using var anonymous = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/syncs");
+            Assert.AreEqual(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist'"))!;
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/syncs");
+            Assert.AreEqual(HttpStatusCode.Forbidden, read.StatusCode);
+            using var write = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1(5, false, version));
+            Assert.AreEqual(HttpStatusCode.Forbidden, write.StatusCode);
+            Assert.AreEqual("20:true", await host.ScalarAsync("SELECT \"RequestsPerMinute\" || ':' || \"PausesWhileUsed\" FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist'"));
         }
 
         [TestMethod]
@@ -141,18 +203,67 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(aniList.PausesWhileUsed);
 
             var windows = new BaseDataList<ExternalWorkSyncWindowV1>([new(new TimeOnly(2, 0), new TimeOnly(6, 0)), new(new TimeOnly(22, 30), new TimeOnly(1, 0))]);
-            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1(true, 15, true, aniList.Version, windows));
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1(15, true, aniList.Version, windows));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             Assert.AreEqual("02:00:00-06:00:00,22:30:00-01:00:00", await host.ScalarAsync("SELECT string_agg(\"StartsAt\"::text || '-' || \"EndsAt\"::text, ',' ORDER BY \"StartsAt\") FROM \"ExternalWorkSyncWindows\""));
 
             // An old version and a window without length are refused; the saved windows stay.
-            using var stale = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1(true, 10, true, aniList.Version));
+            using var stale = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1(10, true, aniList.Version));
             Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
             using var empty = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist",
-                new UpdateExternalWorkSyncDataV1(true, 10, true, aniList.Version + 1, new([new(new TimeOnly(3, 0), new TimeOnly(3, 0))])));
+                new UpdateExternalWorkSyncDataV1(10, true, aniList.Version + 1, new([new(new TimeOnly(3, 0), new TimeOnly(3, 0))])));
             Assert.AreEqual(HttpStatusCode.BadRequest, empty.StatusCode);
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncWindows\""));
             Assert.AreEqual(15, await host.ScalarAsync("SELECT \"RequestsPerMinute\"::integer FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist'"));
+        }
+
+        [TestMethod]
+        public async Task CatalogPage_ShowsHowTheModulesKeepEachCatalog_WithoutAChoiceOfItsOwn()
+        {
+            await using var host = await Host.CreateAsync(library: true, razor: true);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "ExternalWorkSyncs" ("Namespace", "RequestsPerMinute") VALUES ('openlibrary', 30);
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
+                """);
+
+            async Task<string> PageAsync()
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, "/Admin/Catalog");
+                var html = await response.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, html);
+                return html;
+            }
+
+            static string Card(string html, string @namespace) => html[html.IndexOf("id=\"catalog-" + @namespace + "\"", StringComparison.Ordinal)..] is var rest
+                ? rest[..(rest.IndexOf("</article>", StringComparison.Ordinal) + 10)] : "";
+
+            // With the full catalog a catalog with a full list is kept whole, the others keep Discover's lists; each card keeps its pace, pause and windows.
+            var html = await PageAsync();
+            Assert.IsFalse(html.Contains("id=\"catalog-tmdb_tv\"", StringComparison.Ordinal), "TMDB's series catalog has no card.");
+            foreach (var (@namespace, mode) in new[] { ("anilist", "Whole"), ("tmdb_movie", "Whole"), ("openlibrary", "Kept"), ("tvdb", "Kept") })
+            {
+                var card = Card(html, @namespace);
+                StringAssert.Contains(card, ">" + mode + "<", @namespace);
+                StringAssert.Contains(card, "name=\"RequestsPerMinute\"", @namespace);
+                StringAssert.Contains(card, "name=\"PausesWhileUsed\"", @namespace);
+            }
+            foreach (var gone in new[] { "name=\"CacheTier\"", "name=\"IsEnabled\"", "name=\"CatalogDetailKeepDays\"", "name=\"DetailsDiscoverAhead\"", "handler=Cache\"" })
+            {
+                Assert.IsFalse(html.Contains(gone, StringComparison.Ordinal), gone);
+            }
+
+            // The images of other titles stay the page's one section.
+            StringAssert.Contains(html, "<h2>Images of other titles</h2>");
+            StringAssert.Contains(html, "action=\"/Admin/Catalog?handler=Covers\"");
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "<h2>").Count, "No other heading.");
+
+            // Without the Caching module Discover asks live.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" IN ('LocalDiscovery', 'DiscoverCache')");
+            html = await PageAsync();
+            StringAssert.Contains(Card(html, "anilist"), ">Live<");
+            StringAssert.Contains(html, "Discover keeps nothing locally and always asks the providers.");
         }
 
         // One column of the catalog Work a provider identity names.
@@ -209,7 +320,6 @@ namespace Jularr.Backend.Tests
                             """{"adult":false,"id":604,"original_title":"The Matrix Reloaded","popularity":40,"video":false}""",
                             """{"adult":false,"id":999,"original_title":"Gone","popularity":1,"video":false}"""
                         },
-                        "/p/exports/tv_series_ids_10_19_2026.json.gz" => ["""{"id":1399,"original_name":"Game of Thrones","popularity":80}"""],
                         _ => null
                     };
                     return Task.FromResult(lines is null ? new HttpResponseMessage(HttpStatusCode.NotFound) : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Gzip(lines)) });
@@ -220,9 +330,7 @@ namespace Jularr.Backend.Tests
                 {
                     "/3/movie/603" => """{"id":603,"title":"Matrix","original_title":"The Matrix","release_date":"1999-03-31","overview":"Ein Hacker.","poster_path":"/matrix.jpg","popularity":60,"vote_average":8.2,"imdb_id":"tt0133093"}""",
                     "/3/movie/604" => """{"id":604,"title":"Matrix Reloaded","original_title":"The Matrix Reloaded","release_date":"2003-05-15","vote_average":0}""",
-                    "/3/tv/1399" => """{"id":1399,"name":"Game of Thrones","original_name":"Game of Thrones","first_air_date":"2011-04-17","external_ids":{"imdb_id":"tt0944947"}}""",
                     "/3/movie/changes" => """{"results":[{"id":603,"adult":false}],"page":1,"total_pages":1}""",
-                    "/3/tv/changes" => """{"results":[],"page":1,"total_pages":1}""",
                     _ => null
                 };
                 return Task.FromResult(body is null ? new HttpResponseMessage(HttpStatusCode.NotFound)

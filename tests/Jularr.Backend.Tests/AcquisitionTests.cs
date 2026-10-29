@@ -1856,7 +1856,7 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
             await host.Fixture.RunSqlAsync("UPDATE \"LibraryRoots\" SET \"MediaTypeId\" = 2");
 
-            // Without a key TMDB is unavailable; the key is stored write-only.
+            // Without a key TheTVDB's series search is unavailable; the keys are stored write-only.
             var search = new SearchMetadataDataV1(MediaType.Series, "Example Show");
             using var unavailable = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/metadata/search", search);
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, unavailable.StatusCode);
@@ -1874,10 +1874,11 @@ namespace Jularr.Backend.Tests
             Assert.IsNull(result.WorkId);
 
             // Import maps identities and the episode catalog; a repeat updates the same Work.
-            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, result.ExternalId));
+            Assert.AreEqual(("tvdb", "81189"), (result.Namespace, result.ExternalId));
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, result.ExternalId, null, result.Namespace));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
-            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, result.ExternalId));
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, result.ExternalId, null, result.Namespace));
             Assert.AreEqual(work.Id, (await again.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\""));
@@ -2433,16 +2434,19 @@ namespace Jularr.Backend.Tests
             using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, "1399"));
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
 
-            // The Work stores another TheTVDB id than the one TMDB gives, so importing it again is refused.
+            // Another Work of the library holds the series' TheTVDB id, so the Work, refreshed by its TMDB id, cannot be imported again.
             await host.Fixture.RunSqlAsync($"""
                 INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (600, {work.Id});
-                UPDATE "WorkExternalIdentities" SET "Value" = '999' WHERE "WorkId" = {work.Id} AND "Namespace" = 'tvdb';
+                INSERT INTO "Works" ("Id", "CanonicalTitle", "MediaTypeId") VALUES (601, 'Other', 2);
+                INSERT INTO "WantedItems" ("Id", "WorkId", "IsPaused") VALUES (602, 601, TRUE);
+                UPDATE "WorkExternalIdentities" SET "WorkId" = 601 WHERE "WorkId" = {work.Id} AND "Namespace" = 'tvdb';
                 UPDATE "WorkExternalIdentities" SET "UpdatedAt" = now() - interval '2 days' WHERE "WorkId" = {work.Id} AND "Namespace" = 'tmdb_tv';
                 """);
             await RunAsync<RefreshWantedMetadataV1>(host);
 
             // It waits for the next day instead of heading the queue every cycle.
             Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"UpdatedAt\" > now() - interval '1 day' FROM \"WorkExternalIdentities\" WHERE \"WorkId\" = {work.Id} AND \"Namespace\" = 'tmdb_tv'"));
+            Assert.AreEqual(work.Id + ":601", await host.ScalarAsync("SELECT string_agg(\"WorkId\"::text, ':' ORDER BY \"Namespace\") FROM \"WorkExternalIdentities\" WHERE \"Namespace\" IN ('tvdb', 'tmdb_tv') AND \"WorkId\" IN (601, " + work.Id + ")"));
         }
 
         [TestMethod]
@@ -3169,9 +3173,13 @@ namespace Jularr.Backend.Tests
                 return path switch
                 {
                     "/v4/login" => Json("""{"data":{"token":"tvdb-test-token"}}"""),
-                    "/v4/series/81189/extended" => Json("""{"data":{"id":81189,"name":"Example Show","remoteIds":[{"sourceName":"IMDb","id":"tt0903747"}]}}"""),
+                    "/v4/series/81189/extended" => Json("""
+                        {"data":{"id":81189,"name":"Beispiel Serie","originalLanguage":"deu","firstAired":"2020-04-01","remoteIds":[{"sourceName":"IMDb","id":"tt0903747"},{"sourceName":"TheMovieDB.com","id":"1399"}],
+                        "translations":{"nameTranslations":[{"name":"Example Show","language":"eng"}]}}}
+                        """),
                     "/v4/search/remoteid/tt0903747" => Json("""{"data":[{"series":{"id":81189}}]}"""),
-                    "/v4/series/81189/episodes/default/eng" => Json($$$"""{"data":{"episodes":[{"id":1,"seasonNumber":0,"number":1,"name":"Pilot extra","aired":"2020-01-01"},{"id":2,"seasonNumber":1,"number":1,"name":"One","aired":"2020-04-01","runtime":42},{"id":3,"seasonNumber":1,"number":2,"name":"Two","aired":"2020-04-08"},{"id":4,"seasonNumber":1,"number":3,"name":"Three","aired":"2020-04-15"},{"id":5,"seasonNumber":2,"number":1,"name":"Four","aired":"2021-04-01"},{"id":6,"seasonNumber":2,"number":2,"name":"Five","aired":"{{{future}}}"}]},"links":{"next":null}}"""),
+                    "/v4/search" => Json("""{"data":[{"tvdb_id":"81189","name":"Beispiel Serie","year":"2020","type":"series","primary_language":"deu","translations":{"deu":"Beispiel Serie","eng":"Example Show"}}]}"""),
+                    "/v4/series/81189/episodes/default" or "/v4/series/81189/episodes/default/eng" => Json($$$"""{"data":{"episodes":[{"id":1,"seasonNumber":0,"number":1,"name":"Pilot extra","aired":"2020-01-01"},{"id":2,"seasonNumber":1,"number":1,"name":"One","aired":"2020-04-01","runtime":42},{"id":3,"seasonNumber":1,"number":2,"name":"Two","aired":"2020-04-08"},{"id":4,"seasonNumber":1,"number":3,"name":"Three","aired":"2020-04-15"},{"id":5,"seasonNumber":2,"number":1,"name":"Four","aired":"2021-04-01"},{"id":6,"seasonNumber":2,"number":2,"name":"Five","aired":"{{{future}}}"}]},"links":{"next":null}}"""),
                     _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                 };
             }

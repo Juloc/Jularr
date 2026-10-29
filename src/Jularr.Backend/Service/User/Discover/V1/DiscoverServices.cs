@@ -59,7 +59,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime), (Data.Page - 1) * ExternalWorkLogic.ShelfSize), ct);
                     return (Keeps: true, Cached: (BaseDataList<DiscoverItemV1>?)new(rows.Select(row => DiscoverQueries.ToItem(Data.MediaTypeId, row)).ToArray()));
                 }
-                var keeps = await ctx.KeepsDiscoverTitlesAsync(ct);
+                var keeps = await ctx.KeepsDiscoverListsAsync(ct);
                 if (keeps)
                 {
                     var snapshot = await ExternalFeedCache.ReadAsync(ctx, feed, ct);
@@ -82,10 +82,11 @@ namespace Jularr.Backend.Service.User.Discover.V1
             }
             else
             {
-                // Without kept lists the titles shown still become Works, so each card opens one.
+                // Without kept lists the titles shown still become Works, so each card opens one; a series is TheTVDB's.
                 var connection = await _metadata.ConnectAsync(Context, CancellationToken);
                 var results = await _metadata.ReadFeedAsync(connection, Data.MediaTypeId, Data.DiscoverFeedTypeId, Data.Page, CancellationToken);
-                works = await MetadataCatalog.KeepWorksAsync(Context, list, [.. results.Select(result => WorkMetadata.ExternalWork(list.Namespace, result))], CancellationToken);
+                works = await MetadataCatalog.KeepWorksAsync(Context, new ExternalWorkListData(ExternalFeedLogic.CatalogOf(list.Namespace), Data.MediaTypeId, null),
+                    await _metadata.ExternalWorksAsync(Context, connection, Data.MediaTypeId, results, CancellationToken), CancellationToken);
             }
 
             return await DiscoverQueries.ItemsAsync(Context, Data.MediaTypeId, works, Auth.ProfileId!.Value, CancellationToken);
@@ -192,29 +193,32 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 return ctx.ReadSql.ReadListAsync<DiscoverItemV1>(sql, ct);
             }, CancellationToken, mode: SqlAccessMode.ReadOnly);
 
-            // Provider results add what is not local yet; an unavailable provider leaves the local results.
+            // Provider results add what is not local yet: films from TMDB, series from TheTVDB. An unavailable provider leaves the other type and the local results;
+            // a search of series alone says when TheTVDB has no key.
             var items = local.Take(LocalLimit).ToList();
-            try
+            var listed = (await DiscoverQueries.ReadTypesAsync(Context, Auth.ProfileId!.Value, CancellationToken)).Listed;
+            foreach (var mediaType in Data.MediaTypeId is { } selected ? [selected] : new[] { MediaType.Movie, MediaType.Series })
             {
-                var connection = await _metadata.ConnectAsync(Context, CancellationToken);
-                var listed = (await DiscoverQueries.ReadTypesAsync(Context, Auth.ProfileId!.Value, CancellationToken)).Listed;
-                foreach (var mediaType in Data.MediaTypeId is { } selected ? [selected] : new[] { MediaType.Movie, MediaType.Series })
+                if (mediaType is not (MediaType.Movie or MediaType.Series) || !listed.Contains(mediaType))
                 {
-                    if (mediaType is not (MediaType.Movie or MediaType.Series) || !listed.Contains(mediaType))
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
+                try
+                {
                     // Every result is kept as the Work it is; one the local results already hold is not repeated.
-                    var results = await _metadata.SearchAsync(connection, mediaType, Data.Query, null, CancellationToken, Data.Page);
-                    var list = new ExternalWorkListData(WorkMetadata.Namespace(mediaType), mediaType, null);
-                    var works = await MetadataCatalog.KeepWorksAsync(Context, list, [.. results.Select(result => WorkMetadata.ExternalWork(list.Namespace, result))], CancellationToken);
+                    IReadOnlyList<ExternalWorkData> results = mediaType == MediaType.Series
+                        ? await _metadata.SearchSeriesAsync(Context, Data.Query, null, CancellationToken, Data.Page)
+                        : [.. (await _metadata.SearchAsync(await _metadata.ConnectAsync(Context, CancellationToken), mediaType, Data.Query, null, CancellationToken, Data.Page))
+                            .Select(result => WorkMetadata.ExternalWork(WorkMetadata.Namespace(mediaType), result))];
+                    var list = new ExternalWorkListData(mediaType == MediaType.Series ? "tvdb" : WorkMetadata.Namespace(mediaType), mediaType, null);
+                    var works = await MetadataCatalog.KeepWorksAsync(Context, list, results, CancellationToken);
                     var localIds = items.Select(item => item.WorkId).ToHashSet();
                     items.AddRange((await DiscoverQueries.ItemsAsync(Context, mediaType, works, Auth.ProfileId!.Value, CancellationToken)).Where(item => !localIds.Contains(item.WorkId)));
                 }
-            }
-            catch (ServiceUnavailableException)
-            {
+                catch (ServiceUnavailableException exception) when (exception.Code != "tvdb_key_missing" || Data.MediaTypeId is null)
+                {
+                }
             }
 
             return new BaseDataList<DiscoverItemV1>(items.ToArray());
@@ -267,7 +271,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 {
                     return (Identity: (WorkIdentityData?)null, Keeps: false, Cached: (BaseDataList<DiscoverItemV1>?)new([]));
                 }
-                var keeps = await ctx.KeepsDiscoverTitlesAsync(ct);
+                var keeps = await ctx.KeepsDiscoverListsAsync(ct);
                 if (keeps)
                 {
                     var feed = new ExternalFeedData(identity.Namespace, type, null, null, 1, identity.Value, null);
@@ -305,9 +309,9 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 results = [];
             }
 
-            // Without kept lists the suggestions still become Works, so each card opens one.
-            var list = new ExternalWorkListData(source.Namespace, mediaType, null);
-            var kept = await MetadataCatalog.KeepWorksAsync(Context, list, [.. results.Select(result => WorkMetadata.ExternalWork(list.Namespace, result))], CancellationToken);
+            // Without kept lists the suggestions still become Works, so each card opens one; a series is TheTVDB's.
+            var list = new ExternalWorkListData(ExternalFeedLogic.CatalogOf(source.Namespace), mediaType, null);
+            var kept = await MetadataCatalog.KeepWorksAsync(Context, list, await _metadata.ExternalWorksAsync(Context, connection, mediaType, results, CancellationToken), CancellationToken);
             return await DiscoverQueries.ItemsAsync(Context, mediaType, kept, Auth.ProfileId!.Value, CancellationToken);
         }
     }
@@ -362,7 +366,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
         }
     }
 
-    // Titles while typing, from what Discover keeps; without DiscoverCache there is nothing to suggest from.
+    // Titles while typing, from what Discover keeps; without the Caching module there is nothing to suggest from.
     [ServiceEndpoint("POST", "/api/v1/discover/suggestions")]
     public sealed class SuggestDiscoverV1 : UserService<DiscoverParametersV1, SuggestDiscoverDataV1>
     {
@@ -375,7 +379,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             var text = Data.Query.Trim();
             if (text.Length < 2 || ExternalWorkLogic.SearchTerms(text) is not { } terms
-                || !await Context.ExecuteBatchAsync((ctx, ct) => ctx.KeepsDiscoverTitlesAsync(ct), CancellationToken, mode: SqlAccessMode.ReadOnly))
+                || !await Context.ExecuteBatchAsync((ctx, ct) => ctx.KeepsDiscoverListsAsync(ct), CancellationToken, mode: SqlAccessMode.ReadOnly))
             {
                 return new BaseDataList<DiscoverSuggestionV1>([]);
             }
@@ -411,9 +415,13 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             // Every result is kept as the Work it is.
             await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
-            var results = Data.MediaSubtypeId == MediaSubtype.Anime ? await _catalog.SearchAnimeAsync(Data.Query, CancellationToken)
-                : await _catalog.SearchAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Query, null, CancellationToken);
-            var works = await MetadataCatalog.KeepAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, results, CancellationToken);
+            var language = Data.MediaSubtypeId == MediaSubtype.LightNovel ? await DiscoverQueries.ReadLanguageAsync(Context, Auth.ProfileId!.Value, CancellationToken) : null;
+            var works = Data.MediaSubtypeId == MediaSubtype.Anime
+                ? await MetadataCatalog.KeepAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, await _catalog.SearchAnimeAsync(Data.Query, CancellationToken), CancellationToken)
+                : Data.MediaTypeId == MediaType.Series
+                    ? await _catalog.SearchAndKeepSeriesAsync(Context, Data.MediaSubtypeId, Data.Query, CancellationToken)
+                    : await MetadataCatalog.KeepAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId,
+                        await _catalog.SearchAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Query, null, CancellationToken, language), CancellationToken);
             return await DiscoverQueries.CatalogItemsAsync(Context, works, Auth.ProfileId!.Value, CancellationToken);
         }
     }
@@ -485,13 +493,36 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 && (scope.MediaSubtypeId is not { } subtype || listed.Contains(subtype.ToString())))];
         }
 
-        public static DiscoverItemV1 ToItem(MediaType mediaType, ExternalWorkShelfItemData work) => new(mediaType, int.Parse(work.Value, CultureInfo.InvariantCulture), work.WorkId, work.Title,
+        // The language of the profile's interface, which names a linked web novel.
+        public static Task<string?> ReadLanguageAsync(LogicContext context, long profileId, CancellationToken ct) =>
+            context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        lower(split_part(locale."Locale", '-', 1))
+                    FROM
+                        "Profiles" AS profile
+                        JOIN "UiLocales" AS locale ON locale."Id" = profile."UiLocaleId"
+                    WHERE
+                        profile."Id" = @ProfileId;
+                    """;
+                sql.Parameters.Add(new ProfileParameters(profileId));
+                return await ctx.ReadSql.ExecuteScalarAsync(sql, token) as string;
+            }, ct, mode: SqlAccessMode.ReadOnly);
+
+        public static DiscoverItemV1 ToItem(MediaType mediaType, ExternalWorkShelfItemData work) => new(mediaType, TmdbId(work.Namespace, work.Value), work.WorkId, work.Title,
             work.ReleaseYear, work.Overview, work.ImageUrl, work.BackdropUrl, work.MediaStateTypeId ?? MediaStateType.NotRequested, work.PlexUrl, work.Rating);
+
+        // A card names TMDB's id only for a title of TMDB's catalog.
+        private static int? TmdbId(string @namespace, string value) =>
+            @namespace is "tmdb_movie" or "tmdb_tv" && int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
 
         public static DiscoverCatalogItemV1 CatalogItem(ExternalWorkShelfItemData work) => new(work.Namespace, work.Value, work.Title, work.ReleaseYear, work.Creator, work.WorkId, work.ImageUrl, work.Rating,
             work.MediaStateTypeId ?? MediaStateType.NotRequested);
 
-        // Films and series are discovered through TMDB; anime series and the other types through their catalogs.
+        // Films and series are discovered through TMDB's lists, series as TheTVDB's; anime series and the other types through their catalogs.
         public static Task RequireCatalogTypeAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, long profileId, CancellationToken ct) =>
             context.ExecuteBatchAsync(async (ctx, token) =>
             {
@@ -569,7 +600,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             return new BaseDataList<DiscoverItemV1>([.. works.Select((work, index) =>
             {
                 var state = states.GetValueOrDefault(ids[index]);
-                return new DiscoverItemV1(mediaType, int.Parse(work.Value, CultureInfo.InvariantCulture), ids[index], work.Title, work.ReleaseYear, work.Overview, state?.PosterUrl ?? work.ImageUrl,
+                return new DiscoverItemV1(mediaType, TmdbId(work.Namespace, work.Value), ids[index], work.Title, work.ReleaseYear, work.Overview, state?.PosterUrl ?? work.ImageUrl,
                     state?.BackdropUrl ?? work.BackdropUrl, state?.MediaStateTypeId ?? MediaStateType.NotRequested, state?.PlexUrl, work.Rating);
             })]);
         }

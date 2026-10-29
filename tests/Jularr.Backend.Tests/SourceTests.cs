@@ -67,7 +67,7 @@ namespace Jularr.Backend.Tests
             using var setUp = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/acquisition/sources/setup");
             Assert.AreEqual(HttpStatusCode.OK, setUp.StatusCode, await setUp.Content.ReadAsStringAsync());
             var result = (await setUp.Content.ReadFromJsonAsync<SourceSetupResultV1>())!;
-            CollectionAssert.AreEqual(new[] { "gutenberg" }, result.Added);
+            CollectionAssert.AreEqual(new[] { "gutenberg", "narou" }, result.Added);
             CollectionAssert.IsSubsetOf(new[] { "annasarchive", "standardebooks", "newznab" }, result.NeedsAccount);
             Assert.IsTrue((await ReadCatalogAsync(host)).Single(item => item.Key == "gutenberg").IsConfigured);
             using var standard = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Standard Ebooks", AcquisitionConnectionType.Opds,
@@ -79,6 +79,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT \"AcquisitionConnectionTypeId\"::bigint FROM \"AcquisitionConnections\" ORDER BY \"Id\" LIMIT 1"));
             // Bulk setup must not silently activate download sources before a workspace is confirmed.
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT \"IsEnabled\"::int::bigint FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 3 LIMIT 1"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT \"IsEnabled\"::int::bigint FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 11"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"Providers\" WHERE \"Key\" = 'syosetu'"));
 
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Sources");
             var html = await page.Content.ReadAsStringAsync();
@@ -429,6 +431,55 @@ namespace Jularr.Backend.Tests
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual("source_manual_link", await AttentionAsync());
 
+            // Open the waiting download's page, not the configured homepage or a different mirror's search.
+            var operationId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!;
+            var downloadBrowser = "/api/v1/admin/activity/" + operationId + "/browser";
+            using (var openedDownload = await host.SendAsync(HttpMethod.Post, downloadBrowser))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, openedDownload.StatusCode, await openedDownload.Content.ReadAsStringAsync());
+                var view = (await openedDownload.Content.ReadFromJsonAsync<BrowserViewV1>())!;
+                Assert.AreEqual(operationId, view.OperationId);
+                Assert.AreEqual(sourceId, view.AcquisitionConnectionId);
+                Assert.AreEqual("https://annas.example.test/slow_download/0123456789abcdef0123456789abcdef/0/0", browser.Address!.AbsoluteUri);
+                Assert.IsTrue(browser.OpensPage);
+            }
+            using (var page = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Filter=Waiting"))
+            {
+                StringAssert.Contains(await page.Content.ReadAsStringAsync(), "handler=OpenDownloadView&amp;operationId=" + operationId);
+            }
+            using (var page = await host.SendAsync(HttpMethod.Get, "/Admin/Browser"))
+            {
+                var html = await page.Content.ReadAsStringAsync();
+                StringAssert.Contains(html, "handler=OpenDownloadView&amp;operationId=" + operationId);
+                using var reopened = await host.SendAsync(HttpMethod.Post, "/Admin/Browser?handler=OpenDownloadView&operationId=" + operationId, new Dictionary<string, string>
+                {
+                    ["__RequestVerificationToken"] = LibraryTests.Token(html)
+                });
+                Assert.AreEqual(HttpStatusCode.OK, reopened.StatusCode, await reopened.Content.ReadAsStringAsync());
+            }
+
+            var sourcePage = browser.Address!.AbsoluteUri;
+            foreach (var rejected in new[] { "https://other.example.test/check", "https://127.0.0.1/check", "https://user:secret@annas.example.test/check" })
+            {
+                await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"AttentionUrl\" = '" + rejected + "' WHERE \"Id\" = " + operationId);
+                var starts = browser.Starts;
+                using var refused = await host.SendAsync(HttpMethod.Post, downloadBrowser);
+                Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+                Assert.AreEqual(starts, browser.Starts);
+            }
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"AttentionUrl\" = '" + sourcePage + "' WHERE \"Id\" = " + operationId);
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"IsEnabled\" = FALSE WHERE \"Id\" = " + sourceId);
+            using (var disabled = await host.SendAsync(HttpMethod.Post, downloadBrowser)) Assert.AreEqual(HttpStatusCode.BadRequest, disabled.StatusCode);
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"IsEnabled\" = TRUE, \"BaseUrl\" = 'https://annas-archive.gl' WHERE \"Id\" = " + sourceId);
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"AttentionUrl\" = 'https://annas-archive.pk/slow_download/0123456789abcdef0123456789abcdef/0/0' WHERE \"Id\" = " + operationId);
+            using (var mirror = await host.SendAsync(HttpMethod.Post, downloadBrowser))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, mirror.StatusCode, await mirror.Content.ReadAsStringAsync());
+                Assert.AreEqual("annas-archive.pk", browser.Address!.Host);
+            }
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"BaseUrl\" = 'https://annas.example.test' WHERE \"Id\" = " + sourceId);
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"AttentionUrl\" = '" + sourcePage + "' WHERE \"Id\" = " + operationId);
+
             // Closing a different source does not release this source's waiting jobs.
             await CloseAsync(otherId);
             Assert.AreEqual("source_manual_link", await AttentionAsync());
@@ -441,6 +492,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"AttentionKey\" = 'download_size_limit' WHERE \"OperationTypeId\" = 2");
             await CloseAsync(sourceId);
             Assert.AreEqual("download_size_limit", await AttentionAsync());
+            using (var wrongState = await host.SendAsync(HttpMethod.Post, downloadBrowser)) Assert.AreEqual(HttpStatusCode.BadRequest, wrongState.StatusCode);
             await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"AttentionKey\" = 'source_manual_link' WHERE \"OperationTypeId\" = 2");
 
             // The person completes the source's check; Jularr reads its countdown and file link itself.

@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Media;
 using NpgsqlTypes;
 
 namespace Jularr.Backend.Data.Fields.Media
@@ -25,7 +26,6 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly DateField Day = new();
         public static readonly StringField Shelves = new() { AllowBlank = false };
         public static readonly StringField SearchTerms = new() { AllowBlank = false, MaximumLength = 1000 };
-        public static readonly BoolField IsEnabled = new();
         public static readonly IntField RequestsPerMinute = new() { Minimum = 1, Maximum = 600 };
         public static readonly BoolField PausesWhileUsed = new();
         public static readonly IntField Cursor = new() { Minimum = 1, Required = false };
@@ -34,7 +34,15 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly TimeField EndsAt = new();
         public static readonly LongField Entries = new() { Minimum = 0 };
         public static readonly LongField Pending = new() { Minimum = 0 };
+        public static readonly EnumField Tier = new(typeof(CachingTier));
+        // Works a pass leaves out for now, such as titles that just could not be detailed.
+        public static readonly LongArrayField WorkIds = new() { Minimum = 1, MaximumLength = 10000, IsSet = true };
         public static readonly BoolField IsDetailed = new();
+        // Whether Discover keeps its lists (the Caching module is on).
+        public static readonly BoolField KeepsDiscoverLists = new();
         public static readonly BoolField AreDetailsUnavailable = new();
+        // Whether something ties a Work to the library (WorkLibraryRelations).
+        public static readonly BoolField IsInLibrary = new();
+        public static readonly BoolField HoldsValue = new();
     }
 }

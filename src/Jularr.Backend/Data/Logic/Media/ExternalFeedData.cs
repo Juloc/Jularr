@@ -69,10 +69,10 @@ namespace Jularr.Backend.Data.Logic.Media
         public string Items { get; }
     }
 
-    internal sealed class ExternalFeedStateData(bool isEnabled, long? feedId)
+    // The feed once it was filled.
+    internal sealed class ExternalFeedStateData(long feedId)
     {
-        public bool IsEnabled { get; } = isEnabled;
-        public long? FeedId { get; } = feedId;
+        public long FeedId { get; } = feedId;
     }
 
     internal sealed class ExternalFeedRetryData : ExternalFeedData

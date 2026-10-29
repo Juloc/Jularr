@@ -68,6 +68,10 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.SeasonNumber), false)]
         public int? SeasonNumber { get; }
+
+        // TMDB's and IMDb's ids of a TheTVDB series a TMDB list or Sonarr named; the Work keeps them as further identities.
+        public string? TmdbValue { get; init; }
+        public string? ImdbValue { get; init; }
     }
 
     // Whether a Work the profile may open has its details yet; a series that is only an anime season names its AniList entry.
@@ -98,6 +102,22 @@ namespace Jularr.Backend.Data.Logic.Media
         public string? AniListValue { get; }
     }
 
+    // A Work whose details are looked up: for a profile only while it may see the Work, for a background pass (no profile) always.
+    internal sealed class WorkDetailLookupData : BaseData
+    {
+        public WorkDetailLookupData(long id, long? profileId)
+        {
+            Id = id;
+            ProfileId = profileId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id), false)]
+        public long? ProfileId { get; }
+    }
+
     // Anime seasons that were Works of their own and now go into the series that maps them.
     internal sealed class AnimePlaceholderMergeData : BaseData
     {
@@ -112,6 +132,53 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Ids))]
         public long[] PlaceholderWorkIds { get; }
+    }
+
+    internal sealed class WorkIdsData : BaseData
+    {
+        public WorkIdsData(long[] workIds)
+        {
+            WorkIds = workIds;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Ids))]
+        public long[] WorkIds { get; }
+    }
+
+    // A Work a title or folder may name, and whether something ties it to the library.
+    internal sealed class WorkLibraryCandidateData : BaseData
+    {
+        public WorkLibraryCandidateData(long id, bool isInLibrary)
+        {
+            Id = id;
+            IsInLibrary = isInLibrary;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsInLibrary))]
+        public bool IsInLibrary { get; }
+    }
+
+    // A Work that shares a provider id with another: whether it is in the library and whether it holds the provider's own id.
+    internal sealed class WorkTwinData : BaseData
+    {
+        public WorkTwinData(long id, bool isInLibrary, bool holdsValue)
+        {
+            Id = id;
+            IsInLibrary = isInLibrary;
+            HoldsValue = holdsValue;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsInLibrary))]
+        public bool IsInLibrary { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.HoldsValue))]
+        public bool HoldsValue { get; }
     }
 
     // The Work a saved catalog title is; an anime season is its series with the season.
@@ -171,6 +238,8 @@ namespace Jularr.Backend.Data.Logic.Media
             ImageUrls = works.Select(work => work.ImageUrl).ToArray();
             BackdropUrls = works.Select(work => work.BackdropUrl).ToArray();
             Ratings = works.Select(work => work.Rating ?? 0).ToArray();
+            TmdbValues = works.Select(work => work.TmdbValue).ToArray();
+            ImdbValues = works.Select(work => work.ImdbValue).ToArray();
         }
 
         public string Namespace { get; }
@@ -187,6 +256,8 @@ namespace Jularr.Backend.Data.Logic.Media
         public string?[] ImageUrls { get; }
         public string?[] BackdropUrls { get; }
         public decimal[] Ratings { get; }
+        public string?[] TmdbValues { get; }
+        public string?[] ImdbValues { get; }
     }
 
     // One Discover shelf of a whole catalog, or a scope to search without a list: Shelf numbers it within the request.
@@ -350,10 +421,9 @@ namespace Jularr.Backend.Data.Logic.Media
     // A catalog's full-sync settings and progress.
     internal sealed class ExternalWorkSyncData : BaseData
     {
-        public ExternalWorkSyncData(string @namespace, bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, int? cursor, DateTime? changesReadAt)
+        public ExternalWorkSyncData(string @namespace, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, int? cursor, DateTime? changesReadAt)
         {
             Namespace = @namespace;
-            IsEnabled = isEnabled;
             RequestsPerMinute = requestsPerMinute;
             PausesWhileUsed = pausesWhileUsed;
             ListedOn = listedOn;
@@ -363,9 +433,6 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
         public string Namespace { get; }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsEnabled))]
-        public bool IsEnabled { get; }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.RequestsPerMinute))]
         public int RequestsPerMinute { get; }
@@ -381,6 +448,46 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.ChangesReadAt))]
         public DateTime? ChangesReadAt { get; }
+    }
+
+    // A catalog whose Discover lists get their details in advance: its requests a pass and whether it waits while Jularr is used.
+    internal sealed class CatalogPrefetchData : BaseData
+    {
+        public CatalogPrefetchData(string @namespace, int requestsPerMinute, bool pausesWhileUsed)
+        {
+            Namespace = @namespace;
+            RequestsPerMinute = requestsPerMinute;
+            PausesWhileUsed = pausesWhileUsed;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.RequestsPerMinute))]
+        public int RequestsPerMinute { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.PausesWhileUsed))]
+        public bool PausesWhileUsed { get; }
+    }
+
+    // The next titles of a catalog's Discover lists without details, leaving out those a pass just could not detail.
+    internal sealed class CatalogPrefetchQueryData : BaseData
+    {
+        public CatalogPrefetchQueryData(string @namespace, int limit, long[] skipped)
+        {
+            Namespace = @namespace;
+            Limit = limit;
+            Skipped = skipped;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Limit))]
+        public int Limit { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.WorkIds))]
+        public long[] Skipped { get; }
     }
 
     internal sealed class ExternalWorkSyncProgressData : BaseData
@@ -427,10 +534,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
     internal sealed class ExternalWorkSyncSummaryData : BaseData
     {
-        public ExternalWorkSyncSummaryData(string @namespace, bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, long entries, long pending, long version)
+        public ExternalWorkSyncSummaryData(string @namespace, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, long entries, long pending, long version)
         {
             Namespace = @namespace;
-            IsEnabled = isEnabled;
             RequestsPerMinute = requestsPerMinute;
             PausesWhileUsed = pausesWhileUsed;
             ListedOn = listedOn;
@@ -441,9 +547,6 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
         public string Namespace { get; }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsEnabled))]
-        public bool IsEnabled { get; }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.RequestsPerMinute))]
         public int RequestsPerMinute { get; }
@@ -467,10 +570,9 @@ namespace Jularr.Backend.Data.Logic.Media
     // The Owner's choices for one catalog, with its windows as JSON rows.
     internal sealed class ExternalWorkSyncSettingsData : BaseData
     {
-        public ExternalWorkSyncSettingsData(string @namespace, bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, long version, string windows)
+        public ExternalWorkSyncSettingsData(string @namespace, int requestsPerMinute, bool pausesWhileUsed, long version, string windows)
         {
             Namespace = @namespace;
-            IsEnabled = isEnabled;
             RequestsPerMinute = requestsPerMinute;
             PausesWhileUsed = pausesWhileUsed;
             Version = version;
@@ -479,9 +581,6 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
         public string Namespace { get; }
-
-        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsEnabled))]
-        public bool IsEnabled { get; }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.RequestsPerMinute))]
         public int RequestsPerMinute { get; }

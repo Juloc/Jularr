@@ -7,6 +7,9 @@ namespace Jularr.Backend.Logic.Media
 {
     internal static class WorkMetadataLogic
     {
+        // Narō's ncodes: web novels, never a published edition.
+        public const string WebNovelNamespace = "syosetu";
+
         // A Work matched to the wrong provider entry takes the chosen one: its provider identities, titles, facts and units without files go,
         // its files, requests and manual edits stay; the following metadata import fills it again.
         public static async Task RematchWorkAsync(this LogicContext ctx, WorkRematchData data, MediaType mediaType, CancellationToken ct)
@@ -14,7 +17,7 @@ namespace Jularr.Backend.Logic.Media
             var allowed = mediaType switch
             {
                 MediaType.Movie => data.Namespace == "tmdb_movie",
-                MediaType.Series => data.Namespace == "tmdb_tv",
+                MediaType.Series => data.Namespace is "tvdb" or "tmdb_tv",
                 MediaType.Book => data.Namespace is "openlibrary" or "anilist",
                 MediaType.Music => data.Namespace == "musicbrainz",
                 MediaType.Game => data.Namespace == "igdb",
@@ -129,6 +132,40 @@ namespace Jularr.Backend.Logic.Media
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
+        // The metadata fill asked a catalog for this Work now, whatever the answer; it asks again a day later at the earliest.
+        public static async Task MarkWorkMetadataTriedAsync(this LogicContext ctx, long workId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Works"
+                SET
+                    "MetadataTriedAt" = now()
+                WHERE
+                    "Id" = @Id;
+                """;
+            sql.Parameters.Add(new WorkIdData(workId));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        public static async Task SaveWorkRatingAsync(this LogicContext ctx, WorkRatingData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Works"
+                SET
+                    "Rating" = COALESCE(@Rating, "Rating"),
+                    "Votes" = CASE WHEN @Rating::numeric IS NULL THEN "Votes" ELSE @Votes END
+                WHERE
+                    "Id" = @Id;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         // TMDB sometimes links a series to an old or duplicate TheTVDB entry and an import then stored that id. When the folder's own id
         // (Sonarr, nfo) names the same series by its TMDB id (and its IMDb id, if both are known), the Work takes the folder's id instead;
         // an id a person set stays, and an id another Work holds is never taken.
@@ -183,6 +220,82 @@ namespace Jularr.Backend.Logic.Media
             return ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
+        // A film or series whose provider ids lie on several Works of the same type: a catalog title nothing ties to the library (a twin a list or search made
+        // before the library Work held the id) goes into the Work that is in the library, or else into the one holding the provider's own id; its list places,
+        // relations and catalog fields move along. Two Works of the library stay apart and need a person; a Work that never was a catalog title counts as one.
+        public static async Task<long> MergeCatalogTwinsAsync(this LogicContext ctx, WorkMetadataData data, IReadOnlyList<long> workIds, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    work."Id",
+                    work."CatalogNamespace" IS NULL OR EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id") AS "IsInLibrary",
+                    EXISTS (SELECT 1 FROM "WorkExternalIdentities" AS own WHERE own."WorkId" = work."Id" AND own."Namespace" = @Namespace AND own."Value" = @Value) AS "HoldsValue"
+                FROM
+                    "Works" AS work
+                WHERE
+                    work."Id" = ANY(@WorkIds)
+                ORDER BY
+                    work."Id";
+                """;
+            sql.Parameters.Add(data);
+            sql.Parameters.Add(new WorkIdsData([.. workIds]));
+            var candidates = await ctx.ReadSql.ReadListAsync<WorkTwinData>(sql, ct);
+            if (candidates.Count(candidate => candidate.IsInLibrary) > 1)
+            {
+                throw new DataValidationException(nameof(data.ExternalIdentities), "in_use");
+            }
+
+            var kept = candidates.OrderByDescending(candidate => candidate.IsInLibrary).ThenByDescending(candidate => candidate.HoldsValue).ThenBy(candidate => candidate.Id).First();
+            var merge = new AnimePlaceholderMergeData(kept.Id, [.. candidates.Where(candidate => candidate.Id != kept.Id).Select(candidate => candidate.Id)]);
+
+            // The kept Work takes the catalog fields it lacks; the identities follow with the import.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Works" AS work
+                SET
+                    "CatalogNamespace" = coalesce(work."CatalogNamespace", twin."CatalogNamespace"),
+                    "OriginalTitle" = coalesce(work."OriginalTitle", twin."OriginalTitle"),
+                    "Overview" = coalesce(work."Overview", twin."Overview"),
+                    "ImageUrl" = coalesce(work."ImageUrl", twin."ImageUrl"),
+                    "BackdropUrl" = coalesce(work."BackdropUrl", twin."BackdropUrl"),
+                    "Popularity" = coalesce(work."Popularity", twin."Popularity"),
+                    "Rating" = coalesce(work."Rating", twin."Rating"),
+                    "Votes" = coalesce(work."Votes", twin."Votes"),
+                    "TrendingRank" = coalesce(work."TrendingRank", twin."TrendingRank")
+                FROM
+                    (
+                        SELECT
+                            other."CatalogNamespace",
+                            other."OriginalTitle",
+                            other."Overview",
+                            other."ImageUrl",
+                            other."BackdropUrl",
+                            other."Popularity",
+                            other."Rating",
+                            other."Votes",
+                            other."TrendingRank"
+                        FROM
+                            "Works" AS other
+                        WHERE
+                            other."Id" = ANY(@PlaceholderWorkIds)
+                        ORDER BY
+                            other."TrendingRank" NULLS LAST,
+                            other."Id"
+                        LIMIT 1
+                    ) AS twin
+                WHERE
+                    work."Id" = @SeriesWorkId;
+                """;
+            sql.Parameters.Add(merge);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            await ctx.MergeWorksIntoAsync(merge, ct);
+            return kept.Id;
+        }
+
         public static async Task<long> SaveWorkMetadataAsync(this LogicContext ctx, WorkMetadataData data, CancellationToken ct)
         {
             // Video provider IDs must agree on one canonical Work before any metadata is written.
@@ -209,12 +322,12 @@ namespace Jularr.Backend.Logic.Media
                     """;
                 sql.Parameters.Add(data);
                 var matches = (await ctx.Sql.ReadListAsync<WorkIdentityCandidateData>(sql, ct)).DistinctBy(candidate => candidate.Id).ToArray();
-                if (matches.Length > 1 || matches.Any(candidate => candidate.MediaTypeId != data.MediaTypeId))
+                if (matches.Any(candidate => candidate.MediaTypeId != data.MediaTypeId))
                 {
                     throw new DataValidationException(nameof(data.ExternalIdentities), "in_use");
                 }
 
-                workId = matches.SingleOrDefault()?.Id;
+                workId = matches.Length > 1 ? await ctx.MergeCatalogTwinsAsync(data, [.. matches.Select(candidate => candidate.Id)], ct) : matches.SingleOrDefault()?.Id;
                 if (workId is { } known)
                 {
                     // An unchanged shared IMDb ID cannot silently replace a different stored TMDB or TVDB ID.
@@ -263,7 +376,8 @@ namespace Jularr.Backend.Logic.Media
             }
 
             // A Book of the same subtype, title and year from another provider is the same Work; anything less clear becomes a new one.
-            if (workId is null && data.MediaTypeId == MediaType.Book)
+            // A Narō web novel and a published edition stay apart in both directions, whatever their titles.
+            if (workId is null && data.MediaTypeId == MediaType.Book && data.Namespace != WebNovelNamespace)
             {
                 sql = new SqlStatement();
                 sql.Statement =
@@ -283,7 +397,7 @@ namespace Jularr.Backend.Logic.Media
                                 "WorkExternalIdentities" AS identity
                             WHERE
                                 identity."WorkId" = work."Id"
-                                AND identity."Namespace" = @Namespace
+                                AND identity."Namespace" IN (@Namespace, 'syosetu')
                         )
                         AND EXISTS (
                             SELECT
@@ -303,13 +417,15 @@ namespace Jularr.Backend.Logic.Media
                 workId = same.Count == 1 ? same[0].Id : null;
             }
 
+            // A provider's classification names the subtype of a new title only: a Work created now, or a catalog title that gets its first details.
+            // A refresh never changes the subtype of a Work, and a person's choice always stays.
             sql = new SqlStatement();
             sql.Statement = workId is null
                 ? """
                   INSERT INTO
                       "Works" ("MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "ReleasedOn", "OriginalLanguage", "DetailedAt")
                   VALUES
-                      (@MediaTypeId, @MediaSubtypeId, @CanonicalTitle, @ReleaseYear, @ReleasedOn, @OriginalLanguage, now())
+                      (@MediaTypeId, COALESCE(@MediaSubtypeId, @ClassifiedSubtypeId), @CanonicalTitle, @ReleaseYear, @ReleasedOn, @OriginalLanguage, now())
                   RETURNING
                       "Id";
                   """
@@ -320,7 +436,13 @@ namespace Jularr.Backend.Logic.Media
                       "ReleaseYear" = COALESCE(work."ReleaseYear", @ReleaseYear),
                       "ReleasedOn" = COALESCE(@ReleasedOn, work."ReleasedOn"),
                       "OriginalLanguage" = COALESCE(@OriginalLanguage, work."OriginalLanguage"),
-                      "MediaSubtypeId" = CASE WHEN work."IsMediaSubtypeManual" THEN work."MediaSubtypeId" ELSE COALESCE(@MediaSubtypeId, work."MediaSubtypeId") END,
+                      "MediaSubtypeId" = CASE
+                          WHEN work."IsMediaSubtypeManual" THEN work."MediaSubtypeId"
+                          WHEN @MediaSubtypeId::smallint IS NOT NULL THEN @MediaSubtypeId
+                          WHEN work."MediaSubtypeId" IS NULL AND work."DetailedAt" IS NULL
+                              AND NOT EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id") THEN @ClassifiedSubtypeId
+                          ELSE work."MediaSubtypeId"
+                      END,
                       "DetailedAt" = now(),
                       "UpdatedAt" = now()
                   WHERE
@@ -336,7 +458,7 @@ namespace Jularr.Backend.Logic.Media
 
             workId = (await ctx.ReadRequiredAsync<WorkIdData>(sql, ct)).Id;
 
-            // Provider titles are replaced; manual titles are never touched.
+            // Provider titles are replaced; manual titles are never touched. A series' titles and facts come from TheTVDB alone, so TMDB's earlier ones go with them.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -351,10 +473,11 @@ namespace Jularr.Backend.Logic.Media
                     DELETE FROM
                         "WorkTitles" AS title
                     USING
-                        provider
+                        "Providers" AS replaced
                     WHERE
                         title."WorkId" = @Id
-                        AND title."ProviderId" = provider."Id"
+                        AND title."ProviderId" = replaced."Id"
+                        AND (replaced."Key" = @ProviderKey OR @MediaTypeId = 2 AND replaced."Key" = 'tmdb')
                         AND NOT title."IsManual"
                 )
                 INSERT INTO
@@ -412,7 +535,7 @@ namespace Jularr.Backend.Logic.Media
                 WHERE
                     fact."WorkId" = @Id
                     AND fact."ProviderId" = provider."Id"
-                    AND provider."Key" = @ProviderKey
+                    AND (provider."Key" = @ProviderKey OR @MediaTypeId = 2 AND provider."Key" = 'tmdb')
                     AND NOT fact."IsManual";
                 """;
             sql.Parameters.Add(data);

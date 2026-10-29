@@ -60,6 +60,33 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Fill_TitlesTheCatalogCannotGive_DoNotHoldBackTheOthers_AndAreAskedOnceADay()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var catalog = new FakeCatalog();
+            await using var host = await CreateHostAsync(storage.Path, catalog);
+
+            // Four films of the library TMDB does not know and a series known only by its AniList entry come before The Matrix.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (9001, 1, 'Gone 1'), (9002, 1, 'Gone 2'), (9003, 1, 'Gone 3'), (9004, 1, 'Gone 4'), (9005, 2, 'Anime'), (9006, 1, 'The Matrix');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (9001, 'tmdb_movie', '901'), (9002, 'tmdb_movie', '902'), (9003, 'tmdb_movie', '903'),
+                    (9004, 'tmdb_movie', '904'), (9005, 'anilist', '154587'), (9006, 'tmdb_movie', '603');
+                INSERT INTO "WantedItems" ("WorkId") SELECT unnest(ARRAY[9001, 9002, 9003, 9004, 9005, 9006]);
+                """);
+
+            Assert.IsTrue((await FillAsync(host)).Success, "More titles wait after the first three.");
+            Assert.IsFalse((await FillAsync(host)).Success);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "WorkMetadataFacts" WHERE "WorkId" = 9006 AND "FactKey" = 'Overview' """));
+            Assert.AreEqual("9001,9002,9003,9004,9006", await host.ScalarAsync("""SELECT string_agg("Id"::text, ',' ORDER BY "Id") FROM "Works" WHERE "MetadataTriedAt" IS NOT NULL"""),
+                "Every film was asked once; a series without an identity TheTVDB can read is no candidate.");
+
+            // Nothing is asked again the same day.
+            var requests = catalog.Requests;
+            Assert.IsFalse((await FillAsync(host)).Success);
+            Assert.AreEqual(requests, catalog.Requests);
+        }
+
+        [TestMethod]
         public async Task Fill_WorkWithoutAnyCatalogIdentity_IsLeftAlone()
         {
             using var storage = new LibraryTests.TemporaryDirectory();

@@ -3,7 +3,7 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // Discover's media-type bar, highlights, filter and layout, from catalogs read whole.
+    // Discover's media-type bar, highlights, filter and layout, from a film catalog read whole and the series TMDB's trending list last named.
     [TestClass]
     public sealed class DiscoverLayoutTests
     {
@@ -17,14 +17,14 @@ namespace Jularr.E2E.Tests
             await Owner.SetUpAndSignInAsync(page);
             await jularr.RunSqlAsync("""
                 UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
-                UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" IN ('tmdb_movie', 'tmdb_tv');
+                UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'tmdb_movie';
                 INSERT INTO "Works" ("Id", "CatalogNamespace", "MediaTypeId", "CanonicalTitle", "ReleasedOn", "ImageUrl", "Popularity", "Rating", "Votes", "TrendingRank") VALUES
                     (9603, 'tmdb_movie', 1, 'The Matrix', '1999-03-31', 'https://127.0.0.1/603.jpg', 80, 8.7, 25000, 1),
                     (9604, 'tmdb_movie', 1, 'The Matrix Reloaded', '2003-05-15', 'https://127.0.0.1/604.jpg', 60, 7.0, 10000, 2),
-                    (9396, 'tmdb_tv', 2, 'Breaking Bad', '2008-01-20', 'https://127.0.0.1/1396.jpg', 90, 9.0, 20000, 1),
-                    (9399, 'tmdb_tv', 2, 'Game of Thrones', '2011-04-17', 'https://127.0.0.1/1399.jpg', 70, 8.4, 30000, 2);
+                    (9396, 'tvdb', 2, 'Breaking Bad', '2008-01-20', 'https://127.0.0.1/1396.jpg', 90, 9.0, 20000, 1),
+                    (9399, 'tvdb', 2, 'Game of Thrones', '2011-04-17', 'https://127.0.0.1/1399.jpg', 70, 8.4, 30000, 2);
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES
-                    (9603, 'tmdb_movie', '603'), (9604, 'tmdb_movie', '604'), (9396, 'tmdb_tv', '1396'), (9399, 'tmdb_tv', '1399');
+                    (9603, 'tmdb_movie', '603'), (9604, 'tmdb_movie', '604'), (9396, 'tvdb', '81189'), (9399, 'tvdb', '121361');
                 """);
 
             try
@@ -64,7 +64,7 @@ namespace Jularr.E2E.Tests
                 await page.Locator("[data-discover-layout]").ClickAsync();
                 await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-discover-layout", "grid");
 
-                // One highlight per type leaves one slide for each of the two types.
+                // One highlight per type leaves one slide for each of the two types: the films read whole, the series from Discover's series list.
                 await page.Locator("button[data-drawer-pane=view]").ClickAsync();
                 await page.Locator("#discover-panel .choice-group__item", new() { HasText = "1 title" }).ClickAsync();
                 await Assertions.Expect(page.Locator(".hero-carousel__counter")).ToHaveTextAsync("1 / 2");

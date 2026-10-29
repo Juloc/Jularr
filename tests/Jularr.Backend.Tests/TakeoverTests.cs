@@ -9,9 +9,12 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.System.Media.V1;
 using Jularr.Integrations.Logic.Servarr;
 using Jularr.Integrations.Logic.Tmdb;
+using Jularr.Integrations.Logic.Tvdb;
 using Jularr.Integrations.Logic.OpenLibrary;
 using Jularr.Integrations.Logic.MusicBrainz;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,7 +30,7 @@ namespace Jularr.Backend.Tests
         private const string TmdbToken = "eyJ-takeover-token";
 
         [TestMethod]
-        public async Task Takeover_RadarrPreviewThenApply_ImportsInventoryAndPausesNewMonitoringUntilExplicitRelease()
+        public async Task Takeover_RadarrPreviewThenApply_ImportsInventoryIntoTheLibraryWithRadarrsMonitoring()
         {
             var radarr = new FakeRadarr();
             await using var host = await Host.CreateAsync(razor: true, library: true, services: services =>
@@ -69,18 +72,22 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(3L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
             Assert.AreEqual("https://readable.example.test", await host.ScalarAsync("SELECT \"BaseUrl\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Readable'"));
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"ProtectedApiKey\" IS NULL FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Open'"));
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
-            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsPaused\" FROM \"WantedItems\""), "Takeover alone must not start automatic acquisition.");
+            // Every title taken over is in the library at once, monitored as Radarr monitored it.
+            Assert.AreEqual("Ignored:true,Owned:false,The Matrix:false", await host.ScalarAsync("""
+                SELECT string_agg(work."CanonicalTitle" || ':' || wanted."IsPaused", ',' ORDER BY work."CanonicalTitle")
+                FROM "WantedItems" AS wanted JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                """));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" AS work WHERE NOT EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS tie WHERE tie."WorkId" = work."Id")"""));
             var again = await RunAsync(host, true);
             Assert.AreEqual("takeover_exists", again.Single(item => item.Name == "Readable").OutcomeKey);
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\""));
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\""));
             var signal = host.Services.GetRequiredService<AcquisitionSearchSignal>();
-            Assert.IsFalse(signal.TakeRequest(), "Taking over inventory must not wake automatic search.");
+            Assert.IsFalse(signal.TakeRequest(), "Taking over inventory leaves the search to its next cycle.");
 
-            // Explicitly releasing monitoring uses the existing target editor; a repeated takeover must preserve that choice.
-            var wantedId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"WantedItems\""))!;
+            // Releasing an unmonitored title uses the existing target editor; a repeated takeover must preserve that choice.
+            var wantedId = (long)(await host.ScalarAsync("""SELECT wanted."Id" FROM "WantedItems" AS wanted JOIN "Works" AS work ON work."Id" = wanted."WorkId" WHERE work."CanonicalTitle" = 'Ignored'"""))!;
             await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = now() + interval '1 day' WHERE \"Id\" = " + wantedId);
             using var released = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/" + wantedId, new UpdateWantedDataV1(false, 1));
             Assert.AreEqual(HttpStatusCode.OK, released.StatusCode, await released.Content.ReadAsStringAsync());
@@ -95,7 +102,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
             Assert.IsFalse(signal.TakeRequest(), "A stale update must not wake automatic search.");
             await RunAsync(host, true);
-            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsPaused\" FROM \"WantedItems\""));
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsPaused\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId));
 
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Takeover");
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
@@ -124,13 +131,13 @@ namespace Jularr.Backend.Tests
             {
                 services.AddHttpClient<ServarrApiClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
                 services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
+                services.AddHttpClient<TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
                 services.AddHttpClient<MusicBrainzClient>().ConfigurePrimaryHttpMessageHandler(() => music);
                 services.AddHttpClient<OpenLibraryClient>().ConfigurePrimaryHttpMessageHandler(() => books);
             });
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
-            var tmdb = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
-            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(TmdbToken));
+            await SaveSeriesKeysAsync(host);
 
             // Prowlarr hands over its indexers only.
             var prowlarr = await RunAsync(host, true, TakeoverSourceType.Prowlarr, "http://prowlarr.example.test:9696");
@@ -218,6 +225,45 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Sonarr_WithoutTheTvdbKey_TakesTheSeriesWithItsIds_AndItsDetailsFollowOnceTheKeyIsThere()
+        {
+            var arr = new FakeArrs();
+            await using var host = await Host.CreateAsync(library: true, services: services =>
+            {
+                services.AddHttpClient<ServarrApiClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
+                services.AddHttpClient<TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
+            });
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            await SaveSeriesKeysAsync(host, "tmdb");
+
+            // Without TheTVDB's key the missing series is still wanted, as TheTVDB's series with Sonarr's TheTVDB, TMDB and IMDb ids and no details yet.
+            var sonarr = await RunAsync(host, true, TakeoverSourceType.Sonarr, "http://sonarr.example.test:8989");
+            Assert.AreEqual("takeover_wanted", sonarr.Single(item => item.Name == "Example Show (2020)").OutcomeKey);
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\""))!;
+            Assert.AreEqual("imdb:tt0081189 tmdb_tv:1399 tvdb:81189", await host.ScalarAsync($"""
+                SELECT string_agg(identity."Namespace" || ':' || identity."Value", ' ' ORDER BY identity."Namespace") FROM "WorkExternalIdentities" AS identity WHERE identity."WorkId" = {workId}
+                """));
+            Assert.AreEqual("Example Show 2020", await host.ScalarAsync($"SELECT \"CanonicalTitle\" || ' ' || \"ReleaseYear\" FROM \"Works\" WHERE \"Id\" = {workId} AND \"DetailedAt\" IS NULL"));
+
+            // A second run finds it by its ids.
+            var again = await RunAsync(host, true, TakeoverSourceType.Sonarr, "http://sonarr.example.test:8989");
+            Assert.AreEqual("takeover_exists", again.Single(item => item.Name == "Example Show (2020)").OutcomeKey);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"MediaTypeId\" = 2"));
+
+            // Once the key is there the metadata job brings TheTVDB's details into the same Work.
+            await SaveSeriesKeysAsync(host, "tvdb");
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<FillWorkMetadataV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default);
+            }
+            Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"DetailedAt\" IS NOT NULL FROM \"Works\" WHERE \"Id\" = {workId}"));
+            Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkId\" = {workId} AND \"WorkUnitTypeId\" = 2"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"MediaTypeId\" = 2"));
+        }
+
+        [TestMethod]
         [DataRow(false)]
         [DataRow(true)]
         public async Task SeriesWithoutId_UseTitleAndYear_AndUnsupportedProfilesBlockTitles(bool unsupported)
@@ -227,11 +273,11 @@ namespace Jularr.Backend.Tests
             {
                 services.AddHttpClient<ServarrApiClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
                 services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
+                services.AddHttpClient<TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
             });
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
-            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb' """))!;
-            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(TmdbToken));
+            await SaveSeriesKeysAsync(host);
             var mount = (long)(await host.ScalarAsync("""INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") VALUES ('New import', 3, '/srv/new', FALSE) RETURNING "Id" """))!;
             var libraries = new BaseDataList<TakeoverLibraryV1>([new("/new", "Imported series", mount, "series")]);
             using var preview = await host.SendAsync(HttpMethod.Post, Takeover, new RunTakeoverDataV1(TakeoverSourceType.Sonarr, "http://sonarr.example.test:8989", RadarrKey, false, newLibraries: libraries));
@@ -327,7 +373,18 @@ namespace Jularr.Backend.Tests
             private static HttpResponseMessage Json(string json) => new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
         }
 
-        // Prowlarr, Sonarr, Lidarr and Readarr by their hosts, with the TMDB series Sonarr names.
+        // Prowlarr, Sonarr, Lidarr and Readarr by their hosts, with the series Sonarr names by its TheTVDB, TMDB and IMDb ids.
+        // Series come from TheTVDB; TMDB gives their rating.
+        private static async Task SaveSeriesKeysAsync(Host host, params string[] keys)
+        {
+            foreach (var key in keys.Length == 0 ? ["tmdb", "tvdb"] : keys)
+            {
+                var provider = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = '" + key + "'"))!;
+                using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1(TmdbToken));
+                Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            }
+        }
+
         private sealed class FakeArrs : HttpMessageHandler
         {
             public bool WithoutSeriesId { get; init; }
@@ -359,9 +416,21 @@ namespace Jularr.Backend.Tests
                 {
                     return Task.FromResult(uri.AbsolutePath switch
                     {
-                        "/3/tv/1399" => Json("""{"id":1399,"name":"Example Show","first_air_date":"2020-04-01","seasons":[{"season_number":1,"name":"Season 1","air_date":"2020-04-01","episode_count":1}]}"""),
-                        "/3/tv/1399/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"One","air_date":"2020-04-01"}]}"""),
+                        "/3/tv/1399" => Json("""{"id":1399,"name":"Example Show","first_air_date":"2020-04-01","external_ids":{"tvdb_id":81189},"seasons":[{"season_number":1,"name":"Season 1","air_date":"2020-04-01","episode_count":1}]}"""),
                         "/3/search/tv" => Json("""{"page":1,"total_pages":1,"results":[{"id":1399,"name":"Example Show","first_air_date":"2020-04-01"}]}"""),
+                        _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+                    });
+                }
+
+                // TheTVDB describes the series Sonarr hands over.
+                if (uri.Host == "api4.thetvdb.com")
+                {
+                    return Task.FromResult(uri.AbsolutePath switch
+                    {
+                        "/v4/login" => Json("""{"data":{"token":"tvdb-test-token"}}"""),
+                        "/v4/search" => Json("""{"data":[{"tvdb_id":"81189","name":"Example Show","year":"2020","type":"series","primary_language":"eng","translations":{"eng":"Example Show"}}]}"""),
+                        "/v4/series/81189/extended" => Json("""{"data":{"id":81189,"name":"Example Show","firstAired":"2020-04-01","remoteIds":[{"sourceName":"TheMovieDB.com","id":"1399"}]}}"""),
+                        "/v4/series/81189/episodes/default" => Json("""{"data":{"episodes":[{"id":1,"seasonNumber":1,"number":1,"name":"One","aired":"2020-04-01"}]},"links":{"next":null}}"""),
                         _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                     });
                 }
@@ -372,7 +441,7 @@ namespace Jularr.Backend.Tests
                     ("sonarr.example.test", "/api/v3/indexer") => Json(Indexer.Replace("NAME", "Prowled", StringComparison.Ordinal).Replace("HOST", "prowled", StringComparison.Ordinal)),
                     ("sonarr.example.test", "/api/v3/downloadclient") => Json(Client("tvCategory")),
                     ("sonarr.example.test", "/api/v3/rootfolder") => Json("[]"),
-                    ("sonarr.example.test", "/api/v3/series") => Json("""[{"title":"Example Show","year":2020,"tmdbId":1399,"monitored":true,"qualityProfileId":4,"statistics":{"episodeFileCount":0,"episodeCount":1}}]"""),
+                    ("sonarr.example.test", "/api/v3/series") => Json("""[{"title":"Example Show","year":2020,"tvdbId":81189,"tmdbId":1399,"imdbId":"tt0081189","monitored":true,"qualityProfileId":4,"statistics":{"episodeFileCount":0,"episodeCount":1}}]"""),
                     ("sonarr.example.test", "/api/v3/qualityprofile") => Json("""
                         [{"id":4,"name":"HD-1080p","upgradeAllowed":true,"cutoff":1002,"minFormatScore":0,"items":[
                           {"quality":{"id":4,"name":"HDTV-720p","source":"television","resolution":720},"items":[],"allowed":false},

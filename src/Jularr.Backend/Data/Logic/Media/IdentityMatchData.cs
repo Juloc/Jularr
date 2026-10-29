@@ -7,7 +7,7 @@ namespace Jularr.Backend.Data.Logic.Media
     // A Work waiting for its AniList entries.
     internal sealed class IdentityMatchTargetData : BaseData
     {
-        public IdentityMatchTargetData(long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, string[] titles)
+        public IdentityMatchTargetData(long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, string[] titles, string? author, bool isWebNovel)
         {
             WorkId = workId;
             MediaTypeId = mediaTypeId;
@@ -15,6 +15,8 @@ namespace Jularr.Backend.Data.Logic.Media
             CanonicalTitle = canonicalTitle;
             ReleaseYear = releaseYear;
             Titles = titles;
+            Author = author;
+            IsWebNovel = isWebNovel;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
@@ -34,6 +36,13 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Titles))]
         public string[] Titles { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Author))]
+        public string? Author { get; }
+
+        // A Narō web novel: an entry only lends it titles, never its identity.
+        [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.IsWebNovel))]
+        public bool IsWebNovel { get; }
     }
 
     internal sealed class IdentityMatchQueryData : BaseData
@@ -93,8 +102,10 @@ namespace Jularr.Backend.Data.Logic.Media
     // The outcome of one matching pass; a Work-level entry or season entries with their episode offsets.
     internal sealed class IdentityMatchResultData : BaseData
     {
-        public IdentityMatchResultData(long workId, string @namespace, IdentityMatchStatusType identityMatchStatusTypeId, string candidates, string? value, string seasons, bool isManual)
+        public IdentityMatchResultData(long workId, string @namespace, IdentityMatchStatusType identityMatchStatusTypeId, string candidates, string? value, string seasons, bool isManual,
+            bool replacesAutomatic = false)
         {
+            ReplacesAutomatic = replacesAutomatic;
             WorkId = workId;
             Namespace = @namespace;
             IdentityMatchStatusTypeId = identityMatchStatusTypeId;
@@ -126,5 +137,13 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.IsManual))]
         public bool IsManual { get; }
+
+        // The seasons come from the AniBridge mappings and replace the Work's earlier automatic ones; a person's stay.
+        [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.ReplacesAutomatic))]
+        public bool ReplacesAutomatic { get; }
+
+        // The name a web novel takes from its entry in every language but Japanese.
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle), false)]
+        public string? LinkedTitle { get; init; }
     }
 }

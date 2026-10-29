@@ -808,15 +808,11 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Scan_UnknownImdbId_ResolvesViaTmdbOnceAndImportsEpisode()
+        public async Task Scan_UnknownImdbId_ResolvesViaTvdbOnceAndImportsEpisode()
         {
             using var storage = new TemporaryDirectory();
-            var source = new FakeTmdbIdentity();
-            await using var host = await CreateHostAsync(storage.Path, services: services =>
-                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => source));
-            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
-            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
-            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+            var source = new FakeTvdbSeries();
+            await using var host = await CreateSeriesHostAsync(storage.Path, new FakeTmdbIdentity(), source);
 
             var mountId = await CreateMountAsync(host);
             var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Example Show - tt39551287", "Season 1");
@@ -832,20 +828,16 @@ namespace Jularr.Backend.Tests
                 JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = asset."WorkId"
                 WHERE identity."Namespace" = 'imdb' AND identity."Value" = 'tt39551287';
                 """));
-            Assert.AreEqual(1, source.FindRequests);
+            Assert.AreEqual(1, source.RemoteRequests);
             await ScanAsync(host, rootId);
-            Assert.AreEqual(1, source.FindRequests);
+            Assert.AreEqual(1, source.RemoteRequests);
         }
 
         [TestMethod]
         public async Task Scan_ManyUnknownImdbIds_ResolvesEverySeriesInOneScan()
         {
             using var storage = new TemporaryDirectory();
-            await using var host = await CreateHostAsync(storage.Path, services: services =>
-                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
-            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
-            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
-            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+            await using var host = await CreateSeriesHostAsync(storage.Path, new FakeTmdbSeries());
 
             var mountId = await CreateMountAsync(host);
             for (var number = 1; number <= 20; number++)
@@ -865,11 +857,7 @@ namespace Jularr.Backend.Tests
         public async Task Scan_OutOfLookupBudget_QueuesTheNextScanForTheRest()
         {
             using var storage = new TemporaryDirectory();
-            await using var host = await CreateHostAsync(storage.Path, services: services =>
-                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
-            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
-            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
-            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+            await using var host = await CreateSeriesHostAsync(storage.Path, new FakeTmdbSeries());
 
             var mountId = await CreateMountAsync(host);
             for (var number = 1; number <= 3; number++)
@@ -896,14 +884,10 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Scan_WorkWithoutEpisodes_GetsItsEpisodesFromTmdbThenTakesTheFile()
+        public async Task Scan_WorkKnownByTmdbOnly_GetsItsEpisodesFromTvdbThenTakesTheFile()
         {
             using var storage = new TemporaryDirectory();
-            await using var host = await CreateHostAsync(storage.Path, services: services =>
-                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
-            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
-            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
-            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+            await using var host = await CreateSeriesHostAsync(storage.Path, new FakeTmdbSeries());
 
             // What a media server sync leaves: the series with its ids, but no seasons or episodes.
             await host.Fixture.RunSqlAsync("""
@@ -928,11 +912,7 @@ namespace Jularr.Backend.Tests
         public async Task Scan_CatalogLinksAnotherTvdbIdThanTheFolder_TheFolderIdStaysTheWorksOwn()
         {
             using var storage = new TemporaryDirectory();
-            await using var host = await CreateHostAsync(storage.Path, services: services =>
-                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
-            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
-            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
-            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+            await using var host = await CreateSeriesHostAsync(storage.Path, new FakeTmdbSeries());
 
             // The Work (from a media server) holds the series' TheTVDB id 4001; TMDB links the show to 7777.
             await host.Fixture.RunSqlAsync("""
@@ -960,11 +940,7 @@ namespace Jularr.Backend.Tests
         public async Task Scan_WorkHoldsTmdbsStaleTvdbId_TakesTheFolderIdAndTheFile()
         {
             using var storage = new TemporaryDirectory();
-            await using var host = await CreateHostAsync(storage.Path, services: services =>
-                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
-            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
-            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
-            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+            await using var host = await CreateSeriesHostAsync(storage.Path, new FakeTmdbSeries());
 
             // An earlier import stored TMDB's TheTVDB link (7001); the folder, as Sonarr names it, says 4001.
             await host.Fixture.RunSqlAsync("""
@@ -992,11 +968,7 @@ namespace Jularr.Backend.Tests
         public async Task Scan_NoIdTheCatalogKnows_TitleAndYearNameOneEntry_TakeTheFile()
         {
             using var storage = new TemporaryDirectory();
-            await using var host = await CreateHostAsync(storage.Path, services: services =>
-                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
-            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
-            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
-            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+            await using var host = await CreateSeriesHostAsync(storage.Path, new FakeTmdbSeries());
 
             // The IMDb id in the name is one TMDB does not link; the title and the year name exactly one series.
             var mountId = await CreateMountAsync(host);
@@ -1014,11 +986,7 @@ namespace Jularr.Backend.Tests
         public async Task Scan_FolderIdTheCatalogDoesNotKnowYet_StillTakesTheFileThroughItsOtherIds()
         {
             using var storage = new TemporaryDirectory();
-            await using var host = await CreateHostAsync(storage.Path, services: services =>
-                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
-            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
-            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
-            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+            await using var host = await CreateSeriesHostAsync(storage.Path, new FakeTmdbSeries());
 
             // A new series: TMDB knows it by its own id and by IMDb, but does not link the TVDB id (9999) yet.
             var mountId = await CreateMountAsync(host);
@@ -1038,17 +1006,7 @@ namespace Jularr.Backend.Tests
         public async Task Scan_WorkWithoutEpisodes_TakesSeasonsAndEpisodesFromTvdb()
         {
             using var storage = new TemporaryDirectory();
-            await using var host = await CreateHostAsync(storage.Path, services: services =>
-            {
-                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries());
-                services.AddHttpClient<Jularr.Integrations.Logic.Tvdb.TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTvdbSeries());
-            });
-            foreach (var key in new[] { "tmdb", "tvdb" })
-            {
-                var provider = (long)(await host.ScalarAsync($"""SELECT "Id" FROM "Providers" WHERE "Key" = '{key}'"""))!;
-                using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
-                Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
-            }
+            await using var host = await CreateSeriesHostAsync(storage.Path, new FakeTmdbSeries());
 
             await host.Fixture.RunSqlAsync("""
                 WITH work AS (
@@ -1074,11 +1032,7 @@ namespace Jularr.Backend.Tests
         public async Task Scan_WorkKnowsOnlyOneOfTheFolderIds_StillTakesTheFile()
         {
             using var storage = new TemporaryDirectory();
-            await using var host = await CreateHostAsync(storage.Path, services: services =>
-                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdbSeries()));
-            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
-            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
-            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+            await using var host = await CreateSeriesHostAsync(storage.Path, new FakeTmdbSeries());
             await host.Fixture.RunSqlAsync("""
                 WITH work AS (
                     INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (2, 'Show 1', 2020) RETURNING "Id"
@@ -1100,17 +1054,57 @@ namespace Jularr.Backend.Tests
         }
 
         // TheTVDB names the series 4001 with a special and two episodes; TMDB would name only one episode.
+        // Series scans: TMDB names the series, TheTVDB describes them; both keys are set.
+        private static async Task<Host> CreateSeriesHostAsync(string storagePath, HttpMessageHandler tmdb, FakeTvdbSeries? tvdb = null)
+        {
+            var host = await CreateHostAsync(storagePath, services: services =>
+            {
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => tmdb);
+                services.AddHttpClient<Jularr.Integrations.Logic.Tvdb.TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => tvdb ?? new FakeTvdbSeries());
+            });
+            foreach (var key in new[] { "tmdb", "tvdb" })
+            {
+                var provider = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = '" + key + "'"))!;
+                using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
+                Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+            }
+
+            return host;
+        }
+
+        // TheTVDB knows Show 1 as 4001 (and as 9999, an id TMDB does not link yet) with a special and two episodes, Show n of FakeTmdbSeries as 7000 + n
+        // and Example Show as 24680, each with one episode; it finds a series by its IMDb id and Show 1 by its name.
         private sealed class FakeTvdbSeries : HttpMessageHandler
         {
+            public int RemoteRequests { get; private set; }
+
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 var path = request.RequestUri!.AbsolutePath;
+                if (path.StartsWith("/v4/search/remoteid/", StringComparison.Ordinal)) RemoteRequests++;
+                var remote = path.StartsWith("/v4/search/remoteid/tt20000", StringComparison.Ordinal) && int.TryParse(path[^2..], out var show) && show > 1 ? 7000 + show : (int?)null;
+                var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                var id = parts is ["v4", "series", var value, ..] && int.TryParse(value, out var number) ? number : 0;
+                var (name, imdb, tmdb) = id switch
+                {
+                    4001 or 9999 => ("Show 1", "tt2000001", 1),
+                    > 7000 and < 7100 => ("Show " + (id - 7000), "tt" + (2000000 + id - 7000), id - 7000),
+                    24680 => ("Example Show", "tt39551287", 1399),
+                    _ => ((string?)null, (string?)null, 0)
+                };
                 var json = path switch
                 {
                     "/v4/login" => """{"data":{"token":"tvdb-test-token"}}""",
                     "/v4/search/remoteid/tt2000001" => """{"data":[{"series":{"id":4001}}]}""",
-                    "/v4/series/4001/extended" => """{"data":{"id":4001,"name":"Show 1","remoteIds":[{"sourceName":"IMDb","id":"tt2000001"}]}}""",
-                    "/v4/series/4001/episodes/default/eng" => """{"data":{"episodes":[{"id":10,"seasonNumber":0,"number":1,"name":"Special from TVDB"},{"id":11,"seasonNumber":1,"number":1,"name":"First from TVDB"},{"id":12,"seasonNumber":1,"number":2,"name":"Second from TVDB"}]},"links":{"next":null}}""",
+                    "/v4/search/remoteid/tt39551287" => """{"data":[{"series":{"id":24680}}]}""",
+                    _ when remote is { } found => $$$"""{"data":[{"series":{"id":{{{found}}}}}]}""",
+                    "/v4/search" when request.RequestUri!.Query.Contains("Show%201", StringComparison.Ordinal)
+                        => """{"data":[{"tvdb_id":"4001","name":"Show 1","year":"2020","type":"series","translations":{"eng":"Show 1"}}]}""",
+                    "/v4/search" => """{"data":[]}""",
+                    "/v4/series/4001/episodes/default" => """{"data":{"episodes":[{"id":10,"seasonNumber":0,"number":1,"name":"Special from TVDB"},{"id":11,"seasonNumber":1,"number":1,"name":"First from TVDB"},{"id":12,"seasonNumber":1,"number":2,"name":"Second from TVDB"}]},"links":{"next":null}}""",
+                    _ when name is null => null,
+                    _ when parts is [.., "extended"] => $$$"""{"data":{"id":{{{id}}},"name":"{{{name}}}","firstAired":"2020-01-01","remoteIds":[{"sourceName":"IMDB","id":"{{{imdb}}}"},{"sourceName":"TheMovieDB.com","id":"{{{tmdb}}}"}]}}""",
+                    _ when parts is [.., "episodes", "default"] => $$$"""{"data":{"episodes":[{"id":{{{id * 10}}},"seasonNumber":1,"number":{{{(id == 24680 ? 7 : 1)}}},"name":"Pilot"}]},"links":{"next":null}}""",
                     _ => null
                 };
                 return Task.FromResult(json is null ? new HttpResponseMessage(HttpStatusCode.NotFound) :
@@ -1176,6 +1170,28 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Scan_WithoutProviderId_PrefersTheLibrarysWork_OverACatalogTitleOfTheSameName()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Same Name (2020)", "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Same Name - S01E01.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+
+            // A catalog title of TheTVDB with the same name and year comes first; only the library's Work is wanted.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (8001, 2, 'Same Name', 2020, 'tvdb'), (8002, 2, 'Same Name', 2020, NULL);
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (8001, 'tvdb', '8001');
+                INSERT INTO "WantedItems" ("WorkId") VALUES (8002);
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(8002L, await host.ScalarAsync("""SELECT asset."WorkId" FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId" """));
+        }
+
+        [TestMethod]
         public async Task Scan_UnknownSecondProviderId_DoesNotGuessFromTheFirst()
         {
             using var storage = new TemporaryDirectory();
@@ -1198,23 +1214,15 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
         }
 
+        // TMDB gives Example Show's rating.
         private sealed class FakeTmdbIdentity : HttpMessageHandler
         {
-            public int FindRequests { get; private set; }
-
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 var path = request.RequestUri!.AbsolutePath;
-                if (path == "/3/find/tt39551287")
-                {
-                    FindRequests++;
-                }
-
                 var json = path switch
                 {
-                    "/3/find/tt39551287" => """{"movie_results":[],"tv_results":[{"id":1399}]}""",
-                    "/3/tv/1399" => """{"id":1399,"name":"Example Show","first_air_date":"2020-01-01","external_ids":{"imdb_id":"tt39551287"},"seasons":[{"season_number":1,"name":"Season 1","episode_count":1}]}""",
-                    "/3/tv/1399/season/1" => """{"episodes":[{"season_number":1,"episode_number":7,"name":"Night"}]}""",
+                    "/3/tv/1399" => """{"id":1399,"name":"Example Show","first_air_date":"2020-01-01","external_ids":{"imdb_id":"tt39551287","tvdb_id":24680},"seasons":[{"season_number":1,"name":"Season 1","episode_count":1}]}""",
                     _ => null
                 };
                 return Task.FromResult(json is null ? new HttpResponseMessage(HttpStatusCode.NotFound) :

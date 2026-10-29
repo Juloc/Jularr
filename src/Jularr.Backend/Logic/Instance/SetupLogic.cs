@@ -99,8 +99,15 @@ namespace Jularr.Backend.Logic.Instance
                     'tmdb',
                     TRUE
                 WHERE
-                    EXISTS (SELECT 1 FROM "MediaTypes" AS type WHERE type."Key" IN ('Movie', 'Series') AND type."IsEnabled")
+                    EXISTS (SELECT 1 FROM "MediaTypes" AS type WHERE type."Key" = 'Movie' AND type."IsEnabled")
                     AND NOT EXISTS (SELECT 1 FROM "Providers" AS provider WHERE provider."Key" = 'tmdb' AND provider."IsEnabled" AND provider."ProtectedSecret" IS NOT NULL)
+                UNION ALL
+                SELECT
+                    'tvdb',
+                    TRUE
+                WHERE
+                    EXISTS (SELECT 1 FROM "MediaTypes" AS type WHERE type."Key" = 'Series' AND type."IsEnabled")
+                    AND NOT EXISTS (SELECT 1 FROM "Providers" AS provider WHERE provider."Key" = 'tvdb' AND provider."IsEnabled" AND provider."ProtectedSecret" IS NOT NULL)
                 UNION ALL
                 SELECT
                     'indexer',

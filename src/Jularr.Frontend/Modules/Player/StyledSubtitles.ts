@@ -6,9 +6,10 @@ export interface StyledSubtitles {
     destroy(): void;
 }
 
-export async function showStyledSubtitles(video: HTMLVideoElement, url: string, offsetSeconds: number): Promise<StyledSubtitles> {
+// The fonts are the addresses of the ones the file carries; libass takes them in, so the file's own lettering is drawn and the default font only stands in for the rest.
+export async function showStyledSubtitles(video: HTMLVideoElement, url: string, offsetSeconds: number, fonts: string[] = []): Promise<StyledSubtitles> {
     const { default: JASSUB } = await import("jassub");
-    const instance = new JASSUB({ video, subUrl: url, timeOffset: offsetSeconds });
+    const instance = new JASSUB({ video, subUrl: url, timeOffset: offsetSeconds, fonts });
     await instance.ready;
     return {
         setOffset: seconds => { instance.timeOffset = seconds; },

@@ -106,13 +106,14 @@ namespace Jularr.Frontend.Framework
                 [
                     new("admin.providers.title", "/Admin/Providers", Right("providers.read")),
                     new("admin.mediaServers.title", "/Admin/Providers", Right("providers.read"), ["ProgressSync", "Library"], "servers", false, "view"),
-                    new("admin.catalog.title", "/Admin/Catalog", Admin, ["Library", "DiscoverCache"])
+                    new("admin.catalog.title", "/Admin/Catalog", Admin, ["Library"])
                 ]),
                 new("storage", "storage.title", "drive",
                 [
                     new("storage.connections", "/Admin/Storage", Right("storage.read")),
                     new("downloadStorage.title", "/Admin/DownloadStorage", Acquisition, ["Acquisition"])
-                ])
+                ]),
+                new("network", "admin.vpn.title", "shield-check", [new("admin.vpn.title", "/Admin/Network", Admin, ["Vpn"])])
             ]),
             new("nav.group.instance",
             [

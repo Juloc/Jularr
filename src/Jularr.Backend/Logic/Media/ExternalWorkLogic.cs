@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Profile;
@@ -11,12 +12,28 @@ namespace Jularr.Backend.Logic.Media
     // The provider catalog Discover keeps: every title it loaded once, the current trending lists in their order.
     internal static class ExternalWorkLogic
     {
-        // With the DiscoverCache module Discover keeps what it loaded and answers from it; without it Discover only asks the providers.
-        public static async Task<bool> KeepsDiscoverTitlesAsync(this LogicContext ctx, CancellationToken ct) =>
-            (await ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["DiscoverCache"]), ct)).Any(module => module.IsEnabled);
+        // The one rule for how much of the provider catalogs is kept, for the whole instance: without the Caching module (key DiscoverCache) only the library and
+        // opened titles (lean), with it also Discover's lists (standard), with its sub-option LocalDiscovery the whole catalog (full).
+        public static CachingTier CachingTierOf(bool caching, bool fullCatalog) => !caching ? CachingTier.Lean : fullCatalog ? CachingTier.Full : CachingTier.Standard;
+
+        public static async Task<CachingTier> ReadCachingTierAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var modules = await ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["DiscoverCache", "LocalDiscovery"]), ct);
+            return CachingTierOf(modules.Any(module => module.Key == "DiscoverCache" && module.IsEnabled), modules.Any(module => module.Key == "LocalDiscovery" && module.IsEnabled));
+        }
+
+        // Catalogs with a full list may be kept whole; on the full tier every other one keeps Discover's lists.
+        public static readonly IReadOnlySet<string> FullSyncCatalogs = new HashSet<string>(StringComparer.Ordinal) { "tmdb_movie", "anilist" };
+
+        public static CachingTier CatalogTier(CachingTier tier, string @namespace) => tier == CachingTier.Full && !FullSyncCatalogs.Contains(@namespace) ? CachingTier.Standard : tier;
+
+        // Above the lean tier Discover keeps its lists and answers from them; on the lean tier it asks the provider each time.
+        public static async Task<bool> KeepsDiscoverListsAsync(this LogicContext ctx, CancellationToken ct) => await ctx.ReadCachingTierAsync(ct) != CachingTier.Lean;
 
         // The one owner of catalog rows: every title a list, search or relation names is a Work with its identity, found again by that identity.
         // An anime entry AniList knows as a season of a series is that series with the season, also while an earlier entry of its own still waits to be merged into it.
+        // A TheTVDB series a TMDB list, TheTVDB's search or Sonarr named keeps TMDB's and IMDb's ids as well; a series Work known only by that TMDB or IMDb id is the
+        // same Work and takes the TheTVDB id.
         public static async Task<IReadOnlyList<ExternalWorkSavedData>> SaveExternalWorksAsync(this LogicContext ctx, ExternalWorkBatchData data, CancellationToken ct)
         {
             if (data.Values.Length == 0) return [];
@@ -48,7 +65,8 @@ namespace Jularr.Backend.Logic.Media
             }
 
             // A list or search that knows less than an earlier read keeps what was known; only secure image addresses are kept.
-            // A Work keeps its title, year and subtype once it has details or a person chose its subtype, and another catalog's Work keeps its catalog fields.
+            // A Work keeps its title, year and subtype once it has details, belongs to the library or a person chose its subtype, a list without a subtype never
+            // clears one, and another catalog's Work keeps its catalog fields.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -63,22 +81,42 @@ namespace Jularr.Backend.Logic.Media
                         CASE WHEN entry."ImageUrl" ~ '^https://' AND length(entry."ImageUrl") <= 500 THEN entry."ImageUrl" END AS "ImageUrl",
                         CASE WHEN entry."BackdropUrl" ~ '^https://' AND length(entry."BackdropUrl") <= 500 THEN entry."BackdropUrl" END AS "BackdropUrl",
                         nullif(entry."Rating", 0) AS "Rating",
-                        CASE WHEN @IsTrending THEN entry."Rank"::integer END AS "TrendingRank"
+                        CASE WHEN @IsTrending THEN entry."Rank"::integer END AS "TrendingRank",
+                        entry."TmdbValue",
+                        entry."ImdbValue"
                     FROM
-                        unnest(@Values, @Titles, @OriginalTitles, @ReleaseYears, @Overviews, @Creators, @ImageUrls, @BackdropUrls, @Ratings) WITH ORDINALITY
-                            AS entry ("Value", "Title", "OriginalTitle", "ReleaseYear", "Overview", "Creator", "ImageUrl", "BackdropUrl", "Rating", "Rank")
+                        unnest(@Values, @Titles, @OriginalTitles, @ReleaseYears, @Overviews, @Creators, @ImageUrls, @BackdropUrls, @Ratings, @TmdbValues, @ImdbValues) WITH ORDINALITY
+                            AS entry ("Value", "Title", "OriginalTitle", "ReleaseYear", "Overview", "Creator", "ImageUrl", "BackdropUrl", "Rating", "TmdbValue", "ImdbValue", "Rank")
                     ORDER BY
                         entry."Value",
                         entry."Rank"
                 ), resolved AS (
                     SELECT
                         item."Value",
-                        identity."WorkId" AS "KnownWorkId",
+                        item."TmdbValue",
+                        item."ImdbValue",
+                        coalesce(identity."WorkId", linked."WorkId") AS "KnownWorkId",
+                        linked."WorkId" IS NOT NULL AS "IsLinked",
                         season."WorkId" AS "SeriesWorkId",
-                        season."SeasonNumber"
+                        season."SeasonNumber",
+                        EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = coalesce(identity."WorkId", linked."WorkId")) AS "IsInLibrary"
                     FROM
                         item
                         LEFT JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = @Namespace AND identity."Value" = item."Value"
+                        LEFT JOIN LATERAL (
+                            SELECT
+                                other."WorkId"
+                            FROM
+                                "WorkExternalIdentities" AS other
+                                JOIN "Works" AS work ON work."Id" = other."WorkId" AND work."MediaTypeId" = 2
+                            WHERE
+                                (other."Namespace" = 'tmdb_tv' AND other."Value" = item."TmdbValue" OR other."Namespace" = 'imdb' AND other."Value" = item."ImdbValue")
+                                AND NOT EXISTS (SELECT 1 FROM "WorkExternalIdentities" AS own WHERE own."WorkId" = other."WorkId" AND own."Namespace" = @Namespace)
+                            ORDER BY
+                                other."Namespace" = 'tmdb_tv' DESC,
+                                other."WorkId"
+                            LIMIT 1
+                        ) AS linked ON identity."WorkId" IS NULL
                         LEFT JOIN LATERAL (
                             SELECT
                                 unit."WorkId",
@@ -95,10 +133,11 @@ namespace Jularr.Backend.Logic.Media
                         "Works" AS work
                     SET
                         "CatalogNamespace" = @Namespace,
-                        "CanonicalTitle" = CASE WHEN work."DetailedAt" IS NULL THEN item."Title" ELSE work."CanonicalTitle" END,
-                        "ReleaseYear" = CASE WHEN work."DetailedAt" IS NULL THEN coalesce(item."ReleaseYear", work."ReleaseYear") ELSE work."ReleaseYear" END,
+                        "CanonicalTitle" = CASE WHEN work."DetailedAt" IS NULL AND NOT resolved."IsInLibrary" THEN item."Title" ELSE work."CanonicalTitle" END,
+                        "ReleaseYear" = CASE WHEN work."DetailedAt" IS NULL AND NOT resolved."IsInLibrary" THEN coalesce(item."ReleaseYear", work."ReleaseYear") ELSE work."ReleaseYear" END,
                         "MediaSubtypeId" = CASE
-                            WHEN work."DetailedAt" IS NULL AND NOT work."IsMediaSubtypeManual" AND work."MediaTypeId" = @MediaTypeId THEN @MediaSubtypeId::smallint
+                            WHEN work."DetailedAt" IS NULL AND NOT resolved."IsInLibrary" AND NOT work."IsMediaSubtypeManual" AND work."MediaTypeId" = @MediaTypeId
+                                THEN coalesce(@MediaSubtypeId::smallint, work."MediaSubtypeId")
                             ELSE work."MediaSubtypeId"
                         END,
                         "OriginalTitle" = coalesce(item."OriginalTitle", work."OriginalTitle"),
@@ -163,6 +202,42 @@ namespace Jularr.Backend.Logic.Media
                         fresh."Value"
                     FROM
                         fresh
+                ), links AS (
+                    INSERT INTO
+                        "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                    SELECT
+                        resolved."KnownWorkId",
+                        @Namespace,
+                        resolved."Value"
+                    FROM
+                        resolved
+                    WHERE
+                        resolved."IsLinked"
+                    UNION ALL
+                    SELECT
+                        coalesce(resolved."KnownWorkId", fresh."WorkId"),
+                        'tmdb_tv',
+                        resolved."TmdbValue"
+                    FROM
+                        resolved
+                        LEFT JOIN fresh ON fresh."Value" = resolved."Value"
+                    WHERE
+                        resolved."TmdbValue" IS NOT NULL
+                        AND resolved."SeriesWorkId" IS NULL
+                        AND coalesce(resolved."KnownWorkId", fresh."WorkId") IS NOT NULL
+                    UNION ALL
+                    SELECT
+                        coalesce(resolved."KnownWorkId", fresh."WorkId"),
+                        'imdb',
+                        resolved."ImdbValue"
+                    FROM
+                        resolved
+                        LEFT JOIN fresh ON fresh."Value" = resolved."Value"
+                    WHERE
+                        resolved."ImdbValue" IS NOT NULL
+                        AND resolved."SeriesWorkId" IS NULL
+                        AND coalesce(resolved."KnownWorkId", fresh."WorkId") IS NOT NULL
+                    ON CONFLICT DO NOTHING
                 )
                 SELECT
                     resolved."Value",
@@ -237,10 +312,10 @@ namespace Jularr.Backend.Logic.Media
         public static bool AreChangesDue(ExternalWorkSyncData sync, DateTimeOffset now) =>
             sync.ChangesReadAt is not { } read || now - new DateTimeOffset(read, TimeSpan.Zero) >= ChangesInterval;
 
-        // A catalog syncs when the Owner kept it on, inside one of its windows (none: any time) and, if it waits, while nobody uses Jularr.
-        public static bool MaySync(ExternalWorkSyncData sync, IReadOnlyList<ExternalWorkSyncWindowData> windows, TimeOnly localTime, bool isUsed)
+        // A catalog syncs while it is kept whole, inside one of its windows (none: any time) and, if it waits, while nobody uses Jularr.
+        public static bool MaySync(CachingTier tier, ExternalWorkSyncData sync, IReadOnlyList<ExternalWorkSyncWindowData> windows, TimeOnly localTime, bool isUsed)
         {
-            if (!sync.IsEnabled || sync.PausesWhileUsed && isUsed) return false;
+            if (CatalogTier(tier, sync.Namespace) != CachingTier.Full || sync.PausesWhileUsed && isUsed) return false;
             var own = windows.Where(window => window.Namespace == sync.Namespace).ToArray();
             return own.Length == 0 || own.Any(window => window.StartsAt < window.EndsAt
                 ? localTime >= window.StartsAt && localTime < window.EndsAt
@@ -255,11 +330,10 @@ namespace Jularr.Backend.Logic.Media
         public const int UpcomingWithinDays = 180;
         public const int SuggestionCount = 6;
 
-        // With full local discovery a catalog read whole answers Discover itself.
+        // On the full tier a catalog read whole once answers Discover itself; only its full sync reads a catalog whole, and that runs only for a catalog with a full list.
         public static async Task<IReadOnlySet<string>> ReadWholeExternalWorkCatalogsAsync(this LogicContext ctx, CancellationToken ct)
         {
-            var modules = await ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["DiscoverCache", "LocalDiscovery"]), ct);
-            if (modules.Count(module => module.IsEnabled) < 2) return new HashSet<string>(StringComparer.Ordinal);
+            if (await ctx.ReadCachingTierAsync(ct) != CachingTier.Full) return new HashSet<string>(StringComparer.Ordinal);
 
             var sql = new SqlStatement();
             sql.Statement =
@@ -269,8 +343,7 @@ namespace Jularr.Backend.Logic.Media
                 FROM
                     "ExternalWorkSyncs" AS sync
                 WHERE
-                    sync."IsEnabled"
-                    AND sync."CompletedAt" IS NOT NULL;
+                    sync."CompletedAt" IS NOT NULL;
                 """;
             return (await ctx.ReadSql.ReadListAsync<ExternalWorkNamespaceData>(sql, ct)).Select(row => row.Namespace).ToHashSet(StringComparer.Ordinal);
         }
@@ -519,7 +592,6 @@ namespace Jularr.Backend.Logic.Media
                 """
                 SELECT
                     sync."Namespace",
-                    sync."IsEnabled",
                     sync."RequestsPerMinute"::integer AS "RequestsPerMinute",
                     sync."PausesWhileUsed",
                     sync."ListedOn",
@@ -560,7 +632,6 @@ namespace Jularr.Backend.Logic.Media
                 """
                 SELECT
                     sync."Namespace",
-                    sync."IsEnabled",
                     sync."RequestsPerMinute"::integer AS "RequestsPerMinute",
                     sync."PausesWhileUsed",
                     sync."ListedOn",
@@ -626,7 +697,6 @@ namespace Jularr.Backend.Logic.Media
                 UPDATE
                     "ExternalWorkSyncs" AS sync
                 SET
-                    "IsEnabled" = @IsEnabled,
                     "RequestsPerMinute" = @RequestsPerMinute,
                     "PausesWhileUsed" = @PausesWhileUsed,
                     "Version" = sync."Version" + 1,
@@ -774,7 +844,7 @@ namespace Jularr.Backend.Logic.Media
         }
 
         // Entries just read replace what the catalog knew. An entry the provider no longer has takes its Work along while that Work is only a catalog title;
-        // a Work with details, a tie to the library or a relation pointing at it stays and is not read again.
+        // a Work with details, a tie to the library, a file record or a relation pointing at it stays and is not read again.
         public static async Task<int> DetailExternalWorksAsync(this LogicContext ctx, ExternalWorkEntriesData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -791,6 +861,7 @@ namespace Jularr.Backend.Logic.Media
                     AND work."CatalogNamespace" = @Namespace
                     AND work."DetailedAt" IS NULL
                     AND NOT EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id")
+                    AND NOT EXISTS (SELECT 1 FROM "MediaAssets" AS asset WHERE asset."WorkId" = work."Id")
                     AND NOT EXISTS (SELECT 1 FROM "WorkRelations" AS relation WHERE relation."RelatedWorkId" = work."Id");
                 """;
             sql.Parameters.Add(data);
@@ -814,7 +885,7 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(data);
             changed += await ctx.ExecuteAsyncForAffectedRows(sql, ct);
 
-            // Title, year and date belong to the details once a Work has them; the catalog fields are the catalog's.
+            // Title, year and date belong to the details once a Work has them, and to the library's Work; the catalog fields are the catalog's.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -822,10 +893,10 @@ namespace Jularr.Backend.Logic.Media
                     "Works" AS work
                 SET
                     "CatalogNamespace" = @Namespace,
-                    "CanonicalTitle" = CASE WHEN work."DetailedAt" IS NULL THEN left(entry."Title", 500) ELSE work."CanonicalTitle" END,
-                    "ReleasedOn" = CASE WHEN work."DetailedAt" IS NULL THEN entry."ReleasedOn" ELSE work."ReleasedOn" END,
+                    "CanonicalTitle" = CASE WHEN work."DetailedAt" IS NULL AND NOT library."IsInLibrary" THEN left(entry."Title", 500) ELSE work."CanonicalTitle" END,
+                    "ReleasedOn" = CASE WHEN work."DetailedAt" IS NULL AND NOT library."IsInLibrary" THEN entry."ReleasedOn" ELSE work."ReleasedOn" END,
                     "ReleaseYear" = CASE
-                        WHEN work."DetailedAt" IS NOT NULL THEN work."ReleaseYear"
+                        WHEN work."DetailedAt" IS NOT NULL OR library."IsInLibrary" THEN work."ReleaseYear"
                         WHEN extract(year FROM entry."ReleasedOn") BETWEEN 1800 AND 2200 THEN extract(year FROM entry."ReleasedOn")::smallint
                     END,
                     "OriginalTitle" = left(entry."OriginalTitle", 500),
@@ -841,6 +912,10 @@ namespace Jularr.Backend.Logic.Media
                     jsonb_to_recordset(@Entries::jsonb) AS entry ("Value" text, "Title" text, "OriginalTitle" text, "ReleasedOn" date, "Overview" text, "ImageUrl" text,
                         "BackdropUrl" text, "Popularity" real, "Rating" double precision, "Votes" integer, "ImdbId" text, "IsAdult" boolean)
                     JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = @Namespace AND identity."Value" = entry."Value"
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS tie WHERE tie."WorkId" = identity."WorkId") AS "IsInLibrary"
+                    ) AS library
                 WHERE
                     work."Id" = identity."WorkId"
                     AND (work."CatalogNamespace" IS NULL OR work."CatalogNamespace" = @Namespace)

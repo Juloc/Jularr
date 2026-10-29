@@ -6,7 +6,8 @@ namespace Jularr.Backend.Logic.Instance
 {
     internal static class InstanceModuleLogic
     {
-        public static async Task UpdateInstanceModulesAsync(this LogicContext ctx, IReadOnlyList<InstanceModuleUpdateData> modules, CancellationToken ct)
+        // Every switch and the Caching module's settings in one step; the settings are saved whether the module is on or not.
+        public static async Task UpdateInstanceModulesAsync(this LogicContext ctx, IReadOnlyList<InstanceModuleUpdateData> modules, CachingSettingsData caching, CancellationToken ct)
         {
             // Match every shown row by ID and version; one stale or missing row rolls the step back.
             if (modules.Count is < 1 or > 64 || modules.Select(module => module.Id).Distinct().Count() != modules.Count)
@@ -38,6 +39,39 @@ namespace Jularr.Backend.Logic.Instance
             }
 
             await ctx.RequireModuleDependenciesAsync("Modules", ct);
+
+            var settings = new SqlStatement();
+            settings.Statement =
+                """
+                UPDATE
+                    "InstanceSettings" AS settings
+                SET
+                    "CatalogDetailKeepDays" = @CatalogDetailKeepDays,
+                    "DetailsDiscoverAhead" = @DetailsDiscoverAhead
+                WHERE
+                    settings."Id" = 1;
+                """;
+            settings.Parameters.Add(caching);
+            if (await ctx.ExecuteAsyncForAffectedRows(settings, ct) != 1)
+            {
+                throw new InvalidOperationException("The instance settings are missing.");
+            }
+        }
+
+        public static Task<CachingSettingsData> ReadCachingSettingsAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    settings."CatalogDetailKeepDays"::integer AS "CatalogDetailKeepDays",
+                    settings."DetailsDiscoverAhead"
+                FROM
+                    "InstanceSettings" AS settings
+                WHERE
+                    settings."Id" = 1;
+                """;
+            return ctx.ReadSql.ReadRequiredAsync<CachingSettingsData>(sql, ct);
         }
 
         // An enabled module needs every module it builds on to be enabled; checked after the write, so the whole step rolls back.

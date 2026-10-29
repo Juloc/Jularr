@@ -29,7 +29,37 @@ namespace Jularr.Backend.Logic.Media
                 }
             }
 
-            // Season entries land on the Work's regular seasons by number.
+            // Mapped seasons replace the automatic entries of an earlier pass that no longer fit; a person's entries stay.
+            if (data.ReplacesAutomatic)
+            {
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    DELETE FROM
+                        "WorkUnitExternalIdentities" AS mapped
+                    USING
+                        "WorkUnits" AS season
+                    WHERE
+                        season."Id" = mapped."WorkUnitId"
+                        AND season."WorkId" = @WorkId
+                        AND mapped."Namespace" = @Namespace
+                        AND NOT mapped."IsManual"
+                        AND NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                jsonb_to_recordset(@Seasons::jsonb) AS item ("Season" integer, "Value" text, "Offset" integer)
+                            WHERE
+                                item."Value" = mapped."Value"
+                                AND item."Season" = season."Number"
+                                AND item."Offset" = mapped."EpisodeOffset"
+                        );
+                    """;
+                sql.Parameters.Add(data);
+                await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            }
+
+            // Season entries land on the Work's seasons by number.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -103,6 +133,71 @@ namespace Jularr.Backend.Logic.Media
 
             // A season that waited as a Work of its own goes into the series now mapping it.
             await ctx.MergeAnimePlaceholdersAsync(data.WorkId, ct);
+
+            if (status != IdentityMatchStatusType.Matched || data.LinkedTitle is null)
+            {
+                return;
+            }
+
+            // A linked web novel keeps its Japanese name and is called by its entry's name in every other language; titles set by hand stay.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH provider AS (
+                    SELECT
+                        "Id"
+                    FROM
+                        "Providers"
+                    WHERE
+                        "Key" = @Namespace
+                ), removed AS (
+                    DELETE FROM
+                        "WorkTitles" AS title
+                    USING
+                        provider
+                    WHERE
+                        title."WorkId" = @WorkId
+                        AND title."ProviderId" = provider."Id"
+                        AND title."UiLocaleId" IS NOT NULL
+                        AND NOT title."IsManual"
+                )
+                INSERT INTO
+                    "WorkTitles" ("WorkId", "UiLocaleId", "Title", "ProviderId", "IsManual")
+                SELECT
+                    @WorkId,
+                    locale."Id",
+                    @LinkedTitle,
+                    provider."Id",
+                    FALSE
+                FROM
+                    provider
+                    CROSS JOIN "UiLocales" AS locale
+                WHERE
+                    lower(split_part(locale."Locale", '-', 1)) <> 'ja';
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // Whether a Work's AniList match was already made, proposed or decided.
+        public static async Task<bool> HasAniListMatchAsync(this LogicContext ctx, long workId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkIdentityMatches"
+                        WHERE
+                            "WorkId" = @Id
+                            AND "Namespace" = 'anilist'
+                    );
+                """;
+            sql.Parameters.Add(new WorkIdData(workId));
+            return (bool)(await ctx.ReadSql.ExecuteScalarAsync(sql, ct))!;
         }
 
         // An anime season no series held yet was a Work of its own: a series, anime, with only its AniList entry and nothing of its own.
@@ -149,9 +244,17 @@ namespace Jularr.Backend.Logic.Media
                 return 0;
             }
 
+            await ctx.MergeWorksIntoAsync(new AnimePlaceholderMergeData(seriesWorkId, [.. placeholders.Select(placeholder => placeholder.Id)]), ct);
+            return placeholders.Count;
+        }
+
+        // Works that are the same title as another (an anime season's own Work, a catalog twin) go into it: favorites, collections, progress, relations, list places,
+        // requests, wanted entries with their release history and notifications move, what the kept Work already has stays, and the merged Works go.
+        // A list place of an AniList entry the kept Work maps to a season shows it at that season.
+        public static async Task MergeWorksIntoAsync(this LogicContext ctx, AnimePlaceholderMergeData merge, CancellationToken ct)
+        {
             // Personal lists keep the series once.
-            var merge = new AnimePlaceholderMergeData(seriesWorkId, [.. placeholders.Select(placeholder => placeholder.Id)]);
-            sql = new SqlStatement();
+            var sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO
@@ -210,6 +313,44 @@ namespace Jularr.Backend.Logic.Media
                             moved."ProfileId",
                             moved."UpdatedAt" DESC
                     );
+
+                -- Progress of an episode or volume moves to the kept Work's unit of the same number, where the profile has none yet.
+                UPDATE
+                    "MediaProgress" AS progress
+                SET
+                    "WorkId" = @SeriesWorkId,
+                    "WorkUnitId" = target."UnitId"
+                FROM
+                    (
+                        SELECT DISTINCT ON (moved."ProfileId", kept."Id")
+                            moved."Id",
+                            kept."Id" AS "UnitId"
+                        FROM
+                            "MediaProgress" AS moved
+                            JOIN "WorkUnits" AS unit ON unit."Id" = moved."WorkUnitId"
+                            LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
+                            JOIN "WorkUnits" AS kept ON kept."WorkId" = @SeriesWorkId AND kept."WorkUnitTypeId" = unit."WorkUnitTypeId" AND kept."Number" = unit."Number"
+                            LEFT JOIN "WorkUnits" AS keptParent ON keptParent."Id" = kept."ParentWorkUnitId"
+                        WHERE
+                            moved."WorkId" = ANY(@PlaceholderWorkIds)
+                            AND keptParent."Number" IS NOT DISTINCT FROM parent."Number"
+                            AND NOT EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "MediaProgress" AS existing
+                                WHERE
+                                    existing."ProfileId" = moved."ProfileId"
+                                    AND existing."WorkId" = @SeriesWorkId
+                                    AND existing."WorkUnitId" = kept."Id"
+                            )
+                        ORDER BY
+                            moved."ProfileId",
+                            kept."Id",
+                            moved."UpdatedAt" DESC
+                    ) AS target
+                WHERE
+                    progress."Id" = target."Id";
                 """;
             sql.Parameters.Add(merge);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
@@ -268,23 +409,39 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(merge);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
 
-            // A list shows the series at the season instead; a place the series already has at that season stays the only one.
+            // A list shows the kept Work instead, an anime season's place at its season; a place the kept Work already has there stays the only one.
             sql = new SqlStatement();
             sql.Statement =
                 """
-                WITH moved AS (
+                WITH placed AS (
                     SELECT
                         item."FeedId",
                         item."Position",
-                        season."Number"::smallint AS "SeasonNumber",
-                        row_number() OVER (PARTITION BY item."FeedId", season."Number" ORDER BY item."Position") AS "Place"
+                        coalesce(season."Number", item."SeasonNumber") AS "SeasonNumber"
                     FROM
                         "ExternalWorkFeedItems" AS item
-                        JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = item."WorkId" AND identity."Namespace" = 'anilist'
-                        JOIN "WorkUnitExternalIdentities" AS mapped ON mapped."Namespace" = 'anilist' AND mapped."Value" = identity."Value"
-                        JOIN "WorkUnits" AS season ON season."Id" = mapped."WorkUnitId" AND season."WorkId" = @SeriesWorkId
+                        LEFT JOIN LATERAL (
+                            SELECT
+                                unit."Number"::smallint AS "Number"
+                            FROM
+                                "WorkExternalIdentities" AS identity
+                                JOIN "WorkUnitExternalIdentities" AS mapped ON mapped."Namespace" = 'anilist' AND mapped."Value" = identity."Value"
+                                JOIN "WorkUnits" AS unit ON unit."Id" = mapped."WorkUnitId" AND unit."WorkId" = @SeriesWorkId
+                            WHERE
+                                identity."WorkId" = item."WorkId"
+                                AND identity."Namespace" = 'anilist'
+                            LIMIT 1
+                        ) AS season ON TRUE
                     WHERE
                         item."WorkId" = ANY(@PlaceholderWorkIds)
+                ), moved AS (
+                    SELECT
+                        placed."FeedId",
+                        placed."Position",
+                        placed."SeasonNumber",
+                        row_number() OVER (PARTITION BY placed."FeedId", placed."SeasonNumber" ORDER BY placed."Position") AS "Place"
+                    FROM
+                        placed
                 ), dropped AS (
                     DELETE FROM
                         "ExternalWorkFeedItems" AS item
@@ -412,6 +569,41 @@ namespace Jularr.Backend.Logic.Media
                             moved."Id"
                     );
 
+                -- The releases taken, failed or blocked for an entry that goes stay with the kept entry, so nothing is grabbed twice or tried again.
+                UPDATE
+                    "AcquisitionReleases" AS release
+                SET
+                    "WantedItemId" = target."WantedItemId",
+                    "UpdatedAt" = now()
+                FROM
+                    (
+                        SELECT DISTINCT ON (kept."Id", moved."ReleaseIdentity")
+                            moved."Id",
+                            kept."Id" AS "WantedItemId"
+                        FROM
+                            "AcquisitionReleases" AS moved
+                            JOIN "WantedItems" AS wanted ON wanted."Id" = moved."WantedItemId"
+                            JOIN "WantedItems" AS kept ON kept."WorkId" = @SeriesWorkId AND kept."GamePlatformId" IS NOT DISTINCT FROM wanted."GamePlatformId"
+                        WHERE
+                            wanted."WorkId" = ANY(@PlaceholderWorkIds)
+                            AND NOT EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "AcquisitionReleases" AS same
+                                WHERE
+                                    same."WantedItemId" = kept."Id"
+                                    AND same."ReleaseIdentity" = moved."ReleaseIdentity"
+                            )
+                        ORDER BY
+                            kept."Id",
+                            moved."ReleaseIdentity",
+                            moved."UpdatedAt" DESC,
+                            moved."Id"
+                    ) AS target
+                WHERE
+                    release."Id" = target."Id";
+
                 INSERT INTO
                     "RequestTargets" ("AcquisitionRequestId", "WantedItemId")
                 SELECT
@@ -486,7 +678,6 @@ namespace Jularr.Backend.Logic.Media
                 """;
             sql.Parameters.Add(merge);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
-            return placeholders.Count;
         }
 
         // Matched Works whose relations were never read or are a day old, the oldest first, with the AniList entries they hold.

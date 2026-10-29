@@ -14,7 +14,7 @@ using Jularr.Integrations.Logic.Tmdb;
 
 namespace Jularr.Backend.Service.System.Media.V1
 {
-    // One pass of full local discovery for TMDB: the daily id list, the changes, then the next entries by popularity.
+    // One pass of full local discovery for TMDB films and AniList: TMDB's daily id list, the changes, then the next entries by popularity.
     // Provider reads happen between short write batches, never inside one.
     public sealed class SyncExternalWorksV1 : SystemService<SyncExternalWorksParametersV1, NoData>
     {
@@ -38,9 +38,9 @@ namespace Jularr.Backend.Service.System.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var windows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkSyncWindowsAsync(ct), CancellationToken);
+            var (tier, windows) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await ctx.ReadCachingTierAsync(ct), await ctx.ReadExternalWorkSyncWindowsAsync(ct)), CancellationToken);
             var isUsed = _activity.IsUsedWithin(ExternalWorkLogic.UseLasts);
-            var changed = await SyncAniListAsync(windows, isUsed);
+            var changed = await SyncAniListAsync(tier, windows, isUsed);
 
             // Without a TMDB key there is nothing to keep from TMDB.
             TmdbConnection connection;
@@ -53,45 +53,45 @@ namespace Jularr.Backend.Service.System.Media.V1
                 return new UpdateResult(changed > 0);
             }
 
-            foreach (var mediaType in new[] { MediaType.Movie, MediaType.Series })
+            // Series come from TheTVDB, which has no full list; only films are kept whole from TMDB.
+            var list = new ExternalWorkListData(WorkMetadata.Namespace(MediaType.Movie), MediaType.Movie, null);
+            var now = _time.GetUtcNow();
+            var sync = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkSyncAsync(list.Namespace, ct), CancellationToken);
+            if (sync is null || !ExternalWorkLogic.MaySync(tier, sync, windows, TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, _time.LocalTimeZone).DateTime), isUsed))
             {
-                var list = new ExternalWorkListData(WorkMetadata.Namespace(mediaType), mediaType, null);
-                var now = _time.GetUtcNow();
-                var sync = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkSyncAsync(list.Namespace, ct), CancellationToken);
-                if (sync is null || !ExternalWorkLogic.MaySync(sync, windows, TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, _time.LocalTimeZone).DateTime), isUsed)) continue;
-
-                var today = DateOnly.FromDateTime(now.UtcDateTime);
-                var listedOn = sync.ListedOn;
-                if (ExternalWorkLogic.IsListDue(sync, now) && await ListAsync(mediaType, list, today))
-                {
-                    listedOn = today;
-                    await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorkSyncAsync(new ExternalWorkSyncProgressData(list.Namespace, listedOn, sync.Cursor, sync.ChangesReadAt), ct),
-                        CancellationToken);
-                }
-
-                if (ExternalWorkLogic.AreChangesDue(sync, now))
-                {
-                    // The first pass has every entry still to read; later ones read what changed since.
-                    if (sync.ChangesReadAt is { } read) changed += await MarkChangesAsync(connection, mediaType, list, DateOnly.FromDateTime(read), today);
-                    await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorkSyncAsync(new ExternalWorkSyncProgressData(list.Namespace, listedOn, sync.Cursor, now.UtcDateTime), ct),
-                        CancellationToken);
-                }
-
-                // A pass runs every minute: the catalog's requests a minute are its budget; once the listed titles are all read the catalog is whole.
-                var (detailed, isDone) = await DetailAsync(connection, mediaType, list, sync.RequestsPerMinute);
-                changed += detailed;
-                if (isDone && listedOn is not null) await Context.ExecuteBatchAsync((ctx, ct) => ctx.CompleteExternalWorkSyncAsync(list.Namespace, ct), CancellationToken);
+                return new UpdateResult(changed > 0);
             }
 
+            var today = DateOnly.FromDateTime(now.UtcDateTime);
+            var listedOn = sync.ListedOn;
+            if (ExternalWorkLogic.IsListDue(sync, now) && await ListAsync(list, today))
+            {
+                listedOn = today;
+                await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorkSyncAsync(new ExternalWorkSyncProgressData(list.Namespace, listedOn, sync.Cursor, sync.ChangesReadAt), ct),
+                    CancellationToken);
+            }
+
+            if (ExternalWorkLogic.AreChangesDue(sync, now))
+            {
+                // The first pass has every entry still to read; later ones read what changed since.
+                if (sync.ChangesReadAt is { } read) changed += await MarkChangesAsync(connection, list, DateOnly.FromDateTime(read), today);
+                await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorkSyncAsync(new ExternalWorkSyncProgressData(list.Namespace, listedOn, sync.Cursor, now.UtcDateTime), ct),
+                    CancellationToken);
+            }
+
+            // A pass runs every minute: the catalog's requests a minute are its budget; once the listed titles are all read the catalog is whole.
+            var (detailed, isDone) = await DetailAsync(connection, list, sync.RequestsPerMinute);
+            changed += detailed;
+            if (isDone && listedOn is not null) await Context.ExecuteBatchAsync((ctx, ct) => ctx.CompleteExternalWorkSyncAsync(list.Namespace, ct), CancellationToken);
             return new UpdateResult(changed > 0);
         }
 
         // AniList has no id list: a pass walks its titles by id, a page per request within the budget, and goes on where the last one stopped.
-        private async Task<int> SyncAniListAsync(IReadOnlyList<ExternalWorkSyncWindowData> windows, bool isUsed)
+        private async Task<int> SyncAniListAsync(CachingTier tier, IReadOnlyList<ExternalWorkSyncWindowData> windows, bool isUsed)
         {
             var now = _time.GetUtcNow();
             var sync = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkSyncAsync(AniListMetadata.Namespace, ct), CancellationToken);
-            if (sync is null || !ExternalWorkLogic.MaySync(sync, windows, TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, _time.LocalTimeZone).DateTime), isUsed)
+            if (sync is null || !ExternalWorkLogic.MaySync(tier, sync, windows, TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, _time.LocalTimeZone).DateTime), isUsed)
                 || !ExternalWorkLogic.IsFullPassDue(sync, now))
             {
                 return 0;
@@ -168,22 +168,22 @@ namespace Jularr.Backend.Service.System.Media.V1
         }
 
         // Adult titles and video extras stay out of the catalog.
-        private Task<bool> ListAsync(MediaType mediaType, ExternalWorkListData list, DateOnly day) =>
-            _metadata.ReadIdListAsync(mediaType, day, async entries =>
+        private Task<bool> ListAsync(ExternalWorkListData list, DateOnly day) =>
+            _metadata.ReadMovieIdListAsync(day, async entries =>
             {
                 var rows = JsonSerializer.Serialize(entries.Where(entry => !entry.IsAdult && !entry.IsVideo)
                     .Select(entry => new { Value = entry.Id.ToString(CultureInfo.InvariantCulture), Title = entry.OriginalTitle, entry.Popularity }));
                 await Context.ExecuteBatchAsync((ctx, ct) => ctx.ListExternalWorksAsync(new ExternalWorkEntriesData(list, rows), ct), CancellationToken);
             }, CancellationToken);
 
-        private async Task<int> MarkChangesAsync(TmdbConnection connection, MediaType mediaType, ExternalWorkListData list, DateOnly from, DateOnly to)
+        private async Task<int> MarkChangesAsync(TmdbConnection connection, ExternalWorkListData list, DateOnly from, DateOnly to)
         {
             // TMDB answers at most fourteen days at once; an older pass starts the window two weeks back.
             if (to.DayNumber - from.DayNumber > 14) from = to.AddDays(-14);
             var changed = 0;
             for (int page = 1, pages = 1; page <= pages; page++)
             {
-                var (ids, total) = await _metadata.ReadChangesAsync(connection, mediaType, from, to, page, CancellationToken);
+                var (ids, total) = await _metadata.ReadMovieChangesAsync(connection, from, to, page, CancellationToken);
                 pages = Math.Min(total, 500);
                 var values = new ExternalWorkValuesData(list.Namespace, [.. ids.Select(id => id.ToString(CultureInfo.InvariantCulture))]);
                 changed += await Context.ExecuteBatchAsync((ctx, ct) => ctx.MarkChangedExternalWorksAsync(values, ct), CancellationToken);
@@ -192,7 +192,7 @@ namespace Jularr.Backend.Service.System.Media.V1
             return changed;
         }
 
-        private async Task<(int Changed, bool IsDone)> DetailAsync(TmdbConnection connection, MediaType mediaType, ExternalWorkListData list, int limit)
+        private async Task<(int Changed, bool IsDone)> DetailAsync(TmdbConnection connection, ExternalWorkListData list, int limit)
         {
             var values = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadUndetailedExternalWorksAsync(new ExternalWorkQueueData(list.Namespace, limit), ct), CancellationToken);
             if (values.Count == 0) return (0, true);
@@ -204,7 +204,7 @@ namespace Jularr.Backend.Service.System.Media.V1
             {
                 foreach (var chunk in values.Chunk(4))
                 {
-                    var read = await Task.WhenAll(chunk.Select(async value => (value, entry: await _metadata.ReadCatalogEntryAsync(connection, mediaType, int.Parse(value, CultureInfo.InvariantCulture), CancellationToken))));
+                    var read = await Task.WhenAll(chunk.Select(async value => (value, entry: await _metadata.ReadCatalogEntryAsync(connection, MediaType.Movie, int.Parse(value, CultureInfo.InvariantCulture), CancellationToken))));
                     foreach (var (value, entry) in read)
                     {
                         if (entry is null) gone.Add(value);

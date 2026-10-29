@@ -45,9 +45,32 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
         }
     }
 
+    // The Caching module's settings; they are saved with the switches (UpdateInstanceModulesV1, SaveSetupModulesV1).
+    [ServiceEndpoint("GET", "/api/v1/admin/instance/caching")]
+    public sealed class ReadCachingSettingsV1 : AdminService<ReadInstanceModulesParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<CachingSettingsV1>()];
+        protected override ModuleRequirement GetInstanceModules(ReadInstanceModulesParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(ReadInstanceModulesParametersV1 parameters, Type resultType) => new("instance.settings.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            var settings = await Context.ReadCachingSettingsAsync(CancellationToken);
+            return new CachingSettingsV1(settings.CatalogDetailKeepDays, settings.DetailsDiscoverAhead);
+        }
+    }
+
     [ServiceEndpoint("PUT", "/api/v1/admin/instance/modules/{instanceModuleId:long}")]
     public sealed class UpdateInstanceModuleV1 : AdminService<UpdateInstanceModuleParametersV1, UpdateInstanceModuleDataV1>
     {
+        private readonly VpnTunnels _tunnels;
+        private bool _stopsTunnels;
+
+        internal UpdateInstanceModuleV1(VpnTunnels tunnels)
+        {
+            _tunnels = tunnels;
+        }
+
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(UpdateInstanceModuleParametersV1 parameters) => ModuleRequirement.None;
@@ -56,13 +79,27 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             await Context.UpdateInstanceModuleAsync(new InstanceModuleUpdateData(Parameters.InstanceModuleId, Data.IsEnabled, Data.Version), CancellationToken);
+            _stopsTunnels = await OptionalModules.StopsTunnelsAsync(Context, _tunnels, CancellationToken);
             return new UpdateResult(true);
+        }
+
+        protected override void OnCommitted()
+        {
+            if (_stopsTunnels) _ = _tunnels.StopAllAsync();
         }
     }
 
     [ServiceEndpoint("PUT", "/api/v1/admin/instance/modules")]
     public sealed class UpdateInstanceModulesV1 : AdminService<UpdateInstanceModulesParametersV1, UpdateInstanceModulesDataV1>
     {
+        private readonly VpnTunnels _tunnels;
+        private bool _stopsTunnels;
+
+        internal UpdateInstanceModulesV1(VpnTunnels tunnels)
+        {
+            _tunnels = tunnels;
+        }
+
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(UpdateInstanceModulesParametersV1 parameters) => ModuleRequirement.None;
@@ -71,8 +108,26 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             // Every switch in one step, so that a module and what it needs can change together.
-            await Context.UpdateInstanceModulesAsync(Data.Modules.Select(module => new InstanceModuleUpdateData(module.Id, module.IsEnabled, module.Version)).ToArray(), CancellationToken);
+            await Context.UpdateInstanceModulesAsync(Data.Modules.Select(module => new InstanceModuleUpdateData(module.Id, module.IsEnabled, module.Version)).ToArray(),
+                new CachingSettingsData(Data.CatalogDetailKeepDays, Data.DetailsDiscoverAhead), CancellationToken);
+            _stopsTunnels = await OptionalModules.StopsTunnelsAsync(Context, _tunnels, CancellationToken);
             return new UpdateResult(true);
+        }
+
+        protected override void OnCommitted()
+        {
+            if (_stopsTunnels) _ = _tunnels.StopAllAsync();
+        }
+    }
+
+    // What switching optional modules off frees at once: the VPN tunnels end with their module.
+    internal static class OptionalModules
+    {
+        public static async Task<bool> StopsTunnelsAsync(LogicContext ctx, VpnTunnels tunnels, CancellationToken ct)
+        {
+            if (!tunnels.IsRunning) return false;
+            var modules = await ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["Vpn"]), ct);
+            return !modules.Any(module => module.Key == "Vpn" && module.IsEnabled);
         }
     }
 }
