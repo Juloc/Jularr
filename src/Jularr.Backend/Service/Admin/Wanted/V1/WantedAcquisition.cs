@@ -27,6 +27,7 @@ using Jularr.Backend.Service.Core;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Logic.Storage;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 
 namespace Jularr.Backend.Service.Admin.Wanted.V1
 {
@@ -47,10 +48,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private readonly DownloadStorage _downloads;
         private readonly StorageAccess _storage;
         private readonly WorkSignals _signals;
+        private readonly ILogger<WantedAcquisition> _logger;
 
         public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DirectSources direct, NyaaSources nyaa,
-            IDataProtectionProvider protection, IMemoryCache offers, TimeProvider time, DownloadStorage downloads, StorageAccess storage, WorkSignals signals)
+            IDataProtectionProvider protection, IMemoryCache offers, TimeProvider time, DownloadStorage downloads, StorageAccess storage, WorkSignals signals, ILogger<WantedAcquisition> logger)
         {
+            _logger = logger;
             _storage = storage;
             _signals = signals;
             _downloads = downloads;
@@ -396,21 +399,35 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
                 var staging = await nativePaths!.PrepareIncompleteAsync(operationId, ct, target.MediaTypeId, target.MediaSubtypeId);
+                var stage = "workspace";
                 try
                 {
                     Directory.CreateDirectory(staging);
                     File.Delete(Path.Combine(staging, UsenetJob.NzbName));
+                    stage = "transfer";
                     await _newznab.DownloadNzbAsync(offer.DownloadUri, Path.Combine(staging, UsenetJob.NzbName), ct,
                         bytes => nativePaths.ReserveWrite(operationId, staging, bytes));
                     externalId = UsenetJob.ExternalId;
                 }
                 catch (NewznabException exception)
                 {
+                    // Never log an exception: its message or inner exception can contain the signed URL.
+                    _logger.LogWarning("NZB download failed for operation {OperationId}, indexer {IndexerId}: {Failure}; HTTP {StatusCode}; timeout {TimedOut}; transport {TransportError}.",
+                        operationId, offer.ConnectionId, exception.Failure, (int?)exception.StatusCode, exception.InnerException is OperationCanceledException,
+                        exception.InnerException is HttpRequestException transport ? transport.HttpRequestError : (HttpRequestError?)null);
                     failure = exception.Failure == NewznabFailure.Unavailable ? "acquisition_unavailable" : "acquisition_grab_failed";
                 }
-                catch (IOException)
+                catch (IOException exception)
                 {
+                    _logger.LogWarning("NZB I/O failed for operation {OperationId}, indexer {IndexerId}, stage {Stage}: {ExceptionType}; HResult {HResult}.",
+                        operationId, offer.ConnectionId, stage, exception.GetType().Name, exception.HResult);
                     failure = "acquisition_unavailable";
+                }
+                catch (UnauthorizedAccessException exception)
+                {
+                    _logger.LogWarning("NZB access denied for operation {OperationId}, indexer {IndexerId}, stage {Stage}: {ExceptionType}; HResult {HResult}.",
+                        operationId, offer.ConnectionId, stage, exception.GetType().Name, exception.HResult);
+                    throw;
                 }
 
                 if (failure is not null && Directory.Exists(staging))
