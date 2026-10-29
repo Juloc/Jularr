@@ -491,8 +491,8 @@ namespace Jularr.Backend.Tests
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 18"));
             Assert.AreEqual("Torrent", await ScalarAsync(cs,
                 "SELECT \"Key\" FROM \"AcquisitionConnectionTypes\" WHERE \"Id\" = 12"));
-            Assert.AreEqual("0019_smart_pages_view", await ScalarAsync(cs,
-                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 19"));
+            Assert.AreEqual("0025_smart_pages_view", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 25"));
             Assert.AreEqual("SmartPages", await ScalarAsync(cs,
                 "SELECT \"Key\" FROM \"ReadingViewTypes\" WHERE \"Id\" = 3"));
             Assert.AreEqual(2L, await ScalarAsync(cs,
