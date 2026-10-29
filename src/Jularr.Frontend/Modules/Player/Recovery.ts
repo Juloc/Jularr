@@ -1,5 +1,5 @@
-// A playback that stopped plans itself again: the pauses between fresh sessions and when the picture counts as healed.
-export const ReplanAttempts = 6;
+// A playback that stopped plans itself again without end: the pauses between fresh sessions, when the player tells the person, when the picture counts as healed.
+export const AttemptsBeforeNotice = 6;
 export const HealedSeconds = 20;
 const FirstDelayMs = 1_000;
 const LongestDelayMs = 15_000;

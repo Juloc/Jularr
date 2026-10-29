@@ -8,7 +8,7 @@ import type { StyledSubtitles } from "./StyledSubtitles";
 import { deviceKind, libassWanted } from "./Device";
 import { Automatic, nextQuality, recordStall, StallSeconds, troubled } from "./AutoQuality";
 import { pickSecondSubtitle, pickTranslationSource, SecondSubtitleLine, type SubtitleOption } from "./Subtitles";
-import { healed, ReplanAttempts, replanDelay } from "./Recovery";
+import { healed, AttemptsBeforeNotice, replanDelay } from "./Recovery";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
@@ -1486,13 +1486,19 @@ async function start(player: HTMLElement): Promise<void> {
         window.setTimeout(() => { if (status.textContent === shown) status.hidden = true; }, 8_000);
     }
 
-    // The playback never ends on its own: when repairing in place fails, a new session is planned at the same position, after a growing pause,
-    // and only several of these in a row without a picture that plays on give up with a message.
+    // The playback never ends on its own: when repairing in place fails, a new session is planned at the same position, after a growing pause
+    // (at most fifteen seconds), for as long as it takes. After several tries in a row the message shows once as a note; the tries go on and a
+    // session that plays again takes the message away.
     async function escalate(): Promise<void> {
         if (escalating || switching || casting || leaving || !plan) return;
         escalating = true;
+        let told = false;
         try {
-            while (replans < ReplanAttempts) {
+            for (;;) {
+                if (replans >= AttemptsBeforeNotice && !told) {
+                    told = true;
+                    await failure();
+                }
                 showLoading();
                 await new Promise(resolve => window.setTimeout(resolve, replanDelay(replans++)));
                 if (!plan || leaving || casting) return;
@@ -1502,7 +1508,6 @@ async function start(player: HTMLElement): Promise<void> {
                     return;
                 }
             }
-            await failure();
         } finally {
             escalating = false;
         }

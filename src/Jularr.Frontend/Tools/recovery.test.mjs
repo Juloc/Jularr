@@ -14,8 +14,8 @@ test('A new session waits one second, then twice as long, never more than fiftee
     assert.equal(exports.replanDelay(-1), 1_000);
 });
 
-test('The player plans again several times before it gives up', () => {
-    assert.equal(exports.ReplanAttempts, 6);
+test('The player tells the person after six tries and keeps trying', () => {
+    assert.equal(exports.AttemptsBeforeNotice, 6);
 });
 
 test('A picture that plays on for twenty seconds after a repair is healed', () => {
