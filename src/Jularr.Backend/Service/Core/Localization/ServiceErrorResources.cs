@@ -144,6 +144,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.too_long", "The value is too long."),
             new("errors.validation.invalid_email", "Please enter a valid email address."),
             new("errors.validation.invalid_locale", "Please enter a language code supported by this server."),
+            new("errors.validation.same_language", "Choose a target language different from the subtitle's source language."),
             new("errors.validation.invalid_url", "Please enter an HTTP or HTTPS address."),
             new("errors.validation.invalid_host", "Please enter a hostname or IPv4 address without a scheme or path."),
             new("errors.validation.invalid_path", "Please enter a path without traversal segments."),
