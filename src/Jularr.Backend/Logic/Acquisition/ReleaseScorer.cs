@@ -85,6 +85,7 @@ namespace Jularr.Backend.Logic.Acquisition
             // Custom formats add their profile scores; the sum must reach the profile's minimum.
             var context = new FormatContext(profile.IsMovie, profile.OriginalLanguage, profile.Year);
             var formatScore = 0;
+            var formatPoints = new List<ScorePoint>();
             foreach (var (format, points) in profile.Formats)
             {
                 if (!CustomFormatMatcher.TryMatch(format, candidate, context, out var matches))
@@ -94,6 +95,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 else if (matches)
                 {
                     formatScore += points;
+                    formatPoints.Add(new ScorePoint("CustomFormat", format.Name, points));
                     scoreReasons.Add(new ReleaseReason("FormatScore", $"{format.Name}: {(points >= 0 ? "+" : "")}{points}"));
                 }
             }
@@ -107,7 +109,8 @@ namespace Jularr.Backend.Logic.Acquisition
             return new ReleaseScoreResult(candidate, rejections.Count == 0, score, qualityKey, qualityRank, rejections, scoreReasons)
             {
                 InfoReasons = infoReasons,
-                FormatScore = formatScore
+                FormatScore = formatScore,
+                FormatPoints = formatPoints
             };
         }
 

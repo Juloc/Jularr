@@ -5054,6 +5054,110 @@
    "Equal candidates",
    "Gleichwertige Kandidaten"
   ],
+  "acquisition.reason.WebNovel": [
+   "Web novel, another text of the story",
+   "Web-Novel, ein anderer Text der Geschichte"
+  ],
+  "acquisition.reason.AudiobookNotWanted": [
+   "Audiobook, not an e-book",
+   "Hörbuch, kein E-Book"
+  ],
+  "acquisition.reason.MangaNotWanted": [
+   "Manga or comic, not an e-book",
+   "Manga oder Comic, kein E-Book"
+  ],
+  "acquisition.reason.MagazineNotWanted": [
+   "Magazine, not an e-book",
+   "Magazin, kein E-Book"
+  ],
+  "acquisition.reason.SizeAboveVolumeMaximum": [
+   "Above the size limit per volume",
+   "Über der Größengrenze pro Band"
+  ],
+  "acquisition.reason.SizeBelowVolumeMinimum": [
+   "Below the size limit per volume",
+   "Unter der Größengrenze pro Band"
+  ],
+  "acquisition.points.CustomFormat": [
+   "Custom format",
+   "Eigenes Format"
+  ],
+  "acquisition.points.TitleMatches": [
+   "Title matches",
+   "Titel passt"
+  ],
+  "acquisition.points.AuthorNamed": [
+   "Author named",
+   "Autor genannt"
+  ],
+  "acquisition.points.Format": [
+   "Format",
+   "Format"
+  ],
+  "acquisition.points.FormatNotNamed": [
+   "Format not named",
+   "Format nicht genannt"
+  ],
+  "acquisition.points.Illustrated": [
+   "Illustrated edition",
+   "Illustrierte Ausgabe"
+  ],
+  "acquisition.kind.Ebook": [
+   "E-book",
+   "E-Book"
+  ],
+  "acquisition.kind.Audiobook": [
+   "Audiobook",
+   "Hörbuch"
+  ],
+  "acquisition.kind.MangaComic": [
+   "Manga/comic",
+   "Manga/Comic"
+  ],
+  "acquisition.kind.Magazine": [
+   "Magazine",
+   "Magazin"
+  ],
+  "acquisition.size.AboveMaximum": [
+   "Too large",
+   "Zu groß"
+  ],
+  "acquisition.size.BelowMinimum": [
+   "Too small",
+   "Zu klein"
+  ],
+  "acquisition.size.Unknown": [
+   "Volumes unknown",
+   "Bände unbekannt"
+  ],
+  "wanted.search.kind": [
+   "Kind",
+   "Art"
+  ],
+  "wanted.search.volumes": [
+   "Volumes",
+   "Bände"
+  ],
+  "wanted.search.complete": [
+   "Complete",
+   "Komplett"
+  ],
+  "arr.size.Ebook": [
+   "E-book",
+   "E-Book"
+  ],
+  "arr.size.Illustrated": [
+   "Illustrated edition",
+   "Illustrierte Ausgabe"
+  ],
+  "arr.size.Manga": [
+   "Manga volume",
+   "Manga-Band"
+  ],
+  "unit.megabytesPerVolume": [
+   "MB/volume",
+   "MB/Band"
+  ],
   "acquisition.reason.MatchesTitle": [
    "Matches the title",
    "Passt zum Titel"

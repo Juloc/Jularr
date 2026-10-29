@@ -118,7 +118,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(ReleaseDecisionType.Eligible, gutenberg.ReleaseDecisionTypeId);
             Assert.AreEqual("EPUB", gutenberg.QualityKey);
             Assert.AreNotEqual(ReleaseDecisionType.Eligible, candidates.Single(candidate => candidate.Title.StartsWith("Seth Grahame", StringComparison.Ordinal)).ReleaseDecisionTypeId);
-            Assert.AreEqual("AuthorMissing", candidates.Single(candidate => candidate.Title.StartsWith("Pride.and.Prejudice.Retold", StringComparison.Ordinal)).ReasonCode);
+            var retold = candidates.Single(candidate => candidate.Title.StartsWith("Pride.and.Prejudice.Retold", StringComparison.Ordinal));
+            Assert.AreEqual(("ExtraTitleWords", "retold"), (retold.ReasonCode, retold.ReasonValue));
+            Assert.AreEqual(BookReleaseKind.Ebook, gutenberg.BookReleaseKindId);
+            Assert.IsTrue(gutenberg.ScorePoints.Any(point => point.Code == "Format" && point.Value == "EPUB" && point.Points == 40));
             Assert.AreEqual("PDF", candidates.Single(candidate => candidate.Title.StartsWith("Jane.Austen", StringComparison.Ordinal)).QualityKey);
 
             // Jularr downloads the catalog book itself and imports it like any job.
