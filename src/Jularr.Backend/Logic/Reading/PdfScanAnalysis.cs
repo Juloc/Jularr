@@ -71,30 +71,27 @@ namespace Jularr.Backend.Logic.Reading
                     continue;
                 }
 
-                // Columns: a gap wider than a line's height between neighbouring words; rows within them by the words' middles.
-                var tall = words.Average(word => word.Bottom - word.Top) * height;
-                var columns = new List<List<PdfLayerWord>>();
+                // Lines: a word joins the line it shares its rows with and stands a word space from (against the smaller of the two), so columns, and small
+                // type beside large, stay apart.
+                var rows = new List<List<PdfLayerWord>>();
                 foreach (var word in words.OrderBy(word => word.Left))
                 {
-                    var column = columns.FirstOrDefault(column => (word.Left - column.Max(other => other.Right)) * width <= tall * 1.2 && word.Left * width >= column.Min(other => other.Left) * width - tall);
-                    if (column is null)
+                    var row = rows.FirstOrDefault(row => row[^1] is var last && Math.Min(last.Bottom - last.Top, word.Bottom - word.Top) * height is var low
+                        && (Math.Min(last.Bottom, word.Bottom) - Math.Max(last.Top, word.Top)) * height >= low * 0.5 && (word.Left - last.Right) * width <= low * 1.2);
+                    if (row is null)
                     {
-                        columns.Add([word]);
+                        rows.Add([word]);
                     }
                     else
                     {
-                        column.Add(word);
+                        row.Add(word);
                     }
                 }
 
-                foreach (var column in columns)
+                foreach (var row in rows.OrderBy(row => row.Min(word => word.Top)))
                 {
-                    foreach (var row in column.GroupBy(word => Math.Round((word.Top + word.Bottom) / 2 * height / Math.Max(1, tall * 0.8))).OrderBy(row => row.Key))
-                    {
-                        var ordered = row.OrderBy(word => word.Left).ToList();
-                        result.Add(new RecognizedLine(Round(ordered.Min(word => word.Left)), Round(ordered.Min(word => word.Top)), Round(ordered.Max(word => word.Right)),
-                            Round(ordered.Max(word => word.Bottom)), string.Join(' ', ordered.Select(word => Typeset(word.Text))), UnsureLine));
-                    }
+                    result.Add(new RecognizedLine(Round(row.Min(word => word.Left)), Round(row.Min(word => word.Top)), Round(row.Max(word => word.Right)),
+                        Round(row.Max(word => word.Bottom)), string.Join(' ', row.Select(word => Typeset(word.Text))), UnsureLine));
                 }
             }
 
