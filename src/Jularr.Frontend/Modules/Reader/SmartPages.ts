@@ -93,7 +93,11 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
     function show(block: HTMLElement, text: string): void {
         const parts = Array.from(block.querySelectorAll<HTMLElement>(':scope > [data-part]'));
         if (parts.length === 0) set(block, text);
-        else splitText(text, parts.map(part => part.textContent?.length ?? 0)).forEach((piece, index) => set(parts[index], piece));
+        else {
+            // Shared out by the original's letters until the page is laid out; then it flows box by box (fit).
+            splitText(text, parts.map(part => part.textContent?.length ?? 0)).forEach((piece, index) => set(parts[index], piece));
+            block.dataset.flow = text;
+        }
         block.dataset.translated = 'true';
     }
 
@@ -111,6 +115,7 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
     function fit(element: HTMLElement): void {
         const height = element.clientHeight;
         if (!height) return;
+        for (const flow of element.querySelectorAll<HTMLElement>('[data-flow]')) pour(flow, height);
         const blocks = Array.from(element.querySelectorAll<HTMLElement>('[data-box]'));
         for (const block of blocks) {
             let size = startSize(Number(block.dataset.base), height);
@@ -134,6 +139,27 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
             const natural = Array.from(block.children).reduce((sum, child) => sum + child.getBoundingClientRect().width, 0);
             block.style.letterSpacing = `${letterSpacing(block.clientWidth - natural, block.textContent?.length ?? 0, parseFloat(block.style.fontSize), block.dataset.translated === 'true')}px`;
         }
+    }
+
+    // A translation flows through the boxes of its sentence like the print: each box at its measured size takes words while they fit, the last the rest.
+    function pour(flow: HTMLElement, height: number): void {
+        const parts = Array.from(flow.querySelectorAll<HTMLElement>(':scope > [data-part]'));
+        const words = (flow.dataset.flow ?? '').split(/\s+/).filter(Boolean);
+        let next = 0;
+        parts.forEach((part, index) => {
+            const run = part.querySelector<HTMLElement>('span') ?? part;
+            part.style.whiteSpace = part.dataset.lines === '1' ? 'nowrap' : '';
+            part.style.fontSize = `${startSize(Number(part.dataset.base), height)}px`;
+            if (index === parts.length - 1) { run.textContent = words.slice(next).join(' '); return; }
+            const overflows = () => part.scrollHeight > part.clientHeight * 1.04 + 1 || part.scrollWidth > part.clientWidth + 1;
+            const start = next;
+            run.textContent = '';
+            while (next < words.length) {
+                run.textContent = words.slice(start, next + 1).join(' ');
+                if (overflows() && next > start) { run.textContent = words.slice(start, next).join(' '); break; }
+                next++;
+            }
+        });
     }
 
     // A language chosen here is kept for the profile; the pages then show in it.
