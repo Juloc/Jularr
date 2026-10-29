@@ -60,12 +60,27 @@ namespace Jularr.Integrations.Logic.Ocr
                 }
             }
             var lines = new List<OcrLine>();
-            foreach (var box in Split(page, Join(Detect(page))))
+            foreach (var region in Join(Detect(page)))
             {
-                var (text, confidence, characters) = Recognize(page, box);
-                if (text.Trim() is { Length: > 0 } trimmed)
+                // A region parted at a gutter is read both ways; the surer reading wins (a line over a photograph has no gutter, only a mottled ground).
+                var read = new List<(SKRectI Box, (string Text, float Confidence, IReadOnlyList<OcrCharacter> Characters) Read)> { (region, Recognize(page, region)) };
+                if (Split(page, [region]) is { Count: > 1 } parts)
                 {
-                    lines.Add(new OcrLine(box.Left, box.Top, box.Right, box.Bottom, trimmed, confidence) { Characters = characters });
+                    var apart = parts.Select(part => (Box: part, Read: Recognize(page, part))).ToList();
+                    var letters = apart.Sum(each => each.Read.Text.Trim().Length);
+                    if (letters > 0 && apart.All(each => each.Read.Confidence >= SurePart)
+                        && apart.Sum(each => each.Read.Confidence * each.Read.Text.Trim().Length) / letters >= read[0].Read.Confidence)
+                    {
+                        read = apart;
+                    }
+                }
+
+                foreach (var (box, (text, confidence, characters)) in read)
+                {
+                    if (text.Trim() is { Length: > 0 } trimmed)
+                    {
+                        lines.Add(new OcrLine(box.Left, box.Top, box.Right, box.Bottom, trimmed, confidence) { Characters = characters });
+                    }
                 }
             }
 
@@ -103,8 +118,11 @@ namespace Jularr.Integrations.Logic.Ocr
             return lines;
         }
 
-        // A detected region may run over the gutter between two columns (a rule in it joins them): a stretch without ink wider than the region is high (a
-        // thin rule counts as empty) parts it, and each part is trimmed to its own ink, so small type beside large is read at its own size.
+        // Every part of a region read apart must be read this surely, or the region is read whole.
+        private const float SurePart = 0.75f;
+
+        // A detected region may run over the gutter between two columns (a rule in it joins them): a stretch without ink half again as wide as the type is
+        // high, or half that with a rule in it, parts it, and each part keeps its whole lines, so small type beside large is read at its own size.
         internal static List<SKRectI> Split(SKBitmap page, List<SKRectI> boxes)
         {
             var result = new List<SKRectI>();

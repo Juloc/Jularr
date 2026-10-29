@@ -159,10 +159,10 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
         });
         const tokens = boxes.flatMap(box => words(box));
         if (lines.length === 0 || tokens.length === 0) return [];
-        // A line may run a little past the original's ink, as the print's margin allows. The original keeps its own lines, each made smaller only where
-        // our face runs wider; a translation wraps from line to line, and all of it gets smaller where it does not fit the lines.
-        const over = (row: HTMLElement) => row.scrollWidth > row.clientWidth * 1.06 + 1;
+        // The original keeps its own lines, each made smaller only where our face runs wider than a little past the original's ink, as the print's margin
+        // allows; a translation wraps from line to line within the lines, and all of it gets smaller where it does not fit them.
         const lined = tokens.filter(token => token === '\n').length >= lines.length - 1;
+        const over = (row: HTMLElement) => row.scrollWidth > row.clientWidth * (lined ? 1.06 : 1) + 1;
         let placed: HTMLElement[] = [];
         for (let scale = 1, step = 0; step < 60; step++, scale *= 0.97) {
             for (const row of placed) row.remove();
