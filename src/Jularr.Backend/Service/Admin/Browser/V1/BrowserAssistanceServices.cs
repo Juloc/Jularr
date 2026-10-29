@@ -1,16 +1,66 @@
 using System.Security;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Browser.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Logic.AnnasArchive;
 
 namespace Jularr.Backend.Service.Admin.Browser.V1
 {
+    [ServiceEndpoint("POST", "/api/v1/admin/activity/{operationId:long}/browser")]
+    public sealed class OpenDownloadBrowserAssistanceV1 : AdminService<ActivityOperationParametersV1, NoData>
+    {
+        private readonly BrowserAssistance _assistance;
+        internal OpenDownloadBrowserAssistanceV1(BrowserAssistance assistance) => _assistance = assistance;
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BrowserViewV1>()];
+        protected override ModuleRequirement GetInstanceModules(ActivityOperationParametersV1 parameters) => ModuleRequirement.All("Acquisition", "Browser");
+        protected override ServicePermission GetPermission(ActivityOperationParametersV1 parameters, Type resultType) => new("acquisition.manage");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    connection."Id" AS "AcquisitionConnectionId",
+                    connection."BaseUrl",
+                    operation."AttentionUrl"
+                FROM
+                    "Operations" AS operation
+                    JOIN "AcquisitionConnections" AS connection ON connection."Id" = operation."AcquisitionConnectionId"
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2)
+                    AND operation."AttentionKey" = 'source_manual_link'
+                    AND operation."AttentionUrl" IS NOT NULL
+                    AND operation."AttentionProposal" IS NULL
+                    AND operation."SourceLinkUrl" IS NULL
+                    AND connection."IsEnabled"
+                    AND connection."AcquisitionConnectionTypeId" = 5;
+                """;
+            sql.Parameters.Add(Parameters);
+            var download = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadSql.ReadOptionalAsync<BrowserAssistanceDownloadData>(sql, ct), CancellationToken, SqlAccessMode.ReadOnly)
+                ?? throw new DataValidationException(nameof(Parameters.OperationId), "invalid_transition");
+            if (!Uri.TryCreate(download.BaseUrl, UriKind.Absolute, out var source) || !Uri.TryCreate(download.AttentionUrl, UriKind.Absolute, out var page)
+                || !AnnasArchiveClient.IsTrustedSource(source, page))
+            {
+                throw new DataValidationException(nameof(Parameters.OperationId), "invalid_transition");
+            }
+
+            return await _assistance.OpenAsync(Auth.SessionPublicId ?? throw new SecurityException(), download.AcquisitionConnectionId, page, CancellationToken, Parameters.OperationId);
+        }
+    }
+
     [ServiceEndpoint("POST", "/api/v1/admin/browser/assistance/{acquisitionConnectionId:long}")]
     public sealed class OpenBrowserAssistanceV1 : AdminService<AcquisitionConnectionParametersV1, NoData>
     {
