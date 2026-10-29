@@ -49,9 +49,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 var reason = ReferenceEquals(evaluation, winner) && result.Selection.WinnerReason is { } won
                     ? (won.Code, won.Value)
                     : evaluation.Reasons.Count > 0 ? (evaluation.Reasons[^1].Code, evaluation.Reasons[^1].Value) : ("Eligible", null);
+                // Every rule with its points: the profile's custom formats, then the media type's rules.
+                var book = evaluation.Candidate.Parsed?.Book;
+                var points = (evaluation.Score?.FormatPoints ?? []).Concat(evaluation.Candidate.ContextPoints)
+                    .Select(point => new ReleaseScorePointV1(point.Code, TextLimit.Cut(point.Value, 1000), point.Points));
                 return new WantedReleaseCandidateV1(evaluation.Candidate.Id, offer.Title, offer.ConnectionName, offer.SizeBytes, offer.PublishedAt?.UtcDateTime, evaluation.Score?.QualityKey,
                     evaluation.Decision switch { SelectionDecision.Eligible => ReleaseDecisionType.Eligible, SelectionDecision.ManualReview => ReleaseDecisionType.ManualReview, _ => ReleaseDecisionType.Rejected },
-                    evaluation.PreferenceScore, reason.Item1, TextLimit.Cut(reason.Item2, 1000));
+                    evaluation.PreferenceScore, reason.Item1, TextLimit.Cut(reason.Item2, 1000), book?.Kind, book?.VolumeStart, book?.VolumeEnd, book?.IsComplete ?? false,
+                    evaluation.Candidate.SizeMark, new BaseDataList<ReleaseScorePointV1>(points));
             }).ToArray());
         }
     }

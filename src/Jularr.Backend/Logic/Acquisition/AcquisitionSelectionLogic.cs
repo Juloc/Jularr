@@ -164,7 +164,9 @@ namespace Jularr.Backend.Logic.Acquisition
                 IsPart = existing.IsPart || found.IsPart
             };
 
-        public static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, UnitScope? scope, IEnumerable<ReleaseOffer> offers, string? focusLanguage = null)
+        // An automatic choice rejects what a manual search only marks for a person (a book's size outside its limits).
+        public static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, UnitScope? scope, IEnumerable<ReleaseOffer> offers, string? focusLanguage = null,
+            bool automatic = true)
         {
             var installed = scope is null || scope.UnitNumber is not null ? Installed(profile, target, scope?.Unit.Id) : null;
             // Failed and blocked releases stay visible but are never taken.
@@ -172,7 +174,7 @@ namespace Jularr.Backend.Logic.Acquisition
             return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer => kind switch
             {
                 AcquisitionKind.Book or AcquisitionKind.LightNovel => Candidate(offer, BookReleaseJudge.Judge([target.CanonicalTitle, .. target.EditionTitles], target.Author, offer,
-                    target.OriginalLanguage)),
+                    target.OriginalLanguage, new BookSearch(kind == AcquisitionKind.LightNovel, profile.Sizes, automatic))),
                 AcquisitionKind.Manga => Candidate(offer, MangaReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], scope, offer)),
                 AcquisitionKind.Music => Candidate(offer, MusicReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.Author, offer)),
                 AcquisitionKind.Game => Candidate(offer, GameReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.PlatformIgdbId, target.PlatformAbbreviation, offer)),
@@ -187,7 +189,10 @@ namespace Jularr.Backend.Logic.Acquisition
                     IsPart = offer.IsPart,
                     SafetyRejection = blocked.Contains(offer.Identity) ? "Blocked" : judgement.SafetyRejection
                         ?? (EditionLanguageFilter.Rejects(judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? [], target.MonitoredEditionLanguages, target.UnmonitoredEditionLanguages, focusLanguage) ? "EditionNotMonitored" : null),
-                    ContextScore = judgement.ContextScore,
+                    ContextPoints = judgement.Points,
+                    Rejection = judgement.Rejection,
+                    Flag = judgement.Flag,
+                    SizeMark = judgement.SizeMark,
                     Languages = judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? [],
                     InstalledQuality = installed?.Quality,
                     InstalledNeedsReplacement = installed?.NeedsReplacement ?? false,

@@ -85,6 +85,13 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new CandidateEvaluation(candidate, SelectionDecision.Rejected, score, reliability, reasons);
             }
 
+            // A hard rule of the media type (a wrong kind, a size outside its limits) rejects with its own reason; the score stays visible.
+            if (candidate.Rejection is { } rejected)
+            {
+                reasons.Add(rejected);
+                return new CandidateEvaluation(candidate, SelectionDecision.Rejected, score, reliability, reasons);
+            }
+
             foreach (var rejection in score.RejectionReasons)
             {
                 reasons.Add(new SelectionReason(rejection.Code == "QualityNotAllowed" ? SelectionReasonKind.Quality : SelectionReasonKind.Profile, rejection.Code, rejection.Value));
@@ -93,6 +100,13 @@ namespace Jularr.Backend.Logic.Acquisition
             if (!score.Accepted)
             {
                 return new CandidateEvaluation(candidate, SelectionDecision.Rejected, score, reliability, reasons);
+            }
+
+            // A manual search only marks what an automatic one rejects; a person may still take it.
+            if (candidate.Flag is { } flag)
+            {
+                reasons.Add(flag);
+                return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
             }
 
             // An unrequested language needs a deliberate manual choice; fallback is not an unrestricted download.

@@ -162,12 +162,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             bool Enough(IReadOnlyList<ReleaseOffer> found)
             {
                 var all = found.Concat(offers.Values).ToArray();
-                return AcquisitionSelectionLogic.Select(profile, target, kind, scope, all, focusLanguage).Ranked.Any(evaluation =>
+                return AcquisitionSelectionLogic.Select(profile, target, kind, scope, all, focusLanguage, automatic).Ranked.Any(evaluation =>
                     evaluation.IsSelectable && (!profile.IsBook || profile.LanguageOrder.Length == 0
                         || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages)));
             }
 
-            var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
+            var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
 
             // Expansion tiers only run while too few releases are usable.
             for (var tier = 0; tier <= budget.MaxTier && offers.Count < budget.MaxResults; tier++)
@@ -191,7 +191,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 // The direct sources answered at the same time; their releases belong to the choice.
                 await direct;
                 await nyaaSearch;
-                selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
+                selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
                 if (selection.Ranked.Count(evaluation => evaluation.IsSelectable
                     && (!profile.IsBook || profile.LanguageOrder.Length == 0
                         || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages))) >= budget.TargetUsable)
@@ -203,7 +203,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // The direct sources are waited for; they answered at the same time as the indexers.
             await direct;
             await nyaaSearch;
-            selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
+            selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
 
             // Manual grabs pick from what was shown; the cache is bounded by offer count.
             var grabbable = selection.Ranked.Where(evaluation => evaluation.Decision != SelectionDecision.Rejected).Select(evaluation => evaluation.Candidate.Id).ToHashSet(StringComparer.Ordinal);
