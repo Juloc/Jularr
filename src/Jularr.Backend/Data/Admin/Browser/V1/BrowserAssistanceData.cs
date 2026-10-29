@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Fields.Acquisition;
+using Jularr.Backend.Data.Fields.Operation;
 
 namespace Jularr.Backend.Data.Admin.Browser.V1
 {
@@ -10,7 +11,7 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
         public Guid LeaseId { get; } = leaseId;
     }
 
-    public sealed class BrowserViewV1(Guid leaseId, int width, int height, long acquisitionConnectionId, bool isActive) : BaseResponse
+    public sealed class BrowserViewV1(Guid leaseId, int width, int height, long acquisitionConnectionId, bool isActive, long? operationId = null) : BaseResponse
     {
         [DataField(typeof(BrowserFields), nameof(BrowserFields.LeaseId))]
         public Guid LeaseId { get; } = leaseId;
@@ -22,6 +23,8 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
         public long AcquisitionConnectionId { get; } = acquisitionConnectionId;
         [DataField(typeof(BrowserFields), nameof(BrowserFields.IsActive))]
         public bool IsActive { get; } = isActive;
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id), false)]
+        public long? OperationId { get; } = operationId;
     }
 
     public sealed class BrowserInputDataV1(string action, int x = 0, int y = 0, int delta = 0, string? key = null, string? text = null) : BaseData

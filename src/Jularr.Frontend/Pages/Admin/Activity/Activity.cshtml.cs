@@ -1,6 +1,7 @@
 using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Activity.V1;
+using Jularr.Backend.Data.Admin.Browser.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Service.Admin.Activity.V1;
@@ -391,7 +392,8 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
         // The shared browser resumes automatic links; pasting a file URL remains an optional fallback.
         private IUiComponent ManualLink(ActivityItemV1 item, string manual, string? csrf) => new Div(
-            new A(new Text("admin.browser.manualOpen")).Class("button").Attribute("href", "/Admin/Browser"),
+            new Form<BrowserParametersV1>(form => form.Submit("admin.browser.manualOpen"),
+                "/Admin/Browser?handler=OpenDownloadView&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new BrowserParametersV1()),
             new A(new Text("activity.openSource")).Class("button").Attribute("href", manual).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"),
             new Form<SaveActivitySourceLinkDataV1>(form =>
             {
