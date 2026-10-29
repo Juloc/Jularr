@@ -8908,6 +8908,10 @@
    "Enter IP addresses or networks such as 192.168.1.10 or 10.0.0.0/8.",
    "Gib IP-Adressen oder Netzwerke wie 192.168.1.10 oder 10.0.0.0/8 ein."
   ],
+  "errors.validation.same_language": [
+   "The subtitle is already in this language.",
+   "Der Untertitel ist schon in dieser Sprache."
+  ],
   "errors.validation.pairing_expired": [
    "This code has expired; show a new code on the device.",
    "Dieser Code ist abgelaufen; lass auf dem Gerät einen neuen Code anzeigen."
