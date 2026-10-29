@@ -385,6 +385,27 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("Rule No. 9: Describing yourself as a hot-tub guy on the first date.", document.QuerySelector("[data-b='1']")!.TextContent);
         }
 
+        // A bold lead-in before its sentence is a block of its own inside the box, so it is translated apart and keeps its look; a word in another look
+        // inside a sentence stays with the sentence.
+        [TestMethod]
+        public void SmartPage_LeadInsInTheirOwnLook_AreBlocksOfTheirOwn()
+        {
+            PdfSmartRun Run(string text, bool serif, int weight) => new(text, serif, weight, false, 100, 0.03, "#222222");
+            var page = new PdfSmartPage(5, [1], 0.8, [
+                new PdfSmartBlock(0.05, 0.1, 0.9, 0.1, 3, 0.03, 0, false, false,
+                    [Run("Rule No. 202:", false, 900), Run(" You can always fool them with ", true, 400), Run("butter", true, 700), Run(".", true, 400), Run(" Rule No. 203:", false, 900), Run(" Let someone else bring dessert.", true, 400)]),
+                new PdfSmartBlock(0.05, 0.3, 0.9, 0.05, 1, 0.03, 0, false, false, [Run("Keep your chocolate dark.", true, 900)])]);
+            var book = new PdfBookContent([], [], [], new PdfVerdict(true, ""), new PdfVerdict(true, "")) { SmartPages = [page] };
+            var html = PdfBookHtml.Prepare(book, 7).SmartPages.Single();
+            var document = new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html.Html);
+            CollectionAssert.AreEqual(new[] { "0", "1", "2", "3", "4", "5" }, document.QuerySelectorAll("[data-b]").Select(block => block.GetAttribute("data-b")).ToArray());
+            Assert.AreEqual(6, html.Structure.Blocks);
+            CollectionAssert.AreEqual(new[] { "Rule No. 202:", " You can always fool them with butter.", " Rule No. 203:", " Let someone else bring dessert." },
+                document.QuerySelectorAll("[data-box] > [data-b]").Select(block => block.TextContent).ToArray());
+            Assert.AreEqual("sans", document.QuerySelector("[data-b='1'] > [data-face]")!.GetAttribute("data-face"));
+            Assert.IsNull(document.QuerySelector("[data-b='5']")!.QuerySelector("[data-b]"));
+        }
+
         // The darkest grey in a part of a picture, given in fractions of it.
         private static int Darkest(SKBitmap bitmap, double left, double top, double right, double bottom)
         {

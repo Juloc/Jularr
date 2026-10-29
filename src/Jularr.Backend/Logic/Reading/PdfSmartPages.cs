@@ -31,7 +31,7 @@ namespace Jularr.Backend.Logic.Reading
                 var line = new Line(box, recognized.Kind == RecognizedLine.Label);
                 var texts = recognized.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
                 var spans = recognized.Words is { } edges && edges.Length == texts.Length * 2 ? edges : Spread(recognized, texts);
-                var paper = PdfScanAnalysis.Ring(pixels, w, h, box);
+                var paper = Paper(pixels, w, h, box);
                 for (var index = 0; index < texts.Length; index++)
                 {
                     var word = Clamp(new SKRectI((int)(spans[index * 2] * w), box.Top, (int)Math.Ceiling(spans[index * 2 + 1] * w), box.Bottom), w, h);
@@ -223,7 +223,8 @@ namespace Jularr.Backend.Logic.Reading
             {
                 var look = looks.LastOrDefault();
                 if (look is null || look[^1].Style!.Ink.Distance(word.Style!.Ink) >= 90
-                    || (word.Text.Count(char.IsLetter) >= 3 && (Math.Abs(Mid(look, style => style.Ratio) - word.Style.Ratio) > 0.06 || Math.Abs(Mid(look, style => style.Contrast) - word.Style.Contrast) > 0.2)))
+                    || (word.Text.Count(char.IsLetter) >= 3 && (Math.Abs(Mid(look, style => style.Ratio) - word.Style.Ratio) > 0.06 || Math.Abs(Mid(look, style => style.Contrast) - word.Style.Contrast) > 0.2
+                        || look.Count(other => other.Style!.Serif) * 2 > look.Count == !word.Style.Serif && Math.Abs(Mid(look, style => style.Ratio) - word.Style.Ratio) > 0.04)))
                 {
                     looks.Add([word]);
                 }
@@ -259,6 +260,7 @@ namespace Jularr.Backend.Logic.Reading
                 && line.Box.Top - previous.Box.Bottom < previous.Box.Height * 0.6
                 && line.Box.Left < previous.Box.Right && line.Box.Right > previous.Box.Left
                 && Math.Abs(Size(line, first: true) - size) < size * 0.4
+                && Math.Abs(Body(line) - block.Body) < block.Body * 0.25
                 && Math.Abs(line.Left - block.Margin) < size * 4
                 && line.Ink.Distance(previous.Ink) < 120
                 && !(line.Left - block.Margin > size * 0.6 && line.Left - block.Margin < size * 4);
@@ -283,6 +285,7 @@ namespace Jularr.Backend.Logic.Reading
                     block.Area = SKRectI.Union(block.Area, line.Box);
                     block.Margin = Math.Min(block.Margin, line.Left);
                     block.Last = line;
+                    block.Bodies.Add(Body(line));
                     block.IsLabel = false;
                 }
 
@@ -337,11 +340,11 @@ namespace Jularr.Backend.Logic.Reading
                 series[label] = row.Min(blocks.IndexOf) + 1;
             }
 
-            // A few words alone (labels, capitals with wide bars) cannot tell serif from sans: a longer text of their colour and nearly their weight on the page can.
+            // A few capitals alone (labels with wide bars) cannot tell serif from sans: a longer text of their colour and weight on the page can.
             var longer = blocks.SelectMany(each => each.Runs).Where(run => run.Text.Count(char.IsLetter) >= 12).ToList();
-            foreach (var run in blocks.Where(each => each.Runs.Sum(Letters) < 12).SelectMany(each => each.Runs))
+            foreach (var run in blocks.Where(each => each.Runs.Sum(Letters) < 12).SelectMany(each => each.Runs).Where(run => !run.Text.Any(char.IsLower)))
             {
-                if (longer.Where(other => other.Ink.Distance(run.Ink) < 90 && Math.Abs(other.Weight - run.Weight) <= 200).MaxBy(other => other.Text.Length) is { } kin)
+                if (longer.Where(other => other.Ink.Distance(run.Ink) < 90 && Math.Abs(other.Weight - run.Weight) <= 100).MaxBy(other => other.Text.Length) is { } kin)
                 {
                     run.Serif = kin.Serif;
                 }
@@ -381,6 +384,13 @@ namespace Jularr.Backend.Logic.Reading
 
         private static int Letters(Run run) => Math.Max(1, run.Text.Count(char.IsLetter));
 
+        // The size of most of a line's letters.
+        private static double Body(Line line)
+        {
+            var sizes = line.Words.Where(word => word.Style is not null).SelectMany(word => Enumerable.Repeat(word.Style!.Size, Math.Max(1, word.Text.Count(char.IsLetter)))).Order().ToList();
+            return sizes.Count == 0 ? line.Box.Height / 2.0 : sizes[(sizes.Count - 1) / 2];
+        }
+
         // The size of the text at a line's start or end.
         private static double Size(Line line, bool first)
         {
@@ -393,6 +403,8 @@ namespace Jularr.Backend.Logic.Reading
         private static void Settle(List<Run> runs)
         {
             bool Kin(Run one, Run other) => one.Ink.Distance(other.Ink) < 90;
+            // Measurements of one look differ by a weight step; another face and two steps bolder is a look of its own (the bold "Rule No. 4:" before the text).
+            bool Alike(Run one, Run other) => Math.Abs(one.Weight - other.Weight) <= 100 || Math.Abs(one.Weight - other.Weight) <= 200 && one.Serif == other.Serif;
             for (var index = 0; index < runs.Count; index++)
             {
                 if (runs[index].Text.Count(char.IsLetter) >= 12)
@@ -402,7 +414,7 @@ namespace Jularr.Backend.Logic.Reading
 
                 var near = new[] { index > 0 ? runs[index - 1] : null, index + 1 < runs.Count ? runs[index + 1] : null }
                     .Where(run => run is not null && Kin(run, runs[index]) && Letters(run) > Letters(runs[index])).MaxBy(run => Letters(run!));
-                if (near is not null && Math.Abs(near.Weight - runs[index].Weight) <= 200)
+                if (near is not null && Alike(near, runs[index]))
                 {
                     (runs[index].Serif, runs[index].Weight, runs[index].Italic) = (near.Serif, near.Weight, near.Italic);
                 }
@@ -410,7 +422,7 @@ namespace Jularr.Backend.Logic.Reading
 
             foreach (var run in runs)
             {
-                var group = runs.Where(other => Kin(other, run) && Math.Abs(other.Weight - run.Weight) <= 200 && other.Italic == run.Italic).ToList();
+                var group = runs.Where(other => Kin(other, run) && Alike(other, run) && other.Italic == run.Italic).ToList();
                 var weights = group.OrderBy(other => other.Weight).SelectMany(other => Enumerable.Repeat(other.Weight, Letters(other))).ToList();
                 (run.Serif, run.Weight) = (group.Where(other => other.Serif).Sum(Letters) >= group.Where(other => !other.Serif).Sum(Letters), weights[weights.Count / 2]);
             }
@@ -584,6 +596,50 @@ namespace Jularr.Backend.Logic.Reading
             };
         }
 
+        // The paper under a line: the commonest colour around and inside its box. Letters cover less of the box than paper does, so a black bar or a
+        // picture right beside the line, which may fill a side of the ring around it, does not pass for the paper.
+        private static int[] Paper(byte[] pixels, int w, int h, SKRectI box)
+        {
+            var bins = new Dictionary<int, (int Count, long Red, long Green, long Blue)>();
+            void Add(int x, int y)
+            {
+                if (x < 0 || y < 0 || x >= w || y >= h)
+                {
+                    return;
+                }
+
+                var at = (y * w + x) * 4;
+                var key = (pixels[at] >> 5) << 6 | (pixels[at + 1] >> 5) << 3 | pixels[at + 2] >> 5;
+                var (count, red, green, blue) = bins.GetValueOrDefault(key);
+                bins[key] = (count + 1, red + pixels[at], green + pixels[at + 1], blue + pixels[at + 2]);
+            }
+
+            var ring = Math.Max(2, box.Height / 6);
+            for (var x = box.Left - ring; x <= box.Right + ring; x += 2)
+            {
+                Add(x, box.Top - ring);
+                Add(x, box.Bottom + ring);
+            }
+
+            for (var y = box.Top; y <= box.Bottom; y += 2)
+            {
+                Add(box.Left - ring, y);
+                Add(box.Right + ring, y);
+                for (var x = box.Left; x <= box.Right; x += 2)
+                {
+                    Add(x, y);
+                }
+            }
+
+            if (bins.Count == 0)
+            {
+                return [255, 255, 255];
+            }
+
+            var (total, r, g, b) = bins.Values.MaxBy(bin => bin.Count);
+            return [(int)(r / total), (int)(g / total), (int)(b / total)];
+        }
+
         private static List<int> Runs(bool[] ink, int w, int left, int right, int from, int to, bool horizontal, int shorterThan)
         {
             var runs = new List<int>();
@@ -717,6 +773,8 @@ namespace Jularr.Backend.Logic.Reading
             public SKRectI Area { get; set; } = first.Box;
             public double Margin { get; set; } = first.Left;
             public Line Last { get; set; } = first;
+            public List<double> Bodies { get; } = [Body(first)];
+            public double Body => Bodies.Order().ElementAt((Bodies.Count - 1) / 2);
             public bool IsLabel { get; set; } = first.IsLabel;
             public int Lines { get; set; }
             public List<Run> Runs { get; } = [];

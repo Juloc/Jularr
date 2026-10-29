@@ -1,7 +1,7 @@
 import { blockBox, letterSpacing, splitText, spreads, startSize } from './SmartPageFit';
 
 // Smart Pages: a scanned page in its own layout, its text erased from the scan and set anew in the original boxes in the look measured for each run, or
-// its translation in the look of the block's main text. The server prepares the pages as reading units from 100000 on; the server's TranslateGemma
+// its translation in the look of the main text of each sentence. The server prepares the pages as reading units from 100000 on; the server's TranslateGemma
 // translates them like any section, the page in view first.
 export interface SmartPages {
     has(page: number): boolean;
@@ -52,7 +52,8 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
             if (!element) return;
             const address = `${url}${units.get(number)}/local-translations/${encodeURIComponent(target)}/${encodeURIComponent(model!)}`;
             const blocks = Array.from(element.querySelectorAll<HTMLElement>('[data-b]'));
-            const texts = blocks.map(block => block.textContent?.trim() ?? '');
+            // A block holding others (a lead-in in its own look and its sentence) is translated through them.
+            const texts = blocks.map(block => block.querySelector('[data-b]') ? '' : block.textContent?.trim() ?? '');
             const wanted = texts.filter(Boolean).length;
             while (current === number) {
                 const cached = await fetch(`${address}?sourceLanguage=${encodeURIComponent(source)}`, { credentials: 'same-origin' });
@@ -104,9 +105,12 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
     function set(box: HTMLElement, text: string): void {
         const spans = Array.from(box.querySelectorAll<HTMLElement>('span[data-face]'));
         const main = spans.reduce<HTMLElement | undefined>((longest, span) => !longest || (span.textContent?.length ?? 0) > (longest.textContent?.length ?? 0) ? span : longest, undefined);
+        // The main look keeps its size against the block's: 1 for the block's own text, larger for a bold lead-in.
         const run = (main?.cloneNode(false) as HTMLElement | undefined) ?? document.createElement('span');
-        run.style.fontSize = '1em';
-        run.textContent = text;
+        // A sentence after a lead-in keeps the space between them; text in capitals stays in capitals (ALWAYS / SOMETIMES / NEVER, running heads).
+        const original = box.textContent ?? '';
+        const capitals = /\p{L}/u.test(original) && original === original.toLocaleUpperCase();
+        run.textContent = (!box.dataset.box && /^\s/.test(original) ? ' ' : '') + (capitals ? text.toLocaleUpperCase() : text);
         box.replaceChildren(run);
     }
 

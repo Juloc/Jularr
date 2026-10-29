@@ -76,14 +76,30 @@ namespace Jularr.Backend.Logic.Reading
                 heads[index] = flow;
             }
 
+            // Blocks are numbered in their order, a sentence in a look of its own inside one too.
+            var number = 0;
             for (var index = 0; index < flows.Count; index++)
             {
-                html.Append("<p data-b=\"").Append(index.ToString(CultureInfo.InvariantCulture)).Append('"');
+                html.Append("<p data-b=\"").Append((number++).ToString(CultureInfo.InvariantCulture)).Append('"');
                 if (flows[index] is [var single])
                 {
                     Box(html, single);
                     html.Append('>');
-                    Runs(html, single);
+                    // Sentences in looks of their own (the bold "Rule No. 4:" before its text) are translated each on its own and keep their look.
+                    var sentences = Sentences(single.Runs);
+                    if (sentences.Count == 1)
+                    {
+                        Runs(html, single, single.Runs);
+                    }
+                    else
+                    {
+                        foreach (var sentence in sentences)
+                        {
+                            html.Append("<span data-b=\"").Append((number++).ToString(CultureInfo.InvariantCulture)).Append("\">");
+                            Runs(html, single, sentence);
+                            html.Append("</span>");
+                        }
+                    }
                 }
                 else
                 {
@@ -99,7 +115,7 @@ namespace Jularr.Backend.Logic.Reading
                         html.Append("<span data-part");
                         Box(html, part);
                         html.Append('>');
-                        Runs(html, part);
+                        Runs(html, part, part.Runs);
                         html.Append("</span>");
                     }
                 }
@@ -108,7 +124,7 @@ namespace Jularr.Backend.Logic.Reading
             }
 
             var characters = page.Blocks.Sum(block => block.Runs.Sum(run => run.Text.Length));
-            return new PdfPreparedSection(new ReadingStructureSection("pdf/smart/" + page.Number.ToString("D5", CultureInfo.InvariantCulture) + ".xhtml", null, characters, flows.Count, page.Number, page.Number),
+            return new PdfPreparedSection(new ReadingStructureSection("pdf/smart/" + page.Number.ToString("D5", CultureInfo.InvariantCulture) + ".xhtml", null, characters, number, page.Number, page.Number),
                 html.Append("</div>").ToString());
 
             static void Box(StringBuilder html, PdfSmartBlock block)
@@ -123,9 +139,28 @@ namespace Jularr.Backend.Logic.Reading
                 html.Append(block.IsLabel ? " data-label" : "").Append(block.IsRunning ? " data-running" : "");
             }
 
-            static void Runs(StringBuilder html, PdfSmartBlock block)
+            // A new sentence starts where a run in another look follows the end of one.
+            static List<List<PdfSmartRun>> Sentences(IReadOnlyList<PdfSmartRun> runs)
             {
-                foreach (var run in block.Runs)
+                var sentences = new List<List<PdfSmartRun>>();
+                foreach (var run in runs)
+                {
+                    if (sentences.Count == 0 || sentences[^1][^1].Text.TrimEnd() is { Length: > 0 } before && ".:!?…”\"".Contains(before[^1]))
+                    {
+                        sentences.Add([run]);
+                    }
+                    else
+                    {
+                        sentences[^1].Add(run);
+                    }
+                }
+
+                return sentences;
+            }
+
+            static void Runs(StringBuilder html, PdfSmartBlock block, IEnumerable<PdfSmartRun> runs)
+            {
+                foreach (var run in runs)
                 {
                     html.Append("<span data-face=\"").Append(run.Serif ? "serif" : "sans").Append("\" style=\"font-weight:").Append(run.Weight.ToString(CultureInfo.InvariantCulture))
                         .Append(run.Italic ? ";font-style:italic" : "").Append(run.Serif ? "" : ";font-stretch:" + run.Stretch.ToString(CultureInfo.InvariantCulture) + "%")

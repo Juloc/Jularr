@@ -11,7 +11,7 @@ namespace Jularr.Backend.Logic.Reading
     internal static partial class PdfBook
     {
         // Raised when the converted output changes; old documents are prepared again.
-        public const int AnalyzerVersion = 6;
+        public const int AnalyzerVersion = 7;
         public const int MaximumPages = 5000;
 
         // PDFium draws a scan from the file's bytes in memory; larger files stay with their recognition layer and the original pages.
