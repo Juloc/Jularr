@@ -293,6 +293,11 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "Rule No. 687: If it’s fast,", "Rule No. 688: If it’s in" }, lines.Select(line => line.Text).ToArray());
             Assert.AreEqual(12, lines.Sum(line => line.Words!.Length / 2));
 
+            // Small type beside large in the same rows stays apart.
+            var mixed = new OcrPage(1000, 1000, [new OcrLine(50, 100, 800, 200, "considering Wom", 0.5f)]);
+            PdfLayerWord[] beside = [new("considering", 0.05, 0.16, 0.27, 0.18), new("Women", 0.35, 0.12, 0.8, 0.2)];
+            CollectionAssert.AreEquivalent(new[] { "considering", "Women" }, PdfScanAnalysis.Analyse(page, mixed, beside).Select(line => line.Text).ToArray());
+
             PdfLayerWord[] noise = [new("ee", 0.05, 0.1, 0.1, 0.125), new("Ll", 0.11, 0.1, 0.14, 0.125), new("rme|", 0.15, 0.1, 0.19, 0.125), new("Sue", 0.2, 0.1, 0.25, 0.125),
                 new("mln|fel", 0.3, 0.1, 0.4, 0.125), new("=S|", 0.45, 0.1, 0.5, 0.125)];
             Assert.AreEqual("Rule it’s Rule 688: If", PdfScanAnalysis.Analyse(page, read, noise).Single().Text);
