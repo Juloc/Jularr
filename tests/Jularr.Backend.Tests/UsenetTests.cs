@@ -105,29 +105,25 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Usenet_NzbWriteAccessDenied_LogsSafeDiagnosticsAndPropagatesTheException()
+        public async Task Usenet_NzbAccessDenied_LogsSafeDiagnosticsAndPropagatesTheException()
         {
             using var storage = new TemporaryDirectory();
             using var staging = new TemporaryDirectory();
-            var indexer = new FakeIndexer("<nzb />")
-            {
-                NzbResponse = () =>
-                {
-                    var job = Directory.EnumerateDirectories(staging.Path, "j-*", SearchOption.AllDirectories).Single();
-                    Directory.CreateDirectory(Path.Combine(job, UsenetJob.NzbName));
-                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("<nzb />") };
-                }
-            };
+            // Filesystem collisions have different exception types across operating systems.
+            var denied = new UnauthorizedAccessException($"{staging.Path}/private-key/job.nzb");
+            var indexer = new FakeIndexer("<nzb />") { NzbResponse = () => throw denied };
             await using var host = await CreateHostAsync(storage.Path, staging.Path, indexer, 1);
             await CreateWantedMovieAsync(host);
 
-            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => RunAsync<SearchDueWantedV1>(host));
+            var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(() => RunAsync<SearchDueWantedV1>(host));
+            Assert.AreSame(denied, exception);
 
             var log = host.Services.GetRequiredService<RecentLogs>().Read(100)
                 .Single(entry => entry.Category == typeof(WantedAcquisition).FullName);
             StringAssert.Contains(log.Message, "stage transfer: UnauthorizedAccessException");
             Assert.IsFalse(log.Message.Contains(staging.Path, StringComparison.Ordinal));
             Assert.IsFalse(log.Message.Contains(UsenetJob.NzbName, StringComparison.Ordinal));
+            Assert.IsFalse(log.Message.Contains("private-key", StringComparison.Ordinal));
             Assert.AreEqual(1, indexer.NzbRequests);
         }
 
