@@ -51,7 +51,7 @@ namespace Jularr.Frontend.Framework
             "takeover" => "Takeover",
             "modules" => "Modules",
             "requests" => "Requests",
-            "tmdb" or "igdb" or "anilist" => "Providers",
+            "tmdb" or "tvdb" or "igdb" or "anilist" => "Providers",
             "indexer" => "Indexers",
             "downloader" => "Downloads",
             "library" => "Libraries",

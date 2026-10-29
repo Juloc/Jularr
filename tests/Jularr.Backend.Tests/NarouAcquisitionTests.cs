@@ -12,6 +12,7 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Data.User.Discover.V1;
+using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.Narou;
@@ -42,32 +43,35 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (900, 'anilist', '4242');
                 """);
 
-            // Discover finds the web novel by its title and by its ncode, as a web novel of Narō.
+            // Discover finds the web novel by its title and by its ncode, as a web novel of Narō kept as one catalog Work of its own.
+            var found = new List<long>();
             foreach (var query in new[] { "転生したら", "N1234AB" })
             {
-                using var found = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/search", new SearchDiscoverCatalogDataV1(MediaType.Book, query, MediaSubtype.LightNovel));
-                Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
-                var item = (await found.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single(result => result.Namespace == "syosetu");
-                Assert.AreEqual((Ncode, Title, 2019, (long?)null), (item.ExternalId, item.Title, item.ReleaseYear, item.WorkId), query);
+                using var search = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/search", new SearchDiscoverCatalogDataV1(MediaType.Book, query, MediaSubtype.LightNovel));
+                Assert.AreEqual(HttpStatusCode.OK, search.StatusCode, await search.Content.ReadAsStringAsync());
+                var item = (await search.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single(result => result.Namespace == "syosetu");
+                Assert.AreEqual((Ncode, Title, 2019), (item.ExternalId, item.Title, item.ReleaseYear), query);
+                found.Add(item.WorkId);
             }
 
-            // The page lists it as a web novel and its request page names the ncode.
+            var workId = (long)(await host.ScalarAsync($"SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'syosetu' AND \"Value\" = '{Ncode}'"))!;
+            CollectionAssert.AreEqual(new[] { workId, workId }, found);
+            Assert.AreNotEqual(900L, workId);
+
+            // The page lists it as a web novel that opens its Work; the Work's page takes Narō's description.
             using var page = await host.SendAsync(HttpMethod.Get, "/?type=lightnovels&q=" + Uri.EscapeDataString("転生したら"));
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            StringAssert.Contains(html, "/Discover/lightnovels/syosetu/" + Ncode);
+            StringAssert.Contains(html, "/Details/" + workId);
             StringAssert.Contains(html, "Web novel");
-            using var requestPage = await host.SendAsync(HttpMethod.Get, "/Discover/lightnovels/syosetu/" + Ncode);
-            StringAssert.Contains(await requestPage.Content.ReadAsStringAsync(), "Web novel " + Ncode);
-
-            using var entry = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/entry", new ReadDiscoverCatalogEntryDataV1(MediaType.Book, "syosetu", Ncode, MediaSubtype.LightNovel));
-            Assert.AreEqual("司書が異世界で本を集める。", (await entry.Content.ReadFromJsonAsync<DiscoverCatalogEntryV1>())!.Overview);
+            using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
+            var detailsHtml = await details.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, detailsHtml);
+            StringAssert.Contains(WebUtility.HtmlDecode(detailsHtml), "司書が異世界で本を集める。");
 
             // The request makes the web novel its own light novel Work under its ncode; the edition keeps its own.
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/requests", new RequestDiscoverCatalogDataV1(MediaType.Book, "syosetu", Ncode, 1, MediaSubtype.LightNovel));
+            using var requested = await host.SendAsync(HttpMethod.Post, $"/api/v1/works/{workId}/requests", new CreateRequestDataV1(1));
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
-            var workId = (long)(await host.ScalarAsync($"SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'syosetu' AND \"Value\" = '{Ncode}'"))!;
-            Assert.AreNotEqual(900L, workId);
             Assert.AreEqual("3:ja:山田太郎", await host.ScalarAsync($"""
                 SELECT work."MediaSubtypeId" || ':' || work."OriginalLanguage" || ':' || person."Name"
                 FROM "Works" AS work JOIN "WorkPeople" AS credit ON credit."WorkId" = work."Id" JOIN "People" AS person ON person."Id" = credit."PersonId" WHERE work."Id" = {workId}
@@ -117,8 +121,6 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "anilist:4242:Library Reincarnation", "syosetu:" + Ncode + ":Library Reincarnation" },
                 items.Select(item => item.Namespace + ":" + item.ExternalId + ":" + item.Title).ToArray());
             Assert.AreEqual(2, narou.Requests.Count);
-            using var entry = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/entry", new ReadDiscoverCatalogEntryDataV1(MediaType.Book, "syosetu", Ncode, MediaSubtype.LightNovel));
-            Assert.AreEqual("Library Reincarnation", (await entry.Content.ReadFromJsonAsync<DiscoverCatalogEntryV1>())!.Title);
 
             // Requested, the web novel is its own Work under its ncode and is called by the edition's name; the edition stays a Work of its own.
             var novelId = await RequestAsync(host, "syosetu", Ncode);
@@ -148,11 +150,20 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "WorkExternalIdentities" WHERE "Namespace" = 'anilist'"""));
         }
 
+        // A title Discover has not shown yet is found first, so that it is a catalog Work; the request names that Work.
         private static async Task<long> RequestAsync(Host host, string source, string id)
         {
-            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/requests", new RequestDiscoverCatalogDataV1(MediaType.Book, source, id, 1, MediaSubtype.LightNovel));
+            var identity = $"""SELECT "WorkId" FROM "WorkExternalIdentities" WHERE "Namespace" = '{source}' AND "Value" = '{id}'""";
+            if (await host.ScalarAsync(identity) is null)
+            {
+                using var found = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/search", new SearchDiscoverCatalogDataV1(MediaType.Book, id, MediaSubtype.LightNovel));
+                Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
+            }
+
+            var workId = (long)(await host.ScalarAsync(identity))!;
+            using var requested = await host.SendAsync(HttpMethod.Post, $"/api/v1/works/{workId}/requests", new CreateRequestDataV1(1));
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
-            return (long)(await host.ScalarAsync($"""SELECT "WorkId" FROM "WorkExternalIdentities" WHERE "Namespace" = '{source}' AND "Value" = '{id}'"""))!;
+            return workId;
         }
 
         private static async Task<Host> CreateHostAsync(string storage, string downloads, NarouClientTests.FakeNarou narou, FakeAniList? aniList = null)

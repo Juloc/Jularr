@@ -54,7 +54,12 @@ namespace Jularr.Integrations.Logic.Servarr
                 var statistics = item.TryGetProperty("statistics", out var value) && value.ValueKind == JsonValueKind.Object ? value : default;
                 var missing = statistics.ValueKind == JsonValueKind.Object && (Int(statistics, "episodeFileCount") ?? 0) < (Int(statistics, "episodeCount") ?? 0);
                 return new ServarrTitle(Text(item, "title") ?? "", Int(item, "year"), Int(item, "tmdbId") is > 0 and var id ? id : null, Bool(item, "monitored") ?? false, missing,
-                    qualityProfileId: Int(item, "qualityProfileId")) { Path = Text(item, "path") };
+                    qualityProfileId: Int(item, "qualityProfileId"))
+                {
+                    Path = Text(item, "path"),
+                    TvdbId = Int(item, "tvdbId") is > 0 and var tvdb ? tvdb : null,
+                    ImdbId = Text(item, "imdbId") is { Length: >= 9 and <= 16 } imdb && imdb.StartsWith("tt", StringComparison.Ordinal) ? imdb : null
+                };
             }).Where(title => title.Title.Length > 0)];
         }
 

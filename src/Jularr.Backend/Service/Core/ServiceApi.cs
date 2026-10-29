@@ -15,6 +15,7 @@ using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Browser;
+using Jularr.Integrations.Logic.AniBridge;
 using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.AnnasArchive;
 using Jularr.Integrations.Logic.Browser;
@@ -233,6 +234,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<Jularr.Backend.Service.Admin.Media.V1.MediaImportProcessor>();
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<TvdbMetadata>();
+            services.TryAddSingleton<TvdbConnectionState>();
             services.TryAddTransient<PlexServer>();
             services.TryAddTransient<MediaServers>();
             services.TryAddTransient<LibraryReplacements>();
@@ -361,6 +363,8 @@ namespace Jularr.Backend.Service.Core
             AddClient<AcoustIdClient>(services, 15, 1, agent: true, baseAddress: providers.AcoustId, provider: "acoustid");
             services.TryAddSingleton(providers);
             AddClient<AniListClient>(services, 15, 4, agent: true, baseAddress: providers.AniList, provider: "anilist");
+            AddClient<AniBridgeClient>(services, 60, null, agent: true, baseAddress: providers.AnimeMappings,
+                handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
             AddClient<MusicBrainzClient>(services, 20, 4, agent: true, baseAddress: providers.MusicBrainz, provider: "musicbrainz");
             AddClient<IgdbClient>(services, 20, 8, agent: true, provider: "igdb");
             AddClient<LibretroClient>(services, 60, 16, agent: true);

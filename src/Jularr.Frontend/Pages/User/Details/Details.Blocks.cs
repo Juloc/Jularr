@@ -47,8 +47,7 @@ namespace Jularr.Frontend.Pages.User.Details
 
             if (_credits.Count > 0) blocks.Add(new("people", "details.tab.people", _credits.Count, People));
             if (_relations.Count > 0) blocks.Add(new("related", "details.related", _relations.Count, preview => Related(work, preview)));
-            var similar = _recommendations.Where(item => item.WorkId is not null || _scopes.Any(scope => scope.MediaTypeId == item.MediaTypeId && !scope.IsCatalog)).ToArray();
-            if (similar.Length > 0) blocks.Add(new("similar", "details.tab.similar", similar.Length, preview => Similar(similar, preview)));
+            if (_recommendations.Count > 0) blocks.Add(new("similar", "details.tab.similar", _recommendations.Count, preview => Similar(_recommendations, preview)));
             blocks.Add(new("details", "details.tab.facts", null, preview => Facts(work, kind, preview)));
 
             // Editions of a book, a comic or an album; a film's cuts and a game's platforms are listed with its versions.
@@ -102,17 +101,12 @@ namespace Jularr.Frontend.Pages.User.Details
             credit.Credit is null ? new Span() : new Span(new Truncated(credit.Credit)).Class("details-person__role"))
             .Class("details-person").Attribute("href", PersonHref(credit.PersonId));
 
-        // Similar titles lead to their Work or to their request; a known one can also go into the favorites from its card.
+        // Similar titles lead to their Work and can go into the favorites from their card.
         private IUiComponent Similar(IReadOnlyList<DiscoverItemV1> similar, bool preview) =>
             new Div([.. (preview ? similar.Take(8) : similar).Select(Recommendation)]).Class("media-grid");
 
-        private IUiComponent Recommendation(DiscoverItemV1 item)
-        {
-            var card = MediaCard.For(assets, item, item.WorkId is { } known ? "/Details/" + known.ToString(CultureInfo.InvariantCulture)
-                : "/Discover/" + _scopes.First(scope => scope.MediaTypeId == item.MediaTypeId && !scope.IsCatalog).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture));
-            if (item.WorkId is { } workId) card.Bookmark(new MediaBookmark(assets, workId));
-            return card;
-        }
+        private IUiComponent Recommendation(DiscoverItemV1 item) =>
+            MediaCard.For(assets, item, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture)).Bookmark(new MediaBookmark(assets, item.WorkId));
 
         // The full summary with the genres beside the facts; the Overview shows the facts and the collections alone.
         private IUiComponent Facts(WorkDetailsV1 work, WorkKind kind, bool preview)

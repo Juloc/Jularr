@@ -1281,12 +1281,12 @@
    "Sem correspondência clara"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted (paused)",
-   "Será monitorado (pausado)"
+   "Will be wanted",
+   "Será monitorado"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted (paused)",
-   "Monitoramento pausado"
+   "Wanted",
+   "Monitorado"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",

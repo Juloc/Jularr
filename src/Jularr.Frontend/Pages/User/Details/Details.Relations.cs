@@ -29,12 +29,9 @@ namespace Jularr.Frontend.Pages.User.Details
         private const string RelationDialogId = "details-relation-add";
         private IReadOnlyList<WorkRelationV1> _relations = [];
         private WorkRelationSearchData? _relationSearch;
-
-        // The catalog title requested from its row in this answer: an anime season is requested as its series and found as a Work only when the matching has mapped it.
-        private (string Namespace, string ExternalId)? _requestedRelation;
         private IReadOnlyList<DiscoverSuggestionV1>? _relationResults;
 
-        // The series, then the typed relations as a list: a title the library has leads to its Work, any other to its Discover page and is requested from its row.
+        // The series, then the typed relations as a list: every title leads to its Work, and a catalog title the library has nothing of is requested from its row.
         private IUiComponent Related(WorkDetailsV1 work, bool preview)
         {
             var canManage = texts.CanManageRelations();
@@ -59,23 +56,21 @@ namespace Jularr.Frontend.Pages.User.Details
         // Cover, title and year; what the title is to this Work with its source in the tip; the media type; what the library has of it; and the actions.
         private ListRow RelationRow(WorkRelationV1 relation, bool canManage)
         {
-            var address = relation.RelatedWorkId is { } workId ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture) : DiscoverAddress(relation);
+            var address = "/Details/" + relation.RelatedWorkId.ToString(CultureInfo.InvariantCulture);
             var cover = MediaImage.Or(assets, relation.PosterUrl, "", 92, 138);
-            IUiComponent title = new Truncated(relation.Title);
-            if (address is not null) title = new A(title).Class("relation__title").Attribute("href", address);
+            var title = new A(new Truncated(relation.Title)).Class("relation__title").Attribute("href", address);
             var year = new Span(new ValueText(relation.ReleaseYear?.ToString(CultureInfo.InvariantCulture) ?? ""));
             var identity = new ListIdentity(new IconTile(cover, UiTone.Accent), title, year);
 
             var kind = new StateChip(new Text("details.relation." + relation.WorkRelationTypeId), UiTone.Accent, new Icon(KindIcon(relation.WorkRelationTypeId), assets, 14))
                 .Attribute("title", string.Format(CultureInfo.CurrentCulture, texts["details.relation.source"], SourceName(relation.SourceKey)));
             var typeLabel = new Tag(new Text(MediaTypeLabel.Key(relation.MediaTypeId, relation.MediaSubtypeId)));
-            var isRequested = relation.RelatedWorkId is null && _requestedRelation is { } asked && asked.Namespace == relation.Namespace && asked.ExternalId == relation.ExternalId;
-            var state = isRequested ? (IUiComponent)new StateChip(new Text("details.relation.requested"), UiTone.Accent, new Icon("requests", assets, 14)) : Availability(relation);
+            var state = Availability(relation);
 
             var actions = new List<IUiComponent>();
-            if (relation.RelatedWorkId is null && !isRequested && address is not null && texts.CanRequest())
+            if (relation.AvailabilityStateId is null && texts.CanRequest())
             {
-                actions.Add(new PostForm(Address(query => query["handler"] = "RequestRelated"), _csrf, [("namespace", relation.Namespace ?? ""), ("externalId", relation.ExternalId ?? "")],
+                actions.Add(new PostForm(Address(query => query["handler"] = "RequestRelated"), _csrf, [("relatedWorkId", relation.RelatedWorkId.ToString(CultureInfo.InvariantCulture))],
                     new Button(new Text("details.relation.request")).Compact().Soft().Submit()));
             }
 
@@ -89,7 +84,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 ListPanel.Fact("table.status", state)]);
         }
 
-        // What the library has of the related Work, in the card's states; a title that is no Work says so.
+        // What the library has of the related Work, in the card's states; a catalog title the library has nothing of says so.
         private IUiComponent Availability(WorkRelationV1 relation)
         {
             if (relation.AvailabilityStateId is not { } state)
@@ -142,21 +137,7 @@ namespace Jularr.Frontend.Pages.User.Details
             _ => texts["details.relation.source.manual"]
         };
 
-        // The Discover page of a catalog title that is no Work; none when its catalog has no page for the profile.
-        private string? DiscoverAddress(WorkRelationV1 relation)
-        {
-            if (relation.Namespace is not { } catalog || relation.ExternalId is not { } id) return null;
-            if (catalog is "tmdb_movie" or "tmdb_tv")
-            {
-                return _scopes.FirstOrDefault(scope => !scope.IsCatalog && scope.MediaTypeId == relation.MediaTypeId) is { } tmdb ? "/Discover/" + tmdb.Slug + "/" + Uri.EscapeDataString(id) : null;
-            }
-
-            return _scopes.FirstOrDefault(scope => scope.IsCatalog && scope.MediaTypeId == relation.MediaTypeId && scope.MediaSubtypeId == relation.MediaSubtypeId) is { } scope
-                ? "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(catalog) + "/" + Uri.EscapeDataString(id)
-                : null;
-        }
-
-        // The Owner finds a Work or a catalog title by its words and says what it is to this Work; the matches come with an Add button each.
+        // The Owner finds a Work by its words and says what it is to this Work; the matches come with an Add button each.
         private IUiComponent RelationDialog()
         {
             var types = Enum.GetValues<WorkRelationType>().Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["details.relation." + type]));
@@ -181,18 +162,10 @@ namespace Jularr.Frontend.Pages.User.Details
             return new Modal(assets, RelationDialogId, "details.relation.dialog", [new Div([.. content]).Class("relation-dialog")], _relationSearch is not null);
         }
 
-        // One match as a Work of the library or as its catalog title.
-        private IUiComponent AddForm(DiscoverSuggestionV1 item, WorkRelationType type)
-        {
-            var hidden = new List<(string Name, string Value)> { ("workRelationTypeId", ((byte)type).ToString(CultureInfo.InvariantCulture)) };
-            if (item.WorkId is { } workId) hidden.Add(("relatedWorkId", workId.ToString(CultureInfo.InvariantCulture)));
-            else
-            {
-                hidden.Add(("namespace", item.Namespace));
-                hidden.Add(("externalId", item.ExternalId));
-            }
-
-            return new PostForm(Address(query => query["handler"] = "AddRelation"), _csrf, hidden, new Button(new Icon("plus", assets, 14), new Text("details.relation.pick")).Compact().Soft().Submit());
-        }
+        // One match as the Work it is.
+        private IUiComponent AddForm(DiscoverSuggestionV1 item, WorkRelationType type) =>
+            new PostForm(Address(query => query["handler"] = "AddRelation"), _csrf,
+                [("workRelationTypeId", ((byte)type).ToString(CultureInfo.InvariantCulture)), ("relatedWorkId", item.WorkId.ToString(CultureInfo.InvariantCulture))],
+                new Button(new Icon("plus", assets, 14), new Text("details.relation.pick")).Compact().Soft().Submit());
     }
 }

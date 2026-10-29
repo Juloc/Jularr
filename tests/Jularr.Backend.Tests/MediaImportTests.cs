@@ -12,6 +12,7 @@ using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.OpenLibrary;
 using Jularr.Integrations.Logic.Tmdb;
+using Jularr.Integrations.Logic.Tvdb;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
@@ -323,6 +324,33 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(4L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
             Assert.AreEqual(4L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
             Assert.IsFalse(signal.TakeRequest());
+        }
+
+        [TestMethod]
+        public async Task Import_Series_IsTheTvdbSeries_ByItsOwnIdImdbsIdOrItsTitle()
+        {
+            await using var host = await CreateHostAsync(new FakeProviders());
+            var list = """
+                {"version":1,"items":[
+                  {"type":"series","ids":{"imdb":"tt0081189"}},
+                  {"type":"series","ids":{"tvdb":"81189"}},
+                  {"type":"series","title":"Fake Show"}
+                ]}
+                """;
+
+            // An IMDb id finds TheTVDB's series, the same one the TheTVDB id names; a title proposes TheTVDB's search results.
+            var preview = await PreviewAsync(host, list);
+            CollectionAssert.AreEqual(new[] { MediaImportStatusType.New, MediaImportStatusType.Duplicate, MediaImportStatusType.Open }, preview.Rows.Select(row => row.StatusTypeId).ToArray());
+            Assert.AreEqual("tvdb:81189", preview.Rows[0].Choice);
+            Assert.AreEqual(0, preview.Rows[1].DuplicateOf);
+            Assert.AreEqual("tvdb:81189", preview.Rows[2].Candidates.Single().Choice);
+
+            // The series is TheTVDB's with TMDB's id beside it.
+            await RunAsync(host, list, MediaImportActionType.AddOnly);
+            Assert.AreEqual("tmdb_tv:1399 tvdb:81189", await host.ScalarAsync("""
+                SELECT string_agg(identity."Namespace" || ':' || identity."Value", ' ' ORDER BY identity."Namespace") FROM "WorkExternalIdentities" AS identity JOIN "Works" AS work ON work."Id" = identity."WorkId"
+                WHERE work."MediaTypeId" = 2
+                """));
         }
 
         [TestMethod]
@@ -829,15 +857,20 @@ namespace Jularr.Backend.Tests
             var host = await Host.CreateAsync(razor: true, library: true, services: services =>
             {
                 services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => providers);
+                services.AddHttpClient<TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => providers);
                 services.AddHttpClient<OpenLibraryClient>().ConfigurePrimaryHttpMessageHandler(() => providers);
                 services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => providers);
             });
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode, await login.Content.ReadAsStringAsync());
-            var provider = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
-            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1(Token));
-            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            foreach (var key in new[] { "tmdb", "tvdb" })
+            {
+                var provider = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = '" + key + "'"))!;
+                using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1(Token));
+                Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            }
+
             return host;
         }
 
@@ -878,6 +911,22 @@ namespace Jularr.Backend.Tests
                         "/works/OL66554W.json" => Json("""{"title":"Pride and Prejudice","first_publish_date":"1813","description":{"value":"A novel of manners."},"covers":[14348537],"authors":[{"author":{"key":"/authors/OL21594A"}}]}"""),
                         "/authors/OL21594A.json" => Json("""{"name":"Jane Austen"}"""),
                         "/works/OL66554W/editions.json" => Json("""{"entries":[{"key":"/books/OL1M","title":"Pride and Prejudice","languages":[{"key":"/languages/eng"}],"physical_format":"Paperback","isbn_13":["9780141439518"],"publishers":["Penguin"],"publish_date":"2003"}]}"""),
+                        _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+                    });
+                }
+
+                // TheTVDB describes the series TMDB names and finds it by its IMDb id and its name.
+                if (uri.Host == "api4.thetvdb.com")
+                {
+                    return Task.FromResult(uri.AbsolutePath switch
+                    {
+                        "/v4/login" => Json("""{"data":{"token":"tvdb-test-token"}}"""),
+                        "/v4/search/remoteid/tt0081189" => Json("""{"data":[{"series":{"id":81189}}]}"""),
+                        "/v4/search" when uri.Query.Contains("Fake%20Show", StringComparison.Ordinal)
+                            => Json("""{"data":[{"tvdb_id":"81189","name":"Fake Show","year":"2020","type":"series","translations":{"eng":"Fake Show"}}]}"""),
+                        "/v4/search" => Json("""{"data":[]}"""),
+                        "/v4/series/81189/extended" => Json("""{"data":{"id":81189,"name":"Fake Show","overview":"A show.","firstAired":"2020-01-01","remoteIds":[{"sourceName":"TheMovieDB.com","id":"1399"}]}}"""),
+                        "/v4/series/81189/episodes/default" => Json("""{"data":{"episodes":[]},"links":{"next":null}}"""),
                         _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                     });
                 }
