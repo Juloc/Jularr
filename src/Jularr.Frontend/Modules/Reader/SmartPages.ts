@@ -1,7 +1,7 @@
-import { blockBox, letterSpacing, splitText, spreads, startSize } from './SmartPageFit';
+import { blockBox, capitals, letterSpacing, lineBoxes, splitText, spreads, startSize } from './SmartPageFit';
 
-// Smart Pages: a scanned page in its own layout, its text erased from the scan and set anew in the original boxes in the look measured for each run, or
-// its translation in the look of the main text of each sentence. The server prepares the pages as reading units from 100000 on; the server's TranslateGemma
+// Smart Pages: a scanned page in its own layout, its text erased from the scan and set anew into the original's lines in the look measured for each run,
+// or its translation in the look of the main text of each sentence. The server prepares the pages as reading units from 100000 on; the server's TranslateGemma
 // translates them like any section, the page in view first.
 export interface SmartPages {
     has(page: number): boolean;
@@ -10,6 +10,9 @@ export interface SmartPages {
 }
 
 const Units = 100_000;
+
+// A word to set, in the look of its run (a span the server wrote).
+interface Word { text: string; template: HTMLElement; look: string }
 
 export function smartPages(reader: HTMLElement): SmartPages | undefined {
     const numbers = (reader.dataset.smartPages ?? '').split(',').filter(Boolean).map(Number);
@@ -31,11 +34,7 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
         element.className = 'reader__smart';
         // The server wrote this markup itself from the recognized text; nothing in it comes from the file.
         element.innerHTML = html;
-        for (const block of element.querySelectorAll<HTMLElement>('[data-box]')) {
-            const box = blockBox(block.dataset.box ?? '');
-            if (!box) { block.remove(); continue; }
-            Object.assign(block.style, { left: `${box.left * 100}%`, top: `${box.top * 100}%`, width: `${box.width * 100}%`, height: `${box.height * 100}%` });
-        }
+        for (const block of element.querySelectorAll<HTMLElement>('[data-box]')) if (!blockBox(block.dataset.box ?? '')) block.remove();
         return element;
     }
 
@@ -93,77 +92,151 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
     // The translation takes the look of the block's main text; text flowing around a picture is shared out over its boxes by their share of the original.
     function show(block: HTMLElement, text: string): void {
         const parts = Array.from(block.querySelectorAll<HTMLElement>(':scope > [data-part]'));
-        if (parts.length === 0) set(block, text);
+        if (parts.length === 0) replace(block, text);
         else {
             // Shared out by the original's letters until the page is laid out; then it flows box by box (fit).
-            splitText(text, parts.map(part => part.textContent?.length ?? 0)).forEach((piece, index) => set(parts[index], piece));
-            block.dataset.flow = text;
+            splitText(text, parts.map(part => part.textContent?.length ?? 0)).forEach((piece, index) => replace(parts[index], piece));
         }
         block.dataset.translated = 'true';
     }
 
-    function set(box: HTMLElement, text: string): void {
+    function replace(box: HTMLElement, text: string): void {
         const spans = Array.from(box.querySelectorAll<HTMLElement>('span[data-face]'));
         const main = spans.reduce<HTMLElement | undefined>((longest, span) => !longest || (span.textContent?.length ?? 0) > (longest.textContent?.length ?? 0) ? span : longest, undefined);
         // The main look keeps its size against the block's: 1 for the block's own text, larger for a bold lead-in.
         const run = (main?.cloneNode(false) as HTMLElement | undefined) ?? document.createElement('span');
         // A sentence after a lead-in keeps the space between them; text in capitals stays in capitals (ALWAYS / SOMETIMES / NEVER, running heads).
         const original = box.textContent ?? '';
-        const capitals = /\p{L}/u.test(original) && original === original.toLocaleUpperCase();
-        run.textContent = (!box.dataset.box && /^\s/.test(original) ? ' ' : '') + (capitals ? text.toLocaleUpperCase() : text);
+        run.textContent = (!box.dataset.box && /^\s/.test(original) ? ' ' : '') + (capitals(original) ? text.toLocaleUpperCase() : text);
         box.replaceChildren(run);
     }
 
-    // The measured size first; smaller only where the text does not fit its box. Labels of one series share the smallest size, and a short label spans its
-    // box like the print, by the original's letter spacing (a translation only a little).
+    // The text is set line by line into the original's lines (their left edge, baseline and width): the original breaks where the print broke, a
+    // translation flows on through the lines of its block, a lead-in on a line of its own keeps it. All of a block gets smaller together only where its
+    // text does not fit its lines. Labels of one series share the smallest size; a label in capitals of a word or two and a running head in capitals
+    // are spread over their line like the print.
     function fit(element: HTMLElement): void {
         const height = element.clientHeight;
         if (!height) return;
-        for (const flow of element.querySelectorAll<HTMLElement>('[data-flow]')) pour(flow, height);
-        const blocks = Array.from(element.querySelectorAll<HTMLElement>('[data-box]'));
-        for (const block of blocks) {
-            let size = startSize(Number(block.dataset.base), height);
-            const single = block.dataset.lines === '1';
-            block.style.whiteSpace = single ? 'nowrap' : '';
-            block.style.letterSpacing = '0px';
-            block.style.fontSize = `${size}px`;
-            for (let step = 0; step < 60 && size > 4 && (block.scrollHeight > block.clientHeight * 1.04 + 1 || block.scrollWidth > block.clientWidth + 1); step++) {
-                size *= 0.95;
-                block.style.fontSize = `${size}px`;
-            }
+        const page = element.querySelector<HTMLElement>('[data-smart-page]') ?? element;
+        let layer = page.querySelector<HTMLElement>(':scope > [data-layer]');
+        if (!layer) {
+            layer = document.createElement('div');
+            layer.dataset.layer = '';
+            page.append(layer);
         }
+        layer.replaceChildren();
         const series = new Map<string, HTMLElement[]>();
-        for (const block of blocks) if (block.dataset.series) series.set(block.dataset.series, [...series.get(block.dataset.series) ?? [], block]);
-        for (const group of series.values()) {
-            const size = Math.min(...group.map(block => parseFloat(block.style.fontSize)));
-            for (const block of group) block.style.fontSize = `${size}px`;
+        const spread: { row: HTMLElement; translated: boolean }[] = [];
+        for (const block of page.querySelectorAll<HTMLElement>(':scope > [data-b]')) {
+            const parts = Array.from(block.querySelectorAll<HTMLElement>(':scope > [data-part]'));
+            const boxes = parts.length > 0 ? parts : [block];
+            const rows = set(layer, boxes, height);
+            const label = block.dataset.series;
+            if (label) series.set(label, [...series.get(label) ?? [], ...rows]);
+            const text = block.textContent ?? '';
+            if (rows.length === 1 && (block.dataset.label !== undefined && spreads(text) || block.dataset.running !== undefined && capitals(text)))
+                spread.push({ row: rows[0], translated: !!block.querySelector('[data-translated]') || block.dataset.translated === 'true' });
         }
-        // Only a label in capitals of a word or two is spread like the print (ALWAYS / SOMETIMES / NEVER); a line of text keeps its own spacing.
-        for (const block of blocks.filter(block => block.dataset.lines === '1' && block.dataset.label !== undefined && spreads(block.textContent ?? ''))) {
-            const natural = Array.from(block.children).reduce((sum, child) => sum + child.getBoundingClientRect().width, 0);
-            block.style.letterSpacing = `${letterSpacing(block.clientWidth - natural, block.textContent?.length ?? 0, parseFloat(block.style.fontSize), block.dataset.translated === 'true')}px`;
+        for (const group of series.values()) {
+            const size = Math.min(...group.map(row => parseFloat(row.style.fontSize)));
+            for (const row of group) row.style.fontSize = `${size}px`;
+        }
+        for (const { row, translated } of spread) {
+            const natural = Array.from(row.children).reduce((sum, child) => sum + child.getBoundingClientRect().width, 0);
+            row.style.letterSpacing = `${letterSpacing(row.clientWidth - natural, row.textContent?.length ?? 0, parseFloat(row.style.fontSize), translated)}px`;
         }
     }
 
-    // A translation flows through the boxes of its sentence like the print: each box at its measured size takes words while they fit, the last the rest.
-    function pour(flow: HTMLElement, height: number): void {
-        const parts = Array.from(flow.querySelectorAll<HTMLElement>(':scope > [data-part]'));
-        const words = (flow.dataset.flow ?? '').split(/\s+/).filter(Boolean);
-        let next = 0;
-        parts.forEach((part, index) => {
-            const run = part.querySelector<HTMLElement>('span') ?? part;
-            part.style.whiteSpace = part.dataset.lines === '1' ? 'nowrap' : '';
-            part.style.fontSize = `${startSize(Number(part.dataset.base), height)}px`;
-            if (index === parts.length - 1) { run.textContent = words.slice(next).join(' '); return; }
-            const overflows = () => part.scrollHeight > part.clientHeight * 1.04 + 1 || part.scrollWidth > part.clientWidth + 1;
-            const start = next;
-            run.textContent = '';
-            while (next < words.length) {
-                run.textContent = words.slice(start, next + 1).join(' ');
-                if (overflows() && next > start) { run.textContent = words.slice(start, next).join(' '); break; }
-                next++;
-            }
+    // Sets a block's words into its lines, at its measured size or as much smaller as it takes; returns the lines used.
+    function set(layer: HTMLElement, boxes: HTMLElement[], height: number): HTMLElement[] {
+        const width = layer.clientWidth || height;
+        const lines = boxes.flatMap(box => {
+            const own = lineBoxes(box.dataset.rows ?? '', blockBox(box.dataset.box ?? ''));
+            // The last line of a box may run as wide as its widest, so a longer translation finds room.
+            const right = Math.max(...own.map(line => line.left + line.width));
+            return own.map((line, index) => ({ ...line, width: index === own.length - 1 ? right - line.left : line.width, size: startSize(Number(box.dataset.base), height) }));
         });
+        const tokens = boxes.flatMap(box => words(box));
+        if (lines.length === 0 || tokens.length === 0) return [];
+        // A line may run a little past the original's ink, as the print's margin allows. The original keeps its own lines, each made smaller only where
+        // our face runs wider; a translation wraps from line to line, and all of it gets smaller where it does not fit the lines.
+        const over = (row: HTMLElement) => row.scrollWidth > row.clientWidth * 1.06 + 1;
+        const lined = tokens.filter(token => token === '\n').length >= lines.length - 1;
+        let placed: HTMLElement[] = [];
+        for (let scale = 1, step = 0; step < 60; step++, scale *= 0.97) {
+            for (const row of placed) row.remove();
+            placed = [];
+            let index = 0, count = 0;
+            const open = () => {
+                const line = lines[index];
+                const row = document.createElement('div');
+                row.className = 'reader__smart-line';
+                const size = line.size * scale;
+                Object.assign(row.style, { left: `${line.left * width}px`, width: `${line.width * width}px`, top: `${line.baseline * height - size * 0.8}px`, fontSize: `${size}px` });
+                layer.append(row);
+                placed.push(row);
+                return row;
+            };
+            let row = open();
+            let fits = true;
+            for (const token of tokens) {
+                if (token === '\n') {
+                    if (count === 0 || index + 1 >= lines.length && lined) continue;
+                    if (++index >= lines.length) { fits = false; break; }
+                    row = open();
+                    count = 0;
+                    continue;
+                }
+                const span = add(row, token, count > 0);
+                if (!lined && over(row) && count > 0) {
+                    span.textContent = span.textContent!.slice(0, -(token.text.length + 1));
+                    if (!span.textContent) span.remove();
+                    if (++index >= lines.length) { fits = false; break; }
+                    row = open();
+                    add(row, token, false);
+                    count = 0;
+                }
+                count++;
+            }
+            if (fits && (lined || !placed.some(row => over(row) && row.childNodes.length > 0 && (row.textContent ?? '').includes(' ')))) break;
+        }
+        for (const row of placed.filter(over)) row.style.fontSize = `${parseFloat(row.style.fontSize) * row.clientWidth * 1.03 / row.scrollWidth}px`;
+        return placed;
+    }
+
+    // A word in the look of its run; the next word of the same run goes into the same span.
+    function add(row: HTMLElement, token: Word, spaced: boolean): HTMLElement {
+        const last = row.lastElementChild as HTMLElement | null;
+        const text = (spaced ? ' ' : '') + token.text;
+        if (last && last.dataset.look === token.look) { last.textContent += text; return last; }
+        const span = token.template.cloneNode(false) as HTMLElement;
+        span.dataset.look = token.look;
+        span.textContent = text;
+        row.append(span);
+        return span;
+    }
+
+    // A box's words in their runs' looks, with a line break where the original broke a line (or keeps a lead-in apart).
+    function words(box: HTMLElement): (Word | '\n')[] {
+        const tokens: (Word | '\n')[] = [];
+        let look = 0;
+        const walk = (node: Node, template: HTMLElement | undefined, id: string): void => {
+            if (node instanceof HTMLElement) {
+                if (node.tagName === 'WBR' || node.tagName === 'BR') {
+                    // A lead-in's own break and the original's line break after it are one break.
+                    if (tokens.length > 0 && tokens[tokens.length - 1] !== '\n') tokens.push('\n');
+                    return;
+                }
+                if (node.dataset.face) { template = node; id = String(look++); }
+                for (const child of Array.from(node.childNodes)) walk(child, template, id);
+                return;
+            }
+            if (node.nodeType === Node.TEXT_NODE && template)
+                for (const text of (node.textContent ?? '').split(/\s+/).filter(Boolean)) tokens.push({ text, template, look: id });
+        };
+        walk(box, undefined, '');
+        return tokens;
     }
 
     // A language chosen here is kept for the profile; the pages then show in it.

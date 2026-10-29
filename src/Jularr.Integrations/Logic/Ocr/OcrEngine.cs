@@ -60,7 +60,7 @@ namespace Jularr.Integrations.Logic.Ocr
                 }
             }
             var lines = new List<OcrLine>();
-            foreach (var box in Join(Detect(page)))
+            foreach (var box in Split(page, Join(Detect(page))))
             {
                 var (text, confidence, characters) = Recognize(page, box);
                 if (text.Trim() is { Length: > 0 } trimmed)
@@ -101,6 +101,104 @@ namespace Jularr.Integrations.Logic.Ocr
             }
 
             return lines;
+        }
+
+        // A detected region may run over the gutter between two columns (a rule in it joins them): a stretch without ink wider than the region is high (a
+        // thin rule counts as empty) parts it, and each part is trimmed to its own ink, so small type beside large is read at its own size.
+        internal static List<SKRectI> Split(SKBitmap page, List<SKRectI> boxes)
+        {
+            var result = new List<SKRectI>();
+            var pixels = page.GetPixelSpan();
+            foreach (var box in boxes)
+            {
+                var (w, h) = (box.Width, box.Height);
+                if (w < h * 3 || h < 8)
+                {
+                    result.Add(box);
+                    continue;
+                }
+
+                // Ink: far from the region's commonest brightness.
+                var light = new int[w * h];
+                for (var y = 0; y < h; y++)
+                {
+                    for (var x = 0; x < w; x++)
+                    {
+                        var at = ((box.Top + y) * page.Width + box.Left + x) * 4;
+                        light[y * w + x] = (pixels[at] * 3 + pixels[at + 1] * 6 + pixels[at + 2]) / 10;
+                    }
+                }
+
+                var ground = light.Order().ElementAt(light.Length / 2);
+                var columns = new int[w];
+                for (var index = 0; index < light.Length; index++)
+                {
+                    columns[index % w] += Math.Abs(light[index] - ground) > 60 ? 1 : 0;
+                }
+
+                var blank = columns.Select(count => count <= Math.Max(1, h / 30)).ToArray();
+                // A rule: a thin stroke over the region's whole height with space on both sides, unlike a letter's stem.
+                var (thin, aside) = (Math.Max(2, h / 15), Math.Max(2, h / 4));
+                bool Clear(int from, int to) => from >= 0 && to <= w && Enumerable.Range(from, to - from).All(x => columns[x] <= Math.Max(1, h / 30));
+                for (int x = 0; x < w;)
+                {
+                    var end = x;
+                    while (end < w && !blank[end]) end++;
+                    if (end > x && end - x <= thin && columns[x..end].Max() >= h * 0.85 && Clear(x - aside, x) && Clear(end, end + aside))
+                    {
+                        for (var each = x; each < end; each++) blank[each] = true;
+                    }
+
+                    x = end == x ? x + 1 : end;
+                }
+
+                var cuts = new List<(int From, int To)>();
+                for (int x = 0; x < w;)
+                {
+                    var end = x;
+                    while (end < w && blank[end]) end++;
+                    if (end - x >= h * 0.9 && x > 0 && end < w)
+                    {
+                        cuts.Add((x, end));
+                    }
+
+                    x = end == x ? x + 1 : end;
+                }
+
+                if (cuts.Count == 0)
+                {
+                    result.Add(box);
+                    continue;
+                }
+
+                var from = 0;
+                foreach (var (start, end) in cuts.Append((w, w)))
+                {
+                    // The part's own rows of ink.
+                    var (top, bottom) = (h, -1);
+                    for (var y = 0; y < h; y++)
+                    {
+                        for (var x = from; x < start; x++)
+                        {
+                            if (Math.Abs(light[y * w + x] - ground) > 60)
+                            {
+                                (top, bottom) = (Math.Min(top, y), Math.Max(bottom, y));
+                                break;
+                            }
+                        }
+                    }
+
+                    if (bottom - top >= 4)
+                    {
+                        var margin = Math.Max(2, (bottom - top) / 8);
+                        result.Add(new SKRectI(box.Left + from, Math.Max(box.Top, box.Top + top - margin), box.Left + start, Math.Min(box.Bottom, box.Top + bottom + margin + 1)));
+                    }
+
+                    from = end;
+                }
+            }
+
+            return result;
         }
 
         private List<SKRectI> Detect(SKBitmap page)

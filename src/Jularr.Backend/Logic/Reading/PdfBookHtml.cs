@@ -95,6 +95,12 @@ namespace Jularr.Backend.Logic.Reading
                     {
                         foreach (var sentence in sentences)
                         {
+                            // A lead-in on a line of its own keeps it in a translation too.
+                            if (sentence != sentences[0] && sentence[0].Breaks.Any(at => at <= 1))
+                            {
+                                html.Append("<br>");
+                            }
+
                             html.Append("<span data-b=\"").Append((number++).ToString(CultureInfo.InvariantCulture)).Append("\">");
                             Runs(html, single, sentence);
                             html.Append("</span>");
@@ -137,6 +143,10 @@ namespace Jularr.Backend.Logic.Reading
                 }
 
                 html.Append(block.IsLabel ? " data-label" : "").Append(block.IsRunning ? " data-running" : "");
+                if (block.Rows.Count > 0)
+                {
+                    html.Append(" data-rows=\"").AppendJoin(';', block.Rows.Select(row => Number(row.Left) + " " + Number(row.Baseline) + " " + Number(row.Width))).Append('"');
+                }
             }
 
             // A new sentence starts where a run in another look follows the end of one.
@@ -165,8 +175,22 @@ namespace Jularr.Backend.Logic.Reading
                     html.Append("<span data-face=\"").Append(run.Serif ? "serif" : "sans").Append("\" style=\"font-weight:").Append(run.Weight.ToString(CultureInfo.InvariantCulture))
                         .Append(run.Italic ? ";font-style:italic" : "").Append(run.Serif ? "" : ";font-stretch:" + run.Stretch.ToString(CultureInfo.InvariantCulture) + "%")
                         .Append(";color:").Append(run.Ink).Append(";font-size:").Append(Number(block.Base > 0 ? run.Size / block.Base : 1)).Append("em\">")
-                        .Append(WebUtility.HtmlEncode(run.Text)).Append("</span>");
+                        .Append(Lines(run)).Append("</span>");
                 }
+            }
+
+            // The text with a <wbr> where the original starts a new line: the Reader sets the original line by line, a translation flows on.
+            static string Lines(PdfSmartRun run)
+            {
+                var text = new StringBuilder();
+                var from = 0;
+                foreach (var at in run.Breaks.Where(at => at > 0 && at < run.Text.Length).Order())
+                {
+                    text.Append(WebUtility.HtmlEncode(run.Text[from..at])).Append("<wbr>");
+                    from = at;
+                }
+
+                return text.Append(WebUtility.HtmlEncode(run.Text[from..])).ToString();
             }
         }
 

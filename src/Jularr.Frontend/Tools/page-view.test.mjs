@@ -140,6 +140,14 @@ test('a Smart Page sets its text at the measured size, in the boxes of the page,
     assert.equal(smartFit.spreads('And Jacob.'), false);
     assert.equal(smartFit.spreads('ONE TWO THREE'), false);
     assert.equal(smartFit.spreads('12'), false);
+    assert.equal(smartFit.capitals('ESQUIRE’S THE NEW RULES FOR MEN'), true);
+    assert.equal(smartFit.capitals('DRINKING 37'), true);
+    assert.equal(smartFit.capitals('Drinking 37'), false);
+    assert.equal(smartFit.capitals('37'), false);
+    const lines = (value, box) => JSON.stringify(smartFit.lineBoxes(value, box));
+    assert.equal(lines('0.1 0.2 0.5;0.1 0.25 0.3'), JSON.stringify([{ left: 0.1, baseline: 0.2, width: 0.5 }, { left: 0.1, baseline: 0.25, width: 0.3 }]));
+    assert.equal(lines('', { left: 0.1, top: 0.5, width: 0.4, height: 0.25 }), JSON.stringify([{ left: 0.1, baseline: 0.7, width: 0.4 }]), 'without lines, one along the box');
+    assert.equal(lines('0.1 x 0.5;0.1 0.2 0'), '[]', 'broken lines are left out');
     assert.deepEqual([...smartFit.splitText('Das sind die riskantesten Dreiecke der Welt', [30, 10, 20])], ['Das sind die riskantesten', 'Dreiecke', 'der Welt']);
     assert.deepEqual([...smartFit.splitText('Kurz', [10, 10])], ['Kurz', '']);
 });

@@ -11,6 +11,8 @@ namespace Jularr.Backend.Logic.Reading
         private const int ImageSide = 1600;
         private const int ImageQuality = 80;
         private const double MinimumConfidence = 0.5;
+        private const double PhotoGround = 0.4;
+        private const double PhotoGroundDark = 0.08;
 
         public static PdfSmartPage? Build(SKBitmap drawn, RecognizedPage read, int number)
         {
@@ -28,19 +30,55 @@ namespace Jularr.Backend.Logic.Reading
                     continue;
                 }
 
-                var line = new Line(box, recognized.Kind == RecognizedLine.Label);
+                // Lettering in a photograph (a painted sign, a screen) stays part of it: its ground is mottled, unlike paper or a plain box. Light letters on a
+                // dark ground are a caption bubble's, set like text.
+                if (recognized.Kind == RecognizedLine.Label && Mottled(pixels, w, h, box) is var mottled
+                    && (mottled > PhotoGround || mottled > PhotoGroundDark && Paper(pixels, w, h, box).Sum() > 3 * 128))
+                {
+                    continue;
+                }
+
                 var texts = recognized.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                var spans = recognized.Words is { } edges && edges.Length == texts.Length * 2 ? edges : Spread(recognized, texts);
+                var placed = recognized.Words is { } edges && edges.Length == texts.Length * 2;
+                var spans = placed ? recognized.Words! : Spread(recognized, texts);
                 var paper = Paper(pixels, w, h, box);
+                var words = new List<(Word Word, SKRectI Box)>();
                 for (var index = 0; index < texts.Length; index++)
                 {
                     var word = Clamp(new SKRectI((int)(spans[index * 2] * w), box.Top, (int)Math.Ceiling(spans[index * 2 + 1] * w), box.Bottom), w, h);
                     var style = Measure(pixels, w, h, word, paper, texts[index].Length);
-                    line.Words.Add(new Word(texts[index], style?.Left ?? word.Left) { Style = style });
+                    words.Add((new Word(texts[index], style?.Left ?? word.Left) { Style = style, Baseline = style?.Baseline }, word));
                 }
 
-                Looks(line);
-                lines.Add(line);
+                // The recognizer may read two columns side by side as one line: a gap wider than a word space, or a jump in size across a gap, parts them
+                // (where it said where its words stand).
+                var start = 0;
+                for (var index = 1; index <= words.Count; index++)
+                {
+                    if (index < words.Count && !placed)
+                    {
+                        continue;
+                    }
+
+                    if (index < words.Count)
+                    {
+                        var (before, after) = (words[index - 1], words[index]);
+                        var (one, other) = (before.Word.Style?.Size ?? box.Height * 0.6, after.Word.Style?.Size ?? box.Height * 0.6);
+                        var gap = after.Box.Left - before.Box.Right;
+                        if (gap <= Math.Max(one, other) * 1.2 && !(gap > Math.Min(one, other) * 0.5 && Math.Max(one, other) > Math.Min(one, other) * 1.35))
+                        {
+                            continue;
+                        }
+                    }
+
+                    var part = words[start..index];
+                    var line = new Line(Clamp(new SKRectI(start == 0 ? box.Left : part[0].Box.Left, box.Top, index == words.Count ? box.Right : part[^1].Box.Right, box.Bottom), w, h),
+                        recognized.Kind == RecognizedLine.Label);
+                    line.Words.AddRange(part.Select(each => each.Word));
+                    Looks(line);
+                    lines.Add(line);
+                    start = index;
+                }
             }
 
             if (lines.Count == 0)
@@ -222,7 +260,8 @@ namespace Jularr.Backend.Logic.Reading
             foreach (var word in measured)
             {
                 var look = looks.LastOrDefault();
-                if (look is null || look[^1].Style!.Ink.Distance(word.Style!.Ink) >= 90
+                // A lead-in ends with its colon ("Rule No. 4:"): the words after it are measured on their own.
+                if (look is null || look[^1].Text.EndsWith(':') || look[^1].Style!.Ink.Distance(word.Style!.Ink) >= 90
                     || (word.Text.Count(char.IsLetter) >= 3 && (Math.Abs(Mid(look, style => style.Ratio) - word.Style.Ratio) > 0.06 || Math.Abs(Mid(look, style => style.Contrast) - word.Style.Contrast) > 0.2
                         || look.Count(other => other.Style!.Serif) * 2 > look.Count == !word.Style.Serif && Math.Abs(Mid(look, style => style.Ratio) - word.Style.Ratio) > 0.04)))
                 {
@@ -256,8 +295,10 @@ namespace Jularr.Backend.Logic.Reading
         {
             var previous = block.Last;
             var size = Size(previous, first: false);
+            // Lines of a paragraph follow at its steady pitch; a space before the next paragraph is wider. The first two lines of a block set the pitch.
+            var pitch = line.Baseline - previous.Baseline;
             return line.Box.Top >= previous.Box.Top
-                && line.Box.Top - previous.Box.Bottom < previous.Box.Height * 0.6
+                && pitch > block.Body * 0.4 && pitch <= (block.Pitches.Count > 0 ? block.Pitches.Order().ElementAt((block.Pitches.Count - 1) / 2) * 1.25 : block.Body * 2.1)
                 && line.Box.Left < previous.Box.Right && line.Box.Right > previous.Box.Left
                 && Math.Abs(Size(line, first: true) - size) < size * 0.4
                 && Math.Abs(Body(line) - block.Body) < block.Body * 0.25
@@ -284,7 +325,9 @@ namespace Jularr.Backend.Logic.Reading
                 {
                     block.Area = SKRectI.Union(block.Area, line.Box);
                     block.Margin = Math.Min(block.Margin, line.Left);
+                    block.Pitches.Add(line.Baseline - block.Last.Baseline);
                     block.Last = line;
+                    block.All.Add(line);
                     block.Bodies.Add(Body(line));
                     block.IsLabel = false;
                 }
@@ -293,24 +336,39 @@ namespace Jularr.Backend.Logic.Reading
                 {
                     var style = word.Style ?? new Style { Size = line.Box.Height * 0.7 };
                     var last = block.Runs.LastOrDefault();
+                    // Where the original starts a line, unless a word broken at the line's end runs on.
+                    var starts = last is not null && word == line.Words[0] && !last.Text.EndsWith('-');
                     var hyphen = last is not null && last.Text.EndsWith('-') && word == line.Words[0];
+                    // A hyphen at the line's end before a word with a hyphen of its own belongs to the compound (farm-to-table) and stays.
+                    var broken = hyphen && !word.Text.Contains('-');
                     if (last is not null && last.Serif == style.Serif && last.Italic == style.Italic && last.Ink.Distance(style.Ink) < 90 && Math.Abs(last.Weight - style.Weight) <= 100
                         && Math.Abs(last.Size - style.Size / h) < 0.2 * last.Size)
                     {
-                        last.Text = hyphen ? last.Text[..^1] + word.Text : last.Text + " " + word.Text;
+                        if (starts)
+                        {
+                            last.Breaks.Add(last.Text.Length + 1);
+                        }
+
+                        last.Text = hyphen ? (broken ? last.Text[..^1] : last.Text) + word.Text : last.Text + " " + word.Text;
                     }
                     else
                     {
-                        if (hyphen)
+                        if (broken)
                         {
                             last!.Text = last.Text[..^1];
                         }
 
-                        block.Runs.Add(new Run
+                        var run = new Run
                         {
                             Text = (block.Runs.Count == 0 || hyphen ? "" : " ") + word.Text, Serif = style.Serif, Weight = style.Weight, Italic = style.Italic, Stretch = style.Stretch,
                             Size = style.Size / h, Ink = style.Ink
-                        });
+                        };
+                        if (starts)
+                        {
+                            run.Breaks.Add(1);
+                        }
+
+                        block.Runs.Add(run);
                     }
                 }
 
@@ -320,7 +378,8 @@ namespace Jularr.Backend.Logic.Reading
             foreach (var each in blocks)
             {
                 Settle(each.Runs);
-                each.IsLabel &= string.Concat(each.Runs.Select(run => run.Text)).Split(' ', StringSplitOptions.RemoveEmptyEntries).Length <= 3;
+                Light(each.Runs);
+                each.IsLabel &=string.Concat(each.Runs.Select(run => run.Text)).Split(' ', StringSplitOptions.RemoveEmptyEntries).Length <= 3;
             }
 
             // Labels side by side are one series (ALWAYS / SOMETIMES / NEVER): one word alone measures poorly, together they agree on face, weight and size.
@@ -360,9 +419,10 @@ namespace Jularr.Backend.Logic.Reading
                     Math.Round(each.Runs.MaxBy(run => run.Text.Length)?.Size ?? height / each.Lines, 5), series.GetValueOrDefault(each), each.IsLabel,
                     // A short line at the very top or bottom is a running head or a page number.
                     each.Lines == 1 && text.Length < 40 && (top < 0.07 || top + height > 0.93),
-                    [.. each.Runs.Select(run => new PdfSmartRun(run.Text, run.Serif, run.Weight, run.Italic, run.Stretch, Math.Round(run.Size, 5), run.Ink.Hex))])
+                    [.. each.Runs.Select(run => new PdfSmartRun(run.Text, run.Serif, run.Weight, run.Italic, run.Stretch, Math.Round(run.Size, 5), run.Ink.Hex) { Breaks = [.. run.Breaks] })])
                 {
-                    Follows = follows[index]
+                    Follows = follows[index],
+                    Rows = [.. each.All.Select(line => new PdfSmartRow(Math.Round((double)line.Box.Left / w, 4), Math.Round(line.Baseline / h, 4), Math.Round((double)line.Box.Width / w, 4)))]
                 };
             })];
         }
@@ -380,6 +440,29 @@ namespace Jularr.Backend.Logic.Reading
                 && after.Area.Top >= before.Area.Bottom - line * 0.5 && after.Area.Top - before.Area.Bottom < line * 0.8
                 && after.Area.Left < before.Area.Right && after.Area.Right > before.Area.Left && before.Ink.Distance(after.Ink) < 120
                 && (runsOn || !before.IsLabel && !after.IsLabel && Math.Abs(one - other) <= Math.Max(one, other) * 0.25);
+        }
+
+        // Light letters on a dark ground (a caption bubble) measure their weight poorly, line by line differently: the text after a lead-in is one run in
+        // the look of its longest part.
+        private static void Light(List<Run> runs)
+        {
+            var from = runs.Count > 0 && runs[0].Text.TrimEnd().EndsWith(':') ? 1 : 0;
+            if (runs.Count - from < 2 || runs.MaxBy(run => run.Text.Length)!.Ink is var ink && ink.Red + ink.Green + ink.Blue <= 400)
+            {
+                return;
+            }
+
+            var main = runs.Skip(from).MaxBy(run => run.Text.Length)!;
+            var look = (main.Serif, main.Weight, main.Italic, main.Stretch, main.Size, main.Ink);
+            var merged = runs[from];
+            foreach (var run in runs.Skip(from + 1))
+            {
+                merged.Breaks.AddRange(run.Breaks.Select(at => at + merged.Text.Length));
+                merged.Text += run.Text;
+            }
+
+            runs.RemoveRange(from + 1, runs.Count - from - 1);
+            (merged.Serif, merged.Weight, merged.Italic, merged.Stretch, merged.Size, merged.Ink) = look;
         }
 
         private static int Letters(Run run) => Math.Max(1, run.Text.Count(char.IsLetter));
@@ -440,6 +523,7 @@ namespace Jularr.Backend.Logic.Reading
                 var (one, other) = (runs[index - 1], runs[index]);
                 if (one.Serif == other.Serif && one.Weight == other.Weight && one.Italic == other.Italic && Kin(one, other) && Math.Abs(one.Size - other.Size) <= 0.2 * one.Size)
                 {
+                    one.Breaks.AddRange(other.Breaks.Select(at => at + one.Text.Length));
                     one.Text += other.Text;
                     runs.RemoveAt(index);
                 }
@@ -591,9 +675,45 @@ namespace Jularr.Backend.Logic.Reading
 
             return new Style
             {
-                Size = size, Left = box.Left + left, Stem = stem, Ratio = stem / size, Contrast = Middle(hairs) / stem, Slant = slant, Foot = Middle(feet) / stem,
+                Size = size, Left = box.Left + left, Baseline = box.Top + baseline, Stem = stem, Ratio = stem / size, Contrast = Middle(hairs) / stem, Slant = slant, Foot = Middle(feet) / stem,
                 Advance = (right - left + 1.0) / Math.Max(1, characters) / size, Ink = new Rgb((int)(red / dark), (int)(green / dark), (int)(blue / dark))
             };
+        }
+
+        // How much of the ground around a line is neither its paper nor ink: little on paper or a plain box, much in a photograph.
+        internal static double Mottled(byte[] pixels, int w, int h, SKRectI box)
+        {
+            var paper = Paper(pixels, w, h, box);
+            var (mid, ground) = (0, 0);
+            var ring = Math.Max(2, box.Height / 3);
+            void Add(int x, int y)
+            {
+                if (x < 0 || y < 0 || x >= w || y >= h)
+                {
+                    return;
+                }
+
+                var at = (y * w + x) * 4;
+                var distance = Math.Abs(pixels[at] - paper[0]) + Math.Abs(pixels[at + 1] - paper[1]) + Math.Abs(pixels[at + 2] - paper[2]);
+                if (distance <= 150)
+                {
+                    ground++;
+                    mid += distance > 45 ? 1 : 0;
+                }
+            }
+
+            for (var y = box.Top - ring; y <= box.Bottom + ring; y += 2)
+            {
+                for (var x = box.Left - ring; x <= box.Right + ring; x += 2)
+                {
+                    if (y < box.Top || y > box.Bottom || x < box.Left || x > box.Right)
+                    {
+                        Add(x, y);
+                    }
+                }
+            }
+
+            return ground == 0 ? 0 : (double)mid / ground;
         }
 
         // The paper under a line: the commonest colour around and inside its box. Letters cover less of the box than paper does, so a black bar or a
@@ -725,6 +845,7 @@ namespace Jularr.Backend.Logic.Reading
         {
             public double Size { get; set; }
             public double Left { get; set; }
+            public double Baseline { get; set; }
             public double Stem { get; set; } = 1;
             public double Ratio { get; set; } = 0.13;
             public double Contrast { get; set; } = 0.5;
@@ -746,6 +867,9 @@ namespace Jularr.Backend.Logic.Reading
             public string Text { get; } = text;
             public double Left { get; } = left;
             public Style? Style { get; set; }
+
+            // Its own baseline: the look it shares with the words beside it has none.
+            public double? Baseline { get; init; }
         }
 
         private sealed class Line(SKRectI box, bool isLabel)
@@ -755,6 +879,10 @@ namespace Jularr.Backend.Logic.Reading
             public List<Word> Words { get; } = [];
             public Rgb Ink { get; set; }
             public double Left => Words.Count == 0 ? Box.Left : Words[0].Left;
+
+            // Where the line stands: the middle of its words' baselines, which unlike its box does not depend on ascenders and descenders.
+            public double Baseline => Words.Where(word => word.Baseline is not null).Select(word => word.Baseline!.Value).Order().ToList() is { Count: > 0 } lines
+                ? lines[(lines.Count - 1) / 2] : Box.Bottom - Box.Height * 0.2;
         }
 
         private sealed class Run
@@ -766,6 +894,7 @@ namespace Jularr.Backend.Logic.Reading
             public int Stretch { get; set; }
             public double Size { get; set; }
             public Rgb Ink { get; set; }
+            public List<int> Breaks { get; } = [];
         }
 
         private sealed class Block(Line first)
@@ -773,7 +902,9 @@ namespace Jularr.Backend.Logic.Reading
             public SKRectI Area { get; set; } = first.Box;
             public double Margin { get; set; } = first.Left;
             public Line Last { get; set; } = first;
+            public List<Line> All { get; } = [first];
             public List<double> Bodies { get; } = [Body(first)];
+            public List<double> Pitches { get; } = [];
             public double Body => Bodies.Order().ElementAt((Bodies.Count - 1) / 2);
             public bool IsLabel { get; set; } = first.IsLabel;
             public int Lines { get; set; }
@@ -791,8 +922,18 @@ namespace Jularr.Backend.Logic.Reading
     {
         // The block whose sentence this one continues (text flowing around a picture), -1 for none.
         public int Follows { get; init; } = -1;
+
+        // The original's lines, which the text is set into line by line.
+        public IReadOnlyList<PdfSmartRow> Rows { get; init; } = [];
     }
 
+    // A line of the original: its left edge, baseline and width in fractions of the page.
+    internal sealed record PdfSmartRow(double Left, double Baseline, double Width);
+
     // Text in one look: serif or sans, weight, italic, width in percent, size against the page's height and colour.
-    internal sealed record PdfSmartRun(string Text, bool Serif, int Weight, bool Italic, int Stretch, double Size, string Ink);
+    internal sealed record PdfSmartRun(string Text, bool Serif, int Weight, bool Italic, int Stretch, double Size, string Ink)
+    {
+        // Where in the text the original starts a new line.
+        public IReadOnlyList<int> Breaks { get; init; } = [];
+    }
 }

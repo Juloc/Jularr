@@ -406,6 +406,26 @@ namespace Jularr.Backend.Tests
             Assert.IsNull(document.QuerySelector("[data-b='5']")!.QuerySelector("[data-b]"));
         }
 
+        // The Reader sets the text into the original's lines: each block names them, the text marks where the original broke a line, and a lead-in on a
+        // line of its own keeps a break before its sentence that a translation does not replace.
+        [TestMethod]
+        public void SmartPage_KeepsTheOriginalsLines()
+        {
+            var page = new PdfSmartPage(5, [1], 0.8, [
+                new PdfSmartBlock(0.05, 0.1, 0.4, 0.1, 3, 0.03, 0, false, false, [
+                    new PdfSmartRun("Rule No. 35:", false, 800, false, 80, 0.02, "#222222"),
+                    new PdfSmartRun(" A man over the age of 30 should not", true, 500, false, 90, 0.016, "#222222") { Breaks = [1, 20] }])
+                {
+                    Rows = [new(0.05, 0.12, 0.2), new(0.05, 0.15, 0.38), new(0.05, 0.18, 0.31)]
+                }]);
+            var book = new PdfBookContent([], [], [], new PdfVerdict(true, ""), new PdfVerdict(true, "")) { SmartPages = [page] };
+            var html = PdfBookHtml.Prepare(book, 7).SmartPages.Single().Html;
+            StringAssert.Contains(html, "data-rows=\"0.05 0.12 0.2;0.05 0.15 0.38;0.05 0.18 0.31\"");
+            StringAssert.Contains(html, "</span><br><span data-b=\"2\">");
+            StringAssert.Contains(html, "> <wbr>A man over the age <wbr>of 30 should not</span>");
+            Assert.AreEqual(" A man over the age of 30 should not", new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html).QuerySelector("[data-b='2']")!.TextContent);
+        }
+
         // The darkest grey in a part of a picture, given in fractions of it.
         private static int Darkest(SKBitmap bitmap, double left, double top, double right, double bottom)
         {
@@ -432,6 +452,27 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, OcrEngine.Join([Box(60, 230, 300, 270), Box(400, 200, 900, 330)]).Count, "a small line beside large type");
             Assert.AreEqual(2, OcrEngine.Join([Box(60, 300, 500, 330), Box(560, 302, 1000, 331)]).Count, "two columns of text");
             Assert.AreEqual(1, OcrEngine.Join([Box(60, 300, 100, 320), Box(110, 296, 300, 330), Box(310, 300, 350, 320)]).Count, "a short word beside one with a descender");
+        }
+
+        // A region the detector ran over a gutter with a rule in it is read as two lines, each trimmed to its own type; the word spaces of a line part nothing.
+        [TestMethod]
+        public void Recognizer_PartsARegion_AtTheGutterBetweenColumns()
+        {
+            using var page = new SKBitmap(new SKImageInfo(1000, 60, SKColorType.Rgba8888, SKAlphaType.Premul));
+            using (var canvas = new SKCanvas(page))
+            {
+                canvas.Clear(SKColors.White);
+                using var ink = new SKPaint { Color = SKColors.Black };
+                for (var x = 10; x < 300; x += 30) canvas.DrawRect(x, 20, 20, 20, ink);
+                canvas.DrawRect(330, 0, 2, 60, ink);
+                for (var x = 380; x < 980; x += 70) canvas.DrawRect(x, 5, 55, 50, ink);
+            }
+
+            var parts = OcrEngine.Split(page, [new SKRectI(0, 0, 1000, 60)]);
+            Assert.AreEqual(2, parts.Count, "small type, the rule, large type");
+            Assert.IsTrue(parts[0].Top >= 14 && parts[0].Bottom <= 46 && parts[0].Right <= 340, $"the small type alone: {parts[0]}");
+            Assert.IsTrue(parts[1].Left >= 330, $"the large type alone: {parts[1]}");
+            Assert.AreEqual(1, OcrEngine.Split(page, [new SKRectI(370, 0, 1000, 60)]).Count, "a line of large type");
         }
 
         // A page drawn by PDFium keeps its colours: an orange box stays orange, not blue.

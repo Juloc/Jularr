@@ -65,9 +65,10 @@
     background: #fff;
     [data-smart-page] { position: absolute; inset: 0; }
     [data-smart-image] { display: block; width: 100%; height: 100%; }
-    p:has(> [data-part]) { margin: 0; }
-    [data-part] { display: block; }
-    [data-box] { position: absolute; margin: 0; padding: 0; line-height: 1.12; overflow: visible; hyphens: auto; overflow-wrap: break-word; user-select: text; }
+    // The blocks hold the text and its translation; the Reader sets them line by line into the layer above the page.
+    [data-smart-page] > p { display: none; }
+    [data-layer] { position: absolute; inset: 0; }
+    .reader__smart-line { position: absolute; margin: 0; padding: 0; line-height: 1; white-space: nowrap; user-select: text; }
     [data-face=serif] { font-family: 'Source Serif 4', Georgia, serif; }
     [data-face=sans] { font-family: 'Roboto Flex', Arial, sans-serif; }
 }
