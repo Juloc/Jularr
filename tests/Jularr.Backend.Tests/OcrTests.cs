@@ -358,6 +358,24 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(Darkest(clean, 0.25, 0.42, 0.72, 0.6) < 100, "the drawing stays");
         }
 
+        // Text flowing around a picture runs through several boxes: they are one block of the page, translated as one sentence, each box a part of it.
+        [TestMethod]
+        public void SmartPage_TextAroundAPicture_IsOneBlockInParts()
+        {
+            PdfSmartRun Run(string text) => new(text, true, 400, false, 100, 0.03, "#222222");
+            var page = new PdfSmartPage(5, [1], 0.8, [
+                new PdfSmartBlock(0.05, 0.1, 0.9, 0.05, 1, 0.03, 0, false, false, [Run("Of all love triangles, those involving at least one law-")]),
+                new PdfSmartBlock(0.5, 0.16, 0.4, 0.05, 1, 0.03, 0, false, false, [Run("enforcement official are the most fraught.")]) { Follows = 0 },
+                new PdfSmartBlock(0.05, 0.9, 0.4, 0.02, 1, 0.012, 0, false, true, [Run("12 ESQUIRE")])]);
+            var book = new PdfBookContent([], [], [], new PdfVerdict(true, ""), new PdfVerdict(true, "")) { SmartPages = [page] };
+            var html = PdfBookHtml.Prepare(book, 7).SmartPages.Single();
+            Assert.AreEqual(2, html.Structure.Blocks);
+            var document = new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html.Html);
+            var first = document.QuerySelector("[data-b='0']")!;
+            Assert.AreEqual(2, first.QuerySelectorAll("[data-part][data-box]").Length);
+            Assert.AreEqual("Of all love triangles, those involving at least one law-enforcement official are the most fraught.", first.TextContent);
+        }
+
         // The darkest grey in a part of a picture, given in fractions of it.
         private static int Darkest(SKBitmap bitmap, double left, double top, double right, double bottom)
         {

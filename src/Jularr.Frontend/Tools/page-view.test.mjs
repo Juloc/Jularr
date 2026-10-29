@@ -140,4 +140,6 @@ test('a Smart Page sets its text at the measured size, in the boxes of the page,
     assert.equal(smartFit.spreads('And Jacob.'), false);
     assert.equal(smartFit.spreads('ONE TWO THREE'), false);
     assert.equal(smartFit.spreads('12'), false);
+    assert.deepEqual([...smartFit.splitText('Das sind die riskantesten Dreiecke der Welt', [30, 10, 20])], ['Das sind die riskantesten', 'Dreiecke', 'der Welt']);
+    assert.deepEqual([...smartFit.splitText('Kurz', [10, 10])], ['Kurz', '']);
 });

@@ -347,7 +347,9 @@ namespace Jularr.Backend.Logic.Reading
                 }
             }
 
-            return [.. blocks.Select(each =>
+            // Text that flows around a picture runs on in the block right below, set further in or out: it continues the sentence, so it is translated with it.
+            var follows = blocks.Select(each => blocks.FindLastIndex(blocks.IndexOf(each), other => other != each && Continues(other, each))).ToList();
+            return [.. blocks.Select((each, index) =>
             {
                 var text = string.Concat(each.Runs.Select(run => run.Text)).Trim();
                 var (left, top, width, height) = ((double)each.Area.Left / w, (double)each.Area.Top / h, (double)each.Area.Width / w, (double)each.Area.Height / h);
@@ -355,8 +357,23 @@ namespace Jularr.Backend.Logic.Reading
                     Math.Round(each.Runs.MaxBy(run => run.Text.Length)?.Size ?? height / each.Lines, 5), series.GetValueOrDefault(each), each.IsLabel,
                     // A short line at the very top or bottom is a running head or a page number.
                     each.Lines == 1 && text.Length < 40 && (top < 0.07 || top + height > 0.93),
-                    [.. each.Runs.Select(run => new PdfSmartRun(run.Text, run.Serif, run.Weight, run.Italic, run.Stretch, Math.Round(run.Size, 5), run.Ink.Hex))]);
+                    [.. each.Runs.Select(run => new PdfSmartRun(run.Text, run.Serif, run.Weight, run.Italic, run.Stretch, Math.Round(run.Size, 5), run.Ink.Hex))])
+                {
+                    Follows = follows[index]
+                };
             })];
+        }
+
+        // A block continues another whose sentence is not over where it starts right below it, overlapping it sideways, in nearly its size and colour.
+        private static bool Continues(Block before, Block after)
+        {
+            var text = string.Concat(before.Runs.Select(run => run.Text)).TrimEnd();
+            var line = before.Area.Height / (double)Math.Max(1, before.Lines);
+            var (one, other) = (before.Runs.MaxBy(run => run.Text.Length)?.Size ?? 0, after.Runs.MaxBy(run => run.Text.Length)?.Size ?? 0);
+            return text.Length > 0 && !".!?:”\"".Contains(text[^1]) && !before.IsLabel && !after.IsLabel
+                && after.Area.Top >= before.Area.Bottom - line * 0.5 && after.Area.Top - before.Area.Bottom < line * 0.8
+                && after.Area.Left < before.Area.Right && after.Area.Right > before.Area.Left
+                && Math.Abs(one - other) <= Math.Max(one, other) * 0.25 && before.Ink.Distance(after.Ink) < 120;
         }
 
         private static int Letters(Run run) => Math.Max(1, run.Text.Count(char.IsLetter));
@@ -709,7 +726,11 @@ namespace Jularr.Backend.Logic.Reading
 
     // A block in fractions of the page, its lines, the size of its main text against the page's height, the series of labels it belongs to (0 for none),
     // whether it is a label or a running head or page number, and its runs.
-    internal sealed record PdfSmartBlock(double Left, double Top, double Width, double Height, int Lines, double Base, int Series, bool IsLabel, bool IsRunning, IReadOnlyList<PdfSmartRun> Runs);
+    internal sealed record PdfSmartBlock(double Left, double Top, double Width, double Height, int Lines, double Base, int Series, bool IsLabel, bool IsRunning, IReadOnlyList<PdfSmartRun> Runs)
+    {
+        // The block whose sentence this one continues (text flowing around a picture), -1 for none.
+        public int Follows { get; init; } = -1;
+    }
 
     // Text in one look: serif or sans, weight, italic, width in percent, size against the page's height and colour.
     internal sealed record PdfSmartRun(string Text, bool Serif, int Weight, bool Italic, int Stretch, double Size, string Ink);

@@ -57,18 +57,68 @@ namespace Jularr.Backend.Logic.Reading
             var html = new StringBuilder();
             html.Append("<div data-smart-page=\"").Append(page.Number.ToString(CultureInfo.InvariantCulture)).Append("\" data-ratio=\"").Append(Number(page.Ratio)).Append("\">")
                 .Append("<img data-smart-image alt=\"\" src=\"").Append(WebUtility.HtmlEncode(ReadingHtml.ResourceUrl(documentId, SmartImagePath(page.Number)))).Append("\">");
+            // A block is one sentence's text: one box, or the boxes text flowing around a picture runs through, each a part of it.
+            var flows = new List<List<PdfSmartBlock>>();
+            var heads = new Dictionary<int, List<PdfSmartBlock>>();
             for (var index = 0; index < page.Blocks.Count; index++)
             {
                 var block = page.Blocks[index];
-                html.Append("<p data-b=\"").Append(index.ToString(CultureInfo.InvariantCulture)).Append("\" data-box=\"")
-                    .AppendJoin(' ', new[] { block.Left, block.Top, block.Width, block.Height }.Select(Number)).Append("\" data-lines=\"").Append(block.Lines.ToString(CultureInfo.InvariantCulture))
-                    .Append("\" data-base=\"").Append(Number(block.Base)).Append('"');
+                if (block.Follows >= 0 && heads.TryGetValue(block.Follows, out var flow))
+                {
+                    flow.Add(block);
+                }
+                else
+                {
+                    flow = [block];
+                    flows.Add(flow);
+                }
+
+                heads[index] = flow;
+            }
+
+            for (var index = 0; index < flows.Count; index++)
+            {
+                html.Append("<p data-b=\"").Append(index.ToString(CultureInfo.InvariantCulture)).Append('"');
+                if (flows[index] is [var single])
+                {
+                    Box(html, single);
+                    html.Append('>');
+                    Runs(html, single);
+                }
+                else
+                {
+                    html.Append('>');
+                    foreach (var part in flows[index])
+                    {
+                        html.Append("<span data-part");
+                        Box(html, part);
+                        html.Append('>');
+                        Runs(html, part);
+                        html.Append("</span>");
+                    }
+                }
+
+                html.Append("</p>");
+            }
+
+            var characters = page.Blocks.Sum(block => block.Runs.Sum(run => run.Text.Length));
+            return new PdfPreparedSection(new ReadingStructureSection("pdf/smart/" + page.Number.ToString("D5", CultureInfo.InvariantCulture) + ".xhtml", null, characters, flows.Count, page.Number, page.Number),
+                html.Append("</div>").ToString());
+
+            static void Box(StringBuilder html, PdfSmartBlock block)
+            {
+                html.Append(" data-box=\"").AppendJoin(' ', new[] { block.Left, block.Top, block.Width, block.Height }.Select(Number)).Append("\" data-lines=\"")
+                    .Append(block.Lines.ToString(CultureInfo.InvariantCulture)).Append("\" data-base=\"").Append(Number(block.Base)).Append('"');
                 if (block.Series > 0)
                 {
                     html.Append(" data-series=\"").Append(block.Series.ToString(CultureInfo.InvariantCulture)).Append('"');
                 }
 
-                html.Append(block.IsLabel ? " data-label" : "").Append(block.IsRunning ? " data-running" : "").Append('>');
+                html.Append(block.IsLabel ? " data-label" : "").Append(block.IsRunning ? " data-running" : "");
+            }
+
+            static void Runs(StringBuilder html, PdfSmartBlock block)
+            {
                 foreach (var run in block.Runs)
                 {
                     html.Append("<span data-face=\"").Append(run.Serif ? "serif" : "sans").Append("\" style=\"font-weight:").Append(run.Weight.ToString(CultureInfo.InvariantCulture))
@@ -76,13 +126,7 @@ namespace Jularr.Backend.Logic.Reading
                         .Append(";color:").Append(run.Ink).Append(";font-size:").Append(Number(block.Base > 0 ? run.Size / block.Base : 1)).Append("em\">")
                         .Append(WebUtility.HtmlEncode(run.Text)).Append("</span>");
                 }
-
-                html.Append("</p>");
             }
-
-            var characters = page.Blocks.Sum(block => block.Runs.Sum(run => run.Text.Length));
-            return new PdfPreparedSection(new ReadingStructureSection("pdf/smart/" + page.Number.ToString("D5", CultureInfo.InvariantCulture) + ".xhtml", null, characters, page.Blocks.Count, page.Number, page.Number),
-                html.Append("</div>").ToString());
         }
 
         // A paragraph, a small picture in the line, a figure with its alternative text and caption, or the stand-in for a page only the original shows; each starts on a page.

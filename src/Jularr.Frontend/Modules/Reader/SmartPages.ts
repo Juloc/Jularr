@@ -1,4 +1,4 @@
-import { blockBox, letterSpacing, spreads, startSize } from './SmartPageFit';
+import { blockBox, letterSpacing, splitText, spreads, startSize } from './SmartPageFit';
 
 // Smart Pages: a scanned page in its own layout, its text erased from the scan and set anew in the original boxes in the look measured for each run, or
 // its translation in the look of the block's main text. The server prepares the pages as reading units from 100000 on; the server's TranslateGemma
@@ -89,15 +89,21 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
         status.textContent = text ?? '';
     }
 
-    // The translation takes the look of the block's main text.
+    // The translation takes the look of the block's main text; text flowing around a picture is shared out over its boxes by their share of the original.
     function show(block: HTMLElement, text: string): void {
-        const spans = Array.from(block.querySelectorAll<HTMLElement>('span'));
+        const parts = Array.from(block.querySelectorAll<HTMLElement>(':scope > [data-part]'));
+        if (parts.length === 0) set(block, text);
+        else splitText(text, parts.map(part => part.textContent?.length ?? 0)).forEach((piece, index) => set(parts[index], piece));
+        block.dataset.translated = 'true';
+    }
+
+    function set(box: HTMLElement, text: string): void {
+        const spans = Array.from(box.querySelectorAll<HTMLElement>('span[data-face]'));
         const main = spans.reduce<HTMLElement | undefined>((longest, span) => !longest || (span.textContent?.length ?? 0) > (longest.textContent?.length ?? 0) ? span : longest, undefined);
         const run = (main?.cloneNode(false) as HTMLElement | undefined) ?? document.createElement('span');
         run.style.fontSize = '1em';
         run.textContent = text;
-        block.replaceChildren(run);
-        block.dataset.translated = 'true';
+        box.replaceChildren(run);
     }
 
     // The measured size first; smaller only where the text does not fit its box. Labels of one series share the smallest size, and a short label spans its

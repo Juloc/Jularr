@@ -22,3 +22,21 @@ export function spreads(text: string): boolean {
     const words = text.trim().split(/\s+/).filter(Boolean);
     return words.length >= 1 && words.length <= 2 && /\p{L}/u.test(text) && text === text.toUpperCase();
 }
+
+// A translation shared out over the boxes a sentence ran through, by their share of the original's letters, at word boundaries; every box gets a word
+// while there are words.
+export function splitText(text: string, lengths: number[]): string[] {
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    const total = Math.max(1, lengths.reduce((sum, length) => sum + length, 0));
+    const pieces: string[] = [];
+    let start = 0, before = 0;
+    lengths.forEach((length, index) => {
+        before += length;
+        const left = lengths.length - index - 1;
+        const lower = Math.min(words.length, start + 1), upper = Math.max(lower, words.length - left);
+        const end = index === lengths.length - 1 ? words.length : Math.min(upper, Math.max(lower, Math.round(words.length * before / total)));
+        pieces.push(words.slice(start, end).join(' '));
+        start = Math.max(start, end);
+    });
+    return pieces;
+}
