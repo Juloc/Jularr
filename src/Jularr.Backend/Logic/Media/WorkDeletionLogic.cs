@@ -151,6 +151,29 @@ namespace Jularr.Backend.Logic.Media
             }
         }
 
+        // The same rule for a Work already kept: any of its provider identities that was excluded refuses the request.
+        public static async Task RequireWorkNotExcludedAsync(this LogicContext ctx, long workId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    exclusion."Namespace",
+                    exclusion."Value"
+                FROM
+                    "WorkExternalIdentities" AS identity
+                    JOIN "WorkExclusionIdentities" AS exclusion ON exclusion."Namespace" = identity."Namespace" AND exclusion."Value" = identity."Value"
+                WHERE
+                    identity."WorkId" = @Id
+                LIMIT 1;
+                """;
+            sql.Parameters.Add(new WorkIdData(workId));
+            if (await ctx.ReadSql.ReadOptionalAsync<ExclusionIdentityData>(sql, ct) is not null)
+            {
+                throw new DataValidationException(nameof(ExclusionIdentityData.Value), "excluded");
+            }
+        }
+
         public static async Task DeleteWorkExclusionAsync(this LogicContext ctx, WorkExclusionParametersV1 parameters, CancellationToken ct)
         {
             var sql = new SqlStatement();

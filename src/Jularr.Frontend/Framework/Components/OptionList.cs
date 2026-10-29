@@ -36,6 +36,13 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
+        // The fields that belong to the option, under it inside the row.
+        public OptionRow With(IEnumerable<IUiComponent> parts)
+        {
+            foreach (var part in parts) AddChild(part);
+            return this;
+        }
+
         private static IUiComponent[] Parts(string name, string? line, IUiComponent control)
         {
             var text = new List<IUiComponent> { new Span(new Truncated(name)).Class("option-row__name") };

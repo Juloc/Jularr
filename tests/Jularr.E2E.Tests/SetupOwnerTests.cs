@@ -140,7 +140,8 @@ namespace Jularr.E2E.Tests
                 var complete = page.Locator("[data-setup-preset=complete]");
                 await complete.ClickAsync();
                 await Assertions.Expect(complete).ToHaveAttributeAsync("aria-pressed", "true");
-                await Assertions.Expect(page.Locator("[data-module] input[type=checkbox]:not(:checked)")).ToHaveCountAsync(0);
+                // A module's own switch, not the settings inside its card (the Caching module's).
+                await Assertions.Expect(page.Locator("[data-module] > .option-row__switch input[type=checkbox]:not(:checked)")).ToHaveCountAsync(0);
                 await Assertions.Expect(page.Locator("[data-media] input[type=checkbox]:not(:checked)")).ToHaveCountAsync(0);
                 await Assertions.Expect(accountsGroup.Locator("[data-option-count]")).ToHaveTextAsync("4/4 on");
                 await Assertions.Expect(personalGroup.Locator("[data-option-count]")).ToHaveTextAsync("6/6 on");

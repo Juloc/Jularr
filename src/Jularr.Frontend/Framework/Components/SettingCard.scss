@@ -37,8 +37,9 @@
     &__text { display: grid; flex: 1; gap: 4px; min-width: 0; }
     &__name { min-width: 0; color: var(--text); font-size: 12px; font-weight: 810; line-height: 1.3; }
     &__state { color: var(--muted); font-size: var(--text-small); line-height: 1.3; }
-    &__state-off, &:has(input:checked) &__state-on { display: inline; }
-    &__state-on, &:has(input:checked) &__state-off { display: none; }
+    // The card's own switch decides its state, not the switches of the sub-options inside it.
+    &__state-off, &:has(> .setting-card__head input:checked) &__state-on { display: inline; }
+    &__state-on, &:has(> .setting-card__head input:checked) &__state-off { display: none; }
     &__switch { flex: none; }
     &__switch .toggle { min-height: 0; }
     &__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
@@ -46,6 +47,10 @@
     &__tags [hidden] { display: none; }
     // The word before a group of tags: what the module needs, who needs it.
     &__tags-label { flex: none; color: var(--muted); font-size: var(--text-small); font-weight: 760; white-space: nowrap; }
+
+    // A module's sub-options show while its switch is on.
+    &:has(> .setting-card__head input[type="checkbox"]:not(:checked)) > .option-subs { display: none; }
+    & > .option-subs { margin: 0; }
 
     // A switch that cannot move for now: dimmed like any disabled control, the tags say why.
     &--blocked &__switch { opacity: .4; }

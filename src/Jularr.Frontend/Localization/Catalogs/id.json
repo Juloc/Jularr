@@ -1281,12 +1281,12 @@
    "Tidak ada kecocokan yang jelas"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted (paused)",
-   "Akan dipantau (dijeda)"
+   "Will be wanted",
+   "Akan dipantau"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted (paused)",
-   "Pemantauan dijeda"
+   "Wanted",
+   "Dipantau"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",

@@ -72,6 +72,12 @@
     &:has(> .ui-form__row input[type="checkbox"]:not(:checked)) > .option-subs { display: none; }
     &:has(> .ui-form__row input[type="checkbox"]:not(:checked)) > .ui-form__row > .option-row--type > .option-row__text { opacity: .55; }
 }
+// A module's setting inside its card, a short number field.
+.option-number { max-width: 220px; }
+.option-row > .option-number, .option-row > .option-subs { flex-basis: 100%; }
+.option-row:has(> .option-row__switch input[type="checkbox"]:not(:checked)) > .option-subs { display: none; }
+.option-row > .option-subs { margin: 8px 0 0; }
+
 .option-subs {
     margin: 0 0 8px;
     padding: 4px 12px;

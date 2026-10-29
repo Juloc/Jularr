@@ -7,6 +7,7 @@ using Jularr.Backend.Service.Core;
 using Jularr.Backend.Tests.Infrastructure;
 using Jularr.Frontend.Framework;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using static Jularr.Backend.Tests.DatabaseBaselineTests;
 
 namespace Jularr.Backend.Tests
@@ -55,6 +56,275 @@ namespace Jularr.Backend.Tests
             INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId") VALUES (41, 'migrate_owner', 'migrate@example.test', 'Migrate Owner', 1);
             INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (501, 1, 'Kept Film');
             """);
+
+        [TestMethod]
+        public async Task WorkCatalogColumns_UpgradeKeepsWorksMarksThemDetailedAndAddsDefaults()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(WorkCatalogColumns_UpgradeKeepsWorksMarksThemDetailedAndAddsDefaults));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 19).ToArray()).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            // Existing Works count as detailed and just opened, so neither the cleanup nor the metadata fill takes them up at once.
+            Assert.AreEqual(1L, await ScalarAsync(cs, """
+                SELECT count(*) FROM "Works" WHERE "Id" = 501 AND "CanonicalTitle" = 'Kept Film' AND "DetailedAt" IS NOT NULL AND "ViewedAt" IS NOT NULL
+                    AND NOT "DetailedAt" < "ViewedAt" - interval '1 day' AND "MetadataTriedAt" IS NULL
+                """));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 501 AND "IsAdult" = FALSE AND "CatalogNamespace" IS NULL AND "FetchedAt" IS NULL AND "OriginalTitle" IS NULL AND "Overview" IS NULL AND "Creator" IS NULL AND "ImageUrl" IS NULL AND "BackdropUrl" IS NULL AND "Popularity" IS NULL AND "Rating" IS NULL AND "Votes" IS NULL AND "TrendingRank" IS NULL"""));
+            await ExecuteAsync(cs, """UPDATE "Works" SET "OriginalTitle" = 'Gehaltener Film' WHERE "Id" = 501""");
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 501 AND "SearchText" @@ to_tsquery('simple', 'gehaltener') AND "SearchText" @@ to_tsquery('simple', 'kept')"""));
+            Assert.AreEqual((short)14, await ScalarAsync(cs, """SELECT "CatalogDetailKeepDays" FROM "InstanceSettings" WHERE "Id" = 1"""));
+            Assert.AreEqual(19, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0019_work_catalog_columns'"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+        }
+
+        [TestMethod]
+        [DataRow(true, true)]
+        [DataRow(true, false)]
+        [DataRow(false, false)]
+        public async Task CachingModule_UpgradeKeepsTheModuleStates_AndDropsTheChoicesOfEachCatalog(bool caching, bool fullCatalog)
+        {
+            // The Caching module (DiscoverCache) and its sub-option LocalDiscovery decide for the whole instance; both keep their state.
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(CachingModule_UpgradeKeepsTheModuleStates_AndDropsTheChoicesOfEachCatalog) + caching + fullCatalog);
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 22).ToArray()).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs, $"""
+                UPDATE "ExternalWorkSyncs" SET "IsEnabled" = "Namespace" = 'tmdb_movie', "DetailsTrending" = TRUE, "CacheTier" = 3, "RequestsPerMinute" = 30;
+                UPDATE "InstanceModules" SET "IsEnabled" = {(caching ? "TRUE" : "FALSE")} WHERE "Key" = 'DiscoverCache';
+                UPDATE "InstanceModules" SET "IsEnabled" = {(fullCatalog ? "TRUE" : "FALSE")} WHERE "Key" = 'LocalDiscovery';
+                INSERT INTO "ExternalWorkSyncWindows" ("Namespace", "StartsAt", "EndsAt") VALUES ('anilist', '02:00', '06:00');
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            Assert.AreEqual((caching ? "true" : "false") + ":" + (fullCatalog ? "true" : "false"), await ScalarAsync(cs,
+                """SELECT string_agg("IsEnabled"::text, ':' ORDER BY "Key") FROM "InstanceModules" WHERE "Key" IN ('DiscoverCache', 'LocalDiscovery')"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "InstanceModuleDependencies" WHERE "ModuleKey" = 'LocalDiscovery' AND "RequiredKey" = 'DiscoverCache'"""),
+                "The full catalog stays a sub-option of the Caching module.");
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM information_schema.columns WHERE table_name = 'ExternalWorkSyncs' AND column_name IN ('IsEnabled', 'DetailsTrending', 'CacheTier')"""));
+            Assert.AreEqual("anilist:30,tmdb_movie:30,tvdb:120", await ScalarAsync(cs, """SELECT string_agg("Namespace" || ':' || "RequestsPerMinute", ',' ORDER BY "Namespace") FROM "ExternalWorkSyncs" """),
+                "Each catalog keeps its pace; the TMDB series catalog went with 0023, TheTVDB's card came with 0024.");
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkSyncWindows" WHERE "Namespace" = 'anilist'"""), "The Owner's windows stay.");
+            Assert.AreEqual("false:14", await ScalarAsync(cs, """SELECT "DetailsDiscoverAhead" || ':' || "CatalogDetailKeepDays" FROM "InstanceSettings" WHERE "Id" = 1"""));
+            Assert.AreEqual(22, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0022_catalog_cache_tiers'"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+        }
+
+        [TestMethod]
+        public async Task SeriesFromTvdb_UpgradeDropsTheTmdbSeriesCatalog_DeletesItsCatalogTitles_AndMakesLibrarySeriesDue()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(SeriesFromTvdb_UpgradeDropsTheTmdbSeriesCatalog_DeletesItsCatalogTitles_AndMakesLibrarySeriesDue));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 23).ToArray()).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "ExternalWorkSyncWindows" ("Namespace", "StartsAt", "EndsAt") VALUES ('tmdb_tv', '02:00', '06:00'), ('tmdb_movie', '02:00', '06:00');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "CatalogNamespace", "DetailedAt") VALUES
+                    (601, 2, 'Catalog Series', 'tmdb_tv', NULL), (602, 2, 'Opened Series', 'tmdb_tv', now()), (603, 2, 'Library Series', 'tmdb_tv', now()),
+                    (604, 2, 'Plex Series', NULL, now()), (605, 1, 'Catalog Film', 'tmdb_movie', NULL), (606, 2, 'Series Nobody Holds', NULL, now());
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES
+                    (601, 'tmdb_tv', '1'), (602, 'tmdb_tv', '2'), (603, 'tmdb_tv', '3'), (604, 'plex', '4'), (605, 'tmdb_movie', '5'), (606, 'tmdb_tv', '6');
+                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual") VALUES (603, 'Meine Serie', TRUE);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "CatalogNamespace", "DetailedAt") VALUES
+                    (607, 2, 'Related Series', 'tmdb_tv', NULL), (608, 2, 'TheTVDB Series', 'tmdb_tv', NULL), (609, 2, 'Library TheTVDB Series', NULL, now()), (610, 2, 'Anime', 'anilist', NULL);
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (607, 'tmdb_tv', '7'), (608, 'tvdb', '8'), (609, 'tvdb', '9'), (610, 'tvdb', '10');
+                INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey") VALUES (604, 607, 1, 'tmdb');
+                INSERT INTO "ExternalWorkFeeds" ("Id", "Key", "Namespace", "MediaTypeId", "DiscoverFeedTypeId", "Page", "RefreshedAt", "RetryAfter")
+                VALUES (70, 'tmdb_tv:trending', 'tmdb_tv', 2, 1, 1, now(), now() + interval '6 hours');
+                INSERT INTO "ExternalWorkFeedItems" ("FeedId", "Position", "WorkId") VALUES (70, 1, 601), (70, 2, 603);
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            Assert.AreEqual("anilist,tmdb_movie,tvdb", await ScalarAsync(cs, """SELECT string_agg("Namespace", ',' ORDER BY "Namespace") FROM "ExternalWorkSyncs" """));
+            Assert.AreEqual("tmdb_movie", await ScalarAsync(cs, """SELECT string_agg("Namespace", ',') FROM "ExternalWorkSyncWindows" """));
+            CollectionAssert.AreEqual(new long[] { 501, 603, 604, 605, 606, 607, 608, 609, 610 }, (long[])(await ScalarAsync(cs, """SELECT array_agg("Id" ORDER BY "Id") FROM "Works" """))!,
+                "Catalog series of TMDB go, opened or not; a series in the library, one not from that catalog, a relation target of a library series, TheTVDB's series and the films stay.");
+            Assert.AreEqual("603:false,604:false,606:true,607:false,608:false,609:true,610:false", await ScalarAsync(cs,
+                """SELECT string_agg("Id" || ':' || ("DetailedAt" IS NOT NULL)::text, ',' ORDER BY "Id") FROM "Works" WHERE "MediaTypeId" = 2"""),
+                "Library series wait for their details from TheTVDB.");
+            Assert.AreEqual("603:tmdb_tv,604:,606:,607:tmdb_tv,608:tvdb,609:tvdb,610:anilist", await ScalarAsync(cs,
+                """SELECT string_agg("Id" || ':' || coalesce("CatalogNamespace", ''), ',' ORDER BY "Id") FROM "Works" WHERE "MediaTypeId" = 2"""),
+                "A series with a TheTVDB id is TheTVDB's catalog title; AniList's anime keep theirs.");
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkFeedItems" WHERE "FeedId" = 70 AND "WorkId" = 603"""));
+            Assert.AreEqual(true, await ScalarAsync(cs, """SELECT "RetryAfter" <= now() FROM "ExternalWorkFeeds" WHERE "Id" = 70"""), "The series list is renewed soon.");
+            await ExecuteAsync(cs, """
+                INSERT INTO "People" ("Id", "Name") VALUES (900, 'Bryan Cranston');
+                INSERT INTO "PersonExternalIdentities" ("PersonId", "Namespace", "Value") VALUES (900, 'tvdb', '300'), (900, 'imdb', 'nm0186505');
+                """);
+            Assert.AreEqual(23, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0023_series_from_tvdb'"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+        }
+
+        [TestMethod]
+        public async Task AnimeMappings_UpgradeAddsTheEmptyMappingsTheirSource_AndTheTvdbCatalogCard()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(AnimeMappings_UpgradeAddsTheEmptyMappingsTheirSource_AndTheTvdbCatalogCard));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 24).ToArray()).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await ExecuteAsync(cs, """UPDATE "ExternalWorkSyncs" SET "RequestsPerMinute" = 30, "PausesWhileUsed" = TRUE WHERE "Namespace" = 'tmdb_movie'""");
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            // The other catalogs keep the Owner's choices; TheTVDB's card has TMDB's pace and no full sync state.
+            Assert.AreEqual("anilist:20:true,tmdb_movie:30:true,tvdb:120:false", await ScalarAsync(cs,
+                """SELECT string_agg("Namespace" || ':' || "RequestsPerMinute" || ':' || "PausesWhileUsed", ',' ORDER BY "Namespace") FROM "ExternalWorkSyncs" """));
+            Assert.AreEqual(true, await ScalarAsync(cs, """SELECT "ListedOn" IS NULL AND "Cursor" IS NULL AND "CompletedAt" IS NULL FROM "ExternalWorkSyncs" WHERE "Namespace" = 'tvdb'"""));
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "AnimeMappings" """));
+            Assert.AreEqual(true, await ScalarAsync(cs, """SELECT "ETag" IS NULL AND "LoadedAt" IS NULL FROM "AnimeMappingSources" """));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 501"""));
+
+            // A row per entry and season, ranges within themselves; one source row only.
+            await ExecuteAsync(cs, """INSERT INTO "AnimeMappings" ("AniListId", "TvdbId", "SeasonNumber", "AniListEpisode", "FirstEpisode", "LastEpisode") VALUES (104578, 267440, 3, 1, 13, 22), (21, 81797, 23, 1156, 1, NULL)""");
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "AnimeMappings" ("AniListId", "TvdbId", "SeasonNumber", "AniListEpisode", "FirstEpisode", "LastEpisode") VALUES (1, 1, 1, 1, 5, 4)"""));
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "AnimeMappingSources" ("Id") VALUES (FALSE)"""));
+            Assert.AreEqual(24, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0024_anime_mappings_tvdb_budget'"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+        }
+
+        [TestMethod]
+        public async Task LibraryTieIndexes_UpgradeKeepsTiesAndIndexesTheirMarkedRows()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(LibraryTieIndexes_UpgradeKeepsTiesAndIndexesTheirMarkedRows));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 21).ToArray()).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await ExecuteAsync(cs,
+                """
+                UPDATE "Works" SET "MediaSubtypeId" = 1, "IsMediaSubtypeManual" = TRUE WHERE "Id" = 501;
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "CatalogNamespace") VALUES (502, 1, 'Plex Film', NULL), (503, 1, 'Catalog Film', 'tmdb_movie'),
+                    (504, 1, 'Film on an offline NAS', NULL), (505, 2, 'Hidden relation', NULL), (506, 2, 'Hidden target', 'tvdb'), (507, 2, 'Episode groups', NULL),
+                    (508, 2, 'Mapped by hand', NULL), (509, 2, 'Mapped automatically', NULL), (510, 1, 'Requested', NULL);
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (502, 'plex', '42'), (503, 'tmdb_movie', '603');
+                WITH edition AS (INSERT INTO "WorkEditions" ("WorkId") VALUES (504) RETURNING "Id", "WorkId"),
+                version AS (INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId") SELECT "WorkId", "Id" FROM edition RETURNING "Id", "WorkId")
+                INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT "WorkId", "Id", 1 FROM version;
+                INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey", "IsSuppressed") VALUES (505, 506, 1, 'tvdb', TRUE);
+                INSERT INTO "WorkUnitGroups" ("WorkId", "Name", "FirstNumber", "LastNumber") VALUES (507, 'Arc', 1, 5);
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (5081, 508, 1, 1), (5091, 509, 1, 1);
+                INSERT INTO "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value", "IsManual") VALUES (5081, 'anilist', '1', TRUE), (5091, 'anilist', '2', FALSE);
+                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByAccountId", "UiLocaleId") SELECT 510, 41, (SELECT min("Id") FROM "UiLocales");
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            Assert.AreEqual(8L, await ScalarAsync(cs, """
+                SELECT count(*) FROM pg_indexes
+                WHERE indexname IN ('IX_WorkExternalIdentities_LibraryTie', 'IX_Works_ManualClass', 'IX_AcquisitionRequests_Work', 'IX_MediaProgress_Work', 'IX_Works_Detailed',
+                    'IX_WorkMetadataFacts_Manual', 'IX_WorkRelations_PersonsEdit', 'IX_WorkUnitExternalIdentities_Manual')
+                """));
+
+            // A file record ties its Work also while its storage is offline; a hidden relation, episode groups and a season mapped by hand are a person's edits.
+            CollectionAssert.AreEqual(new long[] { 501, 502, 504, 505, 506, 507, 508, 510 }, (long[])(await ScalarAsync(cs, """SELECT array_agg(DISTINCT "WorkId" ORDER BY "WorkId") FROM "WorkLibraryRelations" """))!);
+            Assert.AreEqual(21, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0021_library_tie_indexes'"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+        }
+
+        [TestMethod]
+        public async Task MergeExternalWorks_UpgradeKeepsWhatPeopleMadeAsWorksAndDropsTheCache()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(MergeExternalWorks_UpgradeKeepsWhatPeopleMadeAsWorksAndDropsTheCache));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 20).ToArray()).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await ExecuteAsync(cs,
+                """
+                UPDATE "Works" SET "Overview" = 'Own overview' WHERE "Id" = 501;
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (501, 'tmdb_movie', '603'), (501, 'imdb', 'tt0133093');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (502, 2, 1, 'Frieren'), (503, 1, NULL, 'Library Remake');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (503, 'tmdb_movie', '605');
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (5021, 502, 1, 1), (5022, 502, 1, 2);
+                INSERT INTO "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value") VALUES (5021, 'anilist', '154587'), (5022, 'anilist', '154588');
+                INSERT INTO "WantedItems" ("WorkId") VALUES (503);
+                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "MediaSubtypeId", "Title", "OriginalTitle", "ReleaseYear", "Overview", "ImageUrl", "ImdbId", "Rating", "Votes",
+                    "TrendingRank", "DetailedAt")
+                VALUES
+                    (1, 'tmdb_movie', '603', 1, NULL, 'Matrix', 'The Matrix', 1999, 'Catalog overview', 'https://image.test/603.jpg', 'tt0133093', 8.2, 500, 1, now()),
+                    (2, 'tmdb_movie', '604', 1, NULL, 'Matrix Reloaded', 'The Matrix Reloaded', 2003, NULL, 'https://image.test/604.jpg', 'tt0234215', 7.0, 300, 2, now()),
+                    (3, 'tmdb_movie', '605', 1, NULL, 'Remake Catalog', NULL, 2020, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+                    (4, 'tmdb_movie', '606', 1, NULL, 'Same Imdb', NULL, 2001, NULL, NULL, 'tt0133093', NULL, NULL, NULL, NULL),
+                    (5, 'anilist', '154587', 2, 1, 'Frieren Season 1', NULL, 2023, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+                    (6, 'anilist', '154588', 2, 1, 'Frieren Season 2', NULL, 2026, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+                    (7, 'anilist', '999001', 2, 1, 'Unmapped Anime', NULL, 2024, NULL, 'https://image.test/999001.jpg', NULL, 8.0, 100, 3, NULL),
+                    (8, 'tmdb_movie', '700', 1, NULL, 'Unrelated', NULL, 2010, NULL, NULL, NULL, NULL, NULL, NULL, now());
+                INSERT INTO "WorkRelations" ("Id", "WorkId", "RelatedWorkId", "ExternalWorkId", "WorkRelationTypeId", "SourceKey") VALUES
+                    (1, 501, NULL, 2, 1, 'manual'),
+                    (2, 501, 503, NULL, 9, 'tmdb'),
+                    (3, 501, NULL, 3, 9, 'manual'),
+                    (4, 503, NULL, 4, 11, 'tmdb'),
+                    (5, 502, NULL, 5, 1, 'anilist'),
+                    (6, 501, NULL, 6, 6, 'anilist'),
+                    (7, 501, NULL, 7, 11, 'anilist');
+                INSERT INTO "ExternalWorkFeeds" ("Id", "Key", "Namespace", "MediaTypeId", "DiscoverFeedTypeId", "Page", "RefreshedAt", "RetryAfter")
+                VALUES (1, 'tmdb_movie/1/0/1/1//en', 'tmdb_movie', 1, 1, 1, now(), now() + interval '1 hour');
+                INSERT INTO "ExternalWorkFeedItems" ("FeedId", "Position", "ExternalWorkId") VALUES (1, 1, 1), (1, 2, 8);
+                UPDATE "ExternalWorkSyncs" SET "ListedOn" = '2026-10-01', "Cursor" = 5, "ChangesReadAt" = now(), "CompletedAt" = now();
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            // A Work keeps its own fields and takes only the empty catalog fields of its entry; the trending rank is list state.
+            Assert.AreEqual(1L, await ScalarAsync(cs, """
+                SELECT count(*) FROM "Works" WHERE "Id" = 501 AND "CanonicalTitle" = 'Kept Film' AND "Overview" = 'Own overview' AND "OriginalTitle" = 'The Matrix'
+                    AND "ImageUrl" = 'https://image.test/603.jpg' AND "Rating" = 8.2 AND "Votes" = 500 AND "CatalogNamespace" = 'tmdb_movie' AND "TrendingRank" IS NULL AND "FetchedAt" IS NOT NULL
+                """));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 503 AND "CanonicalTitle" = 'Library Remake' AND "CatalogNamespace" = 'tmdb_movie' AND "FetchedAt" IS NULL"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 502 AND "CatalogNamespace" IS NULL"""), "A season's entry does not describe its series.");
+
+            // Relation targets became minimal Works with their identity, and the relations name them.
+            var reloaded = (long)(await ScalarAsync(cs, """SELECT "WorkId" FROM "WorkExternalIdentities" WHERE "Namespace" = 'tmdb_movie' AND "Value" = '604'"""))!;
+            Assert.AreEqual(1L, await ScalarAsync(cs, $"""
+                SELECT count(*) FROM "Works" WHERE "Id" = {reloaded} AND "MediaTypeId" = 1 AND "CanonicalTitle" = 'Matrix Reloaded' AND "OriginalTitle" = 'The Matrix Reloaded' AND "ReleaseYear" = 2003
+                    AND "CatalogNamespace" = 'tmdb_movie' AND "DetailedAt" IS NULL AND "FetchedAt" IS NOT NULL AND "Votes" = 300 AND "TrendingRank" IS NULL
+                """));
+            Assert.AreEqual("tt0234215", await ScalarAsync(cs, $"""SELECT "Value" FROM "WorkExternalIdentities" WHERE "WorkId" = {reloaded} AND "Namespace" = 'imdb'"""));
+            Assert.AreEqual(reloaded, await ScalarAsync(cs, """SELECT "RelatedWorkId" FROM "WorkRelations" WHERE "Id" = 1 AND "SourceKey" = 'manual'"""));
+            var unmapped = (long)(await ScalarAsync(cs, """SELECT "WorkId" FROM "WorkExternalIdentities" WHERE "Namespace" = 'anilist' AND "Value" = '999001'"""))!;
+            Assert.AreEqual(1L, await ScalarAsync(cs, $"""
+                SELECT count(*) FROM "Works" WHERE "Id" = {unmapped} AND "MediaTypeId" = 2 AND "MediaSubtypeId" = 1 AND "CatalogNamespace" = 'anilist' AND "DetailedAt" IS NULL AND "FetchedAt" IS NULL
+                """));
+            Assert.AreEqual(unmapped, await ScalarAsync(cs, """SELECT "RelatedWorkId" FROM "WorkRelations" WHERE "Id" = 7"""));
+            Assert.AreEqual(502L, await ScalarAsync(cs, """SELECT "RelatedWorkId" FROM "WorkRelations" WHERE "Id" = 6"""), "A mapped anime season is its series.");
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "WorkRelations" WHERE "Id" = 5"""), "A relation to the Work's own season says nothing.");
+            Assert.AreEqual("manual", await ScalarAsync(cs, """SELECT string_agg("SourceKey", ',') FROM "WorkRelations" WHERE "WorkId" = 501 AND "RelatedWorkId" = 503 AND "WorkRelationTypeId" = 9"""),
+                "Of two relations that now say the same, a person's stays.");
+
+            // An IMDb id another Work holds stays there; nothing is merged.
+            var sameImdb = (long)(await ScalarAsync(cs, """SELECT "WorkId" FROM "WorkExternalIdentities" WHERE "Namespace" = 'tmdb_movie' AND "Value" = '606'"""))!;
+            Assert.AreEqual(0L, await ScalarAsync(cs, $"""SELECT count(*) FROM "WorkExternalIdentities" WHERE "WorkId" = {sameImdb} AND "Namespace" = 'imdb'"""));
+            Assert.AreEqual(501L, await ScalarAsync(cs, """SELECT "WorkId" FROM "WorkExternalIdentities" WHERE "Namespace" = 'imdb' AND "Value" = 'tt0133093'"""));
+            Assert.AreEqual(sameImdb, await ScalarAsync(cs, """SELECT "RelatedWorkId" FROM "WorkRelations" WHERE "Id" = 4"""));
+
+            // The rest of the cache is gone; feeds load again at once and the full sync starts over.
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "WorkExternalIdentities" WHERE "Value" IN ('700', '154587', '154588')"""));
+            Assert.AreEqual(6L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" """));
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkFeedItems" """));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkFeeds" WHERE "RefreshedAt" IS NULL AND "RetryAfter" <= now()"""));
+            Assert.AreEqual(3L, await ScalarAsync(cs, """
+                SELECT count(*) FROM "ExternalWorkSyncs" WHERE "ListedOn" IS NULL AND "Cursor" IS NULL AND "ChangesReadAt" IS NULL AND "CompletedAt" IS NULL AND "RequestsPerMinute" > 0
+                """), "TMDB films, AniList and TheTVDB's card of 0024; the TMDB series catalog went with 0023.");
+            Assert.AreEqual(DBNull.Value, await ScalarAsync(cs, """SELECT to_regclass('"ExternalWorks"')::text"""));
+            Assert.AreEqual(0L, await ScalarAsync(cs, """
+                SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND column_name = 'ExternalWorkId' AND table_name IN ('WorkRelations', 'ExternalWorkFeedItems')
+                """));
+            await ExecuteAsync(cs, $"""INSERT INTO "ExternalWorkFeedItems" ("FeedId", "Position", "WorkId", "SeasonNumber") VALUES (1, 1, 502, 1), (1, 2, 502, 2), (1, 3, {unmapped}, NULL)""");
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "ExternalWorkFeedItems" ("FeedId", "Position", "WorkId", "SeasonNumber") VALUES (1, 4, 502, 1)"""));
+
+            // The library tie: a wanted Work and a person's relation are tied, a catalog title is not.
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(DISTINCT "WorkId") FROM "WorkLibraryRelations" WHERE "WorkId" = 503"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, $"""SELECT count(DISTINCT "WorkId") FROM "WorkLibraryRelations" WHERE "WorkId" = {reloaded}"""));
+            Assert.AreEqual(0L, await ScalarAsync(cs, $"""SELECT count(*) FROM "WorkLibraryRelations" WHERE "WorkId" = {unmapped}"""));
+            Assert.AreEqual(20, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0020_merge_external_works'"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+        }
 
         [TestMethod]
         public async Task ContentLanguages_UpgradePreservesExistingProfilesWithoutInferringTheirPreferences()

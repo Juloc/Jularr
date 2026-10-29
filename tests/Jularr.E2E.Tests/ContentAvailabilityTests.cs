@@ -14,13 +14,12 @@ namespace Jularr.E2E.Tests
             var page = browser.Page;
             await Owner.SetUpAndSignInAsync(page);
             await jularr.RunSqlAsync("""
-                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES
-                    (7801, 1, 'Accepted film'), (7802, 1, 'Subtitled film'), (7803, 3, 'Accepted book');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "CatalogNamespace", "ReleasedOn", "ImageUrl", "TrendingRank", "Popularity", "Rating", "Votes") VALUES
+                    (7801, 1, 'Accepted film', 'tmdb_movie', '2000-01-01', 'https://127.0.0.1/7801.jpg', 1, 80, 8, 100),
+                    (7802, 1, 'Subtitled film', 'tmdb_movie', '2000-01-01', 'https://127.0.0.1/7802.jpg', 2, 60, 8, 100),
+                    (7803, 3, 'Accepted book', NULL, NULL, NULL, NULL, NULL, NULL, NULL);
                 UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
                 UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'tmdb_movie';
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "ReleasedOn", "ImageUrl", "TrendingRank", "Popularity", "Rating", "Votes") VALUES
-                    ('tmdb_movie', '7801', 1, 'Accepted film', '2000-01-01', 'https://127.0.0.1/7801.jpg', 1, 80, 8, 100),
-                    ('tmdb_movie', '7802', 1, 'Subtitled film', '2000-01-01', 'https://127.0.0.1/7802.jpg', 2, 60, 8, 100);
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES
                     (7801, 'tmdb_movie', '7801'), (7802, 'tmdb_movie', '7802');
                 """);

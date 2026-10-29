@@ -93,7 +93,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 try
                 {
                     var target = new IdentityMatchTargetData(workId, MediaType.Book, MediaSubtype.LightNovel, data.CanonicalTitle, data.ReleaseYear, [], novel.Writer.Length == 0 ? null : novel.Writer, true);
-                    var result = await matcher.MatchAsync(target, [], null, ct);
+                    var result = await matcher.MatchAsync(target, [], [], null, ct);
                     await context.ExecuteBatchAsync(async (ctx, token) =>
                     {
                         await ctx.SaveIdentityMatchAsync(result, token);

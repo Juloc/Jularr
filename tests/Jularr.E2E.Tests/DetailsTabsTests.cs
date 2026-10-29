@@ -23,9 +23,9 @@ namespace Jularr.E2E.Tests
                     SELECT "Id" INTO pid FROM "Profiles" ORDER BY "Id" LIMIT 1;
                     INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") VALUES ('Tabs', 3, 'C:\tabs', FALSE) RETURNING "Id" INTO mount;
                     INSERT INTO "LibraryRoots" ("Name", "MediaTypeId", "StorageMountId", "RelativePath") VALUES ('Tabs series', 2, mount, 'series') RETURNING "Id" INTO root;
-                    INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (7001, 2, 'Tabbed Show', 2024), (7002, 1, 'Bare Film', 2020);
+                    INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace", "Rating", "Votes") VALUES
+                        (7001, 2, 'Tabbed Show', 2024, 'tmdb_tv', 8.4, 100), (7002, 1, 'Bare Film', 2020, NULL, NULL, NULL);
                     INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (7001, 'Overview', 'A show with two seasons.', TRUE), (7001, 'Genres', 'Drama', TRUE), (7001, 'Poster', '/__test-only__/details-cover.webp', TRUE);
-                    INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear", "Rating", "Votes") VALUES ('tmdb_tv', '777', 2, 'Tabbed Show', 2024, 8.4, 100);
                     INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (7001, 'tmdb_tv', '777');
                     INSERT INTO "WorkEditions" ("WorkId", "LanguageCode") VALUES (7001, 'en') RETURNING "Id" INTO ed;
                     INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId") VALUES (7001, ed) RETURNING "Id" INTO ver;

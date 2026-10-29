@@ -21,7 +21,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync($"""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "OriginalLanguage") VALUES (10, 3, 'The Book', 2020, 'en');
                 INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (10, 'Poster', 'https://example.test/poster.webp', TRUE);
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "OriginalTitle", "Rating", "Votes") VALUES ('openlibrary', 'OL1W', 3, 'The Book', 'Das Buch', 8.2, 50);
+                UPDATE "Works" SET "OriginalTitle" = 'Das Buch', "Rating" = 8.2, "Votes" = 50, "CatalogNamespace" = 'openlibrary' WHERE "Id" = 10;
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (10, 'openlibrary', 'OL1W');
                 INSERT INTO "WorkEditions" ("Id", "WorkId", "Name", "LanguageCode", "EditionFormatId", "Publisher") VALUES (1, 10, 'English EPUB', 'en', 2, 'Press'), (2, 10, 'Deutsch EPUB', 'de', 2, NULL);
                 INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (1, 10, 1);

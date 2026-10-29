@@ -47,22 +47,32 @@ namespace Jularr.Backend.Data.Logic.Media
         public string? Language { get; }
     }
 
+    // A feed's entries in their order as the Works they are; entries that are the same Work (two parts of one anime season) list it once.
     internal sealed class ExternalFeedUpdateData : ExternalFeedData
     {
-        public ExternalFeedUpdateData(ExternalFeedData feed, IReadOnlyList<ExternalWorkData> works)
+        public ExternalFeedUpdateData(ExternalFeedData feed, IReadOnlyList<ExternalWorkData> works, IReadOnlyList<ExternalWorkSavedData> saved)
             : base(feed.Namespace, feed.MediaTypeId, feed.MediaSubtypeId, feed.DiscoverFeedTypeId, feed.Page, feed.SourceValue, feed.Language)
         {
-            Values = works.Select(work => work.Value).Distinct(StringComparer.Ordinal).ToArray();
+            var known = saved.ToDictionary(work => work.Value, StringComparer.Ordinal);
+            var items = works.Select(work => work.Value).Distinct(StringComparer.Ordinal)
+                .Select(value => known.TryGetValue(value, out var work) ? work : throw new InvalidOperationException("The feed contains an unknown provider identity."))
+                .DistinctBy(work => (work.WorkId, work.SeasonNumber))
+                .Select((work, index) => new { Position = index + 1, work.WorkId, work.SeasonNumber })
+                .ToArray();
+            Count = items.Length;
+            Items = JsonSerializer.Serialize(items);
         }
 
-        [DataField(typeof(ExternalFeedFields), nameof(ExternalFeedFields.Values))]
-        public string[] Values { get; }
+        public int Count { get; }
+
+        [DataField(typeof(ExternalFeedFields), nameof(ExternalFeedFields.Items))]
+        public string Items { get; }
     }
 
-    internal sealed class ExternalFeedStateData(bool isEnabled, long? feedId)
+    // The feed once it was filled.
+    internal sealed class ExternalFeedStateData(long feedId)
     {
-        public bool IsEnabled { get; } = isEnabled;
-        public long? FeedId { get; } = feedId;
+        public long FeedId { get; } = feedId;
     }
 
     internal sealed class ExternalFeedRetryData : ExternalFeedData

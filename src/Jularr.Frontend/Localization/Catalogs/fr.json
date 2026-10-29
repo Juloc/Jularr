@@ -1281,12 +1281,12 @@
    "Aucune correspondance claire"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted (paused)",
-   "Sera surveillé (en pause)"
+   "Will be wanted",
+   "Sera surveillé"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted (paused)",
-   "Surveillance en pause"
+   "Wanted",
+   "Surveillé"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",

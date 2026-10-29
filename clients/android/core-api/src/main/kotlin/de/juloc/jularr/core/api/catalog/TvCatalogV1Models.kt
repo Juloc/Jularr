@@ -160,11 +160,11 @@ data class TvDiscoverScopeV1(
     val feeds: List<Int>,
 )
 
-/** workId is null for catalog-only entries: tmdbId is not interchangeable with WorkId. */
+/** Every Discover title is a Work; open and request it by workId. */
 data class TvDiscoverItemV1(
     val mediaTypeId: Int,
     val tmdbId: Int?,
-    val workId: Long?,
+    val workId: Long,
     val title: String,
     val releaseYear: Int?,
     val overview: String?,
@@ -182,10 +182,12 @@ data class TvDiscoverCatalogItemV1(
     val title: String,
     val releaseYear: Int?,
     val author: String?,
-    val workId: Long?,
+    val workId: Long,
     val posterUrl: String?,
     val rating: Double?,
     val mediaStateTypeId: Int?,
+    /** Season of the series Work a mapped anime entry is; null otherwise. */
+    val seasonNumber: Int? = null,
 )
 
 data class TvDiscoverShelfV1(

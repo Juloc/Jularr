@@ -1271,16 +1271,12 @@
    "Discover speichert nichts lokal und fragt immer die Anbieter."
   ],
   "admin.catalog.off": [
-   "Full local discovery is off; Discover keeps only what it loaded.",
-   "Full local discovery ist aus; Discover behält nur, was es geladen hat."
+   "Keep full catalog is off; Discover keeps only what it loaded.",
+   "Vollen Katalog behalten ist aus; Discover behält nur, was es geladen hat."
   ],
   "admin.catalog.tmdb_movie": [
    "TMDB films",
    "TMDB-Filme"
-  ],
-  "admin.catalog.tmdb_tv": [
-   "TMDB series",
-   "TMDB-Serien"
   ],
   "admin.catalog.anilist": [
    "AniList",
@@ -1297,10 +1293,6 @@
   "admin.catalog.listedOn": [
    "Last complete",
    "Zuletzt vollständig"
-  ],
-  "admin.catalog.enabled": [
-   "Keep whole",
-   "Ganz lokal halten"
   ],
   "admin.catalog.requestsPerMinute": [
    "Requests per minute",
@@ -1331,12 +1323,12 @@
    "Bilder anderer Titel"
   ],
   "admin.catalog.coversKeepDays": [
-   "Keep unused images for days",
-   "Ungenutzte Bilder aufbewahren (Tage)"
+   "Keep unused images for",
+   "Ungenutzte Bilder aufbewahren"
   ],
   "admin.catalog.coversMaximumMegabytes": [
-   "Largest size in MB, 0 keeps none",
-   "Größte Menge in MB, 0 speichert nichts"
+   "Largest size, 0 keeps none",
+   "Größte Menge, 0 speichert nichts"
   ],
   "admin.catalog.coversFormat": [
    "Cover format",
@@ -1847,12 +1839,12 @@
    "Bibliothek zugewiesen"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted (paused)",
-   "Wird überwacht (pausiert)"
+   "Will be wanted",
+   "Wird überwacht"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted (paused)",
-   "Überwachung pausiert"
+   "Wanted",
+   "Überwacht"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",
@@ -2043,8 +2035,12 @@
    "noch keine Bibliothek"
   ],
   "setup.check.tmdb": [
-   "Movies and series need a TMDB key.",
-   "Filme und Serien brauchen einen TMDB-Schlüssel."
+   "Films need a TMDB key.",
+   "Filme brauchen einen TMDB-Schlüssel."
+  ],
+  "setup.check.tvdb": [
+   "Series need a TVDB key.",
+   "Serien brauchen einen TVDB-Schlüssel."
   ],
   "setup.check.indexer": [
    "Arr+ has no indexer yet.",
@@ -3478,6 +3474,10 @@
    "Media details",
    "Mediendetails"
   ],
+  "details.unavailable": [
+   "Details can't be loaded right now",
+   "Details gerade nicht ladbar"
+  ],
   "details.units": [
    "Episodes / editions",
    "Folgen / Editionen"
@@ -3609,6 +3609,10 @@
   "discover.providerUnavailable": [
    "Discovery is unavailable right now; your library still works.",
    "Entdecken ist gerade nicht verfügbar; deine Bibliothek funktioniert weiterhin."
+  ],
+  "discover.tvdbKeyMissing": [
+   "Series need a TVDB key.",
+   "Serien brauchen einen TVDB-Schlüssel."
   ],
   "discover.empty": [
    "Nothing to show here yet.",
@@ -5414,6 +5418,10 @@
    "Failures to look at",
    "Fehler zum Nachsehen"
   ],
+  "system.catalogTitles": [
+   "Catalog titles",
+   "Katalogtitel"
+  ],
   "system.storageOffline": [
    "Storage connections offline",
    "Speicherverbindungen offline"
@@ -5650,14 +5658,11 @@
    "Recognize the text of scanned books",
    "Text gescannter Bücher erkennen"
   ],
-  "instance.module.DiscoverCache": [
-   "Keep Discover's titles locally",
-   "Discover-Titel lokal speichern"
-  ],
-  "instance.module.LocalDiscovery": [
-   "Keep whole provider catalogs for Discover",
-   "Ganze Anbieter-Kataloge für Discover lokal halten"
-  ],
+  "instance.module.DiscoverCache": ["Caching", "Caching"],
+  "instance.module.LocalDiscovery": ["Keep full catalog", "Vollen Katalog behalten"],
+  "instance.caching.keepDays": ["Keep extended data", "Erweiterte Daten aufbewahren"],
+  "hint.InstanceSettingsFields.CatalogDetailKeepDays.info": ["Seasons and episodes, cast, trailers, descriptions and relations of titles outside the library. Titles in the library are never cleaned up.", "Staffeln und Folgen, Besetzung, Trailer, Beschreibungen und Beziehungen von Titeln außerhalb der Bibliothek. Titel in der Bibliothek werden nie aufgeräumt."],
+  "instance.caching.detailsDiscoverAhead": ["Detail Discover in advance", "Discover vorab detaillieren"],
   "instance.module.Diagnostics": [
    "Diagnostics in memory",
    "Diagnose im Arbeitsspeicher"
@@ -8815,6 +8820,10 @@
    "TMDB limits requests right now. Please try again shortly.",
    "TMDB begrenzt gerade die Anfragen. Bitte versuche es gleich erneut."
   ],
+  "errors.tvdb_key_missing": [
+   "Series need a TVDB key.",
+   "Serien brauchen einen TVDB-Schlüssel."
+  ],
   "errors.reading_unavailable": [
    "This book is not saved for reading while its storage is offline.",
    "Dieses Buch ist nicht zum Lesen gespeichert, solange sein Speicher offline ist."
@@ -10845,6 +10854,10 @@
    "Provider covers",
    "Titelbilder der Anbieter"
   ],
+  "jobs.job.catalogCleanup": [
+   "Catalog cleanup",
+   "Katalog aufräumen"
+  ],
   "jobs.job.coverBackfill": [
    "Cover conversion",
    "Titelbilder umwandeln"
@@ -11317,6 +11330,10 @@
   "jobs.about.covers": [
    "Fetches and renews the covers of titles from their providers.",
    "Lädt und erneuert die Cover von Titeln bei ihren Anbietern."
+  ],
+  "jobs.about.catalogCleanup": [
+   "Drops the details and rows of catalog titles nobody uses, once a day.",
+   "Entfernt täglich die Details und Zeilen von Katalogtiteln, die niemand nutzt."
   ],
   "jobs.about.coverBackfill": [
    "Converts stored covers into the chosen cover format, a few at a time.",
@@ -12974,6 +12991,14 @@
    "Reads the relations AniList names for matched titles and adds them to the library's relations.",
    "Liest die Beziehungen, die AniList für zugeordnete Titel nennt, und ergänzt damit die Beziehungen der Bibliothek."
   ],
+  "jobs.job.animeMappings": [
+   "Anime mappings",
+   "Anime-Zuordnungen"
+  ],
+  "jobs.about.animeMappings": [
+   "Loads the AniBridge mappings from AniList to TheTVDB once a day.",
+   "Lädt einmal täglich die AniBridge-Zuordnungen von AniList zu TheTVDB."
+  ],
   "jobs.about.aniListSync": [
    "Reads each connected profile's AniList list, takes over what is watched or read there and sends the progress made here.",
    "Liest die AniList-Liste jedes verbundenen Profils, übernimmt, was dort gesehen oder gelesen ist, und sendet den hier gemachten Fortschritt."
@@ -13369,14 +13394,6 @@
   "setup.module.help.SmartPdf": [
    "Prepare matching EPUB reading copies of PDF books.",
    "Aus PDF-Büchern passende EPUB-Lesekopien vorbereiten."
-  ],
-  "setup.module.help.DiscoverCache": [
-   "Keep the titles Discover found on this server.",
-   "Entdeckte Titel lokal zwischenspeichern."
-  ],
-  "setup.module.help.LocalDiscovery": [
-   "Keep whole provider catalogs here; needs more storage.",
-   "Ganze Anbieter-Kataloge lokal halten; braucht mehr Speicher."
   ],
   "setup.module.help.Subtitles": [
    "Look for missing subtitles at providers.",

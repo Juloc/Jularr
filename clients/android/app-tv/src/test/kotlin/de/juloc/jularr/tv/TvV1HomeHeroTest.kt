@@ -10,7 +10,7 @@ import org.junit.Test
 class TvV1HomeHeroTest {
     private fun movie(id: Int, overview: String? = null, backdrop: String? = "https://example.test/$id.jpg") =
         TvDiscoverItemV1(
-            mediaTypeId = 1, tmdbId = id, workId = null,
+            mediaTypeId = 1, tmdbId = id, workId = id.toLong(),
             title = "Movie $id", releaseYear = 2026, overview = overview,
             posterUrl = "https://example.test/poster/$id.jpg", backdropUrl = backdrop,
             mediaStateTypeId = 1, plexUrl = null, rating = null, trailerKey = null,
@@ -29,7 +29,7 @@ class TvV1HomeHeroTest {
                 movies(1, movie(1, overview = "From trending"), movie(2)),
             ),
         )
-        assertEquals(listOf("tmdb:1:1", "tmdb:1:2", "tmdb:1:4", "tmdb:1:3"),
+        assertEquals(listOf("work:1", "work:2", "work:4", "work:3"),
             heroes.map { it.key })
         assertEquals("From trending", heroes.first().overview)
         assertEquals("Filme · Trending", heroes.first().subtitle)
@@ -37,10 +37,10 @@ class TvV1HomeHeroTest {
         assertEquals(null, heroes.first().catalogItem)
     }
 
-    @Test fun acceptsCatalogNamespaceButDoesNotForgeWorkId() {
+    @Test fun acceptsCatalogNamespaceAndKeepsItsWorkId() {
         val catalog = TvDiscoverCatalogItemV1(
             namespace = "anilist", externalId = "30499", title = "Anime",
-            releaseYear = 2026, author = null, workId = null,
+            releaseYear = 2026, author = null, workId = 77,
             posterUrl = "https://example.test/anime.jpg",
             rating = null, mediaStateTypeId = null,
         )
@@ -53,7 +53,7 @@ class TvV1HomeHeroTest {
         assertEquals("catalog:anilist:30499", heroes.single().key)
         assertEquals("Anime · Trending", heroes.single().subtitle)
         assertEquals(null, heroes.single().discoverItem)
-        assertEquals(null, heroes.single().catalogItem?.workId)
+        assertEquals(77L, heroes.single().catalogItem?.workId)
         assertEquals("30499", heroes.single().catalogItem?.externalId)
     }
 

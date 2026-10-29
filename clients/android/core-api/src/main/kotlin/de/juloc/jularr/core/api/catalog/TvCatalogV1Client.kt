@@ -32,12 +32,10 @@ interface TvCatalogV1Client {
     suspend fun discoverCatalogSearch(mediaTypeId: Int, query: String, mediaSubtypeId: Int? = null): List<TvDiscoverCatalogItemV1>
     suspend fun discoverCatalogFeed(mediaTypeId: Int, feedTypeId: Int, mediaSubtypeId: Int? = null): List<TvDiscoverCatalogItemV1>
     suspend fun discoverSuggestions(query: String, scopeSlug: String? = null): List<TvDiscoverSuggestionV1>
-    /** Read provider item details without pretending a TMDB/external id is a local WorkId. */
-    suspend fun discoverTmdbItem(mediaTypeId: Int, tmdbId: Int): TvDiscoverItemV1
-    suspend fun discoverCatalogEntry(mediaTypeId: Int, namespace: String, externalId: String, mediaSubtypeId: Int? = null): TvDiscoverCatalogEntryV1
     suspend fun requestLocales(): List<TvRequestLocaleV1>
-    suspend fun requestDiscoverTmdb(mediaTypeId: Int, tmdbId: Int, localeId: Long): Long
-    suspend fun requestDiscoverCatalog(mediaTypeId: Int, namespace: String, externalId: String, mediaSubtypeId: Int?, localeId: Long): Long
+    /** Imports the Work's details on first open; true when they are unavailable. */
+    suspend fun openWork(workId: Long): Boolean
+    suspend fun requestWork(workId: Long, localeId: Long): Long
     suspend fun work(workId: Long): TvWorkDetailsV1
     suspend fun editions(workId: Long): List<TvWorkEditionV1>
     suspend fun credits(workId: Long): List<TvWorkCreditV1>
