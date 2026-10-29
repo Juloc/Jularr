@@ -10,6 +10,21 @@ namespace Jularr.Backend.Tests
     public sealed class SourceBrowserTests
     {
         [TestMethod]
+        [DataRow("https://annas-archive.gl/", "https://annas-archive.pk/slow_download/abc/0/0", false, true)]
+        [DataRow("https://annas-archive.gl/slow_download/abc/0/0", "https://annas-archive.pk/slow_download/abc/0/0", true, true)]
+        [DataRow("https://annas-archive.gl/slow_download/abc/0/0", "https://annas-archive.pk/search?q=abc", true, false)]
+        [DataRow("https://annas-archive.gl/slow_download/abc/0/0", "https://annas-archive.pk/slow_download/other/0/0", true, false)]
+        [DataRow("https://annas-archive.gl/", "https://annas-archive.pk.evil.test/", false, false)]
+        [DataRow("https://annas-archive.gl/", "https://annas-archive.pk:444/", false, false)]
+        [DataRow("https://annas-archive.gl/", "https://user:secret@annas-archive.pk/", false, false)]
+        [DataRow("https://annas-archive.gl/", "http://annas-archive.pk/", false, false)]
+        [DataRow("https://source.test/", "https://other.test/", false, false)]
+        public void Assistance_ResumesOnlyTheIntendedPageWithinTheTrustedSource(string address, string current, bool opensPage, bool resumes)
+        {
+            Assert.AreEqual(resumes, SourceBrowser.CanResumeManualPage(new Uri(address), new Uri(current), opensPage));
+        }
+
+        [TestMethod]
         [DataRow("CONNECT 127.0.0.1:443 HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\n\\r\\n")]
         [DataRow("CONNECT 169.254.169.254:443 HTTP/1.1\\r\\nHost: 169.254.169.254\\r\\n\\r\\n")]
         [DataRow("CONNECT localhost:443 HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n")]
@@ -343,7 +358,7 @@ namespace Jularr.Backend.Tests
             var address = new Uri(server.Address, "/manual");
             var view = await browser.BeginManualAsync(address, DateTimeOffset.UtcNow.AddMinutes(2), ct);
             Assert.IsTrue(view.Width > 0 && view.Height > 0);
-            await Task.Delay(500, ct);
+            await server.ManualPageReady.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
             var frame = await browser.CaptureManualAsync(DateTimeOffset.UtcNow.AddMinutes(2), ct);
             Assert.IsTrue(frame.Length > 500 && frame[0] == 0xff && frame[1] == 0xd8, "The view must return JPEG bytes.");
             Assert.IsNull(await browser.ReadPageAsync(address, ct));
@@ -383,7 +398,8 @@ namespace Jularr.Backend.Tests
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
             var ct = timeout.Token;
             await browser.BeginManualAsync(new Uri(server.Address, "/manual"), DateTimeOffset.UtcNow.AddMinutes(2), ct);
-            await Task.Delay(300, ct);
+            await server.ManualPageReady.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+            await browser.CaptureManualAsync(DateTimeOffset.UtcNow.AddMinutes(2), ct);
             await Input("down", 60, 60);
             await Input("up", 60, 60);
             await Input("text", text: "page session");
@@ -398,6 +414,7 @@ namespace Jularr.Backend.Tests
 
             // Reopening the configured source keeps the current page and its form.
             await browser.BeginManualAsync(server.Address, DateTimeOffset.UtcNow.AddMinutes(2), ct);
+            await browser.CaptureManualAsync(DateTimeOffset.UtcNow.AddMinutes(2), ct);
             await Input("down", 60, 60);
             await Input("up", 60, 60);
             await Input("key", key: "End");
@@ -409,7 +426,8 @@ namespace Jularr.Backend.Tests
             // A different configured origin starts its own page session.
             using var other = new CheckPage();
             await browser.BeginManualAsync(new Uri(other.Address, "/manual"), DateTimeOffset.UtcNow.AddMinutes(2), ct);
-            await Task.Delay(300, ct);
+            await other.ManualPageReady.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+            await browser.CaptureManualAsync(DateTimeOffset.UtcNow.AddMinutes(2), ct);
             await Input("down", 60, 60);
             await Input("up", 60, 60);
             await Input("text", text: "other source");
@@ -420,6 +438,22 @@ namespace Jularr.Backend.Tests
 
             Task Input(string action, int x = 0, int y = 0, string? key = null, string? text = null) =>
                 browser.InputManualAsync(action, x, y, 0, key, text, DateTimeOffset.UtcNow.AddMinutes(2), ct);
+        }
+
+        [TestMethod]
+        public async Task Browser_DownloadAssistanceLeavesAnUnrelatedSearchPageForItsExactTarget()
+        {
+            var executable = Environment.GetEnvironmentVariable("JULARR_BROWSER");
+            if (string.IsNullOrWhiteSpace(executable)) Assert.Inconclusive("JULARR_BROWSER names no browser.");
+            using var folder = new TemporaryDirectory();
+            using var server = new CheckPage();
+            using var browser = new SourceBrowser(new BrowserOptions { Path = executable, ProfilePath = folder.Path, AllowPrivateAddressesForTests = true, PageTimeoutSeconds = 10 });
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            Assert.IsNotNull(await browser.ReadPageAsync(new Uri(server.Address, "/session"), timeout.Token));
+            var target = new Uri(server.Address, "/manual?download=two");
+            await browser.BeginManualAsync(target, DateTimeOffset.UtcNow.AddMinutes(2), timeout.Token, opensPage: true);
+            Assert.AreEqual(target, await server.ManualPageOpened.Task.WaitAsync(TimeSpan.FromSeconds(5), timeout.Token));
+            await browser.EndManualAsync(timeout.Token);
         }
 
         private static int FreePort()
@@ -450,6 +484,8 @@ namespace Jularr.Backend.Tests
             public string? LastCookie { get; private set; }
             public TaskCompletionSource<string> ManualInput { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
             public TaskCompletionSource<string> SecondManualInput { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public TaskCompletionSource<Uri> ManualPageOpened { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public TaskCompletionSource<bool> ManualPageReady { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             public void Dispose()
             {
@@ -473,6 +509,7 @@ namespace Jularr.Backend.Tests
                     }
 
                     LastCookie = context.Request.Headers["Cookie"];
+                    if (context.Request.Url!.AbsolutePath == "/manual") ManualPageOpened.TrySetResult(context.Request.Url);
                     if (context.Request.Url!.AbsolutePath is "/manual" or "/accepted" or "/session" or "/needs-person")
                     {
                         if (context.Request.Url.AbsolutePath == "/accepted")
@@ -486,12 +523,17 @@ namespace Jularr.Backend.Tests
                             <input id="entry" style="position:absolute;left:40px;top:40px;width:250px;height:40px">
                             <button style="position:absolute;left:40px;top:120px;width:250px;height:40px" onclick="sessionStorage.setItem('assisted',document.getElementById('entry').value);document.cookie='assisted=yes; Max-Age=3600; SameSite=Lax';fetch('/accepted?v='+encodeURIComponent(document.getElementById('entry').value))">Accept fixture</button>
                             <p id="proof" style="position:absolute;top:220px"></p>
-                            <script>document.getElementById('entry').value=sessionStorage.getItem('assisted')||'';document.getElementById('proof').textContent='Primary page session: '+(sessionStorage.getItem('assisted')||'');</script>
+                            <script>document.getElementById('entry').value=sessionStorage.getItem('assisted')||'';document.getElementById('proof').textContent='Primary page session: '+(sessionStorage.getItem('assisted')||'');fetch('/ready');</script>
                             </body></html>
                             """.Replace("Manual browser fixture", title, StringComparison.Ordinal));
                         context.Response.ContentType = "text/html";
                         context.Response.ContentLength64 = bytes.Length;
                         await context.Response.OutputStream.WriteAsync(bytes);
+                    }
+                    else if (context.Request.Url.AbsolutePath == "/ready")
+                    {
+                        ManualPageReady.TrySetResult(true);
+                        context.Response.StatusCode = 204;
                     }
                     else if (context.Request.Url.AbsolutePath == "/book.epub")
                     {

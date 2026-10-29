@@ -38,7 +38,8 @@ namespace Jularr.Frontend.Pages.Admin.Matches
             {
                 var content = new List<IUiComponent>
                 {
-                    new P(new ValueText(review.CanonicalTitle), new Span(new ValueText(" · ")), new Text(MediaTypeLabel.Key(review.MediaTypeId, review.MediaSubtypeId)))
+                    new P(new ValueText(review.CanonicalTitle), new Span(new ValueText(" · ")),
+                        new Text(review.IsWebNovel ? "discover.webNovel" : MediaTypeLabel.Key(review.MediaTypeId, review.MediaSubtypeId)))
                 };
                 foreach (var (id, label) in review.CandidateIds.Zip(review.CandidateLabels))
                 {
