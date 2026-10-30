@@ -307,6 +307,7 @@ namespace Jularr.E2E.Tests
             await form.Locator("[name=Name]").FillAsync(name);
             await form.GetByText("Default for its media type", new() { Exact = true }).ClickAsync();
             await Assertions.Expect(form.GetByRole(AriaRole.Switch, new() { Name = "Default for its media type", Exact = true })).ToBeCheckedAsync();
+            await form.Locator("details.profile-advanced > summary").ClickAsync();
             await form.Locator(".ui-form__row", new() { HasText = name }).Locator("input[name$='.Score']").FillAsync("100");
             await form.Locator("[name=MinimumFormatScore]").FillAsync("100");
             await Steps.SaveAsync(page);

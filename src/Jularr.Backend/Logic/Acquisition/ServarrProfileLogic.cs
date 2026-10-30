@@ -106,7 +106,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 QualityOrder = original.QualityOrder, QualityGroups = original.QualityGroups,
                 FormatScores = original.FormatScores.Select(score => new FormatScore(keys[checked((int)score.FormatId)], score.Score)).ToArray(),
                 MinimumFormatScore = original.MinimumFormatScore, CutoffFormatScore = original.CutoffFormatScore,
-                MinimumUpgradeFormatScore = original.MinimumUpgradeFormatScore, Monitoring = original.Monitoring
+                MinimumUpgradeFormatScore = original.MinimumUpgradeFormatScore, Monitoring = original.Monitoring,
+                GoodGroupScore = original.GoodGroupScore, BadGroupScore = original.BadGroupScore
             };
             var id = await ctx.CreateAcquisitionProfileAsync(input, ct);
             sql = new SqlStatement();

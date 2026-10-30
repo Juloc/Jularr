@@ -1924,6 +1924,65 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Profiles_ReleaseGroupScores_DefaultSaveRangeAndEditor()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
+            const string Profiles = "/api/v1/admin/acquisition/profiles/";
+            var movies = (await ReadProfilesAsync(host)).Single(profile => profile.MediaTypeId == MediaType.Movie && profile.IsDefault);
+            Assert.AreEqual((50, -50), (movies.GoodGroupScore, movies.BadGroupScore));
+
+            // The scores are stored in the definition the selection reads.
+            using var saved = await host.SendAsync(HttpMethod.Put, Profiles + movies.Id, new SaveAcquisitionProfileDataV1(movies.Name, MediaType.Movie, true, movies.AllowedQualities,
+                movies.UpgradeAllowed, movies.UpgradeCutoffQuality, null, null, movies.Version, goodGroupScore: 80, badGroupScore: -30));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            movies = (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id);
+            Assert.AreEqual((80, -30), (movies.GoodGroupScore, movies.BadGroupScore));
+            var definition = System.Text.Json.JsonSerializer.Deserialize<AcquisitionProfileDefinition>(
+                (string)(await host.ScalarAsync($"SELECT \"Definition\"::text FROM \"AcquisitionProfiles\" WHERE \"Id\" = {movies.Id}"))!, AcquisitionSelectionLogic.DefinitionOptions)!;
+            Assert.AreEqual((80, -30), (definition.GoodGroupScore, definition.BadGroupScore));
+
+            // A good group earns points and a bad one loses them.
+            foreach (var (good, bad) in new[] { (-1, -50), (50, 1), (1000001, -50) })
+            {
+                using var invalid = await host.SendAsync(HttpMethod.Put, Profiles + movies.Id, new SaveAcquisitionProfileDataV1(movies.Name, MediaType.Movie, true, movies.AllowedQualities,
+                    movies.UpgradeAllowed, movies.UpgradeCutoffQuality, null, null, movies.Version, goodGroupScore: good, badGroupScore: bad));
+                Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode, good + " / " + bad);
+            }
+
+            // The editor shows them in their own section, the upgrade scores once, the advanced parts closed, and round arrows that stop at the ends.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + movies.Id);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "name=\"GoodGroupScore\" type=\"number\" autocomplete=\"off\" value=\"80\"");
+            StringAssert.Contains(html, "name=\"BadGroupScore\" type=\"number\" autocomplete=\"off\" value=\"-30\"");
+            StringAssert.Contains(html, "Rate groups (0, 0 blocked)");
+            StringAssert.Contains(html, "<details class=\"profile-advanced\"><summary>Advanced: quality groups and format scores</summary>");
+            Assert.AreEqual(1, html.Split("name=\"MinimumFormatScore\"").Length - 1);
+            Assert.IsTrue(html.IndexOf("name=\"MinimumUpgradeFormatScore\"", StringComparison.Ordinal) < html.IndexOf("profile-advanced", StringComparison.Ordinal));
+            Assert.AreEqual(1, html.Split("aria-label=\"Move up\" disabled=\"disabled\"").Length - 1);
+            Assert.AreEqual(1, html.Split("aria-label=\"Move down\" disabled=\"disabled\"").Length - 1);
+
+            // The page saves them through the same service; an out of range score is refused.
+            using var posted = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + movies.Id, new FormUrlEncodedContent(
+            [
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaTypeId", "1"), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("Name", movies.Name), new("IsDefault", "True"), new("AllowedQualities", "WEBDL-1080p"), new("GoodGroupScore", "120"), new("BadGroupScore", "-70")
+            ]));
+            Assert.AreEqual(HttpStatusCode.Redirect, posted.StatusCode, await posted.Content.ReadAsStringAsync());
+            movies = (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id);
+            Assert.AreEqual((120, -70), (movies.GoodGroupScore, movies.BadGroupScore));
+            using var refused = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + movies.Id, new FormUrlEncodedContent(
+            [
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaTypeId", "1"), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("Name", movies.Name), new("IsDefault", "True"), new("AllowedQualities", "WEBDL-1080p"), new("GoodGroupScore", "-5")
+            ]));
+            Assert.AreNotEqual(HttpStatusCode.Redirect, refused.StatusCode);
+            Assert.AreEqual(120, (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id).GoodGroupScore);
+        }
+
+        [TestMethod]
         public async Task Blocklist_BlocksAndAllowsReleasesOfTheTarget()
         {
             using var storage = new TemporaryDirectory();
