@@ -11,7 +11,7 @@ namespace Jularr.Backend.Logic.Reading
     internal static partial class PdfBook
     {
         // Raised when the converted output changes; old documents are prepared again.
-        public const int AnalyzerVersion = 5;
+        public const int AnalyzerVersion = 16;
         public const int MaximumPages = 5000;
 
         // PDFium draws a scan from the file's bytes in memory; larger files stay with their recognition layer and the original pages.
@@ -19,6 +19,10 @@ namespace Jularr.Backend.Logic.Reading
 
         // A scan's pictures are cut from the page drawn with this longer side; a caption stands within this share of the page below its picture.
         private const int PictureSide = 2400;
+
+        // Smart Pages: pages read at least this plausibly are set anew, measured on a drawing this many pixels on its longer side.
+        private const double SmartQuality = 0.6;
+        private const int SmartSide = 2400;
         private const double CaptionReach = 0.06;
 
         // Pictures smaller than an icon are decoration; a book keeps a bounded number of bounded pictures.
@@ -93,6 +97,7 @@ namespace Jularr.Backend.Logic.Reading
             var right = lines.Select(line => line.Right).Order().ElementAt((int)(lines.Length * 0.9));
             return new PdfBookContent(Chapters(pages, body, spacing, left, right), state.Images, state.Reports, PdfQuality.Judge(state.Reports, false), PdfQuality.Judge(state.Reports, true))
             {
+                SmartPages = state.SmartPages,
                 WantsRecognition = state.Unrecognized > 0
             };
         }
@@ -174,6 +179,11 @@ namespace Jularr.Backend.Logic.Reading
 
                 // A cover (the first or last page with a picture) shows as the whole page; other pictures are cut out, their caption is text.
                 var cover = pictures.Count > 0 && (scan.Number == 1 || scan.Number == state.Pages);
+                if (!cover && !read.IsUncertain && result.Quality >= SmartQuality)
+                {
+                    SmartPage(state, scan, read);
+                }
+
                 if (!cover && !read.IsUncertain && (recognizedWords.Count > 0 ? ScanText(scan, recognizedWords, result, RecognizedPage.Recognized) : pictures.Count > 0))
                 {
                     ScanPictures(state, scan, pictures, result);
@@ -408,6 +418,27 @@ namespace Jularr.Backend.Logic.Reading
                 state.Images.Add(new PdfImage(path, "image/jpeg", bytes));
                 result.Items.RemoveAll(used.Contains);
                 result.Items.Add(new PdfLine(box.Top, 0, scan.Box.Height) { Image = path, Figure = kind, Alt = caption ?? "", Caption = caption });
+            }
+        }
+
+        // The page in its own layout with the text set anew (Smart Pages); a page PDFium cannot draw keeps the original.
+        private static void SmartPage(BookState state, PdfPageScan scan, RecognizedPage read)
+        {
+            if (state.Rendering is null)
+            {
+                return;
+            }
+
+            try
+            {
+                using var drawn = state.Rendering.Render(scan.Number, SmartSide);
+                if (PdfSmartPages.Build(drawn, read, scan.Number) is { } page && page.Image.Length <= MaximumImageBytes)
+                {
+                    state.SmartPages.Add(page);
+                }
+            }
+            catch (InvalidDataException)
+            {
             }
         }
 
@@ -671,6 +702,7 @@ namespace Jularr.Backend.Logic.Reading
         private sealed class BookState
         {
             public List<PdfImage> Images { get; } = [];
+            public List<PdfSmartPage> SmartPages { get; } = [];
             public List<PdfPageReport> Reports { get; } = [];
             public long TextCharacters { get; set; }
             public PdfRendering? Rendering { get; init; }
@@ -705,6 +737,9 @@ namespace Jularr.Backend.Logic.Reading
     {
         // Scanned pages wait for the recognizer, which reads them anew and finds their pictures.
         public bool WantsRecognition { get; init; }
+
+        // Scanned pages in their own layout with the text set anew, by page.
+        public IReadOnlyList<PdfSmartPage> SmartPages { get; init; } = [];
     }
 
     // A PDF of scanned pages: it stays with its original pages, until a recognizer has read them.

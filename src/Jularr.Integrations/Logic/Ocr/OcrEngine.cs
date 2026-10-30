@@ -60,12 +60,27 @@ namespace Jularr.Integrations.Logic.Ocr
                 }
             }
             var lines = new List<OcrLine>();
-            foreach (var box in Join(Detect(page)))
+            foreach (var region in Join(Detect(page)))
             {
-                var (text, confidence, characters) = Recognize(page, box);
-                if (text.Trim() is { Length: > 0 } trimmed)
+                // A region parted at a gutter is read both ways; the surer reading wins (a line over a photograph has no gutter, only a mottled ground).
+                var read = new List<(SKRectI Box, (string Text, float Confidence, IReadOnlyList<OcrCharacter> Characters) Read)> { (region, Recognize(page, region)) };
+                if (Split(page, [region]) is { Count: > 1 } parts)
                 {
-                    lines.Add(new OcrLine(box.Left, box.Top, box.Right, box.Bottom, trimmed, confidence) { Characters = characters });
+                    var apart = parts.Select(part => (Box: part, Read: Recognize(page, part))).ToList();
+                    var letters = apart.Sum(each => each.Read.Text.Trim().Length);
+                    if (letters > 0 && apart.All(each => each.Read.Confidence >= SurePart)
+                        && apart.Sum(each => each.Read.Confidence * each.Read.Text.Trim().Length) / letters >= read[0].Read.Confidence)
+                    {
+                        read = apart;
+                    }
+                }
+
+                foreach (var (box, (text, confidence, characters)) in read)
+                {
+                    if (text.Trim() is { Length: > 0 } trimmed)
+                    {
+                        lines.Add(new OcrLine(box.Left, box.Top, box.Right, box.Bottom, trimmed, confidence) { Characters = characters });
+                    }
                 }
             }
 
@@ -101,6 +116,155 @@ namespace Jularr.Integrations.Logic.Ocr
             }
 
             return lines;
+        }
+
+        // Every part of a region read apart must be read this surely, or the region is read whole.
+        private const float SurePart = 0.75f;
+
+        // A detected region may run over the gutter between two columns (a rule in it joins them): a stretch without ink half again as wide as the type is
+        // high, or half that with a rule in it, parts it, and each part keeps its whole lines, so small type beside large is read at its own size.
+        internal static List<SKRectI> Split(SKBitmap page, List<SKRectI> boxes)
+        {
+            var result = new List<SKRectI>();
+            var pixels = page.GetPixelSpan();
+            foreach (var box in boxes)
+            {
+                var (w, h) = (box.Width, box.Height);
+                if (w < h * 3 || h < 8)
+                {
+                    result.Add(box);
+                    continue;
+                }
+
+                // Ink: far from the region's commonest brightness.
+                var light = new int[w * h];
+                for (var y = 0; y < h; y++)
+                {
+                    for (var x = 0; x < w; x++)
+                    {
+                        var at = ((box.Top + y) * page.Width + box.Left + x) * 4;
+                        light[y * w + x] = (pixels[at] * 3 + pixels[at + 1] * 6 + pixels[at + 2]) / 10;
+                    }
+                }
+
+                var ground = light.Order().ElementAt(light.Length / 2);
+                var columns = new int[w];
+                for (var index = 0; index < light.Length; index++)
+                {
+                    columns[index % w] += Math.Abs(light[index] - ground) > 60 ? 1 : 0;
+                }
+
+                // The height of the type in a stretch of columns: its rows of dense ink, not the stray ends of a line above or below.
+                int Tall(int from, int to)
+                {
+                    var rows = new int[h];
+                    for (var y = 0; y < h; y++)
+                    {
+                        for (var x = Math.Max(0, from); x < Math.Min(w, to); x++)
+                        {
+                            rows[y] += Math.Abs(light[y * w + x] - ground) > 60 ? 1 : 0;
+                        }
+                    }
+
+                    var dense = rows.Max() * 0.15;
+                    var top = Array.FindIndex(rows, count => count > dense);
+                    return top < 0 ? 0 : Array.FindLastIndex(rows, count => count > dense) - top + 1;
+                }
+
+                // The detector grows its regions well beyond the letters: the type's own height is the measure.
+                var type = Math.Max(8, Tall(0, w));
+                var blank = columns.Select(count => count <= Math.Max(1, h / 30)).ToArray();
+                var rule = new bool[w];
+                // A rule: a thin stroke over the region's whole height with space on both sides, unlike a letter's stem.
+                var (thin, aside) = (Math.Max(3, type / 8), Math.Max(2, type / 5));
+                bool Clear(int from, int to) => from >= 0 && to <= w && Enumerable.Range(from, to - from).All(x => columns[x] <= Math.Max(1, h / 30));
+                for (int x = 0; x < w;)
+                {
+                    var end = x;
+                    while (end < w && !blank[end]) end++;
+                    if (end > x && end - x <= thin && columns[x..end].Max() >= type * 0.4 && Clear(x - aside, x) && Clear(end, end + aside))
+                    {
+                        for (var each = x; each < end; each++) (blank[each], rule[each]) = (true, true);
+                    }
+
+                    x = end == x ? x + 1 : end;
+                }
+
+                // A gutter: empty half again wider than the type is high (wider than a spaced word gap), or with a rule in it, half that.
+                var cuts = new List<(int From, int To)>();
+                for (int x = 0; x < w;)
+                {
+                    var end = x;
+                    while (end < w && blank[end]) end++;
+                    if (x > 0 && end < w && (end - x >= type * 1.5 || end - x >= type * 0.5 && rule[x..end].Any(each => each)))
+                    {
+                        cuts.Add((x, end));
+                    }
+
+                    x = end == x ? x + 1 : end;
+                }
+
+                if (cuts.Count == 0)
+                {
+                    result.Add(box);
+                    continue;
+                }
+
+                var from = 0;
+                foreach (var (start, end) in cuts.Append((w, w)))
+                {
+                    // The part's own line: of its bands of inked rows (small type beside large may show the ends of the lines above and below), the one
+                    // nearest the region's middle.
+                    var inked = new bool[h];
+                    for (var y = 0; y < h; y++)
+                    {
+                        var count = 0;
+                        for (var x = from; x < start; x++)
+                        {
+                            count += Math.Abs(light[y * w + x] - ground) > 60 ? 1 : 0;
+                        }
+
+                        inked[y] = count > Math.Max(1, (start - from) / 200);
+                    }
+
+                    // Every whole line of the part (a band clear of the region's edges, where lines above and below show their ends); else the band nearest
+                    // the middle.
+                    var bands = new List<(int Top, int Bottom)>();
+                    for (var y = 0; y < h;)
+                    {
+                        if (!inked[y])
+                        {
+                            y++;
+                            continue;
+                        }
+
+                        var last = y;
+                        while (last + 1 < h && (inked[last + 1] || last + 2 < h && inked[last + 2])) last++;
+                        if (last - y >= 4)
+                        {
+                            bands.Add((y, last));
+                        }
+
+                        y = last + 1;
+                    }
+
+                    var whole = bands.Where(band => band.Top > 1 && band.Bottom < h - 2).ToList();
+                    if (whole.Count == 0 && bands.Count > 0)
+                    {
+                        whole.Add(bands.MinBy(band => band.Top > h / 2 ? band.Top - h / 2 : band.Bottom < h / 2 ? h / 2 - band.Bottom : 0));
+                    }
+
+                    foreach (var (top, bottom) in whole)
+                    {
+                        var margin = Math.Max(2, (bottom - top) / 8);
+                        result.Add(new SKRectI(box.Left + from, Math.Max(box.Top, box.Top + top - margin), box.Left + start, Math.Min(box.Bottom, box.Top + bottom + margin + 1)));
+                    }
+
+                    from = end;
+                }
+            }
+
+            return result;
         }
 
         private List<SKRectI> Detect(SKBitmap page)

@@ -250,13 +250,24 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 await writer.AddAsync(new ReadingResourceData(state.DocumentId, SectionPath(index), "text/html; charset=utf-8", Encoding.UTF8.GetBytes(prepared.Sections[index].Html)));
             }
 
+            foreach (var page in book.SmartPages)
+            {
+                await writer.AddAsync(new ReadingResourceData(state.DocumentId, PdfBookHtml.SmartImagePath(page.Number), "image/jpeg", page.Image));
+            }
+
+            for (var index = 0; index < prepared.SmartPages.Count; index++)
+            {
+                await writer.AddAsync(new ReadingResourceData(state.DocumentId, PdfBookHtml.SmartPagePath(index), "text/html; charset=utf-8", Encoding.UTF8.GetBytes(prepared.SmartPages[index].Html)));
+            }
+
             await writer.FlushAsync();
             var structure = prepared.Sections.Select(section => section.Structure).ToArray();
             var recommended = book.Reading.IsReadable;
             // A PDF names no language: its text tells, so the server's translation knows the book's own.
             var language = ReadingLanguage.Guess(string.Join(' ', book.Chapters.SelectMany(chapter => chapter.Blocks).Select(block => block.Text).Where(text => text is not null).Take(200)));
             await CompleteAsync(context, new ReadingDocumentCompleteData(state.DocumentId, null, language,
-                JsonSerializer.Serialize(new ReadingStructure(structure, [.. prepared.Toc], recommended, recommended ? null : book.Reading.Reason, [.. prepared.OriginalPages])),
+                JsonSerializer.Serialize(new ReadingStructure(structure, [.. prepared.Toc], recommended, recommended ? null : book.Reading.Reason, [.. prepared.OriginalPages],
+                    [.. prepared.SmartPages.Select(page => page.Structure)])),
                 structure.Sum(section => section.Characters)), ct);
             return state.DocumentId;
         }

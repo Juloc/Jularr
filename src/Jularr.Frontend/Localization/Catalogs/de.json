@@ -11341,6 +11341,14 @@
    "Original pages",
    "Originalseiten"
   ],
+  "reader.view.smartPages": [
+   "Smart Pages",
+   "Smart-Seiten"
+  ],
+  "reader.view.smartPagesUnavailable": [
+   "Smart Pages are not ready for this book; the original pages are shown.",
+   "Die Smart-Seiten sind für dieses Buch noch nicht fertig; die Originalseiten werden angezeigt."
+  ],
   "reader.view.failed": [
    "The view could not be saved.",
    "Die Ansicht konnte nicht gespeichert werden."
