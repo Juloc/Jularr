@@ -18,6 +18,8 @@ namespace Jularr.Frontend.Framework
             conventions.AddPageRoute("/Admin/Dashboard/Dashboard", "/Admin");
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Admin/Acquisition/Downloads");
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Admin/Acquisition/Subtitles");
+            conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Admin/Downloads/Servers");
+            conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Admin/Downloads/Clients");
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Setup/Indexers");
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Setup/Downloads");
             conventions.AddPageRoute("/Admin/DownloadStorage/DownloadStorage", "/Setup/DownloadStorage");
@@ -29,6 +31,7 @@ namespace Jularr.Frontend.Framework
             conventions.AuthorizePage("/Admin/Acquisition/Acquisition", ServiceApi.AcquisitionManagePolicyName);
             conventions.AuthorizePage("/Admin/DownloadStorage/DownloadStorage", ServiceApi.AcquisitionManagePolicyName);
             conventions.AuthorizePage("/Admin/Downloads/Downloads", ServiceApi.AcquisitionManagePolicyName);
+            conventions.AuthorizePage("/Admin/DownloadSpeed/DownloadSpeed", ServiceApi.AcquisitionManagePolicyName);
             conventions.AuthorizePage("/Admin/Profiles/Profiles", ServiceApi.AcquisitionManagePolicyName);
             conventions.AuthorizePage("/Admin/Sources/Sources", ServiceApi.AcquisitionManagePolicyName);
             conventions.AuthorizePage("/Admin/Works/Works", ServiceApi.MediaReadPolicyName);

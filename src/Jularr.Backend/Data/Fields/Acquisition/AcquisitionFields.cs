@@ -9,6 +9,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly StringField Name = new(NpgsqlDbType.Varchar) { MaximumLength = 128, AllowBlank = false, Trim = true };
         public static readonly EnumField AcquisitionConnectionTypeId = new(typeof(AcquisitionConnectionType));
+        public static readonly EnumArrayField AcquisitionConnectionTypeIds = new(typeof(AcquisitionConnectionType)) { MaximumLength = 12 };
         public static readonly StringField BaseUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, AllowBlank = false, Trim = true, TrimsTrailingSlash = true, Format = StringFormat.HttpUrl };
         public static readonly StringField Host = new(NpgsqlDbType.Varchar) { MaximumLength = 253, Required = false, AllowBlank = false, Trim = true, Format = StringFormat.HostName };
         public static readonly IntField Port = new() { Minimum = 1, Maximum = 65535, Required = false };

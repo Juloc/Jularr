@@ -30,7 +30,7 @@ namespace Jularr.Backend.Tests
                 Assert.IsFalse(cycle.HasJobs || cycle.Progressed);
             }
 
-            using (var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads"))
+            using (var page = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Clients"))
             {
                 Assert.IsFalse((await page.Content.ReadAsStringAsync()).Contains("Add torrent engine", StringComparison.Ordinal));
             }
@@ -84,8 +84,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0L, status.GetProperty("sentPieceBytes").GetInt64());
             Assert.IsFalse(status.GetProperty("hasVerifiedTunnel").GetBoolean());
 
-            // The page offers the engine and shows its measured lock.
-            using var on = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads");
+            // The External clients page offers the engine beside SABnzbd and qBittorrent and shows its measured lock.
+            using var on = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Clients");
             var html = await on.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, on.StatusCode, html);
             StringAssert.Contains(html, "Add torrent engine");

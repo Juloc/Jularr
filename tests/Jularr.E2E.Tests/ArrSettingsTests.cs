@@ -23,7 +23,7 @@ namespace Jularr.E2E.Tests
                 await Owner.SetUpAndSignInAsync(page);
 
                 // One row of navigation joins every page of the acquisition settings, and no page offers a waiting time.
-                foreach (var label in new[] { "Quality profiles", "Custom formats", "Quality sizes", "Release profiles", "Release groups", "Tags", "Indexers", "Download clients" })
+                foreach (var label in new[] { "Quality profiles", "Custom formats", "Quality sizes", "Release profiles", "Release groups", "Tags", "Indexers" })
                 {
                     await page.GotoAsync("/Admin/Acquisition/Profiles");
                     await page.Locator(".navigation-tabs").GetByRole(AriaRole.Link, new() { Name = label, Exact = true }).ClickAsync();
