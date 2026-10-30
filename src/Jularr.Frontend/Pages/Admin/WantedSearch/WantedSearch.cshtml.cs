@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
@@ -12,7 +13,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Admin.WantedSearch
 {
     // A manual search of one target, or of its season, episode or volume: every candidate with its decision, the eligible ones to take.
-    public sealed class WantedSearchModel(ReadWantedItemV1 readItem, SearchWantedV1 search, GrabWantedReleaseV1 grab, IAntiforgery antiforgery) : JularrPage
+    public sealed class WantedSearchModel(ReadWantedItemV1 readItem, SearchWantedV1 search, GrabWantedReleaseV1 grab, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private WantedDetailsV1? _item;
         private SearchWantedDataV1? _search;
@@ -48,14 +49,27 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
             if (FormError is not null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
             if (_candidates is not { } candidates) return;
 
-            // Every candidate stays visible with its decision; rejected ones cannot be taken.
-            page.Content.Add(candidates.Count == 0 ? new P(new Text("wanted.search.empty")).Attribute("role", "status") : new Table<WantedReleaseCandidateV1>(candidates)
+            // Every candidate stays visible with its decision; rejected ones cannot be taken. The score's rules and points show on hover; books also show kind and volumes.
+            if (candidates.Count == 0)
+            {
+                page.Content.Add(new P(new Text("wanted.search.empty")).Attribute("role", "status"));
+                return;
+            }
+
+            var table = new Table<WantedReleaseCandidateV1>(candidates)
                 .Resource(item => item.ReleaseDecisionTypeId, "wanted.search.decision", decision => "acquisition.decision." + decision)
-                .Text(item => item.Score, "wanted.search.score")
-                .Text(item => item.Title, "wanted.search.release")
+                .Content("wanted.search.score", Score)
+                .Text(item => item.Title, "wanted.search.release");
+            if (item.MediaTypeId == MediaType.Book && item.MediaSubtypeId != MediaSubtype.Manga)
+            {
+                table.Content("wanted.search.kind", item => item.BookReleaseKindId is { } kind ? new Text("acquisition.kind." + kind) : new Span())
+                    .Content("wanted.search.volumes", Volumes);
+            }
+
+            page.Content.Add(table
                 .Text(item => item.ConnectionName, "wanted.search.indexer")
                 .Content("wanted.search.age", item => new ValueText(ReleaseFacts.AgeDays(item.PublishedAt)))
-                .Content("wanted.search.size", item => new ValueText(ReleaseFacts.Size(item.SizeBytes)))
+                .Content("wanted.search.size", Size)
                 .Text(item => item.QualityKey, "wanted.search.quality")
                 .Content("wanted.search.reason", item => item.ReasonValue is { } value
                     ? new Span(new Text("acquisition.reason." + item.ReasonCode), new ValueText(" · " + value)) : new Text("acquisition.reason." + item.ReasonCode))
@@ -64,6 +78,41 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
                     form.Hidden(data => data.CandidateId);
                     form.Submit("wanted.search.grab");
                 }, WantedStatus.Home(Id) + "/Search?handler=Grab", csrf, new GrabWantedReleaseDataV1(item.CandidateId))));
+        }
+
+        // The sum, with every rule and its points on hover.
+        private IUiComponent Score(WantedReleaseCandidateV1 item)
+        {
+            var score = new Span(new ValueText(item.Score.ToString(CultureInfo.CurrentCulture)));
+            if (item.ScorePoints.Count == 0) return score;
+            var lines = item.ScorePoints.Select(point => texts["acquisition.points." + point.Code] + (point.Value is { } value ? " " + value : "") + ": "
+                + point.Points.ToString("+0;-0;0", CultureInfo.CurrentCulture));
+            return score.Attribute("title", string.Join("\n", lines));
+        }
+
+        private static IUiComponent Volumes(WantedReleaseCandidateV1 item)
+        {
+            var range = item.VolumeStart is not { } start ? null
+                : item.VolumeEnd is { } end ? start.ToString(CultureInfo.CurrentCulture) + "\u2013" + end.ToString(CultureInfo.CurrentCulture) : start.ToString(CultureInfo.CurrentCulture);
+            return (range, item.IsComplete) switch
+            {
+                (null, false) => new Span(),
+                (null, true) => new Text("wanted.search.complete"),
+                (_, false) => new ValueText(range),
+                _ => new Span(new ValueText(range + " \u00b7 "), new Text("wanted.search.complete"))
+            };
+        }
+
+        // An outlier of its kind's size per volume is marked, not silent.
+        private static IUiComponent Size(WantedReleaseCandidateV1 item)
+        {
+            var size = new ValueText(ReleaseFacts.Size(item.SizeBytes));
+            return item.ReleaseSizeMarkId switch
+            {
+                ReleaseSizeMark.AboveMaximum or ReleaseSizeMark.BelowMinimum => new Span(size, new ValueText(" "), new StateChip(new Text("acquisition.size." + item.ReleaseSizeMarkId), UiTone.Warning)),
+                ReleaseSizeMark.Unknown => new Span(size, new ValueText(" "), new StateChip(new Text("acquisition.size.Unknown"), UiTone.Neutral)),
+                _ => size
+            };
         }
 
         public async Task<IActionResult> OnGetAsync()

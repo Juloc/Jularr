@@ -2,6 +2,7 @@
 //   data-live="kind:id"       the element (or block) shows that entity; data-live-optional hides it while the stream knows nothing for it
 //   data-live-text="name"     its text is the entity's text of that name, hidden while there is none
 //   data-live-value="percent" a <progress> takes the entity's percent, hidden while there is none
+//   data-live-points="name"   an SVG line takes the entity's text of that name as its points (a speed line), left as it is while there is none
 // The entity's phase and step become data-phase and data-step, which the styles read. Nothing else on the page is touched.
 
 export interface LiveEntity {
@@ -30,6 +31,11 @@ export function applyLive(root: ParentNode, entities: LiveEntities): void {
         if (optional) element.hidden = false;
         setAttribute(element, "data-phase", entity.phase);
         setAttribute(element, "data-step", entity.step === undefined ? undefined : String(entity.step));
+        for (const line of Array.from(element.querySelectorAll<SVGElement>("[data-live-points]"))) {
+            const points = entity.text?.[line.dataset.livePoints ?? ""];
+            if (points) setAttribute(line as unknown as HTMLElement, "points", points);
+        }
+
         const fields = Array.from(element.querySelectorAll<HTMLElement>("[data-live-text], [data-live-value]"));
         if (element.hasAttribute("data-live-text") || element.hasAttribute("data-live-value")) fields.push(element);
         for (const field of fields) {

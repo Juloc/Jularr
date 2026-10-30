@@ -18,5 +18,6 @@
   <ItemGroup>
     <EmbeddedResource Include="Fixtures/Anna/*.html" />
     <EmbeddedResource Include="Fixtures/AniBridge/*.json" LogicalName="AniBridge.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Fixtures/ReleaseNames/*.tsv" LogicalName="ReleaseNames.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

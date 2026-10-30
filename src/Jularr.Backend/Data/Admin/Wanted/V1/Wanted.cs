@@ -342,8 +342,15 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
     public sealed class WantedReleaseCandidateV1 : BaseResponse
     {
         public WantedReleaseCandidateV1(string candidateId, string title, string connectionName, long? sizeBytes, DateTime? publishedAt, string? qualityKey,
-            ReleaseDecisionType releaseDecisionTypeId, int score, string reasonCode, string? reasonValue)
+            ReleaseDecisionType releaseDecisionTypeId, int score, string reasonCode, string? reasonValue, BookReleaseKind? bookReleaseKindId = null, int? volumeStart = null,
+            int? volumeEnd = null, bool isComplete = false, ReleaseSizeMark? releaseSizeMarkId = null, BaseDataList<ReleaseScorePointV1>? scorePoints = null)
         {
+            BookReleaseKindId = bookReleaseKindId;
+            VolumeStart = volumeStart;
+            VolumeEnd = volumeEnd;
+            IsComplete = isComplete;
+            ReleaseSizeMarkId = releaseSizeMarkId;
+            ScorePoints = scorePoints ?? new([]);
             CandidateId = candidateId;
             Title = title;
             ConnectionName = connectionName;
@@ -385,6 +392,46 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReasonValue))]
         public string? ReasonValue { get; }
+
+        // What a book release name states: its kind, its volumes (a single volume has no end) and whether it is complete.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.BookReleaseKindId))]
+        public BookReleaseKind? BookReleaseKindId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitStart))]
+        public int? VolumeStart { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitEnd))]
+        public int? VolumeEnd { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.IsComplete))]
+        public bool IsComplete { get; }
+
+        // The size per volume against the limits of the release's kind.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReleaseSizeMarkId))]
+        public ReleaseSizeMark? ReleaseSizeMarkId { get; }
+
+        // Every rule that gave points; their sum is the score.
+        public BaseDataList<ReleaseScorePointV1> ScorePoints { get; }
+    }
+
+    // The points of one score rule and what it saw.
+    public sealed class ReleaseScorePointV1 : BaseData
+    {
+        public ReleaseScorePointV1(string code, string? value, int points)
+        {
+            Code = code;
+            Value = value;
+            Points = points;
+        }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReasonCode))]
+        public string Code { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReasonValue))]
+        public string? Value { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Score))]
+        public int Points { get; }
     }
 
     public sealed class SearchWantedDataV1 : BaseData

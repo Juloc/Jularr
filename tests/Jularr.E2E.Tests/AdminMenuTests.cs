@@ -51,7 +51,7 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Admin/Acquisition/Profiles?tab=formats&mediaTypeId=1");
                 await Assertions.Expect(page.Locator("main .navigation-tabs")).ToHaveCountAsync(1);
                 await Assertions.Expect(page.Locator("main .navigation-tabs [aria-current=page]")).ToHaveTextAsync("Custom formats");
-                await Assertions.Expect(menu.Locator(".menu-entry.is-active")).ToHaveAttributeAsync("href", "/Admin/Acquisition");
+                await Assertions.Expect(menu.Locator(".menu-entry.is-active")).ToHaveAttributeAsync("href", "/Admin/Downloads");
 
                 // Every entry opens its first page and every chip of its row a page that renders: the old addresses all work.
                 var entries = await menu.Locator(".menu-entry").EvaluateAllAsync<string[]>("links => links.map(link => link.getAttribute('href'))");

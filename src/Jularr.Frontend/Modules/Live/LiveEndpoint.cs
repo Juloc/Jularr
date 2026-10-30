@@ -27,7 +27,8 @@ namespace Jularr.Frontend.Modules.Live
             return endpoints;
         }
 
-        private static async Task StreamAsync(HttpContext http, LiveChanges changes, UiText texts, ReadLiveV1 own, ReadLiveAdminV1 admin, ReadActivitySummaryV1 queue, AdminMenuCounters menu, IHostApplicationLifetime lifetime)
+        private static async Task StreamAsync(HttpContext http, LiveChanges changes, UiText texts, ReadLiveV1 own, ReadLiveAdminV1 admin, ReadActivitySummaryV1 queue, AdminMenuCounters menu,
+            ReadDownloadClientsV1 clients, ReadNewsServersV1 newsServers, IHostApplicationLifetime lifetime)
         {
             // A stopping host ends its streams instead of waiting for them.
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(http.RequestAborted, lifetime.ApplicationStopping);
@@ -43,7 +44,7 @@ namespace Jularr.Frontend.Modules.Live
             }
 
             await texts.InitializeAsync(http);
-            var reads = new Reads(texts.Can("profile.requests.read", "Requests"), texts.Can("media.read"));
+            var reads = new Reads(texts.Can("profile.requests.read", "Requests"), texts.Can("media.read"), texts.Can("media.read", "Acquisition"));
             if (!reads.Own && !reads.Admin)
             {
                 http.Response.StatusCode = StatusCodes.Status403Forbidden;
@@ -69,7 +70,7 @@ namespace Jularr.Frontend.Modules.Live
                 {
                     // The version is taken before reading, so a change during the read is not lost.
                     var seen = changes.Sequence;
-                    var payload = await ReadAsync(http, texts, reads, own, admin, queue, menu, cancellationToken);
+                    var payload = await ReadAsync(http, texts, reads, own, admin, queue, menu, new DownloadReads(clients, newsServers), cancellationToken);
                     if (payload != last)
                     {
                         await WriteAsync(http, "event: " + (last is null ? "snapshot" : "update") + "\ndata: " + payload + "\n\n", cancellationToken);
@@ -93,7 +94,8 @@ namespace Jularr.Frontend.Modules.Live
             }
         }
 
-        private static async Task<string> ReadAsync(HttpContext http, UiText texts, Reads reads, ReadLiveV1 own, ReadLiveAdminV1 admin, ReadActivitySummaryV1 queue, AdminMenuCounters menu, CancellationToken cancellationToken)
+        private static async Task<string> ReadAsync(HttpContext http, UiText texts, Reads reads, ReadLiveV1 own, ReadLiveAdminV1 admin, ReadActivitySummaryV1 queue, AdminMenuCounters menu,
+            DownloadReads downloads, CancellationToken cancellationToken)
         {
             var entities = new Dictionary<string, LiveEntity>(StringComparer.Ordinal);
 
@@ -124,6 +126,19 @@ namespace Jularr.Frontend.Modules.Live
                 entities[LiveKeys.Menu] = LiveEntities.Menu(await menu.ReadAsync(texts, cancellationToken, summary));
             }
 
+            // The Downloads page: All, every client and every news server.
+            if (reads.Downloads)
+            {
+                var read = await downloads.Clients.ExecuteAsync<BaseDataList<DownloadClientV1>>(new ReadDownloadClientsParametersV1(), cancellationToken);
+                IReadOnlyList<DownloadClientV1> all = [.. read.Where(client => client.DownloadClientKindId != Jularr.Backend.Data.Enums.Acquisition.DownloadClientKind.Torrent || texts.Can(null, "Torrent"))];
+                entities[LiveKeys.Downloads(LiveKeys.AllDownloads)] = LiveEntities.Downloads(texts, all);
+                foreach (var client in all) entities[LiveKeys.Downloads(ReadDownloadClientsV1.Key(client.DownloadClientKindId, client.AcquisitionConnectionId))] = LiveEntities.Downloads(texts, [client]);
+                foreach (var server in await downloads.NewsServers.ExecuteAsync<BaseDataList<NewsServerV1>>(new ReadDownloadClientsParametersV1(), cancellationToken))
+                {
+                    entities[LiveKeys.NewsServer(server.AcquisitionConnectionId)] = LiveEntities.NewsServer(texts, server);
+                }
+            }
+
             return JsonSerializer.Serialize(new { entities }, Json);
         }
 
@@ -133,6 +148,8 @@ namespace Jularr.Frontend.Modules.Live
             await http.Response.Body.FlushAsync(cancellationToken);
         }
 
-        private sealed record Reads(bool Own, bool Admin);
+        private sealed record Reads(bool Own, bool Admin, bool Downloads);
+
+        private sealed record DownloadReads(ReadDownloadClientsV1 Clients, ReadNewsServersV1 NewsServers);
     }
 }

@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
@@ -7,15 +8,24 @@ using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Live;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Operation;
+using Jularr.Backend.Data.Fields.Storage;
 
 namespace Jularr.Backend.Data.Admin.Activity.V1
 {
     public sealed class ReadActivityParametersV1 : BaseParameters
     {
-        public ReadActivityParametersV1(ActivityFilterType activityFilterTypeId = ActivityFilterType.All, int page = 1, int pageSize = 25, bool torrentOnly = false)
+        public ReadActivityParametersV1(ActivityFilterType activityFilterTypeId = ActivityFilterType.All, int page = 1, int pageSize = 25, bool torrentOnly = false, bool downloadsOnly = false,
+            bool failedOnly = false, DownloadClientKind? downloadClientKindId = null, long? acquisitionConnectionId = null, MediaType? mediaTypeId = null,
+            DownloadPriorityType? downloadPriorityTypeId = null)
         {
+            DownloadPriorityTypeId = downloadPriorityTypeId;
             ActivityFilterTypeId = activityFilterTypeId;
             TorrentOnly = torrentOnly;
+            DownloadsOnly = downloadsOnly;
+            FailedOnly = failedOnly;
+            DownloadClientKindId = downloadClientKindId;
+            AcquisitionConnectionId = acquisitionConnectionId;
+            MediaTypeId = mediaTypeId;
             Page = page;
             PageSize = pageSize;
         }
@@ -25,6 +35,27 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         [DataField(typeof(OperationFields), nameof(OperationFields.TorrentOnly))]
         public bool TorrentOnly { get; }
+
+        // Only downloads, as the Downloads page lists them: with All what is still open, with History every finished one.
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadsOnly))]
+        public bool DownloadsOnly { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.FailedOnly))]
+        public bool FailedOnly { get; }
+
+        // One client's downloads: a kind, and for SABnzbd and qBittorrent the connection.
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadClientKindId), false)]
+        public DownloadClientKind? DownloadClientKindId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
+        public long? AcquisitionConnectionId { get; }
+
+        // The category: the media type of the downloaded title.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
+        public MediaType? MediaTypeId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadPriorityTypeId), false)]
+        public DownloadPriorityType? DownloadPriorityTypeId { get; }
 
         public int Page { get; }
         public int PageSize { get; }
@@ -44,8 +75,15 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     public sealed class ActivityItemV1 : BaseResponse
     {
         public ActivityItemV1(long id, OperationType operationTypeId, OperationStatusType operationStatusTypeId, string title, long? workId, string? workTitle, int? progressPercent,
-            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false, string? indexerName = null, long? bytesPerSecond = null, bool canBrowseFiles = false, long? sabnzbdConnectionId = null)
+            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false, string? indexerName = null, long? bytesPerSecond = null, bool canBrowseFiles = false, long? sabnzbdConnectionId = null,
+            long? acquisitionConnectionId = null, DownloadClientKind? downloadClientKindId = null, MediaType? mediaTypeId = null, bool canRetry = false,
+            DownloadPriorityType downloadPriorityTypeId = DownloadPriorityType.Normal)
         {
+            DownloadPriorityTypeId = downloadPriorityTypeId;
+            CanRetry = canRetry;
+            AcquisitionConnectionId = acquisitionConnectionId;
+            DownloadClientKindId = downloadClientKindId;
+            MediaTypeId = mediaTypeId;
             IndexerName = indexerName;
             BytesPerSecond = bytesPerSecond;
             CanPause = canPause;
@@ -152,6 +190,236 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // It kept where its files are, so a person can import them by hand.
         [DataField(typeof(OperationFields), nameof(OperationFields.CanImportManually))]
         public bool CanImportManually { get; }
+
+        // The client that carries the download out, and the media type of its title.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
+        public long? AcquisitionConnectionId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadClientKindId), false)]
+        public DownloadClientKind? DownloadClientKindId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
+        public MediaType? MediaTypeId { get; }
+
+        // A failure nobody put aside yet can be tried again.
+        [DataField(typeof(OperationFields), nameof(OperationFields.CanPause))]
+        public bool CanRetry { get; }
+
+        // How soon its client takes it.
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadPriorityTypeId))]
+        public DownloadPriorityType DownloadPriorityTypeId { get; }
+    }
+
+    public sealed class ReadDownloadClientsParametersV1 : BaseParameters
+    {
+    }
+
+    // One tab of the Downloads page: a client with its open downloads, how fast it is and how much it still has to fetch.
+    public sealed class DownloadClientV1 : BaseResponse
+    {
+        public DownloadClientV1(DownloadClientKind downloadClientKindId, long? acquisitionConnectionId, long settingsConnectionId, string name, int queueCount, int activeCount, int pausedCount,
+            int warningCount, long bytesPerSecond, long remainingBytes, long[]? speedSamples = null)
+        {
+            SpeedSamples = speedSamples ?? [];
+            DownloadClientKindId = downloadClientKindId;
+            AcquisitionConnectionId = acquisitionConnectionId;
+            SettingsConnectionId = settingsConnectionId;
+            Name = name;
+            QueueCount = queueCount;
+            ActiveCount = activeCount;
+            PausedCount = pausedCount;
+            WarningCount = warningCount;
+            BytesPerSecond = bytesPerSecond;
+            RemainingBytes = remainingBytes;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadClientKindId))]
+        public DownloadClientKind DownloadClientKindId { get; }
+
+        // SABnzbd and qBittorrent are a client per connection; the others are one client of Jularr whatever its servers or sources.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
+        public long? AcquisitionConnectionId { get; }
+
+        // The connection whose settings the client's settings open (the first of its servers or sources).
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
+        public long SettingsConnectionId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Name))]
+        public string Name { get; }
+
+        // Open downloads, those that fetch or unpack now, those paused, and those that failed unseen or wait for a person.
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int QueueCount { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int ActiveCount { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int PausedCount { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int WarningCount { get; }
+
+        [DataField(typeof(LiveFields), nameof(LiveFields.BytesPerSecond))]
+        public long BytesPerSecond { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.SizeBytes))]
+        public long RemainingBytes { get; }
+
+        // The client's speed over the last minutes, oldest first, one sample every few seconds while the page or the stream was read.
+        [DataField(typeof(OperationFields), nameof(OperationFields.SpeedSamples))]
+        public long[] SpeedSamples { get; }
+
+        public DownloadClientV1 WithSamples(long[] samples) => new(DownloadClientKindId, AcquisitionConnectionId, SettingsConnectionId, Name, QueueCount, ActiveCount, PausedCount, WarningCount,
+            BytesPerSecond, RemainingBytes, samples);
+    }
+
+    // What a news server of Jularr's Usenet downloader did in its last pass: the connections it held, its pace, and its articles with the missing ones since the start.
+    public sealed class NewsServerV1 : BaseResponse
+    {
+        public NewsServerV1(long acquisitionConnectionId, int connections, long bytesPerSecond, int articles, int missingArticles, int maxConnections)
+        {
+            MaxConnections = maxConnections;
+            AcquisitionConnectionId = acquisitionConnectionId;
+            Connections = connections;
+            BytesPerSecond = bytesPerSecond;
+            Articles = articles;
+            MissingArticles = missingArticles;
+        }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
+        public long AcquisitionConnectionId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int Connections { get; }
+
+        [DataField(typeof(LiveFields), nameof(LiveFields.BytesPerSecond))]
+        public long BytesPerSecond { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int Articles { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int MissingArticles { get; }
+
+        // The connections the server allows (a server without its own number gets the downloader's eight).
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int MaxConnections { get; }
+    }
+
+    // One client of the Downloads page: a kind, and for SABnzbd and qBittorrent the connection.
+    public sealed class DownloadClientParametersV1 : BaseParameters
+    {
+        public DownloadClientParametersV1(DownloadClientKind? downloadClientKindId = null, long? acquisitionConnectionId = null)
+        {
+            DownloadClientKindId = downloadClientKindId;
+            AcquisitionConnectionId = acquisitionConnectionId;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadClientKindId), false)]
+        public DownloadClientKind? DownloadClientKindId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
+        public long? AcquisitionConnectionId { get; }
+    }
+
+    // A client's speed limit in bytes per second; none when empty.
+    public sealed class DownloadSpeedLimitV1 : BaseResponse
+    {
+        public DownloadSpeedLimitV1(long? maxBytesPerSecond)
+        {
+            MaxBytesPerSecond = maxBytesPerSecond;
+        }
+
+        [DataField(typeof(DownloadStorageFields), nameof(DownloadStorageFields.MaxBytesPerSecond), false)]
+        public long? MaxBytesPerSecond { get; }
+    }
+
+    public sealed class SetDownloadSpeedLimitDataV1 : BaseData
+    {
+        public SetDownloadSpeedLimitDataV1(long? maxBytesPerSecond)
+        {
+            MaxBytesPerSecond = maxBytesPerSecond;
+        }
+
+        [DataField(typeof(DownloadStorageFields), nameof(DownloadStorageFields.MaxBytesPerSecond), false)]
+        public long? MaxBytesPerSecond { get; }
+    }
+
+    // The chosen downloads take one priority.
+    public sealed class PrioritizeActivityDownloadsDataV1 : BaseData
+    {
+        public PrioritizeActivityDownloadsDataV1(long[] operationIds, DownloadPriorityType downloadPriorityTypeId)
+        {
+            OperationIds = operationIds;
+            DownloadPriorityTypeId = downloadPriorityTypeId;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Ids))]
+        public long[] OperationIds { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadPriorityTypeId))]
+        public DownloadPriorityType DownloadPriorityTypeId { get; }
+    }
+
+    // A download moves before another of its client's queue (dragged there), or to the end without one.
+    public sealed class MoveActivityDownloadDataV1 : BaseData
+    {
+        public MoveActivityDownloadDataV1(long? beforeOperationId)
+        {
+            BeforeOperationId = beforeOperationId;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id), false)]
+        public long? BeforeOperationId { get; }
+    }
+
+    // Finished downloads that leave the history.
+    public sealed class DeleteActivityHistoryDataV1 : BaseData
+    {
+        public DeleteActivityHistoryDataV1(long[] operationIds)
+        {
+            OperationIds = operationIds;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Ids))]
+        public long[] OperationIds { get; }
+    }
+
+    // A download added by hand: the title it is for and the NZB, torrent or magnet address.
+    public sealed class AddActivityDownloadDataV1 : BaseData
+    {
+        public AddActivityDownloadDataV1(long wantedItemId, string downloadUrl)
+        {
+            WantedItemId = wantedItemId;
+            DownloadUrl = downloadUrl;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadUrl))]
+        public string DownloadUrl { get; }
+    }
+
+    public sealed class ApplyActivityDownloadsParametersV1 : BaseParameters
+    {
+    }
+
+    // The chosen downloads of the queue and what happens to them; each client is told as for one download, and those it cannot do this for are left as they are.
+    public sealed class ApplyActivityDownloadsDataV1 : BaseData
+    {
+        public ApplyActivityDownloadsDataV1(long[] operationIds, DownloadBulkActionType downloadBulkActionTypeId)
+        {
+            OperationIds = operationIds;
+            DownloadBulkActionTypeId = downloadBulkActionTypeId;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Ids))]
+        public long[] OperationIds { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadBulkActionTypeId))]
+        public DownloadBulkActionType DownloadBulkActionTypeId { get; }
     }
 
     public sealed class ReadActivitySummaryParametersV1 : BaseParameters
@@ -348,8 +616,20 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         public bool BlocksRelease { get; }
     }
 
+    // The whole queue, or one client's part of it.
     public sealed class PauseActivityQueueParametersV1 : BaseParameters
     {
+        public PauseActivityQueueParametersV1(DownloadClientKind? downloadClientKindId = null, long? acquisitionConnectionId = null)
+        {
+            DownloadClientKindId = downloadClientKindId;
+            AcquisitionConnectionId = acquisitionConnectionId;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadClientKindId), false)]
+        public DownloadClientKind? DownloadClientKindId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
+        public long? AcquisitionConnectionId { get; }
     }
 
     public sealed class PauseActivityDownloadDataV1 : BaseData

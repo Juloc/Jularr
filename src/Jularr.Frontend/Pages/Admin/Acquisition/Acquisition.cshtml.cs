@@ -265,6 +265,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 body.Add(new A(Glyph("download", 14), new Text("console.open")).Class("button button--compact button--soft")
                     .Attribute("href", Address(item.Id) + "&Pane=downloads"));
 
+            // Every download client has its tab on the Downloads page; a SABnzbd or qBittorrent is a tab of its own.
+            if (DownloadClientKinds.Of(item.AcquisitionConnectionTypeId) is { } kind && kind != DownloadClientKind.Direct)
+                body.Add(new A(Glyph("download", 14), new Text("admin.menu.downloads")).Class("button button--compact button--soft")
+                    .Attribute("href", "/Admin/Downloads?Client=" + kind + (kind is DownloadClientKind.Sabnzbd or DownloadClientKind.Qbittorrent ? "&ConnectionId=" + item.Id.ToString(CultureInfo.InvariantCulture) : "")));
+
             // The settings are inputs of the card; the page's pill saves them. A key or password is never shown again.
             body.Add(ConnectionForm(item.AcquisitionConnectionTypeId, csrf, item));
 

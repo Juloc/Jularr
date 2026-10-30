@@ -41,6 +41,14 @@
     --info: light-dark(#487bd6, #9dbdf7);
     --info-soft: light-dark(#edf3ff, #273653);
 
+    // Download phases (Downloads page): one colour each for the pill, the bar and the icon tile.
+    --phase-queued: #8a82a0;
+    --phase-downloading: #2f6fed;
+    --phase-extracting: #0f9d8f;
+    --phase-paused: #a38bd6;
+    --phase-completed: #1d9a5a;
+    --phase-failed: #c63247;
+
     // Shapes: pills for buttons, chips, search and single-line fields; 19px panels, 13px stat and detail tiles and multiline fields, 12px icon tiles.
     --radius-control: 999px;
     --radius-panel: 19px;

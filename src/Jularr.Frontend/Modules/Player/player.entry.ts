@@ -8,6 +8,7 @@ import type { StyledSubtitles } from "./StyledSubtitles";
 import { deviceKind, libassWanted } from "./Device";
 import { Automatic, nextQuality, recordStall, StallSeconds, troubled } from "./AutoQuality";
 import { pickSecondSubtitle, pickTranslationSource, SecondSubtitleLine, type SubtitleOption } from "./Subtitles";
+import { healed, AttemptsBeforeNotice, replanDelay, stallStep } from "./Recovery";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
@@ -94,7 +95,7 @@ async function start(player: HTMLElement): Promise<void> {
     const antiforgery = player.dataset.antiforgery ?? "";
     let plan: PlaybackPlan | null = null;
     let hls: { destroy(): void } | null = null;
-    let hlsPlayer: { recoverMediaError(): void } | null = null;
+    let hlsPlayer: { recoverMediaError(): void; startLoad(): void } | null = null;
     let save: (value: object, leaving?: boolean) => void = () => undefined;
     let switching = false;
     // A Chromecast showing this playback: its own session, its own position.
@@ -109,6 +110,10 @@ async function start(player: HTMLElement): Promise<void> {
     let idle = 0;
     let seeking = false;
     let recoveries = 0;
+    // Repairing in place did not help: the same video is planned again, a fresh session at the same place.
+    let replans = 0;
+    let replannedAt = 0;
+    let escalating = false;
     let sourceReady = false;
     let sourcePosition = 0;
     let lastSubtitle: { key: string; language: string | undefined } | undefined;
@@ -408,9 +413,10 @@ async function start(player: HTMLElement): Promise<void> {
                 }
             });
             instance.on(Hls.Events.ERROR, (_, data) => {
-                // A conversion stopped for room answers Gone; the server says which.
-                if (data.response?.code === 410) { instance.destroy(); void failure(); return; }
+                // A conversion stopped for room answers Gone: its session is over, so the video is planned again.
+                if (data.response?.code === 410) { instance.destroy(); void escalate(); return; }
                 if (!data.fatal) return;
+                console.warn("Playback error", data.type, data.details, data.response?.code);
                 // A dropped connection or a broken segment in the middle of the film is retried in place a few times before the player gives up,
                 // so the page needs no reload; a picture that plays again resets the count.
                 if (recoveries < MaxRecoveries) {
@@ -418,7 +424,7 @@ async function start(player: HTMLElement): Promise<void> {
                     if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { instance.startLoad(); return; }
                     if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { instance.recoverMediaError(); return; }
                 }
-                void failure();
+                void escalate();
             });
             instance.on(Hls.Events.BUFFER_CODECS, (_, data) => { hlsCodecs = [data.video?.codec, data.audio?.codec].filter(Boolean).join(" \u00b7 "); });
             instance.on(Hls.Events.FRAG_LOADED, (_, data) => { hlsSegmentMs = data.frag.stats.loading.end - data.frag.stats.loading.start; });
@@ -638,7 +644,9 @@ async function start(player: HTMLElement): Promise<void> {
     // The picture element reports a broken stretch as well (decoding, a segment that does not fit): an HLS playback is repaired in place first, like a fatal error of the loader.
     video.addEventListener("error", () => {
         if (hlsPlayer && recoveries < MaxRecoveries) { recoveries++; hlsPlayer.recoverMediaError(); return; }
-        void failure();
+        // A file the browser cannot play at all is no passing fault: planning it again would give the same answer.
+        if (plan?.playbackModeTypeId === 1 && video.error?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) { void failure(); return; }
+        void escalate();
     });
     video.addEventListener("waiting", () => { if (!video.paused) showLoading(); });
     video.addEventListener("stalled", () => { if (!video.paused) showLoading(); });
@@ -649,11 +657,36 @@ async function start(player: HTMLElement): Promise<void> {
     video.addEventListener("pause", stopLoading);
     video.addEventListener("ended", stopLoading);
 
+    // A picture that stands still while it should play, with no error at all (a segment the server never delivers), is what a reload would cure:
+    // the loader is nudged after twenty seconds, a fresh session is planned after sixty.
+    let watchedTime = -1;
+    let progressAt = performance.now();
+    let nudged = false;
+    window.setInterval(() => {
+        const now = performance.now();
+        if (video.paused || video.ended || !plan || casting || leaving || escalating || switching || Math.abs(video.currentTime - watchedTime) > 0.01) {
+            watchedTime = video.currentTime;
+            progressAt = now;
+            nudged = false;
+            return;
+        }
+        const step = stallStep((now - progressAt) / 1000);
+        if (step === "resume" && !nudged) {
+            nudged = true;
+            hlsPlayer?.startLoad();
+        } else if (step === "replan") {
+            progressAt = now;
+            nudged = false;
+            void escalate();
+        }
+    }, 2_000);
+
     // Transport state.
     video.addEventListener("play", () => setPlaying(true));
     video.addEventListener("pause", () => setPlaying(false));
     video.addEventListener("timeupdate", () => {
         if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) stopLoading();
+        if (replans > 0 && !escalating && healed(replannedAt, video.currentTime)) replans = 0;
         if (!seeking) timeline.value = String(Math.floor(video.currentTime));
         timeline.style.setProperty('--played', `${Number(timeline.value) / Math.max(1, Number(timeline.max)) * 100}%`);
         player.querySelector("[data-role=time]")!.textContent = clock(video.currentTime);
@@ -1475,6 +1508,33 @@ async function start(player: HTMLElement): Promise<void> {
         show(code);
         const shown = status.textContent;
         window.setTimeout(() => { if (status.textContent === shown) status.hidden = true; }, 8_000);
+    }
+
+    // The playback never ends on its own: when repairing in place fails, a new session is planned at the same position, after a growing pause
+    // (at most fifteen seconds), for as long as it takes. After several tries in a row the message shows once as a note; the tries go on and a
+    // session that plays again takes the message away.
+    async function escalate(): Promise<void> {
+        if (escalating || switching || casting || leaving || !plan) return;
+        escalating = true;
+        let told = false;
+        try {
+            for (;;) {
+                if (replans >= AttemptsBeforeNotice && !told) {
+                    told = true;
+                    await failure();
+                }
+                showLoading();
+                await new Promise(resolve => window.setTimeout(resolve, replanDelay(replans++)));
+                if (!plan || leaving || casting) return;
+                if (await replan(audioIndex, quality)) {
+                    recoveries = 0;
+                    replannedAt = video.currentTime;
+                    return;
+                }
+            }
+        } finally {
+            escalating = false;
+        }
     }
 
     // A conversion the server stopped to make room says so; anything else is a plain failure.
