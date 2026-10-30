@@ -114,6 +114,60 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(after.IsRecognizing);
         }
 
+        // After a download nobody has to open a book: the library is prepared in the background, newest first, EPUBs at once and a scan through the
+        // recognizer, which prepares it when it is done; the book then knows its language for the server's translation.
+        [TestMethod]
+        public async Task Books_ArePreparedWithoutOpening_ScansThroughTheRecognizer()
+        {
+            using var storage = new TemporaryDirectory();
+            var recognizer = new FakeRecognizer();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddSingleton<IPageRecognizer>(recognizer));
+            var scan = await AddScanAsync(host, storage.Path, ScannedPdf(pages: 2));
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Ocr'");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\""));
+
+            // The scan is the newest book: it waits for the recognizer; then the EPUB is prepared; then there is nothing left.
+            Assert.IsTrue(await PrepareAsync(host));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingRecognitions\" WHERE \"FinishedAt\" IS NULL"));
+            Assert.IsTrue(await PrepareAsync(host));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\" WHERE \"CacheCompletedAt\" IS NOT NULL"));
+            Assert.IsFalse(await PrepareAsync(host));
+
+            // The recognizer reads the scan and prepares it; its language comes from its text.
+            await RecognizeAsync(host, true);
+            Assert.AreEqual("en", await host.ScalarAsync("SELECT document.\"Language\" FROM \"ReadingDocuments\" AS document JOIN \"StoredFiles\" AS file ON file.\"Id\" = document.\"StoredFileId\" "
+                + "WHERE file.\"MediaAssetId\" = " + scan + " AND file.\"MissingSince\" IS NULL"));
+            Assert.IsFalse(await PrepareAsync(host));
+        }
+
+        // Two copies of the same book share one document, which names only the copy opened last: each copy is prepared once, not in turn forever.
+        [TestMethod]
+        public async Task Books_ArePreparedOnce_WhenTheLibraryHoldsTwoCopies()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var (_, second) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var books = Path.Combine(storage.Path, "1", "Books");
+            File.Copy(Path.Combine(books, "First Book", "First Book.epub"), Path.Combine(books, "Second Book", "Second Book.epub"), overwrite: true);
+            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"SizeBytes\" = " + new FileInfo(Path.Combine(books, "Second Book", "Second Book.epub")).Length
+                + " WHERE \"MediaAssetId\" = " + second);
+
+            Assert.IsTrue(await PrepareAsync(host));
+            Assert.IsTrue(await PrepareAsync(host));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\""));
+            Assert.IsFalse(await PrepareAsync(host));
+        }
+
+        [TestMethod]
+        [DataRow("The man was sure that it is the end of the day and he went with them to the house of the old woman.", "en")]
+        [DataRow("Der Mann sagte, dass er nicht mit ihr zu der Stadt gehen will, und das ist ein Problem, das sich nicht löst.", "de")]
+        [DataRow("Le chat est dans la maison et les enfants ne sont pas là, mais une femme que nous aimons est dans le jardin.", "fr")]
+        [DataRow("12 34 56", null)]
+        public void Language_IsGuessedFromCommonWords(string text, string? expected)
+        {
+            Assert.AreEqual(expected, ReadingLanguage.Guess(text));
+        }
+
         // A long scan is read a few pages at a time, the page a reader has open first; an interrupted scan goes on where it stopped.
         [TestMethod]
         public async Task Recognition_ReadsInSlices_OpenPageFirst_AndResumes()
@@ -353,6 +407,12 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("INSERT INTO \"StoredFiles\" (\"LibraryRootId\", \"RelativePath\", \"SizeBytes\", \"ModifiedAt\", \"LastSeenAt\", \"MediaAssetId\") "
                 + "SELECT \"LibraryRootId\", 'Second Book/Second Book.pdf', " + pdf.Length + ", now(), now(), \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" = " + second);
             return second;
+        }
+
+        private static async Task<bool> PrepareAsync(Host host)
+        {
+            await using var scope = host.Services.CreateAsyncScope();
+            return (await scope.ServiceProvider.GetRequiredService<PrepareReadingBooksV1>().ExecuteAsync<UpdateResult>(new ReadingPreparationParametersV1(), default, CancellationToken.None)).Success;
         }
 
         private static async Task<bool> RecognizeAsync(Host host, bool expected)
