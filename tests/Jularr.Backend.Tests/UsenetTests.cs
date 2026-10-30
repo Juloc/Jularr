@@ -34,7 +34,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         [DataRow("redirect", "HTTP 302", "acquisition_unavailable")]
         [DataRow("authentication", "HTTP 403", "acquisition_grab_failed")]
-        [DataRow("rate-limit", "HTTP 429", "acquisition_unavailable")]
+        [DataRow("rate-limit", "HTTP 429", "acquisition_rate_limited")]
         [DataRow("server", "HTTP 503", "acquisition_unavailable")]
         [DataRow("timeout", "timeout True", "acquisition_unavailable")]
         [DataRow("network", "transport NameResolutionError", "acquisition_unavailable")]
@@ -98,7 +98,7 @@ namespace Jularr.Backend.Tests
             cancellation.Cancel();
             using var handler = new FakeIndexer("<nzb />") { NzbResponse = () => throw new OperationCanceledException(cancellation.Token) };
             using var http = new HttpClient(handler);
-            var client = new NewznabClient(http);
+            var client = new NewznabClient(http, new NewznabGate(TimeSpan.Zero));
 
             await Assert.ThrowsAsync<OperationCanceledException>(() => client.DownloadNzbAsync(new Uri("https://indexer.example.test/getnzb/feature"),
                 "unused.nzb", cancellation.Token));
