@@ -76,7 +76,32 @@ namespace Jularr.Backend.Service.User.Library.V1
                     leaf."WorkId"
             """;
 
-        public const string ProgressJoin = "LEFT JOIN (" + ProgressCounts + ") AS unitCounts ON unitCounts.\"WorkId\" = work.\"Id\"\n" + ProgressStateJoin;
+        // The same counts for the one Work of the row alone: the units of other Works are never read.
+        private const string WorkProgressCounts =
+            """
+                SELECT
+                    count(*)::integer AS "Total",
+                    count(*) FILTER (WHERE unitProgress."IsCompleted")::integer AS "Done",
+                    count(*) FILTER (WHERE NOT unitProgress."IsCompleted" AND (coalesce(unitProgress."PositionMs", 0) > 0 OR coalesce(unitProgress."Progression", 0) > 0))::integer AS "Started"
+                FROM
+                    "WorkUnits" AS leaf
+                    LEFT JOIN "MediaProgress" AS unitProgress ON unitProgress."ProfileId" = @ProfileId AND unitProgress."WorkId" = leaf."WorkId" AND unitProgress."WorkUnitId" = leaf."Id"
+                WHERE
+                    leaf."WorkId" = work."Id"
+                    AND EXISTS (SELECT 1 FROM "MediaProgress" AS progress WHERE progress."ProfileId" = @ProfileId AND progress."WorkId" = work."Id")
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkUnits" AS child
+                        WHERE
+                            child."ParentWorkUnitId" = leaf."Id"
+                    )
+                GROUP BY
+                    leaf."WorkId"
+            """;
+
+        public const string ProgressJoin = "LEFT JOIN LATERAL (" + WorkProgressCounts + ") AS unitCounts ON TRUE\n" + ProgressStateJoin;
         public const string PageProgressJoin = "LEFT JOIN \"UnitProgressCounts\" AS unitCounts ON unitCounts.\"WorkId\" = work.\"Id\"\n" + ProgressStateJoin;
 
         private const string ProgressStateJoin =
@@ -267,18 +292,17 @@ namespace Jularr.Backend.Service.User.Library.V1
                         ) AS subtitles
                 ) AS present ON TRUE
             ) AS availability
-            LEFT JOIN (
+            LEFT JOIN LATERAL (
                 SELECT
-                    asset."WorkId",
                     coalesce(array_agg(DISTINCT track."Language") FILTER (WHERE track."MediaTrackTypeId" = 2 AND track."Language" IS NOT NULL), '{}') AS "AudioLanguages",
                     coalesce(array_agg(DISTINCT track."Language") FILTER (WHERE track."MediaTrackTypeId" = 3 AND track."Language" IS NOT NULL), '{}') AS "SubtitleLanguages"
                 FROM
                     "MediaAssets" AS asset
                     JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL
                     JOIN "MediaTracks" AS track ON track."StoredFileId" = file."Id"
-                GROUP BY
-                    asset."WorkId"
-            ) AS tracks ON tracks."WorkId" = work."Id"
+                WHERE
+                    asset."WorkId" = work."Id"
+            ) AS tracks ON TRUE
             CROSS JOIN LATERAL (
                 -- What happens with the title before the library holds it: a running download,
                 -- a running search, a request that waits.
