@@ -162,12 +162,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             bool Enough(IReadOnlyList<ReleaseOffer> found)
             {
                 var all = found.Concat(offers.Values).ToArray();
-                return AcquisitionSelectionLogic.Select(profile, target, kind, scope, all, focusLanguage).Ranked.Any(evaluation =>
+                return AcquisitionSelectionLogic.Select(profile, target, kind, scope, all, focusLanguage, automatic).Ranked.Any(evaluation =>
                     evaluation.IsSelectable && (!profile.IsBook || profile.LanguageOrder.Length == 0
                         || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages)));
             }
 
-            var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
+            var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
 
             // Expansion tiers only run while too few releases are usable.
             for (var tier = 0; tier <= budget.MaxTier && offers.Count < budget.MaxResults; tier++)
@@ -191,7 +191,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 // The direct sources answered at the same time; their releases belong to the choice.
                 await direct;
                 await nyaaSearch;
-                selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
+                selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
                 if (selection.Ranked.Count(evaluation => evaluation.IsSelectable
                     && (!profile.IsBook || profile.LanguageOrder.Length == 0
                         || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages))) >= budget.TargetUsable)
@@ -203,7 +203,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // The direct sources are waited for; they answered at the same time as the indexers.
             await direct;
             await nyaaSearch;
-            selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
+            selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
 
             // Manual grabs pick from what was shown; the cache is bounded by offer count.
             var grabbable = selection.Ranked.Where(evaluation => evaluation.Decision != SelectionDecision.Rejected).Select(evaluation => evaluation.Candidate.Id).ToHashSet(StringComparer.Ordinal);
@@ -373,8 +373,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 nativePaths = await _downloads.OpenAsync(context, client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? DownloadStorageArea.Usenet : DownloadStorageArea.Torrent, ct);
             }
 
-            // A grab counts against its indexer's daily limit.
-            if (!await context.ExecuteBatchAsync((ctx, token) => ctx.CountIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token), ct))
+            // A grab counts against its indexer's daily limit; a download added by hand (connection 0) has no indexer.
+            var manual = offer.ConnectionId <= 0;
+            if (!manual && !await context.ExecuteBatchAsync((ctx, token) => ctx.CountIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token), ct))
             {
                 throw new ServiceUnavailableException("acquisition_limit_reached");
             }
@@ -385,7 +386,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 ? EpisodeNumbering.Episodes(await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnitStatesAsync(target.WantedItemId, token), ct))
                 : [];
             var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(kind, offer.Title, episodes);
-            var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end,
+            var grab = new AcquisitionGrabData(target.WantedItemId, manual ? null : offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end,
                 requestedByAccountId: accountId) { IndexerFlags = [.. offer.IndexerFlags], RequiresActiveMonitoring = automatic };
             var operationId = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
@@ -524,11 +525,15 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // A refused grab releases the reservation and its indexer count; the target is searched again later.
             if (failure is not null)
             {
-                await context.ExecuteBatchAsync(async (ctx, token) =>
+                if (!manual)
                 {
-                    await ctx.ReturnIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token);
-                    return true;
-                }, ct);
+                    await context.ExecuteBatchAsync(async (ctx, token) =>
+                    {
+                        await ctx.ReturnIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token);
+                        return true;
+                    }, ct);
+                }
+
                 await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
                     await ctx.FailDownloadAsync(new DownloadFailureData(operationId, failure, DateTime.UtcNow.AddMinutes(30)), token);

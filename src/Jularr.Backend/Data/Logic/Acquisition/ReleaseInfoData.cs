@@ -94,5 +94,56 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // Volume range of a Manga release; empty for a complete or unnumbered one.
         public int? VolumeStart { get; init; }
         public int? VolumeEnd { get; init; }
+
+        // What the name of a book release states; null for other media.
+        public BookReleaseName? Book { get; init; }
     }
+
+    // Everything a book release name states, read without the request.
+    internal sealed class BookReleaseName
+    {
+        public BookReleaseName(string title, BookReleaseKind kind, string? format, int? volumeStart, int? volumeEnd, IReadOnlyList<string> editions, string? publisher, string? group, int? year,
+            IReadOnlyList<string> languages)
+        {
+            Title = title;
+            Kind = kind;
+            Format = format;
+            VolumeStart = volumeStart;
+            VolumeEnd = volumeEnd;
+            Editions = editions;
+            Publisher = publisher;
+            Group = group;
+            Year = year;
+            Languages = languages;
+        }
+
+        // The name without tags, volumes, formats and edition words.
+        public string Title { get; }
+        public BookReleaseKind Kind { get; }
+
+        // The named file format (EPUB, PDF, CBZ, M4B ...); null when the name does not say.
+        public string? Format { get; }
+
+        // A single volume has no end; an unnumbered release has neither.
+        public int? VolumeStart { get; }
+        public int? VolumeEnd { get; }
+
+        // Edition words in a fixed order: Digital, WebNovel, Compilation, Complete, Illustrated.
+        public IReadOnlyList<string> Editions { get; }
+        public string? Publisher { get; }
+        public string? Group { get; }
+        public int? Year { get; }
+        public IReadOnlyList<string> Languages { get; }
+
+        public bool IsComplete => Editions.Contains("Complete");
+
+        // Volumes the name counts; null when it names none.
+        public int? VolumeCount => VolumeStart is { } start ? Math.Max(start, VolumeEnd ?? start) - start + 1 : null;
+    }
+
+    // Points of one score rule, with what it saw.
+    internal sealed record ScorePoint(string Code, string? Value, int Points);
+
+    // What a book search asks besides the title: a series (light novels) or one book, the size limits per volume of the kinds, and whether a person decides (manual search).
+    internal sealed record BookSearch(bool IsSeries, IReadOnlyDictionary<string, QualitySize> Sizes, bool Automatic);
 }

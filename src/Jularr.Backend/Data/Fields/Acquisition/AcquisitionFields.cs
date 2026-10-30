@@ -67,6 +67,9 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly IntField Score = new();
         public static readonly StringField ReasonCode = new() { MaximumLength = 64, AllowBlank = false };
         public static readonly StringField ReasonValue = new() { MaximumLength = 1000, Required = false };
+        public static readonly EnumField BookReleaseKindId = new(typeof(BookReleaseKind)) { Required = false };
+        public static readonly EnumField ReleaseSizeMarkId = new(typeof(ReleaseSizeMark)) { Required = false };
+        public static readonly BoolField IsComplete = new();
         public static readonly IntField ProgressPercent = new() { Minimum = 0, Maximum = 100, Required = false };
         public static readonly StringField Progress = new() { AllowBlank = false };
         public static readonly StringField ExternalId = new(NpgsqlDbType.Varchar) { MaximumLength = 128, Required = false };

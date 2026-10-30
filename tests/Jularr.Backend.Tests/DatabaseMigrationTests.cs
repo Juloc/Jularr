@@ -190,6 +190,21 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task BookVolumeSizes_UpgradeAddsTheLimitsPerVolumeOfTheBookKinds()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(BookVolumeSizes_UpgradeAddsTheLimitsPerVolumeOfTheBookKinds));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 25).ToArray()).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            Assert.AreEqual("Ebook:0-150,Illustrated:0-300,Manga:0-700", await ScalarAsync(cs,
+                """SELECT string_agg("Quality" || ':' || "MinimumMbPerMinute"::integer || '-' || "MaximumMbPerMinute"::integer, ',' ORDER BY "Quality") FROM "QualityDefinitions" WHERE "MediaTypeId" = 3"""));
+            Assert.AreEqual(25, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0025_book_volume_sizes'"""));
+        }
+
+        [TestMethod]
         public async Task LibraryTieIndexes_UpgradeKeepsTiesAndIndexesTheirMarkedRows()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
@@ -491,8 +506,8 @@ namespace Jularr.Backend.Tests
                 "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 18"));
             Assert.AreEqual("Torrent", await ScalarAsync(cs,
                 "SELECT \"Key\" FROM \"AcquisitionConnectionTypes\" WHERE \"Id\" = 12"));
-            Assert.AreEqual("0025_smart_pages_view", await ScalarAsync(cs,
-                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 25"));
+            Assert.AreEqual("0027_smart_pages_view", await ScalarAsync(cs,
+                "SELECT \"Name\" FROM \"DatabaseSchemaVersions\" WHERE \"Version\" = 27"));
             Assert.AreEqual("SmartPages", await ScalarAsync(cs,
                 "SELECT \"Key\" FROM \"ReadingViewTypes\" WHERE \"Id\" = 3"));
             Assert.AreEqual(2L, await ScalarAsync(cs,

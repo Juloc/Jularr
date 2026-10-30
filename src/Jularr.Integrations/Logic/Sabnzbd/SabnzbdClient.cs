@@ -180,6 +180,48 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             RequireStatus(await RequireBodyAsync(response, ct));
         }
 
+        // The job's priority: -1 low, 0 normal, 1 high, 2 force.
+        public async Task SetPriorityAsync(SabnzbdConnection connection, string nzoId, int priority, CancellationToken ct)
+        {
+            var id = ValidateNzoId(nzoId);
+            using var response = await SendAsync(connection, [new("mode", "queue"), new("name", "priority"), new("value", id),
+                new("value2", Math.Clamp(priority, -1, 2).ToString(CultureInfo.InvariantCulture))], ct);
+            await RequireBodyAsync(response, ct);
+        }
+
+        // The job moves to the given place of the queue, from 0 (SABnzbd keeps higher priorities ahead).
+        public async Task MoveAsync(SabnzbdConnection connection, string nzoId, int index, CancellationToken ct)
+        {
+            var id = ValidateNzoId(nzoId);
+            using var response = await SendAsync(connection, [new("mode", "switch"), new("value", id), new("value2", Math.Max(0, index).ToString(CultureInfo.InvariantCulture))], ct);
+            await RequireBodyAsync(response, ct);
+        }
+
+        // SABnzbd's own speed limit in bytes per second; null is none.
+        public async Task<long?> GetSpeedLimitAsync(SabnzbdConnection connection, CancellationToken ct)
+        {
+            using var response = await SendAsync(connection, [new("mode", "queue"), new("start", "0"), new("limit", "1")], ct);
+            using var document = JsonDocument.Parse(await RequireBodyAsync(response, ct));
+            return document.RootElement.TryGetProperty("queue", out var queue) && ReadDouble(queue, "speedlimit_abs") is > 0 and < 1e13 and var limit ? (long)limit : null;
+        }
+
+        // A limit in whole kilobytes per second; none sets SABnzbd free.
+        public async Task SetSpeedLimitAsync(SabnzbdConnection connection, long? bytesPerSecond, CancellationToken ct)
+        {
+            var value = bytesPerSecond is > 0 and var limit ? Math.Max(1, limit / 1024).ToString(CultureInfo.InvariantCulture) + "K" : "0";
+            using var response = await SendAsync(connection, [new("mode", "config"), new("name", "speedlimit"), new("value", value)], ct);
+            await RequireBodyAsync(response, ct);
+        }
+
+        internal static int? ReadPriority(string? value) => value?.ToLowerInvariant() switch
+        {
+            "low" or "-1" => -1,
+            "normal" or "0" => 0,
+            "high" or "1" => 1,
+            "force" or "2" => 2,
+            _ => null
+        };
+
         private static void RequireStatus(string json)
         {
             try
@@ -300,7 +342,8 @@ namespace Jularr.Integrations.Logic.Sabnzbd
                 {
                     var percentage = ReadDouble(slot, "percentage");
                     jobs.Add(new SabnzbdQueueJob(id, ReadString(slot, "filename") ?? ReadString(slot, "name") ?? id, percentage is null ? null : Math.Clamp(percentage.Value, 0, 100),
-                        Megabytes(ReadDouble(slot, "mb")), Megabytes(ReadDouble(slot, "mbleft")), Duration(ReadString(slot, "timeleft")), paused ? "Paused" : ReadString(slot, "status")));
+                        Megabytes(ReadDouble(slot, "mb")), Megabytes(ReadDouble(slot, "mbleft")), Duration(ReadString(slot, "timeleft")), paused ? "Paused" : ReadString(slot, "status"),
+                        ReadPriority(ReadString(slot, "priority")), ReadLong(slot, "index") is { } index and <= int.MaxValue ? (int)index : null));
                 }
             }
 
