@@ -245,7 +245,8 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(progress).ToContainTextAsync("1 of 1 targets checked", new() { Timeout = 30_000 });
                 await Assertions.Expect(progress).ToHaveAttributeAsync("data-running", "false");
                 for (var attempt = 0; attempt < 50 && fakes.Grabbed.Count == 0; attempt++) await Task.Delay(100);
-                CollectionAssert.AreEqual(new[] { fakes.NzbAddress(film).ToString() }, fakes.Grabbed.ToArray());
+                // Switching monitoring on starts a search of its own, paced per indexer host, so it may take the offered release before or after the row's search does: the release is grabbed, not necessarily once.
+                CollectionAssert.AreEqual(new[] { fakes.NzbAddress(film).ToString() }, fakes.Grabbed.Distinct().ToArray());
 
                 // Select all shows the dock's bulk zone with the count; the mass editor sets monitoring for both and reports per title.
                 await page.Locator(".list-head").GetByRole(AriaRole.Checkbox, new() { Name = "Select all titles", Exact = true }).CheckAsync();
