@@ -228,17 +228,34 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task FranchiseAndUnitFileIndexes_AreCreatedOnUpgrade()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(FranchiseAndUnitFileIndexes_AreCreatedOnUpgrade));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 29).ToArray()).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            Assert.AreEqual(2L, await ScalarAsync(cs, """SELECT count(*) FROM pg_indexes WHERE indexname IN ('IX_Works_Franchise', 'IX_MediaAssets_WorkUnit')"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 501"""));
+            Assert.AreEqual(29, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0029_franchise_and_unit_file_indexes'"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+        }
+
+        [TestMethod]
         public async Task TranslationMachines_UpgradeStartsWithAnEmptyOrder_SoTheConfiguredEndpointKeepsTranslating()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
             var cs = TestPostgres.ResolveConnectionString(nameof(TranslationMachines_UpgradeStartsWithAnEmptyOrder_SoTheConfiguredEndpointKeepsTranslating));
             var options = Backup(folder.Path, out _);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
-            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 29).ToArray()).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 30).ToArray()).StartAsync(CancellationToken.None);
             await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
 
             Assert.AreEqual(0, await ScalarAsync(cs, """SELECT cardinality("TranslationMachines") FROM "InstanceSettings" WHERE "Id" = 1"""));
-            Assert.AreEqual(29, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0029_translation_machines'"""));
+            Assert.AreEqual(30, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0030_translation_machines'"""));
         }
 
         [TestMethod]

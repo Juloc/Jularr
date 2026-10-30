@@ -68,11 +68,19 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Admin/Acquisition/Profiles/New?type=Movie");
                 var profile = page.Locator("main form", new() { Has = page.Locator("[name=MinimumFormatScore]") });
                 await profile.Locator("[name=Name]").FillAsync("Browser quality");
+                await profile.Locator("details.profile-advanced > summary").ClickAsync();
                 await profile.Locator(".ui-form__row", new() { HasText = "Browser format" }).Locator("input[name$='.Score']").FillAsync("100");
                 await profile.Locator("[name=MinimumFormatScore]").FillAsync("100");
                 await Steps.SaveAsync(page);
                 await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
                 await Assertions.Expect(profile.Locator(".ui-form__row", new() { HasText = "Browser format" }).Locator("input[name$='.Score']")).ToHaveValueAsync("100");
+
+                // The round arrows move a quality; the first row cannot move up.
+                var qualities = profile.Locator(".ui-choice-table tbody tr");
+                await Assertions.Expect(qualities.First.GetByRole(AriaRole.Button, new() { Name = "Move up", Exact = true })).ToBeDisabledAsync();
+                var first = await qualities.First.Locator("th").InnerTextAsync();
+                await qualities.First.GetByRole(AriaRole.Button, new() { Name = "Move down", Exact = true }).ClickAsync();
+                await Assertions.Expect(qualities.Nth(1).Locator("th")).ToHaveTextAsync(first);
                 await page.GotoAsync("/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=1");
                 await Assertions.Expect(Row(page, "Browser quality")).ToBeVisibleAsync();
 
