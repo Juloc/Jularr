@@ -17,22 +17,24 @@ namespace Jularr.Backend.Tests
                 File.WriteAllText(Path.Combine(directory.Path, LibraryNaming.Alternative("film", attempt) + ".mkv"), "existing");
             }
 
-            var result = await DownloadImport.FreeStemAsync(new LocalStorageFiles(directory.Path), "", "film", [".mkv"], CancellationToken.None);
+            var result = await DownloadImport.FreeStemAsync(new LocalStorageFiles(directory.Path), "", "film", [".mkv"], new HashSet<string>(), CancellationToken.None);
 
             Assert.IsNull(result);
             Assert.AreEqual("existing", File.ReadAllText(Path.Combine(directory.Path, "film (99).mkv")));
         }
 
         [TestMethod]
-        public async Task ImportNameReservation_ChecksEveryExtensionInAGroup()
+        public async Task ImportNameReservation_ChecksEveryExtensionInAGroupAndTheInventory()
         {
             using var directory = new TemporaryDirectory();
             File.WriteAllText(Path.Combine(directory.Path, "film.mkv"), "existing");
             File.WriteAllText(Path.Combine(directory.Path, "film (2).en.srt"), "existing");
 
-            var result = await DownloadImport.FreeStemAsync(new LocalStorageFiles(directory.Path), "", "film", [".mkv", ".en.srt"], CancellationToken.None);
+            // A name the inventory still gives an assigned file that went missing is taken too.
+            var result = await DownloadImport.FreeStemAsync(new LocalStorageFiles(directory.Path), "", "film", [".mkv", ".en.srt"], new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "FILM (3).mkv" },
+                CancellationToken.None);
 
-            Assert.AreEqual("film (3)", result);
+            Assert.AreEqual("film (4)", result);
         }
 
         [TestMethod]

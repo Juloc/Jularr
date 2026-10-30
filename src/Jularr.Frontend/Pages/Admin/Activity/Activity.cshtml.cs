@@ -313,6 +313,11 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             facts.Add(("operation.created", new LocalTime(item.CreatedAt)));
 
             var body = new List<IUiComponent> { Drawer.State("table.status", state), Drawer.Facts([.. facts]) };
+            if (item.UnmatchedFiles is { Length: > 0 } unmatched)
+            {
+                body.Add(Drawer.Block("activity.unmatched", new Div([.. unmatched.Select(path => new Div(new Truncated(path[(path.LastIndexOf('/') + 1)..])).Class("activity-file-row"))])));
+            }
+
             if (item.OperationTypeId == OperationType.Download && !(item.OperationStatusTypeId == OperationStatusType.Failed))
             {
                 if (item.ManualUrl is { } manual) body.Add(Drawer.Block("activity.source.check", ManualLink(item, manual, csrf)));

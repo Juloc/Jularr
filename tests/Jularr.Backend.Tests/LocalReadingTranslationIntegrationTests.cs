@@ -55,16 +55,11 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(offlineHtml, "translategemma:4b", "Model choices must stay visible when Ollama is offline.");
             ollama.Unavailable = false;
 
-            // An empty Mozilla catalogue still reports English as a bridge; a German book
-            // must not offer that as a usable browser route without a de->en model.
-            mozilla.EmptyCatalogue = true;
-            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'de' WHERE \"Id\" = " + document.DocumentId);
-            using var germanReader = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
-            Assert.AreEqual(HttpStatusCode.OK, germanReader.StatusCode, await germanReader.Content.ReadAsStringAsync());
-            var germanHtml = await germanReader.Content.ReadAsStringAsync();
-            StringAssert.Contains(germanHtml, "data-browser-translation-targets=\"\"");
-            StringAssert.Contains(germanHtml, "reader__footer");
-            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en' WHERE \"Id\" = " + document.DocumentId);
+            // The server's TranslateGemma is the Reader's only translator; Mozilla is neither asked nor offered (#1726).
+            StringAssert.Contains(readerHtml, "data-translation-engine=" + (char)34 + "gemma" + (char)34);
+            Assert.IsFalse(readerHtml.Contains("data-local-quality-toggle", StringComparison.Ordinal));
+            Assert.IsFalse(readerHtml.Contains("data-route-url", StringComparison.Ordinal));
+            Assert.AreEqual(0, mozilla.Requests, "Opening the Reader must not reach Mozilla.");
 
             var baseUrl = "/api/v1/reading/documents/" + document.DocumentId + "/sections/0/local-translations/de/translategemma:4b";
             var request = baseUrl + "/blocks/0";
@@ -105,12 +100,13 @@ namespace Jularr.Backend.Tests
 
         private sealed class UnavailableMozilla : HttpMessageHandler
         {
-            public bool EmptyCatalogue { get; set; }
+            public int Requests { get; private set; }
 
-            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-                Task.FromResult(EmptyCatalogue
-                    ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"data":[]}""") }
-                    : new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                Requests++;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+            }
         }
 
         private sealed class FakeOllama : HttpMessageHandler

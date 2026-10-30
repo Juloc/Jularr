@@ -36,44 +36,71 @@ namespace Jularr.Integrations.Logic.Ocr
         }
 
         // Text lines of a page picture with their boxes in its pixels, top to bottom.
-        public OcrPage Read(byte[] picture) => Read(picture, 0);
-
-        // A page the PDF shows turned clockwise by this many degrees is read upright; the boxes are in the upright picture's pixels.
-        public OcrPage Read(byte[] picture, int rotation)
+        public OcrPage Read(byte[] picture)
         {
             using var decoded = SKBitmap.Decode(picture) ?? throw new InvalidDataException("The page picture cannot be decoded.");
-            if ((long)decoded.Width * decoded.Height > MaximumPixels)
+            return Read(decoded);
+        }
+
+        // Text lines of an upright page with their boxes in its pixels and the place of every character, top to bottom.
+        public OcrPage Read(SKBitmap picture)
+        {
+            if ((long)picture.Width * picture.Height > MaximumPixels)
             {
                 throw new InvalidDataException("The page picture is too large.");
             }
 
-            using var copy = decoded.ColorType == SKColorType.Rgba8888 ? decoded.Copy() : decoded.Copy(SKColorType.Rgba8888);
-            using var turned = rotation % 360 == 0 ? null : Turn(copy, ((rotation % 360) + 360) % 360);
-            var page = turned ?? copy;
-            var lines = new List<OcrLine>();
-            foreach (var box in Detect(page))
+            // The pixels in red, green, blue order, converted from whatever order the picture has.
+            using var page = new SKBitmap(new SKImageInfo(picture.Width, picture.Height, SKColorType.Rgba8888, SKAlphaType.Premul));
+            using (var pixmap = picture.PeekPixels())
             {
-                var (text, confidence) = Recognize(page, box);
+                if (!pixmap.ReadPixels(page.Info, page.GetPixels(), page.RowBytes))
+                {
+                    throw new InvalidDataException("The page picture cannot be read.");
+                }
+            }
+            var lines = new List<OcrLine>();
+            foreach (var box in Join(Detect(page)))
+            {
+                var (text, confidence, characters) = Recognize(page, box);
                 if (text.Trim() is { Length: > 0 } trimmed)
                 {
-                    lines.Add(new OcrLine(box.Left, box.Top, box.Right, box.Bottom, trimmed, confidence));
+                    lines.Add(new OcrLine(box.Left, box.Top, box.Right, box.Bottom, trimmed, confidence) { Characters = characters });
                 }
             }
 
             return new OcrPage(page.Width, page.Height, [.. lines.OrderBy(line => line.Top).ThenBy(line => line.Left)]);
         }
 
-        // The picture turned clockwise by a multiple of 90 degrees.
-        private static SKBitmap Turn(SKBitmap source, int degrees)
+        // Large type is detected word by word: pieces side by side on the same rows become their line again, so it is read in one go and in order. Only pieces
+        // a word space apart (against the smaller one's height) join; a wider gap (the gutter to another column, small type beside large) keeps them apart.
+        internal static List<SKRectI> Join(List<SKRectI> boxes)
         {
-            var sideways = degrees is 90 or 270;
-            var turned = new SKBitmap(sideways ? source.Height : source.Width, sideways ? source.Width : source.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
-            using var canvas = new SKCanvas(turned);
-            canvas.Translate(turned.Width / 2f, turned.Height / 2f);
-            canvas.RotateDegrees(degrees);
-            canvas.Translate(-source.Width / 2f, -source.Height / 2f);
-            canvas.DrawBitmap(source, 0, 0, SKSamplingOptions.Default);
-            return turned;
+            var lines = boxes.OrderBy(box => box.Left).ToList();
+            for (var merged = true; merged;)
+            {
+                merged = false;
+                for (var first = 0; first < lines.Count && !merged; first++)
+                {
+                    for (var second = first + 1; second < lines.Count && !merged; second++)
+                    {
+                        var (one, other) = (lines[first], lines[second]);
+                        var overlap = Math.Min(one.Bottom, other.Bottom) - Math.Max(one.Top, other.Top);
+                        var gap = Math.Max(one.Left, other.Left) - Math.Min(one.Right, other.Right);
+                        var low = Math.Min(one.Height, other.Height);
+                        if (overlap < low * 0.7f || gap > low * 0.6f)
+                        {
+                            continue;
+                        }
+
+                        lines[first] = SKRectI.Union(one, other);
+                        lines.RemoveAt(second);
+                        merged = true;
+                    }
+                }
+            }
+
+            return lines;
         }
 
         private List<SKRectI> Detect(SKBitmap page)
@@ -148,18 +175,18 @@ namespace Jularr.Integrations.Logic.Ocr
             return boxes;
         }
 
-        private (string Text, float Confidence) Recognize(SKBitmap page, SKRectI box)
+        private (string Text, float Confidence, IReadOnlyList<OcrCharacter> Characters) Recognize(SKBitmap page, SKRectI box)
         {
             if (box.Width < 2 || box.Height < 2)
             {
-                return ("", 0);
+                return ("", 0, []);
             }
 
             var width = Math.Clamp((int)Math.Ceiling(LineHeight * (float)box.Width / box.Height), 16, MaximumLineWidth);
             using var crop = new SKBitmap(box.Width, box.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
             if (!page.ExtractSubset(crop, box))
             {
-                return ("", 0);
+                return ("", 0, []);
             }
 
             using var line = crop.Resize(new SKImageInfo(width, LineHeight, SKColorType.Rgba8888), new SKSamplingOptions(SKFilterMode.Linear));
@@ -181,6 +208,7 @@ namespace Jularr.Integrations.Logic.Ocr
 
             // Greedy CTC: the likeliest class per step, blanks and repeats dropped.
             var text = new System.Text.StringBuilder();
+            var characters = new List<OcrCharacter>();
             float sum = 0;
             var kept = 0;
             var previous = 0;
@@ -199,6 +227,9 @@ namespace Jularr.Integrations.Logic.Ocr
                 {
                     var character = best - 1 < _characters.Length ? _characters[best - 1] : "";
                     text.Append(character.Length == 0 ? " " : character);
+
+                    // A step's centre in the page: where the character stands, for words of their own.
+                    characters.Add(new OcrCharacter(character.Length == 0 ? " " : character, box.Left + (step + 0.5f) / steps * box.Width, probability));
                     sum += probability;
                     kept++;
                 }
@@ -206,7 +237,7 @@ namespace Jularr.Integrations.Logic.Ocr
                 previous = best;
             }
 
-            return (text.ToString(), kept == 0 ? 0 : sum / kept);
+            return (text.ToString(), kept == 0 ? 0 : sum / kept, characters);
         }
 
         public void Dispose()
@@ -217,7 +248,13 @@ namespace Jularr.Integrations.Logic.Ocr
     }
 
     // A recognized line: its box in the picture's pixels, its text and the mean probability of its characters.
-    public sealed record OcrLine(int Left, int Top, int Right, int Bottom, string Text, float Confidence);
+    public sealed record OcrLine(int Left, int Top, int Right, int Bottom, string Text, float Confidence)
+    {
+        public IReadOnlyList<OcrCharacter> Characters { get; init; } = [];
+    }
+
+    // A recognized character, the horizontal centre of where it stands in the picture's pixels and its probability.
+    public sealed record OcrCharacter(string Text, float Center, float Probability);
 
     public sealed record OcrPage(int Width, int Height, IReadOnlyList<OcrLine> Lines);
 }

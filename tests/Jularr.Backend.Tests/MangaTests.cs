@@ -171,6 +171,27 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void LightNovel_SingleVolumeStaysOneBook_PackPlacesEachVolumeOnItsUnit()
+        {
+            TargetUnit[] volumes = [new(1, null, 1, false), new(2, null, 2, false), new(3, null, 3, true)];
+            static Jularr.Integrations.Data.Storage.StorageFile[] Files(params string[] names) => [.. names.Select(name => new Jularr.Integrations.Data.Storage.StorageFile("Pack/" + name, 1000, DateTime.UtcNow))];
+            IReadOnlyList<ImportPlacementData> Plan(params string[] names) => ImportPlacementLogic.Plan(MediaType.Book, MediaSubtype.LightNovel, "Novel", null, null, Files(names),
+                NamingPatternTests.DefaultSet, null, episodes: volumes);
+
+            // One volume, also in two formats, is still placed as the book it always was.
+            Assert.IsNull(Plan("Novel - Group Volume 01.epub").Single().UnitNumber);
+            Assert.IsTrue(Plan("Novel v01.epub", "Novel v01.pdf").All(placement => placement.UnitNumber is null));
+            Assert.IsNull(ImportPlacementLogic.UnmatchedVolumes(MediaSubtype.LightNovel, Files("Novel v01.epub"), volumes));
+
+            // A pack: a group name between title and volume is no obstacle; a present volume, a range and a number the Work lacks are not placed.
+            string[] pack = ["Novel - Group Volume 01.epub", "Novel - Group Volume 02.epub", "Novel - Group Volume 03.epub", "Novel - Group Volume 01-02.epub", "Novel - Group Volume 09.epub", "Novel - Extras.epub"];
+            CollectionAssert.AreEqual(new decimal?[] { 1, 2 }, Plan(pack).Select(placement => placement.UnitNumber).ToArray());
+            Assert.IsTrue(Plan(pack).All(placement => placement.WorkUnitTypeId == WorkUnitType.Volume && placement.TargetStem == "Novel/Novel v0" + placement.UnitNumber));
+            CollectionAssert.AreEqual(new[] { "Pack/Novel - Extras.epub", "Pack/Novel - Group Volume 01-02.epub", "Pack/Novel - Group Volume 09.epub" },
+                ImportPlacementLogic.UnmatchedVolumes(MediaSubtype.LightNovel, Files(pack), volumes)!.ToArray());
+        }
+
+        [TestMethod]
         public async Task AniList_NullFields_ReadAsMissing()
         {
             var sources = new FakeMangaSources { Manga = """{"id":102,"title":{"romaji":"Reidai","english":null,"native":null},"startDate":null,"volumes":null,"description":null,"coverImage":null,"staff":null}""" };
@@ -180,6 +201,105 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, manga.Authors.Count);
             sources.Manga = "null";
             await Assert.ThrowsExactlyAsync<Jularr.Integrations.Data.AniList.AniListException>(() => new AniListClient(new HttpClient(sources) { BaseAddress = new ProviderOptions().AniList }).ReadAsync(Jularr.Integrations.Data.AniList.AniListMediaType.Manga, 102, CancellationToken.None));
+        }
+
+        [TestMethod]
+        public async Task LightNovel_PackChosenByHand_ImportsVolumeByVolumeAndNamesUnmatchedFiles()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            const string Release = "Mushoku Tensei - Jobless Reincarnation (Web Novel) Vol 01-24 EPUB [Complete] [Baka-Tsuki] (EN)";
+            var sources = new FakeMangaSources
+            {
+                Manga = """
+                    {"id":4242,"type":"MANGA","format":"NOVEL","title":{"romaji":"Mushoku Tensei","english":"Mushoku Tensei - Jobless Reincarnation","native":"無職転生"},"synonyms":[],"startDate":{"year":2014},
+                     "volumes":26,"status":"FINISHED","staff":{"edges":[{"role":"Story","node":{"name":{"full":"Rifujin na Magonote"}}}]}}
+                    """,
+                Rss = $"""
+                    <rss><channel>
+                      <item><title>{Release}</title><guid>pack</guid><link>https://indexer.example.test/getnzb/pack</link><size>60000000</size></item>
+                    </channel></rss>
+                    """
+            };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            Directory.CreateDirectory(Path.Combine(storage.Path, "1", "Light Novels"));
+            await LibraryTests.CreateRootAsync(host, 1, "Light Novels", MediaType.Book, MediaSubtype.LightNovel);
+
+            // The AniList edition brings its 26 volumes.
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "4242", MediaSubtype.LightNovel, "anilist"));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            Assert.AreEqual(26L, await host.ScalarAsync($"SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkId\" = {work.Id} AND \"WorkUnitTypeId\" = 3"));
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                VALUES (700, {work.Id}, 202, 42, 1, 2, 41, now());
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (800, {work.Id});
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (700, 800);
+                """);
+
+            // The web novel pack only waits for review; taking it by hand grabs it.
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/800/search", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+            var pack = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Single(candidate => candidate.Title == Release);
+            using var grabbed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/800/grab", new GrabWantedReleaseDataV1(pack.CandidateId));
+            Assert.AreEqual(HttpStatusCode.OK, grabbed.StatusCode, await grabbed.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/pack" }, sources.Grabbed);
+
+            // Volumes 1 to 25 fit units, a file beyond the edition's volumes and an unnumbered extra do not.
+            var folder = Directory.CreateDirectory(Path.Combine(downloads.Path, "Mushoku Tensei - Jobless Reincarnation Vol 01-24 EPUB [Complete] [Baka-Tsuki]")).FullName;
+            for (var volume = 1; volume <= 25; volume++)
+            {
+                File.WriteAllBytes(Path.Combine(folder, $"Mushoku Tensei - Baka-Tsuki Volume {volume:00}.epub"), ReadingTests.BuildEpub("Volume " + volume));
+            }
+
+            File.WriteAllBytes(Path.Combine(folder, "Mushoku Tensei - Baka-Tsuki Volume 27.epub"), ReadingTests.BuildEpub("Volume 27"));
+            File.WriteAllBytes(Path.Combine(folder, "Mushoku Tensei - Baka-Tsuki Side Stories.epub"), ReadingTests.BuildEpub("Side Stories"));
+
+            // The inventory still names an assigned file that went missing under the first volume's name.
+            const string Named = "Rifujin na Magonote/Mushoku Tensei - Jobless Reincarnation (2014) {anilist-4242}/Mushoku Tensei - Jobless Reincarnation {anilist-4242} v01";
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (900, {work.Id});
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (900, {work.Id}, 900);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (900, {work.Id}, 900, 3);
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt", "MissingSince")
+                SELECT root."Id", '{Named}.epub', 100, now(), 900, now(), now() FROM "LibraryRoots" AS root WHERE root."RelativePath" = 'Light Novels';
+                """);
+            sources.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Pack","status":"Completed","storage":"/downloads/Mushoku Tensei - Jobless Reincarnation Vol 01-24 EPUB [Complete] [Baka-Tsuki]"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+
+            // Each volume lands on its unit, the first beside the missing file's name; the rest is named for a person and stays in the download.
+            var novels = Path.Combine(storage.Path, "1", "Light Novels");
+            var library = Directory.EnumerateFiles(novels, "*.epub", SearchOption.AllDirectories).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray();
+            Assert.AreEqual(25, library.Length, string.Join(", ", library));
+            Assert.IsTrue(File.Exists(Path.Combine(novels, Named + " (2).epub")), string.Join(", ", library));
+            Assert.IsTrue(File.Exists(Path.Combine(novels, Named.Replace(" v01", " v25", StringComparison.Ordinal) + ".epub")), string.Join(", ", library));
+            Assert.AreEqual(900L, await host.ScalarAsync($"SELECT \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"RelativePath\" = '{Named}.epub'"));
+            const string Volumes = """
+                SELECT count(*) FROM "MediaAssets" AS asset JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
+                WHERE unit."WorkUnitTypeId" = 3 AND unit."Number" BETWEEN 1 AND 25
+                """;
+            Assert.AreEqual(25L, await host.ScalarAsync(Volumes));
+            Assert.AreEqual(25L, await host.ScalarAsync("SELECT count(DISTINCT asset.\"WorkUnitId\") FROM \"MediaAssets\" AS asset WHERE asset.\"WorkUnitId\" IS NOT NULL"));
+            Assert.AreEqual(26L, await host.ScalarAsync($"SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkId\" = {work.Id} AND \"WorkUnitTypeId\" = 3"));
+            Assert.AreEqual("import_unmatched_files", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            var operationId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!;
+            using (var queue = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityFilterTypeId=1"))
+            {
+                var waiting = (await queue.Content.ReadFromJsonAsync<PageResult<Data.Admin.Activity.V1.ActivityItemV1>>())!.Items.Single(item => item.Id == operationId);
+                CollectionAssert.AreEqual(new[] { "Mushoku Tensei - Baka-Tsuki Side Stories.epub", "Mushoku Tensei - Baka-Tsuki Volume 27.epub" },
+                    waiting.UnmatchedFiles!.Select(Path.GetFileName).ToArray());
+                Assert.IsFalse(waiting.CanImportManually);
+            }
+
+            // Read again, the pack brings no second copy of a volume and still names the same files.
+            using var retried = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/retry-import");
+            Assert.AreEqual(HttpStatusCode.OK, retried.StatusCode, await retried.Content.ReadAsStringAsync());
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual(25, Directory.EnumerateFiles(novels, "*.epub", SearchOption.AllDirectories).Count());
+            Assert.AreEqual(25L, await host.ScalarAsync(Volumes));
+            Assert.AreEqual("import_unmatched_files", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(27, Directory.EnumerateFiles(folder).Count(), "The download keeps every file.");
+            Assert.AreEqual(1, sources.Grabbed.Count);
         }
 
         private static byte[] Archive(string header, int length) => [.. Encoding.Latin1.GetBytes(header), .. new byte[length - header.Length]];
@@ -248,6 +368,8 @@ namespace Jularr.Backend.Tests
                 """;
 
 
+            public string? Rss { get; set; }
+
             public List<string> Grabbed { get; } = [];
             public string History { get; set; } = """{"history":{"slots":[]}}""";
 
@@ -272,6 +394,8 @@ namespace Jularr.Backend.Tests
                             <caps><limits max="100" default="100" /><searching><search available="yes" supportedParams="q" /></searching>
                               <categories><category id="7000" name="Books"><subcat id="7030" name="Comics" /></category></categories></caps>
                             """);
+                    case "indexer.example.test" when Rss is not null:
+                        return Xml(Rss);
                     case "indexer.example.test":
                         return Xml("""
                             <rss><channel>

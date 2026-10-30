@@ -284,6 +284,17 @@ export function initializeBookRenderer(reader: HTMLElement) {
     document.addEventListener('visibilitychange', () => { if (document.hidden) restore(); }, { signal });
     window.addEventListener('pagehide', cancel, { signal });
     signal.addEventListener('abort', cancel);
+    // A picture that finishes loading changes the layout its page was printed from (a page picture would stay empty or shifted): print again.
+    let reprint = 0;
+    reader.addEventListener('load', event => {
+        if (!(event.target instanceof HTMLImageElement) || root.contains(event.target) || !ready) return;
+        cancelAnimationFrame(reprint);
+        reprint = requestAnimationFrame(() => {
+            if (!ready || flights.length) return;
+            prints.clear(); root.querySelectorAll<HTMLElement>('[data-book-page]').forEach(element => delete element.dataset.print);
+            try { paintBook(); } catch { fail(); }
+        });
+    }, { capture: true, signal });
     new MutationObserver(() => {
         if (!ready || flights.length) return;
         prints.clear(); root.querySelectorAll<HTMLElement>('[data-book-page]').forEach(element => delete element.dataset.print);

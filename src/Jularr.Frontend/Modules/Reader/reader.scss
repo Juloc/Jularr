@@ -142,8 +142,9 @@
     &__content figure[data-figure] img { width: auto; max-width: 100%; max-height: 100%; margin-inline: auto; }
     &__content figure[data-figure] figcaption { max-width: 100%; margin-top: .6em; font-size: .85em; line-height: 1.4; text-align: center; color: var(--muted); }
     &__content figure[data-figure=page] { max-width: 100%; margin-block: 0; padding-block: 8px; }
-    &[data-mode=paged] &__content figure[data-figure=page] { height: 100%; break-before: column; break-after: column; box-sizing: border-box; }
-    &[data-mode=paged] &__content figure[data-figure=page] img { max-height: calc(100% - 1.8em); }
+    // The page picture is measured against its own figure (a size container): a percentage height inside the columns leaves Chrome's picture unpainted.
+    &[data-mode=paged] &__content figure[data-figure=page] { height: 100%; break-before: column; break-after: column; box-sizing: border-box; container-type: size; }
+    &[data-mode=paged] &__content figure[data-figure=page] img { max-height: calc(100cqh - 1.8em - 16px); }
     &[data-mode=paged] &__content figure[data-figure=wide] img, &[data-mode=paged] &__content img[data-figure=wide] { max-height: 80cqh; }
     &[data-mode=scroll] &__content figure[data-figure=page] img { max-height: 90dvh; }
     &__content img[data-figure] { margin-inline: auto; }
