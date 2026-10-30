@@ -25,7 +25,9 @@ for Fast, 25 for Normal, and 45 for Deep. Expiry records `source_timeout` and
 retains results from sources that answered. If every source failed, the existing
 unavailable response is used rather than reporting an empty successful search.
 Caller cancellation still cancels the search. All concurrent source tasks finish
-before their shared Anna search context is disposed. The browser's global request
+before their shared Anna search context is disposed. Temporary mirror tabs close
+with their own bounded five-second cleanup token after cancellation; the primary
+browser page and session stay open. The browser's global request
 timeout is unchanged. See [#1640](https://github.com/Juloc/Jularr/issues/1640).
 
 ## Focused verification
@@ -35,5 +37,6 @@ timeout is unchanged. See [#1640](https://github.com/Juloc/Jularr/issues/1640).
 - Existing `WorkListTests` and `ReleaseSelectionTests` protect filter and selection behavior.
 - E2E `WorkSearchRunTests`: real background worker, all/filtered/selected forms, navigation/reload, cancellation, results, desktop and 390-pixel mobile layout.
 - `BookTests.Book_SlowDirectSource_RespectsSearchBudgetAndRetainsOtherResults` and E2E `ManualBookSearchTests`: a stalled direct source, retained successful results, all-sources timeout and cancellation by navigation.
+- `SourceBrowserTests.Browser_CancelledMirrorSearch_ClosesOnlyTemporaryTabs_AndReleasesTheBrowser` uses an isolated headless Chrome profile (`JULARR_BROWSER`) to verify temporary-tab cleanup, primary-tab preservation and a subsequent browser read without a database.
 
 Three isolated loopback measurements with 500 targets and 20 warm HTTP samples gave p50 **43.4 / 42.8 / 54.2 ms**, p95 **56.1 / 93.4 / 116.2 ms**, maximum **76.8 / 121.5 / 340.5 ms** for enqueue. The third run includes the integrated main/schema-12 changes. These measurements do not establish a consistent sub-100-ms guarantee or a throughput comparison with Sonarr/Radarr. Source response time is excluded. The reproducible latency check is `Queue_500Targets_RecordsWarmHttpLatencyWithoutCallingSources`; hardware, cold start and source response times affect production results.
