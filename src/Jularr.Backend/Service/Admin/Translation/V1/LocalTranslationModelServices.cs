@@ -4,24 +4,29 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Admin.Translation.V1;
+using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Translation;
 using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.Admin.Translation.V1
 {
+    // Every machine of the order as it answers now; the first that answers with a model is the one that translates.
     [ServiceEndpoint("GET", "/api/v1/admin/translation/models")]
     public sealed class ReadLocalTranslationModelsV1 : AdminService<LocalTranslationModelsParametersV1>
     {
         private readonly OllamaLocalModels _models;
         private readonly LocalTranslationOptions _options;
         private readonly LocalTranslationDownloads _downloads;
+        private readonly LocalTranslationMachines _machines;
 
-        internal ReadLocalTranslationModelsV1(OllamaLocalModels models, IOptions<LocalTranslationOptions> options, LocalTranslationDownloads downloads)
+        internal ReadLocalTranslationModelsV1(OllamaLocalModels models, IOptions<LocalTranslationOptions> options, LocalTranslationDownloads downloads,
+            LocalTranslationMachines machines)
         {
             _models = models;
             _options = options.Value;
             _downloads = downloads;
+            _machines = machines;
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<LocalTranslationModelsV1>()];
@@ -30,59 +35,98 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            var server = OllamaLocalModels.Endpoint(_options.Endpoint);
+            var saved = await LocalTranslationMachines.SavedAsync(Context, CancellationToken);
+            var order = _machines.Order(saved);
             var progress = _downloads.Current();
-            if (server is null) return new LocalTranslationModelsV1(false, OllamaLocalModels.Candidates, [], [], "Configure a local Ollama endpoint.",
-                _options.OperatorVerifiedFreeBytes, progress.Model, progress.State, progress.Progress);
+            if (order.Length == 0) return new LocalTranslationModelsV1(false, OllamaLocalModels.Candidates, [], [], "Configure a local Ollama endpoint.",
+                _options.OperatorVerifiedFreeBytes, progress.Model, progress.State, progress.Progress, [], progress.Machine);
+            var machines = await Task.WhenAll(order.Select(StatusAsync));
+            var active = machines.FirstOrDefault(machine => machine.Reachable && machine.Installed.Any(OllamaLocalModels.Supported))
+                ?? machines.FirstOrDefault(machine => machine.Reachable);
+            return new LocalTranslationModelsV1(true, OllamaLocalModels.Candidates, active?.Installed ?? [], active?.Running ?? [],
+                active is null ? "Ollama is not responding correctly." : null,
+                _options.OperatorVerifiedFreeBytes, progress.Model, progress.State, progress.Progress, machines, progress.Machine);
+        }
+
+        private async Task<LocalTranslationMachineV1> StatusAsync(Uri server)
+        {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(5));
             try
             {
-                return new LocalTranslationModelsV1(true, OllamaLocalModels.Candidates,
-                    await _models.InstalledAsync(server, timeout.Token), await _models.RunningAsync(server, timeout.Token), null,
-                    _options.OperatorVerifiedFreeBytes, progress.Model, progress.State, progress.Progress);
+                return new LocalTranslationMachineV1(server.ToString(), true, await _models.InstalledAsync(server, timeout.Token), await _models.RunningAsync(server, timeout.Token));
             }
-            catch (OperationCanceledException) when (!CancellationToken.IsCancellationRequested)
+            catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException
+                || exception is OperationCanceledException && !CancellationToken.IsCancellationRequested)
             {
-                return new LocalTranslationModelsV1(true, OllamaLocalModels.Candidates, [], [], "Ollama is not responding correctly.",
-                    _options.OperatorVerifiedFreeBytes, progress.Model, progress.State, progress.Progress);
-            }
-            catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException)
-            {
-                return new LocalTranslationModelsV1(true, OllamaLocalModels.Candidates, [], [], "Ollama is not responding correctly.",
-                    _options.OperatorVerifiedFreeBytes, progress.Model, progress.State, progress.Progress);
+                return new LocalTranslationMachineV1(server.ToString(), false, [], []);
             }
         }
     }
 
-    [ServiceEndpoint("POST", "/api/v1/admin/translation/models/{model}/pull")]
-    public sealed class PullLocalTranslationModelV1 : AdminService<LocalTranslationModelParametersV1, NoData>
+    // Downloads a model onto one machine of the order, by its place.
+    [ServiceEndpoint("POST", "/api/v1/admin/translation/machines/{machine:int}/models/{model}/pull")]
+    public sealed class PullLocalTranslationModelV1 : AdminService<LocalTranslationPullParametersV1, NoData>
     {
         private readonly LocalTranslationOptions _options;
         private readonly LocalTranslationDownloads _downloads;
+        private readonly LocalTranslationMachines _machines;
 
-        internal PullLocalTranslationModelV1(IOptions<LocalTranslationOptions> options, LocalTranslationDownloads downloads)
+        internal PullLocalTranslationModelV1(IOptions<LocalTranslationOptions> options, LocalTranslationDownloads downloads, LocalTranslationMachines machines)
         {
             _options = options.Value;
             _downloads = downloads;
+            _machines = machines;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(LocalTranslationModelParametersV1 parameters) => ModuleRequirement.All("Translation");
-        protected override ServicePermission GetPermission(LocalTranslationModelParametersV1 parameters, Type resultType) => new("instance.settings.update");
+        protected override ModuleRequirement GetInstanceModules(LocalTranslationPullParametersV1 parameters) => ModuleRequirement.All("Translation");
+        protected override ServicePermission GetPermission(LocalTranslationPullParametersV1 parameters, Type resultType) => new("instance.settings.update");
 
-        protected override Task<IServiceOutput> OnExecute()
+        protected override async Task<IServiceOutput> OnExecute()
         {
-            if (OllamaLocalModels.Endpoint(_options.Endpoint) is null)
+            var order = _machines.Order(await Context.ExecuteBatchAsync(LocalTranslationMachines.SavedAsync, CancellationToken));
+            if (Parameters.Machine >= order.Length)
                 throw new ServiceUnavailableException("translation_local_unavailable");
             if (!OllamaLocalModels.Supported(Parameters.Model))
                 throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
             if (_options.OperatorVerifiedFreeBytes == 0)
                 throw new ServiceUnavailableException("translation_local_space_unverified");
-            if (!_downloads.Queue(Parameters.Model))
+            if (!_downloads.Queue(Parameters.Model, order[Parameters.Machine]))
                 throw new ServiceUnavailableException("translation_local_busy_or_capacity");
-            return Task.FromResult<IServiceOutput>(new UpdateResult(true));
+            return new UpdateResult(true);
+        }
+    }
+
+    // The Owner's order of Ollama machines: private network addresses only, at most eight; empty leaves the configured endpoint alone.
+    [ServiceEndpoint("PUT", "/api/v1/admin/translation/machines")]
+    public sealed class SaveTranslationMachinesV1 : AdminService<LocalTranslationModelsParametersV1, TranslationMachinesDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(LocalTranslationModelsParametersV1 parameters) => ModuleRequirement.All("Translation");
+        protected override ServicePermission GetPermission(LocalTranslationModelsParametersV1 parameters, Type resultType) => new("instance.settings.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            var machines = new List<string>();
+            foreach (var value in Data.Machines.Select(machine => machine.Trim()).Where(machine => machine.Length > 0))
+            {
+                // An address without a scheme or port is the usual Ollama one (http, port 11434), as Ollama's own settings show it.
+                var typed = value.Contains("://", StringComparison.Ordinal) ? value : "http://" + value;
+                if (!Uri.TryCreate(typed, UriKind.Absolute, out var parsed) || parsed.AbsolutePath != "/" || parsed.Query.Length != 0)
+                    throw new DataValidationException(nameof(Data.Machines), "translation_machine_invalid");
+                var address = OllamaLocalModels.Endpoint(parsed.Scheme + "://" + parsed.Host + ":" + (parsed.IsDefaultPort ? 11434 : parsed.Port) + "/")
+                    ?? throw new DataValidationException(nameof(Data.Machines), "translation_machine_invalid");
+                if (!machines.Contains(address.ToString(), StringComparer.Ordinal)) machines.Add(address.ToString());
+            }
+
+            var sql = new SqlStatement();
+            sql.Statement = """UPDATE "InstanceSettings" SET "TranslationMachines" = @Machines WHERE "Id" = 1;""";
+            sql.Parameters.Add(new TranslationMachinesDataV1([.. machines]));
+            await Context.ExecuteAsyncForAffectedRows(sql, CancellationToken);
+            return new UpdateResult(true);
         }
     }
 
@@ -90,13 +134,13 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
     public sealed class BenchmarkLocalTranslationModelV1 : AdminService<LocalTranslationModelParametersV1, NoData>
     {
         private readonly OllamaLocalModels _models;
-        private readonly LocalTranslationOptions _options;
+        private readonly LocalTranslationMachines _machines;
         private readonly LocalTranslationGate _gate;
 
-        internal BenchmarkLocalTranslationModelV1(OllamaLocalModels models, IOptions<LocalTranslationOptions> options, LocalTranslationGate gate)
+        internal BenchmarkLocalTranslationModelV1(OllamaLocalModels models, LocalTranslationMachines machines, LocalTranslationGate gate)
         {
             _models = models;
-            _options = options.Value;
+            _machines = machines;
             _gate = gate;
         }
 
@@ -107,10 +151,11 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var server = OllamaLocalModels.Endpoint(_options.Endpoint) ?? throw new ServiceUnavailableException("translation_local_unavailable");
             if (!OllamaLocalModels.Supported(Parameters.Model)) throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
-            if (!(await _models.InstalledAsync(server, CancellationToken)).Contains(Parameters.Model, StringComparer.Ordinal))
-                throw new ServiceUnavailableException("translation_local_not_installed");
+            // The machine that translates now with this model.
+            var saved = await Context.ExecuteBatchAsync(LocalTranslationMachines.SavedAsync, CancellationToken);
+            var server = (await _machines.ChooseAsync(saved, CancellationToken, Parameters.Model))?.Server
+                ?? throw new ServiceUnavailableException("translation_local_not_installed");
             if (!await _gate.HeavyWork.WaitAsync(TimeSpan.Zero, CancellationToken)) throw new ServiceUnavailableException("translation_local_busy");
             try
             {

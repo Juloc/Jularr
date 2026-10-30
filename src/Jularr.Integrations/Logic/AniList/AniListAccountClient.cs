@@ -52,7 +52,7 @@ namespace Jularr.Integrations.Logic.AniList
             for (var chunk = 1; chunk <= ListChunkLimit; chunk++)
             {
                 using var document = await PostAsync("query ($userId: Int, $type: MediaType, $chunk: Int, $perChunk: Int) { MediaListCollection(userId: $userId, type: $type, chunk: $chunk, perChunk: $perChunk) { hasNextChunk "
-                    + "lists { entries { id mediaId status progress progressVolumes score(format: POINT_100) updatedAt media { episodes chapters volumes title { romaji english } } } } } }",
+                    + "lists { entries { id mediaId status progress progressVolumes score(format: POINT_100) updatedAt media { episodes chapters volumes title { romaji english } format startDate { year } coverImage { large } } } } } }",
                     new Dictionary<string, object> { ["userId"] = userId, ["type"] = Name(type), ["chunk"] = chunk, ["perChunk"] = ListChunk }, ct, token);
                 if (Child(Child(document.RootElement, "data"), "MediaListCollection") is not { } collection)
                 {
@@ -120,8 +120,10 @@ namespace Jularr.Integrations.Logic.AniList
 
             int Whole(string property) => row.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) && number >= 0 ? number : 0;
             var points = row.TryGetProperty("score", out var score) && score.ValueKind == JsonValueKind.Number && score.TryGetDouble(out var raw) ? (int)Math.Clamp(Math.Round(raw), 0, 100) : 0;
-            return new AniListListEntry(id, listEntryId, isManga, title.Length > 500 ? title[..500] : title, status, Whole("progress"), Whole("progressVolumes"), points,
-                Count(media, isManga ? "chapters" : "episodes", 100_000), Count(media, "volumes", 10_000), updatedAt);
+            var cover = Https(Child(media, "coverImage") is { } image ? Text(image, "large") : null);
+            var year = Child(media, "startDate") is { } start ? Count(start, "year", 2200) : null;
+            return new AniListListEntry(id, listEntryId, isManga, title.Length > 500 ? title[..500] : title, cover is { Length: <= 500 } ? cover : null, Text(media, "format") == "NOVEL", year is >= 1800 ? year : null,
+                status, Whole("progress"), Whole("progressVolumes"), points, Count(media, isManga ? "chapters" : "episodes", 100_000), Count(media, "volumes", 10_000), updatedAt);
         }
 
         private static DateTimeOffset? UnixTime(JsonElement element) =>

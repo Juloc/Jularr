@@ -7,14 +7,14 @@ namespace Jularr.Backend.Data.Logic.Media
     // What stands in the way of deleting a title and which files it owns.
     internal sealed class WorkDeletionFactsData : BaseData
     {
-        public WorkDeletionFactsData(bool hasActiveDownload, long[] storedFileIds)
+        public WorkDeletionFactsData(long[] activeDownloadIds, long[] storedFileIds)
         {
-            HasActiveDownload = hasActiveDownload;
+            ActiveDownloadIds = activeDownloadIds;
             StoredFileIds = storedFileIds;
         }
 
-        [DataField(typeof(WorkExclusionFields), nameof(WorkExclusionFields.HasActiveDownload))]
-        public bool HasActiveDownload { get; }
+        [DataField(typeof(WorkExclusionFields), nameof(WorkExclusionFields.ActiveDownloadIds))]
+        public long[] ActiveDownloadIds { get; }
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Ids))]
         public long[] StoredFileIds { get; }

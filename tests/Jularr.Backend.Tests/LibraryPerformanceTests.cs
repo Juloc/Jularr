@@ -211,45 +211,7 @@ namespace Jularr.Backend.Tests
             await SeedInventoryAsync(host, 300, 411, false);
             await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" f SET \"MissingSince\" = NULL FROM \"MediaAssets\" a WHERE a.\"Id\" = f.\"MediaAssetId\" AND a.\"WorkId\" = 1;");
             var started = Stopwatch.GetTimestamp();
-            // Most catalog Works are minimal rows read 0 to 60 days ago; one in fifty has old details; 100 are trending; a feed lists 500.
-            for (var from = 1; from <= catalogWorks; from += 20000)
-            {
-                var to = Math.Min(from + 19999, catalogWorks);
-                await host.Fixture.RunSqlAsync($"""
-                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "ReleasedOn", "CatalogNamespace", "FetchedAt", "Popularity", "Rating", "Votes", "TrendingRank", "DetailedAt", "ViewedAt")
-                SELECT 1000000 + n, CASE WHEN n % 10 < 7 THEN 1 ELSE 2 END, 'Catalog ' || lpad(n::text, 7, '0'), 1980 + n % 45, current_date + (n % 400) - 200,
-                    CASE WHEN n % 10 < 7 THEN 'tmdb_movie' WHEN n % 10 < 9 THEN 'tmdb_tv' ELSE 'anilist' END,
-                    now() - (n % 60) * interval '1 day', (n % 1000)::real, (n % 100) / 10.0, n % 5000, CASE WHEN n <= 100 THEN n END,
-                    CASE WHEN n % 50 = 0 THEN now() - interval '40 days' END, CASE WHEN n % 50 = 0 THEN now() - interval '40 days' END
-                FROM generate_series({from}, {to}) AS n;
-                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
-                SELECT "Id", "CatalogNamespace", ("Id" - 1000000)::text FROM "Works" WHERE "Id" BETWEEN {1000000 + from} AND {1000000 + to};
-                """);
-            }
-            // Two hundred catalog ids, evenly spread through the catalog range, are library series with 35 episodes each: 7,000 progress rows (two thirds unfinished), files for the first twelve episodes.
-            var spread = Math.Max(catalogWorks / 200, 1);
-            await host.Fixture.RunSqlAsync($"""
-                CREATE TEMPORARY TABLE "Interleaved" AS SELECT "Id" FROM "Works" WHERE "Id" > 1000000 AND ("Id" - 1000000) % {spread} = 0 AND "MediaTypeId" = 1 ORDER BY "Id" LIMIT 200;
-                UPDATE "Works" SET "MediaTypeId" = 2 WHERE "Id" IN (SELECT "Id" FROM "Interleaved");
-                INSERT INTO "WorkTitles" ("WorkId", "UiLocaleId", "Title", "IsManual") SELECT "Id", 1, "CanonicalTitle", TRUE FROM "Works" WHERE "Id" IN (SELECT "Id" FROM "Interleaved");
-                INSERT INTO "WorkEditions" ("WorkId") SELECT "Id" FROM "Interleaved";
-                INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId") SELECT "WorkId", "Id" FROM "WorkEditions" WHERE "WorkId" IN (SELECT "Id" FROM "Interleaved");
-                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number") SELECT interleaved."Id", 2, number FROM "Interleaved" AS interleaved CROSS JOIN generate_series(1, 35) AS number;
-                INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId")
-                SELECT unit."WorkId", version."Id", unit."Id", 1
-                FROM "WorkUnits" AS unit JOIN "WorkVersions" AS version ON version."WorkId" = unit."WorkId" WHERE unit."WorkId" IN (SELECT "Id" FROM "Interleaved");
-                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
-                SELECT (SELECT min("Id") FROM "LibraryRoots"), 'interleaved/' || asset."Id" || '.mkv', 1000000, now(), now(), asset."Id"
-                FROM "MediaAssets" AS asset JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId" WHERE asset."WorkId" IN (SELECT "Id" FROM "Interleaved") AND unit."Number" <= 12;
-                INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "WorkUnitId", "ProgressPositionTypeId", "PositionMs", "DurationMs", "IsCompleted", "CompletedAt", "UpdatedAt")
-                SELECT 101, "WorkId", "Id", 1, 500, 1000, "Number" % 3 = 0, CASE WHEN "Number" % 3 = 0 THEN now() END, now() - ("Id" % 5000) * interval '1 minute'
-                FROM "WorkUnits" WHERE "WorkId" IN (SELECT "Id" FROM "Interleaved");
-                DROP TABLE "Interleaved";
-                """);
-            await host.Fixture.RunSqlAsync("""
-                INSERT INTO "ExternalWorkFeeds" ("Key", "Namespace", "MediaTypeId", "DiscoverFeedTypeId", "Page") VALUES ('scale', 'tmdb_movie', 1, 2, 1);
-                INSERT INTO "ExternalWorkFeedItems" ("FeedId", "Position", "WorkId") SELECT (SELECT "Id" FROM "ExternalWorkFeeds" WHERE "Key" = 'scale'), n, 1000000 + n * 10 FROM generate_series(1, 500) AS n;
-                """);
+            await SeedCatalogAsync(host, catalogWorks);
             TestContext.WriteLine($"Seeded {catalogWorks} catalog Works in {Stopwatch.GetElapsedTime(started).TotalSeconds:F1} s.");
             await host.Fixture.RunSqlAsync("ANALYZE");
 
@@ -719,13 +681,227 @@ namespace Jularr.Backend.Tests
             }
         }
 
+        // The Work page reads its title through about a dozen services; their stored-page cost must not depend on the catalog's size.
+        [TestMethod]
+        [TestCategory("Performance")]
+        public async Task WorkPage_CatalogScale_ServicesStayWithinBudget()
+        {
+            if (!int.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_CATALOG_SCALE"), out var catalogWorks) || catalogWorks <= 0)
+                Assert.Inconclusive("Opt in with JULARR_TEST_CATALOG_SCALE=<number of catalog Works> (500000 for the budget) on the isolated test server.");
+
+            var commands = new CommandLog();
+            using var logs = LoggerFactory.Create(logging => logging.SetMinimumLevel(LogLevel.Information).AddProvider(commands));
+            await using var host = await Host.CreateAsync(razor: true, media: true, services: services =>
+            {
+                services.ConfigureAll<HttpClientFactoryOptions>(options => options.HttpMessageHandlerBuilderActions.Add(builder => builder.PrimaryHandler = new NoProviderHandler()));
+                services.Replace(ServiceDescriptor.Singleton(provider =>
+                {
+                    var configuration = provider.GetRequiredService<IConfiguration>();
+                    var connection = new NpgsqlConnectionStringBuilder(configuration["JULARR_DB"]!) { Pooling = true, CommandTimeout = 120 };
+                    return new SqlDatabase(new NpgsqlDataSourceBuilder(connection.ConnectionString).UseLoggerFactory(logs).EnableParameterLogging().Build());
+                }));
+            });
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
+            await SeedInventoryAsync(host, 300, 411, false);
+            await RunSeedAsync(host, "UPDATE \"StoredFiles\" f SET \"MissingSince\" = NULL FROM \"MediaAssets\" a WHERE a.\"Id\" = f.\"MediaAssetId\" AND a.\"WorkId\" = 1;");
+            await SeedCatalogAsync(host, catalogWorks);
+
+            // Library titles with people, relations in both directions and a detailed catalog title with relations to catalog titles.
+            await RunSeedAsync(host, """
+                INSERT INTO "People" ("Name") SELECT 'Person ' || n FROM generate_series(1, 30) AS n;
+                INSERT INTO "WorkPeople" ("WorkId", "PersonId", "PersonRoleId", "Position")
+                SELECT work."Id", person."Id", 1, (person."Id" % 30 + 1)::smallint FROM "Works" AS work CROSS JOIN "People" AS person WHERE work."Id" IN (1, 301, 1000050);
+                INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey")
+                SELECT 301, 1000000 + n * 7, 1 + n % 7, 'tmdb' FROM generate_series(1, 12) AS n;
+                INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey")
+                SELECT 1000000 + n * 11, 301, 1, 'tmdb' FROM generate_series(1, 4) AS n;
+                INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey")
+                SELECT 1000050, 1000000 + n * 13, 1 + n % 7, 'tmdb' FROM generate_series(1, 12) AS n;
+                """);
+            foreach (var table in new[] { "Works", "WorkExternalIdentities", "WorkUnits", "WorkRelations", "WorkPeople", "People", "MediaAssets", "StoredFiles", "MediaProgress", "WorkTitles" })
+                await RunSeedAsync(host, $"ANALYZE \"{table}\"");
+
+            var interleaved = Convert.ToInt64(await host.ScalarAsync("SELECT min(\"WorkId\") FROM \"WorkUnits\" WHERE \"WorkId\" > 1000000"), System.Globalization.CultureInfo.InvariantCulture);
+            var budget = double.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_DETAILS_MAX_MS"), System.Globalization.CultureInfo.InvariantCulture, out var maximum) ? maximum : 300;
+            var failures = new List<string>();
+
+            // What any page costs before its own reads, for comparison.
+            var frame = new List<double>();
+            for (var iteration = 0; iteration < 6; iteration++)
+            {
+                var frameBegin = Stopwatch.GetTimestamp();
+                using var library = await host.SendAsync(HttpMethod.Get, "/Library");
+                await library.Content.ReadAsStringAsync();
+                if (iteration >= 2) frame.Add(Stopwatch.GetElapsedTime(frameBegin).TotalMilliseconds);
+            }
+
+            TestContext.WriteLine($"PERF library page for comparison: median {frame.Order().ElementAt(frame.Count / 2):F1} ms, fastest {frame.Min():F1} ms");
+            foreach (var (name, id, series) in new[] { ("film", 1L, false), ("series", 301L, true), ("catalog-detailed", 1000050L, false), ("catalog-library-series", interleaved, true) })
+            {
+                var paths = new List<(string Name, HttpMethod Method, string Path)>
+                {
+                    ("open", HttpMethod.Post, $"/api/v1/works/{id}/open"),
+                    ("work", HttpMethod.Get, $"/api/v1/works/{id}"),
+                    ("availability", HttpMethod.Get, $"/api/v1/works/{id}/availability?pageSize=48&page=1"),
+                    ("editions", HttpMethod.Get, $"/api/v1/works/{id}/editions"),
+                    ("credits", HttpMethod.Get, $"/api/v1/works/{id}/credits"),
+                    ("relations", HttpMethod.Get, $"/api/v1/works/{id}/relations"),
+                    ("collections", HttpMethod.Get, $"/api/v1/works/{id}/collections"),
+                    ("request-profiles", HttpMethod.Get, $"/api/v1/works/{id}/request-profiles"),
+                    ("recommendations", HttpMethod.Post, $"/api/v1/works/{id}/recommendations")
+                };
+                if (series)
+                {
+                    paths.Insert(2, ("seasons", HttpMethod.Get, $"/api/v1/works/{id}/seasons"));
+                    paths.Insert(3, ("episodes", HttpMethod.Get, $"/api/v1/works/{id}/seasons/1/episodes"));
+                }
+
+                var totals = new List<double>();
+                var pages = new List<double>();
+                var perCall = paths.ToDictionary(path => path.Name, _ => new List<double>());
+                for (var iteration = 0; iteration < (int.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_DETAILS_ITERATIONS"), out var iterations) ? iterations : 12); iteration++)
+                {
+                    var total = 0.0;
+                    foreach (var (callName, method, path) in paths)
+                    {
+                        commands.Executions.Clear();
+                        commands.Parameterized.Clear();
+                        var begin = Stopwatch.GetTimestamp();
+                        using var response = await host.SendAsync(method, path, method == HttpMethod.Post ? new { } : null);
+                        var elapsed = Stopwatch.GetElapsedTime(begin).TotalMilliseconds;
+                        if (callName is not ("recommendations" or "episodes")) Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, callName + " " + await response.Content.ReadAsStringAsync());
+                        if (iteration < 2) continue;
+                        perCall[callName].Add(elapsed);
+                        if (callName != "recommendations") total += elapsed;
+                        if (iteration == 2 && Environment.GetEnvironmentVariable("JULARR_TEST_DETAILS_PLANS") == "1" && elapsed >= 60) await ExplainSlowAsync(host, commands, name + "/" + callName);
+                        if (iteration == 2 && elapsed >= 20)
+                            foreach (var command in commands.Executions.OrderByDescending(command => command.Milliseconds).Take(2))
+                            {
+                                var text = command.Sql.Replace('\n', ' ').Replace("  ", " ");
+                                TestContext.WriteLine($"PERF   {name}/{callName} SQL {command.Milliseconds:F1} ms: " + text[..Math.Min(160, text.Length)]);
+                            }
+                    }
+
+                    if (iteration >= 2) totals.Add(total);
+
+                    // The page itself: it asks together what does not wait for the Work; its provider suggestions are unavailable here.
+                    commands.Executions.Clear();
+                    var pageBegin = Stopwatch.GetTimestamp();
+                    using var rendered = await host.SendAsync(HttpMethod.Get, $"/Details/{id}");
+                    var html = await rendered.Content.ReadAsStringAsync();
+                    Assert.AreEqual(HttpStatusCode.OK, rendered.StatusCode, html);
+                    if (iteration >= 2) pages.Add(Stopwatch.GetElapsedTime(pageBegin).TotalMilliseconds);
+                    if (iteration == 2)
+                    {
+                        TestContext.WriteLine($"PERF   {name}/page: {commands.Executions.Count} SQL commands totaling {commands.Executions.Sum(command => command.Milliseconds):F0} ms");
+                        foreach (var command in commands.Executions.OrderByDescending(command => command.Milliseconds).Take(5))
+                        {
+                            var text = command.Sql.Replace('\n', ' ').Replace("  ", " ");
+                            TestContext.WriteLine($"PERF   {name}/page SQL {command.Milliseconds:F1} ms: " + text[..Math.Min(140, text.Length)]);
+                        }
+                    }
+                }
+
+                totals.Sort();
+                pages.Sort();
+                foreach (var (callName, durations) in perCall) TestContext.WriteLine($"PERF {name}/{callName}: median {durations.Order().ElementAt(durations.Count / 2):F1} ms, fastest {durations.Min():F1} ms");
+                var median = pages[pages.Count / 2];
+                TestContext.WriteLine($"PERF {name}: one after the other median {totals[totals.Count / 2]:F1} ms; the page median {median:F1} ms, fastest {pages[0]:F1} ms, slowest {pages[^1]:F1} ms with {catalogWorks} catalog Works");
+
+                // The fastest sample decides: other work on a shared server only ever adds time, a read of the whole catalog adds it every time.
+                if (pages[0] >= budget) failures.Add($"{name}: {pages[0]:F1} ms");
+            }
+
+            Assert.IsEmpty(failures, "The Work page exceeded the budget: " + string.Join("; ", failures));
+        }
+
+        // The plan of every statement of the last call that took long, with the values it ran with.
+        private async Task ExplainSlowAsync(Host host, CommandLog commands, string name)
+        {
+            var slow = commands.Executions.Zip(commands.Parameterized, (run, parameters) => (run.Sql, run.Milliseconds, parameters.Parameters)).Where(item => item.Milliseconds >= 100).ToArray();
+            foreach (var (sql, milliseconds, parameters) in slow)
+            {
+                var shortSql = sql.Replace('\n', ' ');
+                TestContext.WriteLine($"PLANSQL {name} {milliseconds:F0} ms, parameters {parameters?.GetType().Name ?? "none"}: {shortSql[..Math.Min(80, shortSql.Length)]}");
+                if (parameters is not System.Collections.IEnumerable values || parameters is string) continue;
+                await using var connection = await host.Fixture.Database.OpenConnectionAsync();
+                await using var transaction = await connection.BeginTransactionAsync();
+                await using var configure = new NpgsqlCommand("SET LOCAL jit = off", connection, transaction);
+                await configure.ExecuteNonQueryAsync();
+                await using var explain = new NpgsqlCommand("EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, TIMING OFF) " + sql, connection, transaction) { CommandTimeout = 120 };
+                foreach (var value in values) explain.Parameters.Add(new NpgsqlParameter { Value = value is null ? DBNull.Value : Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture), NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Unknown });
+                try
+                {
+                    await using var reader = await explain.ExecuteReaderAsync();
+                    while (await reader.ReadAsync()) TestContext.WriteLine("PLAN " + reader.GetString(0));
+                }
+                catch (PostgresException exception)
+                {
+                    TestContext.WriteLine("PLAN failed: " + exception.MessageText + " with " + string.Join(" | ", values.Cast<object?>().Select(value => value?.GetType().Name + "=" + Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture))));
+                }
+            }
+        }
+
+        // A seed statement of a large catalog may take longer than the fixture's short command limit while other work shares the server.
+        private static async Task RunSeedAsync(Host host, string sql)
+        {
+            await using var connection = await host.Fixture.Database.OpenConnectionAsync();
+            await using var command = new NpgsqlCommand(sql, connection) { CommandTimeout = 300 };
+            await command.ExecuteNonQueryAsync();
+        }
+
+        private static async Task SeedCatalogAsync(Host host, int catalogWorks)
+        {
+            // Most catalog Works are minimal rows read 0 to 60 days ago; one in fifty has old details; 100 are trending; a feed lists 500.
+            for (var from = 1; from <= catalogWorks; from += 5000)
+            {
+                var to = Math.Min(from + 4999, catalogWorks);
+                await RunSeedAsync(host, $"""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "ReleasedOn", "CatalogNamespace", "FetchedAt", "Popularity", "Rating", "Votes", "TrendingRank", "DetailedAt", "ViewedAt")
+                SELECT 1000000 + n, CASE WHEN n % 10 < 7 THEN 1 ELSE 2 END, 'Catalog ' || lpad(n::text, 7, '0'), 1980 + n % 45, current_date + (n % 400) - 200,
+                    CASE WHEN n % 10 < 7 THEN 'tmdb_movie' WHEN n % 10 < 9 THEN 'tmdb_tv' ELSE 'anilist' END,
+                    now() - (n % 60) * interval '1 day', (n % 1000)::real, (n % 100) / 10.0, n % 5000, CASE WHEN n <= 100 THEN n END,
+                    CASE WHEN n % 50 = 0 THEN now() - interval '40 days' END, CASE WHEN n % 50 = 0 THEN now() - interval '40 days' END
+                FROM generate_series({from}, {to}) AS n;
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", "CatalogNamespace", ("Id" - 1000000)::text FROM "Works" WHERE "Id" BETWEEN {1000000 + from} AND {1000000 + to};
+                """);
+            }
+            // Two hundred catalog ids, evenly spread through the catalog range, are library series with 35 episodes each: 7,000 progress rows (two thirds unfinished), files for the first twelve episodes.
+            var spread = Math.Max(catalogWorks / 200, 1);
+            await RunSeedAsync(host, $"""
+                CREATE TEMPORARY TABLE "Interleaved" AS SELECT "Id" FROM "Works" WHERE "Id" > 1000000 AND ("Id" - 1000000) % {spread} = 0 AND "MediaTypeId" = 1 ORDER BY "Id" LIMIT 200;
+                UPDATE "Works" SET "MediaTypeId" = 2 WHERE "Id" IN (SELECT "Id" FROM "Interleaved");
+                INSERT INTO "WorkTitles" ("WorkId", "UiLocaleId", "Title", "IsManual") SELECT "Id", 1, "CanonicalTitle", TRUE FROM "Works" WHERE "Id" IN (SELECT "Id" FROM "Interleaved");
+                INSERT INTO "WorkEditions" ("WorkId") SELECT "Id" FROM "Interleaved";
+                INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId") SELECT "WorkId", "Id" FROM "WorkEditions" WHERE "WorkId" IN (SELECT "Id" FROM "Interleaved");
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number") SELECT interleaved."Id", 2, number FROM "Interleaved" AS interleaved CROSS JOIN generate_series(1, 35) AS number;
+                INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId")
+                SELECT unit."WorkId", version."Id", unit."Id", 1
+                FROM "WorkUnits" AS unit JOIN "WorkVersions" AS version ON version."WorkId" = unit."WorkId" WHERE unit."WorkId" IN (SELECT "Id" FROM "Interleaved");
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
+                SELECT (SELECT min("Id") FROM "LibraryRoots"), 'interleaved/' || asset."Id" || '.mkv', 1000000, now(), now(), asset."Id"
+                FROM "MediaAssets" AS asset JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId" WHERE asset."WorkId" IN (SELECT "Id" FROM "Interleaved") AND unit."Number" <= 12;
+                INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "WorkUnitId", "ProgressPositionTypeId", "PositionMs", "DurationMs", "IsCompleted", "CompletedAt", "UpdatedAt")
+                SELECT 101, "WorkId", "Id", 1, 500, 1000, "Number" % 3 = 0, CASE WHEN "Number" % 3 = 0 THEN now() END, now() - ("Id" % 5000) * interval '1 minute'
+                FROM "WorkUnits" WHERE "WorkId" IN (SELECT "Id" FROM "Interleaved");
+                DROP TABLE "Interleaved";
+                """);
+            await RunSeedAsync(host, """
+                INSERT INTO "ExternalWorkFeeds" ("Key", "Namespace", "MediaTypeId", "DiscoverFeedTypeId", "Page") VALUES ('scale', 'tmdb_movie', 1, 2, 1);
+                INSERT INTO "ExternalWorkFeedItems" ("FeedId", "Position", "WorkId") SELECT (SELECT "Id" FROM "ExternalWorkFeeds" WHERE "Key" = 'scale'), n, 1000000 + n * 10 FROM generate_series(1, 500) AS n;
+                """);
+        }
+
         private static async Task SeedInventoryAsync(Host host, int movies, int works, bool stress)
         {
             var mount = await LibraryTests.CreateMountAsync(host);
             var root = await LibraryTests.CreateRootAsync(host, mount, "Performance", MediaType.Series);
 
             // A mix of films and series, with missing files, real tracks and per-episode progress.
-            await host.Fixture.RunSqlAsync($"""
+            await RunSeedAsync(host, $"""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear")
                 SELECT number, CASE WHEN number <= {movies} THEN 1 ELSE 2 END,
                     'Title ' || lpad(number::text, 5, '0'), 1980 + (number % 45)
@@ -771,6 +947,7 @@ namespace Jularr.Backend.Tests
         private sealed class CommandLog : ILoggerProvider, ILogger
         {
             public ConcurrentQueue<(string Sql, double Milliseconds)> Executions { get; } = new();
+            public ConcurrentQueue<(string Sql, object? Parameters)> Parameterized { get; } = new();
             public IReadOnlyList<KeyValuePair<string, object?>>? Last { get; set; }
             public bool JitDisabled { get; set; }
             public ILogger CreateLogger(string categoryName) => this;
@@ -782,7 +959,10 @@ namespace Jularr.Backend.Tests
                 if (state is IReadOnlyList<KeyValuePair<string, object?>> command
                     && command.FirstOrDefault(pair => pair.Key == "CommandText").Value is string text
                     && command.FirstOrDefault(pair => pair.Key == "DurationMs").Value is { } milliseconds)
+                {
                     Executions.Enqueue((text, Convert.ToDouble(milliseconds, System.Globalization.CultureInfo.InvariantCulture)));
+                    Parameterized.Enqueue((text, command.FirstOrDefault(pair => pair.Key == "Parameters").Value));
+                }
                 if (state is IReadOnlyList<KeyValuePair<string, object?>> settings
                     && settings.Any(pair => pair.Key == "CommandText" && pair.Value is "SET LOCAL jit = off")) JitDisabled = true;
                 if (state is IReadOnlyList<KeyValuePair<string, object?>> values

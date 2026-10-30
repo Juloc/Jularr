@@ -1925,6 +1925,65 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Profiles_ReleaseGroupScores_DefaultSaveRangeAndEditor()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
+            const string Profiles = "/api/v1/admin/acquisition/profiles/";
+            var movies = (await ReadProfilesAsync(host)).Single(profile => profile.MediaTypeId == MediaType.Movie && profile.IsDefault);
+            Assert.AreEqual((50, -50), (movies.GoodGroupScore, movies.BadGroupScore));
+
+            // The scores are stored in the definition the selection reads.
+            using var saved = await host.SendAsync(HttpMethod.Put, Profiles + movies.Id, new SaveAcquisitionProfileDataV1(movies.Name, MediaType.Movie, true, movies.AllowedQualities,
+                movies.UpgradeAllowed, movies.UpgradeCutoffQuality, null, null, movies.Version, goodGroupScore: 80, badGroupScore: -30));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            movies = (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id);
+            Assert.AreEqual((80, -30), (movies.GoodGroupScore, movies.BadGroupScore));
+            var definition = System.Text.Json.JsonSerializer.Deserialize<AcquisitionProfileDefinition>(
+                (string)(await host.ScalarAsync($"SELECT \"Definition\"::text FROM \"AcquisitionProfiles\" WHERE \"Id\" = {movies.Id}"))!, AcquisitionSelectionLogic.DefinitionOptions)!;
+            Assert.AreEqual((80, -30), (definition.GoodGroupScore, definition.BadGroupScore));
+
+            // A good group earns points and a bad one loses them.
+            foreach (var (good, bad) in new[] { (-1, -50), (50, 1), (1000001, -50) })
+            {
+                using var invalid = await host.SendAsync(HttpMethod.Put, Profiles + movies.Id, new SaveAcquisitionProfileDataV1(movies.Name, MediaType.Movie, true, movies.AllowedQualities,
+                    movies.UpgradeAllowed, movies.UpgradeCutoffQuality, null, null, movies.Version, goodGroupScore: good, badGroupScore: bad));
+                Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode, good + " / " + bad);
+            }
+
+            // The editor shows them in their own section, the upgrade scores once, the advanced parts closed, and round arrows that stop at the ends.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + movies.Id);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "name=\"GoodGroupScore\" type=\"number\" autocomplete=\"off\" value=\"80\"");
+            StringAssert.Contains(html, "name=\"BadGroupScore\" type=\"number\" autocomplete=\"off\" value=\"-30\"");
+            StringAssert.Contains(html, "Rate groups (0, 0 blocked)");
+            StringAssert.Contains(html, "<details class=\"profile-advanced\"><summary>Advanced: quality groups and format scores</summary>");
+            Assert.AreEqual(1, html.Split("name=\"MinimumFormatScore\"").Length - 1);
+            Assert.IsTrue(html.IndexOf("name=\"MinimumUpgradeFormatScore\"", StringComparison.Ordinal) < html.IndexOf("profile-advanced", StringComparison.Ordinal));
+            Assert.AreEqual(1, html.Split("aria-label=\"Move up\" disabled=\"disabled\"").Length - 1);
+            Assert.AreEqual(1, html.Split("aria-label=\"Move down\" disabled=\"disabled\"").Length - 1);
+
+            // The page saves them through the same service; an out of range score is refused.
+            using var posted = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + movies.Id, new FormUrlEncodedContent(
+            [
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaTypeId", "1"), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("Name", movies.Name), new("IsDefault", "True"), new("AllowedQualities", "WEBDL-1080p"), new("GoodGroupScore", "120"), new("BadGroupScore", "-70")
+            ]));
+            Assert.AreEqual(HttpStatusCode.Redirect, posted.StatusCode, await posted.Content.ReadAsStringAsync());
+            movies = (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id);
+            Assert.AreEqual((120, -70), (movies.GoodGroupScore, movies.BadGroupScore));
+            using var refused = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + movies.Id, new FormUrlEncodedContent(
+            [
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaTypeId", "1"), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("Name", movies.Name), new("IsDefault", "True"), new("AllowedQualities", "WEBDL-1080p"), new("GoodGroupScore", "-5")
+            ]));
+            Assert.AreNotEqual(HttpStatusCode.Redirect, refused.StatusCode);
+            Assert.AreEqual(120, (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id).GoodGroupScore);
+        }
+
+        [TestMethod]
         public async Task Blocklist_BlocksAndAllowsReleasesOfTheTarget()
         {
             using var storage = new TemporaryDirectory();
@@ -2365,6 +2424,31 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(false, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"ParentWorkUnitId\" = {seasons[2].Id} AND \"Number\" = 2"));
             Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"ParentWorkUnitId\" = {seasons[2].Id} AND \"Number\" = 1"));
             Assert.AreEqual(false, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"Id\" = {other.Id}"), "A refresh keeps the owner's choice.");
+        }
+
+        [TestMethod]
+        public async Task Indexers_RateLimitedWithRetryAfter_RestForTheWaitTheyAskedFor()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections,
+                new SaveAcquisitionConnectionDataV1("Limited", AcquisitionConnectionType.Newznab, "https://limited.example.test/", FakeUsenet.IndexerKey, true, 20, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var wantedId = await CreateWantedMovieAsync(host);
+
+            // The first search is refused with a Retry-After of two hours: the backoff lasts that long, not five minutes.
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, await host.ScalarAsync("SELECT \"FailureCount\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Limited'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" > now() + interval '110 minutes' FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Limited'"));
+
+            // Automatic searches leave it alone until then.
+            int Asked() { lock (usenet.IndexerHosts) return usenet.IndexerHosts.Count(asked => asked == "limited.example.test"); }
+            var before = Asked();
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(before, Asked());
         }
 
         [TestMethod]
@@ -3419,10 +3503,11 @@ namespace Jularr.Backend.Tests
                 }
 
                 // The open indexer takes no key, the broken one always fails.
-                if (request.RequestUri!.Host is "indexer.example.test" or "open.example.test" or "broken.example.test" or "books.example.test" or "manual.example.test")
+                if (request.RequestUri!.Host is "indexer.example.test" or "open.example.test" or "broken.example.test" or "books.example.test" or "manual.example.test" or "limited.example.test")
                 {
                     lock (IndexerHosts) IndexerHosts.Add(request.RequestUri.Host);
                     if (request.RequestUri.Host == "broken.example.test") return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+                    if (request.RequestUri.Host == "limited.example.test") return new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Headers = { RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromHours(2)) } };
                     var query = System.Web.HttpUtility.ParseQueryString(request.RequestUri.Query);
                     if (query["apikey"] != (request.RequestUri.Host == "open.example.test" ? null : IndexerKey)) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
                     var found = query["t"] == "caps" ? Capabilities : Results ?? MovieResults;

@@ -133,10 +133,19 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 await Parallel.ForEachAsync(sources, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, sources.Count), CancellationToken = token },
                     async (source, inner) =>
                     {
+                        // Include waiting for Chrome and every title/ISBN variant in the source's budget.
+                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(inner);
+                        timeout.CancelAfter(limits.IndexerTimeout);
                         IReadOnlyList<ReleaseOffer>? answers;
                         try
                         {
-                            answers = await _direct.SearchAsync(source, wanted, inner, Enough, annaSearch);
+                            answers = await _direct.SearchAsync(source, wanted, timeout.Token, Enough, annaSearch);
+                        }
+                        catch (OperationCanceledException) when (!inner.IsCancellationRequested)
+                        {
+                            sourceErrors.Add("source_timeout");
+                            Interlocked.Increment(ref failures);
+                            return;
                         }
                         catch (DirectSourceException exception)
                         {
@@ -169,40 +178,42 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
 
-            // Expansion tiers only run while too few releases are usable.
-            for (var tier = 0; tier <= budget.MaxTier && offers.Count < budget.MaxResults; tier++)
+            async Task SearchIndexersAsync()
             {
-                var current = tier;
-                if (!plans.Values.Any(plan => plan.Any(query => query.Tier == current)))
+                // Expansion tiers only run while too few releases are usable.
+                for (var tier = 0; tier <= budget.MaxTier && offers.Count < budget.MaxResults; tier++)
                 {
-                    continue;
-                }
-
-                await Parallel.ForEachAsync(newznab, new ParallelOptions { MaxDegreeOfParallelism = budget.MaxConcurrentIndexers, CancellationToken = ct }, async (indexer, token) =>
-                {
-                    var use = uses.GetOrAdd(indexer.Id, _ => new IndexerUse());
-                    if (!await SearchIndexerAsync(indexer, kind, target.PlatformIgdbId, plans[indexer.Id].Where(query => query.Tier == current), budget, offers, use, token))
+                    var current = tier;
+                    if (!plans.Values.Any(plan => plan.Any(query => query.Tier == current)))
                     {
-                        use.Failed = true;
-                        Interlocked.Increment(ref failures);
+                        continue;
                     }
-                });
 
-                // The direct sources answered at the same time; their releases belong to the choice.
-                await direct;
-                await nyaaSearch;
-                selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
-                if (selection.Ranked.Count(evaluation => evaluation.IsSelectable
-                    && (!profile.IsBook || profile.LanguageOrder.Length == 0
-                        || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages))) >= budget.TargetUsable)
-                {
-                    break;
+                    await Parallel.ForEachAsync(newznab, new ParallelOptions { MaxDegreeOfParallelism = budget.MaxConcurrentIndexers, CancellationToken = ct }, async (indexer, token) =>
+                    {
+                        var use = uses.GetOrAdd(indexer.Id, _ => new IndexerUse());
+                        if (!await SearchIndexerAsync(indexer, kind, target.PlatformIgdbId, plans[indexer.Id].Where(query => query.Tier == current), budget, offers, use, token))
+                        {
+                            use.Failed = true;
+                            Interlocked.Increment(ref failures);
+                        }
+                    });
+
+                    // The direct sources answered at the same time; their releases belong to the choice.
+                    await direct;
+                    await nyaaSearch;
+                    selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
+                    if (selection.Ranked.Count(evaluation => evaluation.IsSelectable
+                        && (!profile.IsBook || profile.LanguageOrder.Length == 0
+                            || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages))) >= budget.TargetUsable)
+                    {
+                        break;
+                    }
                 }
             }
 
-            // The direct sources are waited for; they answered at the same time as the indexers.
-            await direct;
-            await nyaaSearch;
+            // Join every source on cancellation before disposing their shared Anna search context.
+            await Task.WhenAll(direct, nyaaSearch, SearchIndexersAsync());
             selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
 
             // Manual grabs pick from what was shown; the cache is bounded by offer count.
@@ -216,7 +227,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             {
                 foreach (var (id, use) in uses)
                 {
-                    await ctx.RecordIndexerUseAsync(new IndexerUseData(id, use.Queries, !use.Failed), token);
+                    await ctx.RecordIndexerUseAsync(new IndexerUseData(id, use.Queries, !use.Failed, use.RetryAfterSeconds > 0 ? use.RetryAfterSeconds : null), token);
                 }
 
                 await ctx.RecordReleaseGroupsAsync(new ReleaseGroupSightingsData(target.MediaTypeId, groups, now), token);
@@ -401,6 +412,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // The best client by priority receives the release; Jularr's own downloader keeps the NZB in staging.
             string? failure = null;
             string? externalId = null;
+            NewznabException? rateLimited = null;
             if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
                 var staging = await nativePaths!.PrepareIncompleteAsync(operationId, ct, target.MediaTypeId, target.MediaSubtypeId);
@@ -420,7 +432,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     _logger.LogWarning("NZB download failed for operation {OperationId}, indexer {IndexerId}: {Failure}; HTTP {StatusCode}; timeout {TimedOut}; transport {TransportError}.",
                         operationId, offer.ConnectionId, exception.Failure, (int?)exception.StatusCode, exception.InnerException is OperationCanceledException,
                         exception.InnerException is HttpRequestException transport ? transport.HttpRequestError : (HttpRequestError?)null);
-                    failure = exception.Failure == NewznabFailure.Unavailable ? "acquisition_unavailable" : "acquisition_grab_failed";
+                    failure = GrabFailureKey(exception);
+                    rateLimited = exception.Failure == NewznabFailure.RateLimited ? exception : null;
                 }
                 catch (IOException exception)
                 {
@@ -464,7 +477,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 }
                 catch (NewznabException exception)
                 {
-                    failure = exception.Failure == NewznabFailure.Unavailable ? "acquisition_unavailable" : "acquisition_grab_failed";
+                    failure = GrabFailureKey(exception);
+                    rateLimited = exception.Failure == NewznabFailure.RateLimited ? exception : null;
                 }
                 catch (InvalidDataException)
                 {
@@ -538,9 +552,16 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     }, ct);
                 }
 
+                // A rate-limited indexer rests for the wait it asked for, and the grab tries again after it.
+                var retryAfter = rateLimited?.RetryAfter is { } asked && asked > TimeSpan.FromMinutes(30) ? asked : TimeSpan.FromMinutes(30);
                 await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
-                    await ctx.FailDownloadAsync(new DownloadFailureData(operationId, failure, DateTime.UtcNow.AddMinutes(30)), token);
+                    if (rateLimited is not null)
+                    {
+                        await ctx.RecordIndexerUseAsync(new IndexerUseData(offer.ConnectionId, 0, false, rateLimited.RetryAfter is { } wait ? (int)Math.Ceiling(wait.TotalSeconds) : null), token);
+                    }
+
+                    await ctx.FailDownloadAsync(new DownloadFailureData(operationId, failure, DateTime.UtcNow + retryAfter), token);
                     return true;
                 }, ct);
                 throw new ServiceUnavailableException(failure);
@@ -630,8 +651,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
                 return true;
             }
-            catch (NewznabException)
+            catch (NewznabException exception)
             {
+                // The wait the indexer asked for outlasts the usual backoff.
+                if (exception.RetryAfter is { } wait)
+                {
+                    use.RetryAfterSeconds = Math.Max(use.RetryAfterSeconds, (int)Math.Ceiling(wait.TotalSeconds));
+                }
+
                 return false;
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -640,9 +667,17 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
         }
 
+        private static string GrabFailureKey(NewznabException exception) => exception.Failure switch
+        {
+            NewznabFailure.Unavailable => "acquisition_unavailable",
+            NewznabFailure.RateLimited => "acquisition_rate_limited",
+            _ => "acquisition_grab_failed"
+        };
+
         private sealed class IndexerUse
         {
             public int Queries;
+            public int RetryAfterSeconds;
             public bool Failed;
         }
 

@@ -93,6 +93,14 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, regenerated.StatusCode, await regenerated.Content.ReadAsStringAsync());
             Assert.AreEqual(2, ollama.GenerationCount);
 
+            // The order's first machine answers but fails the block: the same request takes it to the next machine at once.
+            ollama.FailingHost = "10.9.9.9";
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"TranslationMachines\" = '{http://10.9.9.9:11434/,http://ollama:11434/}'");
+            using var passedOn = await host.SendAsync(HttpMethod.Post, baseUrl.Replace("/de/", "/fr/", StringComparison.Ordinal) + "/blocks/0", new LocalReadingBlockDataV1("en"));
+            Assert.AreEqual(HttpStatusCode.OK, passedOn.StatusCode, await passedOn.Content.ReadAsStringAsync());
+            Assert.AreEqual(3, ollama.GenerationCount);
+            Assert.AreEqual(1, ollama.FailedGenerations);
+
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Translation'");
             using var unavailable = await host.SendAsync(HttpMethod.Post, request, new LocalReadingBlockDataV1("en"));
             Assert.AreEqual(HttpStatusCode.Forbidden, unavailable.StatusCode);
@@ -114,6 +122,8 @@ namespace Jularr.Backend.Tests
             public string Digest { get; set; } = new string('a', 64);
             public bool Unavailable { get; set; }
             public int GenerationCount { get; private set; }
+            public string? FailingHost { get; set; }
+            public int FailedGenerations { get; private set; }
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
@@ -123,6 +133,11 @@ namespace Jularr.Backend.Tests
                     body = JsonSerializer.Serialize(new { models = new[] { new { name = "translategemma:4b", digest = Digest } } });
                 else if (request.RequestUri.AbsolutePath == "/api/ps")
                     body = """{"models":[]}""";
+                else if (request.RequestUri.AbsolutePath == "/api/generate" && request.RequestUri.Host == FailingHost)
+                {
+                    FailedGenerations++;
+                    throw new HttpRequestException("The machine dropped out.");
+                }
                 else if (request.RequestUri.AbsolutePath == "/api/generate")
                 {
                     var input = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));

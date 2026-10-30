@@ -11,7 +11,7 @@ using Jularr.Integrations.Logic.Usenet;
 namespace Jularr.Integrations.Logic.Newznab
 {
     // Direct Newznab indexer access through its caps and search XML API.
-    internal sealed class NewznabClient(HttpClient httpClient)
+    internal sealed class NewznabClient(HttpClient httpClient, NewznabGate gate)
     {
         private static readonly (string Element, NewznabSearchMode Mode)[] Functions =
         [
@@ -161,12 +161,19 @@ namespace Jularr.Integrations.Logic.Newznab
         // The release's own link carries the indexer's access; Jularr keeps the NZB for its own downloader.
         public async Task DownloadNzbAsync(Uri nzb, string destination, CancellationToken ct, Func<long, IDisposable>? reserveWrite = null)
         {
+            var host = NewznabGate.HostKey(nzb);
+            await gate.WaitAsync(host, ct);
             try
             {
                 using var response = await httpClient.GetAsync(nzb, HttpCompletionOption.ResponseHeadersRead, ct);
                 if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                 {
                     throw new NewznabException(NewznabFailure.AuthenticationFailed, "The indexer refused the NZB.") { StatusCode = response.StatusCode };
+                }
+
+                if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    throw RateLimited(host, "The indexer is rate limited.", NewznabGate.ReadRetryAfter(response.Headers), response.StatusCode);
                 }
 
                 if (!response.IsSuccessStatusCode)
@@ -199,6 +206,10 @@ namespace Jularr.Integrations.Logic.Newznab
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml"));
 
+            // Every call to the indexer keeps the shared pace.
+            var host = NewznabGate.HostKey(uri);
+            await gate.WaitAsync(host, ct);
+
             string body;
             HttpStatusCode status;
             TimeSpan? retryAfter;
@@ -206,7 +217,7 @@ namespace Jularr.Integrations.Logic.Newznab
             {
                 using var response = await httpClient.SendAsync(request, ct);
                 status = response.StatusCode;
-                retryAfter = response.Headers.RetryAfter?.Delta;
+                retryAfter = NewznabGate.ReadRetryAfter(response.Headers);
                 body = await response.Content.ReadAsStringAsync(ct);
             }
             catch (Exception exception) when (exception is HttpRequestException || exception is OperationCanceledException && !ct.IsCancellationRequested)
@@ -221,7 +232,7 @@ namespace Jularr.Integrations.Logic.Newznab
 
             if (status == HttpStatusCode.TooManyRequests)
             {
-                throw new NewznabException(NewznabFailure.RateLimited, "The indexer is rate limited.", retryAfter);
+                throw RateLimited(host, "The indexer is rate limited.", retryAfter, status);
             }
 
             // Indexers answer errors as <error> documents with any HTTP status.
@@ -247,7 +258,7 @@ namespace Jularr.Integrations.Logic.Newznab
                 {
                     >= 100 and < 200 => new NewznabException(NewznabFailure.AuthenticationFailed, "The indexer rejected the account."),
                     >= 200 and <= 203 => new NewznabException(NewznabFailure.ParametersRejected, "The indexer refused the request shape (t=" + function + ")."),
-                    429 or 500 => new NewznabException(NewznabFailure.RateLimited, "The indexer reached its request limit."),
+                    429 or 500 => RateLimited(host, "The indexer reached its request limit.", null, status),
                     _ => new NewznabException(NewznabFailure.Unavailable, "The indexer reported error " + code.ToString(CultureInfo.InvariantCulture) + ".")
                 };
             }
@@ -258,6 +269,13 @@ namespace Jularr.Integrations.Logic.Newznab
             }
 
             return document;
+        }
+
+        // The whole host rests, not only this call; the exception carries the pause the indexer asked for.
+        private NewznabException RateLimited(string host, string message, TimeSpan? retryAfter, HttpStatusCode status)
+        {
+            var pause = gate.Pause(host, retryAfter);
+            return new NewznabException(NewznabFailure.RateLimited, message, retryAfter is null ? null : pause) { StatusCode = status };
         }
 
         private static XElement? Child(XElement? element, string name) => element?.Elements().FirstOrDefault(child => child.Name.LocalName == name);

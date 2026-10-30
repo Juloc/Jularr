@@ -125,7 +125,7 @@ namespace Jularr.Backend.Logic.Acquisition
             Serves(indexer, mediaType, automatic) && HasQueries(indexer, 0)
             && (!automatic || (indexer.RetryAt is null || indexer.RetryAt <= now) && (indexer.GrabLimit is null || indexer.GrabCount < indexer.GrabLimit));
 
-        // Today's queries count against the limit; a failure backs off from 5 minutes doubling up to a day, an answer ends the backoff.
+        // Today's queries count against the limit; a failure backs off from 5 minutes doubling up to a day, or for the wait the indexer asked for if that is longer; an answer ends the backoff.
         public static async Task RecordIndexerUseAsync(this LogicContext ctx, IndexerUseData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -138,7 +138,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "GrabCount" = CASE WHEN connection."CountedOn" = current_date THEN connection."GrabCount" ELSE 0 END,
                     "CountedOn" = current_date,
                     "FailureCount" = CASE WHEN @IsAvailable THEN 0 ELSE connection."FailureCount" + 1 END,
-                    "RetryAt" = CASE WHEN NOT @IsAvailable THEN now() + least(interval '5 minutes' * power(2, least(connection."FailureCount", 9)), interval '1 day') END,
+                    "RetryAt" = CASE WHEN NOT @IsAvailable THEN now() + greatest(least(interval '5 minutes' * power(2, least(connection."FailureCount", 9)), interval '1 day'), interval '1 second' * COALESCE(@RetryAfterSeconds, 0)) END,
                     "LastErrorKey" = CASE WHEN NOT @IsAvailable THEN 'acquisition_unavailable' END,
                     "CheckedAt" = now()
                 WHERE

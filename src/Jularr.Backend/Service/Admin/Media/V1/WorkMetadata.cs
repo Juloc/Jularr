@@ -399,16 +399,68 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 ct, mode: SqlAccessMode.ReadOnly);
             var language = LanguageCodes.ToThreeLetter(locale) ?? "eng";
             var session = await _tvdb.LoginAsync(credential, ct);
-            var series = await _tvdb.ReadSeriesAsync(session, tvdbId, ct);
-            var episodes = await _tvdb.ReadEpisodesAsync(session, tvdbId, null, ct);
 
-            // Texts in the instance language, else in English, else in the original; episodes in the original language need no second read.
+            // The series and its episodes do not wait for each other, nor do their translations, the credited people's ids and TMDB's rating once the series is known; the people
+            // are the one read that also uses the database, so the TMDB connection is prepared before it starts. Texts are in the instance language, else in English, else in the
+            // original; episodes in the original language need no second read.
+            using var provider = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var seriesTask = _tvdb.ReadSeriesAsync(session, tvdbId, provider.Token);
+            var episodesTask = _tvdb.ReadEpisodesAsync(session, tvdbId, null, provider.Token);
             var preferred = new[] { language, "eng" }.Distinct(StringComparer.Ordinal).ToArray();
-            var original = episodes.ToDictionary(episode => episode.Id);
             var translated = new List<IReadOnlyDictionary<int, TvdbEpisode>>();
-            foreach (var code in preferred)
+            TvdbSeries series;
+            IReadOnlyList<TvdbEpisode> episodes;
+            (TvdbCharacter Character, string? Role)[] credited;
+            (IReadOnlyList<object> Found, IReadOnlySet<int> Skipped) links;
+            var tmdbId = tmdbTvId ?? stored.TmdbTvId;
+            TmdbCatalogEntry? rated;
+            try
             {
-                translated.Add(code == series.OriginalLanguage ? original : (await _tvdb.ReadEpisodesAsync(session, tvdbId, code, ct)).ToDictionary(episode => episode.Id));
+                series = await seriesTask;
+                tmdbId ??= series.TmdbId;
+                var translations = preferred.Select(code => code == series.OriginalLanguage ? null : _tvdb.ReadEpisodesAsync(session, tvdbId, code, provider.Token)).ToArray();
+
+                // Actors with their characters, then the people behind the series, in TheTVDB's order.
+                credited = [.. series.Characters.OrderBy(character => character.Sort).Select(character => (Character: character, Role: character.Role switch
+                {
+                    "Actor" => ProviderPerson.Actor,
+                    "Guest Star" => ProviderPerson.GuestStar,
+                    "Director" => ProviderPerson.Director,
+                    "Writer" => ProviderPerson.Writer,
+                    "Creator" => ProviderPerson.Creator,
+                    _ => null
+                })).Where(item => item.Role is not null)];
+
+                // The rating alone still comes from TMDB; without it the series keeps its rating.
+                TmdbConnection? connection = null;
+                if (tmdbId is not null)
+                {
+                    try
+                    {
+                        connection = await ConnectAsync(context, provider.Token);
+                    }
+                    catch (ServiceUnavailableException)
+                    {
+                    }
+                }
+
+                var linksTask = LookUpPeopleAsync(context, session, credited.Select(item => item.Character).ToArray(), budget, provider.Token);
+                var ratedTask = connection is null ? Task.FromResult<TmdbCatalogEntry?>(null) : ReadRatingAsync(connection, tmdbId!.Value, provider.Token);
+                await Task.WhenAll([episodesTask, linksTask, ratedTask, .. translations.OfType<Task>()]);
+                var original = (await episodesTask).ToDictionary(episode => episode.Id);
+                for (var index = 0; index < preferred.Length; index++)
+                {
+                    translated.Add(translations[index] is { } read ? (await read).ToDictionary(episode => episode.Id) : original);
+                }
+
+                episodes = await episodesTask;
+                links = await linksTask;
+                rated = await ratedTask;
+            }
+            catch
+            {
+                await provider.CancelAsync();
+                throw;
             }
 
             string? Text(Func<TvdbTranslation, string?> value) =>
@@ -453,34 +505,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 new { Key = "Studio", Value = TextLimit.Cut(series.Networks.Count == 0 ? null : string.Join(", ", series.Networks), 4000), Localized = false }
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
 
-            // Actors with their characters, then the people behind the series, in TheTVDB's order.
-            var credited = series.Characters.OrderBy(character => character.Sort).Select(character => (Character: character, Role: character.Role switch
-            {
-                "Actor" => ProviderPerson.Actor,
-                "Guest Star" => ProviderPerson.GuestStar,
-                "Director" => ProviderPerson.Director,
-                "Writer" => ProviderPerson.Writer,
-                "Creator" => ProviderPerson.Creator,
-                _ => null
-            })).Where(item => item.Role is not null).ToArray();
-            var links = await LookUpPeopleAsync(context, session, credited.Select(item => item.Character).ToArray(), budget, ct);
             var people = credited.Select(item => new ProviderPerson(item.Character.PersonId is { } personId && !links.Skipped.Contains(personId) ? personId.ToString(CultureInfo.InvariantCulture) : null,
                 item.Character.PersonName, item.Role!, item.Role is ProviderPerson.Actor or ProviderPerson.GuestStar ? item.Character.Character : null, item.Character.ImageUrl));
-
-            // The rating alone still comes from TMDB.
-            var tmdbId = tmdbTvId ?? stored.TmdbTvId ?? series.TmdbId;
-            TmdbCatalogEntry? rated = null;
-            if (tmdbId is { } ratedId)
-            {
-                try
-                {
-                    rated = await ReadCatalogEntryAsync(await ConnectAsync(context, ct), MediaType.Series, ratedId, ct);
-                }
-                catch (ServiceUnavailableException)
-                {
-                    // Without TMDB the series keeps its rating.
-                }
-            }
 
             var identities = new List<object> { new { Namespace = "tvdb", Value = tvdbId.ToString(CultureInfo.InvariantCulture) } };
             if (tmdbId is { } tmdb)
@@ -525,6 +551,18 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             // The poster and backdrop are kept locally.
             await _covers.StoreAsync(context, saved, ct);
             return saved;
+        }
+
+        private async Task<TmdbCatalogEntry?> ReadRatingAsync(TmdbConnection connection, int tmdbId, CancellationToken ct)
+        {
+            try
+            {
+                return await ReadCatalogEntryAsync(connection, MediaType.Series, tmdbId, ct);
+            }
+            catch (ServiceUnavailableException)
+            {
+                return null;
+            }
         }
 
         // People TheTVDB credits whom no person holds by their TheTVDB id yet are looked up once for their IMDb and TMDB ids, a few at a time and within TheTVDB's

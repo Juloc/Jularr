@@ -12,6 +12,8 @@ namespace Jularr.Backend.Data.Fields.Translation
         public static readonly StringField Url = new() { MaximumLength = 200, AllowBlank = false };
         public static readonly StringField Precision = new() { MaximumLength = 32, Required = false };
         public static readonly StringField Name = new() { MaximumLength = 80, AllowBlank = false, Trim = true };
+        // An Ollama machine by its place in the Owner's order, from 0.
+        public static readonly IntField Machine = new() { Minimum = 0, Maximum = 7 };
 
         // A section's blocks in order as a JSON array of plain texts.
         public static readonly StringField Blocks = new() { MaximumLength = 4_000_000, AllowBlank = false };

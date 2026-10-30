@@ -361,21 +361,29 @@ namespace Jularr.Integrations.Logic.Browser
             }
             finally
             {
-                foreach (var page in opened)
+                try
                 {
-                    if (page.Target is { } target) await ClosePageAsync(target, ct);
+                    // An expired search token cannot close its temporary mirror tabs.
+                    // Keep cleanup bounded and leave the primary page/session in place.
+                    using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    foreach (var page in opened)
+                    {
+                        if (page.Target is { } target) await ClosePageAsync(target, cleanup.Token);
+                    }
                 }
-
-                _gate.Release();
+                finally
+                {
+                    _gate.Release();
+                }
             }
         }
 
         // Keep the primary page's session; alternative addresses use temporary background pages.
         private async Task<OpenPage?> OpenPageAsync(Uri address, bool primary, CancellationToken ct)
         {
+            string? target = null;
             try
             {
-                string? target = null;
                 string? session = null;
                 if (!primary)
                 {
@@ -391,6 +399,11 @@ namespace Jularr.Integrations.Logic.Browser
             }
             catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException or System.Text.Json.JsonException)
             {
+                if (target is not null)
+                {
+                    using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await ClosePageAsync(target, cleanup.Token);
+                }
                 return null;
             }
         }

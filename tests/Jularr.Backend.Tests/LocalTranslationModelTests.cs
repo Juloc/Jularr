@@ -10,6 +10,59 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class LocalTranslationModelTests
     {
+        private static readonly Uri Ollama = new("http://ollama:11434/");
+
+        [TestMethod]
+        public async Task Machines_TranslateInTheOwnersOrder_PassOverOneThatFails_AndReturnToItAfterItsRest()
+        {
+            var handler = new Machines();
+            using var http = new HttpClient(handler);
+            var clock = new Clock();
+            var machines = new LocalTranslationMachines(new OllamaLocalModels(http),
+                Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434" }), clock);
+
+            // Nothing saved: the configured endpoint alone, so an upgraded install translates as before; addresses outside the private network never count.
+            CollectionAssert.AreEqual(new[] { Ollama }, machines.Order([]));
+            CollectionAssert.AreEqual(new[] { new Uri("http://192.168.1.20:11434/"), new Uri("http://10.0.0.2:11434/") },
+                machines.Order(["http://192.168.1.20:11434", "http://8.8.8.8:11434", "http://10.0.0.2:11434", "http://192.168.1.20:11434"]));
+
+            string[] saved = ["http://192.168.1.20:11434", "http://10.0.0.2:11434"];
+            Assert.AreEqual(new Uri("http://192.168.1.20:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+
+            // The first drops out: the next takes over, and the first rests even once it answers again.
+            handler.Offline = "192.168.1.20";
+            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            handler.Offline = null;
+            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            clock.Now += TimeSpan.FromMinutes(2);
+            Assert.AreEqual(new Uri("http://192.168.1.20:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+
+            // A machine that failed a block rests too; a machine without the wanted model is passed over.
+            machines.Fail(new Uri("http://192.168.1.20:11434/"));
+            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            clock.Now += TimeSpan.FromMinutes(2);
+            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default, "translategemma:12b"))?.Server);
+            Assert.IsNull(await machines.ChooseAsync(saved, default, "translategemma:27b"));
+        }
+
+        private sealed class Clock : TimeProvider
+        {
+            public DateTimeOffset Now { get; set; } = new(2026, 10, 30, 12, 0, 0, TimeSpan.Zero);
+            public override DateTimeOffset GetUtcNow() => Now;
+        }
+
+        // Two machines: 192.168.1.20 with the small model, 10.0.0.2 with the small and the middle one.
+        private sealed class Machines : HttpMessageHandler
+        {
+            public string? Offline { get; set; }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                if (request.RequestUri!.Host == Offline) throw new HttpRequestException("No route to host.");
+                var models = request.RequestUri.Host == "10.0.0.2" ? """[{"name":"translategemma:4b"},{"name":"translategemma:12b"}]""" : """[{"name":"translategemma:4b"}]""";
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"models\":" + models + "}") });
+            }
+        }
         [TestMethod]
         public void Endpoint_AllowsOnlyLocalOrPrivateTargets()
         {
@@ -85,15 +138,15 @@ namespace Jularr.Backend.Tests
                 Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 0 }),
                 Options.Create(new MediaOptions { TranslationPath = Path.Combine(root, "denied") }),
                 new LocalTranslationGate());
-            Assert.IsFalse(noCapacity.Queue("translategemma:4b"));
-            Assert.IsFalse(noCapacity.Queue("other:27b"));
+            Assert.IsFalse(noCapacity.Queue("translategemma:4b", Ollama));
+            Assert.IsFalse(noCapacity.Queue("other:27b", Ollama));
 
             using var adequate = new LocalTranslationDownloads(client,
                 Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 6_000_000_000L }),
                 Options.Create(new MediaOptions { TranslationPath = Path.Combine(root, "approved") }),
                 new LocalTranslationGate());
-            Assert.IsTrue(adequate.Queue("translategemma:4b"));
-            Assert.IsFalse(adequate.Queue("translategemma:12b"));
+            Assert.IsTrue(adequate.Queue("translategemma:4b", Ollama));
+            Assert.IsFalse(adequate.Queue("translategemma:12b", Ollama));
             Assert.AreEqual("queued", adequate.Current().State);
         }
 
@@ -112,7 +165,7 @@ namespace Jularr.Backend.Tests
                 var media = Options.Create(new MediaOptions { TranslationPath = root });
                 using (var beforeRestart = new LocalTranslationDownloads(client, settings, media, new LocalTranslationGate()))
                 {
-                    Assert.IsTrue(beforeRestart.Queue("translategemma:4b"));
+                    Assert.IsTrue(beforeRestart.Queue("translategemma:4b", Ollama));
                     Assert.AreEqual("queued", beforeRestart.Current().State);
                     Assert.IsTrue(File.Exists(Path.Combine(root, "ollama-pull-state.json")));
                 }
@@ -122,7 +175,7 @@ namespace Jularr.Backend.Tests
                 {
                     Assert.AreEqual("interrupted", afterRestart.Current().State);
                     Assert.AreEqual("translategemma:4b", afterRestart.Current().Model);
-                    Assert.IsTrue(afterRestart.Queue("translategemma:4b"));
+                    Assert.IsTrue(afterRestart.Queue("translategemma:4b", Ollama));
                     Assert.AreEqual("queued", afterRestart.Current().State);
                 }
             }
@@ -149,7 +202,7 @@ namespace Jularr.Backend.Tests
                     Options.Create(new MediaOptions { TranslationPath = root }),
                     new LocalTranslationGate());
                 Assert.AreEqual("failed", downloads.Current().State);
-                Assert.IsFalse(downloads.Queue("translategemma:4b"));
+                Assert.IsFalse(downloads.Queue("translategemma:4b", Ollama));
             }
             finally
             {

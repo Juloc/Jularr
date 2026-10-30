@@ -3,11 +3,13 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Data.User.AniList.V1;
 using Jularr.Backend.Data.User.Collection.V1;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Service.Public.Authentication.V1;
+using Jularr.Backend.Service.User.AniList.V1;
 using Jularr.Backend.Service.User.Collection.V1;
 using Jularr.Backend.Service.User.Media.V1;
 using Jularr.Backend.Service.User.Profile.V1;
@@ -21,10 +23,13 @@ namespace Jularr.Frontend.Pages.User.Favorites
     // The profile's favorites by media type, in the chosen order, and its collections of them; each title with its state and the collections it is in.
     public sealed partial class FavoritesModel(ReadAuthenticationV1 authentication, ReadWatchlistV1 read, ReadProfileMediaV1 readMedia, UpdateWatchlistV1 update, ReadWatchlistCountV1 readCount, ReadCollectionsV1 readCollections,
         ReadCollectionV1 readCollection, ReadCollectionWorksV1 readCollectionWorks, ReadCollectionMembershipV1 readMembership, CreateCollectionV1 createCollection,
-        UpdateCollectionV1 updateCollection, DeleteCollectionV1 deleteCollection, AddCollectionWorkV1 addWork, RemoveCollectionWorkV1 removeWork, IAntiforgery antiforgery, UiText texts,
-        FrontendAssets assets) : JularrPage
+        UpdateCollectionV1 updateCollection, DeleteCollectionV1 deleteCollection, AddCollectionWorkV1 addWork, RemoveCollectionWorkV1 removeWork, ReadAniListListsV1 readAniListLists,
+        ReadAniListEntriesV1 readAniListEntries, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private const int PageSize = 48;
+
+        private IReadOnlyList<AniListStatusCountV1> _aniListCounts = [];
+        private IReadOnlyList<AniListEntryV1> _aniListEntries = [];
 
         private IReadOnlyList<ProfileMediaV1>? _media;
         private ScopeSelection? _scopes;
@@ -54,6 +59,10 @@ namespace Jularr.Frontend.Pages.User.Favorites
         [BindProperty(SupportsGet = true, Name = "collection")]
         public long? CollectionId { get; set; }
 
+        // An AniList status (as a slug) whose entries are shown instead of the favorites.
+        [BindProperty(SupportsGet = true, Name = "anilist")]
+        public string? AniList { get; set; }
+
         [BindProperty(SupportsGet = true, Name = "p")]
         public int PageNumber { get; set; } = 1;
 
@@ -71,6 +80,16 @@ namespace Jularr.Frontend.Pages.User.Favorites
             _media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), token);
             _scopes = null;
 
+            // The AniList lists beside the collections, and the page of the one that is shown.
+            if (texts.CanSeeAniList())
+            {
+                _aniListCounts = await readAniListLists.ExecuteAsync<BaseDataList<AniListStatusCountV1>>(new AniListParametersV1(), token);
+                if (ValidAniList is { } status)
+                {
+                    _aniListEntries = (await readAniListEntries.ExecuteAsync<PageResult<AniListEntryV1>>(new AniListEntriesParametersV1(status, Math.Max(1, PageNumber), PageSize), token)).Items;
+                }
+            }
+
             // Collections shape the strip; the newest favorites give the first card its covers.
             if (texts.CanCollect())
             {
@@ -81,6 +100,13 @@ namespace Jularr.Frontend.Pages.User.Favorites
                     _newest = (await read.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadWatchlistParametersV1(1, 4), token)).Items;
                     _total = (await readCount.ExecuteAsync<WatchlistCountV1>(new ReadWatchlistCountParametersV1(), token)).Total;
                 }
+            }
+
+            // The entries of an AniList status are all there is to show.
+            if (ValidAniList is not null)
+            {
+                _loaded = true;
+                return;
             }
 
             // One bounded page of the favorites or of the chosen collection.

@@ -60,6 +60,10 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly IntField Count = new() { Minimum = 0 };
         public static readonly DateTimeField LastSeenAt = new() { Required = false };
         public static readonly DateTimeField SeenAt = new();
+
+        // A profile's points for a group rated good (plus) or bad (minus).
+        public static readonly IntField GoodScore = new() { Minimum = 0, Maximum = 1000000 };
+        public static readonly IntField BadScore = new() { Minimum = -1000000, Maximum = 0 };
     }
 
     public static class AcquisitionTagFields

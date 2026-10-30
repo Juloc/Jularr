@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Provider;
 using Jularr.Backend.Data.Logic.AniList;
 
 namespace Jularr.Backend.Logic.AniList
@@ -51,6 +52,39 @@ namespace Jularr.Backend.Logic.AniList
             // The further episodes were finished after sending was switched on.
             var recent = units.Any(unit => unit.IsCompleted && unit.Number > remote && unit.Number <= local && unit.CompletedAt is { } at && at >= pushEnabledAt);
             return recent ? new AniListPush(entry.MediaId, entry.ListEntryId, entry.IsManga, local, entry.Status == "PLANNING") : null;
+        }
+
+        // Where the profile's progress stands against the entry: a completed entry counts as everything it names.
+        public static AniListSyncStateType StateOf(string status, int remote, int? total, int local)
+        {
+            var reached = status == "COMPLETED" && total is { } count ? Math.Max(remote, count) : remote;
+            return local == reached ? AniListSyncStateType.Synchronized : local > reached ? AniListSyncStateType.LocalAhead : AniListSyncStateType.AniListAhead;
+        }
+
+        // Why a difference stays instead of going at the next pass; none while the two agree, and none for what the next pass settles by itself.
+        public static AniListSyncProblemType? ProblemOf(AniListSyncStateType state, bool isPushEnabled, bool isExpired, string? failureCode, string? lastError)
+        {
+            if (state == AniListSyncStateType.Synchronized)
+            {
+                return null;
+            }
+
+            if (isExpired || failureCode == "anilist_authentication_failed")
+            {
+                return AniListSyncProblemType.SignInNeeded;
+            }
+
+            if (failureCode is not null)
+            {
+                return AniListSyncProblemType.Unreachable;
+            }
+
+            if (state != AniListSyncStateType.LocalAhead)
+            {
+                return null;
+            }
+
+            return !isPushEnabled ? AniListSyncProblemType.SendingOff : lastError is not null ? AniListSyncProblemType.SendFailed : null;
         }
 
         // A failed write waits a minute, then twice as long each time, at most six hours.

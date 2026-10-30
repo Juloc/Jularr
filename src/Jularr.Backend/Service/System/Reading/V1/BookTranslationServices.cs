@@ -22,13 +22,13 @@ namespace Jularr.Backend.Service.System.Reading.V1
         private const int BlocksPerCall = 6;
         private static readonly TimeSpan GateWait = TimeSpan.FromSeconds(2);
         private readonly OllamaLocalModels _models;
-        private readonly LocalTranslationOptions _options;
+        private readonly LocalTranslationMachines _machines;
         private readonly LocalTranslationGate _gate;
 
-        internal TranslateReadingBooksV1(OllamaLocalModels models, IOptions<LocalTranslationOptions> options, LocalTranslationGate gate)
+        internal TranslateReadingBooksV1(OllamaLocalModels models, LocalTranslationMachines machines, LocalTranslationGate gate)
         {
             _models = models;
-            _options = options.Value;
+            _machines = machines;
             _gate = gate;
         }
 
@@ -39,19 +39,17 @@ namespace Jularr.Backend.Service.System.Reading.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var server = OllamaLocalModels.Endpoint(_options.Endpoint);
-            if (server is null) return new UpdateResult(false);
-            string model, digest;
+            // The first machine of the order that answers; one that fails rests, and the next round goes to the next one.
+            var saved = await Context.ExecuteBatchAsync(LocalTranslationMachines.SavedAsync, CancellationToken);
+            if (await _machines.ChooseAsync(saved, CancellationToken) is not var (server, model)) return new UpdateResult(false);
+            string digest;
             try
             {
-                var installed = await _models.InstalledAsync(server, CancellationToken);
-                if (OllamaLocalModels.Candidates.FirstOrDefault(candidate => installed.Contains(candidate, StringComparer.Ordinal)) is not { } chosen)
-                    return new UpdateResult(false);
-                model = chosen;
                 digest = await _models.DigestAsync(server, model, CancellationToken);
             }
             catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException && !CancellationToken.IsCancellationRequested)
             {
+                _machines.Fail(server);
                 return new UpdateResult(false);
             }
 
@@ -82,6 +80,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
                     }
                     catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException && !CancellationToken.IsCancellationRequested)
                     {
+                        _machines.Fail(server);
                         break;
                     }
                     finally { _gate.HeavyWork.Release(); }
