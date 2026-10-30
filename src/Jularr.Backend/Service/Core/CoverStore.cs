@@ -48,7 +48,7 @@ namespace Jularr.Backend.Service.Core
             try
             {
                 var targets = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadPendingCoversAsync(new WorkCoverQueryData(workId, 4), token), ct);
-                await StoreAsync(context, targets, ct);
+                await StoreAsync(context, targets, ct, targets.Count);
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !ct.IsCancellationRequested)
             {
@@ -57,8 +57,9 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        // Fetches each target, keeps it and records it; one that cannot be fetched waits a day.
-        public async Task<int> StoreAsync(LogicContext context, IReadOnlyList<WorkCoverTargetData> targets, CancellationToken ct)
+        // Fetches each target, keeps it and records it; one that cannot be fetched waits a day. A pass fetches and keeps that many targets together, then records them one after
+        // the other: the poster and backdrop of one Work are fetched together, a sweep one by one.
+        public async Task<int> StoreAsync(LogicContext context, IReadOnlyList<WorkCoverTargetData> targets, CancellationToken ct, int parallelism = 1)
         {
             var stored = 0;
             if (targets.Count == 0)
@@ -68,25 +69,22 @@ namespace Jularr.Backend.Service.Core
 
             // The Owner's format, read once for the pass.
             var format = EffectiveFormat((await context.ExecuteBatchAsync((ctx, token) => ctx.ReadCoverCacheSettingsAsync(token), ct)).FormatId);
-            foreach (var target in targets)
+            foreach (var together in targets.Chunk(Math.Max(parallelism, 1)))
             {
-                try
+                var fetched = await Task.WhenAll(together.Select(target => FetchAsync(target, format, ct)));
+                foreach (var (target, data) in fetched)
                 {
-                    var (bytes, contentType) = await client.DownloadAsync(target.SourceUrl, ct);
-                    var version = Convert.ToHexStringLower(SHA256.HashData(bytes))[..12];
-                    await WriteAsync(target, bytes, contentType, format, ct);
-                    var data = new WorkCoverStoredData(target, contentType, version, CoverPaths.Url(target.WorkId, target.CoverKindId, target.WorkUnitId, version), format);
-                    await context.ExecuteBatchAsync(async (ctx, token) =>
+                    if (data is not null)
                     {
-                        await ctx.SaveWorkCoverAsync(data, token);
-                        return true;
-                    }, ct);
-                    stored++;
-                }
-                catch (Exception exception) when (exception is HttpRequestException or InvalidDataException or IOException or UnauthorizedAccessException
-                    || exception is OperationCanceledException && !ct.IsCancellationRequested)
-                {
-                    logger.LogInformation("A cover of Work {WorkId} could not be fetched: {Reason}", target.WorkId, exception.Message);
+                        await context.ExecuteBatchAsync(async (ctx, token) =>
+                        {
+                            await ctx.SaveWorkCoverAsync(data, token);
+                            return true;
+                        }, ct);
+                        stored++;
+                        continue;
+                    }
+
                     await context.ExecuteBatchAsync(async (ctx, token) =>
                     {
                         await ctx.SaveWorkCoverFailureAsync(target, token);
@@ -96,6 +94,24 @@ namespace Jularr.Backend.Service.Core
             }
 
             return stored;
+        }
+
+        // The target downloaded and kept; no result when it cannot be fetched.
+        private async Task<(WorkCoverTargetData Target, WorkCoverStoredData? Data)> FetchAsync(WorkCoverTargetData target, CoverFormat format, CancellationToken ct)
+        {
+            try
+            {
+                var (bytes, contentType) = await client.DownloadAsync(target.SourceUrl, ct);
+                var version = Convert.ToHexStringLower(SHA256.HashData(bytes))[..12];
+                await WriteAsync(target, bytes, contentType, format, ct);
+                return (target, new WorkCoverStoredData(target, contentType, version, CoverPaths.Url(target.WorkId, target.CoverKindId, target.WorkUnitId, version), format));
+            }
+            catch (Exception exception) when (exception is HttpRequestException or InvalidDataException or IOException or UnauthorizedAccessException
+                || exception is OperationCanceledException && !ct.IsCancellationRequested)
+            {
+                logger.LogInformation("A cover of Work {WorkId} could not be fetched: {Reason}", target.WorkId, exception.Message);
+                return (target, null);
+            }
         }
 
         // The original as downloaded, then each width in the one format; a width the tools cannot make in it is made in the next one, and without any the original answers.

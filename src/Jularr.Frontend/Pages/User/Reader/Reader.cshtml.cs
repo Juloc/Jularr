@@ -27,7 +27,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.Reader
 {
     public sealed class ReaderModel(ReadReadingSourceV1 readSource, OpenReadingV1 open, ReadReadingTocV1 toc, ReadReadingSectionV1 section, ReadReadingSectionAnnotationsV1 readMarks, ReadReadingAnnotationsV1 readNotes,
-        ReadReadingBookmarksV1 readBookmarks, DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadTranslationLanguagesV1 readLanguages, ReadLocalTranslationAvailabilityV1 readLocalAvailability, ReadWorkV1 readWork,
+        ReadReadingBookmarksV1 readBookmarks, DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadLocalTranslationAvailabilityV1 readLocalAvailability, ReadWorkV1 readWork,
         ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAvailableSpeechModelsV1 readSpeechModels, ReadAuthenticationV1 authentication, IAntiforgery antiforgery, UiText texts, FrontendAssets assets,
         ReadReadingStateV1 readState, ReadReadingPositionV1 readPosition, ReadReadingPageNotesV1 readPageNotes, CreateReadingPageNoteV1 createPageNote, DeleteReadingPageNoteV1 deletePageNote,
         ReadReaderSettingsV1 readSettings, ReadReadingSectionOffsetsV1 readOffsets)
@@ -35,7 +35,6 @@ namespace Jularr.Frontend.Pages.User.Reader
     {
         // The languages this book can be read in: its original first, then the profile's and the other allowed ones Mozilla's models reach.
         private string[] _languages = [];
-        private string[] _browserTranslationTargets = [];
         private string? _localTranslationModel;
 
         // A PDF without reading text, or whose reading text the profile did not ask for, opens as its original pages and says why, here, in a word.
@@ -43,6 +42,9 @@ namespace Jularr.Frontend.Pages.User.Reader
 
         // The original pages show; the page they open at, the book's state and the profile's notes on its pages.
         private bool _original;
+
+        // The prepared book whose scanned pages show as Smart Pages inside the original pages; null where they show as scanned.
+        private ReadingDocumentV1? _smart;
         private int _page = 1;
         private ReadingStateV1? _state;
         private IReadOnlyList<ReadingPageNoteV1> _pageNotes = [];
@@ -165,8 +167,6 @@ namespace Jularr.Frontend.Pages.User.Reader
                     .Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"])
                 : new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
                     .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false")),
-                    new Button(new Text("reader.translation.localQuality")).Class("button")
-                        .Attribute("data-local-quality-toggle", "").Attribute("aria-pressed", "false").Attribute("hidden", "hidden"),
                     new P(new Text("reader.translation.provider.original")).Attribute("data-translation-provider", "")
                         .Attribute("role", "status")]).Class("reader__panel reader__choices")
                     .Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"]);
@@ -275,9 +275,10 @@ namespace Jularr.Frontend.Pages.User.Reader
             }
             if (texts.CanTranslate())
             {
-                // The section's translations are shared; the files to translate it come with its route.
+                // The server's TranslateGemma translates; what its job prepared shows at once, the rest of the page in view it translates first.
                 // A book in another language opens in the profile's, unless the profile chose another for it.
-                view.Attribute("data-browser-translation-targets", string.Join(',', _browserTranslationTargets))
+                // TODO(#1726): Mozilla's translation in the browser returns only as an emergency module, off by default.
+                view.Attribute("data-translation-engine", "gemma")
                     .Attribute("data-local-model", _localTranslationModel ?? "")
                     .Attribute("data-language", document.Language ?? document.OriginalLanguage ?? "")
                     .Attribute("data-reading-language", Chosen(document))
@@ -285,12 +286,10 @@ namespace Jularr.Frontend.Pages.User.Reader
                     .Attribute("data-local-translation-url", "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/" + index.ToString(CultureInfo.InvariantCulture) + "/local-translations/")
                     .Attribute("data-translation-url", "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/"
                         + index.ToString(CultureInfo.InvariantCulture) + "/translations/")
-                    .Attribute("data-route-url", "/api/v1/translation/routes/")
                     .Attribute("data-translating-label", texts["reader.translating"])
                     .Attribute("data-language-saving-label", texts["reader.language.saving"])
                     .Attribute("data-translation-failed-label", texts["reader.translationFailed"])
                     .Attribute("data-provider-original-label", texts["reader.translation.provider.original"])
-                    .Attribute("data-provider-browser-label", texts["reader.translation.provider.browser"])
                     .Attribute("data-provider-local-label", texts["reader.translation.provider.local"]);
             }
 
@@ -310,7 +309,9 @@ namespace Jularr.Frontend.Pages.User.Reader
         {
             var asset = Id.ToString(CultureInfo.InvariantCulture);
             var file = "/api/v1/reading/assets/" + asset + "/file";
+            var translates = _smart is not null && texts.CanTranslate();
             var top = Header(source.Title, "", source.WorkId, [
+                .. translates ? [Overflowing(Tool("globe", "reader.language", "language"), "language", 1)] : Array.Empty<IUiComponent>(),
                 Overflowing(Tool("bookmark", "reader.notes", "notes"), "notes", 2),
                 Overflowing(new Button(new Icon("settings", assets)).IconOnly(texts["reader.settings"]).Attribute("data-reader-open-settings", "all").Attribute("aria-expanded", "false"), "settings", 1),
                 Tool("player-more", "reader.more", "more").Attribute("data-overflow-more", "")
@@ -344,8 +345,10 @@ namespace Jularr.Frontend.Pages.User.Reader
                 ).Class("reader__offer").Attribute("data-role", "view-offer").Attribute("role", "status").Attribute("hidden", "hidden")
             ).Class("reader__notices");
 
-            return new ReaderFrame(assets, texts, top, new Span(), stage, bottom, Settings(true, true, true), PageNotes(), notices,
-                More([MoreEntry(new Icon("bookmark", assets), "reader.notes", "notes"), MoreEntry(new Icon("settings", assets), "reader.settings", "settings"), .. ViewEntries(),
+            var frame = new ReaderFrame(assets, texts, top, new Span(), stage, bottom, Settings(true, true, true), PageNotes(), notices,
+                translates && _smart is { } smart ? Languages(smart) : new Span(),
+                More([.. translates ? [MoreEntry(new Icon("globe", assets), "reader.language", "language")] : Array.Empty<IUiComponent>(),
+                    MoreEntry(new Icon("bookmark", assets), "reader.notes", "notes"), MoreEntry(new Icon("settings", assets), "reader.settings", "settings"), .. ViewEntries(),
                     new A(new Icon("download", assets), new Text("reader.originalPdf")).Class("button reader__menu-item").Attribute("href", file).Attribute("target", "_blank").Attribute("rel", "noopener")]),
                 new P(new Text("progress.saveFailed")).Attribute("data-role", "save-error").Attribute("role", "status").Attribute("hidden", "hidden"))
                 .Class("reader reader--pages").Attribute("data-format", "pages")
@@ -359,12 +362,41 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-view-url", "/api/v1/reading/assets/" + asset + "/view")
                 .Attribute("data-view-chosen", ViewChoiceName(source.ReadingViewTypeId))
                 .Attribute("data-recognition-label", texts["reader.recognition.progress"]);
+            if (_smart is { } document)
+            {
+                // Scanned pages set anew: their reading units (from 100000 on) and, where the server's model translates, the language to show them in.
+                var units = "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/";
+                frame.Attribute("data-smart-pages", string.Join(',', document.SmartPages.Select(number => number.ToString(CultureInfo.InvariantCulture))))
+                    .Attribute("data-smart-url", units);
+                if (translates)
+                {
+                    frame.Attribute("data-local-model", _localTranslationModel ?? "")
+                        .Attribute("data-language", document.Language ?? document.OriginalLanguage ?? "")
+                        .Attribute("data-reading-language", Chosen(document))
+                        .Attribute("data-language-url", "/api/v1/reading/assets/" + asset + "/language")
+                        .Attribute("data-translating-label", texts["reader.translating"])
+                        .Attribute("data-translation-failed-label", texts["reader.translationFailed"]);
+                }
+            }
+
+            return frame;
         }
+
+        // The languages the book can be read in; the choice is kept for the profile.
+        private IUiComponent Languages(ReadingDocumentV1 document) => _languages.Length == 0
+            ? new Div(new P(new Text("reader.language.none"))).Class("reader__panel").Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"])
+            : new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
+                .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false")),
+                new P().Attribute("data-role", "translation-status").Attribute("role", "status").Attribute("hidden", "hidden")])
+                .Class("reader__panel reader__choices").Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"]);
 
         private string RecognitionText(ReadingStateV1 state) => string.Format(CultureInfo.InvariantCulture, texts["reader.recognition.progress"], state.RecognizedPages, state.RecognitionPages);
 
         // The profile's choice as the page's script names it.
-        private static string ViewChoiceName(ReadingView? view) => view switch { ReadingView.Smart => "smart", ReadingView.Original => "original", _ => "auto" };
+        private static string ViewChoiceName(ReadingView? view) => view switch
+        {
+            ReadingView.Smart => "smart", ReadingView.Original => "original", ReadingView.SmartPages => "smartpages", _ => "auto"
+        };
 
         // This book's notes on pages: the one for the page in view, and the others, each leading to its page.
         private IUiComponent PageNotes()
@@ -556,6 +588,7 @@ namespace Jularr.Frontend.Pages.User.Reader
         private IUiComponent ViewGroup() => SettingsGroup("view", "reader.settings.view", group => group.Content(new Div(
             new Button(new Text("reader.view.auto")).Class("button").Attribute("data-view-choice", "auto"),
             new Button(new Text("reader.view.smart")).Class("button").Attribute("data-view-choice", "smart"),
+            new Button(new Text("reader.view.smartPages")).Class("button").Attribute("data-view-choice", "smartpages"),
             new Button(new Text("reader.view.original")).Class("button").Attribute("data-view-choice", "original"),
             new P(new Text("reader.view.failed")).Attribute("data-role", "view-error").Attribute("role", "status").Attribute("hidden", "hidden")
         ).Class("reader__choices")), open: true);
@@ -695,26 +728,12 @@ namespace Jularr.Frontend.Pages.User.Reader
             return Page();
         }
 
-        // A local model can offer the profile's languages even when Mozilla is unavailable.
+        // The profile's languages, offered where the server's TranslateGemma is installed. The Reader asks Mozilla for nothing (#1726).
         private async Task<string[]> LanguagesAsync(CancellationToken ct)
         {
             var allowed = (await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(new ReadUiLocalesParametersV1(), ct))
                 .Select(locale => CultureInfo.GetCultureInfo(locale.Locale).TwoLetterISOLanguageName);
             var candidates = new[] { ProfileLanguage }.Concat(allowed).Distinct(StringComparer.Ordinal).ToArray();
-
-            try
-            {
-                var available = await readLanguages.ExecuteAsync<TranslationLanguagesV1>(new TranslationLanguagesParametersV1(), ct);
-                // A target alone does not make a route: for example, the catalogue always
-                // lists English as a bridge even when no source model is available.
-                var source = (_document?.Language ?? _document?.OriginalLanguage)?.Split('-', '_')[0].ToLowerInvariant();
-                _browserTranslationTargets = source is null || available.Sources.Contains(source, StringComparer.Ordinal)
-                    ? available.Targets : [];
-            }
-            catch (ServiceUnavailableException)
-            {
-                _browserTranslationTargets = [];
-            }
 
             try
             {
@@ -726,7 +745,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 _localTranslationModel = null;
             }
 
-            return _localTranslationModel is not null ? candidates : [.. candidates.Where(_browserTranslationTargets.Contains)];
+            return _localTranslationModel is not null ? candidates : [];
         }
 
         protected override async Task LoadDataAsync()
@@ -736,7 +755,7 @@ namespace Jularr.Frontend.Pages.User.Reader
             _work = await readWork.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(_source.WorkId), ct);
 
             // The view: this visit's, else the profile's choice for the book, else automatic. The original pages need no analysis, so they open without it.
-            var requested = ViewName switch { "smart" => ReadingView.Smart, "original" => ReadingView.Original, _ => _source.ReadingViewTypeId };
+            var requested = ViewName switch { "smart" => ReadingView.Smart, "original" => ReadingView.Original, "smartpages" => ReadingView.SmartPages, _ => _source.ReadingViewTypeId };
             if (_source.HasPdf && requested == ReadingView.Original)
             {
                 await LoadOriginalAsync(ct);
@@ -751,9 +770,35 @@ namespace Jularr.Frontend.Pages.User.Reader
                 && exception.Code is "reading_pdf_without_text" or "reading_invalid_file" or "reading_pdf_recognizing" or "reading_pdf_unfit")
             {
                 // No reading text, or not yet: the original pages show what Jularr cannot reflow, and a profile that asked for the Smart Book is told it is not there.
-                _status = exception.Code == "reading_pdf_recognizing" ? "errors." + exception.Code : requested == ReadingView.Smart ? "reader.view.smartUnavailable" : null;
+                _status = exception.Code == "reading_pdf_recognizing" ? "errors." + exception.Code : requested == ReadingView.Smart ? "reader.view.smartUnavailable"
+                    : requested == ReadingView.SmartPages ? "reader.view.smartPagesUnavailable" : null;
                 await LoadOriginalAsync(ct);
                 return;
+            }
+
+            // Smart Pages: by choice, or by themselves where the reading text did not pass its quality gate and the scan's pages are set anew; the pages
+            // without a Smart Page show as scanned.
+            if (_source.HasPdf && _document.ReadingFormatTypeId == ReadingFormatType.Pdf && (requested == ReadingView.SmartPages || requested is null && !_document.IsRecommended))
+            {
+                if (_document.SmartPages.Length > 0)
+                {
+                    _smart = _document;
+                    if (texts.CanTranslate())
+                    {
+                        _languages = await LanguagesAsync(ct);
+                    }
+
+                    await LoadOriginalAsync(ct);
+                    return;
+                }
+
+                if (requested == ReadingView.SmartPages)
+                {
+                    _status = "reader.view.smartPagesUnavailable";
+                    _document = null;
+                    await LoadOriginalAsync(ct);
+                    return;
+                }
             }
 
             // A converted PDF whose text did not pass the quality gate opens as its original pages, unless the profile asked for the Smart Book.
@@ -886,7 +931,7 @@ namespace Jularr.Frontend.Pages.User.Reader
             return RedirectToPage("/User/Reader/Reader", new { id = Id, s = SectionIndex });
         }
 
-        // The profile's choice for the book, else its language when Mozilla reaches it, else the original.
+        // The profile's choice for the book, else its language when the server translates it, else the original.
         private string Chosen(ReadingDocumentV1 document) => document.ReadingLanguage is { } chosen && (chosen == "original" || _languages.Contains(chosen)) ? chosen
             : _languages.Contains(ProfileLanguage) ? ProfileLanguage : "original";
 

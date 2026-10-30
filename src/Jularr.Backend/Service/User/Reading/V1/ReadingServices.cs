@@ -132,6 +132,14 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         coalesce(jsonb_array_length(document."Structure" -> 'OriginalPages'), 0) AS "OriginalPages",
                         ARRAY(
                             SELECT
+                                (page.value ->> 'PageFrom')::integer
+                            FROM
+                                jsonb_array_elements(coalesce(document."Structure" -> 'SmartPages', '[]'::jsonb)) WITH ORDINALITY AS page (value, position)
+                            ORDER BY
+                                page.position
+                        ) AS "SmartPages",
+                        ARRAY(
+                            SELECT
                                 split_part(translation."Path", '/', 2)
                             FROM
                                 "ReadingResources" AS translation
@@ -363,15 +371,16 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Served from the cache; an evicted section needs the storage again.
+            // Served from the cache; an evicted section needs the storage again. From 100000 on, the index names a Smart Page (a scanned page set anew),
+            // which is read and translated like a section but is not part of the reading text.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
                     @SectionIndex AS "SectionIndex",
-                    document."Structure" -> 'Sections' -> @SectionIndex ->> 'Title' AS "Title",
+                    unit.value ->> 'Title' AS "Title",
                     convert_from(resource."Bytes", 'UTF8') AS "Html",
-                    (document."Structure" -> 'Sections' -> @SectionIndex ->> 'Characters')::bigint AS "Characters",
+                    (unit.value ->> 'Characters')::bigint AS "Characters",
                     (
                         SELECT
                             coalesce(sum((section.value ->> 'Characters')::bigint), 0)
@@ -379,15 +388,24 @@ namespace Jularr.Backend.Service.User.Reading.V1
                             jsonb_array_elements(document."Structure" -> 'Sections') WITH ORDINALITY AS section (value, position)
                         WHERE
                             section.position <= @SectionIndex
+                            AND @SectionIndex < 100000
                     )::bigint AS "CharactersBefore",
                     document."TotalCharacters",
-                    (document."Structure" -> 'Sections' -> @SectionIndex ->> 'Blocks')::integer AS "Blocks",
-                    coalesce((document."Structure" -> 'Sections' -> @SectionIndex ->> 'PageFrom')::integer, 0) AS "PageFrom"
+                    (unit.value ->> 'Blocks')::integer AS "Blocks",
+                    coalesce((unit.value ->> 'PageFrom')::integer, 0) AS "PageFrom"
                 FROM
                     "ReadingDocuments" AS document
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            CASE WHEN @SectionIndex >= 100000 THEN document."Structure" -> 'SmartPages' -> (@SectionIndex - 100000)
+                                ELSE document."Structure" -> 'Sections' -> @SectionIndex END AS value,
+                            CASE WHEN @SectionIndex >= 100000 THEN ':smartpage/' || lpad((@SectionIndex - 100000)::text, 5, '0')
+                                ELSE ':section/' || lpad(@SectionIndex::text, 5, '0') END AS "Path"
+                    ) AS unit
                     JOIN "ReadingResources" AS resource ON resource."ReadingDocumentId" = document."Id"
-                        AND resource."Path" = ':section/' || lpad(@SectionIndex::text, 5, '0')
+                        AND resource."Path" = unit."Path"
                 WHERE
+                    unit.value IS NOT NULL AND
                     document."Id" = @DocumentId
                     AND EXISTS (
                         SELECT

@@ -215,50 +215,73 @@ namespace Jularr.Frontend.Pages.User.Details
             return RedirectToPage("/User/Requests/Requests");
         }
 
+        // What the page reads about the title: the reads that do not wait for the Work itself run together with it, so the page costs its slowest read rather than their sum.
         protected override async Task LoadDataAsync()
         {
-            _work = await read.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), HttpContext.RequestAborted);
-            if (_work.MediaTypeId == MediaType.Series)
-            {
-                _seasons = await readSeasons.ExecuteAsync<BaseDataList<WorkSeasonV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
-                if (SelectedSeason is { } season)
-                {
-                    _episodes = await readEpisodes.ExecuteAsync<BaseDataList<WorkEpisodeV1>>(new ReadWorkEpisodesParametersV1(Id, season), HttpContext.RequestAborted);
-                }
-            }
-
-            _availability = await readAvailability.ExecuteAsync<PageResult<WorkAvailabilityV1>>(new ReadWorkAvailabilityParametersV1(Id, page: PageNumber, pageSize: 48), HttpContext.RequestAborted);
-            _editions = await readEditions.ExecuteAsync<BaseDataList<WorkEditionV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
-            _credits = await readCredits.ExecuteAsync<BaseDataList<WorkCreditV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
-            if (texts.CanSeeRelations())
-            {
-                _relations = await readRelations.ExecuteAsync<BaseDataList<WorkRelationV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
-            }
-
+            var ct = HttpContext.RequestAborted;
+            using var group = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var token = group.Token;
+            var workTask = read.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), token);
+            var availabilityTask = readAvailability.ExecuteAsync<PageResult<WorkAvailabilityV1>>(new ReadWorkAvailabilityParametersV1(Id, page: PageNumber, pageSize: 48), token);
+            var editionsTask = readEditions.ExecuteAsync<BaseDataList<WorkEditionV1>>(new WorkParametersV1(Id), token);
+            var creditsTask = readCredits.ExecuteAsync<BaseDataList<WorkCreditV1>>(new WorkParametersV1(Id), token);
+            var relationsTask = ReadWhenAsync(texts.CanSeeRelations(), () => readRelations.ExecuteAsync<BaseDataList<WorkRelationV1>>(new WorkParametersV1(Id), token));
+            var collectionsTask = ReadWhenAsync(texts.CanCollect(), () => readCollections.ExecuteAsync<BaseDataList<WorkCollectionV1>>(new WorkParametersV1(Id), token));
+            var recommendationsTask = ReadRecommendationsAsync(token);
+            var localesTask = ReadWhenAsync(texts.CanRequest(), () => locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token));
+            var requestProfilesTask = ReadWhenAsync(texts.CanRequest(), () => readRequestProfiles.ExecuteAsync<BaseDataList<RequestProfileOptionV1>>(new CreateRequestParametersV1(Id), token));
+            Task[] reads = [workTask, availabilityTask, editionsTask, creditsTask, relationsTask, collectionsTask, recommendationsTask, localesTask, requestProfilesTask];
             try
             {
-                _recommendations = await readRecommendations.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new WorkParametersV1(Id), default(NoData), HttpContext.RequestAborted);
+                _work = await workTask;
+                Task<BaseDataList<GamePlatformV1>>? platformsTask = null;
+                if (_work.MediaTypeId == MediaType.Series)
+                {
+                    _seasons = await readSeasons.ExecuteAsync<BaseDataList<WorkSeasonV1>>(new WorkParametersV1(Id), token);
+                    if (SelectedSeason is { } season)
+                    {
+                        _episodes = await readEpisodes.ExecuteAsync<BaseDataList<WorkEpisodeV1>>(new ReadWorkEpisodesParametersV1(Id, season), token);
+                    }
+                }
+                else if (_work.MediaTypeId == MediaType.Game)
+                {
+                    // A game's platforms: the ones the title is on, listed with those that are here.
+                    platformsTask = readPlatforms.ExecuteAsync<BaseDataList<GamePlatformV1>>(new WorkParametersV1(Id), token);
+                }
+
+                await Task.WhenAll(reads);
+                _availability = await availabilityTask;
+                _editions = await editionsTask;
+                _credits = await creditsTask;
+                _relations = await relationsTask ?? _relations;
+                _recommendations = await recommendationsTask;
+                _collections = await collectionsTask ?? _collections;
+                _platforms = platformsTask is null ? null : await platformsTask;
+                _locales = await localesTask;
+                _requestProfiles = await requestProfilesTask;
+            }
+            catch
+            {
+                // The first failure ends the reads still running before the page answers.
+                await group.CancelAsync();
+                await Task.WhenAll(reads.Select(item => item.ContinueWith(static _ => { }, TaskScheduler.Default)));
+                throw;
+            }
+        }
+
+        // The Work stays complete without its provider's suggestions.
+        private async Task<IReadOnlyList<DiscoverItemV1>> ReadRecommendationsAsync(CancellationToken token)
+        {
+            try
+            {
+                return await readRecommendations.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new WorkParametersV1(Id), default(NoData), token);
             }
             catch (ServiceUnavailableException)
             {
-                // The Work stays complete without its provider's suggestions.
-            }
-            if (texts.CanCollect())
-            {
-                _collections = await readCollections.ExecuteAsync<BaseDataList<WorkCollectionV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
-            }
-
-            // A game's platforms: the ones the title is on, listed with those that are here.
-            if (_work.MediaTypeId == MediaType.Game)
-            {
-                _platforms = await readPlatforms.ExecuteAsync<BaseDataList<GamePlatformV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
-            }
-
-            if (texts.CanRequest())
-            {
-                _locales = await locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: HttpContext.RequestAborted);
-                _requestProfiles = await readRequestProfiles.ExecuteAsync<BaseDataList<RequestProfileOptionV1>>(new CreateRequestParametersV1(Id), HttpContext.RequestAborted);
+                return [];
             }
         }
+
+        private static async Task<TResult?> ReadWhenAsync<TResult>(bool shown, Func<Task<TResult>> read) where TResult : class => shown ? await read() : null;
     }
 }

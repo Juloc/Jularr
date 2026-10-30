@@ -120,7 +120,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 var summary = new List<IUiComponent>();
                 if (work.Overview is not null) summary.Add(new P(new ValueText(work.Overview)).Class("details-summary__text"));
                 var genres = (work.Genres ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                if (genres.Length > 0) summary.Add(new Div([.. genres.Select(genre => (IUiComponent)new Tag(new ValueText(genre)))]).Class("details-summary__genres"));
+                if (genres.Length > 0) summary.Add(new Div([.. genres.Select(genre => (IUiComponent)new Tag(new ValueText(texts.Genre(genre))))]).Class("details-summary__genres"));
                 parts.Add(new Div(summary.Count > 0 ? new Div([.. summary]).Class("details-summary") : new Span(), grid).Class("details-facts"));
             }
 

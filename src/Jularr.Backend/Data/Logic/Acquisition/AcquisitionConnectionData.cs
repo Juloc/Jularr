@@ -394,13 +394,17 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class AcquisitionConnectionRoleFilterData : BaseData
     {
-        public AcquisitionConnectionRoleFilterData(AcquisitionConnectionRole? acquisitionConnectionRoleId)
+        public AcquisitionConnectionRoleFilterData(AcquisitionConnectionRole? acquisitionConnectionRoleId, AcquisitionConnectionType[] acquisitionConnectionTypeIds)
         {
             AcquisitionConnectionRoleId = acquisitionConnectionRoleId;
+            AcquisitionConnectionTypeIds = acquisitionConnectionTypeIds;
         }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionRoleId), false)]
         public AcquisitionConnectionRole? AcquisitionConnectionRoleId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionTypeIds))]
+        public AcquisitionConnectionType[] AcquisitionConnectionTypeIds { get; }
     }
 
     internal sealed class AcquisitionConnectionRoleParameters : BaseData

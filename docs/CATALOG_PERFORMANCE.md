@@ -118,3 +118,48 @@ Open: the Admin list and summary stay at 140–240 ms. The remaining time does n
 
 Reproduce with `$env:JULARR_TEST_CATALOG_SCALE = '500000'` and `dotnet test tests/Jularr.Backend.Tests --configuration Release --filter 'FullyQualifiedName~CatalogScale_' --logger 'console;verbosity=detailed'`.
 `JULARR_TEST_CATALOG_PLANS=1` prints the Continue statement's `EXPLAIN (ANALYZE, BUFFERS)`; `JULARR_TEST_LIBRARY_MAX_MS` fails the run when a read's P95 reaches that many milliseconds.
+
+## Work page (`/Details/{id}`), 30 October 2026
+
+On the instance the stored page took 1.2–1.6 s. `WorkPage_CatalogScale_ServicesStayWithinBudget` seeds the library fixture next to `JULARR_TEST_CATALOG_SCALE` catalog Works with people, relations in both directions and episodes, times every service the page reads, then the page itself (`GET /Details/{id}`: a film, a library series, a detailed catalog title, a library series among the catalog ids), without provider access.
+
+Causes (`EXPLAIN (ANALYZE, BUFFERS)` on 500,000 catalog Works):
+- Relations (3–14 s of the page): the related Works joined `ProfileWorks` as a plain join, so the planner built the view for all Works (500,411 rows, 4 million joined rows) and, without JIT disabled, compiled the statement on top (1.6 s for a film without a single relation). The view is now read through a lateral per related Work (`OFFSET 0`), the statements disable JIT, and the franchise part asks only for a Work that has a franchise.
+- Seasons and episodes (0.2–1.2 s): the file check of each episode filtered by the unit alone, which no index leads with, so every episode read every file record of the library. It now also names the Work (`IX_MediaAssets_Work`), and the visibility check is asked once for the Work instead of once per row.
+- The Work read computed the track languages and unit progress for the whole library before joining the one Work, and checked "has a file" with a hashed read of all file records. Both are now asked for the one Work (`LATERAL`, `OFFSET 0`); the card projection's track languages and the single-Work unit progress share this.
+- The page asked its services one after the other; independent reads now run together, and the first open of a title reads the series, its episodes, their translations, TMDB's rating and the credited people together and keeps a Work's poster and backdrop together. Only what uses the database waits for the other database reads.
+
+| Work page, 500,000 catalog Works | before: slowest service, page (ms) | after: page median / fastest (ms) |
+| --- | ---: | ---: |
+| Film (library) | relations 3184, page 2914 | 112 / 86 |
+| Series (library) | relations 5988, page 9414 | 129 / 111 |
+| Catalog title with details | relations 6328, page 6305 | 94 / 85 |
+| Catalog title, library series | relations 2233, page 2807 | 93 / 87 |
+
+Fastest of 2 samples before, median and fastest of 10 after, on a server shared with other runs (single figures vary by about a third). What remains does not grow with the catalog except one read: a Work in a franchise finds the other titles of it by a scan of `Works`, because `Works."FranchiseId"` has no index; a partial index `CREATE INDEX "IX_Works_Franchise" ON "Works" ("FranchiseId") WHERE "FranchiseId" IS NOT NULL;` needs a new migration.
+
+`JULARR_TEST_DETAILS_MAX_MS` (300) fails the run when the fastest sample of a page reaches it; `JULARR_TEST_DETAILS_PLANS=1` prints the plans of the slow statements. Reproduce with `$env:JULARR_TEST_CATALOG_SCALE = '500000'` and `--filter 'FullyQualifiedName~WorkPage_CatalogScale'`.
+
+## Discover search and My requests, 30 October 2026
+
+On an instance that keeps the whole TMDB film catalog, `/?q=Dune` took 1.7–2 s and `/Requests` 1.4–1.7 s with a handful of requests. Both read a Work's profile view for the Works they show: `ProfileWorks` (every Work joined with the profile's categories) and `ProfileWorkStates` (every Work for every profile). Joined by Work id like an ordinary table, the planner walks the view through `Works_pkey` or hashes all of it, so the cost grows with the catalog instead of with the page:
+- My requests: the view was merge-joined to the request rows; the request's Work sits at the end of the id range, so the merge read all 500,411 Works (1.1 s). The view is now read per request row (`LEFT JOIN LATERAL ... OFFSET 0`), 1 ms.
+- Discover cards (`DiscoverQueries.ReadStatesInBatchAsync`, one read per provider type and for every feed and list): `ProfileWorkStates` was hash-joined as a whole (0.2–0.6 s each, twice per search). It is now read per card Work.
+- The Discover page's availability read (`/api/v1/library/availability`) started from `ProfileWorks` for the whole catalog (2.3 s at 500,000 Works, 5.3 s in the plan). It now reads the view per picked Work like the library page does.
+- The provider search itself: TMDB and TheTVDB were asked one after the other. TMDB's request now runs while TheTVDB's is asked; the answers are kept one after the other, since one context runs one batch at a time. The types the profile lists are read in the local search's batch.
+
+Searching films does not use the kept catalog today: Discover's result search asks TMDB for films and TheTVDB for series; only the suggestions while typing use `SearchText` and its GIN index `IX_Works_CatalogSearch`. No index is missing.
+
+`SearchAndRequests_CatalogScale_ReportLatency` seeds the library fixture next to `JULARR_TEST_CATALOG_SCALE` film Works (a Dune in 5000 titles; requests at the end of the id range), answers both providers at once and reports the local part (whole time minus the time the provider stub spent) over ten warm calls. The median is held to 500 ms for the search and 300 ms for My requests. `JULARR_TEST_PROVIDER_DELAY_MS` gives each provider request a round trip to see that the searches wait together.
+
+| Local part, warm ms (median / P95) | 500,000 before | 500,000 after | 1,500,000 after |
+| --- | ---: | ---: | ---: |
+| Search API, films and series | 1240 / 2023 | 189 / 238 | 148 / 311 |
+| Search API, films | 314 / 433 | 106 / 152 | 85 / 116 |
+| Discover page `/?q=Dune` | 3638 / 7848 | 214 / 421 | 354 / 942 |
+| My requests API | 983 / 1232 | 44 / 173 | 36 / 50 |
+| My requests page `/Requests` | 1244 / 1319 | 69 / 140 | 76 / 188 |
+
+The run shared one four-core Docker VM with other test runs, so the P95 shows that noise; with a 200 ms provider round trip the search of films and series took 450 ms against 189 ms without, one round trip instead of two. The Discover, Request, SeriesCatalog, ExternalFeed and Library availability tests are the contract for unchanged results. Other statements still join the two views by Work id; they are fast as long as a small outer side drives them, and each needs its own plan before it is changed. The 1,500,000 column was not measured before the change.
+
+Reproduce with `$env:JULARR_TEST_CATALOG_SCALE = '500000'` and `dotnet test tests/Jularr.Backend.Tests --filter 'Name=SearchAndRequests_CatalogScale_ReportLatency' --logger 'console;verbosity=detailed'`.

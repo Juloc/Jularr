@@ -13,15 +13,27 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Backend.Service.Core
 {
+    // The libraries the connected Plex server listed last: every successful read of the server keeps them, so a page shows them without asking the server.
+    internal sealed class PlexLibraries
+    {
+        private IReadOnlyList<PlexSection> _sections = [];
+
+        public IReadOnlyList<PlexSection> Sections => Volatile.Read(ref _sections);
+
+        public void Keep(IReadOnlyList<PlexSection> sections) => Volatile.Write(ref _sections, sections);
+    }
+
     // The owner's Plex Media Server; shared by Admin, the import and the System sync.
     internal sealed class PlexServer
     {
         private readonly PlexServerClient _plex;
+        private readonly PlexLibraries _libraries;
         private readonly IDataProtector _protector;
 
-        public PlexServer(PlexServerClient plex, IDataProtectionProvider protection)
+        public PlexServer(PlexServerClient plex, PlexLibraries libraries, IDataProtectionProvider protection)
         {
             _plex = plex;
+            _libraries = libraries;
             _protector = protection.CreateProtector(SaveProviderSecretV1.ProtectorPurpose);
         }
 
@@ -38,7 +50,9 @@ namespace Jularr.Backend.Service.Core
         {
             try
             {
-                return await _plex.ReadServerAsync(connection, ct);
+                var server = await _plex.ReadServerAsync(connection, ct);
+                _libraries.Keep(server.Sections);
+                return server;
             }
             catch (PlexServerException exception)
             {

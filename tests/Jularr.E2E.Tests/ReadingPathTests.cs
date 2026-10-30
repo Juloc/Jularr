@@ -1055,11 +1055,14 @@ namespace Jularr.E2E.Tests
                     await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookState === 'idle'");
                 }
 
+                // On pages a single click leaves the picture in the book; a double click opens it.
                 var box = (await page.Locator(".reader__page-print img[data-figure]").First.BoundingBoxAsync())!;
-                await page.Mouse.ClickAsync(box.X + box.Width / 2, box.Y + box.Height / 2);
                 var view = page.Locator("dialog.reader-figure");
+                await page.Mouse.ClickAsync(box.X + box.Width / 2, box.Y + box.Height / 2);
+                await Assertions.Expect(view).ToBeHiddenAsync();
+                await page.Mouse.DblClickAsync(box.X + box.Width / 2, box.Y + box.Height / 2);
                 await Assertions.Expect(view).ToBeVisibleAsync();
-                Assert.IsTrue(await view.Locator(".reader-figure__image").EvaluateAsync<bool>("image => image.naturalWidth > 0 && image.getBoundingClientRect().width > innerWidth * 0.2"));
+                await page.WaitForFunctionAsync("() => { const image = document.querySelector('dialog.reader-figure .reader-figure__image'); return !!image && image.naturalWidth > 0 && image.getBoundingClientRect().width > innerWidth * 0.2; }");
                 var stage = view.Locator(".reader-figure__stage");
                 var picture = view.Locator(".reader-figure__image");
                 Assert.IsTrue(await picture.EvaluateAsync<bool>("image => image.clientWidth <= image.parentElement.clientWidth && image.clientHeight <= image.parentElement.clientHeight"));

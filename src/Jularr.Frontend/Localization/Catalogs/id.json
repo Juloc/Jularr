@@ -2168,10 +2168,6 @@
    "A title, optionally with its year.",
    "Sebuah judul, boleh disertai tahunnya."
   ],
-  "hint.CollectionFields.IsSmart.info": [
-   "A smart collection fills itself from the filters below.",
-   "Koleksi cerdas terisi sendiri dari filter di bawah."
-  ],
   "hint.CollectionFields.ReleaseYear.placeholder": [
    "Any year",
    "Tahun apa saja"
@@ -4633,8 +4629,8 @@
    "Jenis"
   ],
   "collections.smartToggle": [
-   "Smart filter instead of hand-picked titles",
-   "Filter cerdas, bukan judul pilihan sendiri"
+   "Smart filter",
+   "Filter cerdas"
   ],
   "collections.manual": [
    "Hand-picked",

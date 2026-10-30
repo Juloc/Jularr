@@ -329,6 +329,39 @@ namespace Jularr.Backend.Tests
             }
         }
 
+        [TestMethod]
+        public async Task JobsPage_AFailedPass_SaysWhy_InTheRowAndInTheHistory_AndAnUnknownCodeReadsAsUnknownError()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var time = new FixedTime(Start);
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddSingleton<TimeProvider>(time));
+            var runner = host.Services.GetRequiredService<WorkerJobRunner>();
+
+            // A job that failed and runs well again keeps its entry in the history, with the reason of its error code.
+            time.Now = Start.AddHours(1);
+            Assert.AreEqual(WorkerJobResultType.Failed, await runner.RunAsync("aniListSync", (_, _) => throw new ServiceUnavailableException("anilist_unavailable"), default));
+            time.Now = Start.AddHours(2);
+            Assert.AreEqual(WorkerJobResultType.Succeeded, await runner.RunAsync("aniListSync", (_, _) => Task.CompletedTask, default));
+            Assert.AreEqual(0L, await OpenNoticesAsync(host, "aniListSync"));
+            using var recovered = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs");
+            var html = await recovered.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, recovered.StatusCode, html);
+            StringAssert.Contains(html, "AniList could not be reached.");
+            StringAssert.Contains(html, "Background job");
+
+            // A failure whose code has no text reads as an unknown error, in the row and in the drawer, never as the raw exception.
+            time.Now = Start.AddHours(3);
+            Assert.AreEqual(WorkerJobResultType.Failed, await runner.RunAsync("metadataFill", (_, _) => throw new ServiceUnavailableException("code_without_text"), default));
+            using var unknown = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs");
+            html = await unknown.Content.ReadAsStringAsync();
+            using var secondPage = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs?pageNumber=2");
+            html += await secondPage.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, unknown.StatusCode, html);
+            StringAssert.Contains(html, "An unknown error occurred.");
+            Assert.IsFalse(html.Contains("code_without_text", StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains("temporarily unavailable", StringComparison.Ordinal));
+        }
+
         private static async Task<long> OpenNoticesAsync(Host host, string key) =>
             (long)(await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"WorkerJobKey\" = '" + key + "' AND \"OperationTypeId\" = 4 AND \"DismissedAt\" IS NULL"))!;
 

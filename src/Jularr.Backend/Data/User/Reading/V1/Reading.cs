@@ -105,8 +105,9 @@ namespace Jularr.Backend.Data.User.Reading.V1
     public sealed class ReadingDocumentV1 : BaseResponse
     {
         public ReadingDocumentV1(long documentId, long workId, string title, ReadingFormatType readingFormatTypeId, int sectionCount, bool isCached, string? locator, decimal? progression,
-            bool isRightToLeft, string? language, string? readingLanguage = null, string? originalLanguage = null, string[]? translatedLanguages = null, bool isRecommended = true, int originalPages = 0, string? revision = null)
+            bool isRightToLeft, string? language, string? readingLanguage = null, string? originalLanguage = null, string[]? translatedLanguages = null, bool isRecommended = true, int originalPages = 0, string? revision = null, int[]? smartPages = null)
         {
+            SmartPages = smartPages ?? [];
             IsRecommended = isRecommended;
             OriginalPages = originalPages;
             Revision = revision;
@@ -179,6 +180,10 @@ namespace Jularr.Backend.Data.User.Reading.V1
         // Pages of the PDF that stand in the text as the original page, and so are not in a downloaded EPUB.
         [DataField(typeof(ReadingFields), nameof(ReadingFields.Count))]
         public int OriginalPages { get; }
+
+        // The scanned pages set anew in their own layout (Smart Pages), in their order: the first is reading unit 100000, the next 100001.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SmartPages))]
+        public int[] SmartPages { get; }
     }
 
     public sealed class ReadingTocEntryV1 : BaseResponse

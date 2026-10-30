@@ -74,8 +74,8 @@ namespace Jularr.E2E.Tests
                 await page.Locator("dialog#connection-delete").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
                 await Assertions.Expect(Row(page, "Fake indexer")).ToHaveCountAsync(1);
 
-                // The download client has its own page, the same cards and a dialog of its own fields.
-                await page.GotoAsync("/Admin/Acquisition/Downloads");
+                // An external download client has its own page, the same cards and a dialog of its own fields.
+                await page.GotoAsync("/Admin/Downloads/Clients");
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }).And(page.Locator("[href*='Type=Sabnzbd']")));
                 form = page.Locator("dialog#connection-editor form").First;
                 await form.Locator("[name=Name]").FillAsync("Fake SABnzbd");
@@ -89,7 +89,7 @@ namespace Jularr.E2E.Tests
 
                 // The lists fit a phone.
                 await page.SetViewportSizeAsync(390, 844);
-                foreach (var path in new[] { "/Admin/Acquisition", "/Admin/Acquisition/Downloads" })
+                foreach (var path in new[] { "/Admin/Acquisition", "/Admin/Downloads/Clients", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed" })
                 {
                     await page.GotoAsync(path);
                     Assert.IsTrue(await page.EvaluateAsync<bool>("document.documentElement.scrollWidth <= innerWidth + 1"), "Horizontal page overflow on " + path);

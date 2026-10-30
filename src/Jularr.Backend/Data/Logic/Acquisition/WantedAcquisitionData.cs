@@ -28,8 +28,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             string? profileName, string? definition, string[] releaseIdentities, bool isPaused, bool hasMedia, bool isDownloading, int searchCount, string[] externalIdentities,
             string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, string? installedFiles = null,
             string[]? editionTitles = null, string[]? isbns = null, string? originalLanguage = null, string? formats = null, string? qualitySizes = null,
-            int? runtimeMinutes = null, string? releaseProfiles = null, string[]? monitoredEditionLanguages = null, string[]? unmonitoredEditionLanguages = null)
+            int? runtimeMinutes = null, string? releaseProfiles = null, string[]? monitoredEditionLanguages = null, string[]? unmonitoredEditionLanguages = null,
+            string? releaseGroupRatings = null)
         {
+            ReleaseGroupRatings = releaseGroupRatings ?? "{}";
             MonitoredEditionLanguages = monitoredEditionLanguages ?? [];
             UnmonitoredEditionLanguages = unmonitoredEditionLanguages ?? [];
             ReleaseProfiles = releaseProfiles ?? "[]";
@@ -161,6 +163,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // The release profiles that apply to the title, as JSON.
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
         public string ReleaseProfiles { get; }
+
+        // The rated release groups of the media type as a JSON object of name and rating.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
+        public string ReleaseGroupRatings { get; }
     }
 
     internal sealed class UnitStateData : BaseData
@@ -493,6 +499,22 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
         public string RelativePath { get; }
+    }
+
+    internal sealed class StoredFolderData : BaseData
+    {
+        public StoredFolderData(long libraryRootId, string folders)
+        {
+            LibraryRootId = libraryRootId;
+            Folders = folders;
+        }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id))]
+        public long LibraryRootId { get; }
+
+        // Folders below the root as a JSON array; an empty one is the root itself.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Payload))]
+        public string Folders { get; }
     }
 
     internal sealed class WantedDueData : BaseData

@@ -133,10 +133,19 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 await Parallel.ForEachAsync(sources, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, sources.Count), CancellationToken = token },
                     async (source, inner) =>
                     {
+                        // Include waiting for Chrome and every title/ISBN variant in the source's budget.
+                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(inner);
+                        timeout.CancelAfter(limits.IndexerTimeout);
                         IReadOnlyList<ReleaseOffer>? answers;
                         try
                         {
-                            answers = await _direct.SearchAsync(source, wanted, inner, Enough, annaSearch);
+                            answers = await _direct.SearchAsync(source, wanted, timeout.Token, Enough, annaSearch);
+                        }
+                        catch (OperationCanceledException) when (!inner.IsCancellationRequested)
+                        {
+                            sourceErrors.Add("source_timeout");
+                            Interlocked.Increment(ref failures);
+                            return;
                         }
                         catch (DirectSourceException exception)
                         {
@@ -169,46 +178,51 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
 
-            // Expansion tiers only run while too few releases are usable.
-            for (var tier = 0; tier <= budget.MaxTier && offers.Count < budget.MaxResults; tier++)
+            async Task SearchIndexersAsync()
             {
-                var current = tier;
-                if (!plans.Values.Any(plan => plan.Any(query => query.Tier == current)))
+                // Expansion tiers only run while too few releases are usable.
+                for (var tier = 0; tier <= budget.MaxTier && offers.Count < budget.MaxResults; tier++)
                 {
-                    continue;
-                }
-
-                await Parallel.ForEachAsync(newznab, new ParallelOptions { MaxDegreeOfParallelism = budget.MaxConcurrentIndexers, CancellationToken = ct }, async (indexer, token) =>
-                {
-                    var use = uses.GetOrAdd(indexer.Id, _ => new IndexerUse());
-                    if (!await SearchIndexerAsync(indexer, kind, target.PlatformIgdbId, plans[indexer.Id].Where(query => query.Tier == current), budget, offers, use, token))
+                    var current = tier;
+                    if (!plans.Values.Any(plan => plan.Any(query => query.Tier == current)))
                     {
-                        use.Failed = true;
-                        Interlocked.Increment(ref failures);
+                        continue;
                     }
-                });
 
-                // The direct sources answered at the same time; their releases belong to the choice.
-                await direct;
-                await nyaaSearch;
-                selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
-                if (selection.Ranked.Count(evaluation => evaluation.IsSelectable
-                    && (!profile.IsBook || profile.LanguageOrder.Length == 0
-                        || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages))) >= budget.TargetUsable)
-                {
-                    break;
+                    await Parallel.ForEachAsync(newznab, new ParallelOptions { MaxDegreeOfParallelism = budget.MaxConcurrentIndexers, CancellationToken = ct }, async (indexer, token) =>
+                    {
+                        var use = uses.GetOrAdd(indexer.Id, _ => new IndexerUse());
+                        if (!await SearchIndexerAsync(indexer, kind, target.PlatformIgdbId, plans[indexer.Id].Where(query => query.Tier == current), budget, offers, use, token))
+                        {
+                            use.Failed = true;
+                            Interlocked.Increment(ref failures);
+                        }
+                    });
+
+                    // The direct sources answered at the same time; their releases belong to the choice.
+                    await direct;
+                    await nyaaSearch;
+                    selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
+                    if (selection.Ranked.Count(evaluation => evaluation.IsSelectable
+                        && (!profile.IsBook || profile.LanguageOrder.Length == 0
+                            || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages))) >= budget.TargetUsable)
+                    {
+                        break;
+                    }
                 }
             }
 
-            // The direct sources are waited for; they answered at the same time as the indexers.
-            await direct;
-            await nyaaSearch;
+            // Join every source on cancellation before disposing their shared Anna search context.
+            await Task.WhenAll(direct, nyaaSearch, SearchIndexersAsync());
             selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
 
             // Manual grabs pick from what was shown; the cache is bounded by offer count.
             var grabbable = selection.Ranked.Where(evaluation => evaluation.Decision != SelectionDecision.Rejected).Select(evaluation => evaluation.Candidate.Id).ToHashSet(StringComparer.Ordinal);
             var cached = offers.Where(pair => grabbable.Contains(pair.Key)).ToDictionary(StringComparer.Ordinal);
             _offers.Set(CacheKey(target.WantedItemId), cached, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = OfferLifetime, Size = Math.Max(1, cached.Count) });
+
+            // Every release group the search saw joins the media type's list, so it can be rated before anything is taken.
+            var groups = ReleaseGroupLogic.Sightings(selection.Ranked.Select(evaluation => evaluation.Candidate.Parsed?.ReleaseGroup));
             await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 foreach (var (id, use) in uses)
@@ -216,6 +230,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     await ctx.RecordIndexerUseAsync(new IndexerUseData(id, use.Queries, !use.Failed, use.RetryAfterSeconds > 0 ? use.RetryAfterSeconds : null), token);
                 }
 
+                await ctx.RecordReleaseGroupsAsync(new ReleaseGroupSightingsData(target.MediaTypeId, groups, now), token);
                 return true;
             }, ct);
 

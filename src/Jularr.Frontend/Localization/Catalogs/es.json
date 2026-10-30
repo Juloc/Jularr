@@ -2168,10 +2168,6 @@
    "A title, optionally with its year.",
    "Un título, opcionalmente con su año."
   ],
-  "hint.CollectionFields.IsSmart.info": [
-   "A smart collection fills itself from the filters below.",
-   "Una colección inteligente se rellena sola a partir de los filtros de abajo."
-  ],
   "hint.CollectionFields.ReleaseYear.placeholder": [
    "Any year",
    "Cualquier año"
@@ -4633,8 +4629,8 @@
    "Tipo"
   ],
   "collections.smartToggle": [
-   "Smart filter instead of hand-picked titles",
-   "Filtro inteligente en lugar de títulos elegidos a mano"
+   "Smart filter",
+   "Filtro inteligente"
   ],
   "collections.manual": [
    "Hand-picked",

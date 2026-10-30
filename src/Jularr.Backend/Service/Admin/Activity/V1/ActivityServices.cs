@@ -55,7 +55,8 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL
                         AND operation."AttentionUrl" IS NULL AS "CanRetryImport",
                     operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL AS "IsWaiting",
-                    operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionProposal" -> 'Source' IS NOT NULL AS "CanImportManually",
+                    operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionProposal" -> 'Source' IS NOT NULL
+                        AND coalesce(work."MediaTypeId" IN (1, 2), FALSE) AS "CanImportManually",
                     connection."Id" AS "AcquisitionConnectionId",
                     CASE
                         WHEN connection."AcquisitionConnectionTypeId" = 6 THEN 1
@@ -66,7 +67,13 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     END::smallint AS "DownloadClientKindId",
                     work."MediaTypeId",
                     operation."OperationStatusTypeId" = 4 AND operation."DismissedAt" IS NULL AS "CanRetry",
-                    operation."DownloadPriorityTypeId"
+                    operation."DownloadPriorityTypeId",
+                    CASE WHEN operation."AttentionKey" = 'import_unmatched_files' THEN ARRAY(
+                        SELECT
+                            proposed."Path"
+                        FROM
+                            jsonb_to_recordset(operation."AttentionProposal" -> 'Files') AS proposed ("Path" text)
+                    ) END AS "UnmatchedFiles"
                 FROM
                     "Operations" AS operation
                     LEFT JOIN "LibraryRoots" AS root ON root."Id" = operation."LibraryRootId"
