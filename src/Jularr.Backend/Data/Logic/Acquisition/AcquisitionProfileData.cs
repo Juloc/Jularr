@@ -70,6 +70,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int MinimumUpgradeFormatScore { get; init; } = 1;
         public ReleaseMonitoring? Monitoring { get; init; }
 
+        // The points of a release group rated good or bad for the profile's media type.
+        public int GoodGroupScore { get; init; } = AcquisitionProfileDefinition.DefaultGoodGroupScore;
+        public int BadGroupScore { get; init; } = AcquisitionProfileDefinition.DefaultBadGroupScore;
+
     }
 
     internal sealed class AcquisitionProfileRowData : BaseData

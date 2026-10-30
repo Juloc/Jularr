@@ -44,7 +44,7 @@ Equal input gives the same ranking whatever order the indexers answered in:
 
 ## Release groups
 
-Each media type keeps one list of release groups (`ReleaseGroups`, migration `0027`; [ReleaseGroupLogic.cs](../src/Jularr.Backend/Logic/Acquisition/ReleaseGroupLogic.cs)).
+Each media type keeps one list of release groups (`ReleaseGroups`, migration `0028`; [ReleaseGroupLogic.cs](../src/Jularr.Backend/Logic/Acquisition/ReleaseGroupLogic.cs)).
 Every manual or automatic search adds the groups its results name (the video parser's group; for books and manga the last named tag, see
 below), counts each once per search and keeps when it last saw it; no extra provider call is made. A name with several groups
 ("danke-Empire, Ushi", also joined by `&`, `+` or `/`) is several groups for the list, the rating and the Group column. A group can also be
@@ -55,7 +55,7 @@ A rating (Good, Bad, Blocked; none is not rated) applies to every profile of the
 (`ReleaseScorer.GroupRating`), not a tie-break:
 
 - Good and Bad add the profile's points, "Group X (good)" and "Group X (bad)", to the format score, once for each rated group of the name. The points live in the profile
-  definition (`GoodGroupScore` +50, `BadGroupScore` -50 by default; no editor yet). The minimum format score counts the custom formats
+  definition (`GoodGroupScore` 0 to +1,000,000, default +50, `BadGroupScore` -1,000,000 to 0, default -50; the profile page's Release groups section). The minimum format score counts the custom formats
   alone, so a bad group lowers the score but is not rejected for it.
 - Blocked (any group of the name) rejects the release in an automatic search ("Group blocked") and only marks it in a manual search, where it
   can still be taken.

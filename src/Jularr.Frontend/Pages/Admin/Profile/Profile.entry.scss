@@ -1,0 +1,32 @@
+// A quality row's two round arrows; up is the down arrow turned over.
+.profile-move {
+    display: flex;
+    gap: 6px;
+
+    .button--icon:first-child .ui-icon { transform: rotate(180deg); }
+}
+
+// The link to the rating of the release groups sits at the foot of its column.
+.profile-groups {
+    align-content: end;
+
+    .button { justify-self: start; }
+}
+
+// Quality groups and the format scores, closed until asked for.
+.profile-advanced {
+    grid-column: 1 / -1;
+    margin: 8px 0;
+
+    > summary {
+        padding: 10px 0;
+        color: var(--muted);
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    &__body {
+        display: grid;
+        gap: 16px;
+    }
+}

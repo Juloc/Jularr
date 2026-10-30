@@ -1,6 +1,6 @@
 # Profile scoring and release groups
 
-Mockup: [index.html](index.html) (three views). Issue: #1711, parents #865 and #1706. Status: owner decisions recorded 2026-10-29, spec awaiting approval; nothing built.
+Mockup: [index.html](index.html) (three views). Issue: #1711, parents #865 and #1706. Status: owner decisions recorded 2026-10-29 and approved; built: release groups and search results (views 2 and 3, #1725) and the profile page (view 1).
 
 ## Decisions (owner, 2026-10-29)
 
