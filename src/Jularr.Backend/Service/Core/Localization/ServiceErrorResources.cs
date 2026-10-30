@@ -10,6 +10,7 @@ namespace Jularr.Backend.Service.Core.Localization
         [
             new("errors.invalid_data", "Please check the supplied values."),
             new("errors.translation_local_busy", "The local translation model is busy."),
+            new("errors.validation.translation_machine_invalid", "Enter Ollama machines by their address in the private network, such as 192.168.1.20 or 192.168.1.20:11434."),
             new("errors.translation_local_not_installed", "Install the selected model on the private server first."),
             new("errors.translation_local_unavailable", "The local translation server is unavailable."),
             new("errors.translation_local_unverified", "The generated block did not pass basic completion checks."),

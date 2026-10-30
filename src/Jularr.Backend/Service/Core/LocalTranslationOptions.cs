@@ -1,4 +1,9 @@
 using Microsoft.Extensions.Hosting;
+using System.Collections.Concurrent;
+using Jularr.Backend.Data.Admin.Translation.V1;
+using Jularr.Backend.Infrastructure.Sql;
+using System.Net.Http;
+using System.Text.Json;
 using System.Threading.Channels;
 using Jularr.Integrations.Logic.Translation;
 using Microsoft.Extensions.Options;
@@ -7,7 +12,7 @@ namespace Jularr.Backend.Service.Core
 {
     public sealed class LocalTranslationOptions
     {
-        // The separately deployed private Ollama runtime; never a user-provided URL.
+        // The separately deployed private Ollama runtime, used while the Owner has saved no order of machines; private addresses only.
         public string? Endpoint { get; set; }
 
         // An operator-confirmed budget for Ollama's own volume, never Jularr's cgroup.
@@ -20,24 +25,70 @@ namespace Jularr.Backend.Service.Core
         public SemaphoreSlim HeavyWork { get; } = new(1, 1);
     }
 
+    // The Ollama machines in the Owner's order (Admin, `InstanceSettings.TranslationMachines`), else the configured endpoint alone. The first
+    // that answers with an approved model translates; one that fails rests a minute, so the next takes over and the first returns by itself.
+    internal sealed class LocalTranslationMachines(OllamaLocalModels models, IOptions<LocalTranslationOptions> options, TimeProvider time)
+    {
+        private static readonly TimeSpan Rest = TimeSpan.FromMinutes(1);
+        private static readonly TimeSpan Answer = TimeSpan.FromSeconds(3);
+        private readonly ConcurrentDictionary<Uri, DateTimeOffset> _resting = new();
+
+        public static async Task<string[]> SavedAsync(LogicContext ctx, CancellationToken ct) =>
+            (await ctx.ReadSql.ReadOptionalAsync<TranslationMachinesV1>(new SqlStatement
+            {
+                Statement = """SELECT "TranslationMachines" AS "Machines" FROM "InstanceSettings" WHERE "Id" = 1;"""
+            }, ct))?.Machines ?? [];
+
+        public Uri[] Order(string[] saved) =>
+            [.. (saved.Length > 0 ? saved : [options.Value.Endpoint]).Select(OllamaLocalModels.Endpoint).OfType<Uri>().Distinct()];
+
+        // The machine that translates now with this model, or with the first approved one it has.
+        public async Task<(Uri Server, string Model)?> ChooseAsync(string[] saved, CancellationToken ct, string? model = null)
+        {
+            foreach (var server in Order(saved))
+            {
+                if (_resting.TryGetValue(server, out var until) && until > time.GetUtcNow()) continue;
+                try
+                {
+                    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    timeout.CancelAfter(Answer);
+                    var installed = await models.InstalledAsync(server, timeout.Token);
+                    var chosen = model is null ? OllamaLocalModels.Candidates.FirstOrDefault(candidate => installed.Contains(candidate, StringComparer.Ordinal))
+                        : installed.Contains(model, StringComparer.Ordinal) ? model : null;
+                    if (chosen is not null) return (server, chosen);
+                }
+                catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException
+                    || exception is OperationCanceledException && !ct.IsCancellationRequested)
+                {
+                    Fail(server);
+                }
+            }
+            return null;
+        }
+
+        // A machine that did not answer or failed a block rests; the next in the order takes its work.
+        public void Fail(Uri server) => _resting[server] = time.GetUtcNow() + Rest;
+    }
+
     // Persist only the explicitly requested model and its last observed status, never
     // credentials or Ollama responses. The translation cache directory is already a
     // durable /data mount in production. No schema or privileged host access is needed.
     internal sealed class LocalTranslationDownloads : BackgroundService
     {
-        private sealed record DownloadSnapshot(string Model, string State, int Progress);
+        private sealed record DownloadSnapshot(string Model, string State, int Progress, string? Machine = null);
 
         private readonly OllamaLocalModels _models;
         private readonly IOptions<LocalTranslationOptions> _settings;
         private readonly LocalTranslationGate _gate;
         private readonly string _statePath;
-        private readonly Channel<string> _queue = Channel.CreateBounded<string>(new BoundedChannelOptions(1)
+        private readonly Channel<(string Model, Uri Server)> _queue = Channel.CreateBounded<(string Model, Uri Server)>(new BoundedChannelOptions(1)
         {
             SingleReader = true, SingleWriter = false, FullMode = BoundedChannelFullMode.Wait
         });
         private readonly object _guard = new();
         private string? _active;
         private string _lastModel = "";
+        private string _machine = "";
         private string _state = "idle";
         private int _progress;
         private bool _storageHealthy = true;
@@ -52,14 +103,15 @@ namespace Jularr.Backend.Service.Core
             RestorePreviousStatus();
         }
 
-        public (string Model, string State, int Progress) Current()
+        public (string Model, string State, int Progress, string Machine) Current()
         {
-            lock (_guard) return (_active ?? _lastModel, _state, _progress);
+            lock (_guard) return (_active ?? _lastModel, _state, _progress, _machine);
         }
 
-        public bool Queue(string model)
+        // The model is downloaded onto the given machine of the order.
+        public bool Queue(string model, Uri server)
         {
-            if (!OllamaLocalModels.Supported(model) || OllamaLocalModels.Endpoint(_settings.Value.Endpoint) is null)
+            if (!OllamaLocalModels.Supported(model))
                 return false;
             // The runtime has its own persistent model volume: do not guess available space
             // from the Jularr container. Every retry must still satisfy the verified budget.
@@ -74,17 +126,19 @@ namespace Jularr.Backend.Service.Core
             lock (_guard)
             {
                 if (_active is not null || !_storageHealthy) return false;
-                var previous = new DownloadSnapshot(_lastModel, _state, _progress);
+                var previous = new DownloadSnapshot(_lastModel, _state, _progress, _machine);
                 // Persist the opt-in before queuing work; never start a download whose
                 // authorization cannot survive a crash or container restart.
-                if (!SaveStatus(new DownloadSnapshot(model, "queued", 0))) return false;
+                if (!SaveStatus(new DownloadSnapshot(model, "queued", 0, server.ToString()))) return false;
                 _active = model;
                 _lastModel = model;
+                _machine = server.ToString();
                 _state = "queued";
                 _progress = 0;
-                if (_queue.Writer.TryWrite(model)) return true;
+                if (_queue.Writer.TryWrite((model, server))) return true;
                 _active = null;
                 _lastModel = previous.Model;
+                _machine = previous.Machine ?? "";
                 _state = previous.State;
                 _progress = previous.Progress;
                 SaveStatus(previous);
@@ -104,6 +158,7 @@ namespace Jularr.Backend.Service.Core
                     || saved.State is not ("queued" or "downloading" or "installed" or "failed" or "interrupted")
                     || saved.Progress is < 0 or > 100) throw new InvalidDataException("Invalid local download status.");
                 _lastModel = saved.Model;
+                _machine = saved.Machine ?? "";
                 _progress = saved.Progress;
                 // A request may have been interrupted by a crash. Report that fact,
                 // but never silently restart a multi-GB model download on host boot.
@@ -146,12 +201,10 @@ namespace Jularr.Backend.Service.Core
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             // Do not auto-resume on reboot: work only starts from an explicit admin pull.
-            await foreach (var model in _queue.Reader.ReadAllAsync(stoppingToken))
+            await foreach (var (model, server) in _queue.Reader.ReadAllAsync(stoppingToken))
             {
                 try
                 {
-                    var server = OllamaLocalModels.Endpoint(_settings.Value.Endpoint);
-                    if (server is null) throw new InvalidOperationException("Local server endpoint is missing.");
                     await _gate.HeavyWork.WaitAsync(stoppingToken);
                     try
                     {
@@ -184,7 +237,7 @@ namespace Jularr.Backend.Service.Core
                 if (!_storageHealthy) { _state = "failed"; return false; }
                 var bounded = Math.Clamp(progress, 0, 100);
                 if (_state == state && _progress == bounded) return true;
-                if (!SaveStatus(new DownloadSnapshot(_active ?? _lastModel, state, bounded))) return false;
+                if (!SaveStatus(new DownloadSnapshot(_active ?? _lastModel, state, bounded, _machine))) return false;
                 _state = state;
                 _progress = bounded;
                 return true;
