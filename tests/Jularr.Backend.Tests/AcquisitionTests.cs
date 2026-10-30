@@ -2232,6 +2232,31 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Indexers_RateLimitedWithRetryAfter_RestForTheWaitTheyAskedFor()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections,
+                new SaveAcquisitionConnectionDataV1("Limited", AcquisitionConnectionType.Newznab, "https://limited.example.test/", FakeUsenet.IndexerKey, true, 20, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var wantedId = await CreateWantedMovieAsync(host);
+
+            // The first search is refused with a Retry-After of two hours: the backoff lasts that long, not five minutes.
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, await host.ScalarAsync("SELECT \"FailureCount\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Limited'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" > now() + interval '110 minutes' FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Limited'"));
+
+            // Automatic searches leave it alone until then.
+            int Asked() { lock (usenet.IndexerHosts) return usenet.IndexerHosts.Count(asked => asked == "limited.example.test"); }
+            var before = Asked();
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(before, Asked());
+        }
+
+        [TestMethod]
         public async Task Indexers_AFailingOneBacksOffWhileOthersSearch_ScopeManualOnlyLimitsAndKeylessHold()
         {
             using var storage = new TemporaryDirectory();
@@ -3281,10 +3306,11 @@ namespace Jularr.Backend.Tests
                 }
 
                 // The open indexer takes no key, the broken one always fails.
-                if (request.RequestUri!.Host is "indexer.example.test" or "open.example.test" or "broken.example.test" or "books.example.test" or "manual.example.test")
+                if (request.RequestUri!.Host is "indexer.example.test" or "open.example.test" or "broken.example.test" or "books.example.test" or "manual.example.test" or "limited.example.test")
                 {
                     lock (IndexerHosts) IndexerHosts.Add(request.RequestUri.Host);
                     if (request.RequestUri.Host == "broken.example.test") return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+                    if (request.RequestUri.Host == "limited.example.test") return new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Headers = { RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromHours(2)) } };
                     var query = System.Web.HttpUtility.ParseQueryString(request.RequestUri.Query);
                     if (query["apikey"] != (request.RequestUri.Host == "open.example.test" ? null : IndexerKey)) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
                     var found = query["t"] == "caps" ? Capabilities : Results ?? MovieResults;

@@ -268,11 +268,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     // What one search asked of an indexer and whether it answered.
     internal sealed class IndexerUseData : BaseData
     {
-        public IndexerUseData(long acquisitionConnectionId, int queryCount, bool isAvailable)
+        public IndexerUseData(long acquisitionConnectionId, int queryCount, bool isAvailable, int? retryAfterSeconds = null)
         {
             AcquisitionConnectionId = acquisitionConnectionId;
             QueryCount = queryCount;
             IsAvailable = isAvailable;
+            RetryAfterSeconds = retryAfterSeconds;
         }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
@@ -283,6 +284,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IsAvailable))]
         public bool IsAvailable { get; }
+
+        // The wait an indexer asked for; the backoff is never shorter.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RetryAfterSeconds))]
+        public int? RetryAfterSeconds { get; }
     }
 
     internal sealed class AcquisitionConnectionCheckData : BaseData

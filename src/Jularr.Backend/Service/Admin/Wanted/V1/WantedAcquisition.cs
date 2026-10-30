@@ -213,7 +213,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             {
                 foreach (var (id, use) in uses)
                 {
-                    await ctx.RecordIndexerUseAsync(new IndexerUseData(id, use.Queries, !use.Failed), token);
+                    await ctx.RecordIndexerUseAsync(new IndexerUseData(id, use.Queries, !use.Failed, use.RetryAfterSeconds > 0 ? use.RetryAfterSeconds : null), token);
                 }
 
                 return true;
@@ -397,6 +397,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // The best client by priority receives the release; Jularr's own downloader keeps the NZB in staging.
             string? failure = null;
             string? externalId = null;
+            NewznabException? rateLimited = null;
             if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
                 var staging = await nativePaths!.PrepareIncompleteAsync(operationId, ct, target.MediaTypeId, target.MediaSubtypeId);
@@ -416,7 +417,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     _logger.LogWarning("NZB download failed for operation {OperationId}, indexer {IndexerId}: {Failure}; HTTP {StatusCode}; timeout {TimedOut}; transport {TransportError}.",
                         operationId, offer.ConnectionId, exception.Failure, (int?)exception.StatusCode, exception.InnerException is OperationCanceledException,
                         exception.InnerException is HttpRequestException transport ? transport.HttpRequestError : (HttpRequestError?)null);
-                    failure = exception.Failure == NewznabFailure.Unavailable ? "acquisition_unavailable" : "acquisition_grab_failed";
+                    failure = GrabFailureKey(exception);
+                    rateLimited = exception.Failure == NewznabFailure.RateLimited ? exception : null;
                 }
                 catch (IOException exception)
                 {
@@ -460,7 +462,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 }
                 catch (NewznabException exception)
                 {
-                    failure = exception.Failure == NewznabFailure.Unavailable ? "acquisition_unavailable" : "acquisition_grab_failed";
+                    failure = GrabFailureKey(exception);
+                    rateLimited = exception.Failure == NewznabFailure.RateLimited ? exception : null;
                 }
                 catch (InvalidDataException)
                 {
@@ -534,9 +537,16 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     }, ct);
                 }
 
+                // A rate-limited indexer rests for the wait it asked for, and the grab tries again after it.
+                var retryAfter = rateLimited?.RetryAfter is { } asked && asked > TimeSpan.FromMinutes(30) ? asked : TimeSpan.FromMinutes(30);
                 await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
-                    await ctx.FailDownloadAsync(new DownloadFailureData(operationId, failure, DateTime.UtcNow.AddMinutes(30)), token);
+                    if (rateLimited is not null)
+                    {
+                        await ctx.RecordIndexerUseAsync(new IndexerUseData(offer.ConnectionId, 0, false, rateLimited.RetryAfter is { } wait ? (int)Math.Ceiling(wait.TotalSeconds) : null), token);
+                    }
+
+                    await ctx.FailDownloadAsync(new DownloadFailureData(operationId, failure, DateTime.UtcNow + retryAfter), token);
                     return true;
                 }, ct);
                 throw new ServiceUnavailableException(failure);
@@ -626,8 +636,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
                 return true;
             }
-            catch (NewznabException)
+            catch (NewznabException exception)
             {
+                // The wait the indexer asked for outlasts the usual backoff.
+                if (exception.RetryAfter is { } wait)
+                {
+                    use.RetryAfterSeconds = Math.Max(use.RetryAfterSeconds, (int)Math.Ceiling(wait.TotalSeconds));
+                }
+
                 return false;
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -636,9 +652,17 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
         }
 
+        private static string GrabFailureKey(NewznabException exception) => exception.Failure switch
+        {
+            NewznabFailure.Unavailable => "acquisition_unavailable",
+            NewznabFailure.RateLimited => "acquisition_rate_limited",
+            _ => "acquisition_grab_failed"
+        };
+
         private sealed class IndexerUse
         {
             public int Queries;
+            public int RetryAfterSeconds;
             public bool Failed;
         }
 

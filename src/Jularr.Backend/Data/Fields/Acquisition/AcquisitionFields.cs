@@ -43,6 +43,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly IntField GrabLimit = new() { Minimum = 1, Maximum = 100000, Required = false };
         public static readonly IntField QueryCount = new() { Minimum = 0 };
         public static readonly IntField GrabCount = new() { Minimum = 0 };
+        public static readonly IntField RetryAfterSeconds = new() { Minimum = 1, Maximum = 86400, Required = false };
         public static readonly DateTimeField RetryAt = new() { Required = false };
         public static readonly BoolField IsBackedOff = new();
         public static readonly StringField ErrorKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };

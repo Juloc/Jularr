@@ -199,6 +199,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<RecentLogs>();
             services.TryAddSingleton<ServiceTimings>();
             services.TryAddSingleton<ProviderObservations>();
+            services.TryAddSingleton(new NewznabGate(NewznabGate.DefaultSpacing));
             services.TryAddSingleton<HealthChecks>();
             services.TryAddSingleton<ResourceHistory>();
             services.AddHostedService(provider => provider.GetRequiredService<ResourceHistory>());
