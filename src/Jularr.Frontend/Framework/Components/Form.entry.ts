@@ -53,6 +53,27 @@ document.addEventListener("change", event => {
     if ((field instanceof HTMLInputElement || field instanceof HTMLSelectElement) && field.dataset.formSubmit !== undefined) field.form?.requestSubmit();
 });
 
+// An optional choice that saves itself goes back to none when its chosen segment is clicked again (or Space or Enter is pressed on it).
+document.addEventListener("pointerdown", event => {
+    if (event.target instanceof HTMLInputElement && event.target.dataset.formClearable !== undefined) event.target.dataset.wasChecked = String(event.target.checked);
+}, true);
+document.addEventListener("click", event => {
+    const field = event.target;
+    if (!(field instanceof HTMLInputElement) || field.dataset.formClearable === undefined) return;
+    const clear = field.dataset.wasChecked === "true";
+    delete field.dataset.wasChecked;
+    if (!clear) return;
+    field.checked = false;
+    field.form?.requestSubmit();
+});
+document.addEventListener("keydown", event => {
+    const field = event.target;
+    if (event.key !== " " && event.key !== "Enter" || !(field instanceof HTMLInputElement) || field.dataset.formClearable === undefined || !field.checked) return;
+    event.preventDefault();
+    field.checked = false;
+    field.form?.requestSubmit();
+});
+
 onPage(import.meta.url, () => {
     document.querySelectorAll<HTMLFormElement>('form').forEach(enhance);
     document.querySelectorAll<HTMLElement>('[data-form-local]').forEach(local => { initializeRanges(local); initializeSteppers(local); });

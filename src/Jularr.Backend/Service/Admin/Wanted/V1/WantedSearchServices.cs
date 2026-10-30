@@ -56,7 +56,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 return new WantedReleaseCandidateV1(evaluation.Candidate.Id, offer.Title, offer.ConnectionName, offer.SizeBytes, offer.PublishedAt?.UtcDateTime, evaluation.Score?.QualityKey,
                     evaluation.Decision switch { SelectionDecision.Eligible => ReleaseDecisionType.Eligible, SelectionDecision.ManualReview => ReleaseDecisionType.ManualReview, _ => ReleaseDecisionType.Rejected },
                     evaluation.PreferenceScore, reason.Item1, TextLimit.Cut(reason.Item2, 1000), book?.Kind, book?.VolumeStart, book?.VolumeEnd, book?.IsComplete ?? false,
-                    evaluation.Candidate.SizeMark, new BaseDataList<ReleaseScorePointV1>(points), TextLimit.Cut(evaluation.Candidate.Parsed?.ReleaseGroup?.Trim(), 64));
+                    evaluation.Candidate.SizeMark, new BaseDataList<ReleaseScorePointV1>(points), TextLimit.Cut(string.Join(", ", ReleaseGroupLogic.Split(evaluation.Candidate.Parsed?.ReleaseGroup)) is { Length: > 0 } groups ? groups : null, 64));
             }).ToArray());
         }
     }

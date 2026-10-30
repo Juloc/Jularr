@@ -106,11 +106,32 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(groupRow.Locator("[data-form-submit-fallback]")).ToBeHiddenAsync();
                 await page.EvaluateAsync("window.__groupProbe = 7");
                 await Steps.FollowAsync(page, groupRow.Locator(".ui-segment", new() { HasText = "Good" }));
-                await Assertions.Expect(page.Locator(".kpi-tile", new() { HasText = "Good" }).Locator(".kpi-tile__value")).ToHaveTextAsync("1");
+                ILocator Figure(string caption) => page.Locator(".kpi-tile", new() { Has = page.Locator(".kpi-tile__caption", new() { HasTextString = caption }) }).Locator(".kpi-tile__value");
+                await Assertions.Expect(Figure("Good")).ToHaveTextAsync("1");
+                await Assertions.Expect(Figure("Not rated")).ToHaveTextAsync("0");
                 Assert.AreEqual(7, await page.EvaluateAsync<int>("window.__groupProbe"), "The rating reloaded the page.");
                 await page.ReloadAsync();
                 await Assertions.Expect(Row(page, "Browser-Group").Locator("input[value='1']")).ToBeCheckedAsync();
                 await Assertions.Expect(Row(page, "Browser-Group")).Not.ToContainTextAsync("Not rated");
+
+                // Blocked moves the figures at once; the chosen segment clicked again takes the rating back.
+                await Steps.FollowAsync(page, Row(page, "Browser-Group").Locator(".ui-segment", new() { HasText = "Blocked" }));
+                await Assertions.Expect(Figure("Blocked")).ToHaveTextAsync("1");
+                await Assertions.Expect(Figure("Good")).ToHaveTextAsync("0");
+                await Steps.FollowAsync(page, Row(page, "Browser-Group").Locator(".ui-segment", new() { HasText = "Blocked" }));
+                await Assertions.Expect(Figure("Blocked")).ToHaveTextAsync("0");
+                await Assertions.Expect(Figure("Not rated")).ToHaveTextAsync("1");
+                await Assertions.Expect(Row(page, "Browser-Group")).ToContainTextAsync("Not rated");
+                await Assertions.Expect(Row(page, "Browser-Group").Locator("input:checked")).ToHaveCountAsync(0);
+
+                // By keyboard: Enter on the chosen segment takes the rating back as well.
+                await Steps.FollowAsync(page, Row(page, "Browser-Group").Locator(".ui-segment", new() { HasText = "Bad" }));
+                await Assertions.Expect(Row(page, "Browser-Group").Locator("input[value='2']")).ToBeCheckedAsync();
+                await Assertions.Expect(Figure("Not rated")).ToHaveTextAsync("0");
+                await Row(page, "Browser-Group").Locator("input[value='2']").FocusAsync();
+                await page.Keyboard.PressAsync("Enter");
+                await Assertions.Expect(Figure("Not rated")).ToHaveTextAsync("1");
+                await Assertions.Expect(Row(page, "Browser-Group").Locator("input:checked")).ToHaveCountAsync(0);
 
                 // A tag is a card whose label is its input; removing asks in a dialog with Cancel.
                 await page.GotoAsync("/Admin/Acquisition/Profiles?tab=tags");

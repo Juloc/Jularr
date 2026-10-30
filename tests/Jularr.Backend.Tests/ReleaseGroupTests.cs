@@ -95,18 +95,45 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(50, profile.GoodGroupScore);
             Assert.AreEqual(-50, profile.BadGroupScore);
             Assert.AreEqual(ReleaseGroupRating.Good, profile.GroupRatings["lucaz"]);
-            Assert.AreEqual(ReleaseGroupRating.Blocked, ReleaseScorer.GroupRating(profile, BookReleaseJudge.Parse(Blocked)));
-            Assert.IsNull(ReleaseScorer.GroupRating(profile, BookReleaseJudge.Parse(Unrated)));
+            Assert.AreEqual(("DigitalMangaFan", ReleaseGroupRating.Blocked), ReleaseScorer.GroupRatings(profile, BookReleaseJudge.Parse(Blocked)).Single());
+            Assert.AreEqual(0, ReleaseScorer.GroupRatings(profile, BookReleaseJudge.Parse(Unrated)).Count);
         }
 
         [TestMethod]
         public void Sightings_TrimAndKeepEachGroupOnceInAnyCase_WithinTheStoredLength()
         {
-            var names = ReleaseGroupLogic.Sightings([" GRP ", "grp", null, "", "   ", new string('x', 65), "LuCaZ", .. Enumerable.Range(0, 300).Select(index => "g" + index)]);
+            var names = ReleaseGroupLogic.Sightings([" GRP ", "grp", null, "", "   ", new string('x', 65), "danke-Empire, Ushi", "LuCaZ & Stick", "A+B/ C ", .. Enumerable.Range(0, 300).Select(index => "g" + index)]);
 
-            CollectionAssert.AreEqual(new[] { "GRP", "LuCaZ" }, names.Take(2).ToArray());
+            CollectionAssert.AreEqual(new[] { "GRP", "danke-Empire", "Ushi", "LuCaZ", "Stick", "A", "B", "C" }, names.Take(8).ToArray());
             Assert.AreEqual(ReleaseGroupLogic.SightingLimit, names.Length);
             Assert.IsFalse(names.Any(name => name.Length > 64));
+        }
+
+        [TestMethod]
+        public void Selection_SeveralGroupsInOneName_AreRatedEachOnTheirOwn()
+        {
+            const string Shared = "Mushoku Tensei - Jobless Reincarnation V06 EPUB (danke-Empire, Ushi) (EN)";
+            var profile = Profile();
+            var ratings = new Dictionary<string, ReleaseGroupRating>(StringComparer.OrdinalIgnoreCase) { ["danke-Empire"] = ReleaseGroupRating.Good, ["ushi"] = ReleaseGroupRating.Bad };
+            profile = new QualityProfile(profile.Id, profile.Name, profile.AllowedQualities, profile.QualityOrder, false, null, null, null) { IsBook = true, LanguageOrder = ["EN"], GroupRatings = ratings };
+
+            // Each group is one rule with its points; a blocked one of them blocks the release.
+            var row = Row(Select(profile, true, Shared, Unrated), Shared);
+            CollectionAssert.AreEqual(new[] { ("GroupGood", "danke-Empire", 50), ("GroupBad", "Ushi", -50) }, row.Score!.FormatPoints.Select(point => (point.Code, point.Value, point.Points)).ToArray());
+            ratings["Ushi"] = ReleaseGroupRating.Blocked;
+            Assert.AreEqual("GroupBlocked", Row(Select(profile, true, Shared), Shared).Reasons[^1].Code);
+        }
+
+        [TestMethod]
+        public void Parse_KnownPublisher_IsThePublisherAndNeverTheGroup()
+        {
+            var alone = BookReleaseJudge.ReadName("Mushoku Tensei - Jobless Reincarnation V06 [Seven Seas Entertainment] (EN)");
+            Assert.AreEqual(("Seven Seas Entertainment", (string?)null), (alone.Publisher, alone.Group));
+            Assert.IsNull(BookReleaseJudge.Parse("Mushoku Tensei - Jobless Reincarnation V06 [Yen Press] (EN)").ReleaseGroup);
+            var both = BookReleaseJudge.ReadName("Mushoku Tensei - Jobless Reincarnation [Stick] [Seven Seas Siren] (EN)");
+            Assert.AreEqual(("Seven Seas Siren", "Stick"), (both.Publisher, both.Group));
+            Assert.AreEqual(("Square Enix", "DigitalMangaFan"), (BookReleaseJudge.ReadName("Title v01 (2023) (Digital) (Square Enix) (DigitalMangaFan)").Publisher,
+                BookReleaseJudge.ReadName("Title v01 (2023) (Digital) (Square Enix) (DigitalMangaFan)").Group));
         }
 
         [TestMethod]

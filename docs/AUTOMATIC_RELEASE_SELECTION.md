@@ -46,16 +46,19 @@ Equal input gives the same ranking whatever order the indexers answered in:
 
 Each media type keeps one list of release groups (`ReleaseGroups`, migration `0026`; [ReleaseGroupLogic.cs](../src/Jularr.Backend/Logic/Acquisition/ReleaseGroupLogic.cs)).
 Every manual or automatic search adds the groups its results name (the video parser's group; for books and manga the last named tag, see
-below), counts each once per search and keeps when it last saw it; no extra provider call is made. A group can also be typed by hand
-(Admin, Acquisition, Profiles, Release groups). A name is trimmed and kept once per media type in any case.
+below), counts each once per search and keeps when it last saw it; no extra provider call is made. A name with several groups
+("danke-Empire, Ushi", also joined by `&`, `+` or `/`) is several groups for the list, the rating and the Group column. A group can also be
+typed by hand (Admin, Acquisition, Profiles, Release groups). A name is trimmed and kept once per media type in any case. A rating saves on
+click and refreshes the figures with the list; the chosen segment clicked again takes it back (not rated).
 
 A rating (Good, Bad, Blocked; none is not rated) applies to every profile of the media type and is one more named rule of the score
 (`ReleaseScorer.GroupRating`), not a tie-break:
 
-- Good and Bad add the profile's points, "Group X (good)" and "Group X (bad)", to the format score. The points live in the profile
+- Good and Bad add the profile's points, "Group X (good)" and "Group X (bad)", to the format score, once for each rated group of the name. The points live in the profile
   definition (`GoodGroupScore` +50, `BadGroupScore` -50 by default; no editor yet). The minimum format score counts the custom formats
   alone, so a bad group lowers the score but is not rejected for it.
-- Blocked rejects the release in an automatic search ("Group blocked") and only marks it in a manual search, where it can still be taken.
+- Blocked (any group of the name) rejects the release in an automatic search ("Group blocked") and only marks it in a manual search, where it
+  can still be taken.
 - An eligible release names its group's rating as its reason; the manual search shows the group in its own column.
 
 ## Books and light novels
@@ -64,8 +67,8 @@ A rating (Good, Bad, Blocked; none is not rated) applies to every profile of the
 
 **Name.** `ReadName` is a pure function of the release name (`BookReleaseName`): kind (e-book, audiobook, manga/comic, magazine),
 format, a single volume or a range (`v01-23`, `Vol 01-24`, `Volume 3`), edition words in a fixed order (Digital, Web Novel,
-Compilation, Complete, Illustrated), publisher and group (the last named tag is the group, the one before it the publisher; a dotted
-scene name ends in its group), the first year and the languages (words, catalog tags and a code alone in brackets such as `(EN)`).
+Compilation, Complete, Illustrated), publisher and group (a known publisher or imprint such as Seven Seas, Yen Press, Kodansha, Square Enix or J-Novel Club is always the
+publisher, never the group; of the other named tags the last is the group, the one before it the publisher; a dotted scene name ends in its group), the first year and the languages (words, catalog tags and a code alone in brackets such as `(EN)`).
 An audiobook says so or names an audio file (M4B, M4A, MP3, FLAC; "unabridged" or "narrated" without an e-book format); a comic names
 its file, says "manga" or "comic", is a `Digital-Compilation` or follows the comic naming `Title v01 (2015) (Digital) (Group)`.
 

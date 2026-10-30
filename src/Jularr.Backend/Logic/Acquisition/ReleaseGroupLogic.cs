@@ -9,9 +9,12 @@ namespace Jularr.Backend.Logic.Acquisition
         // The most groups one search records; a search sees far fewer.
         public const int SightingLimit = 200;
 
-        // The group names of a search, trimmed, once each in any case, within the stored length.
-        public static string[] Sightings(IEnumerable<string?> groups) =>
-            [.. groups.Select(group => group?.Trim()).OfType<string>().Where(group => group.Length is > 0 and <= 64).Distinct(StringComparer.OrdinalIgnoreCase).Take(SightingLimit)];
+        // The groups a release names: "danke-Empire, Ushi" (also with &, + or /) is two groups; each trimmed, once in any case, within the stored length.
+        public static string[] Split(string? group) =>
+            [.. (group ?? "").Split([',', '&', '+', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(name => name.Length <= 64).Distinct(StringComparer.OrdinalIgnoreCase)];
+
+        // The group names of a search, once each in any case.
+        public static string[] Sightings(IEnumerable<string?> groups) => [.. groups.SelectMany(Split).Distinct(StringComparer.OrdinalIgnoreCase).Take(SightingLimit)];
 
         public static async Task RecordReleaseGroupsAsync(this LogicContext ctx, ReleaseGroupSightingsData data, CancellationToken ct)
         {

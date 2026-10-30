@@ -4,6 +4,7 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "form.choice.clear": ["Click again to clear", "Zum Zurücksetzen erneut klicken"],
   "arr.releaseGroups": ["Release groups", "Release-Gruppen"],
   "arr.groups.total": ["Groups", "Gruppen"],
   "arr.groups.notRated": ["Not rated", "Nicht bewertet"],

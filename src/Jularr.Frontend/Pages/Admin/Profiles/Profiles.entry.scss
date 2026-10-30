@@ -13,6 +13,9 @@
     --list-columns-narrow: minmax(180px, 2fr) minmax(112px, 1fr) minmax(60px, .5fr);
 }
 
+// The figures, the field and the list of release groups are one region that keeps the page's own spacing.
+.release-groups { display: contents; }
+
 // A release group's name and its rating; the segments keep their width.
 .release-groups-list {
     --list-columns: minmax(0, 2.4fr) minmax(280px, 1.2fr);

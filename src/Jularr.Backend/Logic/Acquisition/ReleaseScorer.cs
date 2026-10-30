@@ -105,12 +105,12 @@ namespace Jularr.Backend.Logic.Acquisition
                 rejections.Add(new ReleaseReason("FormatScoreBelowMinimum", formatScore.ToString(System.Globalization.CultureInfo.InvariantCulture)));
             }
 
-            // A release group rated good or bad adds the profile's points; the minimum above holds for the custom formats alone.
-            if (GroupRating(profile, candidate.Release) is { } rating and not ReleaseGroupRating.Blocked)
+            // Each release group rated good or bad adds the profile's points; the minimum above holds for the custom formats alone.
+            foreach (var (group, rating) in GroupRatings(profile, candidate.Release).Where(rated => rated.Rating != ReleaseGroupRating.Blocked))
             {
                 var points = rating == ReleaseGroupRating.Good ? profile.GoodGroupScore : profile.BadGroupScore;
                 formatScore += points;
-                formatPoints.Add(new ScorePoint("Group" + rating, candidate.Release.ReleaseGroup!.Trim(), points));
+                formatPoints.Add(new ScorePoint("Group" + rating, group, points));
             }
 
             var score = formatScore;
@@ -122,9 +122,9 @@ namespace Jularr.Backend.Logic.Acquisition
             };
         }
 
-        // The rating of the release's group for the profile's media type; a release without a group or an unrated group has none.
-        public static ReleaseGroupRating? GroupRating(QualityProfile profile, ReleaseInfo release) =>
-            release.ReleaseGroup?.Trim() is { Length: > 0 } group && profile.GroupRatings.TryGetValue(group, out var rating) ? rating : null;
+        // The rated groups of a release for the profile's media type; a release without a group or with unrated groups has none.
+        public static IReadOnlyList<(string Group, ReleaseGroupRating Rating)> GroupRatings(QualityProfile profile, ReleaseInfo release) =>
+            [.. ReleaseGroupLogic.Split(release.ReleaseGroup).Where(group => profile.GroupRatings.ContainsKey(group)).Select(group => (group, profile.GroupRatings[group]))];
 
         public static IReadOnlyList<string> ValidateProfile(QualityProfile profile)
         {

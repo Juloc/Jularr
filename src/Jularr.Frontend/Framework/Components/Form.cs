@@ -190,7 +190,8 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
-        // A choice that saves itself submits its form on change (Form.entry.ts); the form's button then serves browsers without script.
+        // A choice that saves itself submits its form on change (Form.entry.ts); the form's button then serves browsers without script. An optional one goes back to none
+        // when its chosen segment is clicked again.
         public Form<TData> Select<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, IEnumerable<SelectOption> options, FieldHelp? help = null,
             string? refreshAction = null, string? refreshLabelKey = null, FieldAffix? affix = null, bool submitOnChange = false)
         {
@@ -210,7 +211,10 @@ namespace Jularr.Frontend.Framework
                     Configure(field, radio);
                     if (refreshAction is not null) radio.Attribute("data-form-refresh", refreshAction);
                     if (submitOnChange) radio.Attribute("data-form-submit", "");
-                    return new HtmlLabel(radio, new Span(new ValueText(option.Label))).Class("ui-segment");
+                    var segment = new HtmlLabel(radio, new Span(new ValueText(option.Label))).Class("ui-segment");
+                    if (!submitOnChange || field.Required) return segment;
+                    radio.Attribute("data-form-clearable", "");
+                    return option.Value == value ? segment.TextAttribute("title", "form.choice.clear") : segment;
                 }).ToArray<IUiComponent>();
                 AddField(field, new Div(segments).Class("ui-segments"), segmented: true);
                 RefreshButton(refreshAction, refreshLabelKey);

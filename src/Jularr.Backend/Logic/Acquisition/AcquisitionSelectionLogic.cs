@@ -187,8 +187,8 @@ namespace Jularr.Backend.Logic.Acquisition
 
             SelectionCandidate Candidate<TMatch>(ReleaseOffer offer, ReleaseJudgement<TMatch> judgement)
             {
-                // A blocked release group is never taken automatically; a manual search only marks it.
-                var blockedGroup = judgement.Parsed is { } parsed && ReleaseScorer.GroupRating(profile, parsed) == ReleaseGroupRating.Blocked
+                // A release of a blocked group is never taken automatically; a manual search only marks it.
+                var blockedGroup = judgement.Parsed is { } parsed && ReleaseScorer.GroupRatings(profile, parsed).Any(rated => rated.Rating == ReleaseGroupRating.Blocked)
                     ? new SelectionReason(SelectionReasonKind.Profile, "GroupBlocked") : null;
                 return new(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence, judgement.Coverage)
                 {

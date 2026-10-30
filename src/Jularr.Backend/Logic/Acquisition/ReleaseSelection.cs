@@ -131,8 +131,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
             }
 
-            // An eligible release names its group's rating; the points are in the score.
-            if (ReleaseScorer.GroupRating(profile, candidate.Parsed) is { } rating and not ReleaseGroupRating.Blocked)
+            // An eligible release names its groups' ratings; the points are in the score.
+            foreach (var rating in ReleaseScorer.GroupRatings(profile, candidate.Parsed).Select(rated => rated.Rating).Where(rating => rating != ReleaseGroupRating.Blocked).Distinct().Order())
             {
                 reasons.Add(new SelectionReason(SelectionReasonKind.Profile, "GroupRated" + rating));
             }

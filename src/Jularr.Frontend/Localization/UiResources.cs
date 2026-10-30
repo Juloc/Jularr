@@ -155,6 +155,7 @@ namespace Jularr.Frontend.Localization
             new("arr.groups.age.hours", "{0} hours ago"),
             new("arr.groups.age.day", "1 day ago"),
             new("arr.groups.age.days", "{0} days ago"),
+            new("form.choice.clear", "Click again to clear"),
             new("arr.tags", "Tags"),
             new("arr.qualityGroups", "Quality groups"),
             new("arr.refreshGroups", "Apply group changes"),

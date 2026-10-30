@@ -15,13 +15,15 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         {
             if (_groups is not { } result || _groupFigures is not { } figures) return;
 
-            page.Content.Add(new KpiTiles(
+            // A rating updates the figures and the list together, as one region.
+            var region = new List<IUiComponent>();
+            region.Add(new KpiTiles(
                 new KpiTile("arr.groups.total", Count(figures.GroupCount), Glyph("layers"), UiTone.Accent),
                 new KpiTile("arr.groups.rating.Good", Count(figures.GoodCount), Glyph("check"), UiTone.Success),
                 new KpiTile("arr.groups.notRated", Count(figures.NotRatedCount), Glyph("sliders"), UiTone.Info),
                 new KpiTile("arr.groups.rating.Blocked", Count(figures.BlockedCount), Glyph("sync"), UiTone.Warning)).Strip());
 
-            page.Content.Add(new Div(new Form<AddReleaseGroupDataV1>(form =>
+            region.Add(new Div(new Form<AddReleaseGroupDataV1>(form =>
             {
                 form.Text(item => item.Name, "arr.groups.name", help: new FieldHelp(Placeholder: "arr.groups.find"));
                 form.Submit("arr.groups.add");
@@ -38,7 +40,8 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                     new ValueText(item.ReleaseGroupRatingId is null ? texts["arr.groups.notRated"] + " · " + seen : seen));
                 return new ListRow([identity, RatingForm(item)]);
             }).ToList();
-            page.Content.Add(new ListPanel("arr.releaseGroups", columns, rows, empty).Modifier("release-groups-list").Paged());
+            region.Add(new ListPanel("arr.releaseGroups", columns, rows, empty).Modifier("release-groups-list").Paged());
+            page.Content.Add(new Region("release-groups", [.. region]).Class("release-groups"));
         }
 
         // Good, Bad and Blocked as one segmented control; none chosen is not rated. A click saves it.

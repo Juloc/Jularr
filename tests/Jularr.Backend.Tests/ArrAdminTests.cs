@@ -154,6 +154,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, html.Split("class=\"ui-segments\"", StringSplitOptions.None).Length - 1);
             Assert.AreEqual(1, html.Split("value=\"1\" checked=\"checked\"", StringSplitOptions.None).Length - 1);
             StringAssert.Contains(html, "data-form-submit=\"\"");
+            StringAssert.Contains(html, "id=\"release-groups\" data-region=\"\"");
+            Assert.AreEqual(6, html.Split("data-form-clearable=\"\"", StringSplitOptions.None).Length - 1);
+            Assert.AreEqual(1, html.Split("title=\"Click again to clear\"", StringSplitOptions.None).Length - 1);
             foreach (var caption in new[] { "Groups", "Good", "Not rated", "Blocked" }) StringAssert.Contains(html, "kpi-tile__caption\">" + caption + "<");
 
             // A segment saves the rating at once; the field adds a group and shows it.
@@ -161,6 +164,15 @@ namespace Jularr.Backend.Tests
                 new FormUrlEncodedContent([new("__RequestVerificationToken", LibraryTests.Token(html)), new("ReleaseGroupRatingId", "3")]));
             Assert.AreEqual(HttpStatusCode.Redirect, rated.StatusCode, await rated.Content.ReadAsStringAsync());
             Assert.AreEqual(3, Convert.ToInt32(await host.ScalarAsync("""SELECT "ReleaseGroupRatingId" FROM "ReleaseGroups" WHERE "Id" = 902""")));
+
+            // The chosen segment clicked again sends no rating: the group is not rated again.
+            using var cleared = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=groups&mediaTypeId=1&edit=901&handler=Rate",
+                new FormUrlEncodedContent([new("__RequestVerificationToken", LibraryTests.Token(html))]));
+            Assert.AreEqual(HttpStatusCode.Redirect, cleared.StatusCode, await cleared.Content.ReadAsStringAsync());
+            Assert.AreEqual(true, await host.ScalarAsync("""SELECT "ReleaseGroupRatingId" IS NULL FROM "ReleaseGroups" WHERE "Id" = 901"""));
+            var sorted = await (await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=groups&mediaTypeId=1")).Content.ReadAsStringAsync();
+            Assert.IsTrue(sorted.IndexOf(">GRP<", StringComparison.Ordinal) < sorted.IndexOf(">FLUX<", StringComparison.Ordinal), "The group no longer rated comes first again.");
+            StringAssert.Contains(sorted, "kpi-tile__value\">1</div><div class=\"kpi-tile__caption\">Blocked<");
             using var added = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=groups&mediaTypeId=1&handler=Group",
                 new FormUrlEncodedContent([new("__RequestVerificationToken", LibraryTests.Token(html)), new("Name", " danke-Empire ")]));
             Assert.AreEqual(HttpStatusCode.Redirect, added.StatusCode, await added.Content.ReadAsStringAsync());
