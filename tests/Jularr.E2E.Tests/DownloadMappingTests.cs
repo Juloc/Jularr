@@ -5,9 +5,9 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class DownloadMappingTests
     {
-        // A saved connection closes its dialog; its settings are the inputs of its card.
+        // A saved connection closes its dialog; its settings are the inputs of the opened client panel.
         private static ILocator CardForm(IPage page) =>
-            page.Locator(".feature-card", new() { HasText = "My download client" }).Locator("form[data-save]").Filter(new() { Has = page.Locator("[name=BaseUrl]") });
+            page.Locator(".downloaders-detail", new() { HasText = "My download client" }).Locator("form[data-save]").Filter(new() { Has = page.Locator("[name=BaseUrl]") });
 
         [TestMethod]
         [DataRow(1440, 900)]
