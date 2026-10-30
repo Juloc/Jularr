@@ -14,9 +14,9 @@ namespace Jularr.Backend.Logic.Media
             sql.Statement =
                 """
                 SELECT
-                    EXISTS (
+                    coalesce((
                         SELECT
-                            1
+                            array_agg(operation."Id" ORDER BY operation."Id")
                         FROM
                             "Operations" AS operation
                             JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
@@ -25,7 +25,7 @@ namespace Jularr.Backend.Logic.Media
                             wanted."WorkId" = work."Id"
                             AND operation."OperationTypeId" = 2
                             AND operation."OperationStatusTypeId" IN (1, 2)
-                    ) AS "HasActiveDownload",
+                    ), '{}') AS "ActiveDownloadIds",
                     coalesce((
                         SELECT
                             array_agg(file."Id" ORDER BY file."Id")

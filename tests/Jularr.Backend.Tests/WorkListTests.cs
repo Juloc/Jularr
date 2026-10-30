@@ -170,6 +170,18 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Delete_WithItsData_DiscardsTheRunningDownloadWithoutAnError()
+        {
+            await using var host = await CreateAsync();
+            await SeedAsync(host);
+
+            var report = await PostAsync(host, "deletion", new DeleteWorksDataV1([905], true, false));
+            Assert.AreEqual("done", report.Single().OutcomeKey);
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Works" WHERE "Id" = 905"""));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Operations" WHERE "OperationTypeId" = 2 AND "OperationStatusTypeId" IN (1, 2)"""));
+        }
+
+        [TestMethod]
         public async Task RefreshMetadata_TitleWithoutProviderIdentity_StaysAndSaysWhy()
         {
             await using var host = await CreateAsync();
