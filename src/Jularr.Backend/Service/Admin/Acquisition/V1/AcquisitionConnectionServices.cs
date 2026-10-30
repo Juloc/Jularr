@@ -81,8 +81,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     "AcquisitionConnections" AS connection
                     JOIN "AcquisitionConnectionTypes" AS type ON type."Id" = connection."AcquisitionConnectionTypeId"
                 WHERE
-                    @AcquisitionConnectionRoleId::smallint IS NULL
-                    OR type."AcquisitionConnectionRoleId" = @AcquisitionConnectionRoleId
+                    (@AcquisitionConnectionRoleId::smallint IS NULL OR type."AcquisitionConnectionRoleId" = @AcquisitionConnectionRoleId)
+                    AND (cardinality(@AcquisitionConnectionTypeIds::smallint[]) = 0 OR connection."AcquisitionConnectionTypeId" = ANY(@AcquisitionConnectionTypeIds::smallint[]))
                 ORDER BY
                     connection."AcquisitionConnectionTypeId",
                     connection."Priority",
@@ -90,7 +90,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
-            sql.Parameters.Add(new AcquisitionConnectionRoleFilterData(Parameters.AcquisitionConnectionRoleId));
+            sql.Parameters.Add(new AcquisitionConnectionRoleFilterData(Parameters.AcquisitionConnectionRoleId, Parameters.AcquisitionConnectionTypeIds));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<AcquisitionConnectionDetailsV1>(sql, CancellationToken);
         }

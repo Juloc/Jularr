@@ -10,7 +10,7 @@ VPN health signal.
 1. Run qBittorrent with its transfer network in the same network namespace as Gluetun.
    Publish its WebUI only as required for Jularr; do not independently expose qBittorrent's
    network namespace to a second route around the VPN.
-2. In Jularr Admin > Connections > Download clients, add qBittorrent with its WebUI URL
+2. In Jularr Admin > Downloads > External clients, add qBittorrent with its WebUI URL
    and account credentials. Test the connection.
 3. Assign the storage mount/folder through which Jularr can read the client's completed
    download directory. The client path and Jularr mount must refer to the same files.
@@ -97,7 +97,7 @@ sleeps on `WorkSignals.Torrents` until a grab wakes it; with jobs it looks every
   `NetworkRouteLogic` accepts only a tunnel that answers pings and whose exit differs from the host.
   Without one the pass sends nothing and the job rests five minutes. Peer connections and tracker
   requests go through the tunnel; there is no direct path.
-- Admin: Download clients offers "Add torrent engine" only with the module; its card shows the
+- Admin: Downloads > External clients offers "Add torrent engine" only with the module; its card shows the
   lock proven at that read (`ReadTorrentEngineV1`), file data sent (0), control bytes, refused frames,
   received bytes, connected peers and whether a verified tunnel is ready. Test checks module, lock and
   tunnel. Downloads appear in Activity like the other own downloaders.

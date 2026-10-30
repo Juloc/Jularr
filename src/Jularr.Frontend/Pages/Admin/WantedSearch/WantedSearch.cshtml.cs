@@ -49,7 +49,8 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
             if (FormError is not null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
             if (_candidates is not { } candidates) return;
 
-            // Every candidate stays visible with its decision; rejected ones cannot be taken. The score's rules and points show on hover; books also show kind and volumes.
+            // Every candidate stays visible with its decision; rejected ones cannot be taken. The score's rules and points show on hover; books also show kind and volumes, every
+            // release its group.
             if (candidates.Count == 0)
             {
                 page.Content.Add(new P(new Text("wanted.search.empty")).Attribute("role", "status"));
@@ -67,6 +68,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
             }
 
             page.Content.Add(table
+                .Content("wanted.search.group", item => new ValueText(item.ReleaseGroup ?? ""))
                 .Text(item => item.ConnectionName, "wanted.search.indexer")
                 .Content("wanted.search.age", item => new ValueText(ReleaseFacts.AgeDays(item.PublishedAt)))
                 .Content("wanted.search.size", Size)
@@ -85,10 +87,13 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
         {
             var score = new Span(new ValueText(item.Score.ToString(CultureInfo.CurrentCulture)));
             if (item.ScorePoints.Count == 0) return score;
-            var lines = item.ScorePoints.Select(point => texts["acquisition.points." + point.Code] + (point.Value is { } value ? " " + value : "") + ": "
-                + point.Points.ToString("+0;-0;0", CultureInfo.CurrentCulture));
+            // A rule's text names where what it saw goes ({0}, "Group LuCaZ (good)"), else it follows the text.
+            var lines = item.ScorePoints.Select(point => Rule(texts["acquisition.points." + point.Code], point.Value) + ": " + point.Points.ToString("+0;-0;0", CultureInfo.CurrentCulture));
             return score.Attribute("title", string.Join("\n", lines));
         }
+
+        private static string Rule(string text, string? value) => value is null ? text
+            : text.Contains("{0}", StringComparison.Ordinal) ? string.Format(CultureInfo.CurrentCulture, text, value) : text + " " + value;
 
         private static IUiComponent Volumes(WantedReleaseCandidateV1 item)
         {

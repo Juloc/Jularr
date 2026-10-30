@@ -205,17 +205,40 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ReleaseGroups_UpgradeAddsTheEmptyListWithOneNamePerMediaTypeInAnyCase()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(ReleaseGroups_UpgradeAddsTheEmptyListWithOneNamePerMediaTypeInAnyCase));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 27).ToArray()).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "ReleaseGroups" """));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 501"""));
+
+            // A name is kept once per media type in any case, trimmed; a rating is Good, Bad or Blocked.
+            await ExecuteAsync(cs, """INSERT INTO "ReleaseGroups" ("MediaTypeId", "Name", "ReleaseGroupRatingId") VALUES (1, 'GRP', 1), (3, 'grp', NULL)""");
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "ReleaseGroups" ("MediaTypeId", "Name") VALUES (1, 'Grp')"""));
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "ReleaseGroups" ("MediaTypeId", "Name") VALUES (1, ' FLUX')"""));
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "ReleaseGroups" ("MediaTypeId", "Name", "ReleaseGroupRatingId") VALUES (1, 'FLUX', 4)"""));
+            Assert.AreEqual(28, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0028_release_groups'"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
+        }
+
+        [TestMethod]
         public async Task TranslationMachines_UpgradeStartsWithAnEmptyOrder_SoTheConfiguredEndpointKeepsTranslating()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
             var cs = TestPostgres.ResolveConnectionString(nameof(TranslationMachines_UpgradeStartsWithAnEmptyOrder_SoTheConfiguredEndpointKeepsTranslating));
             var options = Backup(folder.Path, out _);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
-            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 28).ToArray()).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 29).ToArray()).StartAsync(CancellationToken.None);
             await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
 
             Assert.AreEqual(0, await ScalarAsync(cs, """SELECT cardinality("TranslationMachines") FROM "InstanceSettings" WHERE "Id" = 1"""));
-            Assert.AreEqual(28, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0028_translation_machines'"""));
+            Assert.AreEqual(29, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0029_translation_machines'"""));
         }
 
         [TestMethod]

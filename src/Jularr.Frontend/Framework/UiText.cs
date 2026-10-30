@@ -11,6 +11,7 @@ using Jularr.Backend.Service.User.Instance.V1;
 using Jularr.Backend.Service.User.Notification.V1;
 using Jularr.Backend.Service.User.Profile.V1;
 using Microsoft.AspNetCore.Http;
+using System.Text.RegularExpressions;
 
 namespace Jularr.Frontend.Framework
 {
@@ -45,6 +46,12 @@ namespace Jularr.Frontend.Framework
             && modules.All(module => capabilities.Modules.Contains(module, StringComparer.Ordinal));
 
         public bool Has(string key) => Catalog.Texts.ContainsKey(key);
+
+        // A genre in the viewer's language: providers hand out their names in English or in the language they were asked for, so a known English name is translated here and any other stays as stored.
+        public string Genre(string name) => Catalog.Texts.TryGetValue("genre." + Regex.Replace(name.ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-'), out var value) ? value : name;
+
+        // The stored comma separated genre names, each in the viewer's language.
+        public string? Genres(string? names) => names is null ? null : string.Join(", ", names.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Genre));
 
         public string this[string key] => Catalog.Texts.TryGetValue(key, out var value)
             ? value

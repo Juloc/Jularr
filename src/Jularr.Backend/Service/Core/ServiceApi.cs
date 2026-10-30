@@ -235,6 +235,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<TvdbMetadata>();
             services.TryAddSingleton<TvdbConnectionState>();
+            services.TryAddSingleton<PlexLibraries>();
             services.TryAddTransient<PlexServer>();
             services.TryAddTransient<MediaServers>();
             services.TryAddTransient<LibraryReplacements>();

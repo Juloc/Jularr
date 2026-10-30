@@ -521,7 +521,7 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
                     LiveFigure(key, "missing", figures, "list-value")
                 ]);
             }).ToList();
-            var add = new A(new Text("downloads.addServer")).Class("button button--compact").Attribute("href", "/Admin/Acquisition/Downloads?PageNumber=1&Type=" + AcquisitionConnectionType.Usenet);
+            var add = new A(new Text("downloads.addServer")).Class("button button--compact").Attribute("href", "/Admin/Downloads/Servers?PageNumber=1&Type=" + AcquisitionConnectionType.Usenet);
             return new Section(new Div(new H2(new Text("downloads.newsServers")), new Span().Class("downloads-panel__spacer"), add).Class("downloads-panel__head"),
                 new ListPanel("downloads.newsServers", columns, rows).Modifier("downloads-list downloads-servers")).Class("downloads-panel");
         }
@@ -622,12 +622,12 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
 
         private IReadOnlyList<DownloadClientV1> Shown() => _client is { } client ? [client] : _clients;
 
-        // SABnzbd, qBittorrent and the torrent engine open their own card; Jularr's news servers the download clients, its direct sources the indexers that list them.
+        // SABnzbd, qBittorrent and the torrent engine open their card among the external clients; Jularr's Usenet downloader its news servers, its direct sources the indexers that list them.
         private static string SettingsAddress(DownloadClientV1 client) => client.DownloadClientKindId switch
         {
-            DownloadClientKind.Usenet => "/Admin/Acquisition/Downloads",
+            DownloadClientKind.Usenet => "/Admin/Downloads/Servers",
             DownloadClientKind.Direct => "/Admin/Acquisition",
-            _ => "/Admin/Acquisition/Downloads?PageNumber=1&AcquisitionConnectionId=" + client.SettingsConnectionId.ToString(CultureInfo.InvariantCulture)
+            _ => "/Admin/Downloads/Clients?PageNumber=1&AcquisitionConnectionId=" + client.SettingsConnectionId.ToString(CultureInfo.InvariantCulture)
         };
 
         public async Task<IActionResult> OnGetAsync()

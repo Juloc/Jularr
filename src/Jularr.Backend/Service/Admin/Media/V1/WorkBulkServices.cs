@@ -5,8 +5,12 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Logic.Qbittorrent;
+using Jularr.Integrations.Logic.Sabnzbd;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
@@ -186,11 +190,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         private readonly LibraryReplacements _replacements;
         private readonly CoverStore _covers;
+        private readonly WorkDownloadClients _clients;
 
-        internal DeleteWorksV1(LibraryReplacements replacements, CoverStore covers)
+        internal DeleteWorksV1(LibraryReplacements replacements, CoverStore covers, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadStorage downloads, TimeProvider time, IDataProtectionProvider protection)
         {
             _replacements = replacements;
             _covers = covers;
+            _clients = new WorkDownloadClients(sabnzbd, qbittorrent, downloads, time, protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose));
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -213,7 +219,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
                 outcomes.Add(await WorkBulkOutcomes.TryAsync(id, target.CanonicalTitle, async () =>
                 {
-                    await DeleteWorkV1.DeleteAsync(Context, _replacements, _covers, id, Data.DeletesFiles, Data.AddsExclusion, Auth.AccountId!.Value, CancellationToken);
+                    await DeleteWorkV1.DeleteAsync(Context, _replacements, _covers, _clients, id, Data.DeletesFiles, Data.AddsExclusion, Auth.AccountId!.Value, CancellationToken);
                     return "done";
                 }));
             }

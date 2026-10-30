@@ -112,7 +112,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             // Local titles first; they never need the provider. A catalog title nobody opened is no local title.
-            var local = await Context.ExecuteBatchAsync((ctx, ct) =>
+            var (local, types) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 var sql = new SqlStatement();
                 sql.Statement =
@@ -190,27 +190,52 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 sql.Parameters.Add(new LibraryFilterData(Data.MediaTypeId, null, Data.Query));
                 sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
                 sql.Page = new PageRequest(Data.Page, LocalLimit);
-                return ctx.ReadSql.ReadListAsync<DiscoverItemV1>(sql, ct);
+                return (await ctx.ReadSql.ReadListAsync<DiscoverItemV1>(sql, ct), await DiscoverQueries.ReadTypesInBatchAsync(ctx, Auth.ProfileId!.Value, ct));
             }, CancellationToken, mode: SqlAccessMode.ReadOnly);
 
             // Provider results add what is not local yet: films from TMDB, series from TheTVDB. An unavailable provider leaves the other type and the local results;
             // a search of series alone says when TheTVDB has no key.
             var items = local.Take(LocalLimit).ToList();
-            var listed = (await DiscoverQueries.ReadTypesAsync(Context, Auth.ProfileId!.Value, CancellationToken)).Listed;
-            foreach (var mediaType in Data.MediaTypeId is { } selected ? [selected] : new[] { MediaType.Movie, MediaType.Series })
+            var listed = types.Listed;
+            var searched = (Data.MediaTypeId is { } selected ? [selected] : new[] { MediaType.Movie, MediaType.Series })
+                .Where(mediaType => mediaType is MediaType.Movie or MediaType.Series && listed.Contains(mediaType)).ToList();
+
+            // Both providers are asked at once: TMDB's request needs the database only for its key, read first, and TheTVDB's search then runs beside it.
+            // The answers are kept one after the other, since a context runs one batch at a time.
+            var searches = new List<(MediaType MediaType, Task<IReadOnlyList<ExternalWorkData>> Search)>();
+            foreach (var mediaType in searched)
             {
-                if (mediaType is not (MediaType.Movie or MediaType.Series) || !listed.Contains(mediaType))
+                if (mediaType == MediaType.Series)
                 {
+                    searches.Add((mediaType, _metadata.SearchSeriesAsync(Context, Data.Query, null, CancellationToken, Data.Page)));
                     continue;
                 }
 
                 try
                 {
+                    searches.Add((mediaType, SearchFilmsAsync(await _metadata.ConnectAsync(Context, CancellationToken))));
+                }
+                catch (ServiceUnavailableException exception)
+                {
+                    searches.Add((mediaType, Task.FromException<IReadOnlyList<ExternalWorkData>>(exception)));
+                }
+            }
+
+            // Each failure shows below, for its own type.
+            try
+            {
+                await Task.WhenAll(searches.Select(search => search.Search));
+            }
+            catch (Exception)
+            {
+            }
+
+            foreach (var (mediaType, search) in searches)
+            {
+                try
+                {
                     // Every result is kept as the Work it is; one the local results already hold is not repeated.
-                    IReadOnlyList<ExternalWorkData> results = mediaType == MediaType.Series
-                        ? await _metadata.SearchSeriesAsync(Context, Data.Query, null, CancellationToken, Data.Page)
-                        : [.. (await _metadata.SearchAsync(await _metadata.ConnectAsync(Context, CancellationToken), mediaType, Data.Query, null, CancellationToken, Data.Page))
-                            .Select(result => WorkMetadata.ExternalWork(WorkMetadata.Namespace(mediaType), result))];
+                    var results = await search;
                     var list = new ExternalWorkListData(mediaType == MediaType.Series ? "tvdb" : WorkMetadata.Namespace(mediaType), mediaType, null);
                     var works = await MetadataCatalog.KeepWorksAsync(Context, list, results, CancellationToken);
                     var localIds = items.Select(item => item.WorkId).ToHashSet();
@@ -223,6 +248,10 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
             return new BaseDataList<DiscoverItemV1>(items.ToArray());
         }
+
+        private async Task<IReadOnlyList<ExternalWorkData>> SearchFilmsAsync(TmdbConnection connection) =>
+            [.. (await _metadata.SearchAsync(connection, MediaType.Movie, Data.Query, null, CancellationToken, Data.Page))
+                .Select(result => WorkMetadata.ExternalWork(WorkMetadata.Namespace(MediaType.Movie), result))];
     }
 
     [ServiceEndpoint("POST", "/api/v1/works/{workId:long}/recommendations")]
@@ -673,11 +702,27 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         LIMIT 1
                     ) AS "BackdropUrl"
                 FROM
-                    "ProfileWorks" AS visible
-                    JOIN "ProfileWorkStates" AS state ON state."ProfileId" = visible."ProfileId" AND state."WorkId" = visible."WorkId"
-                WHERE
-                    visible."ProfileId" = @ProfileId
-                    AND visible."WorkId" = ANY(@WorkIds);
+                    (
+                        SELECT
+                            scoped."WorkId"
+                        FROM
+                            "ProfileWorks" AS scoped
+                        WHERE
+                            scoped."ProfileId" = @ProfileId
+                            AND scoped."WorkId" = ANY(@WorkIds)
+                        OFFSET 0
+                    ) AS visible
+                    -- The state view lists every Work for every profile; it is read for the cards' Works only.
+                    JOIN LATERAL (
+                        SELECT
+                            scoped."MediaStateTypeId"
+                        FROM
+                            "ProfileWorkStates" AS scoped
+                        WHERE
+                            scoped."ProfileId" = @ProfileId
+                            AND scoped."WorkId" = visible."WorkId"
+                        OFFSET 0
+                    ) AS state ON TRUE;
                 """;
             sql.Parameters.Add(new DiscoverWorksData([.. workIds.Distinct()]));
             sql.Parameters.Add(new ProfileParameters(profileId));
