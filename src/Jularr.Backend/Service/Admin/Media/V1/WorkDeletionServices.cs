@@ -3,23 +3,54 @@ using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
+using Jularr.Backend.Service.Admin.Acquisition.V1;
+using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Logic.Qbittorrent;
+using Jularr.Integrations.Logic.Sabnzbd;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
+    // What discards a running download of a title that is deleted with its data: the client's job and files go, the operation closes as removed.
+    internal sealed class WorkDownloadClients(SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadStorage downloads, TimeProvider time, IDataProtector protector)
+    {
+        public async Task DiscardAsync(LogicContext context, long operationId, CancellationToken ct)
+        {
+            var now = time.GetUtcNow().UtcDateTime;
+            var download = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadDownloadActionAsync(operationId, token), ct);
+            if (download is not null)
+            {
+                await DownloadActions.RemoveAsync(context, sabnzbd, qbittorrent, downloads, protector, now, download, false, ct);
+                return;
+            }
+
+            // A download no client holds yet or any more only needs to close.
+            await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                await ctx.RemoveDownloadAsync(new DownloadRemovalData(operationId, false, now), token);
+                return true;
+            }, ct);
+        }
+    }
+
     [ServiceEndpoint("POST", "/api/v1/admin/works/{workId:long}/deletion")]
     public sealed class DeleteWorkV1 : AdminService<WorkParametersV1, DeleteWorkDataV1>
     {
         private readonly LibraryReplacements _replacements;
         private readonly CoverStore _covers;
+        private readonly WorkDownloadClients _clients;
 
-        internal DeleteWorkV1(LibraryReplacements replacements, CoverStore covers)
+        internal DeleteWorkV1(LibraryReplacements replacements, CoverStore covers, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadStorage downloads, TimeProvider time, IDataProtectionProvider protection)
         {
             _replacements = replacements;
             _covers = covers;
+            _clients = new WorkDownloadClients(sabnzbd, qbittorrent, downloads, time, protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose));
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -29,18 +60,26 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            await DeleteAsync(Context, _replacements, _covers, Parameters.WorkId, Data.DeletesFiles, Data.AddsExclusion, Auth.AccountId!.Value, CancellationToken);
+            await DeleteAsync(Context, _replacements, _covers, _clients, Parameters.WorkId, Data.DeletesFiles, Data.AddsExclusion, Auth.AccountId!.Value, CancellationToken);
             return new UpdateResult(true);
         }
 
         // One title as Sonarr's dialog deletes it; the mass editor does the same for each chosen title.
-        internal static async Task DeleteAsync(LogicContext context, LibraryReplacements replacements, CoverStore covers, long workId, bool deletesFiles, bool addsExclusion, long accountId, CancellationToken ct)
+        internal static async Task DeleteAsync(LogicContext context, LibraryReplacements replacements, CoverStore covers, WorkDownloadClients clients, long workId, bool deletesFiles, bool addsExclusion, long accountId, CancellationToken ct)
         {
-            // A running download would be left in its client; it is cancelled first.
+            // A running download would be left in its client: deleting with its data discards it first, deleting only the title refuses.
             var facts = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadWorkDeletionFactsAsync(new WorkParametersV1(workId), token), ct);
-            if (facts.HasActiveDownload)
+            if (facts.ActiveDownloadIds.Length > 0)
             {
-                throw new DataValidationException(nameof(DeleteWorkDataV1.DeletesFiles), "download_active");
+                if (!deletesFiles)
+                {
+                    throw new DataValidationException(nameof(DeleteWorkDataV1.DeletesFiles), "download_active");
+                }
+
+                foreach (var operationId in facts.ActiveDownloadIds)
+                {
+                    await clients.DiscardAsync(context, operationId, ct);
+                }
             }
 
             // A file that cannot be removed, on a library that is not reachable, keeps the title: it never counts as deleted.
