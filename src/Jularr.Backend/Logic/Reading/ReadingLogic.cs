@@ -117,7 +117,8 @@ namespace Jularr.Backend.Logic.Reading
 
         public static async Task<int> EvictReadingCacheAsync(this LogicContext ctx, ReadingCacheBudgetData data, CancellationToken ct)
         {
-            // Newest reads keep their place; older ones beyond the bytes or works budget leave the cache.
+            // Prepared books stay while their file does (the library is prepared ahead); comics and documents of changed or vanished files
+            // share the budget: newest reads keep their place, older ones beyond the bytes or works budget leave the cache.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -131,6 +132,16 @@ namespace Jularr.Backend.Logic.Reading
                         "ReadingDocuments" AS document
                     WHERE
                         document."CacheBytes" > 0
+                        AND (
+                            document."ReadingFormatTypeId" = 4
+                            OR NOT EXISTS (
+                                SELECT 1
+                                FROM "StoredFiles" AS file
+                                WHERE
+                                    file."Id" = document."StoredFileId"
+                                    AND file."SizeBytes" = document."SourceSizeBytes"
+                                    AND file."ModifiedAt" = document."SourceModifiedAt"
+                                    AND file."MissingSince" IS NULL))
                 ), evicted AS (
                     UPDATE
                         "ReadingDocuments" AS document

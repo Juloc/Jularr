@@ -38,3 +38,10 @@ test('the select-all box follows the rows: all, some or none chosen', () => {
     exports.update(null, [{ checked: true }, { checked: false }], all);
     assert.deepEqual([all.checked, all.indeterminate], [false, true]);
 });
+
+test('shift and a click choose every row between the two boxes, in either direction', () => {
+    assert.deepEqual([...exports.rangeBetween(1, 4)], [1, 2, 3, 4]);
+    assert.deepEqual([...exports.rangeBetween(4, 1)], [1, 2, 3, 4]);
+    assert.deepEqual([...exports.rangeBetween(2, 2)], [2]);
+    assert.deepEqual([...exports.rangeBetween(-1, 2)], []);
+});

@@ -53,10 +53,10 @@ namespace Jularr.E2E.Tests
             var response = await page.GotoAsync("/Read/1");
             Assert.AreEqual(200, response!.Status);
             await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Chapter One");
-            // The quality toggle lives inside the initially closed language panel.
+            // The language choices live inside the initially closed language panel; the server's TranslateGemma is the only translator.
             await page.Locator("[data-action=language]").ClickAsync();
             await Assertions.Expect(page.Locator("[data-language-choice=de]")).ToBeVisibleAsync();
-            await Assertions.Expect(page.Locator("[data-local-quality-toggle]")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator("[data-local-quality-toggle]")).ToHaveCountAsync(0);
             // A German profile immediately applies its default reading language.
             // Confirm the engine, then deliberately switch to Original and back.
             await Assertions.Expect(page.Locator("[data-translation-provider]")).ToContainTextAsync("TranslateGemma");

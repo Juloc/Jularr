@@ -211,7 +211,7 @@ namespace Jularr.Backend.Tests
             var cs = TestPostgres.ResolveConnectionString(nameof(ReleaseGroups_UpgradeAddsTheEmptyListWithOneNamePerMediaTypeInAnyCase));
             var options = Backup(folder.Path, out _);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
-            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 26).ToArray()).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 27).ToArray()).StartAsync(CancellationToken.None);
             await InsertWorkAsync(cs);
             await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
 
@@ -223,7 +223,7 @@ namespace Jularr.Backend.Tests
             await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "ReleaseGroups" ("MediaTypeId", "Name") VALUES (1, 'Grp')"""));
             await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "ReleaseGroups" ("MediaTypeId", "Name") VALUES (1, ' FLUX')"""));
             await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "ReleaseGroups" ("MediaTypeId", "Name", "ReleaseGroupRatingId") VALUES (1, 'FLUX', 4)"""));
-            Assert.AreEqual(26, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0026_release_groups'"""));
+            Assert.AreEqual(27, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0027_release_groups'"""));
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
         }
 

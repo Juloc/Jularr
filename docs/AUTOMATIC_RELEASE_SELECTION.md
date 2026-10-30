@@ -44,7 +44,7 @@ Equal input gives the same ranking whatever order the indexers answered in:
 
 ## Release groups
 
-Each media type keeps one list of release groups (`ReleaseGroups`, migration `0026`; [ReleaseGroupLogic.cs](../src/Jularr.Backend/Logic/Acquisition/ReleaseGroupLogic.cs)).
+Each media type keeps one list of release groups (`ReleaseGroups`, migration `0027`; [ReleaseGroupLogic.cs](../src/Jularr.Backend/Logic/Acquisition/ReleaseGroupLogic.cs)).
 Every manual or automatic search adds the groups its results name (the video parser's group; for books and manga the last named tag, see
 below), counts each once per search and keeps when it last saw it; no extra provider call is made. A name with several groups
 ("danke-Empire, Ushi", also joined by `&`, `+` or `/`) is several groups for the list, the rating and the Group column. A group can also be

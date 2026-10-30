@@ -76,8 +76,11 @@ namespace Jularr.Integrations.Data.Sabnzbd
 
     internal sealed class SabnzbdQueueJob
     {
-        public SabnzbdQueueJob(string nzoId, string name, double? percentage, long? sizeBytes = null, long? remainingBytes = null, int? timeLeftSeconds = null, string? status = null)
+        public SabnzbdQueueJob(string nzoId, string name, double? percentage, long? sizeBytes = null, long? remainingBytes = null, int? timeLeftSeconds = null, string? status = null,
+            int? priority = null, int? index = null)
         {
+            Priority = priority;
+            Index = index;
             NzoId = nzoId;
             Name = name;
             Percentage = percentage;
@@ -96,6 +99,10 @@ namespace Jularr.Integrations.Data.Sabnzbd
 
         // Downloading, Queued, Paused or Fetching; a paused queue pauses every job.
         public string? Status { get; }
+
+        // SABnzbd's priority (-1 low, 0 normal, 1 high, 2 force) and the job's place in its queue, from 0.
+        public int? Priority { get; }
+        public int? Index { get; }
     }
 
     internal sealed class SabnzbdHistoryJob

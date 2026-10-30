@@ -90,6 +90,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, on.StatusCode, html);
             StringAssert.Contains(html, "Add torrent engine");
             StringAssert.Contains(html, "Proven now: no file data can leave");
+
+            // The connection links to its tab on the Downloads page.
+            StringAssert.Contains(html, "href=\"/Admin/Downloads?Client=Torrent\"");
         }
 
         // A throwaway WireGuard key per run: any 32 bytes; no key lives in the repository.

@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Data.Logic.Library;
@@ -13,14 +14,18 @@ using Jularr.Backend.Logic.Reading;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
+using Jularr.Integrations.Logic.Pdf;
 using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Usenet;
 
 namespace Jularr.Backend.Service.User.Reading.V1
 {
     // Prepares books and comics from storage into the shared reading cache; I/O stays outside transactions.
-    internal sealed class ReadingContent
+    internal sealed partial class ReadingContent
     {
+        [GeneratedRegex("<[^>]+>")]
+        private static partial Regex Tags();
+
         private const long BatchBytes = 8L * 1024 * 1024;
         private readonly StorageAccess _storage;
         private readonly ArchiveTools _archives;
@@ -131,6 +136,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 return size;
             }
 
+            var guessText = new List<string>();
             for (var index = 0; index < package.Spine.Count; index++)
             {
                 var item = package.Spine[index];
@@ -138,6 +144,11 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 var title = package.Toc.FirstOrDefault(entry => entry.Path == item.Path)?.Title;
                 sections.Add(new ReadingStructureSection(item.Path, title, prepared.Characters, prepared.Blocks));
                 await writer.AddAsync(new ReadingResourceData(documentId, SectionPath(index), "text/html; charset=utf-8", Encoding.UTF8.GetBytes(prepared.Html)));
+                if (package.Language is null && guessText.Sum(text => text.Length) < 20_000)
+                {
+                    guessText.Add(Tags().Replace(prepared.Html, " "));
+                }
+
                 foreach (var image in prepared.Resources.Where(images.Add))
                 {
                     if (archive.GetEntry(image) is { } entry)
@@ -150,7 +161,9 @@ namespace Jularr.Backend.Service.User.Reading.V1
             await writer.FlushAsync();
             var toc = package.Toc.Where(entry => indexes.ContainsKey(entry.Path)).Select(entry => new ReadingStructureEntry(entry.Title, indexes[entry.Path], entry.Level, entry.Anchor)).ToArray();
             var structure = JsonSerializer.Serialize(new ReadingStructure([.. sections], toc));
-            await CompleteAsync(context, new ReadingDocumentCompleteData(documentId, package.Title, package.Language, structure, sections.Sum(section => section.Characters)), ct);
+            // An EPUB without its language tag: the text of its first sections tells.
+            var language = package.Language ?? ReadingLanguage.Guess(string.Concat(guessText));
+            await CompleteAsync(context, new ReadingDocumentCompleteData(documentId, package.Title, language, structure, sections.Sum(section => section.Characters)), ct);
         }
 
         // A PDF reads like an EPUB once its text is reflowed, with the pages that do not reflow as the original's; one without text stays for the original pages. The document says whether it is fit to open by itself.
@@ -161,10 +174,31 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
             // Only a PDF with text becomes a document; a scan waits for recognition where the Ocr module reads it, a page at a time.
             var recognized = await context.ExecuteBatchAsync((ctx, token) => ReadRecognizedAsync(ctx, source, token), ct);
+
+            // Pictures the recognizer found on scanned pages, and pages that show best whole, are cut from the pages PDFium draws.
+            PdfRendering? rendering = null;
+            if (recognized.Values.Any(page => page.Reason == RecognizedPage.Recognized) && file.Length <= PdfBook.MaximumRenderBytes)
+            {
+                using var copy = new MemoryStream();
+                await file.CopyToAsync(copy, ct);
+                file.Position = 0;
+                try
+                {
+                    rendering = PdfRendering.Open(copy.ToArray());
+                }
+                catch (InvalidDataException)
+                {
+                    // Without a drawing the scan's pictures stay with the original pages.
+                }
+            }
+
             PdfBookContent book;
             try
             {
-                book = PdfBook.Read(file, recognized);
+                using (rendering)
+                {
+                    book = PdfBook.Read(file, recognized, rendering);
+                }
             }
             catch (PdfWithoutTextException)
             {
@@ -180,6 +214,13 @@ namespace Jularr.Backend.Service.User.Reading.V1
             if (book.Reading.Reason == "no_text")
             {
                 throw new ServiceUnavailableException("reading_pdf_without_text");
+            }
+
+            // Scanned pages with their own recognition layer read meanwhile from it; the recognizer reads them anew and finds their pictures where the Ocr module is on.
+            if (book.WantsRecognition)
+            {
+                var recognition = new ReadingRecognitionData(source.StoredFileId, source.SizeBytes, source.ModifiedAt);
+                await context.ExecuteBatchAsync((ctx, token) => ctx.RequestReadingRecognitionAsync(recognition, token), ct);
             }
 
             var save = new ReadingDocumentSaveData(source.StoredFileId, source.SizeBytes, source.ModifiedAt, hash, PdfBook.AnalyzerVersion, ReadingFormatType.Pdf, null, null,
@@ -212,7 +253,9 @@ namespace Jularr.Backend.Service.User.Reading.V1
             await writer.FlushAsync();
             var structure = prepared.Sections.Select(section => section.Structure).ToArray();
             var recommended = book.Reading.IsReadable;
-            await CompleteAsync(context, new ReadingDocumentCompleteData(state.DocumentId, null, null,
+            // A PDF names no language: its text tells, so the server's translation knows the book's own.
+            var language = ReadingLanguage.Guess(string.Join(' ', book.Chapters.SelectMany(chapter => chapter.Blocks).Select(block => block.Text).Where(text => text is not null).Take(200)));
+            await CompleteAsync(context, new ReadingDocumentCompleteData(state.DocumentId, null, language,
                 JsonSerializer.Serialize(new ReadingStructure(structure, [.. prepared.Toc], recommended, recommended ? null : book.Reading.Reason, [.. prepared.OriginalPages])),
                 structure.Sum(section => section.Characters)), ct);
             return state.DocumentId;
