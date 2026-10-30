@@ -223,7 +223,7 @@ namespace Jularr.Backend.Tests
             await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "ReleaseGroups" ("MediaTypeId", "Name") VALUES (1, 'Grp')"""));
             await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "ReleaseGroups" ("MediaTypeId", "Name") VALUES (1, ' FLUX')"""));
             await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "ReleaseGroups" ("MediaTypeId", "Name", "ReleaseGroupRatingId") VALUES (1, 'FLUX', 4)"""));
-            Assert.AreEqual(27, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0027_release_groups'"""));
+            Assert.AreEqual(28, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0028_release_groups'"""));
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\""));
         }
 

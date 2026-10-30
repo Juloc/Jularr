@@ -34,5 +34,5 @@ The mockup is built from the real Jularr page parts (shell, tabs, form fields, l
 
 - Table design: one `ReleaseGroups` table (media type, normalised name, rating, last seen, hits) or ratings inside the profile definition. Owner decision is "per media type", which favours one table.
 - Existing `FormatConditionKind.ReleaseGroup` conditions in custom formats keep working next to the rating; whether the Release-Gruppen tab imports them is open.
-- Migration number: 0027_release_groups (0026 is the downloads page migration).
+- Migration number: 0028_release_groups (0026 downloads page, 0027 smart pages view).
 - Recyclarr/TRaSH templates (#1190) and a profile simulation are out of scope here.
