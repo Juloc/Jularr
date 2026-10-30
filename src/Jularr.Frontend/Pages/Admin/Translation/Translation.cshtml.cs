@@ -11,11 +11,12 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Admin.Translation
 {
     public sealed class TranslationModelPage(ReadLocalTranslationModelsV1 read, PullLocalTranslationModelV1 pull,
-        BenchmarkLocalTranslationModelV1 benchmark, IAntiforgery antiforgery, UiText texts) : JularrPage
+        BenchmarkLocalTranslationModelV1 benchmark, SaveTranslationMachinesV1 saveMachines, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string Home = "/Admin/Instance/Translation";
         private LocalTranslationModelsV1? _models;
         private LocalTranslationBenchmarkV1? _benchmark;
+        private TranslationMachinesDataV1? _machines;
 
         protected override void Define(Page page)
         {
@@ -52,26 +53,45 @@ namespace Jularr.Frontend.Pages.Admin.Translation
                 page.Content.Add(new P(new Text("translation.local.failureInfo")).Attribute("role", "alert"));
 
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            // The Ollama machines in order: the first that answers with a model translates, the next takes over when it drops out.
+            page.Content.Add(new Form<TranslationMachinesDataV1>(form =>
+            {
+                form.Multiline(item => item.Machines, "translation.local.machines");
+                form.Save();
+            }, Home + "?handler=Machines", csrf, _machines ?? new TranslationMachinesDataV1([.. _models.Machines.Select(machine => machine.Address)]),
+                _machines is null ? null : FormError));
+            var translating = Array.FindIndex(_models.Machines, machine => machine.Reachable && machine.Installed.Any(_models.Approved.Contains));
+            for (var place = 0; place < _models.Machines.Length; place++)
+            {
+                var machine = _models.Machines[place];
+                var state = !machine.Reachable ? texts["translation.local.machine.offline"]
+                    : place == translating ? texts["translation.local.machine.translating"] : texts["translation.local.machine.waiting"];
+                var models = machine.Installed.Where(_models.Approved.Contains).ToArray();
+                var parts = new List<IUiComponent> { new P(new ValueText((place + 1).ToString(CultureInfo.InvariantCulture) + ". " + machine.Address + " · " + state
+                    + (models.Length > 0 ? " · " + string.Join(", ", models) : ""))) };
+                foreach (var model in _models.Approved.Where(model => machine.Reachable && !machine.Installed.Contains(model, StringComparer.Ordinal)))
+                {
+                    var size = model switch { "translategemma:4b" => 3_300_000_000L, "translategemma:12b" => 8_100_000_000L, _ => 17_000_000_000L };
+                    if (_models.VerifiedFreeBytes < size + 2_000_000_000L || _models.DownloadState is "queued" or "downloading") continue;
+                    var retry = _models.DownloadModel == model && _models.DownloadMachine == machine.Address && _models.DownloadState is "interrupted" or "failed";
+                    parts.Add(new PostForm(Home + "?handler=Pull&model=" + Uri.EscapeDataString(model) + "&machine=" + place.ToString(CultureInfo.InvariantCulture), csrf, [],
+                        new Button(new ValueText(texts[retry ? "translation.local.retry" : "translation.local.pull"] + " · " + model + " · "
+                            + Math.Round(size / 1e9, 1).ToString("0.0", CultureInfo.InvariantCulture) + " GB")).Submit()).Attribute("data-translation-submit", "pull"));
+                }
+                page.Content.Add(new Div([.. parts]).Class("feature-card").Attribute("data-translation-machine", machine.Address));
+            }
+
+            // The approved models as the machine that translates now has them; they stay listed while no machine answers.
             foreach (var model in _models.Approved)
             {
                 var installed = _models.Installed.Contains(model, StringComparer.Ordinal);
-                var running = _models.Running.Contains(model, StringComparer.Ordinal);
-                var size = model switch { "translategemma:4b" => 3_300_000_000L, "translategemma:12b" => 8_100_000_000L, _ => 17_000_000_000L };
-                var sizeText = Math.Round(size / 1e9, 1).ToString("0.0", CultureInfo.InvariantCulture);
-                var state = installed ? running ? "translation.local.loaded" : "translation.local.installed" : "translation.local.notInstalled";
-                var canPull = _models.Configured && _models.Problem is null && !installed
-                    && _models.VerifiedFreeBytes >= size + 2_000_000_000L && _models.DownloadState is not ("queued" or "downloading");
-
+                var state = installed ? _models.Running.Contains(model, StringComparer.Ordinal) ? "translation.local.loaded" : "translation.local.installed" : "translation.local.notInstalled";
                 page.Content.Add(new Div(
-                    new P(new ValueText(model + " · " + sizeText + " GB · " + texts[state])),
+                    new P(new ValueText(model + " · " + texts[state])),
                     installed && _models.Problem is null
                         ? new PostForm(Home + "?handler=Benchmark&model=" + Uri.EscapeDataString(model), csrf, [],
                             new Button(new Text("translation.local.benchmark")).Submit()).Attribute("data-translation-submit", "benchmark")
-                        : canPull
-                            ? new PostForm(Home + "?handler=Pull&model=" + Uri.EscapeDataString(model), csrf, [],
-                                new Button(new Text(_models.DownloadModel == model && _models.DownloadState is "interrupted" or "failed"
-                                    ? "translation.local.retry" : "translation.local.pull")).Submit()).Attribute("data-translation-submit", "pull")
-                            : new P(new Text("translation.local.pullBlocked"))
+                        : new Span()
                 ).Class("feature-card"));
             }
 
@@ -97,9 +117,16 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             return Page();
         }
 
-        public async Task<IActionResult> OnPostPullAsync(string model)
+        public async Task<IActionResult> OnPostPullAsync(string model, int machine)
         {
-            await pull.ExecuteAsync<UpdateResult>(new LocalTranslationModelParametersV1(model), new NoData(), HttpContext.RequestAborted);
+            await pull.ExecuteAsync<UpdateResult>(new LocalTranslationPullParametersV1(model, machine), new NoData(), HttpContext.RequestAborted);
+            return LocalRedirect(Home);
+        }
+
+        public async Task<IActionResult> OnPostMachinesAsync(string? machines)
+        {
+            _machines = new TranslationMachinesDataV1((machines ?? "").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+            await saveMachines.ExecuteAsync<UpdateResult>(new LocalTranslationModelsParametersV1(), _machines, HttpContext.RequestAborted);
             return LocalRedirect(Home);
         }
 

@@ -52,7 +52,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 return new SubtitleTranslationV1(key, existing.State, existing.Done, existing.Total);
             }
 
-            var (server, model) = await _translations.ModelAsync(CancellationToken);
+            var (server, model) = await _translations.ModelAsync(await Context.ExecuteBatchAsync(LocalTranslationMachines.SavedAsync, CancellationToken), CancellationToken);
             var files = _storage.Open(mount);
             var path = StoragePath.Combine(source.RootRelativePath, source.RelativePath);
             var sourceCacheKey = source.StoredFileId.ToString(global::System.Globalization.CultureInfo.InvariantCulture) + "-" + (streamIndex is { } stream ? PlaybackTracks.StreamKey(stream) : "file") + "-"

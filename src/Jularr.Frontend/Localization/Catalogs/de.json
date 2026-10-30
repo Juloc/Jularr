@@ -9441,6 +9441,10 @@
    "Enter IP addresses or networks such as 192.168.1.10 or 10.0.0.0/8.",
    "Gib IP-Adressen oder Netzwerke wie 192.168.1.10 oder 10.0.0.0/8 ein."
   ],
+  "errors.validation.translation_machine_invalid": [
+   "Enter Ollama machines by their address in the private network, such as 192.168.1.20 or 192.168.1.20:11434.",
+   "Ollama-Rechner mit ihrer Adresse im Heimnetz eintragen, etwa 192.168.1.20 oder 192.168.1.20:11434."
+  ],
   "errors.validation.same_language": [
    "The subtitle is already in this language.",
    "Der Untertitel ist schon in dieser Sprache."
@@ -15047,6 +15051,22 @@
   "translation.local.loaded": [
    "Loaded",
    "Geladen"
+  ],
+  "translation.local.machines": [
+   "Ollama machines, one address per line; the first that answers translates",
+   "Ollama-Rechner, eine Adresse pro Zeile; der erste erreichbare übersetzt"
+  ],
+  "translation.local.machine.offline": [
+   "not reachable",
+   "nicht erreichbar"
+  ],
+  "translation.local.machine.translating": [
+   "translating",
+   "übersetzt"
+  ],
+  "translation.local.machine.waiting": [
+   "standing by",
+   "in Reserve"
   ],
   "translation.local.installed": [
    "Installed",
