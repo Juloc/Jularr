@@ -118,3 +118,24 @@ Open: the Admin list and summary stay at 140–240 ms. The remaining time does n
 
 Reproduce with `$env:JULARR_TEST_CATALOG_SCALE = '500000'` and `dotnet test tests/Jularr.Backend.Tests --configuration Release --filter 'FullyQualifiedName~CatalogScale_' --logger 'console;verbosity=detailed'`.
 `JULARR_TEST_CATALOG_PLANS=1` prints the Continue statement's `EXPLAIN (ANALYZE, BUFFERS)`; `JULARR_TEST_LIBRARY_MAX_MS` fails the run when a read's P95 reaches that many milliseconds.
+
+## Work page (`/Details/{id}`), 30 October 2026
+
+On the instance the stored page took 1.2–1.6 s. `WorkPage_CatalogScale_ServicesStayWithinBudget` seeds the library fixture next to `JULARR_TEST_CATALOG_SCALE` catalog Works with people, relations in both directions and episodes, times every service the page reads, then the page itself (`GET /Details/{id}`: a film, a library series, a detailed catalog title, a library series among the catalog ids), without provider access.
+
+Causes (`EXPLAIN (ANALYZE, BUFFERS)` on 500,000 catalog Works):
+- Relations (3–14 s of the page): the related Works joined `ProfileWorks` as a plain join, so the planner built the view for all Works (500,411 rows, 4 million joined rows) and, without JIT disabled, compiled the statement on top (1.6 s for a film without a single relation). The view is now read through a lateral per related Work (`OFFSET 0`), the statements disable JIT, and the franchise part asks only for a Work that has a franchise.
+- Seasons and episodes (0.2–1.2 s): the file check of each episode filtered by the unit alone, which no index leads with, so every episode read every file record of the library. It now also names the Work (`IX_MediaAssets_Work`), and the visibility check is asked once for the Work instead of once per row.
+- The Work read computed the track languages and unit progress for the whole library before joining the one Work, and checked "has a file" with a hashed read of all file records. Both are now asked for the one Work (`LATERAL`, `OFFSET 0`); the card projection's track languages and the single-Work unit progress share this.
+- The page asked its services one after the other; independent reads now run together, and the first open of a title reads the series, its episodes, their translations, TMDB's rating and the credited people together and keeps a Work's poster and backdrop together. Only what uses the database waits for the other database reads.
+
+| Work page, 500,000 catalog Works | before: slowest service, page (ms) | after: page median / fastest (ms) |
+| --- | ---: | ---: |
+| Film (library) | relations 3184, page 2914 | 112 / 86 |
+| Series (library) | relations 5988, page 9414 | 129 / 111 |
+| Catalog title with details | relations 6328, page 6305 | 94 / 85 |
+| Catalog title, library series | relations 2233, page 2807 | 93 / 87 |
+
+Fastest of 2 samples before, median and fastest of 10 after, on a server shared with other runs (single figures vary by about a third). What remains does not grow with the catalog except one read: a Work in a franchise finds the other titles of it by a scan of `Works`, because `Works."FranchiseId"` has no index; a partial index `CREATE INDEX "IX_Works_Franchise" ON "Works" ("FranchiseId") WHERE "FranchiseId" IS NOT NULL;` needs a new migration.
+
+`JULARR_TEST_DETAILS_MAX_MS` (300) fails the run when the fastest sample of a page reaches it; `JULARR_TEST_DETAILS_PLANS=1` prints the plans of the slow statements. Reproduce with `$env:JULARR_TEST_CATALOG_SCALE = '500000'` and `--filter 'FullyQualifiedName~WorkPage_CatalogScale'`.

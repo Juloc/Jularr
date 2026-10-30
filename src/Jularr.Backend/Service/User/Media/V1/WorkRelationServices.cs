@@ -20,10 +20,10 @@ namespace Jularr.Backend.Service.User.Media.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             // The stored relations as this Work sees them, then the other titles of its series that no relation names; a related Work only shows to a profile that may see it.
-            var sql = new SqlStatement();
+            var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 """
-                WITH links AS (
+                WITH links AS MATERIALIZED (
                     SELECT
                         link."RelationId",
                         link."WorkRelationTypeId",
@@ -49,6 +49,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                         JOIN "Works" AS other ON other."FranchiseId" = me."FranchiseId" AND other."Id" <> me."Id"
                     WHERE
                         me."Id" = @WorkId
+                        AND me."FranchiseId" IS NOT NULL
                         AND NOT EXISTS (
                             SELECT
                                 1
@@ -59,7 +60,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                                 AND stored."OtherWorkId" = other."Id"
                                 AND NOT stored."IsSuppressed"
                         )
-                ), picked AS (
+                ), picked AS MATERIALIZED (
                     -- One row for a title and a type, however many relations name it; a person's own wins.
                     SELECT DISTINCT ON (links."OtherWorkId", links."WorkRelationTypeId")
                         links."RelationId",
@@ -101,7 +102,20 @@ namespace Jularr.Backend.Service.User.Media.V1
                 FROM
                     picked
                     JOIN "Works" AS other ON other."Id" = picked."OtherWorkId"
-                    JOIN "ProfileWorks" AS visible ON visible."ProfileId" = @ProfileId AND visible."WorkId" = other."Id" AND NOT visible."IsHidden"
+                    JOIN LATERAL (
+                        SELECT
+                            profileWork."MediaTypeId",
+                            profileWork."MediaSubtypeId",
+                            profileWork."Title"
+                        FROM
+                            "ProfileWorks" AS profileWork
+                        WHERE
+                            profileWork."ProfileId" = @ProfileId
+                            AND profileWork."WorkId" = other."Id"
+                            AND NOT profileWork."IsHidden"
+                        -- Keep the profile view parameterized by each related Work.
+                        OFFSET 0
+                    ) AS visible ON TRUE
                 WHERE
                     EXISTS (
                         SELECT
@@ -127,7 +141,7 @@ namespace Jularr.Backend.Service.User.Media.V1
             var workIds = relations.Select(relation => relation.RelatedWorkId).Distinct().Order().ToArray();
             if (workIds.Length == 0) return new BaseDataList<WorkRelationV1>(relations);
 
-            sql = new SqlStatement();
+            sql = new SqlStatement { DisableJit = true };
             sql.Statement = WorkCardProjection.Page(
                 """
                 SELECT
