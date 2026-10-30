@@ -61,6 +61,32 @@ namespace Jularr.Backend.Logic.AniList
             return local == reached ? AniListSyncStateType.Synchronized : local > reached ? AniListSyncStateType.LocalAhead : AniListSyncStateType.AniListAhead;
         }
 
+        // Why a difference stays instead of going at the next pass; none while the two agree, and none for what the next pass settles by itself.
+        public static AniListSyncProblemType? ProblemOf(AniListSyncStateType state, bool isPushEnabled, bool isExpired, string? failureCode, string? lastError)
+        {
+            if (state == AniListSyncStateType.Synchronized)
+            {
+                return null;
+            }
+
+            if (isExpired || failureCode == "anilist_authentication_failed")
+            {
+                return AniListSyncProblemType.SignInNeeded;
+            }
+
+            if (failureCode is not null)
+            {
+                return AniListSyncProblemType.Unreachable;
+            }
+
+            if (state != AniListSyncStateType.LocalAhead)
+            {
+                return null;
+            }
+
+            return !isPushEnabled ? AniListSyncProblemType.SendingOff : lastError is not null ? AniListSyncProblemType.SendFailed : null;
+        }
+
         // A failed write waits a minute, then twice as long each time, at most six hours.
         public static TimeSpan RetryDelay(int attempts) =>
             attempts <= 1 ? BaseBackoff : TimeSpan.FromTicks(Math.Min(MaximumBackoff.Ticks, BaseBackoff.Ticks << Math.Min(attempts - 1, 20)));

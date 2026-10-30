@@ -47,7 +47,7 @@ namespace Jularr.Frontend.Pages.User.Details
             return hero;
         }
 
-        // The profile's AniList entry for the title: what AniList counts, and whether Jularr and AniList agree.
+        // The profile's AniList entry for the title: what AniList counts, a mark that the two agree, or why they stay apart.
         private IUiComponent AniListLine(WorkAniListV1 aniList)
         {
             var parts = new List<IUiComponent> { new Icon("anilist", assets, 16) };
@@ -61,13 +61,25 @@ namespace Jularr.Frontend.Pages.User.Details
                 ? string.Format(CultureInfo.CurrentCulture, texts["details.anilist.progress"], aniList.Progress, total)
                 : string.Format(CultureInfo.CurrentCulture, texts["details.anilist.progressOpen"], aniList.Progress);
             parts.Add(new Span(new ValueText(figures)));
-            var (key, tone, icon) = aniList.SyncStateId switch
+
+            // A small mark while all is well; words only where the two do not meet by themselves.
+            if (aniList.SyncProblemId is { } problem)
             {
-                AniListSyncStateType.LocalAhead => ("details.anilist.localAhead", UiTone.Accent, "upload"),
-                AniListSyncStateType.AniListAhead => ("details.anilist.aniListAhead", UiTone.Warning, "download"),
-                _ => ("details.anilist.synchronized", UiTone.Success, "check")
-            };
-            parts.Add(Chip(new Text(key), tone, icon));
+                var key = problem switch
+                {
+                    AniListSyncProblemType.SignInNeeded => "details.anilist.signInNeeded",
+                    AniListSyncProblemType.Unreachable => "details.anilist.unreachable",
+                    AniListSyncProblemType.SendingOff => "details.anilist.sendingOff",
+                    _ => "details.anilist.sendFailed"
+                };
+                parts.Add(Chip(new Text(key), UiTone.Warning, "sync"));
+            }
+            else if (aniList.SyncStateId is not null)
+            {
+                parts.Add(new Span(new Icon("check", assets, 16)).Class("media-hero__sync-ok").Attribute("role", "img").Attribute("aria-label", texts["details.anilist.synchronized"])
+                    .Attribute("title", texts["details.anilist.synchronized"]));
+            }
+
             return new Span([.. parts]).Class("media-hero__sync-line");
         }
 

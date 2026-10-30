@@ -146,14 +146,14 @@ namespace Jularr.Frontend.Pages.User.Favorites
             return new Div(link).Class("favorites-collection");
         }
 
-        // An entry of an AniList list: the title of the library when there is one, else the cover AniList has, which leads to a search of the title.
+        // An entry of an AniList list: every one is a Work with its page; one the library holds no unit of says so instead of its figures. A Work the profile may not see leads to a search of the title.
         private IUiComponent AniListCard(AniListEntryV1 entry)
         {
             var href = entry.WorkId is { } workId ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture) : "/?q=" + Uri.EscapeDataString(entry.Title);
             var card = new MediaCard(assets, entry.Title, href, entry.CoverUrl);
             if (entry.WorkId is { } id) card.HoverPreview(MediaPreviewAddress.Work(id));
             var figures = entry.Total is { } total ? entry.Progress.ToString(CultureInfo.CurrentCulture) + " / " + total.ToString(CultureInfo.CurrentCulture) : entry.Progress.ToString(CultureInfo.CurrentCulture);
-            card.Label(entry.WorkId is null ? new Span(new Text("favorites.anilist.notInLibrary")).Class("favorites-entry__badge") : new Span(new ValueText(figures)).Class("favorites-entry__badge"));
+            card.Label(entry.IsInLibrary ? new Span(new ValueText(figures)).Class("favorites-entry__badge") : new Span(new Text("favorites.anilist.notInLibrary")).Class("favorites-entry__badge"));
             return new Div(card).Class("favorites-entry").Attribute("data-list-key", entry.MediaId.ToString(CultureInfo.InvariantCulture));
         }
 

@@ -3,7 +3,10 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.AniList;
+using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.AniList;
 using Jularr.Backend.Service.Admin.Provider.V1;
@@ -143,6 +146,14 @@ namespace Jularr.Backend.Service.Core
                 await ctx.SaveAniListEntriesAsync(new AniListEntriesSaveData(connection.ProfileId, rows), token);
                 return true;
             }, ct);
+
+            // Every entry is a title with a page of its own, a catalog one when the library holds none
+            foreach (var group in entries.GroupBy(entry => entry.IsManga ? (entry.IsNovel ? MediaSubtype.LightNovel : MediaSubtype.Manga) : MediaSubtype.Anime))
+            {
+                var works = group.Select(entry => new ExternalWorkData(AniListMetadata.Namespace, entry.MediaId.ToString(CultureInfo.InvariantCulture), entry.Title, null, entry.ReleaseYear, null, null,
+                    entry.CoverUrl, null, null)).ToArray();
+                await MetadataCatalog.KeepWorksAsync(context, new ExternalWorkListData(AniListMetadata.Namespace, group.Key == MediaSubtype.Anime ? MediaType.Series : MediaType.Book, group.Key), works, ct);
+            }
 
             // Taken over
             for (var round = 0; round < RoundLimit; round++)

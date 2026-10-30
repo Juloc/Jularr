@@ -39,6 +39,8 @@ namespace Jularr.Backend.Data.Fields.Provider
         public static readonly StringField OptionalStatus = new(NpgsqlDbType.Varchar) { MaximumLength = 16, Required = false };
         public static readonly BoolField IsOnList = new();
         public static readonly EnumField SyncStateId = new(typeof(AniListSyncStateType)) { Required = false };
+        public static readonly EnumField SyncProblemId = new(typeof(AniListSyncProblemType)) { Required = false };
+        public static readonly BoolField IsInLibrary = new();
 
         // JSON rows handed to one statement.
         public static readonly StringField Rows = new() { AllowBlank = false };

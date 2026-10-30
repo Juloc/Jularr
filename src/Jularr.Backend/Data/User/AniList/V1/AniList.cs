@@ -69,8 +69,10 @@ namespace Jularr.Backend.Data.User.AniList.V1
     // Where a profile stands with one title on its AniList list; the figures count episodes, or volumes for a book.
     public sealed class WorkAniListV1 : BaseResponse
     {
-        public WorkAniListV1(bool isConnected, bool isOnList, string? status, bool isVolume, int progress, int? total, int localProgress, AniListSyncStateType? syncStateId)
+        public WorkAniListV1(bool isConnected, bool isOnList, string? status, bool isVolume, int progress, int? total, int localProgress, AniListSyncStateType? syncStateId,
+            AniListSyncProblemType? syncProblemId = null)
         {
+            SyncProblemId = syncProblemId;
             IsConnected = isConnected;
             IsOnList = isOnList;
             Status = status;
@@ -103,8 +105,13 @@ namespace Jularr.Backend.Data.User.AniList.V1
         [DataField(typeof(AniListFields), nameof(AniListFields.Progress))]
         public int LocalProgress { get; }
 
+        // Null when the title has nothing here to compare, such as a catalog title without a file or a unit.
         [DataField(typeof(AniListFields), nameof(AniListFields.SyncStateId))]
         public AniListSyncStateType? SyncStateId { get; }
+
+        // Set only where the two do not meet by themselves: sending is off, a write failed, or the account needs attention.
+        [DataField(typeof(AniListFields), nameof(AniListFields.SyncProblemId))]
+        public AniListSyncProblemType? SyncProblemId { get; }
     }
 
     // How many entries of the profile's list sit in one status.
@@ -142,8 +149,9 @@ namespace Jularr.Backend.Data.User.AniList.V1
     // One entry of the profile's list, with the title of the library it belongs to, when there is one.
     public sealed class AniListEntryV1 : BaseResponse
     {
-        public AniListEntryV1(int mediaId, long? workId, string title, string? coverUrl, bool isManga, string status, int progress, int? total)
+        public AniListEntryV1(int mediaId, long? workId, bool isInLibrary, string title, string? coverUrl, bool isManga, string status, int progress, int? total)
         {
+            IsInLibrary = isInLibrary;
             MediaId = mediaId;
             WorkId = workId;
             Title = title;
@@ -159,6 +167,10 @@ namespace Jularr.Backend.Data.User.AniList.V1
 
         [DataField(typeof(AniListFields), nameof(AniListFields.OptionalWorkId))]
         public long? WorkId { get; }
+
+        // The title has units here (files, volumes), not only a page of its own.
+        [DataField(typeof(AniListFields), nameof(AniListFields.IsInLibrary))]
+        public bool IsInLibrary { get; }
 
         [DataField(typeof(AniListFields), nameof(AniListFields.Title))]
         public string Title { get; }

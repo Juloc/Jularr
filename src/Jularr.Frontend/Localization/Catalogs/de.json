@@ -12396,13 +12396,21 @@
    "In sync",
    "Synchron"
   ],
-  "details.anilist.localAhead": [
-   "Jularr ahead",
-   "Jularr weiter"
+  "details.anilist.signInNeeded": [
+   "Sign in to AniList again",
+   "Bei AniList neu anmelden"
   ],
-  "details.anilist.aniListAhead": [
-   "AniList ahead",
-   "AniList weiter"
+  "details.anilist.unreachable": [
+   "AniList can't be reached",
+   "AniList ist nicht erreichbar"
+  ],
+  "details.anilist.sendingOff": [
+   "Sending is off",
+   "Senden ist aus"
+  ],
+  "details.anilist.sendFailed": [
+   "Sending failed, trying again",
+   "Senden fehlgeschlagen, neuer Versuch"
   ],
   "details.progressEpisodes": [
    "{0} / {1} episodes",

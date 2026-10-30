@@ -95,6 +95,20 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void ProblemOf_NamesOnlyWhatTheNextPassDoesNotSettle()
+        {
+            const AniListSyncStateType ahead = AniListSyncStateType.LocalAhead;
+            Assert.IsNull(AniListSyncRules.ProblemOf(AniListSyncStateType.Synchronized, false, true, "anilist_unavailable", "x"));
+            Assert.AreEqual(AniListSyncProblemType.SendingOff, AniListSyncRules.ProblemOf(ahead, false, false, null, null));
+            Assert.IsNull(AniListSyncRules.ProblemOf(ahead, true, false, null, null));
+            Assert.AreEqual(AniListSyncProblemType.SendFailed, AniListSyncRules.ProblemOf(ahead, true, false, null, "anilist_unavailable"));
+            Assert.AreEqual(AniListSyncProblemType.SignInNeeded, AniListSyncRules.ProblemOf(ahead, true, true, null, null));
+            Assert.AreEqual(AniListSyncProblemType.SignInNeeded, AniListSyncRules.ProblemOf(AniListSyncStateType.AniListAhead, true, false, "anilist_authentication_failed", null));
+            Assert.AreEqual(AniListSyncProblemType.Unreachable, AniListSyncRules.ProblemOf(AniListSyncStateType.AniListAhead, true, false, "anilist_unavailable", null));
+            Assert.IsNull(AniListSyncRules.ProblemOf(AniListSyncStateType.AniListAhead, true, false, null, null));
+        }
+
+        [TestMethod]
         public async Task Lists_ShowTheProfilesEntriesWithTheirTitles_AndTheWorkStandsAgainstItsEntry()
         {
             using var storage = new LibraryTests.TemporaryDirectory();
@@ -129,9 +143,16 @@ namespace Jularr.Backend.Tests
             var counts = (await ReadListsAsync(host)).ToDictionary(item => item.Status, item => item.Count);
             Assert.AreEqual((3, 1), (counts["CURRENT"], counts["COMPLETED"]));
             var current = await ReadEntriesAsync(host, "CURRENT");
-            CollectionAssert.AreEquivalent(new long?[] { 20, 40, null }, current.Select(entry => entry.WorkId).ToArray());
-            var pending = current.Single(entry => entry.WorkId is null);
+            CollectionAssert.AreEquivalent(new[] { true, true, false }, current.Select(entry => entry.IsInLibrary).ToArray());
+            CollectionAssert.IsSubsetOf(new long?[] { 20, 40 }, current.Select(entry => entry.WorkId).ToArray());
+
+            // An entry of no library title is a catalog Work all the same, so it has a page of its own.
+            var pending = current.Single(entry => !entry.IsInLibrary);
             Assert.AreEqual((7777, "Title 7777", "https://s4.anilist.co/cover-7777.jpg", 3, 24), (pending.MediaId, pending.Title, pending.CoverUrl, pending.Progress, pending.Total));
+            Assert.IsNotNull(pending.WorkId);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" AS identity JOIN \"Works\" AS work ON work.\"Id\" = identity.\"WorkId\" WHERE identity.\"Namespace\" = 'anilist' AND identity.\"Value\" = '7777' AND work.\"MediaTypeId\" = 2 AND work.\"MediaSubtypeId\" = 1"));
+            var catalogOnly = await ReadWorkAsync(host, pending.WorkId!.Value);
+            Assert.AreEqual((true, 3, null, null), (catalogOnly.IsOnList, catalogOnly.Progress, catalogOnly.SyncStateId, catalogOnly.SyncProblemId));
             Assert.AreEqual(0, (await ReadEntriesAsync(host, "DROPPED")).Count);
             Assert.AreEqual(0, (await ReadEntriesAsync(host, "NOT-A-STATUS")).Count);
 
@@ -151,6 +172,12 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(shownHtml, "Title 7777");
             StringAssert.Contains(shownHtml, "Not in library");
             StringAssert.Contains(shownHtml, "/Details/20");
+            StringAssert.Contains(shownHtml, "/Details/" + pending.WorkId);
+            using var catalogPage = await host.SendAsync(HttpMethod.Get, "/Details/" + pending.WorkId);
+            var catalogHtml = await catalogPage.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, catalogPage.StatusCode, catalogHtml);
+            StringAssert.Contains(catalogHtml, "AniList 3 / 24");
+            Assert.IsFalse(catalogHtml.Contains("In sync", StringComparison.Ordinal));
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/20");
             var detailsHtml = await details.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, detailsHtml);
@@ -162,8 +189,21 @@ namespace Jularr.Backend.Tests
             await WatchAsync(host, 20, 24, 25);
             var ahead = await ReadWorkAsync(host, 20);
             Assert.AreEqual((2, 4, AniListSyncStateType.LocalAhead), (ahead.Progress, ahead.LocalProgress, ahead.SyncStateId));
+
+            // With sending off the difference stays, and the page says why; a failed write or an account that fails says so too.
+            Assert.AreEqual(AniListSyncProblemType.SendingOff, ahead.SyncProblemId);
+            using var reason = await host.SendAsync(HttpMethod.Get, "/Details/20");
+            StringAssert.Contains(await reason.Content.ReadAsStringAsync(), "Sending is off");
+            await host.Fixture.RunSqlAsync("UPDATE \"AniListConnections\" SET \"PushEnabledAt\" = now()");
+            Assert.IsNull((await ReadWorkAsync(host, 20)).SyncProblemId, "The next pass sends it.");
+            await host.Fixture.RunSqlAsync("UPDATE \"AniListEntries\" SET \"LastError\" = 'anilist_unavailable' WHERE \"MediaId\" = 5001");
+            Assert.AreEqual(AniListSyncProblemType.SendFailed, (await ReadWorkAsync(host, 20)).SyncProblemId);
+            await host.Fixture.RunSqlAsync("UPDATE \"AniListConnections\" SET \"FailureCode\" = 'anilist_unavailable'");
+            Assert.AreEqual(AniListSyncProblemType.Unreachable, (await ReadWorkAsync(host, 20)).SyncProblemId);
+            await host.Fixture.RunSqlAsync("UPDATE \"AniListConnections\" SET \"FailureCode\" = NULL");
             await host.Fixture.RunSqlAsync("UPDATE \"AniListEntries\" SET \"Progress\" = 8 WHERE \"MediaId\" = 5001");
-            Assert.AreEqual(AniListSyncStateType.AniListAhead, (await ReadWorkAsync(host, 20)).SyncStateId);
+            var behind = await ReadWorkAsync(host, 20);
+            Assert.AreEqual((AniListSyncStateType.AniListAhead, (AniListSyncProblemType?)null), (behind.SyncStateId, behind.SyncProblemId), "The next pass takes it over.");
 
             // A film that AniList completed and a book counted in volumes; a title that is not on the list says so.
             var film = await ReadWorkAsync(host, 30);

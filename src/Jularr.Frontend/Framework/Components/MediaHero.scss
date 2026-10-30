@@ -281,13 +281,21 @@
     }
     &--poster &__sync {
         display: flex;
+        justify-content: flex-end;
+        margin-top: .5rem;
+        font-size: var(--text-control);
+        font-weight: var(--weight-control);
+    }
+    &--poster &__sync-line {
+        display: inline-flex;
         flex-wrap: wrap;
         align-items: center;
         justify-content: flex-end;
         gap: .5rem;
-        margin-top: .5rem;
-        font-size: var(--text-control);
-        font-weight: var(--weight-control);
+    }
+    &--poster &__sync-ok {
+        display: inline-flex;
+        color: var(--accent-outline);
     }
     &--poster &__progress-bar {
         display: block;

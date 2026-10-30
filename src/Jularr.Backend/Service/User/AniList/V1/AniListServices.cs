@@ -137,19 +137,35 @@ namespace Jularr.Backend.Service.User.AniList.V1
                     entry."Progress",
                     entry."ProgressVolumes",
                     entry."TotalCount",
-                    entry."TotalVolumes"
+                    entry."TotalVolumes",
+                    entry."LastError",
+                    connection."PushEnabledAt" IS NOT NULL AS "IsPushEnabled",
+                    coalesce(connection."ExpiresAt" <= now(), FALSE) AS "IsExpired",
+                    connection."FailureCode"
                 FROM
                     "AniListEntries" AS entry
+                    JOIN "AniListConnections" AS connection ON connection."ProfileId" = entry."ProfileId"
                 WHERE
                     entry."ProfileId" = @ProfileId
-                    AND entry."MediaId" IN (
-                        SELECT
-                            covered."MediaId"
-                        FROM
-                            "AniListEntryUnits" AS covered
-                        WHERE
-                            covered."ProfileId" = entry."ProfileId"
-                            AND covered."WorkId" = @WorkId
+                    AND (
+                        entry."MediaId" IN (
+                            SELECT
+                                covered."MediaId"
+                            FROM
+                                "AniListEntryUnits" AS covered
+                            WHERE
+                                covered."ProfileId" = entry."ProfileId"
+                                AND covered."WorkId" = @WorkId
+                        )
+                        OR entry."MediaId"::text IN (
+                            SELECT
+                                identity."Value"
+                            FROM
+                                "WorkExternalIdentities" AS identity
+                            WHERE
+                                identity."WorkId" = @WorkId
+                                AND identity."Namespace" = 'anilist'
+                        )
                     )
                 ORDER BY
                     entry."Status" IN ('CURRENT', 'REPEATING') DESC,
@@ -206,10 +222,20 @@ namespace Jularr.Backend.Service.User.AniList.V1
                 """;
             units.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             units.Parameters.Add(new AniListMediaData(entry.MediaId));
-            var local = AniListSyncRules.FinishedInARow(await Context.ReadSql.ReadListAsync<AniListUnitData>(units, CancellationToken));
+            var covered = await Context.ReadSql.ReadListAsync<AniListUnitData>(units, CancellationToken);
+            var local = AniListSyncRules.FinishedInARow(covered);
             var remote = entry.IsManga ? entry.ProgressVolumes : entry.Progress;
             var total = entry.IsManga ? entry.TotalVolumes : entry.TotalCount;
-            return new WorkAniListV1(true, true, entry.Status, entry.IsManga, remote, total, local, AniListSyncRules.StateOf(entry.Status, remote, total, local));
+
+            // A title without a unit here has nothing to compare.
+            if (covered.Count == 0)
+            {
+                return new WorkAniListV1(true, true, entry.Status, entry.IsManga, remote, total, 0, null);
+            }
+
+            var state = AniListSyncRules.StateOf(entry.Status, remote, total, local);
+            return new WorkAniListV1(true, true, entry.Status, entry.IsManga, remote, total, local, state,
+                AniListSyncRules.ProblemOf(state, entry.IsPushEnabled, entry.IsExpired, entry.FailureCode, entry.LastError));
         }
     }
 
@@ -257,16 +283,38 @@ namespace Jularr.Backend.Service.User.AniList.V1
                 """
                 SELECT
                     entry."MediaId",
-                    (
+                    coalesce(
+                        (
+                            SELECT
+                                min(covered."WorkId")
+                            FROM
+                                "AniListEntryUnits" AS covered
+                                JOIN "ProfileWorks" AS visible ON visible."ProfileId" = covered."ProfileId" AND visible."WorkId" = covered."WorkId"
+                            WHERE
+                                covered."ProfileId" = entry."ProfileId"
+                                AND covered."MediaId" = entry."MediaId"
+                        ),
+                        (
+                            SELECT
+                                min(identity."WorkId")
+                            FROM
+                                "WorkExternalIdentities" AS identity
+                                JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = identity."WorkId"
+                            WHERE
+                                identity."Namespace" = 'anilist'
+                                AND identity."Value" = entry."MediaId"::text
+                        )
+                    ) AS "WorkId",
+                    EXISTS (
                         SELECT
-                            min(covered."WorkId")
+                            1
                         FROM
                             "AniListEntryUnits" AS covered
                             JOIN "ProfileWorks" AS visible ON visible."ProfileId" = covered."ProfileId" AND visible."WorkId" = covered."WorkId"
                         WHERE
                             covered."ProfileId" = entry."ProfileId"
                             AND covered."MediaId" = entry."MediaId"
-                    ) AS "WorkId",
+                    ) AS "IsInLibrary",
                     entry."Title",
                     entry."CoverUrl",
                     entry."IsManga",

@@ -386,8 +386,13 @@ namespace Jularr.Backend.Data.Logic.AniList
     // The entry of the profile's list that stands for a title of the library.
     internal sealed class WorkAniListEntryData : BaseData
     {
-        public WorkAniListEntryData(int mediaId, bool isManga, string status, int progress, int progressVolumes, int? totalCount, int? totalVolumes)
+        public WorkAniListEntryData(int mediaId, bool isManga, string status, int progress, int progressVolumes, int? totalCount, int? totalVolumes, string? lastError, bool isPushEnabled, bool isExpired,
+            string? failureCode)
         {
+            LastError = lastError;
+            IsPushEnabled = isPushEnabled;
+            IsExpired = isExpired;
+            FailureCode = failureCode;
             MediaId = mediaId;
             IsManga = isManga;
             Status = status;
@@ -417,6 +422,19 @@ namespace Jularr.Backend.Data.Logic.AniList
 
         [DataField(typeof(AniListFields), nameof(AniListFields.Total))]
         public int? TotalVolumes { get; }
+
+        // The code of the last refused write of the entry, and of the last failed pass of the account.
+        [DataField(typeof(AniListFields), nameof(AniListFields.FailureCode))]
+        public string? LastError { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.IsPushEnabled))]
+        public bool IsPushEnabled { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.IsExpired))]
+        public bool IsExpired { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.FailureCode))]
+        public string? FailureCode { get; }
     }
 
     internal sealed class AniListStatusData : BaseData
