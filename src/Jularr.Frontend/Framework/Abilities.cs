@@ -34,6 +34,7 @@ namespace Jularr.Frontend.Framework
         public static bool CanGroupUnits(this UiText texts) => texts.Can("media.manual.update", "Library", "UnitGroups");
         public static bool CanArrangeHome(this UiText texts) => texts.Can("profile.self.update", "Library", "HomeLayout");
         public static bool CanSyncAniList(this UiText texts) => texts.Can("profile.self.update", "Library", "ProgressSync", "AniList");
+        public static bool CanSeeAniList(this UiText texts) => texts.Can("profile.media.read", "Library", "ProgressSync", "AniList");
         public static bool CanTranslateSubtitles(this UiText texts) => texts.Can("profile.playback", "Library", "Playback", "Translation");
 
         public static bool CanPreviewSeeking(this UiText texts) => texts.Can("profile.playback", "Library", "Playback", "Trickplay");

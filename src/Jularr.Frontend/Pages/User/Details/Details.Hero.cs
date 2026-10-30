@@ -1,6 +1,8 @@
 using System.Globalization;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Playback;
+using Jularr.Backend.Data.Enums.Provider;
+using Jularr.Backend.Data.User.AniList.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Frontend.Framework;
@@ -41,7 +43,44 @@ namespace Jularr.Frontend.Pages.User.Details
             }
 
             if (work.ProgressStateId != ProgressStateType.NotStarted && kind != WorkKind.Game) hero.Progress(work.ProgressPercent, texts[ProgressKey(kind)], ProgressValue(work, kind));
+            if (_aniList is { IsConnected: true } aniList) hero.Sync(AniListLine(aniList));
             return hero;
+        }
+
+        // The profile's AniList entry for the title: what AniList counts, a mark that the two agree, or why they stay apart.
+        private IUiComponent AniListLine(WorkAniListV1 aniList)
+        {
+            var parts = new List<IUiComponent> { new Icon("anilist", assets, 16) };
+            if (!aniList.IsOnList)
+            {
+                parts.Add(new Span(new Text("details.anilist.notOnList")));
+                return new Span([.. parts]).Class("media-hero__sync-line");
+            }
+
+            var figures = aniList.Total is { } total
+                ? string.Format(CultureInfo.CurrentCulture, texts["details.anilist.progress"], aniList.Progress, total)
+                : string.Format(CultureInfo.CurrentCulture, texts["details.anilist.progressOpen"], aniList.Progress);
+            parts.Add(new Span(new ValueText(figures)));
+
+            // A small mark while all is well; words only where the two do not meet by themselves.
+            if (aniList.SyncProblemId is { } problem)
+            {
+                var key = problem switch
+                {
+                    AniListSyncProblemType.SignInNeeded => "details.anilist.signInNeeded",
+                    AniListSyncProblemType.Unreachable => "details.anilist.unreachable",
+                    AniListSyncProblemType.SendingOff => "details.anilist.sendingOff",
+                    _ => "details.anilist.sendFailed"
+                };
+                parts.Add(Chip(new Text(key), UiTone.Warning, "sync"));
+            }
+            else if (aniList.SyncStateId is not null)
+            {
+                parts.Add(new Span(new Icon("check", assets, 16)).Class("media-hero__sync-ok").Attribute("role", "img").Attribute("aria-label", texts["details.anilist.synchronized"])
+                    .Attribute("title", texts["details.anilist.synchronized"]));
+            }
+
+            return new Span([.. parts]).Class("media-hero__sync-line");
         }
 
         // The file that plays next: the one the profile began, else the first not finished, else the first.

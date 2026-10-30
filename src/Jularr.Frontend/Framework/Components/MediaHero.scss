@@ -279,6 +279,24 @@
         font-weight: var(--weight-control);
         span:last-child { color: color-mix(in srgb, var(--artwork-foreground) 80%, transparent); font-weight: var(--weight-control); }
     }
+    &--poster &__sync {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: .5rem;
+        font-size: var(--text-control);
+        font-weight: var(--weight-control);
+    }
+    &--poster &__sync-line {
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: .5rem;
+    }
+    &--poster &__sync-ok {
+        display: inline-flex;
+        color: var(--accent-outline);
+    }
     &--poster &__progress-bar {
         display: block;
         appearance: none;
