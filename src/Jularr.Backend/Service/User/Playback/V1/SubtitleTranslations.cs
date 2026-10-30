@@ -10,7 +10,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
 {
     // Translates a subtitle with the local model, in the background and one batch of cues at a time, into a WebVTT file of the playback cache.
     // The model is shared with the books' translation: each batch waits for its turn at the gate, so a reader is never held up for long.
-    internal sealed class SubtitleTranslations(OllamaLocalModels models, IOptions<LocalTranslationOptions> translation, LocalTranslationGate gate, IOptions<MediaOptions> media,
+    internal sealed class SubtitleTranslations(OllamaLocalModels models, LocalTranslationMachines machines, LocalTranslationGate gate, IOptions<MediaOptions> media,
         ILogger<SubtitleTranslations> logger)
     {
         public const string Queued = "queued", Running = "running", Done = "done", Failed = "failed", None = "none";
@@ -27,19 +27,8 @@ namespace Jularr.Backend.Service.User.Playback.V1
         public string Path(string cacheKey) => global::System.IO.Path.Combine(media.Value.TranscodeCachePath, "subtitles", "translated", cacheKey + ".vtt");
 
         // The installed model that translates; none means the local runtime is not set up.
-        public async Task<(Uri Server, string Model)> ModelAsync(CancellationToken ct)
-        {
-            var server = OllamaLocalModels.Endpoint(translation.Value.Endpoint) ?? throw new ServiceUnavailableException("translation_local_unavailable");
-            try
-            {
-                var installed = await models.InstalledAsync(server, ct);
-                return (server, OllamaLocalModels.Candidates.FirstOrDefault(candidate => installed.Contains(candidate, StringComparer.Ordinal)) ?? throw new ServiceUnavailableException("translation_local_unavailable"));
-            }
-            catch (HttpRequestException)
-            {
-                throw new ServiceUnavailableException("translation_local_unavailable");
-            }
-        }
+        public async Task<(Uri Server, string Model)> ModelAsync(string[] saved, CancellationToken ct) =>
+            await machines.ChooseAsync(saved, ct) ?? throw new ServiceUnavailableException("translation_local_unavailable");
 
         public (string State, int Done, int Total) Status(string cacheKey)
         {

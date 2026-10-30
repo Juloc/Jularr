@@ -14,12 +14,14 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Admin.Profile
 {
     public sealed class ProfileModel(ReadAcquisitionProfileV1 read, CreateAcquisitionProfileV1 create, UpdateAcquisitionProfileV1 update, DeleteAcquisitionProfileV1 delete,
-        ReadCustomFormatsV1 formats, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadCustomFormatsV1 formats, ReadReleaseGroupFiguresV1 groupFigures, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string NewId = "New";
         private AcquisitionProfileDetailsV1? _profile;
         private SaveAcquisitionProfileDataV1? _input;
         private List<CustomFormatDetailsV1> _formats = [];
+        private ReleaseGroupFiguresV1? _groupFigures;
+        private bool _advancedOpen;
 
         [BindProperty(SupportsGet = true)] public string Id { get; set; } = "";
         [BindProperty(SupportsGet = true, Name = "type")] public MediaType? NewType { get; set; }
@@ -46,6 +48,8 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         [BindProperty] public int MinimumFormatScore { get; set; }
         [BindProperty] public int CutoffFormatScore { get; set; }
         [BindProperty] public int MinimumUpgradeFormatScore { get; set; } = 1;
+        [BindProperty] public int GoodGroupScore { get; set; } = 50;
+        [BindProperty] public int BadGroupScore { get; set; } = -50;
 
         private long? ProfileId => long.TryParse(Id, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
         private MediaType Scope => _profile?.MediaTypeId ?? NewType ?? MediaType.Movie;
@@ -55,6 +59,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             page.Title(_profile is null ? "profile.new" : "admin.profiles.title", _profile?.Name);
             page.Parent("admin.profiles.title", BackAddress());
             page.Navigation("nav.admin");
+            page.Asset("Pages/Admin/Profile/Profile.entry.scss");
             page.Asset("Framework/Components/Modal.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
             if (_profile is null && Id != NewId) return;
@@ -76,39 +81,10 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 {
                     section.ChoiceTable("profile.qualities", choices, [section.Column(item => item.AllowedQualities, "profile.allowed"),
                         section.Column(item => item.UpgradeCutoffQuality, "profile.cutoff", single: true, noneKey: "profile.noCutoff")],
-                        choice => new Div(Draft("arr.moveUp", "moveUp", choice.Value), Draft("arr.moveDown", "moveDown", choice.Value)));
+                        choice => new Div(Move("arr.moveUp", "moveUp", choice.Value, choice.Value == order[0]), Move("arr.moveDown", "moveDown", choice.Value, choice.Value == order[^1]))
+                            .Class("profile-move"));
                     section.Toggle(item => item.UpgradeAllowed, "profile.upgradeAllowed");
                     section.Hidden(item => item.QualityOrder);
-                });
-                fields.Section("arr.qualityGroups", section =>
-                {
-                    section.Rows(item => item.QualityGroups, (row, group) =>
-                    {
-                        row.Hidden(item => item.Id);
-                        row.Text(item => item.Name, "profile.name");
-                        row.Text(item => item.Qualities, "profile.qualities");
-                        row.Content(Draft("common.remove", "removeGroupId", group.Id.ToString(CultureInfo.InvariantCulture)));
-                    });
-                    section.Content(Draft("collections.add", "addGroup", "true"));
-                    section.Content(Draft("arr.refreshGroups", "refreshGroups", "true"));
-                });
-                fields.Section("arr.scores", section =>
-                {
-                    section.Number(item => item.MinimumFormatScore, "arr.minimumScore");
-                    section.Number(item => item.CutoffFormatScore, "arr.cutoffScore");
-                    section.Number(item => item.MinimumUpgradeFormatScore, "arr.upgradeScore");
-
-                    // The matrix: every custom format of the media type with this profile's score (0 leaves it out).
-                    section.Rows(item => item.FormatScores, (row, score) =>
-                    {
-                        row.Hidden(item => item.FormatId);
-                        if (_formats.FirstOrDefault(format => format.Id == score.FormatId) is { } named)
-                        {
-                            row.Content(new P(new ValueText(named.Name)));
-                            row.Number(item => item.Score, "wanted.search.score");
-                        }
-                        else row.Hidden(item => item.Score);
-                    });
                 });
                 fields.Section("profile.section.size", section =>
                 {
@@ -130,6 +106,58 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                     section.Select(item => item.LanguageFallback, "profile.languageFallback",
                         Enum.GetValues<LanguageFallbackType>().Select(fallback => new SelectOption(((byte)fallback).ToString(CultureInfo.InvariantCulture),
                             texts["profile.languageFallback." + fallback])));
+                });
+                fields.Section("arr.releaseGroups", section =>
+                {
+                    section.Number(item => item.GoodGroupScore, "profile.goodGroupScore", new FieldHelp(Info: "profile.goodGroupScore.info"));
+                    section.Number(item => item.BadGroupScore, "profile.badGroupScore", new FieldHelp(Info: "profile.badGroupScore.info"));
+                    if (_groupFigures is { } figures)
+                    {
+                        var label = string.Format(CultureInfo.CurrentCulture, texts["profile.rateGroups"], figures.GroupCount.ToString("N0", CultureInfo.CurrentCulture),
+                            figures.BlockedCount.ToString("N0", CultureInfo.CurrentCulture));
+                        section.Content(new Div(new A(new ValueText(label)).Class("button").Attribute("href", DownloadPages.PaneAddress(DownloadPages.Groups, Scope, ProfilesModel.Home(Request))))
+                            .Class("ui-field profile-groups"));
+                    }
+                });
+                fields.Section("profile.section.upgrades", section =>
+                {
+                    section.Number(item => item.MinimumFormatScore, "arr.minimumScore", new FieldHelp(Info: "profile.minimumScore.info"));
+                    section.Number(item => item.CutoffFormatScore, "arr.cutoffScore", new FieldHelp(Info: "profile.cutoffScore.info"));
+                    section.Number(item => item.MinimumUpgradeFormatScore, "arr.upgradeScore", new FieldHelp(Info: "profile.upgradeScore.info"));
+                });
+
+                // Quality groups and the score of every format stay behind Advanced; it opens while one of them is being edited or is wrong.
+                var advancedOpen = _advancedOpen || FormError?.Field is { } field && (field.StartsWith("QualityGroups", StringComparison.Ordinal) || field.StartsWith("FormatScores", StringComparison.Ordinal));
+                fields.Wrap(parts =>
+                {
+                    var advanced = new Details(new Summary(new Text("profile.advanced")), new Div([.. parts]).Class("profile-advanced__body")).Class("profile-advanced");
+                    return advancedOpen ? advanced.Attribute("open", "open") : advanced;
+                }, advanced =>
+                {
+                    advanced.Section("arr.qualityGroups", section =>
+                    {
+                        section.Rows(item => item.QualityGroups, (row, group) =>
+                        {
+                            row.Hidden(item => item.Id);
+                            row.Text(item => item.Name, "profile.name");
+                            row.Text(item => item.Qualities, "profile.qualities");
+                            row.Content(Draft("common.remove", "removeGroupId", group.Id.ToString(CultureInfo.InvariantCulture)));
+                        });
+                        section.Content(Draft("collections.add", "addGroup", "true"));
+                        section.Content(Draft("arr.refreshGroups", "refreshGroups", "true"));
+                    });
+
+                    // The matrix: every custom format of the media type with this profile's score (0 leaves it out).
+                    if (input.FormatScores.Count > 0) advanced.Section("arr.scores", section => section.Rows(item => item.FormatScores, (row, score) =>
+                    {
+                        row.Hidden(item => item.FormatId);
+                        if (_formats.FirstOrDefault(format => format.Id == score.FormatId) is { } named)
+                        {
+                            row.Content(new P(new ValueText(named.Name)));
+                            row.Number(item => item.Score, "wanted.search.score");
+                        }
+                        else row.Hidden(item => item.Score);
+                    }));
                 });
                 fields.Save();
             }, Address(), token, input, FormError);
@@ -162,16 +190,25 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             var rows = _formats.Select(format => new CustomFormatScoreV1(format.Id, input.FormatScores.FirstOrDefault(score => score.FormatId == format.Id)?.Score ?? 0)).ToList();
             rows.AddRange(input.FormatScores.Where(score => _formats.All(format => format.Id != score.FormatId)));
             return new(input.Name, input.MediaTypeId, input.IsDefault, input.AllowedQualities, input.UpgradeAllowed, input.UpgradeCutoffQuality, input.MinimumSizeMb, input.MaximumSizeMb, input.Version,
-                input.MediaSubtypeId, input.QualityOrder, input.QualityGroups, new(rows), input.MinimumFormatScore, input.CutoffFormatScore, input.MinimumUpgradeFormatScore, input.LanguageOrder, input.LanguageFallback);
+                input.MediaSubtypeId, input.QualityOrder, input.QualityGroups, new(rows), input.MinimumFormatScore, input.CutoffFormatScore, input.MinimumUpgradeFormatScore, input.LanguageOrder, input.LanguageFallback,
+                input.GoodGroupScore, input.BadGroupScore);
         }
 
         private IUiComponent Draft(string key, string command, string value) => new Button(new Text(key)).Attribute("type", "submit").Attribute("formaction", Address("Draft"))
             .Attribute("formnovalidate", "formnovalidate").Attribute("name", command).Attribute("value", value);
 
+        // A round arrow that moves a quality one place up or down; the first cannot go up, the last cannot go down.
+        private IUiComponent Move(string key, string command, string value, bool atEnd)
+        {
+            var button = new Button(Glyph("chevron-down", 18)).IconOnly(texts[key]).Submit();
+            if (atEnd) button.Disabled();
+            return button.Attribute("title", texts[key]).Attribute("formaction", Address("Draft")).Attribute("formnovalidate", "formnovalidate").Attribute("name", command).Attribute("value", value);
+        }
+
         private static SaveAcquisitionProfileDataV1 FromProfile(AcquisitionProfileDetailsV1 profile) => new(profile.Name, profile.MediaTypeId, profile.IsDefault, profile.AllowedQualities,
             profile.UpgradeAllowed, profile.UpgradeCutoffQuality, profile.MinimumSizeMb, profile.MaximumSizeMb, profile.Version, profile.MediaSubtypeId, profile.QualityOrder,
             profile.QualityGroups, profile.FormatScores, profile.MinimumFormatScore, profile.CutoffFormatScore, profile.MinimumUpgradeFormatScore,
-            profile.LanguageOrder, profile.LanguageFallback);
+            profile.LanguageOrder, profile.LanguageFallback, profile.GoodGroupScore, profile.BadGroupScore);
 
         private static SaveAcquisitionProfileDataV1 NewProfile(MediaType type, MediaSubtype? subtype) => new("", type, false, ProfileQualities.StartingQualities(type, subtype),
             ProfileQualities.StartingCutoff(type) is not null, ProfileQualities.StartingCutoff(type), null, null, null, subtype);
@@ -179,7 +216,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         private SaveAcquisitionProfileDataV1 Posted() => new(Name ?? "", MediaTypeId, IsDefault, AllowedQualities ?? [], UpgradeAllowed, UpgradeCutoffQuality, MinimumSizeMb,
             MaximumSizeMb, Version, MediaSubtypeId, Terms(QualityOrder), new(QualityGroups.Select(group => new QualityGroupV1(group.Id, group.Name ?? "", Terms(group.Qualities)))),
             new(FormatScores.Where(score => score.Score != 0).Select(score => new CustomFormatScoreV1(score.FormatId, score.Score))), MinimumFormatScore, CutoffFormatScore, MinimumUpgradeFormatScore,
-            Terms(LanguageOrder), LanguageFallback);
+            Terms(LanguageOrder), LanguageFallback, GoodGroupScore, BadGroupScore);
 
         public async Task<IActionResult> OnGetAsync()
         {
@@ -205,6 +242,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         {
             if (addGroup && QualityGroups.Count < 32) QualityGroups.Add(new GroupRow(Enumerable.Range(1, 33).Select(value => (long)value).First(id => !QualityGroups.Any(group => group.Id == id)), null, null));
             if (removeGroupId is { } removedGroup) QualityGroups.RemoveAll(group => group.Id == removedGroup);
+            _advancedOpen = addGroup || removeGroupId is not null || refreshGroups;
             _input = Posted();
             await LoadDataAsync();
 
@@ -242,6 +280,9 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 _formats.AddRange(read.Items);
                 if (read.Items.Count < read.PageSize) break;
             }
+
+            // The figures of the media type's release groups name the link to their rating.
+            _groupFigures = await groupFigures.ExecuteAsync<ReleaseGroupFiguresV1>(new ReleaseGroupScopeParametersV1(Scope), HttpContext.RequestAborted);
         }
 
         private string Address(string? handler = null)

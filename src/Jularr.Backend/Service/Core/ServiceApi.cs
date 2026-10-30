@@ -199,6 +199,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<RecentLogs>();
             services.TryAddSingleton<ServiceTimings>();
             services.TryAddSingleton<ProviderObservations>();
+            services.TryAddSingleton(new NewznabGate(NewznabGate.DefaultSpacing));
             services.TryAddSingleton<HealthChecks>();
             services.TryAddSingleton<ResourceHistory>();
             services.AddHostedService(provider => provider.GetRequiredService<ResourceHistory>());
@@ -275,6 +276,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<ReadingActivity>();
             services.TryAddSingleton<TranslationFiles>();
             services.TryAddSingleton<LocalTranslationGate>();
+            services.TryAddSingleton<LocalTranslationMachines>();
             services.TryAddSingleton<LocalTranslationDownloads>();
             services.AddHostedService(provider => provider.GetRequiredService<LocalTranslationDownloads>());
             services.AddHttpClient<OllamaLocalModels>(http => http.Timeout = TimeSpan.FromMinutes(65))
