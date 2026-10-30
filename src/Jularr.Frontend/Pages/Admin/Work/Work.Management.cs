@@ -91,7 +91,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (work.ReleaseYear is { } year) pills.Add(new Span(new ValueText(year.ToString(CultureInfo.InvariantCulture))).Class("work-pill"));
             pills.Add(new Span(new Text(MediaTypeLabel.Key(work.MediaTypeId, work.MediaSubtypeId))).Class("work-pill"));
 
-            var facts = string.Join(" · ", new[] { work.Genres, work.RuntimeMinutes is { } minutes ? string.Format(CultureInfo.CurrentCulture, texts["details.minutes"], minutes) : null, work.Studio }.Where(text => !string.IsNullOrWhiteSpace(text)));
+            var facts = string.Join(" · ", new[] { texts.Genres(work.Genres), work.RuntimeMinutes is { } minutes ? string.Format(CultureInfo.CurrentCulture, texts["details.minutes"], minutes) : null, work.Studio }.Where(text => !string.IsNullOrWhiteSpace(text)));
             var figures = new List<IUiComponent>();
             void Figure(string key, string oneKey, long value, string? tone = null)
             {

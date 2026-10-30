@@ -186,9 +186,9 @@
   "activity.files.empty": ["No torrent files were reported.","Keine Torrent-Dateien gefunden."],
   "activity.files.unavailable": ["The torrent client's file list is currently unavailable.","Die Dateiliste des Torrent-Clients ist derzeit nicht verfügbar."],
   "hint.acquisition.Nyaa.placeholder": ["https://nyaa.media","https://nyaa.media"],
-  "hint.acquisition.Nyaa.info": ["Nyaa RSS search endpoint; no API key required.","Nyaa-RSS-Suchquelle; kein API-Schlüssel erforderlich."],
-  "hint.acquisition.Qbittorrent.placeholder": ["http://qbittorrent:8080","http://qbittorrent:8080"],
-  "hint.acquisition.Qbittorrent.info": ["Address of the qBittorrent Web UI, reachable from Jularr.","Adresse der qBittorrent-Weboberfläche, die Jularr erreichen kann."],
+  "hint.acquisition.Nyaa.info": ["The address of the torrent index. Its files come through a torrent client.","Die Adresse des Torrent-Index. Seine Dateien kommen über einen Torrent-Client."],
+  "hint.acquisition.Qbittorrent.placeholder": ["http://192.168.1.10:8080","http://192.168.1.10:8080"],
+  "hint.acquisition.Qbittorrent.info": ["The torrent client's web address with its port.","Die Weboberflächen-Adresse des Torrent-Clients mit Port."],
   "console.cleanupStatus": ["Jularr cleanup ledger","Jularr-Bereinigung"],
   "console.cleanupEmpty": ["No automatic cleanup records yet.","Noch keine automatischen Bereinigungen."],
   "console.cleanupWaiting": ["Cleanup queued","Bereinigung vorgemerkt"],
@@ -259,7 +259,7 @@
   "console.deleteConfirmTitle": ["Delete verified orphan folder?","Verwaisten Ordner wirklich löschen?"],
   "console.deletePreview": ["The selected folder and its contents will be permanently removed. Files and total size:","Der ausgewählte Ordner samt Inhalt wird dauerhaft gelöscht. Anzahl Dateien und Gesamtgröße:"],
   "console.nextPage": ["Next page","Nächste Seite"],
-  "console.filesWarning": ["Only explicit SABnzbd orphans in the incomplete folder can be manually deleted. Unassigned files are read-only.","Manuell löschbar sind nur von SABnzbd gemeldete verwaiste Ordner im Incomplete-Verzeichnis. Unzugeordnete Dateien bleiben schreibgeschützt."],
+  "console.filesWarning": ["Deletion is available only for files not associated with a current or known SABnzbd job. Inspect the preview before confirming.","Löschen ist nur für Dateien möglich, die keinem aktuellen oder bekannten SABnzbd-Job zugeordnet sind. Prüfe die Vorschau vor dem Bestätigen."],
   "library.filter.availability": ["Show titles", "Titel anzeigen"],
   "library.availability.Available": ["Available files", "Vorhandene Dateien"],
   "library.availability.MyRequests": ["My requests", "Eigene Anfragen"],
@@ -274,6 +274,194 @@
   "companion.title": [
    "Phone remote",
    "Handy-Fernbedienung"
+  ],
+  "genre.action": [
+   "Action",
+   "Action"
+  ],
+  "genre.action-adventure": [
+   "Action & Adventure",
+   "Action & Adventure"
+  ],
+  "genre.adventure": [
+   "Adventure",
+   "Abenteuer"
+  ],
+  "genre.animation": [
+   "Animation",
+   "Animation"
+  ],
+  "genre.anime": [
+   "Anime",
+   "Anime"
+  ],
+  "genre.awards-show": [
+   "Awards Show",
+   "Preisverleihung"
+  ],
+  "genre.biography": [
+   "Biography",
+   "Biografie"
+  ],
+  "genre.children": [
+   "Children",
+   "Kinder"
+  ],
+  "genre.kids": [
+   "Kids",
+   "Kinder"
+  ],
+  "genre.comedy": [
+   "Comedy",
+   "Komödie"
+  ],
+  "genre.cooking": [
+   "Cooking",
+   "Kochen"
+  ],
+  "genre.crime": [
+   "Crime",
+   "Krimi"
+  ],
+  "genre.diy": [
+   "DIY",
+   "Heimwerken"
+  ],
+  "genre.documentary": [
+   "Documentary",
+   "Dokumentarfilm"
+  ],
+  "genre.drama": [
+   "Drama",
+   "Drama"
+  ],
+  "genre.family": [
+   "Family",
+   "Familie"
+  ],
+  "genre.fantasy": [
+   "Fantasy",
+   "Fantasy"
+  ],
+  "genre.food": [
+   "Food",
+   "Essen"
+  ],
+  "genre.game-show": [
+   "Game Show",
+   "Spielshow"
+  ],
+  "genre.history": [
+   "History",
+   "Historie"
+  ],
+  "genre.home-and-garden": [
+   "Home and Garden",
+   "Haus und Garten"
+  ],
+  "genre.horror": [
+   "Horror",
+   "Horror"
+  ],
+  "genre.indie": [
+   "Indie",
+   "Indie"
+  ],
+  "genre.martial-arts": [
+   "Martial Arts",
+   "Kampfsport"
+  ],
+  "genre.mini-series": [
+   "Mini-Series",
+   "Miniserie"
+  ],
+  "genre.music": [
+   "Music",
+   "Musik"
+  ],
+  "genre.musical": [
+   "Musical",
+   "Musical"
+  ],
+  "genre.mystery": [
+   "Mystery",
+   "Mystery"
+  ],
+  "genre.news": [
+   "News",
+   "Nachrichten"
+  ],
+  "genre.podcast": [
+   "Podcast",
+   "Podcast"
+  ],
+  "genre.politics": [
+   "Politics",
+   "Politik"
+  ],
+  "genre.reality": [
+   "Reality",
+   "Reality"
+  ],
+  "genre.romance": [
+   "Romance",
+   "Liebesfilm"
+  ],
+  "genre.sci-fi-fantasy": [
+   "Sci-Fi & Fantasy",
+   "Sci-Fi & Fantasy"
+  ],
+  "genre.science-fiction": [
+   "Science Fiction",
+   "Science Fiction"
+  ],
+  "genre.soap": [
+   "Soap",
+   "Seifenoper"
+  ],
+  "genre.special-interest": [
+   "Special Interest",
+   "Spezialinteresse"
+  ],
+  "genre.sport": [
+   "Sport",
+   "Sport"
+  ],
+  "genre.suspense": [
+   "Suspense",
+   "Spannung"
+  ],
+  "genre.talk": [
+   "Talk",
+   "Talk"
+  ],
+  "genre.talk-show": [
+   "Talk Show",
+   "Talkshow"
+  ],
+  "genre.thriller": [
+   "Thriller",
+   "Thriller"
+  ],
+  "genre.travel": [
+   "Travel",
+   "Reisen"
+  ],
+  "genre.tv-movie": [
+   "TV Movie",
+   "TV-Film"
+  ],
+  "genre.war": [
+   "War",
+   "Kriegsfilm"
+  ],
+  "genre.war-politics": [
+   "War & Politics",
+   "War & Politics"
+  ],
+  "genre.western": [
+   "Western",
+   "Western"
   ],
   "companion.description": [
    "Control playback on your paired Jularr TV. You must be signed in with the same account and profile.",
@@ -724,8 +912,8 @@
    "Anfragelimit"
   ],
   "request.rule.period": [
-   "Rolling period (days)",
-   "Gleitender Zeitraum (Tage)"
+   "Rolling period",
+   "Gleitender Zeitraum"
   ],
   "request.rule.approval": [
    "Approval",
@@ -1336,40 +1524,40 @@
    "Instanzname"
   ],
   "admin.instance.readingCacheMegabytes": [
-   "Reading cache for offline storage (MB)",
-   "Lese-Cache für Offline-Speicher (MB)"
+   "Reading cache for offline storage",
+   "Lese-Cache für Offline-Speicher"
   ],
   "admin.instance.readingCacheWorks": [
    "Reading cache: most recently read books",
    "Lese-Cache: zuletzt gelesene Bücher"
   ],
   "admin.instance.libraryScanIntervalHours": [
-   "Library scan interval (hours)",
-   "Intervall der Bibliotheksscans (Stunden)"
+   "Library scan interval",
+   "Intervall der Bibliotheksscans"
   ],
   "admin.instance.backupIntervalHours": [
-   "Automatic backup interval (hours)",
-   "Intervall der automatischen Backups (Stunden)"
+   "Automatic backup interval",
+   "Intervall der automatischen Backups"
   ],
   "admin.instance.backupKeep": [
    "Backups to keep",
    "Backups behalten"
   ],
   "admin.instance.providerSyncIntervalMinutes": [
-   "Plex, Jellyfin and Emby sync interval (minutes)",
-   "Intervall des Plex-, Jellyfin- und Emby-Abgleichs (Minuten)"
+   "Plex, Jellyfin and Emby sync interval",
+   "Intervall des Plex-, Jellyfin- und Emby-Abgleichs"
   ],
   "admin.instance.wantedSearchIntervalMinutes": [
-   "Wanted search period (minutes)",
-   "Suchintervall für Gesuchtes (Minuten)"
+   "Wanted search period",
+   "Suchintervall für Gesuchtes"
   ],
   "admin.instance.historyRetentionDays": [
-   "Keep finished activity for days",
-   "Abgeschlossene Aktivitäten behalten (Tage)"
+   "Keep finished activity for",
+   "Abgeschlossene Aktivitäten behalten für"
   ],
   "admin.instance.historyMegabytes": [
-   "Activity history size in MB",
-   "Größe des Aktivitätsverlaufs in MB"
+   "Activity history size",
+   "Größe des Aktivitätsverlaufs"
   ],
   "admin.instance.collectionLimit": [
    "Collections per profile",
@@ -1420,8 +1608,8 @@
    "Zuletzt vollständig"
   ],
   "admin.catalog.requestsPerMinute": [
-   "Requests per minute",
-   "Anfragen pro Minute"
+   "Requests",
+   "Anfragen"
   ],
   "admin.catalog.pausesWhileUsed": [
    "Pause while Jularr is used",
@@ -2316,8 +2504,8 @@
    "name@example.com"
   ],
   "hint.AccountFields.Email.info": [
-   "Used to sign in and for password resets.",
-   "Dient zur Anmeldung und zum Zurücksetzen des Passworts."
+   "Optional. Can be used to sign in instead of the username.",
+   "Optional. Kann statt des Benutzernamens zur Anmeldung verwendet werden."
   ],
   "hint.AccountFields.DisplayName.info": [
    "Shown to other users, for example on requests.",
@@ -2356,8 +2544,8 @@
    "Drei bis sechs Ziffern, die beim Wechsel zu diesem Profil abgefragt werden."
   ],
   "hint.AuthenticationFields.NewPassword.info": [
-   "At least 12 characters; a passphrase of several words is easiest to remember.",
-   "Mindestens 12 Zeichen; eine Passphrase aus mehreren Wörtern merkt man sich am leichtesten."
+   "At least 12 characters with at least three of: lowercase letters, uppercase letters, digits and special characters. A passphrase of several words is easiest to remember.",
+   "Mindestens 12 Zeichen mit mindestens drei von: Kleinbuchstaben, Großbuchstaben, Ziffern und Sonderzeichen. Eine Passphrase aus mehreren Wörtern merkt man sich am leichtesten."
   ],
   "hint.DevicePairingFields.Code.placeholder": [
    "123456",
@@ -2903,10 +3091,6 @@
    "A title, optionally with its year.",
    "Ein Titel, optional mit Jahr."
   ],
-  "hint.CollectionFields.IsSmart.info": [
-   "A smart collection fills itself from the filters below.",
-   "Eine intelligente Sammlung füllt sich selbst anhand der Filter unten."
-  ],
   "hint.CollectionFields.ReleaseYear.placeholder": [
    "Any year",
    "Beliebiges Jahr"
@@ -3052,8 +3236,8 @@
    "Mitgliedsschlüssel"
   ],
   "acquisition.outcome.source_manual_link": [
-   "Confirm at the source, then paste the file link",
-   "An der Quelle bestätigen und dann den Dateilink einfügen"
+   "Source confirmation needed; open the source browser to continue automatically",
+   "Bestätigung an der Quelle nötig; öffne den Quellbrowser, um automatisch fortzufahren"
   ],
   "acquisition.outcome.source_gate": [
    "The source asks for a manual login or confirmation",
@@ -3308,8 +3492,8 @@
    "Anfragen"
   ],
   "instance.module.Browser": [
-   "Browser support",
-   "Browser-Unterstützung"
+   "Browser support (optional download and clean uninstall)",
+   "Browser-Unterstützung (optionaler Download und saubere Deinstallation)"
   ],
   "instance.module.Acquisition": [
    "Arr+",
@@ -6153,8 +6337,8 @@
    "Art"
   ],
   "collections.smartToggle": [
-   "Smart filter instead of hand-picked titles",
-   "Intelligenter Filter statt von Hand gewählter Titel"
+   "Smart filter",
+   "Intelligenter Filter"
   ],
   "collections.manual": [
    "Hand-picked",
@@ -6813,8 +6997,8 @@
    "Eigener Papierkorb: Ordner"
   ],
   "library.replacement.days": [
-   "Days in the recycle bin",
-   "Tage im Papierkorb"
+   "Keep in the recycle bin",
+   "Im Papierkorb behalten"
   ],
   "library.keepOnly": [
    "Keep only this version",
@@ -6889,12 +7073,12 @@
    "Besuchern erlauben, ein Konto anzufragen, das ein Administrator aktiviert"
   ],
   "account.register.title": [
-   "Create an account",
-   "Konto erstellen"
+   "Create your account",
+   "Dein Konto erstellen"
   ],
   "account.register.submit": [
-   "Ask for an account",
-   "Konto anfragen"
+   "Create account & request access",
+   "Konto erstellen und Zugang anfragen"
   ],
   "account.register.pending": [
    "Your account waits until an administrator enables it.",
@@ -7166,8 +7350,8 @@
    "Quelle öffnen und bestätigen"
   ],
   "activity.fileLink": [
-   "The address of the file itself (the .epub link), not the page",
-   "Dateilink von der Quelle"
+   "Optional manual file address (the .epub link), not the page",
+   "Optionale manuelle Dateiadresse (der .epub-Link), nicht die Seite"
   ],
   "activity.continueDownload": [
    "Continue download",
@@ -8802,7 +8986,7 @@
    "Wird geladen"
   ],
   "works.status.Unmonitored": [
-   "Not monitored",
+   "Unmonitored",
    "Nicht überwacht"
   ],
   "works.filter.type": [
@@ -8970,8 +9154,8 @@
    "Dieser Untertitel kann nicht angezeigt werden."
   ],
   "errors.playback_capacity_exhausted": [
-   "The server is converting as many streams as it allows. Please try again shortly.",
-   "Der Server konvertiert bereits so viele Streams, wie er zulässt. Bitte versuche es gleich erneut."
+   "Server busy: transcoding is unavailable right now.",
+   "Server ausgelastet: Das Konvertieren ist gerade nicht möglich."
   ],
   "errors.storage_wake_failed": [
    "The Wake-on-LAN packet could not be sent.",
@@ -9066,16 +9250,16 @@
    "Übersetzungsdateien lassen sich gerade nicht abrufen; das Buch bleibt in seiner Sprache."
   ],
   "errors.reading_pdf_without_text": [
-   "This PDF holds scanned pages without text; it opens as a PDF.",
-   "Dieses PDF enthält gescannte Seiten ohne Text; es wird als PDF geöffnet."
+   "This PDF holds scanned pages without text; it opens as its original pages.",
+   "Dieses PDF enthält gescannte Seiten ohne Text; es öffnet sich als die Originalseiten."
   ],
   "errors.reading_translation_incomplete": [
    "This book is not translated into that language in every section yet.",
    "Dieses Buch ist noch nicht in jedem Abschnitt in diese Sprache übersetzt."
   ],
   "errors.reading_pdf_recognizing": [
-   "The scanned pages are being turned into text; until then the book opens as a PDF.",
-   "Die gescannten Seiten werden gerade in Text umgewandelt; bis dahin öffnet sich das Buch als PDF."
+   "The scanned pages are being turned into text; until then the book opens as its original pages.",
+   "Die gescannten Seiten werden gerade in Text umgewandelt; bis dahin öffnet sich das Buch als Originalseiten."
   ],
   "errors.ocr_unavailable": [
    "The text recognition models cannot be fetched right now.",
@@ -9084,6 +9268,106 @@
   "errors.reading_unsupported": [
    "This comic needs 7-Zip, which is not configured on the server.",
    "Dieser Comic braucht 7-Zip, das auf dem Server nicht eingerichtet ist."
+  ],
+  "errors.health_degraded": [
+   "A service did not answer the last health check. The Dashboard shows which one.",
+   "Ein Dienst hat beim letzten Gesundheitscheck nicht geantwortet. Das Dashboard zeigt, welcher."
+  ],
+  "errors.translation_local_busy": [
+   "The local translation model is busy.",
+   "Das lokale Übersetzungsmodell ist ausgelastet."
+  ],
+  "errors.translation_local_not_installed": [
+   "Install the selected model on the private server first.",
+   "Installiere das gewählte Modell zuerst auf dem privaten Server."
+  ],
+  "errors.translation_local_unavailable": [
+   "The local translation server is unavailable.",
+   "Der lokale Übersetzungsserver ist nicht erreichbar."
+  ],
+  "errors.translation_local_unverified": [
+   "The generated block did not pass basic completion checks.",
+   "Der erzeugte Block hat die grundlegenden Vollständigkeitsprüfungen nicht bestanden."
+  ],
+  "errors.translation_local_space_unverified": [
+   "Verify the available storage space of the external Ollama volume before downloading.",
+   "Prüfe vor dem Herunterladen den freien Speicherplatz des externen Ollama-Laufwerks."
+  ],
+  "errors.translation_local_busy_or_capacity": [
+   "A download is already running or the verified storage budget is insufficient.",
+   "Es läuft bereits ein Download oder das geprüfte Speicherbudget reicht nicht aus."
+  ],
+  "errors.validation.unknown_model": [
+   "Select an approved local translation model.",
+   "Wähle ein freigegebenes lokales Übersetzungsmodell."
+  ],
+  "errors.speech_catalog_unavailable": [
+   "The speech model catalog could not be read. Check its format and file permissions.",
+   "Der Katalog der Sprachmodelle konnte nicht gelesen werden. Prüfe sein Format und die Dateirechte."
+  ],
+  "errors.speech_download_failed": [
+   "The speech package could not be downloaded and verified. It was not activated.",
+   "Das Sprachpaket konnte nicht heruntergeladen und geprüft werden. Es wurde nicht aktiviert."
+  ],
+  "errors.speech_discovery_failed": [
+   "The voice sources could not be refreshed. The saved catalog and activated packages are unchanged. Try again in a minute.",
+   "Die Stimmenquellen konnten nicht aktualisiert werden. Der gespeicherte Katalog und die aktivierten Pakete sind unverändert. Versuche es in einer Minute erneut."
+  ],
+  "errors.validation.speech_license_confirmation": [
+   "Review and confirm this model's conditions before downloading and activating it.",
+   "Lies die Bedingungen dieses Modells und bestätige sie, bevor du es herunterlädst und aktivierst."
+  ],
+  "errors.download_storage_unavailable": [
+   "The download storage cannot be read or written. Check its mount and permissions.",
+   "Der Download-Speicher kann nicht gelesen oder beschrieben werden. Prüfe seine Einbindung und die Rechte."
+  ],
+  "errors.download_storage_paths_overlap": [
+   "Incomplete and Complete must be separate folders; neither may contain the other.",
+   "Unvollständig und Fertig müssen getrennte Ordner sein; keiner darf den anderen enthalten."
+  ],
+  "errors.download_storage_reserve": [
+   "The free space cannot be verified or is below the selected reserve.",
+   "Der freie Speicherplatz lässt sich nicht prüfen oder liegt unter der gewählten Reserve."
+  ],
+  "errors.download_size_limit": [
+   "The download exceeds the configured download size limit.",
+   "Der Download überschreitet die eingestellte Größenbegrenzung."
+  ],
+  "errors.download_workspace_limit": [
+   "The configured download workspace limit would be exceeded.",
+   "Die eingestellte Begrenzung des Download-Arbeitsbereichs würde überschritten."
+  ],
+  "errors.import_book_language_unknown": [
+   "The EPUB does not declare a verifiable language. Review it manually.",
+   "Das EPUB gibt keine überprüfbare Sprache an. Prüfe es von Hand."
+  ],
+  "errors.import_book_language_mismatch": [
+   "The EPUB declares a language not permitted by the strict profile. Review it manually.",
+   "Das EPUB gibt eine Sprache an, die das strenge Profil nicht zulässt. Prüfe es von Hand."
+  ],
+  "errors.takeover_unreachable": [
+   "Nothing answered at that address. Check the address and that the app is running and reachable from Jularr.",
+   "An dieser Adresse hat nichts geantwortet. Prüfe die Adresse und ob die App läuft und von Jularr aus erreichbar ist."
+  ],
+  "errors.takeover_authentication_failed": [
+   "The address answered but refused the API key. Copy the key from the app's Settings, General page.",
+   "Die Adresse hat geantwortet, aber den API-Schlüssel abgelehnt. Kopiere den Schlüssel aus den Einstellungen der App, Seite Allgemein."
+  ],
+  "errors.acquisition_paused": [
+   "Automatic download was stopped because this title is paused.",
+   "Der automatische Download wurde gestoppt, weil dieser Titel pausiert ist."
+  ],
+  "errors.acquisition_import_path_unconfigured": [
+   "Set up and verify the SABnzbd Complete folder before starting downloads.",
+   "Richte den SABnzbd-Ordner Fertig ein und prüfe ihn, bevor du Downloads startest."
+  ],
+  "errors.playback_cache_unavailable": [
+   "The playback cache is full or its storage is unavailable. Check the transcode cache path, size budget and free-space reserve.",
+   "Der Wiedergabe-Cache ist voll oder sein Speicher ist nicht verfügbar. Prüfe Pfad, Größenbudget und freie Reserve des Transcode-Caches."
+  ],
+  "errors.validation.module_dependency": [
+   "A module needs the modules it builds on, so it cannot be on while one is off, and they stay on while it is.",
+   "Ein Modul braucht die Module, auf denen es aufbaut: Es kann nicht an sein, solange eines davon aus ist, und diese bleiben an, solange es an ist."
   ],
   "errors.plex_unavailable": [
    "The Plex server could not be reached.",
@@ -10110,7 +10394,7 @@
    "Ausführen"
   ],
   "admin.browser.manualOpen": ["Control browser", "Browser bedienen"],
-  "admin.browser.manualHint": ["Complete the source's check, then close this view and retry the search. Your browser session is kept; downloads continue through Jularr.", "Schließe die Prüfung der Quelle ab, schließe dann diese Ansicht und wiederhole die Suche. Die Browser-Sitzung bleibt erhalten; Downloads laufen weiterhin über Jularr."],
+  "admin.browser.manualHint": ["Complete the source's check, then choose Done and close. Waiting downloads from this source retry automatically; no file link is needed. Your browser session is kept.","Schließe die Prüfung der Quelle ab, wähle dann Fertig und schließe die Ansicht. Wartende Downloads dieser Quelle werden automatisch wiederholt; ein Dateilink ist nicht nötig. Die Browser-Sitzung bleibt erhalten."],
   "admin.browser.manualImage": ["Interactive view of the source browser", "Bedienbare Ansicht des Quellen-Browsers"],
   "admin.browser.manualLoading": ["Connecting to the source browser…", "Verbindung zum Quellen-Browser wird hergestellt…"],
   "admin.browser.manualText": ["Text for the selected field in the source browser", "Text für das ausgewählte Feld im Quellen-Browser"],
@@ -10125,7 +10409,7 @@
   "admin.browser.manualRetrying": ["The browser image is temporarily unavailable. Reconnecting…", "Das Browserbild ist vorübergehend nicht erreichbar. Die Verbindung wird wiederhergestellt…"],
   "admin.browser.manualDenied": ["Browser access has ended. Sign in again or check your permissions.", "Der Browserzugriff wurde beendet. Melde dich erneut an oder prüfe deine Berechtigungen."],
   "admin.browser.manualReady": ["Browser ready. Click the image to control the source.", "Browser bereit. Klicke auf das Bild, um die Quelle zu bedienen."],
-  "admin.browser.manualClosed": ["Browser view closed. The session is kept.", "Browseransicht geschlossen. Die Sitzung bleibt erhalten."],
+  "admin.browser.manualClosed": ["Browser view closed. The session is kept and waiting downloads from this source will retry automatically.","Browseransicht geschlossen. Die Sitzung bleibt erhalten und wartende Downloads dieser Quelle werden automatisch wiederholt."],
   "admin.browser.manualJavascript": ["Enable JavaScript to control this browser view.", "Aktiviere JavaScript, um diese Browseransicht zu bedienen."],
   "errors.browser_assistance_busy": ["Another sign-in session currently controls the source browser. Try again when it is closed or becomes idle.", "Eine andere Anmeldesitzung bedient gerade den Quellen-Browser. Versuche es erneut, sobald die Ansicht geschlossen oder inaktiv ist."],
   "errors.browser_assistance_ended": ["This browser view has ended. Open it again to continue.", "Diese Browseransicht wurde beendet. Öffne sie erneut, um fortzufahren."],
@@ -11016,7 +11300,7 @@
    "Aus"
   ],
   "jobs.state.Idle": [
-   "Idle",
+   "Ready",
    "Bereit"
   ],
   "jobs.state.Pending": [
@@ -11313,8 +11597,8 @@
    "An den Bildschirm anpassen"
   ],
   "reader.figure.original": [
-   "Page {0} is only shown in the original PDF.",
-   "Seite {0} wird nur im Original-PDF angezeigt."
+   "Page {0} is only shown in the original pages.",
+   "Seite {0} wird nur in den Originalseiten angezeigt."
   ],
   "instance.module.SmartPdf": [
    "Prepare EPUB reading copies of PDF books",
