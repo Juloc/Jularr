@@ -168,6 +168,8 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         if (current === target && revision === generation) say(undefined);
     }
 
+    // The Reader page always picks the server's TranslateGemma; the Mozilla path below stays switched off.
+    // TODO(#1726): bring Mozilla back only as an emergency module, off by default, for the page in view and the next 3, kept in the browser.
     // Translated batch by batch so the page fills in while it works; the finished section is shared.
     async function translate(target: Language, generation: number) {
         if (reader.dataset.translationEngine === "gemma") return translateLocal(target, generation);
