@@ -92,6 +92,7 @@ namespace Jularr.Frontend.Framework
                     new("arr.formats", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "formats"),
                     new("arr.sizes", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "sizes"),
                     new("arr.releaseProfiles", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "release"),
+                    new("arr.releaseGroups", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "groups"),
                     new("arr.tags", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "tags")
                 ], UserMenu: true),
                 new("sources", "admin.sources.title", "swap",

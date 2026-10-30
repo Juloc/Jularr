@@ -10,11 +10,12 @@ namespace Jularr.Frontend.Framework
         public const string Formats = "formats";
         public const string Sizes = "sizes";
         public const string Release = "release";
+        public const string Groups = "groups";
         public const string Tags = "tags";
 
         public const string ProfilesAddress = "/Admin/Acquisition/Profiles";
 
-        public static readonly string[] Panes = [Profiles, Formats, Sizes, Release, Tags];
+        public static readonly string[] Panes = [Profiles, Formats, Sizes, Release, Groups, Tags];
 
         public static string PaneAddress(string pane, MediaType type, string home = ProfilesAddress) =>
             home + "?tab=" + pane + "&mediaTypeId=" + ((byte)type).ToString(CultureInfo.InvariantCulture);

@@ -1613,6 +1613,80 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ReleaseGroups_SearchesCollectThem_ARatingScoresOrBlocksTheirReleases()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var wantedId = await CreateWantedMovieAsync(host);
+
+            async Task<WantedReleaseCandidateV1[]> SearchAsync()
+            {
+                using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+                Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+                return (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.ToArray();
+            }
+
+            async Task<T> ReadAsync<T>(string address)
+            {
+                using var read = await host.SendAsync(HttpMethod.Get, address);
+                Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+                return (await read.Content.ReadFromJsonAsync<T>())!;
+            }
+
+            async Task RateAsync(long id, ReleaseGroupRating? rating)
+            {
+                using var rated = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/release-groups/" + id + "/rating", new RateReleaseGroupDataV1(rating));
+                Assert.AreEqual(HttpStatusCode.OK, rated.StatusCode, await rated.Content.ReadAsStringAsync());
+            }
+
+            // Every search counts the group of its results once, for the media type only; nothing is rated yet.
+            var unrated = await SearchAsync();
+            Assert.AreEqual("GRP", unrated.Single(candidate => candidate.Title == Feature).ReleaseGroup);
+            await SearchAsync();
+            var group = (await ReadAsync<PageResult<ReleaseGroupDetailsV1>>("/api/v1/admin/acquisition/release-groups?mediaTypeId=1")).Items.Single();
+            Assert.AreEqual(("GRP", 2, (ReleaseGroupRating?)null), (group.Name, group.SeenCount, group.ReleaseGroupRatingId));
+            Assert.IsNotNull(group.LastSeenAt);
+            Assert.AreEqual(0, (await ReadAsync<PageResult<ReleaseGroupDetailsV1>>("/api/v1/admin/acquisition/release-groups?mediaTypeId=2")).Items.Count);
+
+            // A group typed by hand in another case is the same group; a new one is not seen yet.
+            using (var added = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/acquisition/release-groups", new AddReleaseGroupDataV1(MediaType.Movie, " grp ")))
+            {
+                Assert.AreEqual(group.Id, (await added.Content.ReadFromJsonAsync<SavedReleaseGroupV1>())!.Id);
+            }
+
+            using (var added = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/acquisition/release-groups", new AddReleaseGroupDataV1(MediaType.Movie, "FLUX")))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, added.StatusCode, await added.Content.ReadAsStringAsync());
+            }
+
+            // A good group adds the profile's points to every release of it and names the rule; not rated groups are listed first.
+            await RateAsync(group.Id, ReleaseGroupRating.Good);
+            var listed = (await ReadAsync<PageResult<ReleaseGroupDetailsV1>>("/api/v1/admin/acquisition/release-groups?mediaTypeId=1")).Items;
+            CollectionAssert.AreEqual(new[] { "FLUX", "GRP" }, listed.Select(item => item.Name).ToArray());
+            Assert.AreEqual("GRP", (await ReadAsync<PageResult<ReleaseGroupDetailsV1>>("/api/v1/admin/acquisition/release-groups?mediaTypeId=1&search=gr")).Items.Single().Name);
+            var figures = await ReadAsync<ReleaseGroupFiguresV1>("/api/v1/admin/acquisition/release-groups/figures?mediaTypeId=1");
+            Assert.AreEqual((2, 1, 1, 0), (figures.GroupCount, figures.GoodCount, figures.NotRatedCount, figures.BlockedCount));
+            var good = await SearchAsync();
+            var feature = good.Single(candidate => candidate.Title == Feature);
+            Assert.AreEqual(unrated.Single(candidate => candidate.Title == Feature).Score + 50, feature.Score);
+            Assert.IsTrue(feature.ScorePoints.Any(point => (point.Code, point.Value, point.Points) == ("GroupGood", "GRP", 50)));
+
+            // A blocked group stays visible and selectable by hand, but the automatic search takes none of its releases.
+            await RateAsync(group.Id, ReleaseGroupRating.Blocked);
+            var blocked = await SearchAsync();
+            Assert.IsTrue(blocked.Where(candidate => candidate.ReleaseGroup == "GRP" && candidate.ReleaseDecisionTypeId != ReleaseDecisionType.Rejected)
+                .All(candidate => (candidate.ReleaseDecisionTypeId, candidate.ReasonCode) == (ReleaseDecisionType.ManualReview, "GroupBlocked")));
+            Assert.AreEqual(ReleaseDecisionType.ManualReview, blocked.Single(candidate => candidate.Title == Feature).ReleaseDecisionTypeId);
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(0, usenet.Grabbed.Count);
+
+            using var missing = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/release-groups/999999/rating", new RateReleaseGroupDataV1(ReleaseGroupRating.Bad));
+            Assert.AreEqual(HttpStatusCode.NotFound, missing.StatusCode);
+        }
+
+        [TestMethod]
         public async Task Retry_AfterAClientFault_TakesTheSameReleaseAgain()
         {
             using var storage = new TemporaryDirectory();

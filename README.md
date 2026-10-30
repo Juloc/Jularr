@@ -318,7 +318,7 @@ Anmeldeangebot.
 Plex-Anmeldung und -Registrierung stellt der Owner unter `/Admin/Providers` beim verbundenen
 Plex-Server ein (`ReadPlexSignInV1`, `UpdatePlexSignInV1`; standardmäßig aus): Anmeldung,
 Registrierung, Freigabe neuer Konten (standardmäßig an) und die Bibliotheken, deren Nutzer sich
-registrieren dürfen (keine gewählt: jede). Neue Plex-Konten starten in der Instanzsprache.
+registrieren dürfen (keine gewählt: jede). Die Bibliotheken zeigt die Seite aus der Liste, die der Server zuletzt geliefert hat (Test, Sync oder Gesundheitsprüfung); beim Öffnen fragt sie den Server nicht. Neue Plex-Konten starten in der Instanzsprache.
 `Authentication:SessionLifetimeHours` bleibt 720 (30 Tage), zulässig 1–720.
 
 Plex-Neuregistrierung braucht eine bestätigte E-Mail und Zugriff auf eine dieser Libraries

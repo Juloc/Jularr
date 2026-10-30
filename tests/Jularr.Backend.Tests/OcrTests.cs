@@ -9,6 +9,7 @@ using Jularr.Backend.Logic.Reading;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Reading.V1;
 using Jularr.Integrations.Logic.Ocr;
+using Jularr.Integrations.Logic.Pdf;
 using Microsoft.Extensions.DependencyInjection;
 using SkiaSharp;
 using UglyToad.PdfPig;
@@ -48,19 +49,15 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(page.Lines[index].Confidence > 0.8);
             }
 
-            // A page the PDF shows turned is read upright: the same lines, found in the turned picture.
-            var turned = engine.Read(TypesetPage(Sentences), 90);
-            Assert.AreEqual(page.Height, turned.Width);
-            Assert.AreEqual(page.Width, turned.Height);
-
-            // A scanned PDF of such pages reflows like text: the sentence open at a page's end goes on on the next.
+            // A scanned PDF of such pages, drawn by PDFium, reflows like text: the sentence open at a page's end goes on on the next.
             var pdf = ScannedPdf(pages: 2);
             var recognized = new Dictionary<int, RecognizedPage>();
+            using (var rendering = PdfRendering.Open(pdf))
             using (var document = PdfDocument.Open(pdf))
             {
                 foreach (var scanned in document.GetPages())
                 {
-                    recognized[scanned.Number] = PdfScanPages.Read(scanned, engine.Read);
+                    recognized[scanned.Number] = PdfScanPages.Read(scanned, rendering, engine.Read);
                 }
             }
 
@@ -115,6 +112,60 @@ namespace Jularr.Backend.Tests
             var after = await StateAsync(host, second);
             Assert.AreEqual(ReadingView.Smart, after.RecommendedView);
             Assert.IsFalse(after.IsRecognizing);
+        }
+
+        // After a download nobody has to open a book: the library is prepared in the background, newest first, EPUBs at once and a scan through the
+        // recognizer, which prepares it when it is done; the book then knows its language for the server's translation.
+        [TestMethod]
+        public async Task Books_ArePreparedWithoutOpening_ScansThroughTheRecognizer()
+        {
+            using var storage = new TemporaryDirectory();
+            var recognizer = new FakeRecognizer();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddSingleton<IPageRecognizer>(recognizer));
+            var scan = await AddScanAsync(host, storage.Path, ScannedPdf(pages: 2));
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Ocr'");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\""));
+
+            // The scan is the newest book: it waits for the recognizer; then the EPUB is prepared; then there is nothing left.
+            Assert.IsTrue(await PrepareAsync(host));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingRecognitions\" WHERE \"FinishedAt\" IS NULL"));
+            Assert.IsTrue(await PrepareAsync(host));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\" WHERE \"CacheCompletedAt\" IS NOT NULL"));
+            Assert.IsFalse(await PrepareAsync(host));
+
+            // The recognizer reads the scan and prepares it; its language comes from its text.
+            await RecognizeAsync(host, true);
+            Assert.AreEqual("en", await host.ScalarAsync("SELECT document.\"Language\" FROM \"ReadingDocuments\" AS document JOIN \"StoredFiles\" AS file ON file.\"Id\" = document.\"StoredFileId\" "
+                + "WHERE file.\"MediaAssetId\" = " + scan + " AND file.\"MissingSince\" IS NULL"));
+            Assert.IsFalse(await PrepareAsync(host));
+        }
+
+        // Two copies of the same book share one document, which names only the copy opened last: each copy is prepared once, not in turn forever.
+        [TestMethod]
+        public async Task Books_ArePreparedOnce_WhenTheLibraryHoldsTwoCopies()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var (_, second) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var books = Path.Combine(storage.Path, "1", "Books");
+            File.Copy(Path.Combine(books, "First Book", "First Book.epub"), Path.Combine(books, "Second Book", "Second Book.epub"), overwrite: true);
+            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"SizeBytes\" = " + new FileInfo(Path.Combine(books, "Second Book", "Second Book.epub")).Length
+                + " WHERE \"MediaAssetId\" = " + second);
+
+            Assert.IsTrue(await PrepareAsync(host));
+            Assert.IsTrue(await PrepareAsync(host));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\""));
+            Assert.IsFalse(await PrepareAsync(host));
+        }
+
+        [TestMethod]
+        [DataRow("The man was sure that it is the end of the day and he went with them to the house of the old woman.", "en")]
+        [DataRow("Der Mann sagte, dass er nicht mit ihr zu der Stadt gehen will, und das ist ein Problem, das sich nicht löst.", "de")]
+        [DataRow("Le chat est dans la maison et les enfants ne sont pas là, mais une femme que nous aimons est dans le jardin.", "fr")]
+        [DataRow("12 34 56", null)]
+        public void Language_IsGuessedFromCommonWords(string text, string? expected)
+        {
+            Assert.AreEqual(expected, ReadingLanguage.Guess(text));
         }
 
         // A long scan is read a few pages at a time, the page a reader has open first; an interrupted scan goes on where it stopped.
@@ -182,6 +233,264 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html.ToString(), Sentences[0]);
         }
 
+        // The text of a scanned page is erased from a copy of it; what is left in a large connected area is its picture, and short text in the picture's rows is
+        // its label, not running text. A caption below it stays text.
+        [TestMethod]
+        public void ScanAnalysis_FindsThePicture_AndItsLabels()
+        {
+            using var page = IllustratedPage();
+            var lines = PdfScanAnalysis.Analyse(page, Read(page), []);
+
+            var picture = lines.Single(line => line.Kind == RecognizedLine.Picture);
+            Assert.AreEqual(0.24, picture.Left, 0.03);
+            Assert.AreEqual(0.40, picture.Top, 0.03);
+            Assert.AreEqual(0.77, picture.Right, 0.03);
+            Assert.AreEqual(0.63, picture.Bottom, 0.03);
+            Assert.AreEqual(RecognizedLine.Label, lines.Single(line => line.Text == "ALWAYS").Kind);
+            Assert.IsNull(lines.Single(line => line.Text == "He shouted.").Kind);
+            Assert.IsTrue(lines.Where(line => Sentences.Contains(line.Text)).All(line => line.Kind is null));
+        }
+
+        // Where the recognizer is unsure of a word, the scan's own recognition layer at the same place wins; quotes it dropped come back from there; straight
+        // quotes become typographic ones.
+        [TestMethod]
+        public void ScanAnalysis_TakesTheLayersWord_WhereTheRecognizerWasUnsure()
+        {
+            using var page = new SKBitmap(1000, 1000);
+            page.Erase(SKColors.White);
+            OcrCharacter[] characters = [.. "1ne heavier Drinking it's".Select((character, index) =>
+                new OcrCharacter(character.ToString(), 100 + index * 20, index < 3 ? 0.4f : 0.99f))];
+            var read = new OcrPage(1000, 1000, [new OcrLine(90, 100, 600, 130, "1ne heavier Drinking it's", 0.9f) { Characters = characters }]);
+            PdfLayerWord[] layer = [new("The", 0.09, 0.1, 0.15, 0.13), new("“Drinking”", 0.32, 0.1, 0.5, 0.13)];
+
+            var line = PdfScanAnalysis.Analyse(page, read, layer).Single();
+            Assert.AreEqual("The heavier “Drinking” it’s", line.Text);
+
+            // A doubled character the recognizer read once comes back from the layer.
+            OcrCharacter[] doubled = [.. "Rule No. 16:".Select((character, index) => new OcrCharacter(character.ToString(), 100 + index * 20, 0.99f))];
+            var rule = new OcrPage(1000, 1000, [new OcrLine(90, 700, 400, 730, "Rule No. 16:", 0.99f) { Characters = doubled }]);
+            PdfLayerWord[] numbered = [new("Rule", 0.09, 0.7, 0.17, 0.73), new("No.", 0.19, 0.7, 0.25, 0.73), new("116:", 0.27, 0.7, 0.35, 0.73)];
+            Assert.AreEqual("Rule No. 116:", PdfScanAnalysis.Analyse(page, rule, numbered).Single().Text);
+
+            // An opening quote read apart from its word joins it; a closing quote read twice is one.
+            OcrCharacter[] caption = [.. "\" A horse.\"\"".Select((character, index) => new OcrCharacter(character.ToString(), 100 + index * 20, 0.99f))];
+            var captioned = new OcrPage(1000, 1000, [new OcrLine(90, 300, 400, 330, "\" A horse.\"\"", 0.9f) { Characters = caption }]);
+            Assert.AreEqual("“A horse.”", PdfScanAnalysis.Analyse(page, captioned, []).Single().Text);
+
+            // A double quote that the recognizer closed with a single one closes as double.
+            OcrCharacter[] shouted = [.. "\"Found it!' he shouted.".Select((character, index) => new OcrCharacter(character.ToString(), 100 + index * 20, 0.99f))];
+            var found = new OcrPage(1000, 1000, [new OcrLine(90, 500, 600, 530, "\"Found it!' he shouted.", 0.9f) { Characters = shouted }]);
+            Assert.AreEqual("“Found it!” he shouted.", PdfScanAnalysis.Analyse(page, found, []).Single().Text);
+        }
+
+        // A line the recognizer drew across two columns and read poorly takes the layer's words, column by column; where the layer is noise (a picture's
+        // texture), the recognizer's reading stays.
+        [TestMethod]
+        public void ScanAnalysis_TakesTheLayersColumns_WhereTheRecognizerWasUnsureOfALine()
+        {
+            using var page = new SKBitmap(1000, 1000);
+            page.Erase(SKColors.White);
+            var read = new OcrPage(1000, 1000, [new OcrLine(50, 100, 950, 130, "Rule it's Rule 688: If", 0.58f)]);
+            PdfLayerWord[] layer = [new("Rule", 0.05, 0.1, 0.1, 0.125), new("No.", 0.11, 0.1, 0.14, 0.125), new("687:", 0.15, 0.1, 0.19, 0.125), new("If", 0.2, 0.1, 0.22, 0.125),
+                new("it's", 0.23, 0.1, 0.27, 0.125), new("fast,", 0.28, 0.1, 0.33, 0.125), new("Rule", 0.5, 0.1, 0.55, 0.125), new("No.", 0.56, 0.1, 0.59, 0.125),
+                new("688:", 0.6, 0.1, 0.64, 0.125), new("If", 0.65, 0.1, 0.67, 0.125), new("it's", 0.68, 0.1, 0.72, 0.125), new("in", 0.73, 0.1, 0.75, 0.125)];
+
+            var lines = PdfScanAnalysis.Analyse(page, read, layer);
+            CollectionAssert.AreEqual(new[] { "Rule No. 687: If it’s fast,", "Rule No. 688: If it’s in" }, lines.Select(line => line.Text).ToArray());
+            Assert.AreEqual(12, lines.Sum(line => line.Words!.Length / 2));
+
+            // Small type beside large in the same rows stays apart.
+            var mixed = new OcrPage(1000, 1000, [new OcrLine(50, 100, 800, 200, "considering Wom", 0.5f)]);
+            PdfLayerWord[] beside = [new("considering", 0.05, 0.16, 0.27, 0.18), new("Women", 0.35, 0.12, 0.8, 0.2)];
+            CollectionAssert.AreEquivalent(new[] { "considering", "Women" }, PdfScanAnalysis.Analyse(page, mixed, beside).Select(line => line.Text).ToArray());
+
+            PdfLayerWord[] noise = [new("ee", 0.05, 0.1, 0.1, 0.125), new("Ll", 0.11, 0.1, 0.14, 0.125), new("rme|", 0.15, 0.1, 0.19, 0.125), new("Sue", 0.2, 0.1, 0.25, 0.125),
+                new("mln|fel", 0.3, 0.1, 0.4, 0.125), new("=S|", 0.45, 0.1, 0.5, 0.125)];
+            Assert.AreEqual("Rule it’s Rule 688: If", PdfScanAnalysis.Analyse(page, read, noise).Single().Text);
+        }
+
+        // A scan's picture is cut out of the page PDFium draws and stands in the text with its caption; the page's text reads as text. The first and last
+        // pages are the covers and show whole.
+        [TestMethod]
+        public void ScannedPage_WithAPicture_ReadsAsTextWithThePictureAndItsCaption()
+        {
+            byte[] pdf;
+            using (var page = IllustratedPage())
+            using (var image = SKImage.FromBitmap(page))
+            using (var png = image.Encode(SKEncodedImageFormat.Png, 100))
+            {
+                var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+                foreach (var _ in Enumerable.Range(0, 4))
+                {
+                    builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4).AddPng(png.ToArray(), new UglyToad.PdfPig.Core.PdfRectangle(0, 0, 595, 842));
+                }
+
+                pdf = builder.Build();
+            }
+
+            using var rendering = PdfRendering.Open(pdf);
+            var recognized = new Dictionary<int, RecognizedPage>();
+            using (var document = PdfDocument.Open(pdf))
+            {
+                foreach (var scanned in document.GetPages())
+                {
+                    recognized[scanned.Number] = PdfScanPages.Read(scanned, rendering, Read);
+                    Assert.AreEqual(RecognizedPage.Recognized, recognized[scanned.Number].Reason);
+                }
+            }
+
+            var book = PdfBook.Read(new MemoryStream(pdf), recognized, rendering);
+            Assert.IsFalse(book.WantsRecognition);
+            var blocks = book.Chapters.SelectMany(chapter => chapter.Blocks).ToArray();
+            var figures = blocks.Where(block => block.Image is not null).ToArray();
+            CollectionAssert.AreEqual(new[] { 1, 2, 3, 4 }, figures.Select(figure => figure.Page).ToArray());
+            Assert.IsTrue(figures.Where(figure => figure.Page is 1 or 4).All(cover => cover.Figure == ReadingHtml.PageFigure && cover.Caption is null));
+            Assert.IsTrue(figures.Where(figure => figure.Page is 2 or 3).All(figure => figure.Caption == "He shouted." && figure.Figure == ReadingHtml.WideFigure));
+            Assert.IsTrue(book.Images.All(picture => picture.MediaType == "image/jpeg" && SKBitmap.Decode(picture.Bytes) is { Width: > 300 }));
+            Assert.IsFalse(blocks.Any(block => block.Text?.Contains("ALWAYS", StringComparison.Ordinal) == true || block.Text?.Contains("He shouted", StringComparison.Ordinal) == true));
+            StringAssert.Contains(blocks.First(block => block.Text is not null).Text, Sentences[0]);
+
+            // Smart Pages: the pages between the covers in their own layout, their text set anew in serif like the print, the label as a label, and the
+            // text erased from the page while the drawing stays.
+            CollectionAssert.AreEqual(new[] { 2, 3 }, book.SmartPages.Select(page => page.Number).ToArray());
+            var smart = book.SmartPages[0];
+            StringAssert.StartsWith(string.Concat(smart.Blocks[0].Runs.Select(run => run.Text)), Sentences[0]);
+            Assert.IsTrue(smart.Blocks[0].Runs.All(run => run.Serif && !run.Italic && run.Weight <= 500));
+            Assert.IsTrue(smart.Blocks.Single(block => block.Runs.Any(run => run.Text == "ALWAYS")).IsLabel);
+            Assert.IsTrue(smart.Blocks.Any(block => !block.IsLabel && block.Runs.Any(run => run.Text == "He shouted.")));
+            using var clean = SKBitmap.Decode(smart.Image);
+            Assert.AreEqual(1240.0 / 1754, smart.Ratio, 0.01);
+            Assert.IsTrue(Darkest(clean, 0.1, 210 / 1754.0, 0.88, 250 / 1754.0) > 170, "the first line is erased");
+            Assert.IsTrue(Darkest(clean, 0.25, 0.42, 0.72, 0.6) < 100, "the drawing stays");
+        }
+
+        // Text flowing around a picture runs through several boxes: they are one block of the page, translated as one sentence, each box a part of it.
+        [TestMethod]
+        public void SmartPage_TextAroundAPicture_IsOneBlockInParts()
+        {
+            PdfSmartRun Run(string text) => new(text, true, 400, false, 100, 0.03, "#222222");
+            var page = new PdfSmartPage(5, [1], 0.8, [
+                new PdfSmartBlock(0.05, 0.1, 0.9, 0.05, 1, 0.03, 0, false, false, [Run("Of all love triangles, those involving at least one law-")]),
+                new PdfSmartBlock(0.5, 0.16, 0.4, 0.05, 1, 0.03, 0, false, false, [Run("enforcement official are the most fraught.")]) { Follows = 0 },
+                new PdfSmartBlock(0.5, 0.22, 0.4, 0.05, 1, 0.03, 0, false, false, [Run("Rule No. 9: Describing yourself as a hot-tub")]),
+                new PdfSmartBlock(0.55, 0.28, 0.4, 0.05, 1, 0.03, 0, false, false, [Run("guy on the first date.")]) { Follows = 2 },
+                new PdfSmartBlock(0.05, 0.9, 0.4, 0.02, 1, 0.012, 0, false, true, [Run("12 ESQUIRE")])]);
+            var book = new PdfBookContent([], [], [], new PdfVerdict(true, ""), new PdfVerdict(true, "")) { SmartPages = [page] };
+            var html = PdfBookHtml.Prepare(book, 7).SmartPages.Single();
+            Assert.AreEqual(3, html.Structure.Blocks);
+            var document = new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html.Html);
+            var first = document.QuerySelector("[data-b='0']")!;
+            Assert.AreEqual(2, first.QuerySelectorAll("[data-part][data-box]").Length);
+            Assert.AreEqual("Of all love triangles, those involving at least one law-enforcement official are the most fraught.", first.TextContent);
+            Assert.AreEqual("Rule No. 9: Describing yourself as a hot-tub guy on the first date.", document.QuerySelector("[data-b='1']")!.TextContent);
+        }
+
+        // A bold lead-in before its sentence is a block of its own inside the box, so it is translated apart and keeps its look; a word in another look
+        // inside a sentence stays with the sentence.
+        [TestMethod]
+        public void SmartPage_LeadInsInTheirOwnLook_AreBlocksOfTheirOwn()
+        {
+            PdfSmartRun Run(string text, bool serif, int weight) => new(text, serif, weight, false, 100, 0.03, "#222222");
+            var page = new PdfSmartPage(5, [1], 0.8, [
+                new PdfSmartBlock(0.05, 0.1, 0.9, 0.1, 3, 0.03, 0, false, false,
+                    [Run("Rule No. 202:", false, 900), Run(" You can always fool them with ", true, 400), Run("butter", true, 700), Run(".", true, 400), Run(" Rule No. 203:", false, 900), Run(" Let someone else bring dessert.", true, 400)]),
+                new PdfSmartBlock(0.05, 0.3, 0.9, 0.05, 1, 0.03, 0, false, false, [Run("Keep your chocolate dark.", true, 900)])]);
+            var book = new PdfBookContent([], [], [], new PdfVerdict(true, ""), new PdfVerdict(true, "")) { SmartPages = [page] };
+            var html = PdfBookHtml.Prepare(book, 7).SmartPages.Single();
+            var document = new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html.Html);
+            CollectionAssert.AreEqual(new[] { "0", "1", "2", "3", "4", "5" }, document.QuerySelectorAll("[data-b]").Select(block => block.GetAttribute("data-b")).ToArray());
+            Assert.AreEqual(6, html.Structure.Blocks);
+            CollectionAssert.AreEqual(new[] { "Rule No. 202:", " You can always fool them with butter.", " Rule No. 203:", " Let someone else bring dessert." },
+                document.QuerySelectorAll("[data-box] > [data-b]").Select(block => block.TextContent).ToArray());
+            Assert.AreEqual("sans", document.QuerySelector("[data-b='1'] > [data-face]")!.GetAttribute("data-face"));
+            Assert.IsNull(document.QuerySelector("[data-b='5']")!.QuerySelector("[data-b]"));
+        }
+
+        // The Reader sets the text into the original's lines: each block names them, the text marks where the original broke a line, and a lead-in on a
+        // line of its own keeps a break before its sentence that a translation does not replace.
+        [TestMethod]
+        public void SmartPage_KeepsTheOriginalsLines()
+        {
+            var page = new PdfSmartPage(5, [1], 0.8, [
+                new PdfSmartBlock(0.05, 0.1, 0.4, 0.1, 3, 0.03, 0, false, false, [
+                    new PdfSmartRun("Rule No. 35:", false, 800, false, 80, 0.02, "#222222"),
+                    new PdfSmartRun(" A man over the age of 30 should not", true, 500, false, 90, 0.016, "#222222") { Breaks = [1, 20] }])
+                {
+                    Rows = [new(0.05, 0.12, 0.2), new(0.05, 0.15, 0.38), new(0.05, 0.18, 0.31)]
+                }]);
+            var book = new PdfBookContent([], [], [], new PdfVerdict(true, ""), new PdfVerdict(true, "")) { SmartPages = [page] };
+            var html = PdfBookHtml.Prepare(book, 7).SmartPages.Single().Html;
+            StringAssert.Contains(html, "data-rows=\"0.05 0.12 0.2;0.05 0.15 0.38;0.05 0.18 0.31\"");
+            StringAssert.Contains(html, "</span><br><span data-b=\"2\">");
+            StringAssert.Contains(html, "> <wbr>A man over the age <wbr>of 30 should not</span>");
+            Assert.AreEqual(" A man over the age of 30 should not", new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html).QuerySelector("[data-b='2']")!.TextContent);
+        }
+
+        // The darkest grey in a part of a picture, given in fractions of it.
+        private static int Darkest(SKBitmap bitmap, double left, double top, double right, double bottom)
+        {
+            var darkest = 255;
+            for (var y = (int)(top * bitmap.Height); y < (int)(bottom * bitmap.Height); y++)
+            {
+                for (var x = (int)(left * bitmap.Width); x < (int)(right * bitmap.Width); x++)
+                {
+                    var pixel = bitmap.GetPixel(x, y);
+                    darkest = Math.Min(darkest, (pixel.Red + pixel.Green + pixel.Blue) / 3);
+                }
+            }
+
+            return darkest;
+        }
+
+        // Words of large type detected apart are read as their line; a narrow column beside large type, and columns of text, stay apart.
+        [TestMethod]
+        public void Recognizer_JoinsTheWordsOfALine_ButNotTheColumns()
+        {
+            static SKRectI Box(int left, int top, int right, int bottom) => new(left, top, right, bottom);
+            var joined = OcrEngine.Join([Box(400, 200, 700, 320), Box(740, 205, 1000, 318), Box(1030, 198, 1300, 322)]);
+            CollectionAssert.AreEqual(new[] { Box(400, 198, 1300, 322) }, joined.ToArray(), "the words of a large heading");
+            Assert.AreEqual(2, OcrEngine.Join([Box(60, 230, 300, 270), Box(400, 200, 900, 330)]).Count, "a small line beside large type");
+            Assert.AreEqual(2, OcrEngine.Join([Box(60, 300, 500, 330), Box(560, 302, 1000, 331)]).Count, "two columns of text");
+            Assert.AreEqual(1, OcrEngine.Join([Box(60, 300, 100, 320), Box(110, 296, 300, 330), Box(310, 300, 350, 320)]).Count, "a short word beside one with a descender");
+        }
+
+        // A region the detector ran over a gutter with a rule in it is read as two lines, each trimmed to its own type; the word spaces of a line part nothing.
+        [TestMethod]
+        public void Recognizer_PartsARegion_AtTheGutterBetweenColumns()
+        {
+            using var page = new SKBitmap(new SKImageInfo(1000, 60, SKColorType.Rgba8888, SKAlphaType.Premul));
+            using (var canvas = new SKCanvas(page))
+            {
+                canvas.Clear(SKColors.White);
+                using var ink = new SKPaint { Color = SKColors.Black };
+                for (var x = 10; x < 300; x += 30) canvas.DrawRect(x, 20, 20, 20, ink);
+                canvas.DrawRect(330, 0, 2, 60, ink);
+                for (var x = 380; x < 980; x += 70) canvas.DrawRect(x, 5, 55, 50, ink);
+            }
+
+            var parts = OcrEngine.Split(page, [new SKRectI(0, 0, 1000, 60)]);
+            Assert.AreEqual(2, parts.Count, "small type, the rule, large type");
+            Assert.IsTrue(parts[0].Top >= 14 && parts[0].Bottom <= 46 && parts[0].Right <= 340, $"the small type alone: {parts[0]}");
+            Assert.IsTrue(parts[1].Left >= 330, $"the large type alone: {parts[1]}");
+            Assert.AreEqual(1, OcrEngine.Split(page, [new SKRectI(370, 0, 1000, 60)]).Count, "a line of large type");
+        }
+
+        // A page drawn by PDFium keeps its colours: an orange box stays orange, not blue.
+        [TestMethod]
+        public void Rendering_KeepsTheColoursOfThePage()
+        {
+            using var orange = new SKBitmap(200, 200);
+            orange.Erase(new SKColor(230, 110, 20));
+            using var image = SKImage.FromBitmap(orange);
+            using var png = image.Encode(SKEncodedImageFormat.Png, 100);
+            var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+            builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4).AddPng(png.ToArray(), new UglyToad.PdfPig.Core.PdfRectangle(0, 0, 595, 842));
+            using var rendering = PdfRendering.Open(builder.Build());
+            using var drawn = rendering.Render(1, 400);
+            var pixel = drawn.GetPixel(drawn.Width / 2, drawn.Height / 2);
+            Assert.IsTrue(pixel.Red > 200 && pixel.Blue < 60, pixel.ToString());
+        }
+
         [TestMethod]
         [DataRow(20, null, new[] { 1, 2, 3 }, 4, 17)]
         [DataRow(20, 15, new[] { 15, 16 }, 17, 18)]
@@ -211,6 +520,12 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("INSERT INTO \"StoredFiles\" (\"LibraryRootId\", \"RelativePath\", \"SizeBytes\", \"ModifiedAt\", \"LastSeenAt\", \"MediaAssetId\") "
                 + "SELECT \"LibraryRootId\", 'Second Book/Second Book.pdf', " + pdf.Length + ", now(), now(), \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" = " + second);
             return second;
+        }
+
+        private static async Task<bool> PrepareAsync(Host host)
+        {
+            await using var scope = host.Services.CreateAsyncScope();
+            return (await scope.ServiceProvider.GetRequiredService<PrepareReadingBooksV1>().ExecuteAsync<UpdateResult>(new ReadingPreparationParametersV1(), default, CancellationToken.None)).Success;
         }
 
         private static async Task<bool> RecognizeAsync(Host host, bool expected)
@@ -244,6 +559,40 @@ namespace Jularr.Backend.Tests
             return builder.Build();
         }
 
+        // A page of a book: three lines of text, a drawing with a label in its rows and a caption below it.
+        private static SKBitmap IllustratedPage()
+        {
+            var bitmap = new SKBitmap(1240, 1754);
+            using var canvas = new SKCanvas(bitmap);
+            canvas.Clear(new SKColor(245, 238, 222));
+            using var font = new SKFont(SKTypeface.FromFamilyName("Times New Roman") ?? SKTypeface.Default, 30);
+            using var ink = new SKPaint { Color = new SKColor(30, 28, 28), IsAntialias = true, StrokeWidth = 4 };
+            for (var index = 0; index < Sentences.Length; index++)
+            {
+                canvas.DrawText(Sentences[index], 120, 240 + index * 48, SKTextAlign.Left, font, ink);
+            }
+
+            // The drawing: hatching and a frame from 300 to 900 across and 700 to 1100 down.
+            for (var x = 300; x <= 900; x += 14)
+            {
+                canvas.DrawLine(x, 700, x + 60, 1100, ink);
+            }
+
+            canvas.DrawRect(300, 700, 600, 400, new SKPaint { Color = ink.Color, Style = SKPaintStyle.Stroke, StrokeWidth = 6 });
+            canvas.DrawText("ALWAYS", 340, 1090, SKTextAlign.Left, font, new SKPaint { Color = new SKColor(30, 20, 140), IsAntialias = true });
+            canvas.DrawText("He shouted.", 520, 1170, SKTextAlign.Left, font, ink);
+            return bitmap;
+        }
+
+        // What a recognizer reads on the illustrated page, in the pixels of the picture it is given.
+        private static OcrPage Read(SKBitmap page)
+        {
+            var (x, y) = (page.Width / 1240.0, page.Height / 1754.0);
+            OcrLine Line(int left, int top, int right, int bottom, string text) => new((int)(left * x), (int)(top * y), (int)(right * x), (int)(bottom * y), text, 0.95f);
+            return new OcrPage(page.Width, page.Height, [.. Sentences.Select((text, index) => Line(110, 210 + index * 48, 1110, 250 + index * 48, text)),
+                Line(330, 1062, 470, 1098, "ALWAYS"), Line(510, 1142, 690, 1178, "He shouted.")]);
+        }
+
         // Each page reads as a chapter number and one paragraph in the picture's pixels; a noisy page reads as the symbols a recognizer makes of a drawing.
         private sealed class FakeRecognizer : IPageRecognizer
         {
@@ -251,7 +600,7 @@ namespace Jularr.Backend.Tests
             public int[] NoisyPages { get; init; } = [];
             private int _calls;
 
-            public Task<Func<byte[], int, OcrPage>> RecognizerAsync(string? language, CancellationToken ct) => Task.FromResult<Func<byte[], int, OcrPage>>((_, _) =>
+            public Task<Func<SKBitmap, OcrPage>> RecognizerAsync(string? language, CancellationToken ct) => Task.FromResult<Func<SKBitmap, OcrPage>>(_ =>
             {
                 var number = Interlocked.Increment(ref Pages);
 

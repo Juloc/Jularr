@@ -1,6 +1,6 @@
 import { readerLifetime } from './Lifetime';
 
-// Figures open in a full-screen view: a tap or click on the picture, Enter or Space on it. The wheel, a pinch, a double tap and the buttons zoom; dragging moves a zoomed picture.
+// Figures open in a full-screen view: a tap or click on the picture in scrolled text, a double click or double tap on pages, Enter or Space on it. The wheel, a pinch, a double tap and the buttons zoom; dragging moves a zoomed picture.
 // A page only the original PDF shows stands in the text as a figure without a picture; it names the page and links to it.
 const MaximumScale = 8;
 const TapDistance = 8;
@@ -67,13 +67,23 @@ export function initializeFigures(reader: HTMLElement, content: HTMLElement): vo
     image.addEventListener('load', paint);
     window.addEventListener('resize', () => { if (dialog.open) paint(); }, { signal });
 
-    // Taps and clicks on pictures, in the text and on the paper of the book view.
+    // Taps and clicks on pictures in the scrolled text. On pages (flat or book) a picture just stands in the book: a tap turns the page there, a double click
+    // or double tap opens it. A button or link over a picture (the page arrows) never opens it.
     let down: { image: HTMLImageElement; x: number; y: number; at: number } | undefined;
+    const under = (event: MouseEvent): HTMLImageElement | null =>
+        event.target instanceof Element && event.target.closest('button, a[href], input, select, textarea') ? null : zoomable(event.target) ?? printedPicture(reader, event);
     reader.addEventListener('pointerdown', event => {
-        if (dialog.open) { down = undefined; return; }
-        const picture = zoomable(event.target) ?? printedPicture(reader, event);
+        if (dialog.open || reader.dataset.mode === 'paged') { down = undefined; return; }
+        const picture = under(event);
         down = picture && event.button === 0 && reader.dataset.selecting !== 'true' ? { image: picture, x: event.clientX, y: event.clientY, at: performance.now() } : undefined;
     }, true);
+    reader.addEventListener('dblclick', event => {
+        if (dialog.open || reader.dataset.mode !== 'paged' || reader.dataset.selecting === 'true') return;
+        const picture = under(event);
+        if (!picture) return;
+        getSelection()?.removeAllRanges();
+        open(picture);
+    });
     reader.addEventListener('pointerup', event => {
         if (dialog.open) { down = undefined; return; }
         const start = down; down = undefined;

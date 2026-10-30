@@ -56,6 +56,8 @@ namespace Jularr.Backend.Service.User.Collection.V1
                             ) AS poster
                         WHERE
                             item."CollectionId" = collection."Id"
+                            -- The profile's view is read for the collection's ids alone, never for the catalog.
+                            AND visible."WorkId" = ANY(ARRAY(SELECT picked."WorkId" FROM "CollectionWorks" AS picked WHERE picked."CollectionId" = collection."Id"))
                         ORDER BY
                             item."Position" DESC
                         LIMIT 4
@@ -70,6 +72,7 @@ namespace Jularr.Backend.Service.User.Collection.V1
                     collection."Id"
                 LIMIT 100;
                 """;
+            sql.DisableJit = true;
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return new BaseDataList<CollectionV1>(await Context.ReadSql.ReadListAsync<CollectionV1>(sql, CancellationToken));
         }

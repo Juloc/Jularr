@@ -1,9 +1,12 @@
 // Which view a book with a PDF is read in, and when a better one is offered: the profile's choice wins, an open book never changes by itself.
-export type ViewChoice = 'auto' | 'smart' | 'original';
-export type ReadingView = 'smart' | 'original';
+export type ViewChoice = 'auto' | 'smart' | 'original' | 'smartpages';
+export type ReadingView = 'smart' | 'original' | 'smartpages';
 
 // The choice as the server stores it: none is automatic.
-export const choiceOf = (stored: string | null | undefined): ViewChoice => stored === 'smart' || stored === 'original' ? stored : 'auto';
+export const choiceOf = (stored: string | null | undefined): ViewChoice => stored === 'smart' || stored === 'original' || stored === 'smartpages' ? stored : 'auto';
+
+// The view as the server stores it: Smart Book 1, original pages 2, Smart Pages 3, none for automatic.
+export const viewTypeOf = (choice: ViewChoice): number | null => choice === 'smart' ? 1 : choice === 'original' ? 2 : choice === 'smartpages' ? 3 : null;
 
 // Automatic follows the recommendation; a choice always wins. With no recommendation yet the original pages are there without any preparation.
 export const effectiveView = (choice: ViewChoice, recommended: ReadingView | null): ReadingView => choice === 'auto' ? recommended ?? 'original' : choice;

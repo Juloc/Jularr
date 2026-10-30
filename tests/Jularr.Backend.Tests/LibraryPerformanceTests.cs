@@ -321,6 +321,77 @@ namespace Jularr.Backend.Tests
 
         [TestMethod]
         [TestCategory("Performance")]
+        public async Task Favorites_LargeCatalog_ReadsStayIndependentOfCatalogSize()
+        {
+            var catalogTitles = int.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_FAVORITES_CATALOG"), out var configuredTitles) ? configuredTitles : 500_000;
+            var samples = int.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_LIBRARY_SAMPLES"), out var configuredSamples) ? configuredSamples : 10;
+            var budget = double.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_LIBRARY_MAX_MS"), System.Globalization.CultureInfo.InvariantCulture, out var maximum) ? maximum : 400;
+            await using var host = await Host.CreateAsync(media: true);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
+            await SeedInventoryAsync(host, 300, 411, false);
+
+            // A film and a series with progress are the favorites; the catalog around them is only Discover titles without any tie to the profile.
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('Collections', TRUE) ON CONFLICT ("Key") DO UPDATE SET "IsEnabled" = TRUE;
+                INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId", "CreatedAt") VALUES (101, 1, now()), (101, 301, now() - interval '1 day');
+                INSERT INTO "Collections" ("Id", "ProfileId", "Name") OVERRIDING SYSTEM VALUE VALUES (1, 101, 'Picked');
+                INSERT INTO "CollectionWorks" ("CollectionId", "WorkId", "Position") VALUES (1, 1, 1);
+                """);
+            for (var first = 1; first <= catalogTitles; first += 50_000)
+            {
+                await host.Fixture.RunSqlAsync($"""
+                    INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace")
+                    SELECT 10000 + number, 1 + number % 2, 'Catalog ' || lpad(number::text, 7, '0'), 1950 + number % 75, 'tmdb_movie'
+                    FROM generate_series({first}, {Math.Min(first + 49_999, catalogTitles)}) AS number;
+                    """);
+            }
+            await host.Fixture.RunSqlAsync("ANALYZE");
+
+            var cases = new (string Name, string Service, string Path)[]
+            {
+                ("watchlist-newest", "User/ReadWatchlistV1", "/api/v1/watchlist?page=1&pageSize=4"),
+                ("watchlist-page", "User/ReadWatchlistV1", "/api/v1/watchlist?page=1&pageSize=48"),
+                ("watchlist-type", "User/ReadWatchlistV1", "/api/v1/watchlist?page=1&pageSize=48&mediaTypeIds=2&librarySortTypeId=2"),
+                ("watchlist-progress", "User/ReadWatchlistV1", "/api/v1/watchlist?page=1&pageSize=48&progressStateId=2&librarySortTypeId=4"),
+                ("watchlist-year", "User/ReadWatchlistV1", "/api/v1/watchlist?page=1&pageSize=48&releaseYearFrom=1990&releaseYearTo=2030&librarySortTypeId=3"),
+                ("watchlist-count", "User/ReadWatchlistCountV1", "/api/v1/watchlist/count"),
+                ("collections", "User/ReadCollectionsV1", "/api/v1/collections"),
+                ("membership", "User/ReadCollectionMembershipV1", "/api/v1/collections/membership?workIds=1&workIds=301"),
+                ("profile-media", "User/ReadProfileMediaV1", "/api/v1/profiles/101/media")
+            };
+            var timings = host.Services.GetRequiredService<ServiceTimings>();
+            var failures = new List<string>();
+            foreach (var item in cases)
+            {
+                var durations = new List<double>();
+                for (var iteration = 0; iteration < samples + 2; iteration++)
+                {
+                    var before = timings.Read(100).SingleOrDefault(row => row.Service == item.Service)?.TotalMilliseconds ?? 0;
+                    using var response = await host.SendAsync(HttpMethod.Get, item.Path);
+                    var body = await response.Content.ReadAsStringAsync();
+                    Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, item.Name + ": " + body);
+                    var service = timings.Read(100).Single(row => row.Service == item.Service).TotalMilliseconds - before;
+                    if (iteration >= 2) durations.Add(service);
+                    if (iteration == 0 && item.Name is "watchlist-newest" or "watchlist-page")
+                    {
+                        using var json = JsonDocument.Parse(body);
+                        Assert.AreEqual(2, json.RootElement.GetProperty("items").GetArrayLength(), item.Name);
+                    }
+                }
+
+                durations.Sort();
+                var p95 = durations[(int)Math.Ceiling(samples * .95) - 1];
+                TestContext.WriteLine($"PERF {item.Name} ({catalogTitles} catalog titles): service median {durations[samples / 2]:F1} ms, p95 {p95:F1} ms");
+                if (durations[samples / 2] >= budget) failures.Add($"{item.Name}: {durations[samples / 2]:F1} ms");
+            }
+
+            Assert.IsEmpty(failures, "Service median exceeded " + budget + " ms: " + string.Join("; ", failures));
+        }
+
+        [TestMethod]
+        [TestCategory("Performance")]
         public async Task DiscoverAndWork_MixedInventory_ReportsWarmReadLatency()
         {
             if (Environment.GetEnvironmentVariable("JULARR_TEST_CATALOG_PERFORMANCE") != "1")

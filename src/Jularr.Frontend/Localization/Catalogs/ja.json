@@ -2168,10 +2168,6 @@
    "A title, optionally with its year.",
    "タイトル。必要に応じて公開年も指定できます。"
   ],
-  "hint.CollectionFields.IsSmart.info": [
-   "A smart collection fills itself from the filters below.",
-   "スマートコレクションは、下のフィルターに従って自動的に内容が埋まります。"
-  ],
   "hint.CollectionFields.ReleaseYear.placeholder": [
    "Any year",
    "指定なし"
@@ -4633,8 +4629,8 @@
    "種類"
   ],
   "collections.smartToggle": [
-   "Smart filter instead of hand-picked titles",
-   "選んだタイトルの代わりにスマートフィルターを使う"
+   "Smart filter",
+   "スマートフィルター"
   ],
   "collections.manual": [
    "Hand-picked",
