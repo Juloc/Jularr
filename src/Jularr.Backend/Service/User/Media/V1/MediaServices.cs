@@ -490,6 +490,8 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     entry."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
+                    -- The profile's view is read for the favorites' ids alone, never for the catalog.
+                    AND visible."WorkId" = ANY(ARRAY(SELECT favorite."WorkId" FROM "WatchlistEntries" AS favorite WHERE favorite."ProfileId" = @ProfileId))
                     AND (
                         cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
                         OR visible."MediaSubtypeId" IS NULL AND visible."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
@@ -507,6 +509,7 @@ namespace Jularr.Backend.Service.User.Media.V1
             sql.Parameters.Add(new WorkListFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.ReleaseYearFrom, Parameters.ReleaseYearTo, Parameters.ProgressStateId, Parameters.LibrarySortTypeId));
             sql.Parameters.Add(LanguageCodes.Aliases);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            sql.DisableJit = true;
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
         }
@@ -532,8 +535,10 @@ namespace Jularr.Backend.Service.User.Media.V1
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"
                 WHERE
                     entry."ProfileId" = @ProfileId
-                    AND NOT visible."IsHidden";
+                    AND NOT visible."IsHidden"
+                    AND visible."WorkId" = ANY(ARRAY(SELECT favorite."WorkId" FROM "WatchlistEntries" AS favorite WHERE favorite."ProfileId" = @ProfileId));
                 """;
+            sql.DisableJit = true;
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return await Context.ReadSql.ReadRequiredAsync<WatchlistCountV1>(sql, CancellationToken);
         }
