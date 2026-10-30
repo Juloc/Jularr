@@ -126,9 +126,18 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
             }
 
-            return candidate.Identity.Confidence == IdentityConfidence.Ambiguous && !profile.AllowAmbiguousIdentity
-                ? new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons)
-                : new CandidateEvaluation(candidate, SelectionDecision.Eligible, score, reliability, reasons);
+            if (candidate.Identity.Confidence == IdentityConfidence.Ambiguous && !profile.AllowAmbiguousIdentity)
+            {
+                return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
+            }
+
+            // An eligible release names its groups' ratings; the points are in the score.
+            foreach (var rating in ReleaseScorer.GroupRatings(profile, candidate.Parsed).Select(rated => rated.Rating).Where(rating => rating != ReleaseGroupRating.Blocked).Distinct().Order())
+            {
+                reasons.Add(new SelectionReason(SelectionReasonKind.Profile, "GroupRated" + rating));
+            }
+
+            return new CandidateEvaluation(candidate, SelectionDecision.Eligible, score, reliability, reasons);
         }
 
         private static SelectionOutcome OutcomeOf(IReadOnlyList<CandidateEvaluation> ranked)

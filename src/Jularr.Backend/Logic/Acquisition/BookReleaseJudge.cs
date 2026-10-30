@@ -51,6 +51,14 @@ namespace Jularr.Backend.Logic.Acquisition
             "french", "francais", "spanish", "italian", "japanese", "vol", "vols", "volume", "volumes"
         };
 
+        // Publishers and imprints of books, light novels and manga, by their first words: a tag that starts with one names the publisher, never the group.
+        private static readonly string[][] Publishers = [.. new[]
+        {
+            "seven seas", "yen press", "yen on", "kodansha", "square enix", "j-novel club", "jnc", "viz", "vertical", "dark horse", "tokyopop", "one peace", "cross infinite world",
+            "airship", "ghost ship", "denpa", "kadokawa", "shueisha", "shogakukan", "hakusensha", "media factory", "del rey", "udon", "sol press", "hanashi media", "tentai books",
+            "j-pop", "carlsen", "egmont", "tokyopop", "altraverse", "crunchyroll", "penguin", "harpercollins", "tor books", "orbit", "gollancz", "simon & schuster", "macmillan"
+        }.Distinct().Select(name => ReleaseWords.Tokens(name).Select(word => word.ToLowerInvariant()).ToArray())];
+
         // Edition words left out of the title a name states.
         private static readonly HashSet<string> EditionWords = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -233,12 +241,19 @@ namespace Jularr.Backend.Logic.Acquisition
             var name = string.Join(' ', tokens.Where(token => !Noise.Contains(token) && !ReleaseWords.YearToken().IsMatch(token)));
             var book = ReadName(title);
             return new ReleaseInfo(title, name, null, null, null, null, null, null, false, false, null, ReleaseSource.Unknown, ReleaseVideoCodec.Unknown, null, ReleaseHdrFormat.None,
-                ReleaseAudioCodec.Unknown, null, [], [], false, false, null, 1, tokens.Contains("proper", StringComparer.OrdinalIgnoreCase),
+                ReleaseAudioCodec.Unknown, null, [], [], false, false, book.Group, 1, tokens.Contains("proper", StringComparer.OrdinalIgnoreCase),
                 tokens.Contains("repack", StringComparer.OrdinalIgnoreCase), null, title.ToLowerInvariant(), 1, [])
             {
                 DocumentFormat = format,
                 Book = book
             };
+        }
+
+        // Whether a tag names a known publisher or imprint ("Seven Seas Entertainment", "Seven Seas Siren").
+        private static bool IsPublisher(string tag)
+        {
+            var words = ReleaseWords.Tokens(tag).Select(word => word.ToLowerInvariant()).ToArray();
+            return Publishers.Any(publisher => publisher.Length <= words.Length && publisher.SequenceEqual(words.Take(publisher.Length)));
         }
 
         // Everything a book release name states, without the request: a pure function of the name.
@@ -315,9 +330,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 : otherFormat is "CBZ" or "CBR" or "CB7" || Has("manga", "comic", "comics", "webtoon") || digitalCompilation || comicNaming ? BookReleaseKind.MangaComic
                 : BookReleaseKind.Ebook;
 
-            // The last named tag is the group (as Nyaa and comic names put it), the one before it the publisher.
-            var group = sceneGroup ?? named.LastOrDefault();
-            var publisher = sceneGroup is null && named.Count > 1 ? named[^2] : null;
+            // A known publisher is the publisher wherever it stands; of the other named tags the last is the group (as Nyaa and comic names put it), the one before it the publisher.
+            var groups = named.Where(tag => !IsPublisher(tag)).ToList();
+            var group = sceneGroup ?? groups.LastOrDefault();
+            var publisher = named.LastOrDefault(IsPublisher) ?? (sceneGroup is null && groups.Count > 1 ? groups[^2] : null);
             int? start = volumes.Success ? int.Parse(volumes.Groups["start"].Value, CultureInfo.InvariantCulture) : null;
             int? end = volumes.Success && volumes.Groups["end"].Success ? int.Parse(volumes.Groups["end"].Value, CultureInfo.InvariantCulture) : null;
             return new BookReleaseName(string.Join(' ', titleWords.Where(token => !ReleaseWords.YearToken().IsMatch(token))), kind, ebookFormat ?? otherFormat,

@@ -69,6 +69,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int? Year { get; init; }
         public AcquisitionSourcePolicy SourcePolicy { get; init; } = AcquisitionSourcePolicy.Unrestricted;
 
+        // The rated release groups of the media type by name in any case, and the profile's points for a good and a bad one.
+        public IReadOnlyDictionary<string, ReleaseGroupRating> GroupRatings { get; init; } = new Dictionary<string, ReleaseGroupRating>(StringComparer.OrdinalIgnoreCase);
+        public int GoodGroupScore { get; init; } = AcquisitionProfileDefinition.DefaultGoodGroupScore;
+        public int BadGroupScore { get; init; } = AcquisitionProfileDefinition.DefaultBadGroupScore;
+
         public string? Item(string? quality) => quality is null ? null
             : QualityGroups.FirstOrDefault(group => group.Qualities.Contains(quality, StringComparer.OrdinalIgnoreCase))?.Key ?? quality;
 
@@ -185,6 +190,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // The fallback when no file carries an asked language: the original language of the work, English, or nothing.
         public LanguageFallbackType LanguageFallback { get; init; } = LanguageFallbackType.Any;
 
+        // The points of a release group rated good or bad for the profile's media type.
+        public const int DefaultGoodGroupScore = 50;
+        public const int DefaultBadGroupScore = -50;
+        public int GoodGroupScore { get; init; } = DefaultGoodGroupScore;
+        public int BadGroupScore { get; init; } = DefaultBadGroupScore;
     }
 
     // An artist's release types and statuses, an author's languages and least pages; empty lists allow everything.
