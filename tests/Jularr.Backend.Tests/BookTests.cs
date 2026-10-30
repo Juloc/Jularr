@@ -226,6 +226,51 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow(true)]
+        [DataRow(false)]
+        [Timeout(300_000)]
+        public async Task Book_SlowDirectSource_RespectsSearchBudgetAndRetainsOtherResults(bool withIndexer)
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeBookSources();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "OL66554W"));
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            var wantedId = await CreateWantedAsync(host, work.Id);
+            if (!withIndexer)
+            {
+                await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"IsEnabled\" = FALSE WHERE \"AcquisitionConnectionTypeId\" = 1");
+            }
+
+            sources.BlockDirectSearch = true;
+            var pending = host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            HttpResponseMessage response;
+            try { response = await pending.WaitAsync(TimeSpan.FromSeconds(35)); }
+            catch
+            {
+                host.Client.CancelPendingRequests();
+                try { using var ignored = await pending; }
+                catch (OperationCanceledException) { }
+                throw;
+            }
+            using var finished = response;
+            Assert.IsTrue(sources.DirectSearchCancelled, "The direct source must receive the search budget's cancellation.");
+            if (withIndexer)
+            {
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                var candidates = (await response.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!;
+                Assert.IsTrue(candidates.Any(candidate => candidate.ConnectionName == "Indexer"));
+                Assert.IsFalse(candidates.Any(candidate => candidate.ConnectionName == "Project Gutenberg"));
+            }
+            else
+            {
+                Assert.AreEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+                StringAssert.Contains(await response.Content.ReadAsStringAsync(), "source_timeout");
+            }
+        }
+
+        [TestMethod]
         public async Task Book_TheIndexerAndTheDirectSource_AreAskedAtTheSameTime()
         {
             using var storage = new TemporaryDirectory();
@@ -587,6 +632,8 @@ namespace Jularr.Backend.Tests
             public bool WaitForIndexer { get; set; }
 
             public int DirectSearches { get; private set; }
+            public bool BlockDirectSearch { get; set; }
+            public bool DirectSearchCancelled { get; private set; }
 
             // Forgets what the set-up asked, so that only the next search is observed, and makes each source wait for the other from now on.
             public void StartCounting()
@@ -629,6 +676,11 @@ namespace Jularr.Backend.Tests
                     case "gutendex.example.test":
                         Order.Enqueue("direct");
                         DirectSearches++;
+                        if (BlockDirectSearch)
+                        {
+                            try { await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken); }
+                            finally { DirectSearchCancelled = cancellationToken.IsCancellationRequested; }
+                        }
                         if (WaitForIndexer)
                         {
                             // The direct source waits for the indexer's search; it only comes when both are asked at the same time.

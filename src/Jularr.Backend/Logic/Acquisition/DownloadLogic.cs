@@ -224,7 +224,16 @@ namespace Jularr.Backend.Logic.Acquisition
                             release."IsEnabled"
                             AND (release."MediaTypeId" IS NULL OR release."MediaTypeId" = work."MediaTypeId")
                             AND (cardinality(release."TagIds") = 0 OR release."TagIds" && ARRAY(SELECT tag."TagId" FROM "WorkTags" AS tag WHERE tag."WorkId" = work."Id"))
-                    ), '[]')::text AS "ReleaseProfiles"
+                    ), '[]')::text AS "ReleaseProfiles",
+                    coalesce((
+                        SELECT
+                            jsonb_object_agg(rated."Name", rated."ReleaseGroupRatingId")
+                        FROM
+                            "ReleaseGroups" AS rated
+                        WHERE
+                            rated."MediaTypeId" = work."MediaTypeId"
+                            AND rated."ReleaseGroupRatingId" IS NOT NULL
+                    ), '{}')::text AS "ReleaseGroupRatings"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
@@ -680,6 +689,75 @@ namespace Jularr.Backend.Logic.Acquisition
             sql.Parameters.Add(new WantedItemParameters(wantedItemId));
             sql.DisableJit = true;
             return ctx.ReadSql.ReadListAsync<UnitStateData>(sql, ct);
+        }
+
+        public static Task<IReadOnlyList<UnitStateData>> ReadVolumeStatesAsync(this LogicContext ctx, long wantedItemId, CancellationToken ct)
+        {
+            // Every whole volume of a book, monitored or not, and whether a present file holds it.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    unit."Id" AS "WorkUnitId",
+                    unit."Title",
+                    NULL::integer AS "ParentNumber",
+                    unit."Number"::integer AS "Number",
+                    TRUE AS "IsAvailable",
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id"
+                        WHERE
+                            asset."WorkUnitId" = unit."Id"
+                            AND available."MissingSince" IS NULL
+                    ) AS "HasMedia",
+                    FALSE AS "IsCovered",
+                    NULL::integer AS "AbsoluteNumber",
+                    NULL::date AS "ReleasedOn",
+                    FALSE AS "NeedsUpgrade"
+                FROM
+                    "WantedItems" AS wanted
+                    JOIN "WorkUnits" AS unit ON unit."WorkId" = wanted."WorkId"
+                WHERE
+                    wanted."Id" = @WantedItemId
+                    AND unit."WorkUnitTypeId" = 3
+                    AND unit."ParentWorkUnitId" IS NULL
+                    AND unit."Number" = trunc(unit."Number")
+                ORDER BY
+                    unit."Number";
+                """;
+            sql.Parameters.Add(new WantedItemParameters(wantedItemId));
+            return ctx.ReadSql.ReadListAsync<UnitStateData>(sql, ct);
+        }
+
+        public static async Task<IReadOnlySet<string>> ReadAssignedStoredPathsAsync(this LogicContext ctx, StoredFolderData data, CancellationToken ct)
+        {
+            // Names the inventory still gives an assigned file, also one that went missing, below the folders an import writes to.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    file."LibraryRootId",
+                    file."RelativePath"
+                FROM
+                    "StoredFiles" AS file
+                WHERE
+                    file."LibraryRootId" = @LibraryRootId
+                    AND file."MediaAssetId" IS NOT NULL
+                    AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            jsonb_array_elements_text(@Folders::jsonb) AS folder ("Path")
+                        WHERE
+                            folder."Path" = ''
+                            OR starts_with(file."RelativePath", folder."Path" || '/')
+                    );
+                """;
+            sql.Parameters.Add(data);
+            return (await ctx.ReadSql.ReadListAsync<LibraryFilePathData>(sql, ct)).Select(file => file.RelativePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
 
         public static Task<IReadOnlyList<DownloadData>> ReadActiveDownloadsAsync(this LogicContext ctx, CancellationToken ct, long? operationId = null)

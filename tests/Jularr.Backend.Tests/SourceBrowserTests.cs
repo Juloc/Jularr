@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using Jularr.Integrations.Data.Browser;
 using Jularr.Integrations.Logic.Browser;
 using TemporaryDirectory = Jularr.Backend.Tests.LibraryTests.TemporaryDirectory;
 
@@ -296,6 +297,83 @@ namespace Jularr.Backend.Tests
             var again = await third.ReadPageAsync(server.Address, CancellationToken.None);
             Assert.IsNotNull(again);
             StringAssert.Contains(again, "The page behind the check");
+        }
+
+        [TestMethod]
+        [Timeout(60_000)]
+        public async Task Browser_CancelledMirrorSearch_ClosesOnlyTemporaryTabs_AndReleasesTheBrowser()
+        {
+            var executable = Environment.GetEnvironmentVariable("JULARR_BROWSER");
+            if (string.IsNullOrWhiteSpace(executable)) Assert.Inconclusive("JULARR_BROWSER names no browser.");
+            using var folder = new TemporaryDirectory();
+            using var server = new CheckPage();
+            var port = FreePort();
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(executable)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
+                Arguments = $"--headless=new --remote-debugging-port={port} --user-data-dir=\"{Path.Combine(folder.Path, "profile")}\" --no-first-run --no-default-browser-check about:blank"
+            }) ?? throw new InvalidOperationException("The isolated browser did not start.");
+            try
+            {
+                await using var source = new SourceBrowser(new BrowserOptions { RemoteAddress = $"http://127.0.0.1:{port}", ProfilePath = folder.Path, PageTimeoutSeconds = 30, AllowPrivateAddressesForTests = true });
+                using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(40));
+                using var http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+                while (true)
+                {
+                    try { using var ready = await http.GetAsync("/json/version", limit.Token); ready.EnsureSuccessStatusCode(); break; }
+                    catch (HttpRequestException) { await Task.Delay(50, limit.Token); }
+                }
+                await source.StartAsync(limit.Token);
+                async Task<string[]> TabsAsync(string? title = null)
+                {
+                    using var tabs = System.Text.Json.JsonDocument.Parse(await http.GetStringAsync("/json/list", limit.Token));
+                    return tabs.RootElement.EnumerateArray().Where(tab => tab.GetProperty("type").GetString() == "page")
+                        .Where(tab => title is null || tab.GetProperty("title").GetString() == title)
+                        .Select(tab => tab.GetProperty("id").GetString()!).ToArray();
+                }
+
+                var primary = (await TabsAsync()).Single();
+                using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(limit.Token);
+                var reading = source.ReadPagesAsync([new Uri(server.Address, "/needs-person?mirror=1"), new Uri(server.Address, "/needs-person?mirror=2")], cancelled.Token);
+                while ((await TabsAsync("DDoS-Guard")).Length < 2) await Task.Delay(50, limit.Token);
+                cancelled.Cancel();
+                await Assert.ThrowsAsync<OperationCanceledException>(async () => { await reading; });
+                var remaining = await TabsAsync();
+                var closingStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+                while (remaining.Length > 1 && System.Diagnostics.Stopwatch.GetElapsedTime(closingStarted) < TimeSpan.FromSeconds(5))
+                {
+                    await Task.Delay(50, limit.Token);
+                    remaining = await TabsAsync();
+                }
+                CollectionAssert.AreEqual(new[] { primary }, remaining, "Cancellation must close the temporary mirror tab and retain the primary session; remaining tabs: " + remaining.Length);
+                Assert.IsNotNull(await source.ReadPagesAsync([new Uri(server.Address, "/session")], limit.Token), "The browser gate must be available for the next search.");
+            }
+            finally
+            {
+                // Chrome's crash reporter retains profile files if its parent is killed on Windows.
+                // Close only this test's browser normally before falling back to terminating it.
+                if (!process.HasExited)
+                {
+                    try
+                    {
+                        using var closing = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                        using var http = new HttpClient();
+                        using var version = System.Text.Json.JsonDocument.Parse(await http.GetStringAsync($"http://127.0.0.1:{port}/json/version", closing.Token));
+                        await using var client = new DevToolsClient();
+                        await client.ConnectAsync(version.RootElement.GetProperty("webSocketDebuggerUrl").GetString()!, closing.Token);
+                        try { await client.SendAsync("Browser.close", null, closing.Token); }
+                        catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException) { }
+                        await process.WaitForExitAsync(closing.Token);
+                    }
+                    catch (Exception exception) when (exception is HttpRequestException or SourceBrowserException or OperationCanceledException or System.Text.Json.JsonException)
+                    {
+                        if (!process.HasExited) process.Kill(true);
+                    }
+                }
+                await process.WaitForExitAsync();
+            }
         }
 
         [TestMethod]

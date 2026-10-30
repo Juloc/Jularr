@@ -26,7 +26,7 @@ namespace Jularr.E2E.Tests
             {
                 await Owner.SetUpAndSignInAsync(page);
                 await Steps.AddLibraryAsync(page, folders.Library);
-                await page.GotoAsync("/Admin/Acquisition/Downloads");
+                await page.GotoAsync("/Admin/Downloads/Clients");
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }).And(page.Locator("[href*='Type=Sabnzbd']")));
                 var form = page.Locator("dialog#connection-editor form").Filter(new() { Has = page.Locator("[name=BaseUrl]") });
                 await page.WaitForLoadStateAsync(LoadState.NetworkIdle);

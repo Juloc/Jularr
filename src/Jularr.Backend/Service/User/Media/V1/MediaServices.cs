@@ -137,6 +137,8 @@ namespace Jularr.Backend.Service.User.Media.V1
                             JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                         WHERE
                             asset."WorkId" = work."Id"
+                        -- Ask for this Work alone: without it every file record of the library is read once.
+                        OFFSET 0
                     ) OR EXISTS (
                         SELECT
                             1
@@ -319,7 +321,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     asset."WorkId" = @WorkId
                     AND files."FileCount" > 0
-                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = asset."WorkId")
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = @WorkId)
                 ORDER BY
                     parent."Number" NULLS FIRST,
                     unit."Number" NULLS FIRST,
@@ -490,6 +492,8 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     entry."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
+                    -- The profile's view is read for the favorites' ids alone, never for the catalog.
+                    AND visible."WorkId" = ANY(ARRAY(SELECT favorite."WorkId" FROM "WatchlistEntries" AS favorite WHERE favorite."ProfileId" = @ProfileId))
                     AND (
                         cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
                         OR visible."MediaSubtypeId" IS NULL AND visible."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
@@ -507,6 +511,7 @@ namespace Jularr.Backend.Service.User.Media.V1
             sql.Parameters.Add(new WorkListFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.ReleaseYearFrom, Parameters.ReleaseYearTo, Parameters.ProgressStateId, Parameters.LibrarySortTypeId));
             sql.Parameters.Add(LanguageCodes.Aliases);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            sql.DisableJit = true;
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
         }
@@ -532,8 +537,10 @@ namespace Jularr.Backend.Service.User.Media.V1
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"
                 WHERE
                     entry."ProfileId" = @ProfileId
-                    AND NOT visible."IsHidden";
+                    AND NOT visible."IsHidden"
+                    AND visible."WorkId" = ANY(ARRAY(SELECT favorite."WorkId" FROM "WatchlistEntries" AS favorite WHERE favorite."ProfileId" = @ProfileId));
                 """;
+            sql.DisableJit = true;
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return await Context.ReadSql.ReadRequiredAsync<WatchlistCountV1>(sql, CancellationToken);
         }
@@ -580,7 +587,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                     credit."WorkId" = @WorkId
                     AND credit."WorkUnitId" IS NULL
                     AND credit."WorkEditionId" IS NULL
-                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = credit."WorkId")
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = @WorkId)
                 ORDER BY
                     credit."PersonRoleId",
                     credit."Position";
@@ -617,7 +624,8 @@ namespace Jularr.Backend.Service.User.Media.V1
                             "MediaAssets" AS asset
                             JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
                         WHERE
-                            asset."WorkUnitId" = episode."Id"
+                            asset."WorkId" = season."WorkId"
+                            AND asset."WorkUnitId" = episode."Id"
                             AND asset."MediaAssetTypeId" = 1
                             AND file."MissingSince" IS NULL
                             AND NOT file."IsSubtitle"
@@ -634,7 +642,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     season."WorkId" = @WorkId
                     AND season."WorkUnitTypeId" = 1
-                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = season."WorkId")
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = @WorkId)
                 GROUP BY
                     season."Id"
                 ORDER BY
@@ -702,7 +710,8 @@ namespace Jularr.Backend.Service.User.Media.V1
                             "MediaAssets" AS asset
                             JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
                         WHERE
-                            asset."WorkUnitId" = episode."Id"
+                            asset."WorkId" = episode."WorkId"
+                            AND asset."WorkUnitId" = episode."Id"
                             AND asset."MediaAssetTypeId" = 1
                         GROUP BY
                             asset."Id"
@@ -717,7 +726,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                     episode."WorkId" = @WorkId
                     AND episode."WorkUnitTypeId" = 2
                     AND season."Number" = @SeasonNumber
-                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = episode."WorkId")
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = @WorkId)
                 ORDER BY
                     episode."Number";
                 """;

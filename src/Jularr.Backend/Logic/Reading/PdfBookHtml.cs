@@ -10,6 +10,13 @@ namespace Jularr.Backend.Logic.Reading
     {
         public static string SectionPath(int index) => ":section/" + index.ToString("D5", CultureInfo.InvariantCulture);
 
+        // Smart Pages are reading units of their own beside the sections (read and translated like them), numbered from SmartPageUnits.
+        public const int SmartPageUnits = 100_000;
+
+        public static string SmartPagePath(int index) => ":smartpage/" + index.ToString("D5", CultureInfo.InvariantCulture);
+
+        public static string SmartImagePath(int page) => "pdf/smart/" + page.ToString("D5", CultureInfo.InvariantCulture) + ".jpg";
+
         public static PdfPreparedBook Prepare(PdfBookContent book, long documentId)
         {
             var sections = new List<PdfPreparedSection>();
@@ -39,7 +46,152 @@ namespace Jularr.Backend.Logic.Reading
                 sections.Add(new PdfPreparedSection(new ReadingStructureSection(path, chapter.Title, prepared.Characters, prepared.Blocks, pages.DefaultIfEmpty(0).Min(), pages.DefaultIfEmpty(0).Max()), prepared.Html));
             }
 
-            return new PdfPreparedBook(sections, toc, [.. book.Chapters.SelectMany(chapter => chapter.Blocks).Where(block => block.Figure == ReadingHtml.OriginalFigure).Select(block => block.Page).Distinct().Order()]);
+            return new PdfPreparedBook(sections, toc, [.. book.Chapters.SelectMany(chapter => chapter.Blocks).Where(block => block.Figure == ReadingHtml.OriginalFigure).Select(block => block.Page).Distinct().Order()],
+                [.. book.SmartPages.Select(page => SmartPage(page, documentId))]);
+        }
+
+        // A Smart Page: the text-free page and its blocks where they stand, each run in its measured look; the Reader fits the text (or its translation) into the box.
+        private static PdfPreparedSection SmartPage(PdfSmartPage page, long documentId)
+        {
+            static string Number(double value) => value.ToString("0.#####", CultureInfo.InvariantCulture);
+            var html = new StringBuilder();
+            html.Append("<div data-smart-page=\"").Append(page.Number.ToString(CultureInfo.InvariantCulture)).Append("\" data-ratio=\"").Append(Number(page.Ratio)).Append("\">")
+                .Append("<img data-smart-image alt=\"\" src=\"").Append(WebUtility.HtmlEncode(ReadingHtml.ResourceUrl(documentId, SmartImagePath(page.Number)))).Append("\">");
+            // A block is one sentence's text: one box, or the boxes text flowing around a picture runs through, each a part of it.
+            var flows = new List<List<PdfSmartBlock>>();
+            var heads = new Dictionary<int, List<PdfSmartBlock>>();
+            for (var index = 0; index < page.Blocks.Count; index++)
+            {
+                var block = page.Blocks[index];
+                if (block.Follows >= 0 && heads.TryGetValue(block.Follows, out var flow))
+                {
+                    flow.Add(block);
+                }
+                else
+                {
+                    flow = [block];
+                    flows.Add(flow);
+                }
+
+                heads[index] = flow;
+            }
+
+            // Blocks are numbered in their order, a sentence in a look of its own inside one too.
+            var number = 0;
+            for (var index = 0; index < flows.Count; index++)
+            {
+                html.Append("<p data-b=\"").Append((number++).ToString(CultureInfo.InvariantCulture)).Append('"');
+                if (flows[index] is [var single])
+                {
+                    Box(html, single);
+                    html.Append('>');
+                    // Sentences in looks of their own (the bold "Rule No. 4:" before its text) are translated each on its own and keep their look.
+                    var sentences = Sentences(single.Runs);
+                    if (sentences.Count == 1)
+                    {
+                        Runs(html, single, single.Runs);
+                    }
+                    else
+                    {
+                        foreach (var sentence in sentences)
+                        {
+                            // A lead-in on a line of its own keeps it in a translation too.
+                            if (sentence != sentences[0] && sentence[0].Breaks.Any(at => at <= 1))
+                            {
+                                html.Append("<br>");
+                            }
+
+                            html.Append("<span data-b=\"").Append((number++).ToString(CultureInfo.InvariantCulture)).Append("\">");
+                            Runs(html, single, sentence);
+                            html.Append("</span>");
+                        }
+                    }
+                }
+                else
+                {
+                    html.Append('>');
+                    foreach (var part in flows[index])
+                    {
+                        // Parts read as one sentence: a space between them, none after a word broken at the line's end.
+                        if (part != flows[index][0] && !(flows[index][flows[index].IndexOf(part) - 1].Runs.LastOrDefault()?.Text.EndsWith('-') ?? false))
+                        {
+                            html.Append(' ');
+                        }
+
+                        html.Append("<span data-part");
+                        Box(html, part);
+                        html.Append('>');
+                        Runs(html, part, part.Runs);
+                        html.Append("</span>");
+                    }
+                }
+
+                html.Append("</p>");
+            }
+
+            var characters = page.Blocks.Sum(block => block.Runs.Sum(run => run.Text.Length));
+            return new PdfPreparedSection(new ReadingStructureSection("pdf/smart/" + page.Number.ToString("D5", CultureInfo.InvariantCulture) + ".xhtml", null, characters, number, page.Number, page.Number),
+                html.Append("</div>").ToString());
+
+            static void Box(StringBuilder html, PdfSmartBlock block)
+            {
+                html.Append(" data-box=\"").AppendJoin(' ', new[] { block.Left, block.Top, block.Width, block.Height }.Select(Number)).Append("\" data-lines=\"")
+                    .Append(block.Lines.ToString(CultureInfo.InvariantCulture)).Append("\" data-base=\"").Append(Number(block.Base)).Append('"');
+                if (block.Series > 0)
+                {
+                    html.Append(" data-series=\"").Append(block.Series.ToString(CultureInfo.InvariantCulture)).Append('"');
+                }
+
+                html.Append(block.IsLabel ? " data-label" : "").Append(block.IsRunning ? " data-running" : "");
+                if (block.Rows.Count > 0)
+                {
+                    html.Append(" data-rows=\"").AppendJoin(';', block.Rows.Select(row => Number(row.Left) + " " + Number(row.Baseline) + " " + Number(row.Width))).Append('"');
+                }
+            }
+
+            // A new sentence starts where a run in another look follows the end of one.
+            static List<List<PdfSmartRun>> Sentences(IReadOnlyList<PdfSmartRun> runs)
+            {
+                var sentences = new List<List<PdfSmartRun>>();
+                foreach (var run in runs)
+                {
+                    if (sentences.Count == 0 || sentences[^1][^1].Text.TrimEnd() is { Length: > 0 } before && ".:!?…”\"".Contains(before[^1]))
+                    {
+                        sentences.Add([run]);
+                    }
+                    else
+                    {
+                        sentences[^1].Add(run);
+                    }
+                }
+
+                return sentences;
+            }
+
+            static void Runs(StringBuilder html, PdfSmartBlock block, IEnumerable<PdfSmartRun> runs)
+            {
+                foreach (var run in runs)
+                {
+                    html.Append("<span data-face=\"").Append(run.Serif ? "serif" : "sans").Append("\" style=\"font-weight:").Append(run.Weight.ToString(CultureInfo.InvariantCulture))
+                        .Append(run.Italic ? ";font-style:italic" : "").Append(run.Serif ? "" : ";font-stretch:" + run.Stretch.ToString(CultureInfo.InvariantCulture) + "%")
+                        .Append(";color:").Append(run.Ink).Append(";font-size:").Append(Number(block.Base > 0 ? run.Size / block.Base : 1)).Append("em\">")
+                        .Append(Lines(run)).Append("</span>");
+                }
+            }
+
+            // The text with a <wbr> where the original starts a new line: the Reader sets the original line by line, a translation flows on.
+            static string Lines(PdfSmartRun run)
+            {
+                var text = new StringBuilder();
+                var from = 0;
+                foreach (var at in run.Breaks.Where(at => at > 0 && at < run.Text.Length).Order())
+                {
+                    text.Append(WebUtility.HtmlEncode(run.Text[from..at])).Append("<wbr>");
+                    from = at;
+                }
+
+                return text.Append(WebUtility.HtmlEncode(run.Text[from..])).ToString();
+            }
         }
 
         // A paragraph, a small picture in the line, a figure with its alternative text and caption, or the stand-in for a page only the original shows; each starts on a page.
@@ -67,5 +219,6 @@ namespace Jularr.Backend.Logic.Reading
 
     internal sealed record PdfPreparedSection(ReadingStructureSection Structure, string Html);
 
-    internal sealed record PdfPreparedBook(IReadOnlyList<PdfPreparedSection> Sections, IReadOnlyList<ReadingStructureEntry> Toc, IReadOnlyList<int> OriginalPages);
+    internal sealed record PdfPreparedBook(IReadOnlyList<PdfPreparedSection> Sections, IReadOnlyList<ReadingStructureEntry> Toc, IReadOnlyList<int> OriginalPages,
+        IReadOnlyList<PdfPreparedSection> SmartPages);
 }

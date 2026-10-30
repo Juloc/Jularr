@@ -17,23 +17,33 @@ namespace Jularr.Backend.Tests
             // The Owner with the modules on sees every entry once; each links to the first of its pages.
             var html = await GetAsync(host, "/Admin/Dashboard");
             var entries = Entries(html);
-            foreach (var address in new[] { "/Admin/Dashboard", "/Admin/Activity", "/Admin/Jobs", "/Admin/Works", "/Admin/Library", "/Admin/Downloads", "/Admin/Acquisition/Sources", "/Admin/Providers", "/Admin/Storage", "/Admin/Accounts", "/Admin/Instance", "/Admin/Localization", "/Admin/System", "/Admin/Backup" })
+            foreach (var address in new[] { "/Admin/Dashboard", "/Admin/Activity", "/Admin/Jobs", "/Admin/Works", "/Admin/Library", "/Admin/Downloads", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed",
+                "/Admin/Downloads/Clients", "/Admin/Acquisition", "/Admin/Acquisition/Sources", "/Admin/Providers", "/Admin/Storage", "/Admin/Accounts", "/Admin/Instance", "/Admin/Localization", "/Admin/System", "/Admin/Backup" })
             {
                 CollectionAssert.Contains(entries, address);
             }
 
-            Assert.AreEqual(14, entries.Count);
-            Assert.AreEqual(6, Regex.Matches(html, "<section class=\"menu-group").Count);
+            Assert.AreEqual(18, entries.Count);
+            Assert.AreEqual(7, Regex.Matches(html, "<section class=\"menu-group").Count);
             StringAssert.Contains(html, "class=\"menu-entry is-active\" href=\"/Admin/Dashboard\"");
 
-            // The Downloads entry opens its page, whose client tabs replace the chip row; its other pages lead back to it by their chips.
-            Assert.IsFalse((await GetAsync(host, "/Admin/Downloads")).Contains("navigation-tabs--filters", StringComparison.Ordinal));
-            StringAssert.Contains(Row(await GetAsync(host, "/Admin/Acquisition")), "href=\"/Admin/Downloads\"");
+            // Downloads is a group: each of its pages is an entry of its own, so none has a chip row; the indexers keep theirs, without the former download clients page.
+            foreach (var address in new[] { "/Admin/Downloads", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed", "/Admin/Downloads/Clients" })
+            {
+                var page = await GetAsync(host, address);
+                Assert.IsFalse(page.Contains("navigation-tabs--filters", StringComparison.Ordinal), address);
+                StringAssert.Contains(page, "class=\"menu-entry is-active\" href=\"" + address + "\"", address);
+            }
+
+            var indexers = Row(await GetAsync(host, "/Admin/Acquisition"));
+            StringAssert.Contains(indexers, "href=\"/Admin/Acquisition/Profiles?tab=profiles\"");
+            Assert.IsFalse(indexers.Contains("href=\"/Admin/Acquisition/Downloads\"", StringComparison.Ordinal));
+            Assert.IsFalse(indexers.Contains("href=\"/Admin/Downloads\"", StringComparison.Ordinal));
 
             // A module that is off takes its entries and chips with it.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" IN ('Acquisition', 'Requests')");
             entries = Entries(await GetAsync(host, "/Admin/Dashboard"));
-            foreach (var address in new[] { "/Admin/Downloads", "/Admin/Acquisition/Sources", "/Admin/Wanted" })
+            foreach (var address in new[] { "/Admin/Downloads", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed", "/Admin/Downloads/Clients", "/Admin/Acquisition", "/Admin/Acquisition/Sources", "/Admin/Wanted" })
             {
                 CollectionAssert.DoesNotContain(entries, address);
             }

@@ -132,7 +132,7 @@ namespace Jularr.Backend.Tests
                 StringAssert.Contains(html, "Configure download storage");
             }
 
-            using (var downloads = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads?Type=Usenet"))
+            using (var downloads = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Servers?Type=Usenet"))
             {
                 var html = await downloads.Content.ReadAsStringAsync();
                 Assert.AreEqual(HttpStatusCode.OK, downloads.StatusCode, html);

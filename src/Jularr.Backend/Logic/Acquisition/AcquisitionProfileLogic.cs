@@ -65,7 +65,9 @@ namespace Jularr.Backend.Logic.Acquisition
                 CutoffFormatScore = input.CutoffFormatScore,
                 MinimumUpgradeFormatScore = input.MinimumUpgradeFormatScore,
                 LanguageOrder = languageOrder,
-                LanguageFallback = input.LanguageFallback
+                LanguageFallback = input.LanguageFallback,
+                GoodGroupScore = stored?.GoodGroupScore ?? AcquisitionProfileDefinition.DefaultGoodGroupScore,
+                BadGroupScore = stored?.BadGroupScore ?? AcquisitionProfileDefinition.DefaultBadGroupScore
             };
             return JsonSerializer.Serialize(definition, AcquisitionSelectionLogic.DefinitionOptions);
         }

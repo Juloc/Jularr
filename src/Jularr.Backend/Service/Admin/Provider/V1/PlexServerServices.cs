@@ -126,10 +126,12 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
     public sealed class ReadPlexSignInV1 : AdminService<PlexServerParametersV1>
     {
         private readonly PlexServer _plex;
+        private readonly PlexLibraries _libraries;
 
-        internal ReadPlexSignInV1(PlexServer plex)
+        internal ReadPlexSignInV1(PlexServer plex, PlexLibraries libraries)
         {
             _plex = plex;
+            _libraries = libraries;
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PlexSignInV1>()];
@@ -140,21 +142,14 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
         {
             var settings = await Context.ReadPlexSignInAsync(CancellationToken);
 
-            // The libraries come from the server while it answers; the chosen keys stay either way.
-            IReadOnlyList<PlexSection> sections = [];
-            if (_plex.Connect(await Context.ReadPlexServerAsync(CancellationToken)) is { } connection)
-            {
-                try
-                {
-                    sections = (await _plex.ReadServerAsync(connection, CancellationToken)).Sections;
-                }
-                catch (ServiceUnavailableException)
-                {
-                }
-            }
+            // The libraries are the ones the server listed last (any test, sync or health check); this read never asks the server. Until it listed any, the chosen keys stand for themselves.
+            var connected = _plex.Connect(await Context.ReadPlexServerAsync(CancellationToken)) is not null;
+            var sections = connected ? _libraries.Sections : [];
+            string[] keys = sections.Count > 0 ? [.. sections.Select(section => section.Key)] : connected ? settings.RegistrationSections : [];
+            string[] titles = sections.Count > 0 ? [.. sections.Select(section => section.Title)] : keys;
 
             return new PlexSignInV1(settings.SignIn, settings.Registration, settings.RegistrationApproval, settings.RegistrationSections,
-                [.. sections.Select(section => section.Key)], [.. sections.Select(section => section.Title)]);
+                keys, titles);
         }
     }
 

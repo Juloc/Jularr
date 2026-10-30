@@ -114,6 +114,60 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(after.IsRecognizing);
         }
 
+        // After a download nobody has to open a book: the library is prepared in the background, newest first, EPUBs at once and a scan through the
+        // recognizer, which prepares it when it is done; the book then knows its language for the server's translation.
+        [TestMethod]
+        public async Task Books_ArePreparedWithoutOpening_ScansThroughTheRecognizer()
+        {
+            using var storage = new TemporaryDirectory();
+            var recognizer = new FakeRecognizer();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddSingleton<IPageRecognizer>(recognizer));
+            var scan = await AddScanAsync(host, storage.Path, ScannedPdf(pages: 2));
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Ocr'");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\""));
+
+            // The scan is the newest book: it waits for the recognizer; then the EPUB is prepared; then there is nothing left.
+            Assert.IsTrue(await PrepareAsync(host));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingRecognitions\" WHERE \"FinishedAt\" IS NULL"));
+            Assert.IsTrue(await PrepareAsync(host));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\" WHERE \"CacheCompletedAt\" IS NOT NULL"));
+            Assert.IsFalse(await PrepareAsync(host));
+
+            // The recognizer reads the scan and prepares it; its language comes from its text.
+            await RecognizeAsync(host, true);
+            Assert.AreEqual("en", await host.ScalarAsync("SELECT document.\"Language\" FROM \"ReadingDocuments\" AS document JOIN \"StoredFiles\" AS file ON file.\"Id\" = document.\"StoredFileId\" "
+                + "WHERE file.\"MediaAssetId\" = " + scan + " AND file.\"MissingSince\" IS NULL"));
+            Assert.IsFalse(await PrepareAsync(host));
+        }
+
+        // Two copies of the same book share one document, which names only the copy opened last: each copy is prepared once, not in turn forever.
+        [TestMethod]
+        public async Task Books_ArePreparedOnce_WhenTheLibraryHoldsTwoCopies()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var (_, second) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var books = Path.Combine(storage.Path, "1", "Books");
+            File.Copy(Path.Combine(books, "First Book", "First Book.epub"), Path.Combine(books, "Second Book", "Second Book.epub"), overwrite: true);
+            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"SizeBytes\" = " + new FileInfo(Path.Combine(books, "Second Book", "Second Book.epub")).Length
+                + " WHERE \"MediaAssetId\" = " + second);
+
+            Assert.IsTrue(await PrepareAsync(host));
+            Assert.IsTrue(await PrepareAsync(host));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\""));
+            Assert.IsFalse(await PrepareAsync(host));
+        }
+
+        [TestMethod]
+        [DataRow("The man was sure that it is the end of the day and he went with them to the house of the old woman.", "en")]
+        [DataRow("Der Mann sagte, dass er nicht mit ihr zu der Stadt gehen will, und das ist ein Problem, das sich nicht löst.", "de")]
+        [DataRow("Le chat est dans la maison et les enfants ne sont pas là, mais une femme que nous aimons est dans le jardin.", "fr")]
+        [DataRow("12 34 56", null)]
+        public void Language_IsGuessedFromCommonWords(string text, string? expected)
+        {
+            Assert.AreEqual(expected, ReadingLanguage.Guess(text));
+        }
+
         // A long scan is read a few pages at a time, the page a reader has open first; an interrupted scan goes on where it stopped.
         [TestMethod]
         public async Task Recognition_ReadsInSlices_OpenPageFirst_AndResumes()
@@ -243,6 +297,7 @@ namespace Jularr.Backend.Tests
 
             var lines = PdfScanAnalysis.Analyse(page, read, layer);
             CollectionAssert.AreEqual(new[] { "Rule No. 687: If it’s fast,", "Rule No. 688: If it’s in" }, lines.Select(line => line.Text).ToArray());
+            Assert.AreEqual(12, lines.Sum(line => line.Words!.Length / 2));
 
             // Small type beside large in the same rows stays apart.
             var mixed = new OcrPage(1000, 1000, [new OcrLine(50, 100, 800, 200, "considering Wom", 0.5f)]);
@@ -294,6 +349,97 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(book.Images.All(picture => picture.MediaType == "image/jpeg" && SKBitmap.Decode(picture.Bytes) is { Width: > 300 }));
             Assert.IsFalse(blocks.Any(block => block.Text?.Contains("ALWAYS", StringComparison.Ordinal) == true || block.Text?.Contains("He shouted", StringComparison.Ordinal) == true));
             StringAssert.Contains(blocks.First(block => block.Text is not null).Text, Sentences[0]);
+
+            // Smart Pages: the pages between the covers in their own layout, their text set anew in serif like the print, the label as a label, and the
+            // text erased from the page while the drawing stays.
+            CollectionAssert.AreEqual(new[] { 2, 3 }, book.SmartPages.Select(page => page.Number).ToArray());
+            var smart = book.SmartPages[0];
+            StringAssert.StartsWith(string.Concat(smart.Blocks[0].Runs.Select(run => run.Text)), Sentences[0]);
+            Assert.IsTrue(smart.Blocks[0].Runs.All(run => run.Serif && !run.Italic && run.Weight <= 500));
+            Assert.IsTrue(smart.Blocks.Single(block => block.Runs.Any(run => run.Text == "ALWAYS")).IsLabel);
+            Assert.IsTrue(smart.Blocks.Any(block => !block.IsLabel && block.Runs.Any(run => run.Text == "He shouted.")));
+            using var clean = SKBitmap.Decode(smart.Image);
+            Assert.AreEqual(1240.0 / 1754, smart.Ratio, 0.01);
+            Assert.IsTrue(Darkest(clean, 0.1, 210 / 1754.0, 0.88, 250 / 1754.0) > 170, "the first line is erased");
+            Assert.IsTrue(Darkest(clean, 0.25, 0.42, 0.72, 0.6) < 100, "the drawing stays");
+        }
+
+        // Text flowing around a picture runs through several boxes: they are one block of the page, translated as one sentence, each box a part of it.
+        [TestMethod]
+        public void SmartPage_TextAroundAPicture_IsOneBlockInParts()
+        {
+            PdfSmartRun Run(string text) => new(text, true, 400, false, 100, 0.03, "#222222");
+            var page = new PdfSmartPage(5, [1], 0.8, [
+                new PdfSmartBlock(0.05, 0.1, 0.9, 0.05, 1, 0.03, 0, false, false, [Run("Of all love triangles, those involving at least one law-")]),
+                new PdfSmartBlock(0.5, 0.16, 0.4, 0.05, 1, 0.03, 0, false, false, [Run("enforcement official are the most fraught.")]) { Follows = 0 },
+                new PdfSmartBlock(0.5, 0.22, 0.4, 0.05, 1, 0.03, 0, false, false, [Run("Rule No. 9: Describing yourself as a hot-tub")]),
+                new PdfSmartBlock(0.55, 0.28, 0.4, 0.05, 1, 0.03, 0, false, false, [Run("guy on the first date.")]) { Follows = 2 },
+                new PdfSmartBlock(0.05, 0.9, 0.4, 0.02, 1, 0.012, 0, false, true, [Run("12 ESQUIRE")])]);
+            var book = new PdfBookContent([], [], [], new PdfVerdict(true, ""), new PdfVerdict(true, "")) { SmartPages = [page] };
+            var html = PdfBookHtml.Prepare(book, 7).SmartPages.Single();
+            Assert.AreEqual(3, html.Structure.Blocks);
+            var document = new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html.Html);
+            var first = document.QuerySelector("[data-b='0']")!;
+            Assert.AreEqual(2, first.QuerySelectorAll("[data-part][data-box]").Length);
+            Assert.AreEqual("Of all love triangles, those involving at least one law-enforcement official are the most fraught.", first.TextContent);
+            Assert.AreEqual("Rule No. 9: Describing yourself as a hot-tub guy on the first date.", document.QuerySelector("[data-b='1']")!.TextContent);
+        }
+
+        // A bold lead-in before its sentence is a block of its own inside the box, so it is translated apart and keeps its look; a word in another look
+        // inside a sentence stays with the sentence.
+        [TestMethod]
+        public void SmartPage_LeadInsInTheirOwnLook_AreBlocksOfTheirOwn()
+        {
+            PdfSmartRun Run(string text, bool serif, int weight) => new(text, serif, weight, false, 100, 0.03, "#222222");
+            var page = new PdfSmartPage(5, [1], 0.8, [
+                new PdfSmartBlock(0.05, 0.1, 0.9, 0.1, 3, 0.03, 0, false, false,
+                    [Run("Rule No. 202:", false, 900), Run(" You can always fool them with ", true, 400), Run("butter", true, 700), Run(".", true, 400), Run(" Rule No. 203:", false, 900), Run(" Let someone else bring dessert.", true, 400)]),
+                new PdfSmartBlock(0.05, 0.3, 0.9, 0.05, 1, 0.03, 0, false, false, [Run("Keep your chocolate dark.", true, 900)])]);
+            var book = new PdfBookContent([], [], [], new PdfVerdict(true, ""), new PdfVerdict(true, "")) { SmartPages = [page] };
+            var html = PdfBookHtml.Prepare(book, 7).SmartPages.Single();
+            var document = new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html.Html);
+            CollectionAssert.AreEqual(new[] { "0", "1", "2", "3", "4", "5" }, document.QuerySelectorAll("[data-b]").Select(block => block.GetAttribute("data-b")).ToArray());
+            Assert.AreEqual(6, html.Structure.Blocks);
+            CollectionAssert.AreEqual(new[] { "Rule No. 202:", " You can always fool them with butter.", " Rule No. 203:", " Let someone else bring dessert." },
+                document.QuerySelectorAll("[data-box] > [data-b]").Select(block => block.TextContent).ToArray());
+            Assert.AreEqual("sans", document.QuerySelector("[data-b='1'] > [data-face]")!.GetAttribute("data-face"));
+            Assert.IsNull(document.QuerySelector("[data-b='5']")!.QuerySelector("[data-b]"));
+        }
+
+        // The Reader sets the text into the original's lines: each block names them, the text marks where the original broke a line, and a lead-in on a
+        // line of its own keeps a break before its sentence that a translation does not replace.
+        [TestMethod]
+        public void SmartPage_KeepsTheOriginalsLines()
+        {
+            var page = new PdfSmartPage(5, [1], 0.8, [
+                new PdfSmartBlock(0.05, 0.1, 0.4, 0.1, 3, 0.03, 0, false, false, [
+                    new PdfSmartRun("Rule No. 35:", false, 800, false, 80, 0.02, "#222222"),
+                    new PdfSmartRun(" A man over the age of 30 should not", true, 500, false, 90, 0.016, "#222222") { Breaks = [1, 20] }])
+                {
+                    Rows = [new(0.05, 0.12, 0.2), new(0.05, 0.15, 0.38), new(0.05, 0.18, 0.31)]
+                }]);
+            var book = new PdfBookContent([], [], [], new PdfVerdict(true, ""), new PdfVerdict(true, "")) { SmartPages = [page] };
+            var html = PdfBookHtml.Prepare(book, 7).SmartPages.Single().Html;
+            StringAssert.Contains(html, "data-rows=\"0.05 0.12 0.2;0.05 0.15 0.38;0.05 0.18 0.31\"");
+            StringAssert.Contains(html, "</span><br><span data-b=\"2\">");
+            StringAssert.Contains(html, "> <wbr>A man over the age <wbr>of 30 should not</span>");
+            Assert.AreEqual(" A man over the age of 30 should not", new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html).QuerySelector("[data-b='2']")!.TextContent);
+        }
+
+        // The darkest grey in a part of a picture, given in fractions of it.
+        private static int Darkest(SKBitmap bitmap, double left, double top, double right, double bottom)
+        {
+            var darkest = 255;
+            for (var y = (int)(top * bitmap.Height); y < (int)(bottom * bitmap.Height); y++)
+            {
+                for (var x = (int)(left * bitmap.Width); x < (int)(right * bitmap.Width); x++)
+                {
+                    var pixel = bitmap.GetPixel(x, y);
+                    darkest = Math.Min(darkest, (pixel.Red + pixel.Green + pixel.Blue) / 3);
+                }
+            }
+
+            return darkest;
         }
 
         // Words of large type detected apart are read as their line; a narrow column beside large type, and columns of text, stay apart.
@@ -306,6 +452,27 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, OcrEngine.Join([Box(60, 230, 300, 270), Box(400, 200, 900, 330)]).Count, "a small line beside large type");
             Assert.AreEqual(2, OcrEngine.Join([Box(60, 300, 500, 330), Box(560, 302, 1000, 331)]).Count, "two columns of text");
             Assert.AreEqual(1, OcrEngine.Join([Box(60, 300, 100, 320), Box(110, 296, 300, 330), Box(310, 300, 350, 320)]).Count, "a short word beside one with a descender");
+        }
+
+        // A region the detector ran over a gutter with a rule in it is read as two lines, each trimmed to its own type; the word spaces of a line part nothing.
+        [TestMethod]
+        public void Recognizer_PartsARegion_AtTheGutterBetweenColumns()
+        {
+            using var page = new SKBitmap(new SKImageInfo(1000, 60, SKColorType.Rgba8888, SKAlphaType.Premul));
+            using (var canvas = new SKCanvas(page))
+            {
+                canvas.Clear(SKColors.White);
+                using var ink = new SKPaint { Color = SKColors.Black };
+                for (var x = 10; x < 300; x += 30) canvas.DrawRect(x, 20, 20, 20, ink);
+                canvas.DrawRect(330, 0, 2, 60, ink);
+                for (var x = 380; x < 980; x += 70) canvas.DrawRect(x, 5, 55, 50, ink);
+            }
+
+            var parts = OcrEngine.Split(page, [new SKRectI(0, 0, 1000, 60)]);
+            Assert.AreEqual(2, parts.Count, "small type, the rule, large type");
+            Assert.IsTrue(parts[0].Top >= 14 && parts[0].Bottom <= 46 && parts[0].Right <= 340, $"the small type alone: {parts[0]}");
+            Assert.IsTrue(parts[1].Left >= 330, $"the large type alone: {parts[1]}");
+            Assert.AreEqual(1, OcrEngine.Split(page, [new SKRectI(370, 0, 1000, 60)]).Count, "a line of large type");
         }
 
         // A page drawn by PDFium keeps its colours: an orange box stays orange, not blue.
@@ -353,6 +520,12 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("INSERT INTO \"StoredFiles\" (\"LibraryRootId\", \"RelativePath\", \"SizeBytes\", \"ModifiedAt\", \"LastSeenAt\", \"MediaAssetId\") "
                 + "SELECT \"LibraryRootId\", 'Second Book/Second Book.pdf', " + pdf.Length + ", now(), now(), \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" = " + second);
             return second;
+        }
+
+        private static async Task<bool> PrepareAsync(Host host)
+        {
+            await using var scope = host.Services.CreateAsyncScope();
+            return (await scope.ServiceProvider.GetRequiredService<PrepareReadingBooksV1>().ExecuteAsync<UpdateResult>(new ReadingPreparationParametersV1(), default, CancellationToken.None)).Success;
         }
 
         private static async Task<bool> RecognizeAsync(Host host, bool expected)

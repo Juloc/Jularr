@@ -99,6 +99,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
 
         // The next section to translate: from a book someone is reading (most recently read first, from the chapter they are in, then
         // the chapters before it), then the rest of the library; into each language a profile uses that is not the book's own.
+        // A scan's Smart Pages are units of their own (from 100000 on): first where someone reads the book's pages, from the page they are on.
         // Done means a cache from this model with every block filled in.
         private static SqlStatement NextSection(string model, string digest)
         {
@@ -119,8 +120,11 @@ namespace Jularr.Backend.Service.System.Reading.V1
                         document."Id",
                         lower(split_part(split_part(coalesce(document."Language", work."OriginalLanguage"), '-', 1), '_', 1)) AS "SourceLanguage",
                         jsonb_array_length(document."Structure" -> 'Sections') AS "Sections",
+                        coalesce(jsonb_array_length(document."Structure" -> 'SmartPages'), 0) AS "Pages",
                         reading."ReadAt",
-                        coalesce(reading."FromSection", 0) AS "FromSection"
+                        coalesce(reading."FromSection", 0) AS "FromSection",
+                        coalesce(reading."FromPage", 0) AS "FromPage",
+                        coalesce(reading."ReadsPages", FALSE) AS "ReadsPages"
                     FROM
                         "ReadingDocuments" AS document
                         JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
@@ -129,9 +133,11 @@ namespace Jularr.Backend.Service.System.Reading.V1
                         LEFT JOIN LATERAL (
                             SELECT
                                 max(progress."UpdatedAt") AS "ReadAt",
-                                min((substring(progress."Locator" FROM '^s([0-9]+)/'))::integer) AS "FromSection"
+                                min((substring(progress."Locator" FROM '^s([0-9]+)/'))::integer) AS "FromSection",
+                                min((substring(progress."Locator" FROM '^p([0-9]+)$'))::integer) AS "FromPage",
+                                bool_or(progress."Locator" ~ '^p[0-9]+$') AS "ReadsPages"
                             FROM "MediaProgress" AS progress
-                            WHERE progress."WorkId" = asset."WorkId" AND NOT progress."IsCompleted" AND progress."Locator" ~ '^s[0-9]+/'
+                            WHERE progress."WorkId" = asset."WorkId" AND NOT progress."IsCompleted" AND progress."Locator" ~ '^(s[0-9]+/|p[0-9]+$)'
                         ) AS reading ON TRUE
                     WHERE
                         coalesce(document."Language", work."OriginalLanguage") IS NOT NULL
@@ -143,17 +149,35 @@ namespace Jularr.Backend.Service.System.Reading.V1
                     target."Language",
                     book."SourceLanguage",
                     convert_from(text."Bytes", 'UTF8') AS "Html",
-                    coalesce((document."Structure" -> 'Sections' -> section."Number" ->> 'Blocks')::integer, 0) AS "Blocks",
+                    section."Blocks",
                     convert_from(cache."Bytes", 'UTF8') AS "Cache"
                 FROM
                     books AS book
                     JOIN "ReadingDocuments" AS document ON document."Id" = book."Id"
                     CROSS JOIN targets AS target
-                    CROSS JOIN LATERAL generate_series(0, book."Sections" - 1) AS section ("Number")
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            number AS "Number",
+                            ':section/' || lpad(number::text, 5, '0') AS "Path",
+                            lpad(number::text, 5, '0') AS "Key",
+                            coalesce((document."Structure" -> 'Sections' -> number ->> 'Blocks')::integer, 0) AS "Blocks",
+                            FALSE AS "IsPage",
+                            0 AS "Page"
+                        FROM generate_series(0, book."Sections" - 1) AS number
+                        UNION ALL
+                        SELECT
+                            100000 + number,
+                            ':smartpage/' || lpad(number::text, 5, '0'),
+                            (100000 + number)::text,
+                            coalesce((document."Structure" -> 'SmartPages' -> number ->> 'Blocks')::integer, 0),
+                            TRUE,
+                            coalesce((document."Structure" -> 'SmartPages' -> number ->> 'PageFrom')::integer, 0)
+                        FROM generate_series(0, book."Pages" - 1) AS number
+                    ) AS section
                     JOIN "ReadingResources" AS text ON text."ReadingDocumentId" = book."Id"
-                        AND text."Path" = ':section/' || lpad(section."Number"::text, 5, '0')
+                        AND text."Path" = section."Path"
                     LEFT JOIN "ReadingResources" AS cache ON cache."ReadingDocumentId" = book."Id"
-                        AND cache."Path" = ':localtranslation/v2/' || @Model || '/' || target."Language" || '/' || lpad(section."Number"::text, 5, '0')
+                        AND cache."Path" = ':localtranslation/v2/' || @Model || '/' || target."Language" || '/' || section."Key"
                 WHERE
                     length(target."Language") BETWEEN 2 AND 3
                     AND length(book."SourceLanguage") BETWEEN 2 AND 3
@@ -169,7 +193,8 @@ namespace Jularr.Backend.Service.System.Reading.V1
                 ORDER BY
                     book."ReadAt" IS NULL,
                     book."ReadAt" DESC,
-                    section."Number" < book."FromSection",
+                    section."IsPage" <> book."ReadsPages",
+                    CASE WHEN section."IsPage" THEN section."Page" < book."FromPage" ELSE section."Number" < book."FromSection" END,
                     section."Number",
                     book."Id",
                     target."Language"

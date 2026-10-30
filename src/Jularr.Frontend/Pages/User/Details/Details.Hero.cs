@@ -23,7 +23,7 @@ namespace Jularr.Frontend.Pages.User.Details
             // Plex plays what Jularr cannot play here.
             var plex = work.PlexUrl is not null && (!texts.CanPlay() || items.Any(item => item.IsAvailable) is not true) ? work.PlexUrl : null;
             var facts = string.Join(" · ", new[] { work.ReleaseYear?.ToString(CultureInfo.InvariantCulture), work.RuntimeMinutes is { } minutes ? string.Format(CultureInfo.CurrentCulture, texts["details.minutes"], minutes) : null,
-                work.Genres, work.Studio, work.Platforms.Length > 0 ? string.Join(", ", work.Platforms) : null }.OfType<string>());
+                texts.Genres(work.Genres), work.Studio, work.Platforms.Length > 0 ? string.Join(", ", work.Platforms) : null }.OfType<string>());
 
             var chips = new List<IUiComponent>
             {
