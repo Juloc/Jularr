@@ -2,21 +2,66 @@
 
 .downloads-head {
     display: flex;
-    flex-wrap: wrap;
     gap: 10px;
     align-items: center;
+    margin-bottom: 12px;
+
+    h1 { margin: 0; }
+}
+
+// The clients as pill tabs inside one white capsule, each with its count in a small bubble.
+.downloads-tabs {
     margin-bottom: 16px;
 
     .navigation-tabs {
-        width: max-content;
-        max-width: 100%;
+        gap: 6px;
+        margin: 0;
         padding: 4px;
         border: 1px solid var(--border);
         border-radius: var(--radius-control);
         background: var(--surface);
     }
 
-    &__actions { display: flex; gap: 10px; align-items: center; margin-left: auto; }
+    .navigation-tabs__link { gap: 8px; padding: 7px 16px; }
+    .navigation-tabs__count { padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); opacity: 1; }
+    .navigation-tabs__link--active .navigation-tabs__count { border-color: transparent; }
+}
+
+// The round icon buttons of the mockup: 32px and muted; those of the heading and the panel heads wear a line, the primary add is a pill.
+.downloads-icon.button--icon {
+    width: 32px;
+    min-height: 32px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--muted);
+
+    .ui-icon { width: 16px; height: 16px; }
+    &:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-text); }
+    &.button--danger { color: var(--danger); }
+}
+
+.downloads-head .downloads-icon.button--icon,
+.downloads-panel__head .downloads-icon.button--icon { border-color: var(--border); background: var(--surface); }
+
+.downloads-add-button { min-height: 32px; padding: 0 12px; gap: 6px; }
+
+// The small pill buttons of the panels (Add server, Test, Check tunnel, Download storage, the source links).
+.downloads-small {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    min-height: 0;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--text);
+    font-size: var(--text-control);
+    font-weight: var(--weight-control);
+    text-decoration: none;
+    white-space: nowrap;
+
+    &.button--primary { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
 }
 
 // Speed is the large figure; the others say what is left, what runs and how much room there is.
@@ -30,16 +75,14 @@
 }
 
 .downloads-stat {
-    display: grid;
-    align-content: start;
-    gap: 2px;
+    display: block;
     padding: 12px 14px;
     border: 1px solid var(--border);
     border-radius: var(--radius-inner);
     background: var(--surface);
 
-    &__label, &__foot { color: var(--muted); font-size: var(--text-small); }
-    &__value { font-size: 20px; line-height: 1.1; }
+    &__label, &__foot { display: block; color: var(--muted); font-size: var(--text-small); }
+    &__value { display: block; font-size: 20px; font-weight: 700; line-height: 1.1; }
     &__value--large { font-size: 30px; }
 }
 
@@ -51,7 +94,7 @@
     margin-bottom: 16px;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: var(--radius-panel);
+    border-radius: var(--radius-inner);
     background: var(--surface);
 
     &__head {
@@ -62,50 +105,111 @@
         padding: 12px 16px;
         border-bottom: 1px solid var(--border);
 
-        h2 { margin: 0; font-size: var(--text-heading); }
+        h2 { margin: 0; font-size: var(--text-body); font-weight: 650; }
     }
 
     &__spacer { flex: 1; }
-    &__foot { padding: 0 16px 14px; }
 
     // The list sits inside the panel: the panel's frame is its frame.
     .list-panel { border: 0; border-radius: 0; box-shadow: none; }
 }
 
-.downloads-list .list-row { min-height: 52px; padding-block: 9px; }
+// Two panels of a client side by side (connection and route, tunnel and workspace).
+.downloads-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+
+    .downloads-panel { margin-bottom: 0; }
+}
+
+@container (max-width: 720px) {
+    .downloads-pair { grid-template-columns: 1fr; }
+}
+
+// The tables of the mockup: a plain head in the muted colour, every value on the left, rows close together under a thin line.
+.downloads-list {
+    .list-head, .list-row { column-gap: 16px; padding: 9px 14px; }
+    .list-head { padding-block: 10px; background: transparent; font-weight: 650; letter-spacing: 0; text-transform: none; }
+    .list-head .list-cell--data, .list-row .list-cell--data { justify-content: flex-start; text-align: left; }
+    .list-row { min-height: 0; border-bottom-color: color-mix(in srgb, var(--border) 60%, transparent); }
+    .list-cell { font-size: var(--text-body); }
+    .list-value { font-weight: 400; }
+    .list-value--dim { color: var(--muted); }
+
+    // The mockup's box: 18px with soft corners, the accent with a white tick when chosen.
+    .list-select {
+        appearance: none;
+        border: 1.5px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface) center / 12px no-repeat;
+
+        &:checked {
+            border-color: var(--accent);
+            background-color: var(--accent);
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E");
+        }
+    }
+}
+
+.downloads-namecell { display: flex; gap: 8px; align-items: center; min-width: 0; }
+
+.downloads-name {
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 700;
+
+    a { color: inherit; text-decoration: none; }
+    &--plain { font-weight: 400; }
+}
+
+.downloads-actions { display: flex; gap: 6px; justify-content: flex-end; }
 
 .downloads-queue {
-    --list-columns: minmax(200px, 2.6fr) minmax(70px, .8fr) minmax(100px, .9fr) minmax(130px, 1.3fr) minmax(60px, .6fr) minmax(70px, .7fr) minmax(60px, .6fr) minmax(100px, .9fr);
-    --list-columns-medium: minmax(200px, 2.4fr) minmax(70px, .8fr) minmax(100px, .9fr) minmax(130px, 1.2fr) minmax(70px, .7fr) minmax(100px, .9fr);
-    --list-columns-narrow: minmax(160px, 2fr) minmax(96px, .9fr) minmax(110px, 1.1fr) minmax(64px, .7fr) minmax(96px, .8fr);
+    --list-columns: minmax(160px, 2.4fr) minmax(64px, .7fr) minmax(96px, .8fr) minmax(100px, 200px) 36px minmax(64px, .6fr) minmax(64px, .6fr) minmax(56px, .6fr) 108px;
+    --list-columns-medium: minmax(200px, 2.4fr) minmax(96px, .8fr) minmax(120px, 200px) 40px minmax(70px, .6fr) 108px;
+    --list-columns-narrow: minmax(160px, 2fr) minmax(96px, .9fr) minmax(110px, 1.1fr) 40px 108px;
 }
 
 .downloads-queue.downloads-list--all {
-    --list-columns: minmax(180px, 2.4fr) minmax(84px, .9fr) minmax(64px, .8fr) minmax(96px, .9fr) minmax(120px, 1.3fr) minmax(56px, .6fr) minmax(64px, .7fr) minmax(56px, .6fr) minmax(96px, .9fr);
-    --list-columns-medium: minmax(180px, 2.2fr) minmax(84px, .9fr) minmax(64px, .8fr) minmax(96px, .9fr) minmax(120px, 1.2fr) minmax(64px, .7fr) minmax(96px, .9fr);
+    --list-columns: minmax(150px, 2.2fr) minmax(90px, .8fr) minmax(64px, .7fr) minmax(96px, .8fr) minmax(100px, 200px) 36px minmax(64px, .6fr) minmax(64px, .6fr) minmax(56px, .6fr) 108px;
+    --list-columns-medium: minmax(180px, 2.2fr) minmax(96px, .8fr) minmax(96px, .8fr) minmax(120px, 200px) 40px minmax(70px, .6fr) 108px;
 }
 
 .downloads-history {
-    --list-columns: minmax(200px, 2.4fr) minmax(96px, .9fr) minmax(120px, 1.2fr) minmax(56px, .6fr) minmax(110px, .9fr) minmax(80px, .6fr);
-    --list-columns-medium: minmax(200px, 2.4fr) minmax(96px, .9fr) minmax(110px, .9fr) minmax(80px, .6fr);
-    --list-columns-narrow: minmax(160px, 2fr) minmax(96px, .9fr) minmax(110px, .9fr) minmax(80px, .6fr);
+    --list-columns: minmax(200px, 2.4fr) minmax(96px, .8fr) minmax(120px, 1.4fr) minmax(70px, .6fr) minmax(90px, .7fr) 72px;
+    --list-columns-medium: minmax(200px, 2.4fr) minmax(96px, .8fr) minmax(90px, .7fr) 72px;
+    --list-columns-narrow: minmax(160px, 2fr) minmax(96px, .9fr) minmax(90px, .7fr) 72px;
 }
 
 .downloads-history.downloads-list--all {
-    --list-columns: minmax(200px, 2.2fr) minmax(84px, .9fr) minmax(96px, .9fr) minmax(120px, 1.2fr) minmax(56px, .6fr) minmax(110px, .9fr) minmax(80px, .6fr);
-    --list-columns-medium: minmax(200px, 2.2fr) minmax(84px, .9fr) minmax(96px, .9fr) minmax(110px, .9fr) minmax(80px, .6fr);
+    --list-columns: minmax(200px, 2.2fr) minmax(96px, .8fr) minmax(96px, .8fr) minmax(120px, 1.4fr) minmax(70px, .6fr) minmax(90px, .7fr) 72px;
+    --list-columns-medium: minmax(200px, 2.2fr) minmax(96px, .8fr) minmax(96px, .8fr) minmax(90px, .7fr) 72px;
 }
 
 .downloads-servers {
-    --list-columns: minmax(220px, 2fr) minmax(130px, 1fr) minmax(90px, .8fr) minmax(90px, .8fr) minmax(90px, .8fr);
-    --list-columns-medium: minmax(200px, 2fr) minmax(130px, 1fr) minmax(90px, .8fr) minmax(90px, .8fr);
-    --list-columns-narrow: minmax(180px, 2fr) minmax(130px, 1fr) minmax(80px, .8fr) minmax(80px, .8fr);
+    --list-columns: minmax(220px, 2fr) minmax(110px, 1fr) minmax(90px, .8fr) minmax(90px, .8fr) minmax(90px, .8fr);
+    --list-columns-medium: minmax(200px, 2fr) minmax(110px, 1fr) minmax(90px, .8fr) minmax(90px, .8fr);
+    --list-columns-narrow: minmax(180px, 2fr) minmax(110px, 1fr) minmax(80px, .8fr) minmax(80px, .8fr);
 }
 
 .downloads-sources {
-    --list-columns: minmax(220px, 1.4fr) minmax(140px, .8fr) minmax(260px, 2fr);
-    --list-columns-medium: minmax(200px, 1.4fr) minmax(140px, .8fr) minmax(220px, 2fr);
-    --list-columns-narrow: minmax(180px, 1.4fr) minmax(130px, .8fr) minmax(200px, 2fr);
+    --list-columns: minmax(200px, 1.4fr) minmax(120px, .8fr) minmax(220px, 1.6fr) minmax(200px, 1.4fr);
+    --list-columns-medium: minmax(200px, 1.4fr) minmax(120px, .8fr) minmax(200px, 1.6fr);
+    --list-columns-narrow: minmax(160px, 1.4fr) minmax(110px, .8fr) minmax(180px, 1.6fr);
+}
+
+// A client's settings at a glance: label above a quiet box, two columns, an action under them.
+.downloads-facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
+    padding: 14px 16px;
+
+    &__label { display: block; margin-bottom: 4px; color: var(--muted); font-size: var(--text-small); }
+    &__value { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-small); background: var(--field); overflow-wrap: anywhere; }
+    &__action { grid-column: 1 / -1; }
 }
 
 // One colour per phase, the same on the pill, the bar and the icon tile; never an edge stripe.
@@ -155,8 +259,6 @@
     &[hidden] { display: none; }
 }
 
-.downloads-percent { min-width: 36px; font-weight: 650; text-align: right; }
-
 .downloads-kind {
     padding: 1px 8px;
     border-radius: var(--radius-small);
@@ -180,26 +282,16 @@
     &--on { border-color: var(--accent-edge); background: var(--accent-soft); color: var(--accent-text); }
 }
 
-// A client's settings at a glance: label above a quiet box, two columns.
-.downloads-facts {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px 16px;
-    padding: 14px 16px;
-
-    &__label { display: block; margin-bottom: 4px; color: var(--muted); font-size: var(--text-small); }
-    &__value { min-height: var(--field-height); padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-inner); background: var(--field); overflow-wrap: anywhere; }
-}
-
 .downloads-source-link { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
 
 // The speed card: the large figure, its short line and the client's limit as a small menu.
 .downloads-stat__line {
-    height: 28px;
+    height: 60px;
     margin: 4px 0;
     color: var(--phase-downloading);
 
-    .sparkline { display: block; }
+    .sparkline { display: block; width: 100%; height: 60px; }
+    polyline { stroke-width: 2.5; }
 }
 
 .downloads-limit {
@@ -223,20 +315,6 @@
 }
 
 .downloads-row--dragging { position: relative; z-index: 1; background: var(--accent-soft); box-shadow: var(--shadow-overlay); cursor: grabbing; }
-
-.downloads-status { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-
-.downloads-priority {
-    padding: 1px 8px;
-    border-radius: var(--radius-control);
-    background: var(--field);
-    color: var(--muted);
-    font-size: var(--text-small);
-    font-weight: 650;
-
-    &--high { background: var(--accent-soft); color: var(--accent-text); }
-    &--force { background: var(--warning-soft); color: var(--warning); }
-}
 
 // The add dialog: the title search, the wanted titles as choices and the address.
 .downloads-add {

@@ -26,43 +26,47 @@ namespace Jularr.Frontend.Pages.Admin.DownloadSpeed
             page.Title("downloads.speedPage.title");
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/LiveProgress.entry.ts");
+            page.Asset("Pages/Admin/DownloadSpeed/DownloadSpeed.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            page.Content.Add(new H1(new Text("downloads.speedPage.title")).Class("download-speed__title"));
             if (_clients.Count == 0)
             {
                 page.Content.Add(new Div(new Div(new IconTile(Glyph("download", 22), UiTone.Neutral), new P(new Text("downloads.speedPage.none")).Attribute("role", "status")).Class("list-empty")).Class("list"));
                 return;
             }
 
-            page.Content.Add(new CardGrid([.. _clients.Select(client => Card(client, csrf))]));
+            // The limits of the mockup's speed panel: a row per client with the speed it has now and its limit.
+            page.Content.Add(new Section(new H2(new Text("downloads.speedPage.limits")), new Div([.. _clients.Select(client => Row(client, csrf))]).Class("download-speed__rows"))
+                .Class("download-speed"));
             if (FormError is not null && _failed is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
         }
 
-        // One client: what it downloads at now (kept current by the stream) and its limit; a client that does not answer shows why instead of a limit.
-        private IUiComponent Card(DownloadClientV1 client, string? csrf)
+        // One client: its name, what it downloads at now (kept current by the stream) and its limit; a client that does not answer says so instead of a limit.
+        private IUiComponent Row(DownloadClientV1 client, string? csrf)
         {
             var key = ReadDownloadClientsV1.Key(client.DownloadClientKindId, client.AcquisitionConnectionId);
             var figures = LiveEntities.Downloads(texts, [client]).Text;
-            var speed = new Span(new ValueText(figures.TryGetValue("speed", out var text) ? text : "")).Class("list-value")
+            var speed = new Span(new ValueText(figures.TryGetValue("speed", out var text) ? text : "")).Class("download-speed__now")
                 .Attribute("data-live", LiveKeys.Downloads(key)).Attribute("data-live-text", "speed");
-            var body = new List<IUiComponent> { new FactList([("downloads.speed", speed)]) };
-            if (_limits.TryGetValue(key, out var limit) && limit is not null)
+            IUiComponent limit;
+            if (_limits.TryGetValue(key, out var current) && current is not null)
             {
-                var input = _failed is { } failed && failed.Key == key ? failed.Input : new SetDownloadSpeedLimitDataV1(limit.MaxBytesPerSecond);
-                body.Add(new Form<SetDownloadSpeedLimitDataV1>(form =>
+                var input = _failed is { } failed && failed.Key == key ? failed.Input : new SetDownloadSpeedLimitDataV1(current.MaxBytesPerSecond);
+                limit = new Form<SetDownloadSpeedLimitDataV1>(form =>
                 {
                     form.ByteSize(item => item.MaxBytesPerSecond, "downloads.speedPage.limit");
                     form.Save();
-                }, Address(client), csrf, input, _failed?.Key == key ? FormError : null));
+                }, Address(client), csrf, input, _failed?.Key == key ? FormError : null);
             }
             else
             {
-                body.Add(new P(new Text("downloads.speedPage.unreachable")).Class("feature-card__note"));
+                limit = new P(new Text("downloads.speedPage.unreachable")).Class("download-speed__note");
             }
 
             var native = client.AcquisitionConnectionId is null;
-            return new FeatureCard(new IconTile(Glyph(client.DownloadClientKindId == DownloadClientKind.Usenet ? "network" : "download", 18), UiTone.Info),
-                native ? texts["downloads.client." + client.DownloadClientKindId] : client.Name,
-                native ? null : texts["acquisition.connection.type." + client.DownloadClientKindId], null, body, []).Wide();
+            var name = new Div(new Strong(native ? new Text("downloads.client." + client.DownloadClientKindId) : new ValueText(client.Name)),
+                native ? new Span() : new Span(new Text("acquisition.connection.type." + client.DownloadClientKindId)).Class("download-speed__kind")).Class("download-speed__name");
+            return new Div(name, speed, limit).Class("download-speed__row");
         }
 
         public async Task<IActionResult> OnGetAsync()

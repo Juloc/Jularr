@@ -61,7 +61,7 @@ namespace Jularr.Frontend.Modules.Live
                 ("line", Sparkline.Points([.. SpeedLine(clients).Select(value => (double)value)], height: SpeedLineHeight))));
         }
 
-        public const int SpeedLineHeight = 28;
+        public const int SpeedLineHeight = 60;
 
         // The clients' lines added up, their newest samples aligned.
         public static long[] SpeedLine(IReadOnlyList<DownloadClientV1> clients)

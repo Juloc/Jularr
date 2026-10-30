@@ -172,6 +172,24 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             {
                 page.Content.Add(StorageNotice(DownloadStorageArea.Torrent));
             }
+            // Servers and External clients: the heading, the list and the opened connection; the dock keeps the paging and the download storage.
+            if (Scope is "Servers" or "Clients")
+            {
+                DefineDownloaders(page, csrf, items);
+                AddDialogs(page, csrf);
+                if (_selected is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Sabnzbd } sabnzbd && Request.Query.ContainsKey("Pane"))
+                {
+                    page.Content.Add(DownloadClientTabs(sabnzbd.Id));
+                    page.Content.Add(DownloadClientPane(sabnzbd.Id, csrf));
+                }
+
+                IUiComponent[] storage = Scope == "Servers" || texts.Can(null, "Torrent")
+                    ? [new A(Glyph("drive", 16), new Span(new Text("downloadStorage.configure")).Class("action-dock__text")).Class("button button--soft").Attribute("href", "/Admin/DownloadStorage")]
+                    : [];
+                page.Content.Add(new ActionDock(assets, "acquisition.actions", storage));
+                return;
+            }
+
             var reachable = items.Count(item => State(item) == "healthy");
             var failing = items.Count(item => State(item) is "error" or "backoff");
             var figures = new KpiTiles(
@@ -212,9 +230,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             {
                 actions.Add(new A(Glyph("plus", 16), new Span(new Text("acquisition.connection.addSubtitles")).Class("action-dock__text")).Class("button").Attribute("href", "/Admin/Acquisition/Sources"));
             }
-            else if (Scope != "Clients" || texts.Can(null, "Torrent"))
+            else
             {
-                // Jularr's own downloaders (the news servers, the torrent engine) write into their download storage; SABnzbd and qBittorrent keep their own folders.
                 actions.Add(new A(Glyph("drive", 16), new Span(new Text("downloadStorage.configure")).Class("action-dock__text")).Class("button button--soft")
                     .Attribute("href", "/Admin/DownloadStorage"));
             }
@@ -287,7 +304,6 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             }
             body.Add(new Div(new Span(new Text("acquisition.connection.lastTest")).Class("feature-card__note"), Time(item.CheckedAt)).Class("feature-card__row"));
             if (item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent && _torrentEngine is { } engine) body.Add(TorrentFacts(engine));
-            if (item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet && Scope == "Servers") body.Add(ServerFacts(item));
             if (Role == AcquisitionConnectionRole.Search && (item.AcquisitionConnectionTypeId is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa))
             {
                 body.Add(new Div(new Span(new Text("acquisition.connection.today")).Class("feature-card__note"), Usage(item)).Class("feature-card__row"));
@@ -329,17 +345,6 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             ("acquisition.torrent.peers", new ValueText(engine.ConnectedPeers.ToString("N0", CultureInfo.CurrentCulture))),
             ("acquisition.torrent.vpn", new Text(engine.HasVerifiedTunnel ? "acquisition.torrent.vpnVerified" : "acquisition.torrent.vpnNone"))
         ]);
-
-        // What the news server's last pass measured in this process (connections in use of those allowed, pace, share of missing articles), kept current by the live stream.
-        private IUiComponent ServerFacts(AcquisitionConnectionDetailsV1 item)
-        {
-            var key = LiveKeys.NewsServer(item.Id);
-            var figures = LiveEntities.NewsServer(texts, _newsServers.FirstOrDefault(server => server.AcquisitionConnectionId == item.Id)
-                ?? new NewsServerV1(item.Id, 0, 0, 0, 0, item.MaxConnections ?? 8)).Text;
-            IUiComponent Live(string name) => new Span(new ValueText(figures.TryGetValue(name, out var text) ? text : "")).Class("list-value")
-                .Attribute("data-live", key).Attribute("data-live-text", name);
-            return new FactList([("downloads.connections", Live("connections")), ("downloads.speed", Live("speed")), ("downloads.missingArticles", Live("missing"))]);
-        }
 
         private IUiComponent StorageNotice(DownloadStorageArea area) =>
             NativeDownloadStorageNotice.Message(area, SetupWizard.IsActive(Request) ? SetupWizard.Paths[SetupStepType.DownloadStorage] : "/Admin/DownloadStorage");
@@ -532,8 +537,15 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 Role = _selected.AcquisitionConnectionRoleId;
             }
 
+            var kinds = Kind is { } kind && Kinds.Contains(kind) ? [kind] : Kinds;
             _connections = await connections.ExecuteAsync<PageResult<AcquisitionConnectionDetailsV1>>(new ReadAcquisitionConnectionsParametersV1(PageNumber, acquisitionConnectionRoleId: Role,
-                acquisitionConnectionTypeIds: Kinds), HttpContext.RequestAborted);
+                acquisitionConnectionTypeIds: kinds), HttpContext.RequestAborted);
+            if (Scope == "Clients" && !SetupWizard.IsActive(Request))
+            {
+                _allOfScope = kinds.Length == Kinds.Length ? _connections.Items : (await connections.ExecuteAsync<PageResult<AcquisitionConnectionDetailsV1>>(
+                    new ReadAcquisitionConnectionsParametersV1(1, 100, Role, Kinds), HttpContext.RequestAborted)).Items;
+            }
+
             if (Scope == "Servers") _newsServers = await newsServers.ExecuteAsync<BaseDataList<NewsServerV1>>(new ReadDownloadClientsParametersV1(), HttpContext.RequestAborted);
             if (Type is { } requested && NativeDownloadStorageNotice.RequiresDirectStorage(requested)
                 || _selected is { } selected && NativeDownloadStorageNotice.RequiresDirectStorage(selected.AcquisitionConnectionTypeId)
@@ -772,7 +784,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 AcquisitionConnectionRole.Subtitles => "/Admin/Acquisition/Subtitles",
                 _ => SetupWizard.Address(Request, SetupStepType.Indexers, "/Admin/Acquisition")
             };
-            var address = home + "?PageNumber=" + (pageNumber ?? PageNumber).ToString(CultureInfo.InvariantCulture);
+            var address = home + "?PageNumber=" + (pageNumber ?? PageNumber).ToString(CultureInfo.InvariantCulture) + (Kind is { } shownKind ? "&Kind=" + shownKind : "");
             if (id is { } connectionId) address += "&AcquisitionConnectionId=" + connectionId.ToString(CultureInfo.InvariantCulture);
             else if (type is { } connectionType) address += "&Type=" + connectionType + (SuggestedUrl is { } url ? "&url=" + Uri.EscapeDataString(url) : "")
                 + (SuggestedName is { } name ? "&name=" + Uri.EscapeDataString(name) : "");

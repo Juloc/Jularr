@@ -168,7 +168,8 @@ namespace Jularr.E2E.Tests
             await page.Locator("dialog#connection-editor form").GetByLabel(searchesAutomatically ? "Automatic and manual" : "Manual only", new() { Exact = true }).CheckAsync();
             await SubmitAsync(page, page.Locator("dialog#connection-editor form"));
             await page.GotoAsync("/Admin/Downloads/Clients");
-            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }).And(page.Locator("[href*='Type=Sabnzbd']")));
+            await page.GetByRole(AriaRole.Button, new() { Name = "Add client", Exact = true }).ClickAsync();
+            await FollowAsync(page, page.Locator("dialog#downloaders-add").GetByRole(AriaRole.Link, new() { Name = "SABnzbd", Exact = true }));
             await page.FillAsync("dialog#connection-editor form [name=Name]", "SABnzbd");
             await page.FillAsync("dialog#connection-editor form [name=BaseUrl]", new Uri(fakes.Address, "sabnzbd/").ToString());
             await page.FillAsync("dialog#connection-editor form [name=ApiKey]", FakeServices.ClientKey);

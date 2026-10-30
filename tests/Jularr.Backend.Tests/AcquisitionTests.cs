@@ -803,7 +803,8 @@ namespace Jularr.Backend.Tests
             using var moved = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads?PageNumber=1&AcquisitionConnectionId=" + sab + "&Pane=files");
             Assert.AreEqual(HttpStatusCode.Redirect, moved.StatusCode);
             Assert.AreEqual("/Admin/Downloads/Clients?PageNumber=1&AcquisitionConnectionId=" + sab + "&Pane=files", moved.Headers.Location!.OriginalString);
-            Assert.IsFalse(clientsHtml.Contains("Add torrent engine", StringComparison.Ordinal), "The torrent engine is offered only with its module.");
+            Assert.IsFalse(clientsHtml.Contains("Type=Torrent", StringComparison.Ordinal), "The torrent engine is offered only with its module.");
+            StringAssert.Contains(clientsHtml, "Type=Sabnzbd");
             using var former = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads?Type=Torrent");
             Assert.AreEqual(HttpStatusCode.Redirect, former.StatusCode);
             Assert.AreEqual("/Admin/Downloads/Clients?Type=Torrent", former.Headers.Location!.OriginalString);
@@ -3274,7 +3275,8 @@ namespace Jularr.Backend.Tests
             using var tab = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Clients");
             var html = await tab.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
-            StringAssert.Contains(html, "Add download client");
+            StringAssert.Contains(html, "Add client");
+            StringAssert.Contains(html, "Type=Qbittorrent");
             Assert.IsFalse(html.Contains("Configure download storage", StringComparison.Ordinal), "An external client keeps its own folders.");
             using var storagePolicy = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/downloads/1");
             Assert.AreEqual(HttpStatusCode.OK, storagePolicy.StatusCode, await storagePolicy.Content.ReadAsStringAsync());
