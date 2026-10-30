@@ -27,7 +27,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(7, Regex.Matches(html, "<section class=\"menu-group").Count);
             StringAssert.Contains(html, "class=\"menu-entry is-active\" href=\"/Admin/Dashboard\"");
 
-            // Downloads is a group: each of its pages is an entry of its own, so none has a chip row; the indexers keep theirs, and the torrent engine's page only with its module.
+            // Downloads is a group: each of its pages is an entry of its own, so none has a chip row; the indexers keep theirs, without the former download clients page.
             foreach (var address in new[] { "/Admin/Downloads", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed", "/Admin/Downloads/Clients" })
             {
                 var page = await GetAsync(host, address);
@@ -39,9 +39,6 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(indexers, "href=\"/Admin/Acquisition/Profiles\"");
             Assert.IsFalse(indexers.Contains("href=\"/Admin/Acquisition/Downloads\"", StringComparison.Ordinal));
             Assert.IsFalse(indexers.Contains("href=\"/Admin/Downloads\"", StringComparison.Ordinal));
-            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" IN ('Vpn', 'Torrent')");
-            StringAssert.Contains(Row(await GetAsync(host, "/Admin/Acquisition")), "href=\"/Admin/Acquisition/Downloads\"");
-            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" IN ('Vpn', 'Torrent')");
 
             // A module that is off takes its entries and chips with it.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" IN ('Acquisition', 'Requests')");

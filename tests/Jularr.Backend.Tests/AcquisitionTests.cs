@@ -803,9 +803,10 @@ namespace Jularr.Backend.Tests
             using var moved = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads?PageNumber=1&AcquisitionConnectionId=" + sab + "&Pane=files");
             Assert.AreEqual(HttpStatusCode.Redirect, moved.StatusCode);
             Assert.AreEqual("/Admin/Downloads/Clients?PageNumber=1&AcquisitionConnectionId=" + sab + "&Pane=files", moved.Headers.Location!.OriginalString);
-            using var engines = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads");
-            var enginesHtml = await engines.Content.ReadAsStringAsync();
-            Assert.IsFalse(enginesHtml.Contains("News A", StringComparison.Ordinal) || enginesHtml.Contains("AcquisitionConnectionId=" + sab, StringComparison.Ordinal));
+            Assert.IsFalse(clientsHtml.Contains("Add torrent engine", StringComparison.Ordinal), "The torrent engine is offered only with its module.");
+            using var former = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads?Type=Torrent");
+            Assert.AreEqual(HttpStatusCode.Redirect, former.StatusCode);
+            Assert.AreEqual("/Admin/Downloads/Clients?Type=Torrent", former.Headers.Location!.OriginalString);
 
             // Speed: a card per client with its live speed and its limit, saved for Jularr's Usenet downloader into its workspace.
             using var speed = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Speed");

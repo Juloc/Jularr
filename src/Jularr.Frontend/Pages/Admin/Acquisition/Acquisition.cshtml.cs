@@ -73,18 +73,17 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             set => _role = value;
         }
 
-        // The download clients are spread over three pages: the news servers and the external clients (SABnzbd, qBittorrent) below Downloads, Jularr's torrent engine at the area's address;
+        // The download clients are spread over two pages below Downloads: the news servers, and every other client (SABnzbd, qBittorrent, Jularr's torrent engine);
         // the setup shows every kind on one page.
         private AcquisitionConnectionType[] Kinds => Role != AcquisitionConnectionRole.Download || SetupWizard.IsActive(Request) ? []
             : IsPath("/Downloads/Servers") ? [AcquisitionConnectionType.Usenet]
-            : IsPath("/Downloads/Clients") ? [AcquisitionConnectionType.Sabnzbd, AcquisitionConnectionType.Qbittorrent]
-            : [AcquisitionConnectionType.Torrent];
+            : [AcquisitionConnectionType.Sabnzbd, AcquisitionConnectionType.Qbittorrent, AcquisitionConnectionType.Torrent];
 
         // The name of what the page shows, for its title and its empty list.
         private string Scope => Kinds switch
         {
             [AcquisitionConnectionType.Usenet] => "Servers",
-            [AcquisitionConnectionType.Sabnzbd, AcquisitionConnectionType.Qbittorrent] => "Clients",
+            [_, ..] => "Clients",
             _ => Role.ToString()
         };
 
@@ -94,8 +93,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private static string? HomeOf(AcquisitionConnectionType type) => type switch
         {
             AcquisitionConnectionType.Usenet => "/Admin/Downloads/Servers",
-            AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.Qbittorrent => "/Admin/Downloads/Clients",
-            AcquisitionConnectionType.Torrent => "/Admin/Acquisition/Downloads",
+            AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.Qbittorrent or AcquisitionConnectionType.Torrent => "/Admin/Downloads/Clients",
             _ => null
         };
 
@@ -214,9 +212,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             {
                 actions.Add(new A(Glyph("plus", 16), new Span(new Text("acquisition.connection.addSubtitles")).Class("action-dock__text")).Class("button").Attribute("href", "/Admin/Acquisition/Sources"));
             }
-            else if (Scope != "Clients")
+            else if (Scope != "Clients" || texts.Can(null, "Torrent"))
             {
-                // Jularr's own downloaders write into their download storage; an external client keeps its own folders.
+                // Jularr's own downloaders (the news servers, the torrent engine) write into their download storage; SABnzbd and qBittorrent keep their own folders.
                 actions.Add(new A(Glyph("drive", 16), new Span(new Text("downloadStorage.configure")).Class("action-dock__text")).Class("button button--soft")
                     .Attribute("href", "/Admin/DownloadStorage"));
             }
@@ -403,6 +401,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         public async Task<IActionResult> OnGetAsync()
         {
+            // The download clients' former address is the External clients page now.
+            if (!SetupWizard.IsActive(Request) && IsPath("/Acquisition/Downloads")) return LocalRedirect("/Admin/Downloads/Clients" + Request.QueryString);
             await LoadDataAsync();
 
             // A download client opened or added at another page's address (an older link) goes to the page that shows its kind.
@@ -768,7 +768,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             var home = Role switch
             {
-                AcquisitionConnectionRole.Download => SetupWizard.Address(Request, SetupStepType.Downloads, Kinds is [var kind, ..] ? HomeOf(kind)! : "/Admin/Acquisition/Downloads"),
+                AcquisitionConnectionRole.Download => SetupWizard.Address(Request, SetupStepType.Downloads, Kinds is [var kind, ..] ? HomeOf(kind)! : "/Admin/Downloads/Clients"),
                 AcquisitionConnectionRole.Subtitles => "/Admin/Acquisition/Subtitles",
                 _ => SetupWizard.Address(Request, SetupStepType.Indexers, "/Admin/Acquisition")
             };

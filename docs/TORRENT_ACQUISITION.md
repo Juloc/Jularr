@@ -97,7 +97,7 @@ sleeps on `WorkSignals.Torrents` until a grab wakes it; with jobs it looks every
   `NetworkRouteLogic` accepts only a tunnel that answers pings and whose exit differs from the host.
   Without one the pass sends nothing and the job rests five minutes. Peer connections and tracker
   requests go through the tunnel; there is no direct path.
-- Admin: Download clients offers "Add torrent engine" only with the module; its card shows the
+- Admin: Downloads > External clients offers "Add torrent engine" only with the module; its card shows the
   lock proven at that read (`ReadTorrentEngineV1`), file data sent (0), control bytes, refused frames,
   received bytes, connected peers and whether a verified tunnel is ready. Test checks module, lock and
   tunnel. Downloads appear in Activity like the other own downloaders.

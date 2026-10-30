@@ -622,12 +622,11 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
 
         private IReadOnlyList<DownloadClientV1> Shown() => _client is { } client ? [client] : _clients;
 
-        // SABnzbd and qBittorrent open their card among the external clients, the torrent engine its own card; Jularr's Usenet downloader its news servers, its direct sources the indexers that list them.
+        // SABnzbd, qBittorrent and the torrent engine open their card among the external clients; Jularr's Usenet downloader its news servers, its direct sources the indexers that list them.
         private static string SettingsAddress(DownloadClientV1 client) => client.DownloadClientKindId switch
         {
             DownloadClientKind.Usenet => "/Admin/Downloads/Servers",
             DownloadClientKind.Direct => "/Admin/Acquisition",
-            DownloadClientKind.Torrent => "/Admin/Acquisition/Downloads?PageNumber=1&AcquisitionConnectionId=" + client.SettingsConnectionId.ToString(CultureInfo.InvariantCulture),
             _ => "/Admin/Downloads/Clients?PageNumber=1&AcquisitionConnectionId=" + client.SettingsConnectionId.ToString(CultureInfo.InvariantCulture)
         };
 
