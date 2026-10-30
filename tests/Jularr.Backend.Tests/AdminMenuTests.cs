@@ -36,7 +36,7 @@ namespace Jularr.Backend.Tests
             }
 
             var indexers = Row(await GetAsync(host, "/Admin/Acquisition"));
-            StringAssert.Contains(indexers, "href=\"/Admin/Acquisition/Profiles\"");
+            StringAssert.Contains(indexers, "href=\"/Admin/Acquisition/Profiles?tab=profiles\"");
             Assert.IsFalse(indexers.Contains("href=\"/Admin/Acquisition/Downloads\"", StringComparison.Ordinal));
             Assert.IsFalse(indexers.Contains("href=\"/Admin/Downloads\"", StringComparison.Ordinal));
 
