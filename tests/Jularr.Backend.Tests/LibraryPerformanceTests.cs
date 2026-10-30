@@ -20,6 +20,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Http;
 using Jularr.Backend.Data.Admin.Media.V1;
+using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Common;
 using Npgsql;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
@@ -470,6 +471,142 @@ namespace Jularr.Backend.Tests
                 if (p95 >= budget) failures.Add($"{item.Name}: {p95:F1} ms");
             }
             Assert.IsEmpty(failures, "Service p95 exceeded budget: " + string.Join("; ", failures));
+        }
+
+        [TestMethod]
+        [TestCategory("Performance")]
+        public async Task SearchAndRequests_CatalogScale_ReportLatency()
+        {
+            if (!int.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_CATALOG_SCALE"), out var catalogWorks) || catalogWorks <= 0)
+                Assert.Inconclusive("Opt in with JULARR_TEST_CATALOG_SCALE=<number of catalog Works> on the isolated test server.");
+
+            var providers = new SearchProviders { Delay = TimeSpan.FromMilliseconds(int.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_PROVIDER_DELAY_MS"), out var delay) ? delay : 0) };
+            var commands = new CommandLog();
+            using var logs = LoggerFactory.Create(logging => logging.SetMinimumLevel(LogLevel.Information).AddProvider(commands));
+            await using var host = await Host.CreateAsync(razor: true, media: true, services: services =>
+            {
+                services.AddHttpClient<Jularr.Integrations.Logic.Tmdb.TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => providers);
+                services.AddHttpClient<Jularr.Integrations.Logic.Tvdb.TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => providers);
+                services.Replace(ServiceDescriptor.Singleton(provider =>
+                {
+                    var configuration = provider.GetRequiredService<IConfiguration>();
+                    var connection = new NpgsqlConnectionStringBuilder(configuration["JULARR_DB"]!) { Pooling = true };
+                    return new SqlDatabase(new NpgsqlDataSourceBuilder(connection.ConnectionString).UseLoggerFactory(logs).Build());
+                }));
+            });
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
+            foreach (var key in new[] { "tmdb", "tvdb" })
+            {
+                var provider = (long)(await host.ScalarAsync($"SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = '{key}'"))!;
+                using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1(SearchProviders.Token));
+                Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            }
+
+            // The kept TMDB film catalog: words from a small vocabulary, one title in 5000 is a Dune; TMDB's answer names two of them.
+            await SeedInventoryAsync(host, 300, 411, false);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('DiscoverCache', TRUE), ('LocalDiscovery', TRUE) ON CONFLICT ("Key") DO UPDATE SET "IsEnabled" = TRUE;
+                """);
+            for (var from = 1; from <= catalogWorks; from += 5000)
+            {
+                var to = Math.Min(from + 4999, catalogWorks);
+                await host.Fixture.RunSqlAsync($"""
+                    INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "ReleasedOn", "CatalogNamespace", "FetchedAt", "Popularity", "Rating", "Votes", "ImageUrl")
+                    SELECT 1000000 + n, 1,
+                        CASE WHEN n % 5000 = 0 THEN 'Dune ' || n ELSE
+                            (ARRAY['The','Last','Dark','Blue','Night','Star','Love','War','Lost','Silent','Golden','Wild'])[1 + n % 12] || ' '
+                            || (ARRAY['Road','Man','Shadow','City','River','Dream','Heart','Storm','Garden','Island','King','Code'])[1 + (n / 12) % 12] || ' ' || n END,
+                        1980 + n % 45, current_date - (n % 4000), 'tmdb_movie', now() - (n % 60) * interval '1 day', (n % 1000)::real, (n % 100) / 10.0, n % 5000,
+                        'https://image.tmdb.org/t/p/w500/' || n || '.jpg'
+                    FROM generate_series({from}, {to}) AS n;
+                    INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                    SELECT "Id", 'tmdb_movie', ("Id" - 1000000)::text FROM "Works" WHERE "Id" BETWEEN {1000000 + from} AND {1000000 + to};
+                    """);
+            }
+            await host.Fixture.RunSqlAsync($"""
+                SELECT setval(pg_get_serial_sequence('"Works"', 'Id'), (SELECT max("Id") FROM "Works"));
+                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                SELECT 1000000 + {catalogWorks} - n * 3, 101, 41, 1, 4, 41, now() FROM generate_series(1, 6) AS n;
+                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                SELECT n, 101, 41, 1, 6, 41, now() FROM generate_series(1, 4) AS n;
+                """);
+            await host.Fixture.RunSqlAsync("ANALYZE");
+
+            using var browser = ((Microsoft.AspNetCore.TestHost.TestServer)host.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>()).CreateClient();
+            browser.DefaultRequestHeaders.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+            var budget = double.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_LIBRARY_MAX_MS"), System.Globalization.CultureInfo.InvariantCulture, out var maximum) ? maximum : double.PositiveInfinity;
+            var failures = new List<string>();
+            foreach (var (name, path, limit) in new[]
+            {
+                ("search-api-all", "/api/v1/discover/search", 500.0),
+                ("search-api-films", "/api/v1/discover/search", 500.0),
+                ("search-page", "/?q=Dune", 500.0),
+                ("requests-api", "/api/v1/requests", 300.0),
+                ("requests-page", "/Requests", 300.0)
+            })
+            {
+                var local = new List<double>();
+                var total = new List<double>();
+                var providerTime = new List<double>();
+                for (var iteration = 0; iteration < 12; iteration++)
+                {
+                    commands.Executions.Clear();
+                    providers.Elapsed = TimeSpan.Zero;
+                    var begin = Stopwatch.GetTimestamp();
+                    using var response = path.StartsWith("/api/v1/discover/search", StringComparison.Ordinal)
+                        ? await host.SendAsync(HttpMethod.Post, path, new SearchDiscoverDataV1("Dune", name.EndsWith("films", StringComparison.Ordinal) ? MediaType.Movie : null))
+                        : await browser.GetAsync(path);
+                    var body = await response.Content.ReadAsStringAsync();
+                    Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, name + body);
+                    var elapsed = Stopwatch.GetElapsedTime(begin).TotalMilliseconds;
+                    if (iteration == 0 && name.StartsWith("search", StringComparison.Ordinal)) StringAssert.Contains(body, "Dune");
+                    if (iteration == 3)
+                        foreach (var command in commands.Executions.OrderByDescending(command => command.Milliseconds).Take(4))
+                        {
+                            var text = Regex.Replace(command.Sql, @"\s+", " ").Trim();
+                            TestContext.WriteLine($"PERF   {name} SQL {command.Milliseconds:F1} ms: " + text[..Math.Min(200, text.Length)]);
+                        }
+                    if (iteration < 2) continue;
+                    total.Add(elapsed);
+                    providerTime.Add(providers.Elapsed.TotalMilliseconds);
+                    local.Add(elapsed - providers.Elapsed.TotalMilliseconds);
+                }
+                local.Sort(); total.Sort(); providerTime.Sort();
+                // The median is held to the budget; one slow sample on a busy machine only shows in the p95.
+                var median = local[local.Count / 2];
+                TestContext.WriteLine($"PERF {name} ({catalogWorks} catalog Works): local part median {median:F1} ms, p95 {local[(int)Math.Ceiling(local.Count * .95) - 1]:F1} ms; whole {total[total.Count / 2]:F1} ms; provider stub {providerTime[providerTime.Count / 2]:F1} ms");
+                if (providers.Delay == TimeSpan.Zero && median >= Math.Min(limit, budget)) failures.Add($"{name}: {median:F1} ms");
+            }
+            Assert.IsEmpty(failures, "Local part exceeded its budget: " + string.Join("; ", failures));
+        }
+
+        // TMDB and TheTVDB answer Dune at once; the time spent answering is counted so a run can tell the provider part from the local one.
+        private sealed class SearchProviders : HttpMessageHandler
+        {
+            public const string Token = "eyJ-search-token";
+            public TimeSpan Elapsed { get; set; }
+
+            // A provider's round trip, to see that the two searches wait together.
+            public TimeSpan Delay { get; init; }
+
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                await Task.Delay(Delay, cancellationToken);
+                var started = Stopwatch.GetTimestamp();
+                var json = request.RequestUri!.AbsolutePath switch
+                {
+                    "/3/search/movie" => """{"results":[{"id":5000,"title":"Dune","original_title":"Dune","release_date":"2021-09-15","overview":"Paul.","poster_path":"/dune.jpg"},{"id":10000,"title":"Dune: Part Two","original_title":"Dune: Part Two","release_date":"2024-02-27","overview":"War.","poster_path":"/dune2.jpg"}]}""",
+                    "/v4/login" => """{"data":{"token":"tvdb-test-token"}}""",
+                    "/v4/search" => """{"data":[{"tvdb_id":"403245","name":"Dune: Prophecy","year":"2024","type":"series","primary_language":"eng","image_url":"https://artworks.thetvdb.com/banners/dune.jpg","translations":{"eng":"Dune: Prophecy"},"overviews":{"eng":"Sisters."}}]}""",
+                    _ => null
+                };
+                var response = json is null ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                    : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") };
+                lock (this) Elapsed += Stopwatch.GetElapsedTime(started);
+                return response;
+            }
         }
 
         private async Task ExplainShelfAsync(Host host, CommandLog commands, ExternalWorkShelfData shelf, string name)
