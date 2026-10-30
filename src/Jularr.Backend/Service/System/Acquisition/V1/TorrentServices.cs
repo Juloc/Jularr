@@ -26,10 +26,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     public sealed class DownloadTorrentsV1 : SystemService<AcquisitionCycleParametersV1, NoData>
     {
         private readonly RunTorrentJobV1 _runner;
+        private readonly DownloadSpeeds _speeds;
 
-        internal DownloadTorrentsV1(RunTorrentJobV1 runner)
+        internal DownloadTorrentsV1(RunTorrentJobV1 runner, DownloadSpeeds speeds)
         {
             _runner = runner;
+            _speeds = speeds;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -42,6 +44,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             var (modules, downloads, settings) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["Acquisition", "Torrent"]), ct),
                 await ctx.ReadActiveDownloadsAsync(ct), await ctx.ReadDownloadStorageSettingsAsync(DownloadStorageArea.Torrent, ct)), CancellationToken);
             if (modules.Count(module => module.IsEnabled) != 2) return new TorrentCycleResultV1(false, false);
+            _speeds.Torrent.BytesPerSecond = settings.MaxBytesPerSecond ?? 0;
 
             var jobs = new List<DownloadData>();
             foreach (var group in downloads.Where(download => download.ExternalId == TorrentJob.ExternalId).GroupBy(download => download.AcquisitionConnectionId))

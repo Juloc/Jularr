@@ -9,7 +9,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 {
     // Jularr's own torrent downloads: the .torrent or magnet, the verified pieces and the data live in staging. Every pass runs through a verified
     // VPN tunnel chosen by the route policy; without one nothing is sent and the job waits.
-    internal sealed class TorrentJob(VpnTunnels tunnels, TimeProvider time)
+    internal sealed class TorrentJob(VpnTunnels tunnels, TimeProvider time, DownloadSpeeds speeds)
     {
         public const string ExternalId = "torrent";
         private static readonly TimeSpan TrackerTimeout = TimeSpan.FromSeconds(20);
@@ -44,7 +44,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         {
             using var lease = await AcquireRouteAsync(context, ct);
             using var trackers = new HttpClient(lease.CreateHandler()) { Timeout = TrackerTimeout };
-            return await TorrentDownloader.RunAsync(new TorrentPassRequest(staging, lease.ConnectAsync, trackers, deadline), ct);
+            return await TorrentDownloader.RunAsync(new TorrentPassRequest(staging, lease.ConnectAsync, trackers, deadline, throttle: speeds.Torrent.WaitAsync), ct);
         }
     }
 }

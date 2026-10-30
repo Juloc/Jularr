@@ -49,7 +49,7 @@ namespace Jularr.Integrations.Logic.Torrent
 
             var infoHash = meta?.InfoHash ?? magnet!.InfoHash;
             var peerId = Encoding.ASCII.GetBytes("-JL0100-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(6)));
-            var swarm = new Swarm(meta, storage, infoHash);
+            var swarm = new Swarm(meta, storage, infoHash, request.Throttle);
             var peers = new List<(string Host, int Port)>(magnet?.Peers ?? []);
             foreach (var tracker in (meta?.Trackers ?? magnet!.Trackers).Where(tracker => tracker.Scheme is "http" or "https").Take(20))
             {
@@ -287,7 +287,7 @@ namespace Jularr.Integrations.Logic.Torrent
         }
 
         // What the connections of one pass share: which pieces are taken, the storage, and a magnet's metadata as it arrives.
-        private sealed class Swarm(TorrentMetainfo? meta, TorrentStorage? storage, byte[] infoHash)
+        private sealed class Swarm(TorrentMetainfo? meta, TorrentStorage? storage, byte[] infoHash, Func<long, CancellationToken, ValueTask>? throttle = null)
         {
             private const int MetadataPieceLength = 16 * 1024;
             private const int MaximumMetadata = 8 * 1024 * 1024;
@@ -357,6 +357,7 @@ namespace Jularr.Integrations.Logic.Torrent
             public async Task<bool> ReceiveBlockAsync(PeerState peer, int piece, int offset, ReadOnlyMemory<byte> block, CancellationToken ct)
             {
                 if (peer.Piece != piece || peer.Buffer is null || offset < 0 || offset + block.Length > peer.Buffer.Length || block.Length == 0) return true;
+                if (throttle is not null) await throttle(block.Length, ct);
                 block.CopyTo(peer.Buffer.AsMemory(offset));
                 peer.Received += block.Length;
                 peer.Outstanding--;

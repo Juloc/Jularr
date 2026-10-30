@@ -10,13 +10,18 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 {
     public sealed class ManualImportWorksParametersV1 : BaseParameters
     {
-        public ManualImportWorksParametersV1(string query)
+        public ManualImportWorksParametersV1(string query, bool anyMediaType = false)
         {
             Query = query;
+            AnyMediaType = anyMediaType;
         }
 
         [DataField(typeof(ManualImportFields), nameof(ManualImportFields.Query))]
         public string Query { get; }
+
+        // Every wanted title, not only films and series (a download added by hand on the Downloads page).
+        [DataField(typeof(ManualImportFields), nameof(ManualImportFields.AnyMediaType))]
+        public bool AnyMediaType { get; }
     }
 
     public sealed class ManualImportParametersV1 : BaseParameters
