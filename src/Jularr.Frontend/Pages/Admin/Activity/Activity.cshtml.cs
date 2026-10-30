@@ -325,7 +325,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 {
                     body.Add(Drawer.Block("activity.files",
                         new A(Glyph("folder", 16), new Text("console.files")).Class("button button--soft")
-                            .Attribute("href", "/Admin/Acquisition/Downloads?PageNumber=1&AcquisitionConnectionId="
+                            .Attribute("href", "/Admin/Downloads/Clients?PageNumber=1&AcquisitionConnectionId="
                                 + sabnzbdConnectionId.ToString(CultureInfo.InvariantCulture) + "&Pane=files")));
                 }
                 else if (OpenOperationId == item.Id && ShowFiles)

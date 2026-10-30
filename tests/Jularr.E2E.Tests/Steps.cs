@@ -167,7 +167,7 @@ namespace Jularr.E2E.Tests
             // Two short choices are a segmented control of radios.
             await page.Locator("dialog#connection-editor form").GetByLabel(searchesAutomatically ? "Automatic and manual" : "Manual only", new() { Exact = true }).CheckAsync();
             await SubmitAsync(page, page.Locator("dialog#connection-editor form"));
-            await page.GotoAsync("/Admin/Acquisition/Downloads");
+            await page.GotoAsync("/Admin/Downloads/Clients");
             await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }).And(page.Locator("[href*='Type=Sabnzbd']")));
             await page.FillAsync("dialog#connection-editor form [name=Name]", "SABnzbd");
             await page.FillAsync("dialog#connection-editor form [name=BaseUrl]", new Uri(fakes.Address, "sabnzbd/").ToString());

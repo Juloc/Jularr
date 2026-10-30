@@ -80,20 +80,26 @@ namespace Jularr.Frontend.Framework
                     new("library.tab.Versions", "/Admin/Library/Versions", Right("storage.update"), ["Library"])
                 ], UserMenu: true)
             ]),
+            new("admin.menu.group.downloads",
+            [
+                new("downloads", "admin.menu.downloads", "download", [new("admin.downloads.title", "/Admin/Downloads", Acquisition, ["Acquisition"])], UserMenu: true),
+                new("servers", "downloads.servers.title", "network", [new("downloads.servers.title", "/Admin/Downloads/Servers", Acquisition, ["Acquisition"])]),
+                new("speed", "downloads.speedPage.title", "sliders", [new("downloads.speedPage.title", "/Admin/Downloads/Speed", Acquisition, ["Acquisition"])]),
+                new("clients", "downloads.clients.title", "link", [new("downloads.clients.title", "/Admin/Downloads/Clients", Acquisition, ["Acquisition"])])
+            ]),
             new("nav.group.acquisition",
             [
-                new("downloads", "admin.menu.downloads", "download",
+                new("acquisition", "acquisition.role.Search", "search",
                 [
-                    new("admin.downloads.title", "/Admin/Downloads", Acquisition, ["Acquisition"]),
                     new("acquisition.role.Search", "/Admin/Acquisition", Acquisition, ["Acquisition"]),
-                    new("acquisition.role.Download", "/Admin/Acquisition/Downloads", Acquisition, ["Acquisition"]),
+                    new("acquisition.role.Download", "/Admin/Acquisition/Downloads", Acquisition, ["Acquisition", "Torrent"]),
                     new("acquisition.role.Subtitles", "/Admin/Acquisition/Subtitles", Acquisition, ["Acquisition", "Subtitles"]),
                     new("admin.profiles.title", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "profiles", true),
                     new("arr.formats", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "formats"),
                     new("arr.sizes", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "sizes"),
                     new("arr.releaseProfiles", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "release"),
                     new("arr.tags", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "tags")
-                ], UserMenu: true),
+                ]),
                 new("sources", "admin.sources.title", "swap",
                 [
                     new("admin.sources.title", "/Admin/Acquisition/Sources", Acquisition, ["Acquisition"]),

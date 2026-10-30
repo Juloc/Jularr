@@ -10,7 +10,7 @@ VPN health signal.
 1. Run qBittorrent with its transfer network in the same network namespace as Gluetun.
    Publish its WebUI only as required for Jularr; do not independently expose qBittorrent's
    network namespace to a second route around the VPN.
-2. In Jularr Admin > Connections > Download clients, add qBittorrent with its WebUI URL
+2. In Jularr Admin > Downloads > External clients, add qBittorrent with its WebUI URL
    and account credentials. Test the connection.
 3. Assign the storage mount/folder through which Jularr can read the client's completed
    download directory. The client path and Jularr mount must refer to the same files.
