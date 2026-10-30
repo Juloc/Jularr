@@ -116,6 +116,9 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(filmRow).ToBeVisibleAsync();
                 await Assertions.Expect(seriesRow).Not.ToContainTextAsync("High");
 
+                // The searches the requests started are over (a search takes its time, as the indexer is paced): a release on offer is found only by the search below.
+                await WaitUntilSearchedAsync(page, filmRow, seriesRow);
+
                 // Priorities are for chosen rows: the dock shows its bulk zone, with how many are chosen, only while rows are chosen.
                 var dock = page.Locator(".action-dock:not(.save-pill)");
                 await Assertions.Expect(dock.GetByRole(AriaRole.Button, new() { Name = "High priority", Exact = true })).ToBeHiddenAsync();
@@ -344,6 +347,24 @@ namespace Jularr.E2E.Tests
         }
 
         // The automatic search runs every two minutes.
+        private static async Task WaitUntilSearchedAsync(IPage page, params ILocator[] rows)
+        {
+            var deadline = DateTime.UtcNow.AddMinutes(2);
+            while (true)
+            {
+                var searched = 0;
+                foreach (var row in rows)
+                {
+                    if (await row.Locator("time[data-local-time]").CountAsync() > 0) searched++;
+                }
+
+                if (searched == rows.Length) return;
+                if (DateTime.UtcNow > deadline) throw new AssertFailedException("The searches of the requests did not finish within two minutes.");
+                await Task.Delay(500);
+                await page.ReloadAsync();
+            }
+        }
+
         private static async Task WaitForGrabsAsync(FakeServices fakes, params FakeRelease[] releases)
         {
             var wanted = releases.Select(release => fakes.NzbAddress(release).ToString()).ToArray();
