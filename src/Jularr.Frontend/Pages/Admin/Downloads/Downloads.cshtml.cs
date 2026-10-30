@@ -27,7 +27,8 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
         RemoveActivityDownloadV1 remove, RetryActivityV1 retry, RetryActivityImportV1 retryImport, SaveActivitySourceLinkV1 sourceLink, PrioritizeActivityDownloadsV1 prioritize,
         MoveActivityDownloadV1 move, DeleteActivityHistoryV1 deleteHistory, ClearActivityHistoryV1 clearHistory, ReadDownloadSpeedLimitV1 readSpeedLimit, SetDownloadSpeedLimitV1 setSpeedLimit,
         AddActivityDownloadV1 add, FindManualImportWorksV1 findTitles, ReadNewsServersV1 newsServers, ReadAcquisitionConnectionsV1 connections, TestAcquisitionConnectionV1 test, ReadTorrentEngineV1 torrentEngine,
-        ReadVpnProfilesV1 vpnProfiles, ReadDownloadStorageSettingsV1 storageSettings, ReadStorageMountV1 storageMount, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
+        ReadVpnProfilesV1 vpnProfiles, ReadDownloadStorageSettingsV1 storageSettings, ReadStorageMountV1 storageMount, InspectDownloadClientV1 inspect, IAntiforgery antiforgery, UiText texts,
+        FrontendAssets assets) : JularrPage
     {
         private const string BulkForm = "downloads-bulk";
         private const string MoveForm = "downloads-move";
@@ -50,7 +51,10 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
         private TorrentEngineV1? _engine;
         private VpnProfileV1? _vpn;
         private DownloadStorageSettingsV1? _storage;
-        private StorageMountDetailsV1? _storageMount;
+        private DownloadClientDashboardV1? _dashboard;
+
+        // The free space where the shown downloads land, with the reserve kept there: a native workspace's last measure, SABnzbd's own report; on All the fullest workspace.
+        private (long Free, long? Reserve)? _space;
 
         [BindProperty(SupportsGet = true)]
         public DownloadClientKind? Client { get; set; }
@@ -99,8 +103,9 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             page.Asset("Framework/Components/Modal.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
-            // One row: the clients as pill tabs, the client's icon buttons at its end; then the figures, the queue, the history and the client's own panels.
-            page.Content.Add(new Div(Tabs(), new Div([.. HeadButtons(csrf)]).Class("downloads-head__actions")).Class("downloads-head"));
+            // The heading with the client's icon buttons, the clients as pill tabs under it; then the figures, the queue, the history and the client's own panels.
+            page.Content.Add(new Div([new H1(new Text("admin.downloads.title")), new Span().Class("downloads-panel__spacer"), .. HeadButtons(csrf)]).Class("downloads-head"));
+            page.Content.Add(new Div(Tabs()).Class("downloads-tabs"));
             page.Content.Add(Figures(csrf));
             if (_queue is { } queue) page.Content.Add(QueuePanel(queue, csrf));
             if (_history is { } history) page.Content.Add(HistoryPanel(history, csrf));
@@ -126,35 +131,20 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             return new NavigationTabs(tabs, "downloads.clients");
         }
 
-        // Warnings, pause or resume this client (on All: everything), its settings and adding a download; a button the client has no use for is left out.
+        // Warnings, pause or resume this client (on All: everything), its settings and adding a download; a client that takes no download by hand has no add button.
         private IEnumerable<IUiComponent> HeadButtons(string? csrf)
         {
             var shown = Shown();
-            var warnings = shown.Sum(client => client.WarningCount);
-            if (warnings > 0)
-            {
-                yield return IconLink("alert", string.Format(CultureInfo.CurrentCulture, texts["downloads.warnings"], warnings), "/Admin/Activity?Filter=Errors");
-            }
-
+            yield return IconLink("bell", string.Format(CultureInfo.CurrentCulture, texts["downloads.warnings"], shown.Sum(client => client.WarningCount)), "/Admin/Activity?Filter=Errors");
             var paused = shown.Sum(client => client.PausedCount);
             var open = shown.Sum(client => client.QueueCount);
-            if (open > paused)
-            {
-                yield return IconPost("PauseClient", "pause", _client is null ? "downloads.pauseAll" : "downloads.pauseClient", csrf);
-            }
-            else if (paused > 0)
-            {
-                yield return IconPost("ResumeClient", "play", _client is null ? "downloads.resumeAll" : "downloads.resumeClient", csrf);
-            }
-
-            if (_client is { } client)
-            {
-                yield return IconLink("settings", texts["downloads.settings"], SettingsAddress(client));
-            }
-
+            yield return paused > 0 && paused == open
+                ? IconPost("ResumeClient", "play", _client is null ? "downloads.resumeAll" : "downloads.resumeClient", csrf)
+                : IconPost("PauseClient", "pause", _client is null ? "downloads.pauseAll" : "downloads.pauseClient", csrf);
+            yield return IconLink("settings", texts["downloads.settings"], _client is { } client ? SettingsAddress(client) : "/Admin/Downloads/Clients");
             if (AddLabel() is { } label)
             {
-                yield return new A(Glyph("plus", 16), new Text(label)).Class("button button--primary").Attribute("href", Address(add: true)).Attribute("title", texts[label]);
+                yield return new A(Glyph("plus", 16), new Text(label)).Class("button button--primary downloads-add-button").Attribute("href", Address(add: true)).Attribute("title", texts[label]);
             }
         }
 
@@ -163,7 +153,7 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             ? DownloadClientKinds.AddsNzb(kind) ? "downloads.addNzb" : DownloadClientKinds.AddsTorrent(kind) ? "downloads.addTorrent" : null
             : _clients.Any(client => DownloadClientKinds.AddsNzb(client.DownloadClientKindId) || DownloadClientKinds.AddsTorrent(client.DownloadClientKindId)) ? "downloads.add" : null;
 
-        // Speed with its short line and the client's limit, what is left and how long, what runs and what waits, and the free space of the client's own workspace; the stream keeps them current.
+        // Speed with its short line and the client's limit, what is left and how long, what runs and what waits, and the free space where the downloads land; the stream keeps them current.
         private IUiComponent Figures(string? csrf)
         {
             var shown = Shown();
@@ -180,9 +170,9 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
                 Stat("downloads.remaining", LiveFigure(key, "remaining", figures, "downloads-stat__value"), LiveFigure(key, "eta", figures, "downloads-stat__foot")),
                 Stat("downloads.active", LiveFigure(key, "active", figures, "downloads-stat__value"), LiveFigure(key, "waiting", figures, "downloads-stat__foot"))
             };
-            if (_storageMount is { StorageHealthTypeId: StorageHealthType.Online, FreeBytes: { } free })
+            if (_space is { } space)
             {
-                cards.Add(Stat("downloads.free", new Strong(new ValueText(ByteSize.Format(free))).Class("downloads-stat__value"), _storage?.FreeSpaceReserveBytes is { } reserve
+                cards.Add(Stat("downloads.free", new Strong(new ValueText(ByteSize.Format(space.Free))).Class("downloads-stat__value"), space.Reserve is { } reserve
                     ? new Small(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["downloads.reserve"], ByteSize.Format(reserve)))).Class("downloads-stat__foot") : new Span()));
             }
 
@@ -220,21 +210,21 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             return selected ? option.Attribute("selected", "selected") : option;
         }
 
-        // The open downloads in their client's order: chosen with their box for the dock (shift-click for a range), dragged by their handle where the client reorders, filtered and narrowed by name.
+        // The open downloads in their client's order: chosen with their box for the dock (shift-click for a range), dragged by their handle where the client reorders, filtered by category and priority.
         private IUiComponent QueuePanel(PageResult<ActivityItemV1> queue, string? csrf)
         {
             var all = _client is null;
-            var columns = new List<ListColumn> { new("downloads.name", ListRole.Main, Head: ListIdentity.SelectAllHead(new Text("downloads.name"), "downloads.selectAll")) };
+            var columns = new List<ListColumn> { new("downloads.name", ListRole.Main) };
             if (all) columns.Add(new ListColumn("downloads.client", ListRole.Data, 2));
             columns.AddRange([new ListColumn("downloads.category", ListRole.Data, 2), new ListColumn("table.status", ListRole.Status), new ListColumn("downloads.progress"),
-                new ListColumn("activity.size", ListRole.Data, 1), new ListColumn("downloads.speed"), new ListColumn("downloads.eta", ListRole.Data, 1), new ListColumn("common.actions", ListRole.Actions)]);
+                new ListColumn("downloads.percent", ListRole.Data, Head: new Span()), new ListColumn("activity.size", ListRole.Data, 1), new ListColumn("downloads.speed"),
+                new ListColumn("downloads.eta", ListRole.Data, 1), new ListColumn("common.actions", ListRole.Actions, Head: new Span())]);
             var empty = new Div(new IconTile(Glyph("download", 22), UiTone.Neutral), new P(new Text("downloads.queue.empty")));
             var reorders = _client is { } client && DownloadClientKinds.Reorders(client.DownloadClientKindId) && Category is null && Priority is null;
             var list = new ListPanel("downloads.queue", columns, [.. queue.Items.Select(item => QueueRow(item, all, reorders, csrf))], empty)
                 .Modifier("downloads-list downloads-queue" + (all ? " downloads-list--all" : "") + (reorders ? " downloads-queue--sortable" : "")).Paged(primary: true);
             var filters = new List<IUiComponent> { new H2(new Text("downloads.queue")), new Span().Class("downloads-panel__spacer"), CategoryFilter() };
             if (Shown().Any(shown => DownloadClientKinds.HasPriorities(shown.DownloadClientKindId))) filters.Add(PriorityFilter());
-            filters.Add(new SearchBox(ClientAddress(_client), "downloads.search", null, Scope(), ".downloads-queue", Glyph("search", 16)));
             return new Section(new Div([.. filters]).Class("downloads-panel__head"), list).Class("downloads-panel");
         }
 
@@ -250,11 +240,13 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
                     .Class("downloads-pick");
             }
 
-            var cells = new List<IUiComponent> { Identity(item, phase, pick) };
+            var cells = new List<IUiComponent> { Name(item, pick) };
             if (all) cells.Add(ClientCell(item));
             cells.Add(CategoryCell(item));
             cells.Add(StatusCell(item, phase));
             cells.Add(ProgressCell(item, phase));
+            cells.Add(new Span(new Span(new ValueText(LiveEntities.Percent(item.ProgressPercent))).Attribute("data-live-text", "percent")).Class("list-value")
+                .Attribute("data-live", LiveKeys.Operation(item.Id)));
             cells.Add(Value(item.SizeBytes is { } size ? ByteSize.Format(size) : null));
             cells.Add(LiveValue(item, "speed", says ? "" : LiveEntities.OperationSpeed(texts, item.OperationStatusTypeId, item.DownloadStateTypeId, item.BytesPerSecond)));
             cells.Add(LiveValue(item, "eta", says ? "" : LiveFacts.Eta(item.EtaSeconds)));
@@ -262,7 +254,7 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             return new ListRow(cells, [ListPanel.Fact("downloads.progress", new ValueText(LiveEntities.Percent(item.ProgressPercent)))], (item.WorkTitle ?? "") + " " + item.Title);
         }
 
-        // Pause or go on, put it first, read a waiting one again, import it by hand, take it out (after a question).
+        // Pause or go on, put it first, take it out (after a question).
         private IUiComponent QueueActions(ActivityItemV1 item, string? csrf)
         {
             var actions = new List<IUiComponent>();
@@ -272,21 +264,19 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
                 actions.Add(item.DownloadStateTypeId == DownloadStateType.Paused ? RowPost("Resume", id, "play", "activity.resume", csrf) : RowPost("Pause", id, "pause", "activity.pause", csrf));
             }
 
-            if (item.DownloadClientKindId is not null) actions.Add(RowPost("MoveToTop", id, "chevron-up", "downloads.moveToTop", csrf));
-            if (item.CanRetryImport) actions.Add(RowPost("RetryImport", id, "sync", "activity.retryImport", csrf));
-            if (item.CanImportManually) actions.Add(IconLink("folder", texts["activity.importManually"], "/Admin/ManualImport?operationId=" + id));
+            if (item.DownloadClientKindId is not null) actions.Add(RowPost("MoveToTop", id, "arrow-up", "downloads.moveToTop", csrf));
             actions.Add(IconLink("trash", texts["downloads.remove"], Address(remove: item.Id), danger: true));
-            return new Div([.. actions]).Class("list-actions");
+            return new Div([.. actions]).Class("list-actions downloads-actions");
         }
 
-        // The finished downloads, newest first: failed ones can be tried again, every one can leave the history, and the completed ones all at once.
+        // The finished downloads, newest first: failed ones can be tried again, completed ones lead to their title, every one can leave the history, and the completed ones all at once.
         private IUiComponent HistoryPanel(PageResult<ActivityItemV1> history, string? csrf)
         {
             var all = _client is null;
             var columns = new List<ListColumn> { new("downloads.name", ListRole.Main) };
             if (all) columns.Add(new ListColumn("downloads.client", ListRole.Data, 2));
             columns.AddRange([new ListColumn("table.status", ListRole.Status), new ListColumn("activity.reason", ListRole.Data, 1), new ListColumn("activity.size", ListRole.Data, 1),
-                new ListColumn("downloads.finished"), new ListColumn("common.actions", ListRole.Actions)]);
+                new ListColumn("downloads.finished"), new ListColumn("common.actions", ListRole.Actions, Head: new Span())]);
             var empty = new Div(new IconTile(Glyph("history", 22), UiTone.Neutral), new P(new Text("downloads.history.empty")));
             var list = new ListPanel("downloads.history", columns, [.. history.Items.Select(item => HistoryRow(item, all, csrf))], empty)
                 .Modifier("downloads-list downloads-history" + (all ? " downloads-list--all" : "")).Paged(key: HistoryKey);
@@ -295,7 +285,8 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             var head = new List<IUiComponent> { new H2(new Text("downloads.history")), new Span().Class("downloads-panel__spacer"), failedOnly };
             if (history.Items.Count > 0)
             {
-                head.Add(Modal.Opener(new Button(Glyph("trash", 16)).IconOnly(texts["downloads.clearCompleted"]).Attribute("title", texts["downloads.clearCompleted"]), ClearDialog));
+                head.Add(Modal.Opener(new Button(Glyph("trash", 16)).IconOnly(texts["downloads.clearCompleted"]).Attribute("title", texts["downloads.clearCompleted"]).Class("button button--icon downloads-icon"),
+                    ClearDialog));
             }
 
             return new Section(new Div([.. head]).Class("downloads-panel__head"), list).Class("downloads-panel");
@@ -305,31 +296,40 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
         {
             var phase = Phase(item);
             var id = item.Id.ToString(CultureInfo.InvariantCulture);
-            var cells = new List<IUiComponent> { Identity(item, phase) };
+            var finished = item.FinishedAt ?? item.CreatedAt;
+            var cells = new List<IUiComponent> { new Span(new Truncated(item.WorkTitle ?? item.Title)).Class("downloads-name downloads-name--plain") };
             if (all) cells.Add(ClientCell(item));
             cells.Add(new Div(new Span(new Text("operation.status." + item.OperationStatusTypeId)).Class("downloads-pill")).Class("downloads-phase").Attribute("data-phase", phase));
-            cells.Add(item.ReasonKey is { } key && LiveEntities.Reason(texts, item.OperationTypeId, key) is { Length: > 0 } reason ? new Span(new Truncated(reason)).Class("list-value list-value--fill") : Value(null));
+            cells.Add(item.ReasonKey is { } key && LiveEntities.Reason(texts, item.OperationTypeId, key) is { Length: > 0 } reason
+                ? new Span(new Truncated(reason)).Class("list-value list-value--dim") : new Span());
             cells.Add(Value(item.SizeBytes is { } size ? ByteSize.Format(size) : null));
-            cells.Add(new Span(new LocalTime(item.FinishedAt ?? item.CreatedAt)).Class("list-value"));
+            cells.Add(new Span(new ValueText(Ago(finished))).Class("list-value list-value--dim").Attribute("title", LocalTime.Fallback(finished)));
 
             var actions = new List<IUiComponent>();
             if (item.CanRetry) actions.Add(RowPost("Retry", id, "sync", "activity.retry", csrf));
-            if (item.WorkId is { } workId) actions.Add(IconLink("info", texts["downloads.details"], "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)));
+            else if (item.WorkId is { } workId) actions.Add(IconLink("info", texts["downloads.details"], "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)));
             actions.Add(RowPost("DeleteHistory", id, "trash", "downloads.deleteEntry", csrf, danger: true));
-            cells.Add(new Div([.. actions]).Class("list-actions"));
-            return new ListRow(cells, [ListPanel.Fact("downloads.finished", new LocalTime(item.FinishedAt ?? item.CreatedAt), Glyph("clock", 14))]);
+            cells.Add(new Div([.. actions]).Class("list-actions downloads-actions"));
+            return new ListRow(cells, [ListPanel.Fact("downloads.finished", new ValueText(Ago(finished)), Glyph("clock", 14))]);
         }
 
-        // The work first, the release under it; the tile wears the phase's colour.
-        private IUiComponent Identity(ActivityItemV1 item, string phase, IUiComponent? select = null)
+        // How long ago a download ended, as the history says it.
+        private string Ago(DateTime instant)
+        {
+            var minutes = (int)Math.Max(0, (DateTime.UtcNow - DateTime.SpecifyKind(instant, DateTimeKind.Utc)).TotalMinutes);
+            return minutes < 1 ? texts["downloads.ago.now"]
+                : minutes < 60 ? string.Format(CultureInfo.CurrentCulture, texts["downloads.ago.minutes"], minutes)
+                : minutes < 1440 ? string.Format(CultureInfo.CurrentCulture, texts["downloads.ago.hours"], minutes / 60)
+                : string.Format(CultureInfo.CurrentCulture, texts["downloads.ago.days"], minutes / 1440);
+        }
+
+        // The box (and the handle) and the title in bold; the title leads to its management page.
+        private static IUiComponent Name(ActivityItemV1 item, IUiComponent pick)
         {
             IUiComponent title = item.WorkId is { } workId
-                ? new A(new Truncated(item.WorkTitle ?? item.Title)).Class("list-identity__title").Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture))
+                ? new A(new Truncated(item.WorkTitle ?? item.Title)).Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)).Attribute("title", item.Title)
                 : new Truncated(item.Title);
-            IUiComponent subline = item.WorkId is null ? new ValueText(item.ConnectionName ?? "") : new Truncated(item.Title);
-            var tile = new Span(new IconTile(Glyph(PhaseIcon(phase)), UiTone.Neutral)).Class("downloads-phase downloads-phase--tile").Attribute("data-phase", phase);
-            if (item.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running) tile.Attribute("data-live", LiveKeys.Operation(item.Id));
-            return new ListIdentity(tile, title, subline, select: select);
+            return new Div(pick, new Strong(title).Class("downloads-name")).Class("downloads-namecell");
         }
 
         private IUiComponent ClientCell(ActivityItemV1 item) => item.DownloadClientKindId is { } kind
@@ -338,28 +338,16 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
 
         private IUiComponent CategoryCell(ActivityItemV1 item) => item.MediaTypeId is { } type ? new Span(new Text("media.type." + type)).Class("list-value list-value--dim") : Value(null);
 
-        // The state pill follows the phase the stream sets, in the phase's colour; a priority other than normal stands beside it.
-        private IUiComponent StatusCell(ActivityItemV1 item, string phase)
-        {
-            var parts = new List<IUiComponent>
-            {
-                new Span(new Span(new ValueText(LiveEntities.OperationStatus(texts, item.IsWaiting, item.OperationStatusTypeId, Says(item) ? null : item.DownloadStateTypeId))).Attribute("data-live-text", "status"))
-                    .Class("downloads-pill")
-            };
-            if (item.DownloadPriorityTypeId != DownloadPriorityType.Normal)
-            {
-                parts.Add(new Span(new Text("downloads.priority." + item.DownloadPriorityTypeId)).Class("downloads-priority downloads-priority--" + item.DownloadPriorityTypeId.ToString().ToLowerInvariant()));
-            }
-
-            return new Div([.. parts]).Class("downloads-phase downloads-status").Attribute("data-phase", phase).Attribute("data-live", LiveKeys.Operation(item.Id));
-        }
+        // The state pill follows the phase the stream sets, in the phase's colour.
+        private IUiComponent StatusCell(ActivityItemV1 item, string phase) =>
+            new Div(new Span(new Span(new ValueText(LiveEntities.OperationStatus(texts, item.IsWaiting, item.OperationStatusTypeId, Says(item) ? null : item.DownloadStateTypeId))).Attribute("data-live-text", "status"))
+                .Class("downloads-pill")).Class("downloads-phase downloads-status").Attribute("data-phase", phase).Attribute("data-live", LiveKeys.Operation(item.Id));
 
         private IUiComponent ProgressCell(ActivityItemV1 item, string phase)
         {
             var bar = new Progress().Attribute("max", "100").TextAttribute("aria-label", "live.progress").Class("downloads-bar").Attribute("data-live-value", "percent");
             if (item.ProgressPercent is { } value) bar.Attribute("value", value.ToString(CultureInfo.InvariantCulture));
-            var percent = new Span(new ValueText(LiveEntities.Percent(item.ProgressPercent))).Class("downloads-percent").Attribute("data-live-text", "percent");
-            return new Div(bar, percent).Class("downloads-phase downloads-progress").Attribute("data-phase", phase).Attribute("data-live", LiveKeys.Operation(item.Id));
+            return new Div(bar).Class("downloads-phase downloads-progress").Attribute("data-phase", phase).Attribute("data-live", LiveKeys.Operation(item.Id));
         }
 
         private static IUiComponent LiveValue(ActivityItemV1 item, string name, string text)
@@ -377,16 +365,6 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             var running = item.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running;
             return (item.IsWaiting ? "waiting" : (running && item.DownloadStateTypeId is { } state ? state.ToString() : item.OperationStatusTypeId.ToString())).ToLowerInvariant();
         }
-
-        private static string PhaseIcon(string phase) => phase switch
-        {
-            "downloading" or "running" => "download",
-            "paused" => "pause",
-            "postprocessing" => "layers",
-            "completed" => "check",
-            "failed" => "alert",
-            _ => "clock"
-        };
 
         private static bool Says(ActivityItemV1 item) => item.ReasonKey is not null && (item.IsWaiting || item.OperationStatusTypeId == OperationStatusType.Failed);
 
@@ -406,7 +384,7 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             {
                 BulkButton(nameof(DownloadBulkActionType.Pause), "pause", "downloads.pauseSelected"),
                 BulkButton(nameof(DownloadBulkActionType.Resume), "play", "downloads.resumeSelected"),
-                BulkButton(nameof(DownloadBulkActionType.MoveToTop), "chevron-up", "downloads.moveToTop")
+                BulkButton(nameof(DownloadBulkActionType.MoveToTop), "arrow-up", "downloads.moveToTop")
             };
             if (Shown().Any(client => DownloadClientKinds.HasPriorities(client.DownloadClientKindId)))
             {
@@ -481,7 +459,7 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             return new Modal(assets, "downloads-add", labelKey, body, open: true, returnTo: Address());
         }
 
-        // What belongs to the chosen client only: its news servers, its connection, its tunnel and workspace, or its sources.
+        // What belongs to the chosen client only: its news servers, its connection and route, its tunnel and workspace, or its sources.
         private IEnumerable<IUiComponent> ClientPanels(string? csrf)
         {
             switch (_client?.DownloadClientKindId)
@@ -490,11 +468,17 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
                     yield return NewsServers();
                     break;
                 case DownloadClientKind.Sabnzbd or DownloadClientKind.Qbittorrent:
-                    if (_connections.FirstOrDefault(item => item.Id == _client.SettingsConnectionId) is { } connection) yield return ClientConnection(connection, csrf);
+                    if (_connections.FirstOrDefault(item => item.Id == _client.SettingsConnectionId) is { } connection)
+                    {
+                        yield return new Div(ClientConnection(connection, csrf), Route(connection)).Class("downloads-pair");
+                    }
+
                     break;
                 case DownloadClientKind.Torrent:
-                    if (_engine is { } engine) yield return TunnelPanel(engine);
-                    if (_storage is { } storage) yield return WorkspacePanel(storage);
+                    var panels = new List<IUiComponent>();
+                    if (_engine is { } engine) panels.Add(TunnelPanel(engine));
+                    if (_storage is { } storage) panels.Add(WorkspacePanel(storage));
+                    yield return new Div([.. panels]).Class("downloads-pair");
                     break;
                 case DownloadClientKind.Direct:
                     yield return SourcesPanel(csrf);
@@ -505,7 +489,7 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
         // Each news server with its state and what its last pass measured, kept current by the stream.
         private IUiComponent NewsServers()
         {
-            var columns = new List<ListColumn> { new("downloads.server", ListRole.Main), new("table.status", ListRole.Status), new("downloads.connections"), new("downloads.speed"),
+            var columns = new List<ListColumn> { new("downloads.server", ListRole.Main), new("downloads.state", ListRole.Status), new("downloads.connections"), new("downloads.speed"),
                 new("downloads.missingArticles", ListRole.Data, 1) };
             var rows = _connections.Where(item => item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet).Select(item =>
             {
@@ -514,29 +498,41 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
                     ? LiveEntities.NewsServer(texts, server) : LiveEntities.NewsServer(texts, new NewsServerV1(item.Id, 0, 0, 0, 0, item.MaxConnections ?? 8))).Text;
                 return new ListRow(
                 [
-                    new ListIdentity(new IconTile(Glyph("server"), UiTone.Info), new ValueText(item.Name), new ValueText(item.Host + (item.Port is { } port ? ":" + port.ToString(CultureInfo.InvariantCulture) : ""))),
+                    new Span(new Truncated(item.Name)).Class("downloads-name downloads-name--plain"),
                     ConnectionState(item),
                     LiveFigure(key, "connections", figures, "list-value"),
                     LiveFigure(key, "speed", figures, "list-value"),
                     LiveFigure(key, "missing", figures, "list-value")
                 ]);
             }).ToList();
-            var add = new A(new Text("downloads.addServer")).Class("button button--compact").Attribute("href", "/Admin/Downloads/Servers?PageNumber=1&Type=" + AcquisitionConnectionType.Usenet);
+            var add = new A(new Text("downloads.addServer")).Class("downloads-small").Attribute("href", "/Admin/Downloads/Servers?PageNumber=1&Type=" + AcquisitionConnectionType.Usenet);
             return new Section(new Div(new H2(new Text("downloads.newsServers")), new Span().Class("downloads-panel__spacer"), add).Class("downloads-panel__head"),
                 new ListPanel("downloads.newsServers", columns, rows).Modifier("downloads-list downloads-servers")).Class("downloads-panel");
         }
 
-        // A SABnzbd or qBittorrent: its state, where it is, what it files downloads under and its priority; Test asks it now.
+        // A SABnzbd or qBittorrent: its state, where it is, the categories it files downloads under and its completed folder; Test asks it now.
         private IUiComponent ClientConnection(AcquisitionConnectionDetailsV1 connection, string? csrf)
         {
             var facts = new List<(string, IUiComponent)> { ("downloads.address", new ValueText(connection.BaseUrl ?? "")) };
-            if (connection.DownloadCategory is { } category) facts.Add(("downloads.categoryMapping", new ValueText(category)));
+            var categories = _dashboard is { Categories.Length: > 0 } dashboard ? string.Join(", ", dashboard.Categories) : connection.DownloadCategory;
+            if (categories is not null) facts.Add(("downloads.categoryMapping", new ValueText(categories)));
             if ((connection.LocalPath ?? connection.RemotePath) is { } folder) facts.Add(("downloads.completedFolder", new ValueText(folder)));
-            facts.Add(("downloads.usedFor", new Text(connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd ? "downloads.usedFor.usenet" : "downloads.usedFor.torrent")));
-            facts.Add(("downloads.clientPriority", new ValueText(connection.Priority.ToString(CultureInfo.CurrentCulture))));
-            var testButton = new PostForm(Address(handler: "Test"), csrf, [], new Button(Glyph("sync", 16), new Text("downloads.test")).Compact().Submit());
+            var testButton = new PostForm(Address(handler: "Test"), csrf, [], new Button(Glyph("pulse", 16), new Text("downloads.test")).Compact().Submit().Class("button button--compact downloads-small"));
             return new Section(new Div(new H2(new ValueText(connection.Name)), new Span().Class("downloads-panel__spacer"), ConnectionState(connection)).Class("downloads-panel__head"),
-                Facts(facts), new Div(testButton).Class("downloads-panel__foot")).Class("downloads-panel");
+                Facts(facts, testButton)).Class("downloads-panel");
+        }
+
+        // What Jularr sends to the client and in which order: Usenet or torrent releases, its priority among the clients; SABnzbd seeds nothing.
+        private IUiComponent Route(AcquisitionConnectionDetailsV1 connection)
+        {
+            var sabnzbd = connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd;
+            var facts = new List<(string, IUiComponent)>
+            {
+                ("downloads.usedFor", new Text(sabnzbd ? "downloads.usedFor.usenet" : "downloads.usedFor.torrent")),
+                ("downloads.clientPriority", new ValueText(connection.Priority.ToString(CultureInfo.CurrentCulture)))
+            };
+            if (sabnzbd) facts.Add(("downloads.seeding", new Text("downloads.seeding.none")));
+            return new Section(new Div(new H2(new Text("downloads.route"))).Class("downloads-panel__head"), Facts(facts)).Class("downloads-panel");
         }
 
         // The torrent engine's way out: the tunnel it is bound to, where it leaves, and the upload lock it proved at this read.
@@ -552,10 +548,10 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             facts.Add(("acquisition.torrent.lock", new Span(new Text(engine.IsLockVerified ? "acquisition.torrent.lockVerified" : "acquisition.torrent.lockFailed"),
                 new ValueText(" · " + ByteSize.Format(engine.SentPieceBytes) + " "), new Text("acquisition.torrent.fileData"))));
             if (engine.HasVerifiedTunnel) facts.Add(("downloads.withoutTunnel", new Text("downloads.withoutTunnel.nothing")));
-            var state = engine.HasVerifiedTunnel ? new StateChip(new Text("downloads.tunnel.connected"), UiTone.Success, Glyph("check", 14)) : new StateChip(new Text("acquisition.torrent.vpnNone"), UiTone.Warning, Glyph("alert", 14));
-            var check = texts.Can("instance.settings.read", "Vpn") ? new A(new Text("downloads.checkTunnel")).Class("button button--compact").Attribute("href", "/Admin/Network") : null;
-            return new Section(new Div(new H2(new Text("downloads.vpnPath")), new Span().Class("downloads-panel__spacer"), state).Class("downloads-panel__head"),
-                Facts(facts), check is null ? new Span() : new Div(check).Class("downloads-panel__foot")).Class("downloads-panel");
+            var state = engine.HasVerifiedTunnel ? Pill("downloads.tunnel.connected", "completed") : Pill("acquisition.torrent.vpnNone", "failed");
+            var check = texts.Can("instance.settings.read", "Vpn") ? new A(new Text("downloads.checkTunnel")).Class("downloads-small").Attribute("href", "/Admin/Network") : null;
+            return new Section(new Div(new H2(new Text("downloads.vpnPath")), new Span().Class("downloads-panel__spacer"), state).Class("downloads-panel__head"), Facts(facts, check))
+                .Class("downloads-panel");
         }
 
         private IUiComponent WorkspacePanel(DownloadStorageSettingsV1 storage) => new Section(
@@ -567,54 +563,73 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
                 ("downloads.speedLimit", storage.MaxBytesPerSecond is { } limit ? new ValueText(ByteSize.Format(limit) + "/s") : new Text("downloads.unlimited"))
             ])).Class("downloads-panel");
 
-        // Each direct source with its state; a download that needs a person's link names its source page and takes the link here.
+        // Each direct source with its state, what it waits for and its last result; a download that needs a person's link takes the link in a dialog and names its source page.
         private IUiComponent SourcesPanel(string? csrf)
         {
-            var columns = new List<ListColumn> { new("downloads.source", ListRole.Main), new("table.status", ListRole.Status), new("common.actions", ListRole.Actions) };
-            var rows = _connections.Where(item => DownloadClientKinds.Of(item.AcquisitionConnectionTypeId) == DownloadClientKind.Direct)
-                .Select(item => new ListRow([new ListIdentity(new IconTile(Glyph("books"), UiTone.Accent), new ValueText(item.Name), new Text("acquisition.connection.type." + item.AcquisitionConnectionTypeId)),
-                    ConnectionState(item), new Span()])).ToList();
-            rows.AddRange((_queue?.Items ?? []).Where(item => item.ManualUrl is not null).Select(item => new ListRow(
+            var columns = new List<ListColumn> { new("downloads.source", ListRole.Main), new("downloads.state", ListRole.Status), new("downloads.waitingFor"), new("downloads.lastResult") };
+            var open = _queue?.Items ?? [];
+            var finished = _history?.Items ?? [];
+            var rows = _connections.Where(item => DownloadClientKinds.Of(item.AcquisitionConnectionTypeId) == DownloadClientKind.Direct).Select(item =>
+            {
+                var waiting = open.FirstOrDefault(download => download.ConnectionName == item.Name && download.IsWaiting && download.ReasonKey is not null);
+                var last = finished.FirstOrDefault(download => download.ConnectionName == item.Name);
+                return new ListRow(
+                [
+                    new Span(new Truncated(item.Name)).Class("downloads-name downloads-name--plain"),
+                    waiting is null ? ConnectionState(item) : Pill("activity.waiting", "queued"),
+                    waiting is { ReasonKey: { } reason } ? new Span(new Truncated(LiveEntities.Reason(texts, waiting.OperationTypeId, reason) ?? "")).Class("list-value") : Value(null),
+                    last is null ? Value(null) : new Span(new Truncated((last.WorkTitle ?? last.Title) + ", " + Ago(last.FinishedAt ?? last.CreatedAt))).Class("list-value")
+                ]);
+            }).ToList();
+            rows.AddRange(open.Where(item => item.ManualUrl is not null).Select(item => new ListRow(
             [
-                new ListIdentity(new IconTile(Glyph("link"), UiTone.Danger), new Truncated(item.WorkTitle ?? item.Title), new ValueText(item.ConnectionName ?? "")),
-                new StateChip(new Text("downloads.needsLink"), UiTone.Danger, Glyph("alert", 14)),
-                new Div(new A(new Text("activity.openSource")).Class("button button--compact").Attribute("href", item.ManualUrl!).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"),
-                    new Form<SaveActivitySourceLinkDataV1>(form =>
-                    {
-                        form.Text(data => data.SourceLinkUrl, "activity.fileLink");
-                        form.Submit("downloads.pasteLink");
-                    }, Address(handler: "SourceLink") + "&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new SaveActivitySourceLinkDataV1(""),
-                        FormError?.Field == nameof(SaveActivitySourceLinkDataV1.SourceLinkUrl) ? FormError : null)).Class("downloads-source-link")
+                new Span(new Truncated(item.WorkTitle ?? item.Title)).Class("downloads-name downloads-name--plain"),
+                Pill("downloads.needsLink", "failed"),
+                new Div(Modal.Opener(new Button(new Text("downloads.pasteLink")).Primary().Class("button button--primary downloads-small"), "downloads-link-" + item.Id.ToString(CultureInfo.InvariantCulture)),
+                    new A(new Text("downloads.openPage")).Class("downloads-small").Attribute("href", item.ManualUrl!).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"),
+                    LinkDialog(item, csrf)).Class("downloads-source-link"),
+                new Span(new Text("downloads.checkBrowser")).Class("list-value list-value--dim")
             ])));
-            var storage = new A(new Text("downloadStorage.title")).Class("button button--compact").Attribute("href", "/Admin/DownloadStorage");
+            var storage = new A(new Text("downloadStorage.title")).Class("downloads-small").Attribute("href", "/Admin/DownloadStorage");
             return new Section(new Div(new H2(new Text("downloads.sources")), new Span().Class("downloads-panel__spacer"), storage).Class("downloads-panel__head"),
                 new ListPanel("downloads.sources", columns, rows).Modifier("downloads-list downloads-sources")).Class("downloads-panel");
         }
 
-        // A connection's state: switched off, failing and waiting to try again, failing, not tested yet or reachable.
-        private IUiComponent ConnectionState(AcquisitionConnectionDetailsV1 item)
-        {
-            var (tone, icon, key) = !item.IsEnabled ? (UiTone.Neutral, "power", "acquisition.connection.off")
-                : item is { IsBackedOff: true, RetryAt: not null } ? (UiTone.Warning, "pause", "acquisition.connection.state.backoff")
-                : item.ErrorKey is not null ? (UiTone.Danger, "alert", "acquisition.connection.state.error")
-                : item.CheckedAt is null ? (UiTone.Accent, "clock", "acquisition.connection.unchecked")
-                : (UiTone.Success, "check", "acquisition.connection.healthy");
-            return new StateChip(new Text(key), tone, Glyph(icon, 14));
-        }
+        // The link a person found for a download, given in a dialog.
+        private IUiComponent LinkDialog(ActivityItemV1 item, string? csrf) => new Modal(assets, "downloads-link-" + item.Id.ToString(CultureInfo.InvariantCulture), "downloads.pasteLink",
+            [new Form<SaveActivitySourceLinkDataV1>(form =>
+            {
+                form.Text(data => data.SourceLinkUrl, "activity.fileLink");
+                form.Cancel();
+                form.Submit("downloads.pasteLink");
+            }, Address(handler: "SourceLink") + "&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new SaveActivitySourceLinkDataV1(""),
+                FormError?.Field == nameof(SaveActivitySourceLinkDataV1.SourceLinkUrl) ? FormError : null)]);
 
-        private static IUiComponent Facts(IReadOnlyList<(string LabelKey, IUiComponent Value)> facts) => new Div([.. facts.Select(fact =>
-            (IUiComponent)new Div(new Span(new Text(fact.LabelKey)).Class("downloads-facts__label"), new Div(fact.Value).Class("downloads-facts__value")))]).Class("downloads-facts");
+        // A connection's state as a pill in the colour of its meaning: switched off, failing and waiting to try again, failing, not tested yet or reachable.
+        private IUiComponent ConnectionState(AcquisitionConnectionDetailsV1 item) =>
+            !item.IsEnabled ? Pill("acquisition.connection.off", "queued")
+            : item is { IsBackedOff: true, RetryAt: not null } ? Pill("acquisition.connection.state.backoff", "paused")
+            : item.ErrorKey is not null ? Pill("acquisition.connection.state.error", "failed")
+            : item.CheckedAt is null ? Pill("acquisition.connection.unchecked", "queued")
+            : Pill("acquisition.connection.healthy", "completed");
+
+        private static IUiComponent Pill(string key, string phase) => new Span(new Span(new Text(key)).Class("downloads-pill")).Class("downloads-phase").Attribute("data-phase", phase);
+
+        // A client's settings at a glance: label above a quiet box, two columns; an action under them.
+        private static IUiComponent Facts(IReadOnlyList<(string LabelKey, IUiComponent Value)> facts, IUiComponent? action = null) => new Div([.. facts.Select(fact =>
+            (IUiComponent)new Div(new Span(new Text(fact.LabelKey)).Class("downloads-facts__label"), new Div(fact.Value).Class("downloads-facts__value"))),
+            .. action is null ? [] : new[] { new Div(action).Class("downloads-facts__action") }]).Class("downloads-facts");
 
         private IUiComponent IconLink(string icon, string label, string href, bool danger = false) =>
-            new A(Glyph(icon, 18)).Class(danger ? "button button--icon button--danger" : "button button--icon").Attribute("href", href).Attribute("aria-label", label).Attribute("title", label);
+            new A(Glyph(icon, 16)).Class(danger ? "button button--icon button--danger downloads-icon" : "button button--icon downloads-icon").Attribute("href", href).Attribute("aria-label", label).Attribute("title", label);
 
         private IUiComponent IconPost(string handler, string icon, string labelKey, string? csrf) =>
-            new PostForm(Address(handler: handler), csrf, [], new Button(Glyph(icon, 18)).IconOnly(texts[labelKey]).Submit().Attribute("title", texts[labelKey]));
+            new PostForm(Address(handler: handler), csrf, [], new Button(Glyph(icon, 16)).IconOnly(texts[labelKey]).Submit().Attribute("title", texts[labelKey]).Class("button button--icon downloads-icon"));
 
         private IUiComponent RowPost(string handler, string id, string icon, string labelKey, string? csrf, bool danger = false)
         {
-            var button = new Button(Glyph(icon, 18)).IconOnly(texts[labelKey]).Submit().Attribute("title", texts[labelKey]);
-            if (danger) button.Class("button button--icon button--danger");
+            var button = new Button(Glyph(icon, 16)).IconOnly(texts[labelKey]).Submit().Attribute("title", texts[labelKey]);
+            button.Class(danger ? "button button--icon button--danger downloads-icon" : "button button--icon downloads-icon");
             return new PostForm(Address(handler: handler) + "&operationId=" + id, csrf, [], button);
         }
 
@@ -788,6 +803,19 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
                         _newsServers = await newsServers.ExecuteAsync<BaseDataList<NewsServerV1>>(new ReadDownloadClientsParametersV1(), ct);
                         await LoadWorkspaceAsync(DownloadStorageArea.Usenet, ct);
                     }
+                    else if (kind == DownloadClientKind.Sabnzbd && _client is { AcquisitionConnectionId: { } sabnzbd })
+                    {
+                        // SABnzbd reports its own free space and categories; a SABnzbd that does not answer shows neither.
+                        try
+                        {
+                            _dashboard = await inspect.ExecuteAsync<DownloadClientDashboardV1>(new AcquisitionConnectionParametersV1(sabnzbd), default, ct);
+                            if (_dashboard.FreeBytes is { } free) _space = (free, null);
+                        }
+                        catch (ServiceUnavailableException)
+                        {
+                            _dashboard = null;
+                        }
+                    }
 
                     break;
                 case DownloadClientKind.Direct:
@@ -804,6 +832,21 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
 
                     await LoadWorkspaceAsync(DownloadStorageArea.Torrent, ct);
                     break;
+                case null:
+                    // All: the fullest of the workspaces of Jularr's own downloaders that are shown.
+                    foreach (var area in _clients.Select(client => client.DownloadClientKindId switch
+                    {
+                        DownloadClientKind.Usenet => DownloadStorageArea.Usenet,
+                        DownloadClientKind.Direct => DownloadStorageArea.Direct,
+                        DownloadClientKind.Torrent => DownloadStorageArea.Torrent,
+                        _ => (DownloadStorageArea?)null
+                    }).OfType<DownloadStorageArea>().Distinct())
+                    {
+                        await LoadWorkspaceAsync(area, ct);
+                    }
+
+                    _storage = null;
+                    break;
             }
         }
 
@@ -817,13 +860,15 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             ConnectionId = _client?.AcquisitionConnectionId;
         }
 
-        // The client's own workspace: its folders, limits and the free space last measured where it downloads.
+        // The client's own workspace: its folders, limits and the free space last measured where it downloads (the least of those read).
         private async Task LoadWorkspaceAsync(DownloadStorageArea area, CancellationToken ct)
         {
             _storage = await storageSettings.ExecuteAsync<DownloadStorageSettingsV1>(new DownloadStorageParametersV1(area), ct);
-            if (_storage is { IsConfigured: true, IncompleteStorageMountId: { } mountId } && texts.Can("storage.read"))
+            if (_storage is { IsConfigured: true, IncompleteStorageMountId: { } mountId } && texts.Can("storage.read")
+                && await storageMount.ExecuteAsync<StorageMountDetailsV1>(new StorageMountParametersV1(mountId), ct) is { StorageHealthTypeId: StorageHealthType.Online, FreeBytes: { } free }
+                && (_space is null || free < _space.Value.Free))
             {
-                _storageMount = await storageMount.ExecuteAsync<StorageMountDetailsV1>(new StorageMountParametersV1(mountId), ct);
+                _space = (free, _storage.FreeSpaceReserveBytes);
             }
         }
 

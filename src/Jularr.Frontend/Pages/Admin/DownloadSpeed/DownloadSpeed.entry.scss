@@ -1,0 +1,32 @@
+// Speed and schedule after the owner's downloader mockup (panel 5): the heading, then the limits panel with a row per client.
+.download-speed__title { margin: 0 0 12px; }
+
+.download-speed {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-inner);
+    background: var(--surface);
+
+    h2 { margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: var(--text-body); font-weight: 650; }
+
+    &__row {
+        display: grid;
+        grid-template-columns: minmax(180px, 1.2fr) minmax(90px, .5fr) minmax(260px, 1.6fr);
+        gap: 16px;
+        align-items: center;
+        padding: 10px 16px;
+        border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+
+        &:last-child { border-bottom: 0; }
+        .ui-form { margin: 0; }
+    }
+
+    &__name { display: grid; gap: 2px; min-width: 0; }
+    &__kind, &__note { color: var(--muted); font-size: var(--text-small); }
+    &__note { margin: 0; }
+    &__now { font-weight: 650; }
+}
+
+@container (max-width: 720px) {
+    .download-speed__row { grid-template-columns: 1fr; }
+}

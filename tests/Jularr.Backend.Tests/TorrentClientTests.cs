@@ -32,7 +32,7 @@ namespace Jularr.Backend.Tests
 
             using (var page = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Clients"))
             {
-                Assert.IsFalse((await page.Content.ReadAsStringAsync()).Contains("Add torrent engine", StringComparison.Ordinal));
+                Assert.IsFalse((await page.Content.ReadAsStringAsync()).Contains("Type=Torrent", StringComparison.Ordinal));
             }
 
             using (var engineOff = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/torrent/engine"))
@@ -84,11 +84,15 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0L, status.GetProperty("sentPieceBytes").GetInt64());
             Assert.IsFalse(status.GetProperty("hasVerifiedTunnel").GetBoolean());
 
-            // The External clients page offers the engine beside SABnzbd and qBittorrent and shows its measured lock.
-            using var on = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Clients");
+            // The External clients page offers the engine beside SABnzbd and qBittorrent and, opened, shows its measured lock.
+            using (var offered = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Clients"))
+            {
+                StringAssert.Contains(await offered.Content.ReadAsStringAsync(), "Type=Torrent");
+            }
+
+            using var on = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Clients?AcquisitionConnectionId=" + id);
             var html = await on.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, on.StatusCode, html);
-            StringAssert.Contains(html, "Add torrent engine");
             StringAssert.Contains(html, "Proven now: no file data can leave");
 
             // The connection links to its tab on the Downloads page.

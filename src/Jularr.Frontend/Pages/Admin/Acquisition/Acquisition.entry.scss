@@ -127,3 +127,92 @@
 }
 .native-storage-notice > span { min-width: 0; flex: 1 1 260px; }
 .native-storage-notice > a { flex: 0 0 auto; }
+
+// Servers and External clients after the owner's downloader mockup (panels 3 and 7): the heading with its add button, the list, then the opened connection
+// with its settings on the left and what is known about it on the right.
+.downloaders-head {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 12px;
+
+    h1 { margin: 0; }
+    &__spacer { flex: 1; }
+}
+
+.downloaders-kinds { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.downloaders-list--servers {
+    --list-columns: minmax(220px, 2fr) minmax(110px, 1fr) minmax(80px, .7fr) minmax(80px, .7fr) minmax(80px, .7fr) minmax(60px, .5fr);
+    --list-columns-medium: minmax(200px, 2fr) minmax(110px, 1fr) minmax(80px, .7fr) minmax(80px, .7fr) minmax(60px, .5fr);
+    --list-columns-narrow: minmax(180px, 2fr) minmax(110px, 1fr) minmax(80px, .7fr) minmax(80px, .7fr);
+}
+
+.downloaders-list--clients {
+    --list-columns: minmax(240px, 2.4fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(60px, .5fr);
+    --list-columns-medium: minmax(220px, 2.4fr) minmax(110px, 1fr) minmax(60px, .5fr);
+    --list-columns-narrow: minmax(180px, 2fr) minmax(110px, 1fr);
+}
+
+.downloaders-list .list-row { min-height: 0; }
+.downloaders-list .list-row--accent { background: var(--accent-soft); }
+
+.downloaders-detail {
+    margin-top: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+
+    &__head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+
+        h2 { margin: 0; }
+    }
+
+    &__actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+    &__body {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        gap: 24px;
+        padding: 18px;
+    }
+
+    &__known {
+        display: grid;
+        align-content: start;
+        gap: 10px;
+        padding-left: 24px;
+        border-left: 1px solid var(--border);
+
+        h3 { margin: 0; font-size: var(--text-heading); }
+
+        // The mockup's statistics: a label on the left and its value on the right, one quiet line under each.
+        .fact-list { grid-template-columns: 1fr; gap: 0; margin: 0; }
+        .fact-list__fact { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 8px 0; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: none; box-shadow: none; }
+        .fact-list__fact dd { margin: 0; font-size: var(--text-body); font-weight: 650; letter-spacing: 0; text-align: right; overflow-wrap: anywhere; }
+    }
+}
+
+.downloaders-functions {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    li { display: flex; gap: 8px; align-items: center; }
+    .ui-icon { color: var(--success); }
+}
+
+@container (max-width: 820px) {
+    .downloaders-detail__body { grid-template-columns: 1fr; }
+    .downloaders-detail__known { padding-left: 0; border-left: 0; }
+}

@@ -27,7 +27,8 @@ namespace Jularr.E2E.Tests
                 await Owner.SetUpAndSignInAsync(page);
                 await Steps.AddLibraryAsync(page, folders.Library);
                 await page.GotoAsync("/Admin/Downloads/Clients");
-                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }).And(page.Locator("[href*='Type=Sabnzbd']")));
+                await page.GetByRole(AriaRole.Button, new() { Name = "Add client", Exact = true }).ClickAsync();
+                await Steps.FollowAsync(page, page.Locator("dialog#downloaders-add").GetByRole(AriaRole.Link, new() { Name = "SABnzbd", Exact = true }));
                 var form = page.Locator("dialog#connection-editor form").Filter(new() { Has = page.Locator("[name=BaseUrl]") });
                 await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                 Assert.AreEqual(0d, await page.EvaluateAsync<double>("() => window.jularrLayoutShift"));
