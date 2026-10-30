@@ -2168,10 +2168,6 @@
    "A title, optionally with its year.",
    "Een titel, eventueel met het jaar."
   ],
-  "hint.CollectionFields.IsSmart.info": [
-   "A smart collection fills itself from the filters below.",
-   "Een slimme collectie vult zichzelf aan de hand van de onderstaande filters."
-  ],
   "hint.CollectionFields.ReleaseYear.placeholder": [
    "Any year",
    "Elk jaar"
@@ -4633,8 +4629,8 @@
    "Soort"
   ],
   "collections.smartToggle": [
-   "Smart filter instead of hand-picked titles",
-   "Slim filter in plaats van handmatig gekozen titels"
+   "Smart filter",
+   "Slim filter"
   ],
   "collections.manual": [
    "Hand-picked",

@@ -189,8 +189,6 @@ function initializeText(reader: HTMLElement, address: URL): void {
 
     // Existing translation and annotation services remain the only data owners.
     const translate = reader.dataset.translationUrl ? translator(reader, content, createTranslationWorker) : undefined;
-    const quality = reader.querySelector<HTMLButtonElement>('[data-local-quality-toggle]');
-    const browserTargets = new Set((reader.dataset.browserTranslationTargets ?? '').split(',').filter(Boolean));
     const localModel = reader.dataset.localModel;
     const provider = reader.querySelector<HTMLElement>('[data-translation-provider]');
     const showProvider = () => {
@@ -201,23 +199,6 @@ function initializeText(reader: HTMLElement, address: URL): void {
                 ? (reader.dataset.providerLocalLabel ?? 'TranslateGemma') + ' · ' + (localModel ?? '')
                 : reader.dataset.providerBrowserLabel ?? 'Mozilla/Bergamot';
     };
-    if (quality && translate && localModel) {
-        quality.hidden = false;
-        const initialLanguage = reader.dataset.readingLanguage ?? 'original';
-        if (initialLanguage !== 'original' && !browserTargets.has(initialLanguage)) {
-            reader.dataset.translationEngine = 'gemma';
-            quality.setAttribute('aria-pressed', 'true');
-        }
-        quality.addEventListener('click', () => {
-            const readingLanguage = reader.dataset.readingLanguage ?? 'original';
-            const gemma = reader.dataset.translationEngine !== 'gemma';
-            if (!gemma && readingLanguage !== 'original' && !browserTargets.has(readingLanguage)) return;
-            reader.dataset.translationEngine = gemma ? 'gemma' : 'bergamot';
-            quality.setAttribute('aria-pressed', String(gemma));
-            showProvider();
-            void translate(readingLanguage === 'original' ? '' : readingLanguage);
-        });
-    }
     let reading = reader.dataset.readingLanguage ?? 'original';
     const choices = Array.from(reader.querySelectorAll<HTMLButtonElement>('[data-language-choice]'));
     let savingLanguage = false;
@@ -227,7 +208,6 @@ function initializeText(reader: HTMLElement, address: URL): void {
         if (next === reading) return;
         savingLanguage = true;
         choices.forEach(choice => choice.disabled = true);
-        if (quality) quality.disabled = true;
         const panel = reader.querySelector<HTMLElement>('[data-panel=language]');
         panel?.setAttribute('aria-busy', 'true');
         const feedback = reader.querySelector<HTMLElement>('[data-role=translation-status]');
@@ -244,10 +224,6 @@ function initializeText(reader: HTMLElement, address: URL): void {
             if (!response.ok) throw new Error('Language preference was not saved.');
             reading = next;
             reader.dataset.readingLanguage = next;
-            if (localModel && next !== 'original' && !browserTargets.has(next)) {
-                reader.dataset.translationEngine = 'gemma';
-                quality?.setAttribute('aria-pressed', 'true');
-            }
             choices.forEach(choice => choice.setAttribute('aria-pressed', String(choice === button)));
             showProvider();
             if (translate) void translate(next === 'original' ? '' : next);
@@ -260,7 +236,6 @@ function initializeText(reader: HTMLElement, address: URL): void {
         } finally {
             savingLanguage = false;
             choices.forEach(choice => choice.disabled = false);
-            if (quality) quality.disabled = false;
             panel?.removeAttribute('aria-busy');
         }
     }));

@@ -71,9 +71,19 @@ namespace Jularr.Backend.Service.User.Request.V1
                 FROM
                     "AcquisitionRequests" AS request
                 INNER JOIN
-                    "ProfileWorks" AS visible ON visible."WorkId" = request."WorkId" AND visible."ProfileId" = request."RequestedByProfileId"
-                INNER JOIN
                     "Works" AS work ON work."Id" = request."WorkId"
+                INNER JOIN LATERAL (
+                    -- The view is read for the request's own Work only; joined as a whole it walks the catalog.
+                    SELECT
+                        scoped."Title",
+                        scoped."MediaSubtypeId"
+                    FROM
+                        "ProfileWorks" AS scoped
+                    WHERE
+                        scoped."WorkId" = request."WorkId"
+                        AND scoped."ProfileId" = request."RequestedByProfileId"
+                    OFFSET 0
+                ) AS visible ON TRUE
                 INNER JOIN
                     "UiLocales" AS locale ON locale."Id" = request."UiLocaleId"
                 LEFT JOIN

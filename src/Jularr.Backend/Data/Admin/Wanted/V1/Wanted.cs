@@ -343,8 +343,9 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
     {
         public WantedReleaseCandidateV1(string candidateId, string title, string connectionName, long? sizeBytes, DateTime? publishedAt, string? qualityKey,
             ReleaseDecisionType releaseDecisionTypeId, int score, string reasonCode, string? reasonValue, BookReleaseKind? bookReleaseKindId = null, int? volumeStart = null,
-            int? volumeEnd = null, bool isComplete = false, ReleaseSizeMark? releaseSizeMarkId = null, BaseDataList<ReleaseScorePointV1>? scorePoints = null)
+            int? volumeEnd = null, bool isComplete = false, ReleaseSizeMark? releaseSizeMarkId = null, BaseDataList<ReleaseScorePointV1>? scorePoints = null, string? releaseGroup = null)
         {
+            ReleaseGroup = releaseGroup;
             BookReleaseKindId = bookReleaseKindId;
             VolumeStart = volumeStart;
             VolumeEnd = volumeEnd;
@@ -412,6 +413,10 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         // Every rule that gave points; their sum is the score.
         public BaseDataList<ReleaseScorePointV1> ScorePoints { get; }
+
+        // The group the release name states.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ReleaseGroup))]
+        public string? ReleaseGroup { get; }
     }
 
     // The points of one score rule and what it saw.

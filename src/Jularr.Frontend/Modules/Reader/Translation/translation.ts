@@ -74,8 +74,11 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         return blocks.map(block => block.querySelector("[data-b]") ? "" : block.innerText);
     }
 
+    // A picture stays; only its caption takes the translation.
     function show(translated: string[]) {
-        translated.forEach((text, index) => { if (text.length > 0) blocks[index].textContent = text; });
+        translated.forEach((text, index) => {
+            if (text.length > 0) (blocks[index].querySelector("figcaption") ?? blocks[index]).textContent = text;
+        });
         reader.dataset.translated = "true";
     }
 
@@ -165,6 +168,8 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         if (current === target && revision === generation) say(undefined);
     }
 
+    // The Reader page always picks the server's TranslateGemma; the Mozilla path below stays switched off.
+    // TODO(#1726): bring Mozilla back only as an emergency module, off by default, for the page in view and the next 3, kept in the browser.
     // Translated batch by batch so the page fills in while it works; the finished section is shared.
     async function translate(target: Language, generation: number) {
         if (reader.dataset.translationEngine === "gemma") return translateLocal(target, generation);
