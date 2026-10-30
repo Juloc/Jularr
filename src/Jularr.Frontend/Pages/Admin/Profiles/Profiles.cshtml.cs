@@ -12,13 +12,15 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Profiles
 {
-    // The quality rules, one pane each: profiles, custom formats, quality sizes, release profiles and tags. Profiles and formats are lists (the profile has its own page, the format's
-    // conditions a dialog); release profiles and tags are cards with their settings inside and sizes is one form, all saved by the page's pill; adding opens a dialog.
+    // The quality rules, one pane each: profiles, custom formats, quality sizes, release profiles, release groups and tags. Profiles, formats and groups are lists (the profile has its own
+    // page, the format's conditions a dialog, a group's rating saves on click); release profiles and tags are cards with their settings inside and sizes is one form, all saved by the
+    // page's pill; adding opens a dialog.
     public sealed partial class ProfilesModel(
         ReadAcquisitionProfilesV1 profiles,
         ReadCustomFormatsV1 formats, ReadCustomFormatV1 format, SaveCustomFormatV1 saveFormat, DeleteCustomFormatV1 deleteFormat, ImportCustomFormatsV1 importFormats,
         ReadQualityDefinitionsV1 sizes, SaveQualityDefinitionsV1 saveSizes,
         ReadReleaseProfilesV1 releases, ReadReleaseProfileV1 release, SaveReleaseProfileV1 saveRelease, DeleteReleaseProfileV1 deleteRelease,
+        ReadReleaseGroupsV1 groups, ReadReleaseGroupFiguresV1 groupFigures, AddReleaseGroupV1 addGroup, RateReleaseGroupV1 rateGroup,
         ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, SaveAcquisitionTagV1 saveTag, DeleteAcquisitionTagV1 deleteTag,
         ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection,
         FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
@@ -40,6 +42,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         [BindProperty(SupportsGet = true)] public int PageNumber { get; set; } = 1;
         [BindProperty(SupportsGet = true)] public int TagPage { get; set; } = 1;
         [BindProperty(SupportsGet = true)] public int IndexerPage { get; set; } = 1;
+        [BindProperty(SupportsGet = true, Name = "q")] public string? Search { get; set; }
         private SelectOption[] _tagChoices = [];
         private SelectOption[] _indexerChoices = [];
         private PageResult<AcquisitionTagDetailsV1>? _tagPage;
@@ -48,6 +51,9 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         private PageResult<CustomFormatDetailsV1>? _formats;
         private PageResult<ReleaseProfileDetailsV1>? _releases;
         private PageResult<AcquisitionTagDetailsV1>? _tags;
+        private PageResult<ReleaseGroupDetailsV1>? _groups;
+        private ReleaseGroupFiguresV1? _groupFigures;
+        private AddReleaseGroupDataV1? _group;
         private SaveCustomFormatDataV1? _format;
         private SaveReleaseProfileDataV1? _release;
         private SaveAcquisitionTagDataV1? _tag;
@@ -61,6 +67,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 DownloadPages.Formats => "arr.formats",
                 DownloadPages.Sizes => "arr.sizes",
                 DownloadPages.Release => "arr.releaseProfiles",
+                DownloadPages.Groups => "arr.releaseGroups",
                 DownloadPages.Tags => "arr.tags",
                 _ => "admin.profiles.title"
             });
@@ -83,6 +90,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 case DownloadPages.Formats: DefineFormats(page); break;
                 case DownloadPages.Sizes: DefineSizes(page); break;
                 case DownloadPages.Release: DefineRelease(page); break;
+                case DownloadPages.Groups: DefineGroups(page); break;
                 case DownloadPages.Tags: DefineTags(page); break;
             }
         }
@@ -139,7 +147,8 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         private string Address(string? handler = null, long? edit = null, int? page = null, bool isNew = false) =>
             DownloadPages.PaneAddress(Tab, MediaTypeId, Home(Request)) + "&PageNumber=" + Number(page ?? PageNumber)
-            + (edit is { } id ? "&edit=" + Number(id) : "") + (isNew ? "&new=true" : "") + (handler is null ? "" : "&handler=" + handler);
+            + (edit is { } id ? "&edit=" + Number(id) : "") + (isNew ? "&new=true" : "") + (string.IsNullOrWhiteSpace(Search) ? "" : "&q=" + Uri.EscapeDataString(Search.Trim()))
+            + (handler is null ? "" : "&handler=" + handler);
 
         private string? Token => antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
         private static string Number(long value) => value.ToString(CultureInfo.InvariantCulture);
@@ -178,6 +187,10 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                     break;
                 case DownloadPages.Release:
                     _releases = await releases.ExecuteAsync<PageResult<ReleaseProfileDetailsV1>>(new ReadAcquisitionPolicyParametersV1(MediaTypeId, PageNumber), cancellation);
+                    break;
+                case DownloadPages.Groups:
+                    _groups = await groups.ExecuteAsync<PageResult<ReleaseGroupDetailsV1>>(new ReadReleaseGroupsParametersV1(MediaTypeId, Search, PageNumber), cancellation);
+                    _groupFigures = await groupFigures.ExecuteAsync<ReleaseGroupFiguresV1>(new ReleaseGroupScopeParametersV1(MediaTypeId), cancellation);
                     break;
                 case DownloadPages.Tags:
                     _tags = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(PageNumber), cancellation);

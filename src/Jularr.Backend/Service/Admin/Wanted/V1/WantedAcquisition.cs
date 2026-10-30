@@ -209,6 +209,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var grabbable = selection.Ranked.Where(evaluation => evaluation.Decision != SelectionDecision.Rejected).Select(evaluation => evaluation.Candidate.Id).ToHashSet(StringComparer.Ordinal);
             var cached = offers.Where(pair => grabbable.Contains(pair.Key)).ToDictionary(StringComparer.Ordinal);
             _offers.Set(CacheKey(target.WantedItemId), cached, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = OfferLifetime, Size = Math.Max(1, cached.Count) });
+
+            // Every release group the search saw joins the media type's list, so it can be rated before anything is taken.
+            var groups = ReleaseGroupLogic.Sightings(selection.Ranked.Select(evaluation => evaluation.Candidate.Parsed?.ReleaseGroup));
             await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 foreach (var (id, use) in uses)
@@ -216,6 +219,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     await ctx.RecordIndexerUseAsync(new IndexerUseData(id, use.Queries, !use.Failed), token);
                 }
 
+                await ctx.RecordReleaseGroupsAsync(new ReleaseGroupSightingsData(target.MediaTypeId, groups, now), token);
                 return true;
             }, ct);
 

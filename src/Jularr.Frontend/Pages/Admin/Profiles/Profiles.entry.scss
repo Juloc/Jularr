@@ -13,6 +13,34 @@
     --list-columns-narrow: minmax(180px, 2fr) minmax(112px, 1fr) minmax(60px, .5fr);
 }
 
+// The figures, the field and the list of release groups are one region that keeps the page's own spacing.
+.release-groups { display: contents; }
+
+// A release group's name and its rating; the segments keep their width.
+.release-groups-list {
+    --list-columns: minmax(0, 2.4fr) minmax(280px, 1.2fr);
+    --list-columns-medium: minmax(0, 2fr) minmax(280px, 1fr);
+    --list-columns-narrow: minmax(0, 1fr) minmax(280px, 1fr);
+
+    .ui-field__control--segmented { min-width: 280px; }
+}
+
+// The field that finds or adds a group sits beside its button; the placeholder names it, its label is for assistive technology.
+.release-groups-bar {
+    margin: 14px 0;
+
+    .ui-form--inline { flex-wrap: nowrap; gap: 10px; }
+    .ui-form--inline > .ui-field { flex: 1; max-width: 420px; }
+    .ui-field__top {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+}
+
 // A tag is a card of one row: its icon, the label field and the remove button.
 .tag-card {
     flex-direction: row;
