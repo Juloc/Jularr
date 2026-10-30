@@ -135,8 +135,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // Rules that matched with the Info effect.
         public IReadOnlyList<string> InfoReasons { get; init; } = [];
 
-        // The sum of the matching custom formats' scores.
+        // The sum of the matching custom formats' scores, and each of them.
         public int FormatScore { get; init; }
+        public IReadOnlyList<ScorePoint> FormatPoints { get; init; } = [];
     }
 
     internal sealed class UpgradeAssessment

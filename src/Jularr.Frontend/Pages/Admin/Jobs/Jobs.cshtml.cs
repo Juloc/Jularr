@@ -291,7 +291,14 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
                 [ListPanel.Fact("jobs.when", finished, Glyph("clock", 14))]);
         }
 
-        private static IUiComponent Post(string handler, string? csrf, (string Name, string Value)[] hidden, IUiComponent button) => new PostForm(Address + "?handler=" + handler, csrf, hidden, button);
+        // A form posts to the list as it is shown, so its answer returns to the same chip, filter words and page.
+        private IUiComponent Post(string handler, string? csrf, (string Name, string Value)[] hidden, IUiComponent button)
+        {
+            var here = Here;
+            return new PostForm(here + (here.Contains('?') ? "&" : "?") + "handler=" + handler, csrf, hidden, button);
+        }
+
+        private string Here => Link(StateFilter, QueryFilter, PageNumber);
 
         private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);
 
@@ -334,7 +341,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
         public async Task<IActionResult> OnPostPauseAsync([BindRequired] string key, bool isPaused)
         {
             await pause.ExecuteAsync<UpdateResult>(new JobParametersV1(key), new PauseWorkerJobDataV1(isPaused), HttpContext.RequestAborted);
-            return LocalRedirect(Address);
+            return LocalRedirect(Here);
         }
 
         // Every job that is not yet in the wanted state, one by one.
@@ -347,19 +354,19 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
                 await pause.ExecuteAsync<UpdateResult>(new JobParametersV1(job.Key), new PauseWorkerJobDataV1(isPaused), ct);
             }
 
-            return LocalRedirect(Address);
+            return LocalRedirect(Here);
         }
 
         public async Task<IActionResult> OnPostRunAsync([BindRequired] string key)
         {
             await run.ExecuteAsync<UpdateResult>(new JobParametersV1(key), default, HttpContext.RequestAborted);
-            return LocalRedirect(Address);
+            return LocalRedirect(Here);
         }
 
         public async Task<IActionResult> OnPostUseAsync([BindRequired] string key, bool pausesWhileUsed)
         {
             await use.ExecuteAsync<UpdateResult>(new JobParametersV1(key), new WorkerJobUseDataV1(pausesWhileUsed), HttpContext.RequestAborted);
-            return LocalRedirect(Address);
+            return LocalRedirect(Here);
         }
 
         protected override async Task LoadDataAsync()
