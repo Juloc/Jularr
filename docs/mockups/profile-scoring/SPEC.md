@@ -11,7 +11,8 @@ Mockup: [index.html](index.html) (three views). Issue: #1711, parents #865 and #
 5. Release groups have their own tab in Profile (one tab row, media-type switch as today). The rating applies to every profile of that media type.
 6. Simple mode is the default profile editor: format ranking, size per volume, language order, release group points, upgrade target, minimum score. Custom formats with points stay behind "Erweitert".
 7. Upgrades stop when the target quality is reached **and** the score is at least the target score; a candidate must also beat the existing file by a minimum score gain.
-8. Book rules from #1706 stay: EPUB > AZW3/MOBI > PDF, illustrated higher; size limits per volume by kind; packs allowed when they cover the wanted volumes; audiobooks rejected for e-book requests.
+8. A rating is reset to not rated (neutral) by clicking the already selected segment again (also Space or Enter on it); no extra control. Several groups in one release name (separated by comma, ampersand, plus or slash) are separate groups; publishers and imprints are never groups.
+9. Book rules from #1706 stay: EPUB > AZW3/MOBI > PDF, illustrated higher; size limits per volume by kind; packs allowed when they cover the wanted volumes; audiobooks rejected for e-book requests.
 
 ## Views
 
@@ -33,5 +34,5 @@ The mockup is built from the real Jularr page parts (shell, tabs, form fields, l
 
 - Table design: one `ReleaseGroups` table (media type, normalised name, rating, last seen, hits) or ratings inside the profile definition. Owner decision is "per media type", which favours one table.
 - Existing `FormatConditionKind.ReleaseGroup` conditions in custom formats keep working next to the rating; whether the Release-Gruppen tab imports them is open.
-- Migration number: next free after 0025 at build time.
+- Migration number: 0027_release_groups (0026 is the downloads page migration).
 - Recyclarr/TRaSH templates (#1190) and a profile simulation are out of scope here.
