@@ -2062,7 +2062,11 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
             var wantedId = await CreateWantedMovieAsync(host);
 
-            using var connections = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition?AcquisitionConnectionId=2");
+            // A download client opened at the indexers' address leads to the External clients page, which shows it.
+            using var moved = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition?AcquisitionConnectionId=2");
+            Assert.AreEqual(HttpStatusCode.Redirect, moved.StatusCode);
+            Assert.AreEqual("/Admin/Downloads/Clients?AcquisitionConnectionId=2", moved.Headers.Location!.OriginalString);
+            using var connections = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Clients?AcquisitionConnectionId=2");
             var html = await connections.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, connections.StatusCode, html);
             StringAssert.Contains(html, "Path reported by the client");
