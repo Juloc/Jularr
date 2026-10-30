@@ -382,4 +382,73 @@ namespace Jularr.Backend.Data.Logic.AniList
         [DataField(typeof(AniListFields), nameof(AniListFields.FailureCode))]
         public string? FailureCode { get; }
     }
+
+    // The entry of the profile's list that stands for a title of the library.
+    internal sealed class WorkAniListEntryData : BaseData
+    {
+        public WorkAniListEntryData(int mediaId, bool isManga, string status, int progress, int progressVolumes, int? totalCount, int? totalVolumes)
+        {
+            MediaId = mediaId;
+            IsManga = isManga;
+            Status = status;
+            Progress = progress;
+            ProgressVolumes = progressVolumes;
+            TotalCount = totalCount;
+            TotalVolumes = totalVolumes;
+        }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.MediaId))]
+        public int MediaId { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.IsManga))]
+        public bool IsManga { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.Status))]
+        public string Status { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.Progress))]
+        public int Progress { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.Progress))]
+        public int ProgressVolumes { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.Total))]
+        public int? TotalCount { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.Total))]
+        public int? TotalVolumes { get; }
+    }
+
+    internal sealed class AniListStatusData : BaseData
+    {
+        public AniListStatusData(string status)
+        {
+            Status = status;
+        }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.Status))]
+        public string Status { get; }
+    }
+
+    internal sealed class AniListMediaData : BaseData
+    {
+        public AniListMediaData(int mediaId)
+        {
+            MediaId = mediaId;
+        }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.MediaId))]
+        public int MediaId { get; }
+    }
+
+    internal sealed class AniListFlagData : BaseData
+    {
+        public AniListFlagData(bool isConnected)
+        {
+            IsConnected = isConnected;
+        }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.IsConnected))]
+        public bool IsConnected { get; }
+    }
 }

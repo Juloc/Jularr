@@ -157,9 +157,10 @@ namespace Jularr.Integrations.Data.AniList
     // One entry of a person's list; chapters and volumes of a title are read as its totals.
     internal sealed class AniListListEntry
     {
-        public AniListListEntry(int mediaId, long listEntryId, bool isManga, string title, string status, int progress, int progressVolumes, int score, int? totalCount, int? totalVolumes,
-            DateTimeOffset updatedAt)
+        public AniListListEntry(int mediaId, long listEntryId, bool isManga, string title, string? coverUrl, string status, int progress, int progressVolumes, int score, int? totalCount,
+            int? totalVolumes, DateTimeOffset updatedAt)
         {
+            CoverUrl = coverUrl;
             MediaId = mediaId;
             ListEntryId = listEntryId;
             IsManga = isManga;
@@ -177,6 +178,7 @@ namespace Jularr.Integrations.Data.AniList
         public long ListEntryId { get; }
         public bool IsManga { get; }
         public string Title { get; }
+        public string? CoverUrl { get; }
         public string Status { get; }
 
         // Episodes or chapters, and volumes.

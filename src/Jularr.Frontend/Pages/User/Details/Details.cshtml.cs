@@ -5,12 +5,14 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Playback;
 using Jularr.Backend.Data.Public.Localization.V1;
+using Jularr.Backend.Data.User.AniList.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Collection.V1;
 using Jularr.Backend.Data.User.Discover.V1;
 using AdminServices = Jularr.Backend.Service.Admin.Media.V1;
+using Jularr.Backend.Service.User.AniList.V1;
 using Jularr.Backend.Service.User.Media.V1;
 using Jularr.Backend.Service.User.Collection.V1;
 using Jularr.Backend.Service.User.Discover.V1;
@@ -29,8 +31,9 @@ namespace Jularr.Frontend.Pages.User.Details
         ReadUiLocalesV1 locales, ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
         RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits,
         ReadWorkRecommendationsV1 readRecommendations, ReadWorkRelationsV1 readRelations, AdminServices.CreateWorkRelationV1 createRelation, AdminServices.DeleteWorkRelationV1 deleteRelation, SuggestDiscoverV1 suggest,
-        UpdateWorkProgressV1 updateProgress, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
+        UpdateWorkProgressV1 updateProgress, ReadWorkAniListV1 readAniList, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
+        private WorkAniListV1? _aniList;
         private IReadOnlyList<DiscoverItemV1> _recommendations = [];
         private IReadOnlyList<WorkCreditV1> _credits = [];
         private IReadOnlyList<WorkSeasonV1> _seasons = [];
@@ -252,6 +255,12 @@ namespace Jularr.Frontend.Pages.User.Details
             if (_work.MediaTypeId == MediaType.Game)
             {
                 _platforms = await readPlatforms.ExecuteAsync<BaseDataList<GamePlatformV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
+            }
+
+            // Where the profile stands on its AniList list, for the titles that list knows.
+            if (texts.CanSeeAniList() && Kind(_work) is WorkKind.Anime or WorkKind.Manga or WorkKind.LightNovel)
+            {
+                _aniList = await readAniList.ExecuteAsync<WorkAniListV1>(new WorkParametersV1(Id), HttpContext.RequestAborted);
             }
 
             if (texts.CanRequest())

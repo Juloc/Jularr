@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Provider;
 using Jularr.Backend.Data.Fields.Provider;
 
 namespace Jularr.Backend.Data.User.AniList.V1
@@ -63,6 +64,120 @@ namespace Jularr.Backend.Data.User.AniList.V1
         // Where the person authorizes Jularr; the PIN page then shows the code to paste. Null until the Owner configured it.
         [DataField(typeof(AniListFields), nameof(AniListFields.AuthorizationUrl))]
         public string? AuthorizationUrl { get; }
+    }
+
+    // Where a profile stands with one title on its AniList list; the figures count episodes, or volumes for a book.
+    public sealed class WorkAniListV1 : BaseResponse
+    {
+        public WorkAniListV1(bool isConnected, bool isOnList, string? status, bool isVolume, int progress, int? total, int localProgress, AniListSyncStateType? syncStateId)
+        {
+            IsConnected = isConnected;
+            IsOnList = isOnList;
+            Status = status;
+            IsVolume = isVolume;
+            Progress = progress;
+            Total = total;
+            LocalProgress = localProgress;
+            SyncStateId = syncStateId;
+        }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.IsConnected))]
+        public bool IsConnected { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.IsOnList))]
+        public bool IsOnList { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.OptionalStatus))]
+        public string? Status { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.IsManga))]
+        public bool IsVolume { get; }
+
+        // What AniList counts as done, and what the profile finished in a row here.
+        [DataField(typeof(AniListFields), nameof(AniListFields.Progress))]
+        public int Progress { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.Total))]
+        public int? Total { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.Progress))]
+        public int LocalProgress { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.SyncStateId))]
+        public AniListSyncStateType? SyncStateId { get; }
+    }
+
+    // How many entries of the profile's list sit in one status.
+    public sealed class AniListStatusCountV1 : BaseResponse
+    {
+        public AniListStatusCountV1(string status, int count)
+        {
+            Status = status;
+            Count = count;
+        }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.Status))]
+        public string Status { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.Count))]
+        public int Count { get; }
+    }
+
+    public sealed class AniListEntriesParametersV1 : BaseParameters
+    {
+        public AniListEntriesParametersV1(string status, int page = 1, int pageSize = 48)
+        {
+            Status = status;
+            Page = page;
+            PageSize = pageSize;
+        }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.Status))]
+        public string Status { get; }
+
+        public int Page { get; }
+        public int PageSize { get; }
+    }
+
+    // One entry of the profile's list, with the title of the library it belongs to, when there is one.
+    public sealed class AniListEntryV1 : BaseResponse
+    {
+        public AniListEntryV1(int mediaId, long? workId, string title, string? coverUrl, bool isManga, string status, int progress, int? total)
+        {
+            MediaId = mediaId;
+            WorkId = workId;
+            Title = title;
+            CoverUrl = coverUrl;
+            IsManga = isManga;
+            Status = status;
+            Progress = progress;
+            Total = total;
+        }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.MediaId))]
+        public int MediaId { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.OptionalWorkId))]
+        public long? WorkId { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.Title))]
+        public string Title { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.CoverUrl))]
+        public string? CoverUrl { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.IsManga))]
+        public bool IsManga { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.Status))]
+        public string Status { get; }
+
+        // Episodes or chapters done, and the total AniList knows.
+        [DataField(typeof(AniListFields), nameof(AniListFields.Progress))]
+        public int Progress { get; }
+
+        [DataField(typeof(AniListFields), nameof(AniListFields.Total))]
+        public int? Total { get; }
     }
 
     // The code AniList's PIN page showed.

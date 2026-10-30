@@ -6224,6 +6224,38 @@
    "{0} titles",
    "{0} Titel"
   ],
+  "favorites.anilist.CURRENT": [
+   "AniList: Current",
+   "AniList: Aktuell"
+  ],
+  "favorites.anilist.PLANNING": [
+   "AniList: Planning",
+   "AniList: Geplant"
+  ],
+  "favorites.anilist.COMPLETED": [
+   "AniList: Completed",
+   "AniList: Abgeschlossen"
+  ],
+  "favorites.anilist.PAUSED": [
+   "AniList: Paused",
+   "AniList: Pausiert"
+  ],
+  "favorites.anilist.DROPPED": [
+   "AniList: Dropped",
+   "AniList: Abgebrochen"
+  ],
+  "favorites.anilist.REPEATING": [
+   "AniList: Repeating",
+   "AniList: Wiederholt"
+  ],
+  "favorites.anilist.notInLibrary": [
+   "Not in library",
+   "Nicht in der Bibliothek"
+  ],
+  "favorites.anilist.empty": [
+   "Nothing in this AniList status yet.",
+   "In diesem AniList-Status ist noch nichts."
+  ],
   "favorites.collection.edit": [
    "Edit {0}",
    "{0} bearbeiten"
@@ -12347,6 +12379,30 @@
   "details.percent": [
    "{0} %",
    "{0} %"
+  ],
+  "details.anilist.progress": [
+   "AniList {0} / {1}",
+   "AniList: {0} von {1}"
+  ],
+  "details.anilist.progressOpen": [
+   "AniList {0}",
+   "AniList: {0}"
+  ],
+  "details.anilist.notOnList": [
+   "Not on your AniList",
+   "Nicht auf deiner AniList"
+  ],
+  "details.anilist.synchronized": [
+   "In sync",
+   "Synchron"
+  ],
+  "details.anilist.localAhead": [
+   "Jularr ahead",
+   "Jularr weiter"
+  ],
+  "details.anilist.aniListAhead": [
+   "AniList ahead",
+   "AniList weiter"
   ],
   "details.progressEpisodes": [
    "{0} / {1} episodes",

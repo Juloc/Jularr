@@ -129,6 +129,7 @@ namespace Jularr.Backend.Service.Core
                 entry.ListEntryId,
                 entry.IsManga,
                 entry.Title,
+                entry.CoverUrl,
                 entry.Status,
                 entry.Progress,
                 entry.ProgressVolumes,

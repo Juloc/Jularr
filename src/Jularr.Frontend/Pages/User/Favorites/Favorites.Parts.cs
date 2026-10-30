@@ -1,5 +1,6 @@
 using System.Globalization;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.User.AniList.V1;
 using Jularr.Backend.Data.User.Collection.V1;
 using Jularr.Frontend.Framework;
 
@@ -9,9 +10,14 @@ namespace Jularr.Frontend.Pages.User.Favorites
     {
         private const string PickerId = "favorites-picker";
 
-        private sealed record State(IReadOnlyList<string> Types, LibrarySortType Sort, string? Year, string? Status, long? Collection, int Page);
+        private sealed record State(IReadOnlyList<string> Types, LibrarySortType Sort, string? Year, string? Status, long? Collection, int Page, string? AniList = null);
 
-        private State Current => new(Picked, Sort, ValidYear, ValidStatus, CollectionId, Math.Max(1, PageNumber));
+        private State Current => new(Picked, Sort, ValidYear, ValidStatus, CollectionId, Math.Max(1, PageNumber), ValidAniList?.ToLowerInvariant());
+
+        private static readonly string[] AniListStatuses = ["CURRENT", "PLANNING", "COMPLETED", "PAUSED", "DROPPED", "REPEATING"];
+
+        // The AniList status of the address, upper case as AniList names it; none when the profile cannot see its list.
+        private string? ValidAniList => texts.CanSeeAniList() ? AniListStatuses.FirstOrDefault(status => string.Equals(status, AniList, StringComparison.OrdinalIgnoreCase)) : null;
 
         private string? ValidYear => YearChoice.Valid(Year);
 
@@ -40,6 +46,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
             if (state.Year is not null) values.Add("year=" + state.Year);
             if (state.Status is not null) values.Add("status=" + state.Status);
             if (state.Collection is { } collection) values.Add("collection=" + collection.ToString(CultureInfo.InvariantCulture));
+            if (state.AniList is not null) values.Add("anilist=" + state.AniList);
             if (state.Page > 1) values.Add("p=" + state.Page.ToString(CultureInfo.InvariantCulture));
             return values.Count == 0 ? "/Favorites" : "/Favorites?" + string.Join('&', values);
         }
@@ -70,7 +77,18 @@ namespace Jularr.Frontend.Pages.User.Favorites
             var canCollect = texts.CanCollect();
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var parts = new List<IUiComponent>();
-            if (canCollect) parts.Add(CollectionStrip());
+            if (canCollect || _aniListCounts.Count > 0) parts.Add(CollectionStrip(canCollect));
+
+            // An AniList status shows its entries and nothing of the favorites' own tools.
+            if (ValidAniList is not null)
+            {
+                if (_aniListEntries.Count > 0) parts.Add(new Div([.. _aniListEntries.Select(AniListCard)]).Class("media-grid favorites-grid"));
+                else parts.Add(new P(new Text("favorites.anilist.empty")).Class("favorites-empty").Attribute("role", "status"));
+                parts.Add(new Span().Infinite(_aniListEntries.Count, PageSize, "p", ".favorites-grid"));
+                page.Content.Add(new Div([.. parts]).Class("favorites"));
+                return;
+            }
+
             parts.Add(TypeBar());
             parts.Add(Toolbar(canCollect));
             if (canCollect) parts.Add(BulkBar(csrf));
@@ -97,7 +115,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
             : !IsAll || ValidYear is not null || ValidStatus is not null ? "favorites.noMatch" : "media.favorites.empty";
 
         // All favorites, then one card per collection with the covers of its first titles, and the way to a new one.
-        private IUiComponent CollectionStrip()
+        private IUiComponent CollectionStrip(bool canCollect)
         {
             var cards = new List<IUiComponent> { StripCard(null, "favorites.all", "heart", _newest.Select(item => item.PosterUrl), _total is { } total ? string.Format(CultureInfo.CurrentCulture, texts["favorites.titles"], total) : null, null) };
             foreach (var collection in _collections)
@@ -106,19 +124,48 @@ namespace Jularr.Frontend.Pages.User.Favorites
                 cards.Add(StripCard(collection, null, collection.IsSmart ? "filter" : "folder", collection.PosterUrls, count, collection.Name));
             }
 
-            cards.Add(Drawer.Opener(new Button(new Icon("plus", assets), new Span(new Text("collections.new"))).Class("favorites-collection__new"), "favorites-create"));
+            // The profile's AniList lists, one card per status that has entries.
+            foreach (var status in AniListStatuses)
+            {
+                if (_aniListCounts.FirstOrDefault(item => item.Status == status) is { Count: > 0 } counted) cards.Add(AniListStripCard(status, counted.Count));
+            }
+
+            if (canCollect) cards.Add(Drawer.Opener(new Button(new Icon("plus", assets), new Span(new Text("collections.new"))).Class("favorites-collection__new"), "favorites-create"));
             return new Nav([.. cards]).Class("favorites-collections").Attribute("aria-label", texts["favorites.collections"]);
+        }
+
+        // A list that AniList keeps; it only reads, so it has no edit button.
+        private IUiComponent AniListStripCard(string status, int count)
+        {
+            var selected = ValidAniList == status;
+            var info = new Span(new Icon("anilist", assets, 16), new Strong(new Text("favorites.anilist." + status)), new Small(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["favorites.titles"], count))))
+                .Class("favorites-collection__info");
+            var link = new A(info).Class(selected ? "favorites-collection__card favorites-collection__card--current" : "favorites-collection__card")
+                .Attribute("href", Address(Current with { Collection = null, Page = 1, AniList = status.ToLowerInvariant() }));
+            if (selected) link.Attribute("aria-current", "true");
+            return new Div(link).Class("favorites-collection");
+        }
+
+        // An entry of an AniList list: the title of the library when there is one, else the cover AniList has, which leads to a search of the title.
+        private IUiComponent AniListCard(AniListEntryV1 entry)
+        {
+            var href = entry.WorkId is { } workId ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture) : "/?q=" + Uri.EscapeDataString(entry.Title);
+            var card = new MediaCard(assets, entry.Title, href, entry.CoverUrl);
+            if (entry.WorkId is { } id) card.HoverPreview(MediaPreviewAddress.Work(id));
+            var figures = entry.Total is { } total ? entry.Progress.ToString(CultureInfo.CurrentCulture) + " / " + total.ToString(CultureInfo.CurrentCulture) : entry.Progress.ToString(CultureInfo.CurrentCulture);
+            card.Label(entry.WorkId is null ? new Span(new Text("favorites.anilist.notInLibrary")).Class("favorites-entry__badge") : new Span(new ValueText(figures)).Class("favorites-entry__badge"));
+            return new Div(card).Class("favorites-entry").Attribute("data-list-key", entry.MediaId.ToString(CultureInfo.InvariantCulture));
         }
 
         private IUiComponent StripCard(CollectionV1? collection, string? labelKey, string icon, IEnumerable<string?> posters, string? count, string? name)
         {
-            var selected = collection?.Id == _current?.Id;
+            var selected = ValidAniList is null && collection?.Id == _current?.Id;
             var info = new List<IUiComponent> { new Icon(icon, assets, 16), new Strong(labelKey is null ? (IUiComponent)new ValueText(name ?? "") : new Text(labelKey)) };
             if (count is not null) info.Add(new Small(new ValueText(count)));
             var covers = posters.Where(url => !string.IsNullOrWhiteSpace(url)).Take(3).Select(url => (IUiComponent)new Span(new MediaImage(url!, "", 94, 144)).Class("favorites-collection__poster")).ToArray();
             var link = new A(new Span([.. info]).Class("favorites-collection__info"), new Span(covers).Class("favorites-collection__posters").Attribute("aria-hidden", "true"))
                 .Class(selected ? "favorites-collection__card favorites-collection__card--current" : "favorites-collection__card")
-                .Attribute("href", Address(Current with { Collection = collection?.Id, Page = 1 }));
+                .Attribute("href", Address(Current with { Collection = collection?.Id, Page = 1, AniList = null }));
             if (selected) link.Attribute("aria-current", "true");
 
             var wrapper = new List<IUiComponent> { link };

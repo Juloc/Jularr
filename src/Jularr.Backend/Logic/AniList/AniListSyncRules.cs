@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Provider;
 using Jularr.Backend.Data.Logic.AniList;
 
 namespace Jularr.Backend.Logic.AniList
@@ -51,6 +52,13 @@ namespace Jularr.Backend.Logic.AniList
             // The further episodes were finished after sending was switched on.
             var recent = units.Any(unit => unit.IsCompleted && unit.Number > remote && unit.Number <= local && unit.CompletedAt is { } at && at >= pushEnabledAt);
             return recent ? new AniListPush(entry.MediaId, entry.ListEntryId, entry.IsManga, local, entry.Status == "PLANNING") : null;
+        }
+
+        // Where the profile's progress stands against the entry: a completed entry counts as everything it names.
+        public static AniListSyncStateType StateOf(string status, int remote, int? total, int local)
+        {
+            var reached = status == "COMPLETED" && total is { } count ? Math.Max(remote, count) : remote;
+            return local == reached ? AniListSyncStateType.Synchronized : local > reached ? AniListSyncStateType.LocalAhead : AniListSyncStateType.AniListAhead;
         }
 
         // A failed write waits a minute, then twice as long each time, at most six hours.
