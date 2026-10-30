@@ -140,7 +140,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(reader, "data-translation-url=\"/api/v1/reading/documents/" + document.DocumentId + "/sections/0/translations/\"");
             StringAssert.Contains(reader, "href=\"" + ebook + "?language=de\"");
 
-            // A book opens in the profile's language; its language button offers the original and the other allowed languages Mozilla reaches.
+            // A book opens in the profile's language; its language button offers the original and the other allowed languages the server's TranslateGemma translates into.
             await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" = 'de-DE') WHERE \"Id\" = 101");
             Assert.AreEqual("de", await ReadingLanguageAsync(host, first));
             using var options = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
@@ -172,10 +172,25 @@ namespace Jularr.Backend.Tests
 
         private static async Task<Host> CreateHostAsync(string storage, string models, FakeMozilla mozilla)
         {
-            var host = await LibraryTests.CreateHostAsync(storage, razor: true, settings: new Dictionary<string, string> { ["Media:TranslationPath"] = models },
-                services: services => services.AddHttpClient<MozillaTranslationsClient>().ConfigurePrimaryHttpMessageHandler(() => mozilla));
+            // The server's TranslateGemma is the Reader's only translator (#1726): it offers languages only where a model is installed.
+            var host = await LibraryTests.CreateHostAsync(storage, razor: true,
+                settings: new Dictionary<string, string> { ["Media:TranslationPath"] = models, ["LocalTranslation:Endpoint"] = "http://ollama:11434" },
+                services: services =>
+                {
+                    services.AddHttpClient<MozillaTranslationsClient>().ConfigurePrimaryHttpMessageHandler(() => mozilla);
+                    services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => new FakeOllama());
+                });
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
             return host;
+        }
+
+        // An Ollama machine with the approved translation model installed.
+        private sealed class FakeOllama : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+                Task.FromResult(request.RequestUri!.AbsolutePath == "/api/tags"
+                    ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new { models = new[] { new { name = "translategemma:4b", digest = new string('a', 64) } } })) }
+                    : new HttpResponseMessage(HttpStatusCode.NotFound));
         }
 
         // Mozilla's Remote Settings: engines 2.0, 3.0 and 3.1; en-de 1.0, 2.1 and a preview; en-ja 1.0 and a newer one for Android only; de-en 1.0. One file is served altered.
