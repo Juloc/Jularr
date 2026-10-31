@@ -127,7 +127,7 @@ On an instance that keeps the whole TMDB film catalog, `/?q=Dune` took 1.7–2 s
 - The Discover page's availability read (`/api/v1/library/availability`) started from `ProfileWorks` for the whole catalog (2.3 s at 500,000 Works, 5.3 s in the plan). It now reads the view per picked Work like the library page does.
 - The provider search itself: TMDB and TheTVDB were asked one after the other. TMDB's request now runs while TheTVDB's is asked; the answers are kept one after the other, since one context runs one batch at a time. The types the profile lists are read in the local search's batch.
 
-Searching films does not use the kept catalog today: Discover's result search asks TMDB for films and TheTVDB for series; only the suggestions while typing use `SearchText` and its GIN index `IX_Works_CatalogSearch`. No index is missing.
+Discover's result search reads a catalog kept whole (the Caching module with "keep full catalog" and a completed first pass: TMDB films, AniList anime) from the local Works with the suggestions' `SearchText` condition and its GIN index `IX_Works_CatalogSearch`, and never asks the provider; otherwise it asks TMDB for films live as before. Series always come from TheTVDB. No index is missing.
 
 `SearchAndRequests_CatalogScale_ReportLatency` seeds the library fixture next to `JULARR_TEST_CATALOG_SCALE` film Works (a Dune in 5000 titles; requests at the end of the id range), answers both providers at once and reports the local part (whole time minus the time the provider stub spent) over ten warm calls. The median is held to 500 ms for the search and 300 ms for My requests. `JULARR_TEST_PROVIDER_DELAY_MS` gives each provider request a round trip to see that the searches wait together.
 

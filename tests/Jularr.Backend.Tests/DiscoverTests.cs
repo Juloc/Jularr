@@ -494,6 +494,74 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow(true, true, true)]
+        [DataRow(true, false, false)]
+        [DataRow(false, true, false)]
+        public async Task Search_OnACatalogKeptWhole_ReadsTheLocalCatalog_OtherwiseTheProviderIsAsked(bool fullCatalog, bool isComplete, bool isLocal)
+        {
+            var tmdb = new FakeTmdb();
+            var aniList = new FakeAniList();
+            var tvdb = new FakeTvdb();
+            await using var host = await CreateHostAsync(fake: tmdb, anime: aniList, tvdb: tvdb);
+            await host.Fixture.RunSqlAsync($"""
+                UPDATE "InstanceModules" SET "IsEnabled" = {fullCatalog} WHERE "Key" = 'LocalDiscovery';
+                UPDATE "ExternalWorkSyncs" SET "CompletedAt" = {(isComplete ? "now()" : "NULL")} WHERE "Namespace" IN ('tmdb_movie', 'anilist');
+                INSERT INTO "Works" ("Id", "CatalogNamespace", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleasedOn", "ImageUrl", "Popularity", "Rating", "Votes", "IsAdult") VALUES
+                    (603, 'tmdb_movie', 1, NULL, 'The Matrix', '1999-03-31', 'https://img.test/603.jpg', 80, 8.7, 25000, FALSE),
+                    (604, 'tmdb_movie', 1, NULL, 'The Matrix Reloaded', '2003-05-15', 'https://img.test/604.jpg', 60, 7.0, 10000, FALSE),
+                    (705, 'tmdb_movie', 1, NULL, 'Matrix Resurrections', '2021-12-22', NULL, 10, NULL, NULL, FALSE),
+                    (703, 'tmdb_movie', 1, NULL, 'Matrix Adult', '2001-01-01', 'https://img.test/703.jpg', 90, 9.0, 9000, TRUE),
+                    (700, 'tmdb_movie', 1, NULL, 'Unrelated', '2020-01-01', 'https://img.test/700.jpg', 99, 9.9, 9000, FALSE),
+                    (9021, 'anilist', 2, 1, 'The Matrix Anime', '2021-04-01', 'https://img.test/21.jpg', 5000, 8.0, 5000, FALSE);
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES
+                    (603, 'tmdb_movie', '603'), (604, 'tmdb_movie', '604'), (705, 'tmdb_movie', '705'), (703, 'tmdb_movie', '703'), (700, 'tmdb_movie', '700'), (9021, 'anilist', '21');
+                """);
+            var providerAsked = () => tmdb.Requests.Any(request => request.AbsolutePath == "/3/search/movie");
+            var animeRequests = aniList.Requests;
+
+            // Films come from the catalog, titles that begin with the text first, then by popularity; adult titles stay out and the provider is not asked.
+            using var films = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("matrix", MediaType.Movie));
+            Assert.AreEqual(HttpStatusCode.OK, films.StatusCode, await films.Content.ReadAsStringAsync());
+            var found = (await films.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.ToArray();
+            if (isLocal)
+            {
+                CollectionAssert.AreEqual(new long[] { 705, 603, 604 }, found.Select(item => item.WorkId).ToArray());
+                Assert.AreEqual(((int?)603, (decimal?)8.7m), (found[1].TmdbId, found[1].Rating));
+                Assert.IsFalse(providerAsked());
+                using var next = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("matrix", MediaType.Movie, page: 2));
+                Assert.AreEqual(0, (await next.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Count);
+            }
+            else
+            {
+                Assert.AreEqual(603L, found.Single().WorkId);
+                Assert.IsTrue(providerAsked());
+            }
+
+            // A request keeps showing on the found title; series are always TheTVDB's.
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/works/603/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            using var both = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("matrix"));
+            var all = (await both.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.ToArray();
+            Assert.AreEqual(MediaStateType.Requested, all.Single(item => item.WorkId == 603).MediaStateTypeId);
+            Assert.AreEqual(1, all.Count(item => item.MediaTypeId == MediaType.Series && item.Title == "The Matrix Show"));
+            Assert.IsTrue(tvdb.Requests.Any(request => request.AbsolutePath == "/v4/search"));
+
+            // Anime of AniList likewise.
+            using var anime = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/search", new SearchDiscoverCatalogDataV1(MediaType.Series, "matrix", MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, anime.StatusCode, await anime.Content.ReadAsStringAsync());
+            var animeItems = (await anime.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.ToArray();
+            if (isLocal)
+            {
+                Assert.AreEqual(("21", 9021L), (animeItems.Single().ExternalId, animeItems.Single().WorkId));
+                Assert.AreEqual(animeRequests, aniList.Requests);
+            }
+            else
+            {
+                Assert.IsTrue(aniList.Requests > animeRequests);
+            }
+        }
+
+        [TestMethod]
         public async Task Franchise_TmdbCollection_ListsTheVisibleTitles()
         {
             await using var host = await CreateHostAsync(razor: true);

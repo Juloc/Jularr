@@ -585,6 +585,105 @@ namespace Jularr.Backend.Logic.Media
             return await ctx.ReadSql.ReadListAsync<ExternalWorkShelfItemData>(sql, ct);
         }
 
+        // The search of a catalog kept whole: a page of its titles that match the typed words, titles that begin with the text first, then the most popular, voted and rated.
+        public static async Task<IReadOnlyList<ExternalWorkShelfItemData>> SearchExternalWorkCatalogAsync(this LogicContext ctx, ExternalWorkSearchQueryData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement { DisableJit = true };
+            sql.Statement =
+                """
+                SELECT
+                    0 AS "Shelf",
+                    work."CatalogNamespace" AS "Namespace",
+                    identity."Value",
+                    work."CanonicalTitle" AS "Title",
+                    work."ReleaseYear"::integer AS "ReleaseYear",
+                    work."Overview",
+                    work."Creator",
+                    coalesce(known."StoredImageUrl", work."ImageUrl") AS "ImageUrl",
+                    work."BackdropUrl",
+                    work."Rating",
+                    work."Id" AS "WorkId",
+                    known."MediaStateTypeId",
+                    known."PlexUrl"
+                FROM
+                    unnest(ARRAY(
+                        SELECT
+                            found."Id"
+                        FROM
+                            "Works" AS found
+                        WHERE
+                            found."CatalogNamespace" = @Namespace
+                            AND found."MediaTypeId" = @MediaTypeId
+                            AND coalesce(found."MediaSubtypeId", 0) = coalesce(@MediaSubtypeId::smallint, 0)
+                            AND found."SearchText" @@ to_tsquery('simple', @SearchTerms)
+                            AND NOT found."IsAdult"
+                        ORDER BY
+                            lower(found."CanonicalTitle") LIKE @TitlePrefix DESC,
+                            found."Popularity" DESC NULLS LAST,
+                            found."Votes" DESC NULLS LAST,
+                            found."Rating" DESC NULLS LAST,
+                            found."Id"
+                        LIMIT @Limit OFFSET @Offset)) WITH ORDINALITY AS picked ("Id", "Place")
+                    JOIN "Works" AS work ON work."Id" = picked."Id"
+                    JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = work."Id" AND identity."Namespace" = work."CatalogNamespace"
+                    LEFT JOIN LATERAL (
+                        -- The profile's view of the Work, only when the profile may see it.
+                        SELECT
+                            visible."WorkId",
+                            state."MediaStateTypeId",
+                            (
+                                SELECT
+                                    fact."Value"
+                                FROM
+                                    "WorkMetadataFacts" AS fact
+                                WHERE
+                                    fact."WorkId" = visible."WorkId"
+                                    AND fact."FactKey" = 'Poster'
+                                    AND fact."Value" LIKE '/api/v1/covers/%'
+                                ORDER BY
+                                    fact."IsManual" DESC
+                                LIMIT 1
+                            ) AS "StoredImageUrl",
+                            (
+                                SELECT
+                                    'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"
+                                FROM
+                                    "WorkExternalIdentities" AS plex
+                                    JOIN "Providers" AS provider ON provider."Key" = 'plex' AND provider."IsEnabled" AND provider."ExternalId" IS NOT NULL
+                                WHERE
+                                    plex."WorkId" = visible."WorkId"
+                                    AND plex."Namespace" = 'plex'
+                                LIMIT 1
+                            ) AS "PlexUrl"
+                        FROM
+                            (
+                                SELECT
+                                    scoped."WorkId"
+                                FROM
+                                    "ProfileWorks" AS scoped
+                                WHERE
+                                    scoped."ProfileId" = @ProfileId
+                                    AND scoped."WorkId" = work."Id"
+                                OFFSET 0
+                            ) AS visible
+                            LEFT JOIN LATERAL (
+                                SELECT
+                                    scoped."MediaStateTypeId"
+                                FROM
+                                    "ProfileWorkStates" AS scoped
+                                WHERE
+                                    scoped."ProfileId" = @ProfileId
+                                    AND scoped."WorkId" = visible."WorkId"
+                                OFFSET 0
+                            ) AS state ON TRUE
+                    ) AS known ON TRUE
+                ORDER BY
+                    picked."Place";
+                """;
+            sql.Parameters.Add(data);
+            return await ctx.ReadSql.ReadListAsync<ExternalWorkShelfItemData>(sql, ct);
+        }
+
         public static async Task<ExternalWorkSyncData?> ReadExternalWorkSyncAsync(this LogicContext ctx, string @namespace, CancellationToken ct)
         {
             var sql = new SqlStatement();

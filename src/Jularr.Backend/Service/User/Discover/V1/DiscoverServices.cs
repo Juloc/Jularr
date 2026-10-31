@@ -112,7 +112,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             // Local titles first; they never need the provider. A catalog title nobody opened is no local title.
-            var (local, types) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            var (local, types, catalogFilms) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 var sql = new SqlStatement();
                 sql.Statement =
@@ -190,7 +190,20 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 sql.Parameters.Add(new LibraryFilterData(Data.MediaTypeId, null, Data.Query));
                 sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
                 sql.Page = new PageRequest(Data.Page, LocalLimit);
-                return (await ctx.ReadSql.ReadListAsync<DiscoverItemV1>(sql, ct), await DiscoverQueries.ReadTypesInBatchAsync(ctx, Auth.ProfileId!.Value, ct));
+                var found = await ctx.ReadSql.ReadListAsync<DiscoverItemV1>(sql, ct);
+                var types = await DiscoverQueries.ReadTypesInBatchAsync(ctx, Auth.ProfileId!.Value, ct);
+
+                // Films of a catalog kept whole are found in it, never asked from the provider; until its first full pass is done the provider answers.
+                IReadOnlyList<ExternalWorkShelfItemData>? films = null;
+                if ((Data.MediaTypeId is null or MediaType.Movie) && types.Listed.Contains(MediaType.Movie) && (await ctx.ReadWholeExternalWorkCatalogsAsync(ct)).Contains(WorkMetadata.Namespace(MediaType.Movie)))
+                {
+                    films = ExternalWorkLogic.SearchTerms(Data.Query) is { } terms
+                        ? await ctx.SearchExternalWorkCatalogAsync(new ExternalWorkSearchQueryData(WorkMetadata.Namespace(MediaType.Movie), MediaType.Movie, null, Auth.ProfileId!.Value, terms,
+                            ExternalWorkLogic.TitlePrefix(Data.Query), ExternalWorkLogic.ShelfSize, (Data.Page - 1) * ExternalWorkLogic.ShelfSize), ct)
+                        : [];
+                }
+
+                return (found, types, films);
             }, CancellationToken, mode: SqlAccessMode.ReadOnly);
 
             // Provider results add what is not local yet: films from TMDB, series from TheTVDB. An unavailable provider leaves the other type and the local results;
@@ -198,7 +211,12 @@ namespace Jularr.Backend.Service.User.Discover.V1
             var items = local.Take(LocalLimit).ToList();
             var listed = types.Listed;
             var searched = (Data.MediaTypeId is { } selected ? [selected] : new[] { MediaType.Movie, MediaType.Series })
-                .Where(mediaType => mediaType is MediaType.Movie or MediaType.Series && listed.Contains(mediaType)).ToList();
+                .Where(mediaType => mediaType is MediaType.Movie or MediaType.Series && listed.Contains(mediaType) && !(mediaType == MediaType.Movie && catalogFilms is not null)).ToList();
+            if (catalogFilms is not null)
+            {
+                var found = items.Select(item => item.WorkId).ToHashSet();
+                items.AddRange(catalogFilms.Where(row => !found.Contains(row.WorkId)).Select(row => DiscoverQueries.ToItem(MediaType.Movie, row)));
+            }
 
             // Both providers are asked at once: TMDB's request needs the database only for its key, read first, and TheTVDB's search then runs beside it.
             // The answers are kept one after the other, since a context runs one batch at a time.
@@ -442,8 +460,26 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
+            // Anime of a catalog kept whole are found in it, never asked from AniList; until its first full pass is done AniList answers.
+            var catalogAnime = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await DiscoverQueries.RequireCatalogTypeInBatchAsync(ctx, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, ct);
+                if (Data.MediaSubtypeId != MediaSubtype.Anime || !(await ctx.ReadWholeExternalWorkCatalogsAsync(ct)).Contains(AniListMetadata.Namespace))
+                {
+                    return null;
+                }
+
+                return ExternalWorkLogic.SearchTerms(Data.Query) is { } terms
+                    ? await ctx.SearchExternalWorkCatalogAsync(new ExternalWorkSearchQueryData(AniListMetadata.Namespace, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, terms,
+                        ExternalWorkLogic.TitlePrefix(Data.Query), ExternalWorkLogic.ShelfSize, 0), ct)
+                    : [];
+            }, CancellationToken, mode: SqlAccessMode.ReadOnly);
+            if (catalogAnime is not null)
+            {
+                return new BaseDataList<DiscoverCatalogItemV1>([.. catalogAnime.Select(DiscoverQueries.CatalogItem)]);
+            }
+
             // Every result is kept as the Work it is.
-            await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
             var language = Data.MediaSubtypeId == MediaSubtype.LightNovel ? await DiscoverQueries.ReadLanguageAsync(Context, Auth.ProfileId!.Value, CancellationToken) : null;
             var works = Data.MediaSubtypeId == MediaSubtype.Anime
                 ? await MetadataCatalog.KeepAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, await _catalog.SearchAnimeAsync(Data.Query, CancellationToken), CancellationToken)

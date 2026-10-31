@@ -418,6 +418,46 @@ namespace Jularr.Backend.Data.Logic.Media
         public int Limit { get; }
     }
 
+    // The titles of one kept catalog and type that match the typed words, a page of them.
+    internal sealed class ExternalWorkSearchQueryData : BaseData
+    {
+        public ExternalWorkSearchQueryData(string @namespace, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, long profileId, string searchTerms, string titlePrefix, int limit, int offset)
+        {
+            Namespace = @namespace;
+            MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
+            ProfileId = profileId;
+            SearchTerms = searchTerms;
+            TitlePrefix = titlePrefix;
+            Limit = limit;
+            Offset = offset;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long ProfileId { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.SearchTerms))]
+        public string SearchTerms { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.SearchTerms))]
+        public string TitlePrefix { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Limit))]
+        public int Limit { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Offset))]
+        public int Offset { get; }
+    }
+
     // A catalog's full-sync settings and progress.
     internal sealed class ExternalWorkSyncData : BaseData
     {

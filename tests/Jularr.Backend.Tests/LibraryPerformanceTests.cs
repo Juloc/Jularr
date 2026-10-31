@@ -579,6 +579,7 @@ namespace Jularr.Backend.Tests
             await SeedInventoryAsync(host, 300, 411, false);
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('DiscoverCache', TRUE), ('LocalDiscovery', TRUE) ON CONFLICT ("Key") DO UPDATE SET "IsEnabled" = TRUE;
+                UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'tmdb_movie';
                 """);
             for (var from = 1; from <= catalogWorks; from += 5000)
             {
@@ -633,6 +634,7 @@ namespace Jularr.Backend.Tests
                     Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, name + body);
                     var elapsed = Stopwatch.GetElapsedTime(begin).TotalMilliseconds;
                     if (iteration == 0 && name.StartsWith("search", StringComparison.Ordinal)) StringAssert.Contains(body, "Dune");
+                    if (name.StartsWith("search", StringComparison.Ordinal)) Assert.AreEqual(0, providers.FilmSearches, name + ": the kept film catalog answers, TMDB is not asked");
                     if (iteration == 3)
                         foreach (var command in commands.Executions.OrderByDescending(command => command.Milliseconds).Take(4))
                         {
@@ -654,16 +656,19 @@ namespace Jularr.Backend.Tests
         }
 
         // TMDB and TheTVDB answer Dune at once; the time spent answering is counted so a run can tell the provider part from the local one.
+        // The film catalog is kept whole in this test, so a search of films is read locally and TMDB's search is never asked.
         private sealed class SearchProviders : HttpMessageHandler
         {
             public const string Token = "eyJ-search-token";
             public TimeSpan Elapsed { get; set; }
+            public int FilmSearches { get; private set; }
 
             // A provider's round trip, to see that the two searches wait together.
             public TimeSpan Delay { get; init; }
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
+                if (request.RequestUri!.AbsolutePath == "/3/search/movie") FilmSearches++;
                 await Task.Delay(Delay, cancellationToken);
                 var started = Stopwatch.GetTimestamp();
                 var json = request.RequestUri!.AbsolutePath switch
