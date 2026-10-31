@@ -5198,6 +5198,18 @@
    "Download exceeds the configured size limit",
    "Download überschreitet das konfigurierte Größenlimit"
   ],
+  "acquisition.outcome.usenet_incomplete": [
+   "Articles are missing and there is no repair data",
+   "Artikel fehlen und es gibt keine Reparaturdaten"
+  ],
+  "acquisition.outcome.usenet_repair_failed": [
+   "The repair of the download failed",
+   "Die Reparatur des Downloads ist fehlgeschlagen"
+  ],
+  "acquisition.outcome.usenet_extract_failed": [
+   "The archives could not be unpacked",
+   "Die Archive ließen sich nicht entpacken"
+  ],
   "acquisition.outcome.import_no_media": [
    "The download holds no video file",
    "Der Download enthält keine Videodatei"

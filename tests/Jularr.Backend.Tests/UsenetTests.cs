@@ -285,7 +285,7 @@ namespace Jularr.Backend.Tests
             await CreateWantedMovieAsync(host);
             await RunAsync<SearchDueWantedV1>(host);
             await RunAsync<DownloadUsenetV1>(host);
-            Assert.AreEqual("download_failed", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""));
+            Assert.AreEqual("usenet_incomplete", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""), "The release says why it failed.");
             Assert.IsTrue(Directory.EnumerateFiles(staging.Path, UsenetJob.NzbName, SearchOption.AllDirectories).Any(),
                 "A failed release retains its own job files until explicit cancellation or a successful import.");
         }

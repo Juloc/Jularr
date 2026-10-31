@@ -125,7 +125,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // Grabbed, imported, failed and blocked releases of one target; release faults block like a manual block.
             var sql = new SqlStatement();
             sql.Statement =
-                """
+                $"""
                 SELECT
                     release."Id",
                     release."Title",
@@ -135,7 +135,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     release."ReasonKey",
                     operation."ProgressPercent"::integer AS "ProgressPercent",
                     release."CreatedAt",
-                    release."AcquisitionReleaseStatusTypeId" = 4 OR release."AcquisitionReleaseStatusTypeId" = 3 AND release."ReasonKey" = 'download_failed' AS "IsBlocked"
+                    release."AcquisitionReleaseStatusTypeId" = 4 OR release."AcquisitionReleaseStatusTypeId" = 3 AND {DownloadLogic.ReleaseFaultSql} AS "IsBlocked"
                 FROM
                     "AcquisitionReleases" AS release
                     LEFT JOIN "AcquisitionConnections" AS connection ON connection."Id" = release."AcquisitionConnectionId"

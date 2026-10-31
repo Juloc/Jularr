@@ -254,6 +254,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" IS NOT NULL AND \"NextSearchAt\" <= now() FROM \"WantedItems\" WHERE \"Id\" = 600"));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
             Assert.IsTrue(File.Exists(other), "A download of no use stays for the client to remove.");
+
+            // The search that follows finds the same release again and does not take it: an import that threw a release out blocks it like a failed download.
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(1, usenet.Grabbed.Count(url => url.EndsWith("/feature", StringComparison.Ordinal)), "A release the import threw out is not grabbed again; the next best one is.");
+            Assert.AreEqual(2, usenet.Grabbed.Count);
         }
 
         // A doubt waits for a person with what the files say and is not read again until the person decides.
