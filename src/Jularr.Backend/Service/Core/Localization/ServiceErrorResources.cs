@@ -111,6 +111,8 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.vpn_tunnel_stopped", "The VPN tunnel stopped. Check it again to restart it."),
             new("errors.vpn_exit_not_hidden", "Requests through the tunnel left with this server's own address, so the tunnel is not used."),
             new("errors.acquisition_authentication_failed", "The indexer or download client rejected the API key."),
+            new("errors.usenet_credentials_rejected", "The news server rejected the user name or password."),
+            new("errors.usenet_connection_limit", "The news server allows no more connections right now. Lower this server's connections to what the plan includes."),
             new("errors.acquisition_rate_limited", "The indexer limits requests right now. Please try again later."),
             new("errors.acquisition_limit_reached", "The indexer's daily grab limit is reached."),
             new("errors.acquisition_query_limit_reached", "The indexer's daily query limit is reached."),

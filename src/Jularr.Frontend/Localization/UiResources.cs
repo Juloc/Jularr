@@ -1991,6 +1991,8 @@ namespace Jularr.Frontend.Localization
             new("acquisition.outcome.download_failed", "Download failed"),
             new("acquisition.outcome.download_interrupted", "Download interrupted"),
             new("acquisition.outcome.acquisition_unavailable", "Download client unavailable"),
+            new("acquisition.outcome.usenet_credentials_rejected", "The news server rejected the user name or password"),
+            new("acquisition.outcome.usenet_connection_limit", "The news server allows no more connections"),
             new("acquisition.outcome.acquisition_no_download_client", "No download client"),
             new("acquisition.outcome.acquisition_paused", "Monitoring was paused during the search"),
             new("acquisition.outcome.acquisition_import_path_unconfigured", "Set up and verify the SABnzbd Complete folder"),

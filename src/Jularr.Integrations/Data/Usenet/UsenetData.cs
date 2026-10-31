@@ -11,6 +11,7 @@ namespace Jularr.Integrations.Data.Usenet
     {
         Unavailable,
         Unauthorized,
+        ConnectionLimit,
         ArticleMissing,
         InvalidResponse
     }
