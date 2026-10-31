@@ -43,15 +43,27 @@ namespace Jularr.Backend.Service.Core
                 // Manga and Light Novels are AniList data only; other books come from Open Library.
                 if (subtype is MediaSubtype.Manga or MediaSubtype.LightNovel)
                 {
-                    var editions = await aniList.SearchBooksAsync(subtype.Value, query, year, ct);
+                    // Narō's own search does not depend on the editions, so it runs beside AniList's.
+                    var narouEnabled = subtype == MediaSubtype.LightNovel && await NarouMetadata.IsEnabledAsync(context, ct);
+                    var narouFirst = narouEnabled ? narou.SearchAsync(query, ct) : null;
+                    IReadOnlyList<AniListMedia> editions;
+                    try
+                    {
+                        editions = await aniList.SearchBooksAsync(subtype.Value, query, year, ct);
+                    }
+                    catch
+                    {
+                        if (narouFirst is not null) await Task.WhenAny(narouFirst);
+                        throw;
+                    }
 
                     // Narō's web novels by title or ncode, each its own title beside the published editions; one that is clearly an edition's original follows it under its name.
                     IReadOnlyList<(NarouNovel Novel, AniListMedia? Edition)> novels = [];
-                    if (subtype == MediaSubtype.LightNovel && await NarouMetadata.IsEnabledAsync(context, ct))
+                    if (narouFirst is not null)
                     {
                         try
                         {
-                            novels = await SearchWebNovelsAsync(query, editions, ct);
+                            novels = await SearchWebNovelsAsync(query, editions, narouFirst, ct);
                         }
                         catch (ServiceUnavailableException)
                         {
@@ -101,16 +113,19 @@ namespace Jularr.Backend.Service.Core
         }
 
         // The query's novels and, for an English or romanized query, those under the Japanese titles of the editions found; a novel found only through an edition shows when it clearly is its original.
-        private async Task<IReadOnlyList<(NarouNovel Novel, AniListMedia? Edition)>> SearchWebNovelsAsync(string query, IReadOnlyList<AniListMedia> editions, CancellationToken ct)
+        private async Task<IReadOnlyList<(NarouNovel Novel, AniListMedia? Edition)>> SearchWebNovelsAsync(string query, IReadOnlyList<AniListMedia> editions, Task<IReadOnlyList<NarouNovel>> first, CancellationToken ct)
         {
-            var found = new List<NarouNovel>(await narou.SearchAsync(query, ct));
+            var found = new List<NarouNovel>(await first);
             if (!NarouClient.IsNcode(query.Trim()))
             {
                 var asked = AniListMatching.Normalize(query);
-                foreach (var title in editions.Select(edition => edition.NativeTitle).OfType<string>().Select(AniListMatching.Normalize)
-                    .Where(title => title.Length > 0 && title != asked).Distinct(StringComparer.Ordinal).Take(EditionLookups))
+
+                // The Japanese titles are looked up together; the answers keep the titles' order.
+                var lookups = editions.Select(edition => edition.NativeTitle).OfType<string>().Select(AniListMatching.Normalize)
+                    .Where(title => title.Length > 0 && title != asked).Distinct(StringComparer.Ordinal).Take(EditionLookups).Select(title => narou.SearchAsync(title, ct)).ToArray();
+                foreach (var answer in await Task.WhenAll(lookups))
                 {
-                    found.AddRange((await narou.SearchAsync(title, ct)).Where(novel => AniListMatching.LinkWebNovel(editions, novel.Title, novel.Writer).Match is not null));
+                    found.AddRange(answer.Where(novel => AniListMatching.LinkWebNovel(editions, novel.Title, novel.Writer).Match is not null));
                 }
             }
 
