@@ -103,3 +103,66 @@ test('a failed browser batch restores original blocks before local fallback', as
     assert.equal(reader.dataset.translationState, 'ready');
     assert.equal(blocks[0].innerText, 'local translation');
 });
+
+function emergencyReader(browserTranslation) {
+    const blocks = Array.from({ length: 3 }, (_, index) => {
+        let markup = 'original-' + index;
+        return {
+            get innerHTML() { return markup; },
+            set innerHTML(next) { markup = next; },
+            get innerText() { return markup; },
+            set textContent(next) { markup = next; },
+            querySelector: () => null
+        };
+    });
+    const calls = [];
+    const fetchStub = async (url, options) => {
+        calls.push(url);
+        if (url === '/translated/de') return options?.method === 'PUT' ? { ok: true } : { ok: false };
+        if (url === '/route/en/de') return {
+            ok: true, json: async () => [
+                { step: 0, fileType: 'engine', url: '/engine', precision: null },
+                { step: 1, fileType: 'model', url: '/model', precision: null }
+            ]
+        };
+        if (url.startsWith('/local/de/translategemma%3A4b?')) return { ok: false };
+        if (url.startsWith('/local/de/translategemma%3A4b/blocks/')) return { ok: false };
+        throw new Error('Unexpected fetch: ' + url);
+    };
+    const fakeWorker = {
+        onmessage: null,
+        terminate() {},
+        postMessage(message) {
+            if (message.type === 'load') queueMicrotask(() => this.onmessage({ data: { type: 'ready' } }));
+            else if (message.type === 'translate') queueMicrotask(() => this.onmessage({
+                data: { type: 'translated', id: message.id, texts: message.texts.map(() => 'browser translation') }
+            }));
+        }
+    };
+    const dataset = {
+        language: 'en', translationEngine: 'gemma', localModel: 'translategemma:4b',
+        localTranslationUrl: '/local/', translationUrl: '/translated/', routeUrl: '/route/', translatingLabel: 'Translating'
+    };
+    if (browserTranslation) dataset.browserTranslation = 'true';
+    const localExports = {};
+    runInNewContext(script, { exports: localExports, fetch: fetchStub, ...lifetime });
+    const content = { querySelectorAll: () => blocks, innerText: 'English original text' };
+    const choose = localExports.translator({ dataset, querySelector: () => null }, content, () => fakeWorker);
+    return { blocks, calls, dataset, choose };
+}
+
+test('with the Mozilla module on, a page the server cannot translate falls back to the browser', async () => {
+    const { blocks, dataset, choose, calls } = emergencyReader(true);
+    await choose('de');
+    assert.equal(dataset.translationState, 'ready');
+    assert.equal(blocks[0].innerText, 'browser translation');
+    assert.ok(calls.includes('/route/en/de'), 'The browser engine is asked for only when the server failed.');
+});
+
+test('without the Mozilla module, a page the server cannot translate stays original and asks Mozilla for nothing', async () => {
+    const { blocks, dataset, choose, calls } = emergencyReader(false);
+    await choose('de');
+    assert.equal(dataset.translationState, 'failed');
+    assert.equal(blocks[0].innerText, 'original-0');
+    assert.ok(!calls.includes('/route/en/de'));
+});

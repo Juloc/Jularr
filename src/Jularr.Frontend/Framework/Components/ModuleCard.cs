@@ -36,6 +36,7 @@ namespace Jularr.Frontend.Framework
             ["Devices"] = "devices",
             ["Registration"] = "user-plus",
             ["Translation"] = "globe",
+            ["TranslationBrowser"] = "globe",
             ["Ocr"] = "text-select",
             ["SmartPdf"] = "document",
             ["DiscoverCache"] = "drive",

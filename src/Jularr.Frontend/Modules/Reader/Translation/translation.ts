@@ -168,8 +168,8 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         if (current === target && revision === generation) say(undefined);
     }
 
-    // The Reader page always picks the server's TranslateGemma; the Mozilla path below stays switched off.
-    // TODO(#1726): bring Mozilla back only as an emergency module, off by default, for the page in view and the next 3, kept in the browser.
+    // The Reader page picks the server's TranslateGemma. The Mozilla path below runs only as an emergency: when the Mozilla module is on
+    // (data-browser-translation) and the server could not translate, see the fallback in choose().
     // Translated batch by batch so the page fills in while it works; the finished section is shared.
     async function translate(target: Language, generation: number) {
         if (reader.dataset.translationEngine === "gemma") return translateLocal(target, generation);
@@ -228,6 +228,18 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
                     return;
                 } catch {
                     // If both providers fail, keep the original document readable.
+                }
+            }
+            if (reader.dataset.translationEngine === 'gemma' && reader.dataset.browserTranslation === 'true' && current === target && generation === revision) {
+                try {
+                    // The server could not translate: start over from the original text in the browser.
+                    restore();
+                    reader.dataset.translationEngine = 'browser';
+                    await translate(target, generation);
+                    if (current === target && generation === revision) reader.dataset.translationState = 'ready';
+                    return;
+                } catch {
+                    reader.dataset.translationEngine = 'gemma';
                 }
             }
             if (current === target && generation === revision) { reader.dataset.translationState = 'failed'; restore(); say(reader.dataset.translationFailedLabel); }
