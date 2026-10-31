@@ -136,11 +136,32 @@ test("icon hints remain painted on closed summaries and language hints open abov
     assert.match(css, /\.media-card__languages \.icon-info \.icon-info__trigger:{1,2}after\{top:auto;bottom:100%\}/);
 });
 
-test("availability symbols and their card targets have no painted background", () => {
+test("media badges share quiet surfaces without painting their larger touch targets", () => {
     const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
-    assert.match(css, /\.media-card__availability \.icon-info__trigger\{background:none\}/);
-    assert.match(css, /\.media-availability\{position:relative;display:block;width:28px;height:28px\}/);
+    assert.match(css, /\.media-availability-badge\{[^}]*min-width:44px;height:44px;padding:10px/);
+    assert.match(css, /\.media-availability\{position:relative;display:block;width:32px;height:32px;padding:2px;border-radius:50%;background:var\(--surface-hover\)\}/);
+    assert.match(css, /\.media-availability>svg\{display:block;width:28px;height:28px\}/);
+    assert.match(css, /\.media-availability--compact\{width:16px;height:16px;padding:0;background:none\}/);
+    assert.match(css, /\.media-availability--compact>\.ui-icon\{width:9px;height:9px\}/);
+    assert.match(css, /\.media-availability>\.ui-icon\{position:absolute;top:50%;left:50%;width:14px;height:14px;transform:translate\(-50%,-50%\)\}/);
+    assert.match(css, /\.icon-info__trigger>\.ui-icon\{width:18px;height:18px;flex:0 0 auto\}/);
+    assert.ok(!css.includes(".icon-info__trigger .ui-icon{"), "Hints must not resize another control's nested icon.");
+    assert.match(css, /\.media-card__language>\.ui-icon\{width:18px;height:18px;flex:0 0 auto\}/);
     assert.match(css, /\.icon-info__trigger\{[^}]*min-width:44px;min-height:44px/);
+
+    const shell = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
+    assert.match(shell, /\.tag--neutral\{border-color:transparent;background:var\(--surface-hover\);color:var\(--text\)\}/);
+});
+
+test("shared cards replace artwork with a floating landscape trailer and keep actions over video", () => {
+    const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
+    assert.match(css, /\.media-availability-badge__body\{[^}]*box-shadow:0 0 0 2px var\(--surface\),0 0 0 3px color-mix/);
+    assert.match(css, /\.media-card__surface\[data-expanded\]\{position:fixed;z-index:20;inset:auto;top:var\(--preview-top\);left:var\(--preview-left\);width:var\(--preview-width\);height:auto\}/);
+    assert.match(css, /\.media-card__surface\[data-expanded\] \.media-card__art\{display:none\}/);
+    assert.match(css, /\.media-card__surface\[data-expanded\] \.media-card__trailer\{position:relative;inset:auto\}/);
+    assert.match(css, /\.media-card__surface\[data-expanded\] \.media-card__content\{position:relative;inset:auto;border-radius:0 0 24px 24px\}/);
+    assert.match(css, /\.media-card__actions\{[^}]*bottom:calc\(100% \+ 12px\)/);
+    assert.doesNotMatch(css, /\.design-cover__/);
 });
 
 test("manifest URLs are relative and cannot escape the asset root", () => {

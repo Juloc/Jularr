@@ -12,5 +12,20 @@
     overflow-wrap: anywhere;
 
     &--accent { border-color: color-mix(in srgb, var(--accent-text) 55%, var(--border)); }
+
+    // Quiet informational labels.
+    &--neutral {
+        border-color: transparent;
+        background: var(--surface-hover);
+        color: var(--text);
+    }
+
+    // Stable semantic colors.
+    &--blue { border-color: transparent; background: light-dark(#e8edfa, #243553); color: light-dark(#31558c, #bbd2ff); }
+    &--pink { border-color: transparent; background: light-dark(#f8e4ed, #4a2334); color: light-dark(#924366, #ffc2da); }
+    &--green { border-color: transparent; background: light-dark(#e1f1e8, #203b2c); color: light-dark(#276745, #a2e0bd); }
+    &--yellow { border-color: transparent; background: light-dark(#f6edd5, #423923); color: light-dark(#79601d, #efd38a); }
+    &--purple { border-color: transparent; background: light-dark(#eee6fb, #372746); color: light-dark(#674397, #d5b6ff); }
+
     .ui-icon { width: 16px; height: 16px; }
 }

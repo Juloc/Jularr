@@ -54,13 +54,19 @@ the task and URL. Do not kill unrelated dotnet processes or remove other D: fold
 
 ## Design review
 
-Use `/Design` on this same Development host. The workshop renders the canonical
+Use `/Design` on a Development host. The workshop renders the canonical
 components, labeled samples and disabled Player chrome; it does not start playback.
 Appearance controls adjust Original/Clean, brightness and accent
 immediately in this browser. Shared component changes apply to real pages as well.
-Review one component group at a time, then desktop/mobile and light/dark. Server
-updates continue to follow green, integrated `clean-start` commits; there is no separate
-HTML prototype to keep synchronized. Actual persistent mini-player navigation remains pending.
+Review one component group at a time, then desktop/mobile and light/dark.
+The clean-start preview follows green, integrated commits. For rapid design iteration,
+run the same Frontend project directly from a developer worktree on a separate localhost
+port with `dotnet watch run --no-launch-profile`. Set `ASPNETCORE_ENVIRONMENT=Development`
+and `JULARR_DB` to a separate isolated prototype database; never reuse an active database.
+Build changed SCSS/TypeScript with `npm run build`, then restart the development host
+to load the new fingerprinted manifests. No commit or merge is needed to review a prototype.
+Both hosts render the same canonical components, not a parallel HTML implementation.
+Actual persistent mini-player navigation remains pending.
 
 ## Optional home-network access
 

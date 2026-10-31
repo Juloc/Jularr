@@ -5,15 +5,17 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Profile.V1;
+using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Service.User.Library.V1;
 using Jularr.Backend.Service.User.Profile.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Antiforgery;
 
 namespace Jularr.Frontend.Pages.User.Library
 {
-    public sealed class LibraryModel(ReadAuthenticationV1 authentication, ReadLibraryV1 read, ReadProfileMediaV1 readMedia, UiText texts) : JularrPage
+    public sealed class LibraryModel(ReadAuthenticationV1 authentication, ReadLibraryV1 read, ReadProfileMediaV1 readMedia, UiText texts, FrontendAssets assets, IAntiforgery antiforgery) : JularrPage
     {
         private static readonly (string Slug, MediaType? Type, MediaSubtype? Subtype)[] Scopes =
         [
@@ -41,6 +43,7 @@ namespace Jularr.Frontend.Pages.User.Library
             page.Title("nav.library");
             page.Navigation("nav.library");
             page.Asset("Pages/User/Library/Library.entry.scss");
+            page.Asset("Framework/Components/MediaCard.entry.ts");
             if (_items is not { } items)
             {
                 return;
@@ -61,8 +64,19 @@ namespace Jularr.Frontend.Pages.User.Library
             }
             else
             {
-                page.Content.Add(new Div([.. items.Items.Select(item => new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                    item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId))]).Class("media-grid"));
+                var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+                page.Content.Add(new Div([.. items.Items.Select(item =>
+                {
+                    var href = "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture);
+                    var card = new MediaCard(item.Title, href, item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId)
+                        .Actions(new Form<UpdateWatchlistDataV1>(form =>
+                        {
+                            form.Hidden(data => data.IsWatchlisted);
+                            form.Submit(item.IsWatchlisted ? "media.watchlist.remove" : "media.watchlist.add");
+                        }, href, csrf, new UpdateWatchlistDataV1(!item.IsWatchlisted)));
+                    if (item.MediaStateTypeId == MediaStateType.Requested) card.Availability(new MediaAvailability(assets, MediaAvailabilityState.Requested));
+                    return card;
+                })]).Class("media-grid"));
             }
 
             // A full page offers the next one.

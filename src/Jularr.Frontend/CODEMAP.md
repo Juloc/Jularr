@@ -19,9 +19,9 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Shared SCSS](Assets/Shared/shell.entry.scss): colocated base component styles loaded once.
 - [Appearance](Modules/Appearance/Appearance.cs), [palette](Modules/Appearance/Palette.ts), [theme client](Modules/Appearance/theme.entry.ts): Original/Clean, brightness and optional device preferences.
 - [Original artwork](Modules/Appearance/Original/README.md), [skin styles](Modules/Appearance/Theme.scss): Washi, blossoms, landscapes and mascot; shared Hero fallback, no provider-art tinting.
-- [MediaCard](Framework/Components/MediaCard.cs): Continue progress, top-corner status/availability, up to three genres and centered hover/focus actions.
+- [MediaCard](Framework/Components/MediaCard.cs), [client](Framework/Components/MediaCard.entry.ts): canonical portrait, hover/focus/touch information, native actions above the title, Continue progress, supplied genres/languages and optional delayed muted landscape trailer; delegated interaction supports Discover fragments.
 - [MediaPreview](Framework/Components/MediaPreview.cs), [client](Framework/Components/MediaPreview.ts), [tests](Tools/media-preview.test.mjs): opt-in status links, inert SSR content and one native modal; official trailer embed on Play, released on close. Design examples await real trailer/request/download service fields.
-- [MediaAvailability](Framework/Components/MediaAvailability.cs): noninteractive, background-free status symbol with monitored-unit counts; MediaCard composes its separate hint/preview target.
+- [MediaAvailability](Framework/Components/MediaAvailability.cs): noninteractive status symbol with monitored-unit counts, a 2px theme surface and an optional compact symbol for tags; its Badge owns the dot-to-capsule link; Missing has no badge, Requested is gray.
 - [MediaLanguages](Framework/Components/MediaLanguages.cs), [IconInfo](Framework/Components/IconInfo.cs): supplied preferred flags/counts and native accessible disclosures; Design labels missing service fields.
 - [MediaShelf client](Framework/Components/MediaShelf.ts): shared local chevrons, native touch/keyboard scrolling and fragment observer cleanup; [tests](Tools/media-shelf.test.mjs).
 - [MediaHero](Framework/Components/MediaHero.cs), [MediaShelf](Framework/Components/MediaShelf.cs), [MediaImage](Framework/Components/MediaImage.cs): shared media presentation; Backend owns image processing.
@@ -58,7 +58,9 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 
 - [Asset tests](Tools/asset-manifest.test.mjs), [appearance tests](Tools/appearance.test.mjs), [structure tests](Tools/shell-login.test.mjs).
 - [Discover tests](Tools/discover.test.mjs), [progress tests](Tools/progress.test.mjs), [Reader/Player tests](Tools/reader.test.mjs), [UI-key verification](Tools/verify-ui-resources.mjs).
+- [Card tests](Tools/media-card.test.mjs): delayed trailers, fragment delegation, pointer/touch boundaries, viewport width and teardown.
 - Backend tests: FrontendAuthenticationTests, DiscoverTests, MediaTests, LibraryTests, ReadingTests and PlaybackTests; isolated PostgreSQL only.
-- [Design lab](Pages/Development/Design/Design.cshtml.cs), [ShellPreview](Pages/Development/ShellPreview/ShellPreview.cshtml.cs): Development-only; browser verification is separate.
+- [Design lab](Pages/Development/Design/Design.cshtml.cs), [ShellPreview](Pages/Development/ShellPreview/ShellPreview.cshtml.cs): Development-only; twelve layout concepts at `/Design?pane=concepts` compose canonical UI pieces with colocated [workshop styles](Pages/Development/Design/MediaConcepts.scss), not production card variants. Browser verification is separate.
+- Cover review at `/Design?pane=cover` composes the production `MediaCard`, `MediaAvailability` and semantic `Tag` controls with explicitly illustrative data; no separate prototype implementation. Real list contracts still lack trailers, ratings, genres, series lifecycle and detailed monitored counts.
 - Remaining: persistent shell/miniplayer, previous/next playback targets, AniList Discover, provider facets, complete episode details, profile media visibility/order, metadata-locale policy, Setup backup/restore, PIN/quota/rules.
 - [Local preview](../../docs/LOCAL_PREVIEW.md); feature scope and Backend integration gaps: [BACKEND_NEXT](../../docs/BACKEND_NEXT.md).

@@ -59,6 +59,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             page.Asset("Pages/User/Discover/Index.entry.scss");
+            page.Asset("Framework/Components/MediaCard.entry.ts");
             page.Asset("Pages/User/Discover/Index.entry.ts");
 
             // One server-rendered result region.
@@ -278,7 +279,10 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IUiComponent Card(DiscoverItemV1 item)
         {
             var (actionKey, actionHref) = Action(item);
-            return new MediaCard(item.Title, DetailsHref(item), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId, actionKey, actionHref);
+            var card = new MediaCard(item.Title, DetailsHref(item), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture),
+                "media.state." + item.MediaStateTypeId, actionKey, actionHref).Information(item.Overview);
+            if (item.MediaStateTypeId == MediaStateType.Requested) card.Availability(new MediaAvailability(assets, MediaAvailabilityState.Requested));
+            return card;
         }
 
         // The canonical next step: use what exists, request what is missing.
