@@ -19,8 +19,8 @@ namespace Jularr.Backend.Logic.Acquisition
         public const string FailedReasonKey = "download_failed";
         public const string InterruptedReasonKey = "download_interrupted";
 
-        // A release that failed to download or that the import threw out ("import_...": no video, wrong series, only extras) is never taken again; an interrupted download may be.
-        public const string ReleaseFaultSql = "(release.\"ReasonKey\" = 'download_failed' OR release.\"ReasonKey\" LIKE 'import\\_%')";
+        // A release that failed to download ("usenet_...": incomplete, repair or unpack failed) or that the import threw out ("import_...": no video, wrong series, only extras) is never taken again; an interrupted download may be.
+        public const string ReleaseFaultSql = "(release.\"ReasonKey\" = 'download_failed' OR release.\"ReasonKey\" LIKE 'import\\_%' OR release.\"ReasonKey\" LIKE 'usenet\\_%')";
 
         public static Task<WantedTargetData> ReadWantedTargetAsync(this LogicContext ctx, long wantedItemId, CancellationToken ct)
         {

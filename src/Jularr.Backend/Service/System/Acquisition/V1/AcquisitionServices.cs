@@ -443,7 +443,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     await WaitAsync(download, staging, pass.ReasonKey!);
                     return false;
                 case UsenetPassState.Failed:
-                    await _import.FailAsync(Context, download.OperationId, DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime, CancellationToken);
+                    await _import.FailAsync(Context, download.OperationId, pass.ReasonKey ?? DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime, CancellationToken);
                     break;
                 default:
                     try
