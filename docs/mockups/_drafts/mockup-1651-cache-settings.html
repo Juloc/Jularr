@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jularr Admin Katalog, Cache-Stufen (Mockup #1651)</title>
+<style>
+:root{--background:#faf9ff;--surface:#fff;--field:#f8f7ff;--border:#eae6f4;--border-strong:#e1dcee;--text:#26223d;--muted:#938fa9;--accent:#8040f7;--accent-text:#7136d9;--accent-soft:#f2edff;--accent-outline:#b59aff;--accent-edge:#dcd0ff;--focus:#b59aff;--radius-control:999px;--radius-panel:19px;--shadow:0 9px 30px rgb(55 37 105/4.5%);--text-body:12px;--text-control:11px;--text-small:10px;--control-height:37px;--transition:.15s;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--background);color:var(--text);font:12px/1.5 Inter,"Segoe UI",system-ui,sans-serif}
+.page{max-width:900px;margin:0 auto;padding:34px 24px 120px}
+
+/* Abschnitt: wie .ui-section der Katalogseite (Covers-Abschnitt) */
+.ui-section{padding:20px 22px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-panel);box-shadow:var(--shadow)}
+.ui-section h2{margin:0 0 4px;font-size:14px;font-weight:805;letter-spacing:-.3px}
+
+/* Eine Zeile je Anbieter: Name, Stufenwahl, Schalter */
+.row{display:grid;grid-template-columns:150px 1fr auto;align-items:center;gap:14px;min-height:56px;padding:10px 0;border-top:1px solid var(--border)}
+.row:first-of-type{border-top:0}
+.row__name{font-size:13px;font-weight:770}
+
+/* Stufenwahl: Pillen wie .choice-group__item */
+.pills{display:flex;flex-wrap:wrap;gap:7px}
+.pill{position:relative;display:inline-flex;cursor:pointer}
+.pill input{position:absolute;width:1px;height:1px;opacity:0}
+.pill span{display:inline-flex;align-items:center;padding:9px 13px;border:1px solid var(--border);border-radius:var(--radius-control);background:var(--surface);color:var(--muted);font-size:var(--text-control);font-weight:760;line-height:1.2}
+.pill:hover span{border-color:var(--accent-outline);color:var(--accent-text)}
+.pill input:checked+span{border-color:var(--accent-edge);background:var(--accent-soft);color:var(--accent-text)}
+.pill input:focus-visible+span{outline:2px solid var(--focus);outline-offset:2px}
+.pill input:disabled+span{opacity:.4;cursor:default;border-color:var(--border);background:var(--surface);color:var(--muted)}
+.pill:has(input:disabled){cursor:default}
+.pill:has(input:disabled):hover span{border-color:var(--border);color:var(--muted)}
+
+/* Schalter: 37x21 wie .toggle */
+.toggle{position:relative;display:inline-flex;align-items:center;min-height:var(--control-height);gap:12px;cursor:pointer}
+.toggle>input{position:absolute;width:1px;height:1px;opacity:0}
+.toggle__label{font-size:var(--text-body)}
+.toggle__track{position:relative;flex:0 0 37px;height:21px;border:1px solid var(--border-strong);border-radius:999px;background:var(--field);transition:background-color var(--transition),border-color var(--transition)}
+.toggle__track::after{content:"";position:absolute;inset-block-start:3px;inset-inline-start:3px;width:13px;height:13px;border-radius:50%;background:var(--muted);transition:inset-inline-start .2s,background-color var(--transition)}
+.toggle>input:checked+.toggle__track{border-color:var(--accent);background:var(--accent)}
+.toggle>input:checked+.toggle__track::after{inset-inline-start:19px;background:#fff}
+.toggle>input:focus-visible+.toggle__track{outline:3px solid var(--focus);outline-offset:2px}
+
+/* Aufbewahrung: Regler mit Wert und Einheit wie .ui-range */
+.keep{display:grid;grid-template-columns:150px 1fr;align-items:center;gap:14px;min-height:56px;padding:10px 0 0;border-top:1px solid var(--border)}
+.keep__label{font-size:13px;font-weight:770}
+.range{display:flex;align-items:center;gap:14px}
+.range input[type=range]{flex:1;min-width:0;height:21px;margin:0;accent-color:var(--accent);background:transparent}
+.range output{display:inline-flex;align-items:center;justify-content:flex-end;min-width:74px;height:var(--control-height);padding:0 13px;border:1px solid var(--border-strong);border-radius:var(--radius-control);background:var(--field);font-size:var(--text-control);font-weight:760}
+
+/* Speichern: schwebende Pille wie ActionDock */
+.dock{position:fixed;inset-inline:0;bottom:22px;display:flex;justify-content:center;pointer-events:none}
+.dock button{pointer-events:auto;height:var(--control-height);padding:0 22px;border:0;border-radius:var(--radius-control);background:var(--accent);color:#fff;font:inherit;font-size:var(--text-control);font-weight:800;box-shadow:0 9px 30px rgb(128 64 247/25%);cursor:pointer}
+.dock button:hover{background:color-mix(in oklab,var(--accent) 90%,#000)}
+
+@media (max-width:650px){.ui-section{padding:15px 16px}.row{grid-template-columns:1fr;gap:8px}.keep{grid-template-columns:1fr}}
+</style></head><body>
+<main class="page">
+<section class="ui-section">
+<h2>Zwischenspeicher</h2>
+
+<div class="row">
+<span class="row__name">TMDB Filme</span>
+<div class="pills" role="radiogroup" aria-label="TMDB Filme">
+<label class="pill"><input type="radio" name="tmdb_movie" value="1"><span>1 Schlank</span></label>
+<label class="pill"><input type="radio" name="tmdb_movie" value="2" checked><span>2 Standard</span></label>
+<label class="pill"><input type="radio" name="tmdb_movie" value="3"><span>3 Voll</span></label>
+</div>
+<label class="toggle"><input type="checkbox"><span class="toggle__track"></span><span class="toggle__label">Trending vorab detaillieren</span></label>
+</div>
+
+<div class="row">
+<span class="row__name">TMDB Serien</span>
+<div class="pills" role="radiogroup" aria-label="TMDB Serien">
+<label class="pill"><input type="radio" name="tmdb_tv" value="1"><span>1 Schlank</span></label>
+<label class="pill"><input type="radio" name="tmdb_tv" value="2"><span>2 Standard</span></label>
+<label class="pill"><input type="radio" name="tmdb_tv" value="3" checked><span>3 Voll</span></label>
+</div>
+<label class="toggle"><input type="checkbox" checked><span class="toggle__track"></span><span class="toggle__label">Trending vorab detaillieren</span></label>
+</div>
+
+<div class="row">
+<span class="row__name">AniList</span>
+<div class="pills" role="radiogroup" aria-label="AniList">
+<label class="pill"><input type="radio" name="anilist" value="1"><span>1 Schlank</span></label>
+<label class="pill"><input type="radio" name="anilist" value="2" checked><span>2 Standard</span></label>
+<label class="pill"><input type="radio" name="anilist" value="3"><span>3 Voll</span></label>
+</div>
+<label class="toggle"><input type="checkbox"><span class="toggle__track"></span><span class="toggle__label">Trending vorab detaillieren</span></label>
+</div>
+
+<div class="row">
+<span class="row__name">TVDB</span>
+<div class="pills" role="radiogroup" aria-label="TVDB">
+<label class="pill"><input type="radio" name="tvdb" value="1"><span>1 Schlank</span></label>
+<label class="pill"><input type="radio" name="tvdb" value="2" checked><span>2 Standard</span></label>
+<label class="pill"><input type="radio" name="tvdb" value="3" disabled><span>3 Voll</span></label>
+</div>
+<label class="toggle"><input type="checkbox"><span class="toggle__track"></span><span class="toggle__label">Trending vorab detaillieren</span></label>
+</div>
+
+<div class="keep">
+<span class="keep__label">Aufbewahrung</span>
+<div class="range"><input type="range" id="keep" min="1" max="365" value="14"><output id="keepOut" for="keep">14 Tage</output></div>
+</div>
+</section>
+</main>
+<div class="dock"><button type="button">Speichern</button></div>
+<script>
+var keep=document.getElementById('keep'),out=document.getElementById('keepOut');
+keep.addEventListener('input',function(){out.textContent=keep.value+(keep.value==='1'?' Tag':' Tage')});
+</script>
+</body></html>

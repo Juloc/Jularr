@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark">
+<title>Jularr · Work-Seite · Vergleich und Vorschlag</title>
+<style>
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;--bg:#faf9ff;--panel:#fff;--panel2:#f8f7ff;--lav:#f2edff;--purple:#8040f7;--purple-soft:#b59aff;--ptext:#7136d9;--ink:#26223d;--muted:#938fa9;--line:#eae6f4;--line2:#e1dcee;--green:#159775;--greenbg:#e8f8f1;--amber:#ad7618;--amberbg:#fff4df;--red:#c6536b;--redbg:#ffeff2;--blue:#487bd6;--bluebg:#edf3ff;--shadow:0 9px 30px rgba(55,37,105,.045)}
+body.dark{--bg:#12121d;--panel:#1d1b2b;--panel2:#262339;--lav:#35294e;--purple:#9a70ff;--purple-soft:#8060bf;--ptext:#c3a8ff;--ink:#f4f1ff;--muted:#aba5bf;--line:#38334e;--line2:#4b4260;--green:#75dcb6;--greenbg:#20453a;--amber:#ffcd82;--amberbg:#493823;--red:#ff9cb0;--redbg:#4e2939;--blue:#9dbdf7;--bluebg:#273653;--shadow:0 9px 30px #0003}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);min-width:320px;overflow-x:clip;font-size:13px}
+button,input,select{font:inherit;color:inherit}button{cursor:pointer}h1,h2,h3,h4,p{margin:0}a{color:inherit;text-decoration:none}.hide{display:none!important}
+button:focus-visible,select:focus-visible{outline:3px solid var(--purple-soft);outline-offset:2px}
+.icon{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}.icon.sm{width:13px;height:13px}.icon.lg{width:20px;height:20px}
+.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+/* board chrome */
+.top{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1560px;margin:0 auto;padding:10px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
+.brand{font-weight:850;letter-spacing:-.4px;font-size:15px;display:flex;align-items:center;gap:9px}.brand i{width:28px;height:28px;border-radius:9px;background:linear-gradient(150deg,#9b68ff,#7132ef);display:grid;place-items:center;color:#fff}
+.seg{display:flex;gap:4px;flex-wrap:wrap}
+.pill{border:1px solid transparent;border-radius:999px;padding:7px 13px;background:transparent;color:var(--muted);font-size:11px;font-weight:760;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.pill:hover{background:var(--panel2);color:var(--ptext)}.pill.on{background:var(--lav);color:var(--ptext);border-color:#dcd0ff}body.dark .pill.on{border-color:#5a4680}
+.pill .n{font-size:10px;opacity:.75}
+.top .sp{flex:1}
+.icon-btn{width:34px;height:34px;border-radius:50%;display:inline-grid;place-items:center;border:1px solid var(--line);background:var(--panel);color:var(--muted);flex:none;padding:0}.icon-btn:hover{background:var(--lav);color:var(--ptext);border-color:var(--purple-soft)}
+.wrap{max-width:1560px;margin:0 auto;padding:22px 24px 80px}
+.intro{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;margin:0 0 16px;color:var(--muted);font-size:12px}
+.intro h1{font-size:22px;letter-spacing:-.8px;color:var(--ink);font-weight:850;margin-right:6px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.legend span{display:inline-flex;gap:5px;align-items:center}
+.sym{width:18px;height:18px;border-radius:50%;display:inline-grid;place-items:center;font-size:10px;font-weight:850;flex:none}
+.sym.y{background:var(--greenbg);color:var(--green)}.sym.p{background:var(--amberbg);color:var(--amber)}.sym.n{background:var(--redbg);color:var(--red)}.sym.x{background:var(--panel2);color:var(--muted);border:1px solid var(--line)}
+/* part 1 */
+.cols{display:grid;grid-template-columns:repeat(3,minmax(250px,1fr));gap:14px;align-items:start;overflow-x:auto;padding-bottom:6px}
+.col{background:var(--panel);border:1px solid var(--line);border-radius:19px;box-shadow:var(--shadow);overflow:hidden}
+.col-h{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;gap:11px;align-items:center}
+.col-h .ltr{width:32px;height:32px;border-radius:11px;background:var(--lav);color:var(--ptext);display:grid;place-items:center;font-weight:850;flex:none}
+.col-h h2{font-size:14px;font-weight:820;letter-spacing:-.3px}.col-h small{display:block;color:var(--muted);font-size:10.5px;margin-top:2px}
+.col-b{padding:14px 16px 16px}
+.wf{display:flex;flex-direction:column;gap:5px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:9px}
+.wr{display:flex;gap:5px}
+.wb{border:1px solid var(--line2);border-radius:8px;padding:6px 8px;font-size:10.5px;line-height:1.35;background:var(--panel);min-width:0}
+.wb b{display:block;font-weight:760}.wb i{display:block;font-style:normal;color:var(--muted);font-size:9.5px;margin-top:1px}
+.wb.hero{background:linear-gradient(135deg,#5b30c0,#8040f7);color:#fff;border-color:transparent}.wb.hero i{color:#e5dcff}
+.wb.strip{background:#4a2aa0;color:#fff;border-color:transparent}.wb.strip i{color:#d9ccff}
+.wb.act{background:var(--lav);color:var(--ptext);border-color:transparent}.wb.act i{color:var(--ptext);opacity:.8}
+.wb.unit{background:var(--bluebg);color:var(--blue);border-color:transparent}.wb.unit i{color:var(--blue);opacity:.85}
+.wb.media{background:var(--panel);}
+.wb.ppl{background:var(--greenbg);color:var(--green);border-color:transparent}.wb.ppl i{color:var(--green);opacity:.85}
+.wb.rel{background:var(--amberbg);color:var(--amber);border-color:transparent}.wb.rel i{color:var(--amber);opacity:.85}
+.wb.side{background:var(--lav);border-style:dashed}
+.wb.tabs{display:flex;gap:4px;flex-wrap:wrap;align-items:center;padding:5px 6px;background:var(--panel)}.wb.tabs span{font-size:9.5px;padding:3px 8px;border-radius:99px;background:var(--panel2);color:var(--muted);font-weight:700}.wb.tabs span.a{background:var(--lav);color:var(--ptext)}
+.wb.ghost{border-style:dashed;background:transparent;color:var(--muted);font-style:italic}.wb.ghost b{font-weight:600}
+.facts{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.facts li{display:flex;gap:8px;align-items:flex-start;font-size:11.5px;line-height:1.45}
+.facts .sym{margin-top:1px}
+.facts .stand{color:var(--muted);font-size:10.5px;padding-top:4px;border-top:1px solid var(--line);margin-top:4px}
+.mx{margin-top:20px;border:1px solid var(--line);border-radius:19px;background:var(--panel);box-shadow:var(--shadow);overflow:hidden}
+.mx h2{padding:14px 18px;font-size:14px;font-weight:820;border-bottom:1px solid var(--line)}
+table{border-collapse:collapse;width:100%}
+.mx th,.mx td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);font-size:11.5px;vertical-align:top}
+.mx th{background:var(--panel2);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.6px;font-weight:810}
+.mx tr:last-child td{border-bottom:0}.mx td.f{font-weight:720;width:22%}
+.cell{display:flex;gap:7px;align-items:flex-start}.cell small{color:var(--muted);font-size:10.5px;line-height:1.35;padding-top:2px}
+/* part 2 chrome */
+.demo-bar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:16px;margin-bottom:14px;font-size:11px;color:var(--muted)}
+.demo-bar label{display:flex;gap:7px;align-items:center;font-weight:700}
+.sel{border:1px solid var(--line);background:var(--panel);border-radius:999px;height:32px;padding:0 28px 0 12px;font-size:11px;font-weight:700;color:var(--ink);appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23938fa9' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;background-size:12px;max-width:100%}
+.sel:hover{border-color:var(--purple-soft)}
+.chk{display:inline-flex;gap:6px;align-items:center;cursor:pointer}.chk input{accent-color:var(--purple)}
+.app{border:1px solid var(--line);border-radius:22px;overflow:hidden;background:var(--bg);box-shadow:var(--shadow)}
+.app-top{height:56px;display:flex;align-items:center;gap:10px;padding:0 22px;background:var(--panel);border-bottom:1px solid var(--line);font-size:12px;color:var(--muted)}
+.app-top strong{color:var(--ink);font-weight:810}.app-top .icon{width:12px;height:12px}
+.app-top .sp{flex:1}.avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(145deg,#d3c3fc,#a97bea);color:#5b24a4;font-size:10px;font-weight:830;display:grid;place-items:center}
+.page{padding:20px 24px 40px;max-width:1240px;margin:0 auto}
+.hero{position:relative;border-radius:22px;overflow:hidden;color:#fff;min-height:330px;background:#241a3d;isolation:isolate}
+.hero-bg{position:absolute;inset:0;z-index:-2}
+.hero:after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(18,12,34,.92) 0%,rgba(18,12,34,.74) 45%,rgba(18,12,34,.35) 100%),linear-gradient(0deg,rgba(18,12,34,.7),transparent 55%)}
+.hero-in{display:grid;grid-template-columns:168px minmax(0,1fr);gap:24px;padding:26px 28px 70px;align-items:end;min-height:330px}
+.poster{position:relative;aspect-ratio:2/3;border-radius:14px;overflow:hidden;box-shadow:0 16px 38px rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.18)}
+.poster .glyph{position:absolute;inset:0;display:grid;place-items:center;color:rgba(255,255,255,.22)}.poster .glyph svg{width:46%;height:46%;stroke-width:1.2}
+.tag{position:absolute;left:8px;top:8px;display:inline-flex;gap:5px;align-items:center;padding:5px 9px;border-radius:999px;font-size:10px;font-weight:780;backdrop-filter:blur(6px);white-space:nowrap}
+.tag.local{background:rgba(232,248,241,.94);color:#0f7a5d}.tag.req{background:rgba(242,237,255,.95);color:#6a30d8}.tag.miss{background:rgba(255,255,255,.9);color:#5d5875}
+.hero-info{min-width:0;display:flex;flex-direction:column;gap:9px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:10px;font-weight:780;background:rgba(255,255,255,.14);color:#fff;white-space:nowrap}
+.chip.ok{background:rgba(120,230,190,.2);color:#b9f5df}.chip.warn{background:rgba(255,205,130,.2);color:#ffe0ac}
+.hero h1{font-size:34px;letter-spacing:-1.3px;font-weight:850;line-height:1.1}
+.hero-meta{display:flex;gap:8px 14px;align-items:center;font-size:12px;color:#e3dcf5;flex-wrap:nowrap;overflow:hidden}.hero-meta>*{white-space:nowrap}
+.rate{display:inline-flex;align-items:center;gap:5px;font-weight:800;color:#fff}.rate .icon{fill:#ffcd6b;stroke:#ffcd6b;width:13px;height:13px}.rate small{font-weight:600;color:#cfc6e8;font-size:10.5px}
+.sum{font-size:13px;color:#e9e4f7;max-width:760px;cursor:pointer}.sum.open{white-space:normal;overflow:visible}
+.acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px;position:relative}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:0 16px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--ink);font-size:12px;font-weight:760;white-space:nowrap;transition:border-color .15s,background .15s}
+.btn:hover{border-color:var(--purple-soft);color:var(--ptext)}.btn.primary{background:var(--purple);color:#fff;border-color:var(--purple)}.btn.primary:hover{background:#6f2fe6;color:#fff}
+.btn.soft{color:var(--ptext);background:var(--lav);border-color:transparent}.btn.sm{min-height:32px;padding:0 12px;font-size:11px}
+.hero .btn.glass{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.22);backdrop-filter:blur(8px)}.hero .btn.glass:hover{background:rgba(255,255,255,.24);color:#fff}
+.hero .icon-btn{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.22);width:38px;height:38px}.hero .icon-btn:hover{background:rgba(255,255,255,.26)}.hero .icon-btn.active{background:#fff;color:#d6366b}.hero .icon-btn.active svg{fill:#d6366b}
+.hero .sel{background-color:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.22);height:38px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")}
+.hero .sel option{color:#26223d}
+.live{position:relative;overflow:hidden;background:var(--lav);color:var(--ptext);border-color:transparent}.hero .live{background:rgba(255,255,255,.95);color:#5b24c9}
+.live .bar{position:absolute;left:0;bottom:0;height:3px;background:var(--purple);transition:width .5s}
+.hero-top{position:absolute;right:20px;top:18px;display:flex;gap:8px;align-items:center}
+.sync{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 11px 0 9px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);color:#fff;font-size:10.5px;font-weight:760}
+.sync:hover{background:rgba(255,255,255,.26)}.sync.on{background:rgba(120,230,190,.22);color:#c7f7e5}.sync .al{width:18px;height:18px;border-radius:6px;background:#3db4f2;color:#06243a;font-weight:900;font-size:10px;display:grid;place-items:center}
+.hero-prog{position:absolute;right:22px;bottom:18px;width:min(300px,42%);color:#fff}
+.hero-prog .l{display:flex;justify-content:space-between;gap:10px;font-size:11px;font-weight:700;margin-bottom:6px}.hero-prog .l span:last-child{color:#d8cff0;font-weight:600}
+.hero-prog .b{height:7px;border-radius:99px;background:rgba(255,255,255,.2);overflow:hidden}.hero-prog .b span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#b59aff,#fff);transition:width .35s}
+.menu{position:absolute;z-index:40;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 44px rgba(30,20,60,.28);padding:6px;min-width:230px;top:100%;margin-top:6px}
+.menu button{display:flex;gap:10px;align-items:center;width:100%;text-align:left;border:0;background:transparent;border-radius:10px;padding:9px 11px;font-size:12px;font-weight:700}.menu button:hover{background:var(--lav);color:var(--ptext)}
+.menu hr{border:0;border-top:1px solid var(--line);margin:5px 4px}
+.pop{padding:14px;min-width:270px}.pop label{display:block;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:10px 0 5px}.pop label:first-child{margin-top:0}.pop .sel{width:100%;height:36px}.pop .row{display:flex;gap:7px;margin-top:14px;justify-content:flex-end}
+.tabrow{display:flex;gap:4px;flex-wrap:wrap;margin:18px 0 16px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.tabrow .pill{padding:9px 15px;font-size:12px}
+.bfdot{width:6px;height:6px;border-radius:50%;background:var(--amber);display:inline-block}
+.sec{margin-bottom:30px}
+.sh{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.sh h2{font-size:18px;letter-spacing:-.6px;font-weight:840;display:flex;gap:10px;align-items:center}
+.sh .go{border:0;background:transparent;color:var(--ptext);font-size:11px;font-weight:760;display:inline-flex;gap:4px;align-items:center;border-radius:99px;padding:6px 9px}.sh .go:hover{background:var(--lav)}
+.bf{display:inline-flex;align-items:center;gap:5px;background:var(--amberbg);color:var(--amber);border-radius:999px;padding:4px 9px;font-size:10px;font-weight:780;white-space:nowrap;cursor:help}.bf .icon{width:11px;height:11px}
+.nobf .bf,.nobf .bfdot{display:none}
+.tb{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.tb .sp{flex:1}
+.vw{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--panel)}.vw button{border:0;background:transparent;width:34px;height:32px;display:grid;place-items:center;color:var(--muted)}.vw button.on{background:var(--lav);color:var(--ptext)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:19px;box-shadow:var(--shadow);overflow:hidden}
+.ep-list{display:flex;flex-direction:column}
+.ep{display:grid;grid-template-columns:118px minmax(0,1fr) auto auto;gap:14px;align-items:center;padding:10px 16px 10px 12px;border-bottom:1px solid var(--line)}
+.ep:last-child{border-bottom:0}.ep:hover{background:var(--panel2)}
+.thumb{position:relative;aspect-ratio:16/9;border-radius:10px;overflow:hidden}.thumb .ix{position:absolute;left:7px;bottom:6px;font-size:10px;font-weight:800;background:rgba(20,12,40,.62);color:#fff;border-radius:6px;padding:2px 6px}
+.thumb .pb{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.3)}.thumb .pb span{display:block;height:100%;background:var(--purple)}
+.ep .t{min-width:0}.ep .t b{display:block;font-size:13px;font-weight:760;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ep .t small{display:block;color:var(--muted);font-size:11px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:10.5px;font-weight:780;white-space:nowrap;background:var(--lav);color:var(--ptext)}
+.st.done{background:var(--greenbg);color:var(--green)}.st.prog{background:var(--bluebg);color:var(--blue)}.st.miss{background:var(--amberbg);color:var(--amber)}.st.todo{background:var(--panel2);color:var(--muted);border:1px solid var(--line)}.st.req{background:var(--lav);color:var(--ptext)}
+.ra{display:flex;gap:5px;align-items:center}.ra .icon-btn{width:30px;height:30px}.ra .icon-btn .icon{width:14px;height:14px}.ra .icon-btn.done{background:var(--greenbg);color:var(--green);border-color:transparent}
+.ep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;padding:14px}
+.epc{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel)}.epc .thumb{border-radius:0;aspect-ratio:16/9}.epc .in{padding:10px 12px}.epc .in b{display:block;font-size:12.5px}.epc .in small{display:block;color:var(--muted);font-size:11px;margin:3px 0 8px}.epc .in .row{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.vols{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+.vol{border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:9px;text-align:left;display:flex;flex-direction:column;gap:8px;min-width:0}
+.vol.picked{border-color:var(--purple);box-shadow:0 0 0 3px var(--lav)}.vol.off .cover{opacity:.55;filter:saturate(.5)}
+.cover{position:relative;aspect-ratio:2/3;border-radius:10px;overflow:hidden;display:grid;place-items:center;color:rgba(255,255,255,.9);font-weight:850;font-size:30px;letter-spacing:-1px}
+.cover .tag{font-size:9.5px;padding:4px 8px}.cover .pb{position:absolute;left:0;right:0;bottom:0;height:5px;background:rgba(255,255,255,.3)}.cover .pb span{display:block;height:100%;background:#fff}
+.vol b{font-size:12px;font-weight:780}.vol small{color:var(--muted);font-size:10.5px}
+.chl .row{display:grid;grid-template-columns:34px minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:9px 16px;border-bottom:1px solid var(--line)}.chl .row:last-child{border-bottom:0}.chl .row:hover{background:var(--panel2)}
+.chl .hd{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);font-weight:780;font-size:13px;background:var(--panel2)}
+.num{color:var(--muted);font-size:11px;font-weight:700;text-align:right}
+.tbl th,.tbl td{text-align:left;padding:10px 16px;border-bottom:1px solid var(--line);font-size:12px;vertical-align:middle}.tbl th{background:var(--panel2);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.6px;font-weight:810}.tbl tr:last-child td{border-bottom:0}.tbl tbody tr:hover{background:var(--panel2)}
+.tbl .grp td{background:var(--panel2);font-size:11px;font-weight:800;color:var(--muted)}
+.tbl td.r,.tbl th.r{text-align:right}
+.lc{display:inline-flex;align-items:center;padding:3px 8px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);font-size:10px;font-weight:780;color:var(--ink);margin-right:4px}.lc.q{background:var(--lav);color:var(--ptext);border-color:transparent}
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(124px,1fr));gap:14px}
+.person{min-width:0}.pp{position:relative;aspect-ratio:4/5;border-radius:16px;overflow:hidden;display:grid;place-items:center;color:rgba(255,255,255,.92);font-weight:850;font-size:26px}.pp .ph{position:absolute;left:7px;bottom:7px;background:rgba(20,12,40,.6);color:#fff;border-radius:99px;padding:3px 7px;font-size:9px;font-weight:700;display:flex;gap:4px;align-items:center}
+.person b{display:block;margin-top:8px;font-size:12.5px;font-weight:780}.person small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.sub{font-size:10px;font-weight:810;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:18px 0 10px}.sub:first-child{margin-top:0}
+.rels{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
+.rel{display:grid;grid-template-columns:62px minmax(0,1fr);gap:13px;align-items:center;padding:11px;border:1px solid var(--line);border-radius:16px;background:var(--panel);text-align:left;width:100%}.rel:hover{border-color:var(--purple-soft)}
+.rel .mini{aspect-ratio:2/3;border-radius:9px;position:relative;overflow:hidden}.rel .mini .dot{position:absolute;left:4px;top:4px;width:16px;height:16px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.92);color:var(--green)}.rel .mini .dot.no{color:#7a7591}
+.rel .x{min-width:0;display:flex;flex-direction:column;gap:5px;align-items:flex-start}.rel .x b{font-size:13px;font-weight:780;max-width:100%}.rel .x small{color:var(--muted);font-size:11px;max-width:100%}
+.rt{display:inline-flex;gap:5px;align-items:center;font-size:10px;font-weight:800;border-radius:99px;padding:4px 9px;background:var(--lav);color:var(--ptext);white-space:nowrap}
+.src{font-size:10px;color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+.sim{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px}
+.mc{min-width:0}.mc .poster{box-shadow:none;border-color:var(--line)}.mc b{display:block;margin-top:8px;font-size:12.5px;font-weight:780}.mc small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.mc .tag{backdrop-filter:none;border:1px solid var(--line)}
+.dt{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px;align-items:start}
+.fgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.fgrid div{padding:12px 16px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);min-width:0}.fgrid div:nth-child(2n){border-right:0}.fgrid span{display:flex;gap:6px;align-items:center;font-size:10px;color:var(--muted);font-weight:700}.fgrid strong{display:block;font-size:12.5px;margin-top:4px;font-weight:760}
+.txt{padding:18px 20px;font-size:13px;line-height:1.7;color:var(--ink)}.txt .gen{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+.ed{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.edc{border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:14px;text-align:left;display:flex;flex-direction:column;gap:9px;min-width:0}.edc.picked{border-color:var(--purple);box-shadow:0 0 0 3px var(--lav)}.edc b{font-size:13px}.edc .row{display:flex;justify-content:space-between;align-items:center;gap:8px}.edc small{color:var(--muted);font-size:11px}
+.note{font-size:11px;color:var(--muted);margin-top:10px;display:flex;gap:7px;align-items:flex-start;line-height:1.5}
+.gamerow{display:grid;grid-template-columns:34px minmax(0,1fr) 120px auto;gap:14px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}.gamerow:last-child{border-bottom:0}.gamerow .pbar{height:6px;border-radius:99px;background:var(--line);overflow:hidden}.gamerow .pbar span{display:block;height:100%;background:var(--purple)}
+.empty{padding:40px;text-align:center;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:21px;z-index:60;padding:12px 18px;max-width:calc(100vw - 30px);border-radius:999px;background:#2c2544;color:#fff;font-size:11.5px;font-weight:690;box-shadow:0 11px 30px #0004;transform:translate(-50%,30px);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.toast.show{opacity:1;transform:translate(-50%,0)}
+.plan{margin-top:20px}.plan th,.plan td{padding:9px 14px}
+.plan td:first-child{font-weight:760;white-space:nowrap}
+.q ol{margin:0;padding:6px 20px 16px 38px;display:flex;flex-direction:column;gap:9px;font-size:12.5px;line-height:1.55}.q li b{font-weight:780}
+@media(max-height:720px),(max-width:1000px){.top{position:static}.top .seg{flex-wrap:nowrap;overflow-x:auto;max-width:100%}}
+@media(max-width:1180px){.hero-in{grid-template-columns:130px minmax(0,1fr);padding-bottom:90px}.hero-prog{width:calc(100% - 44px);right:22px;left:22px}.dt{grid-template-columns:1fr}.ep{grid-template-columns:96px minmax(0,1fr) auto auto;gap:10px}}
+@media(max-width:700px){.wrap{padding:16px 12px 60px}.top-in{padding:8px 12px}.hero h1{font-size:25px}.hero-in{grid-template-columns:1fr;padding:22px 18px 100px}.poster{width:120px}.page{padding:12px}.ep{grid-template-columns:78px minmax(0,1fr) auto}.ep .st{display:none}.hero-top{position:static;padding:14px 18px 0}.gamerow{grid-template-columns:30px minmax(0,1fr) auto}.gamerow .pbar{display:none}}
+@media print{.top{position:static}}
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true"><defs>
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 2 2.7 7.3L22 12l-7.3 2.7L12 22l-2.7-7.3L2 12l7.3-2.7Z"/></symbol>
+<symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 4v16M17 4v16M3 9h4m-4 6h4m10-6h4m-4 6h4"/></symbol>
+<symbol id="i-tv" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2.5"/><path d="M8 21h8M12 17v4"/></symbol>
+<symbol id="i-anime" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8.5 5 3.5-5 3.5Z"/></symbol>
+<symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2Zm0 14V5M8 7h7"/></symbol>
+<symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></symbol>
+<symbol id="i-game" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 10.5v4M5 12.5h4M15.5 11h.01M18 14h.01"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7Z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12 5 5 11-11"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/></symbol>
+<symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5 4 4 0 0 1 17.5 18Z"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9-9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c-2 4.600-9 9-9 9Z"/></symbol>
+<symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+<symbol id="i-share" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.700l-1 1M14 10a4 4 0 0 0-5.700 0l-3 3a4 4 0 0 0 5.700 5.700l1-1"/></symbol>
+<symbol id="i-sync" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14-4M4 5v4h4M4 13a8 8 0 0 0 14 4m2 2v-4h-4"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.600 6.100.8-4.500 4.200 1.100 6.100L12 16.800 6.600 19.700l1.100-6.100L3.200 9.400l6.100-.8Z"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+<symbol id="i-restart" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.700L3 8m0-5v5h5"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.500"/><rect x="14" y="3" width="7" height="7" rx="1.500"/><rect x="3" y="14" width="7" height="7" rx="1.500"/><rect x="14" y="14" width="7" height="7" rx="1.500"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 10v7M12 7h.01"/></symbol>
+<symbol id="i-tool" viewBox="0 0 24 24"><path d="M14.700 6.300a4 4 0 0 0 4.900 4.900L21 12.600 12.600 21a2.100 2.100 0 0 1-3-3L18 9.600M14.700 6.300A4 4 0 0 1 17 3l-2.700 2.700Z"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="M5 5 19 19M19 5 5 19"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.500 1.500M17.500 17.500 19 19M19 5l-1.500 1.500M6.500 17.500 5 19"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 15A8 8 0 0 1 9 4 8 8 0 1 0 20 15Z"/></symbol>
+<symbol id="i-disc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.500"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></symbol>
+<symbol id="i-trailer" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3Z"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21v-3a7 7 0 0 1 14 0v3M17 4a4 4 0 0 1 0 8m2 3a6 6 0 0 1 3 6"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></symbol>
+<symbol id="i-seq" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+<symbol id="i-prev" viewBox="0 0 24 24"><path d="M19 12H5m5-5-5 5 5 5"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="3"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
+</defs></svg>
+
+<header class="top"><div class="top-in">
+<div class="brand"><i><svg class="icon"><use href="#i-spark"/></svg></i>Work-Seite</div>
+<nav class="seg" id="partSeg" aria-label="Teil"><button class="pill on" data-part="1">1 · Vergleich</button><button class="pill" data-part="2">2 · Vorschlag</button></nav>
+<nav class="seg" id="typeSeg" aria-label="Medientyp"></nav>
+<span class="sp"></span>
+<button class="icon-btn" id="themeBtn" title="Hell / Dunkel" aria-label="Hell oder Dunkel"><svg class="icon"><use href="#i-moon"/></svg></button>
+</div></header>
+
+<main class="wrap">
+<section id="part1">
+<div class="intro"><h1>Vergleich: Dev, Clean-start, Mockup</h1>
+<div class="legend"><span><i class="sym y">✓</i>vorhanden</span><span><i class="sym p">~</i>teilweise</span><span><i class="sym n">–</i>fehlt</span><span><i class="sym x">·</i>trifft nicht zu</span></div></div>
+<div class="cols" id="cols"></div>
+<div class="mx"><h2 id="mxTitle">Auf einen Blick</h2><div style="overflow:auto"><table id="mx"></table></div></div>
+</section>
+
+<section id="part2" class="hide">
+<div class="intro"><h1>Vorschlag: Work-Seite aus allen drei</h1><span id="p2sub"></span></div>
+<div class="demo-bar" id="demoBar">
+<label>Verfügbarkeit<select class="sel" id="dAvail"><option value="local">Lokal verfügbar</option><option value="requested">Angefragt (live)</option><option value="missing">Nicht lokal</option></select></label>
+<label>Datenlage<select class="sel" id="dData"><option value="full">Vollständig</option><option value="sparse">Wenig Daten (leere Tabs verschwinden)</option></select></label>
+<label>Bewertung<select class="sel" id="dRate"><option value="provider">Provider-Wertung</option><option value="none">Keine</option></select></label>
+<label class="chk"><input type="checkbox" id="dBf" checked>Hinweise „Backend fehlt“</label>
+</div>
+<div class="app" id="app">
+<div class="app-top"><span>Medien</span><svg class="icon"><use href="#i-chev"/></svg><span id="bcType"></span><svg class="icon"><use href="#i-chev"/></svg><strong id="bcTitle" class="ell"></strong><span class="sp"></span><span class="avatar">JU</span></div>
+<div class="page" id="page"></div>
+</div>
+<div class="mx plan" id="planBox"><h2 id="planTitle">Tab-Plan</h2><div style="overflow:auto"><table id="plan"></table></div></div>
+<div class="mx plan"><h2>Alle Typen: Tabs in der vorgeschlagenen Reihenfolge</h2><div style="overflow:auto"><table id="allTabs"></table></div></div>
+<div class="mx plan"><h2>Backend-Kosten: was für diesen Vorschlag noch gebaut werden müsste (Schätzung)</h2><div style="overflow:auto"><table id="cost"></table></div></div>
+<div class="mx plan q"><h2>Offene Fragen an den Owner</h2><ol id="qs"></ol></div>
+</section>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id),E=x=>String(x).replace(/[&<>"']/g,t=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[t]));
+const I=(n,c='')=>`<svg class="icon ${c}"><use href="#i-${n}"/></svg>`;
+const TYPES=[['movie','Film','film'],['series','Serie','tv'],['anime','Anime','anime'],['book','Buch','book'],['manga','Manga','book'],['novel','Light Novel','book'],['music','Musik','music'],['game','Spiel','game']];
+const S={part:1,type:'anime'};
+window.JW={S,TYPES,$,E,I};
+/* ---------- Part 1: wireframes ---------- */
+const bx=(t,o={})=>`<div class="wb ${o.k||'meta'}" style="${o.w?'flex:'+o.w+';':''}${o.h?'min-height:'+o.h+'px':''}"><b>${t}</b>${o.s?`<i>${o.s}</i>`:''}</div>`;
+const row=(...a)=>`<div class="wr">${a.join('')}</div>`;
+const tabs=(a,names)=>`<div class="wb tabs">${names.map((n,i)=>`<span class="${i===a?'a':''}">${n}</span>`).join('')}</div>`;
+const isVid=t=>['movie','series','anime'].includes(t),isRead=t=>['book','manga','novel'].includes(t);
+function wfA(t){
+ const back=bx('← Zurück zur Bibliothek',{k:'ghost'});
+ const hero=s=>bx('Hero · Backdrop (sonst unscharfes Poster)',{k:'hero',h:54,s});
+ const an=t==='anime';
+ switch(t){
+ case 'movie':return [back,hero('Titel + Originaltitel · Jahr · Art · Genres'),bx('Fakten-Leiste',{k:'strip',s:'Wertung + Stimmen · FSK · Laufzeit · Audio/UT-Chips · 4K/HDR/DV'}),row(bx('Jetzt ansehen',{k:'act'}),bx('Watchlist',{k:'act'}),bx('⋯ Menü',{k:'act'})),row(bx('Trailer',{k:'media',s:'Klick lädt erst YouTube'}),bx('Versionen & Sprachen',{k:'unit',s:'Chips · bevorzugte Sprache'})),bx('Besetzung & Stab',{k:'ppl',s:'Zeile, nur Initialen'}),bx('Verwandte Werke',{k:'rel',s:'nach Typ gruppiert · Franchise „n weitere“'}),bx('Über: Tagline · Datum · Länder · AKA',{k:'meta'}),bx('Mehr davon: nur in der Spec',{k:'ghost'})].join('');
+ case 'series':case 'anime':return [back,hero(an?'Titel + Native · Status-Chip (läuft/fertig)':'Titel + Native + AKA · Jahr · Art'),bx('Fakten-Leiste',{k:'strip',s:(an?'AniList-Wertung':'Wertung')+' · Studio · FSK · Anzahl · Audio/UT · % gesehen'}),row(bx(an?'Weiter / Starten':'Jetzt ansehen',{k:'act'}),bx('Watchlist',{k:'act'}),bx('⋯ '+(an?'Lerntools · Manage':'Menü'),{k:'act'})),row(bx('Staffeln',{k:'unit',w:.8,s:'Schiene: Thumb, Zahl, Jahr'}),bx('Episoden',{k:'unit',w:1.6,s:'Liste/Raster · Sortierung · Sprach-Chips · fehlende anfragen'}),bx(an?'AniList + Verwandt + Demnächst':'Verwandt + Franchise',{k:'rel',w:1,s:an?'Zuordnung, Remote-Stand':'nach Typ gruppiert'})),bx('Besetzung',{k:'ppl',s:'Zeile, Initialen'}),bx('Über · Demnächst',{k:'meta'})].join('');
+ case 'book':return [back,bx('Cover · Titel · Autor',{k:'hero',h:44,s:'Erstveröffentlichung · Themen-Tags'}),row(bx('Hörbuch anfragen',{k:'act'}),bx('EPUB hinzufügen / freie Ausgabe suchen / NZB senden',{k:'act'})),bx('Quelle-Link · Manage-Sheet (Owner)',{k:'meta'}),bx('Keine Personen, Einheiten, Verwandte',{k:'ghost'})].join('');
+ case 'manga':return [back,bx('Hero · Titel · Quelle',{k:'hero',h:44}),row(bx('Lesen starten',{k:'act'}),bx('Lerntools-Link',{k:'act'}),bx('Verwalten (Owner)',{k:'act'})),bx('AniList-Suche + Zuordnung (Manage-Sheet)',{k:'side'}),bx('Kapitel',{k:'unit',s:'nach Präsentationsgruppen · Spec: Band-Schiene + Kapitelliste'}),bx('Keine Personen, Verwandte, Empfehlungen',{k:'ghost'})].join('');
+ case 'novel':return [back,bx('Hero · Titel',{k:'hero',h:44}),bx('Weiterlesen-Karte',{k:'strip',s:'Kapitel · Fortschritt'}),row(bx('Lesen starten',{k:'act'}),bx('Offline-Bibliothek',{k:'act'}),bx('Lerntools · Quelle',{k:'act'})),bx('AniList-Zuordnung + Kapitel↔Episode-Mapping',{k:'side',s:'Owner, direkt auf der Seite'}),bx('Bände (EPUB) mit Kapiteln',{k:'unit',s:'Präsentationsgruppen · Kapitel-Art'}),bx('Keine Personen, Verwandte, Empfehlungen',{k:'ghost'})].join('');
+ case 'music':return [back,bx('Titel · Künstler-Link',{k:'hero',h:40,s:'„Tracks in Bibliothek n/m“'}),bx('Anfragen',{k:'act'}),bx('Tracktabelle',{k:'unit',s:'Disc.Nr · Titel · Haken „in Bibliothek“'}),bx('Kein Abspielstatus, keine Personen',{k:'ghost'})].join('');
+ default:return [bx('Keine Nutzerseite im Dev-Baum',{k:'ghost'}),bx('Spec: Versionen / Releases (Region)',{k:'ghost'}),bx('Spec: Save-States · Screenshots',{k:'ghost'}),bx('Spec: Karte „letzter Spielstand“',{k:'ghost'})].join('');
+ }
+}
+function wfB(t){
+ const hero=bx('Hero · Backdrop, Titel einmal',{k:'hero',h:50,s:'Typ · Jahr · Laufzeit · Genres · Studio · Plattformen · Zusammenfassung'});
+ const prim=bx('Hauptaktion',{k:'act',s:'Abspielen / Weiter / Lesen · sonst „In Plex öffnen“'});
+ const mk=(a,b)=>row(...a.map(x=>bx(x,{k:'act'})),...(b||[]));
+ const creators=bx('Schöpfer-Zeile',{k:'meta',s:'Autor, Künstler … verlinkt'});
+ const actions=row(bx('Favorit',{k:'act'}),bx('Anfrage-Formular',{k:'act',s:'Sprache · Plattform · Qualität'}),bx('Live-Phase (SSE)',{k:'act',s:'→ /Requests'}));
+ const tail=[bx('Besetzung',{k:'ppl',s:'Provider-Foto, Rolle, Link'}),bx('Franchise-Regal',{k:'rel'}),bx('Empfehlungen-Regal',{k:isVid(t)&&t!=='anime'?'rel':'ghost',s:isVid(t)?'TMDB':'nur Film/Serie'}),bx('Sammlungen',{k:'meta',s:'hinzufügen / entfernen'})];
+ const head=[hero,prim,creators,actions];
+ switch(t){
+ case 'movie':return [...head,bx('Film-Fortschritt',{k:'strip',s:'Gesehen-Chip · gesehen/ungesehen · von vorn'}),row(bx('Trailer-Link',{k:'media',w:.8}),bx('Sprachen-Karte',{k:'unit',w:1.4,s:'Audio/UT/Qualität-Chips · alle Versionen aufklappbar'})),...tail].join('');
+ case 'series':case 'anime':return [...head,bx('Staffeln',{k:'unit',s:'Poster · Anzahl · Jahr · gesehen n · Serie gesehen/ungesehen/von vorn'}),bx('Episoden-Karten der Staffel',{k:'unit',s:'Standbild · SxEE · Laufzeit · Status · Spielen · Balken · ✓ ↺'}),t==='anime'?bx('Kein Status, keine Wertung, kein AniList',{k:'ghost'}):bx('Keine Sortierung / Raster / Sprach-Chips je Folge',{k:'ghost'}),...tail].join('');
+ case 'music':return [...head,bx('Tracktabelle (nur vorhandene Tracks)',{k:'unit',s:'Einheit · Typ · Qualität · Dauer · Status · Abspielen'}),bx('Fehlende Tracks, Disc-Gruppen: fehlen',{k:'ghost'}),...tail.slice(0,2),bx('Sammlungen',{k:'meta'})].join('');
+ case 'game':return [...head,bx('Versionstabelle',{k:'unit',s:'Spielen-Zeile → /Game/ (nur emulierbar)'}),...tail.slice(0,2),bx('Sammlungen',{k:'meta'})].join('');
+ default:return [...head,bx('Versionstabelle (nur vorhandene Dateien)',{k:'unit',s:'Band/Kapitel · Qualität · Sprache · Status · Gelesen-Chip · Lesen · gelesen · von vorn'}),bx('Fehlende Bände, Cover pro Band: fehlen',{k:'ghost'}),...tail.slice(0,2),bx('Sammlungen',{k:'meta'})].join('');
+ }
+}
+function wfC(t){
+ const lab={movie:'Versionen',series:'Episoden',anime:'Episoden',manga:'Bände & Kapitel',novel:'Bände',book:'Ausgaben',music:'Tracks',game:'Spielinhalte'}[t];
+ const al=['anime','manga','novel'].includes(t);
+ const prev={book:'Leseprobe',manga:'Leseprobe',novel:'Leseprobe',music:'Hörprobe'}[t]||'Trailer';
+ const unit={movie:'Versionen: 4K UHD / 1080p mit Chips',series:'Staffel-Pillen · Liste ↔ Karten · Index · Status · %',anime:'Staffel-Pillen · Liste ↔ Karten · Index · Status · %',manga:'Band-Karten mit Cover + Kapitelzahl',novel:'Band-Karten · Demo „nicht lokal“',book:'Ausgaben-Picker + Liste (DE/EN EPUB, PDF)',music:'Disc-Gruppe · Länge · Fortschritt je Track',game:'Quests/Gebiete · Companion · Plattformen'}[t];
+ return [bx('Hero'+(t==='anime'?'':' + Kunst-Karte rechts'),{k:'hero',h:60,s:'Labels (Typ · Lokal · Tag) · Titel · Jahr · Dauer · Region · Wertung ★ · Zusammenfassung'}),row(bx('Hauptaktion',{k:'act'}),bx(prev,{k:'act'}),bx('♥ Dialog',{k:'act'}),bx('⋯',{k:'act'})),
+ tabs(0,[lab,'Details','Verknüpfte Werke']),
+ row(bx(lab,{k:'unit',w:1.7,s:unit}),
+  bx('Für dein Profil',{k:'side',w:1,s:'Fortschritt · Bearbeiten · Zurücksetzen'})),
+ row('<div style="flex:1.7"></div>',bx(al?'AniList-Block (Demo)':'Verknüpfte Werke (Panel)',{k:'side',w:1,s:al?'verbinden · sync · trennen':'Typ + Quelle'})),
+ row('<div style="flex:1.7"></div>',bx(al?'Verknüpfte Werke (Panel)':'Werkdaten',{k:'side',w:1}),),
+ al?row('<div style="flex:1.7"></div>',bx('Werkdaten',{k:'side',w:1})):'',
+ bx('Besetzung & Mitwirkende',{k:'ppl',s:'Foto + Quelle/Lizenz oder Initialen'}),bx('Weitere Empfehlungen',{k:'rel',s:'6 Karten'})].join('');
+}
+/* ---------- Part 1: facts ---------- */
+const F=(s,t)=>({s,t});
+function factsA(t){
+ const o={
+ movie:[F('y','Spec: eine scrollende Seite, nie Tabs'),F('y','Trailer erst nach Klick, kein Fremd-Frame'),F('y','Versionen & Sprachen mit „bevorzugt“-Markierung und Hinweis „nur andere Sprachen“'),F('y','4K / HDR / Dolby Vision als Badges, Alterseinstufung, Tagline, Länder'),F('p','Besetzung nur als Zeile mit Initialen'),F('n','„Mehr davon“ nicht gerendert (Daten fehlten)')],
+ series:[F('y','Dreiteilig: Staffeln | Episoden | Verwandt'),F('y','Episoden: Liste/Raster, Sortierung (auf, ab, ungesehen zuerst), Sprach-Chips, Anfragestatus, fehlende Folgen anfragen'),F('y','Fakten-Leiste mit Wertung, Studio, FSK, Anzahl, Audio/UT, % gesehen'),F('y','Verwandte Werke nach Typ gruppiert, Franchise-Links'),F('y','Demnächst-Block (Kalender)'),F('p','Besetzung nur als Zeile mit Initialen')],
+ anime:[F('y','Wie Serie, dazu Status-Chip (läuft, abgeschlossen, Pause) und AniList-Wertung'),F('y','AniList-Panel: zugeordneter Eintrag, Remote-Stand (nur der Owner ändert die Zuordnung)'),F('y','Menü mit Lerntools; Manage-Sheet des Owners auf der Nutzerseite'),F('y','Episoden: Liste/Raster, Sortierung, Sprach-Chips, Anfrage fehlender Folgen'),F('y','Verwandt: Adaption, Fortsetzung, Ableger; Demnächst-Block')],
+ book:[F('y','Schlichte Seite: Cover, Autor, Erstveröffentlichung, Themen-Tags'),F('y','Hörbuch anfragen; EPUB hinzufügen; freie Ausgabe suchen; NZB senden'),F('y','Quelle-Link, Manage-Sheet (Owner)'),F('n','Keine Personen, Einheiten, Verwandte, Empfehlungen')],
+ manga:[F('y','Kapitelliste nach Präsentationsgruppen, „Lesen starten“'),F('p','Spec wollte Band-Schiene + Kapitelliste; Seite zeigt nur Kapitel'),F('y','Lerntools-Link; AniList-Suche und Zuordnung im Manage-Sheet (Owner)'),F('n','Keine Personen, Verwandte, Empfehlungen')],
+ novel:[F('y','Weiterlesen-Karte (Kapitel, Fortschritt)'),F('y','Bände (EPUB) mit Kapiteln, Präsentationsgruppen, Kapitel-Art'),F('y','Offline-Bibliothek, Lerntools, Quelle-Link'),F('y','AniList-Zuordnung + Kapitel↔Episode-Mapping direkt auf der Seite (Owner)'),F('n','Keine Personen, Verwandte, Empfehlungen')],
+ music:[F('y','Titel, Künstler-Link, „Tracks in Bibliothek n/m“, Anfragen'),F('y','Tracktabelle: Disc.Nr, Titel, Haken „in Bibliothek“'),F('n','Kein Abspielstatus, keine Personen, keine Verwandten')],
+ game:[F('n','Im Dev-Baum keine Nutzerseite'),F('p','Nur Spec (docs/mockups/game-detail): Versionen/Releases je Region, Save-States, Screenshots, Karte „letzter Spielstand“')]}[t];
+ return [...o,F('x','Stand: origin/dev f796acf (Alpha 90, 16.10.), Seiten Library/*, Manga, Novels, Books, Music')];
+}
+function factsB(t){
+ const c=[F('y','Hero: Backdrop, Titel einmal (Breadcrumb trägt ihn), eine Meta-Zeile'),F('y','Hauptaktion: Abspielen / Weiter / Lesen / Erneut, sonst „In Plex öffnen“'),F('y','Anfrage-Formular inline; danach Live-Phasenbutton (SSE, #1365)'),F('y','Gesehen / ungesehen / von vorn (#1371) '+({movie:'für den Film',series:'für Serie, Staffel, Folge',anime:'für Serie, Staffel, Folge',book:'je Band/Datei',manga:'je Band/Datei',novel:'je Band/Datei',music:'– nicht für Tracks',game:'– nicht für Spiele'}[t])),F('p','Favorit-Schalter + eigener Sammlungs-Abschnitt (#1375)'),F('n','Keine Wertung, keine Tabs, keine Werkdaten-Karte, kein Fortschrittsüberblick')];
+ const x={movie:[F('y','Sprachen-Karte: Audio-, Untertitel-, Qualität-Chips; alle Versionen aufklappbar'),F('y','Trailer-Link, Besetzung mit Provider-Foto')],
+ series:[F('y','Staffelliste mit Poster, Anzahl, Jahr, gesehen n'),F('y','Episoden-Karten: Standbild, Laufzeit, Status, Fortschritt, ✓ und ↺; Staff-Gruppen'),F('p','Empfehlungen (TMDB) und Franchise-Regal mit Medienkarte (#1379)')],
+ anime:[F('y','Anime = Serie (Subtyp): Staffelliste und Episoden-Karten wie bei Serie'),F('n','Kein Status-Chip, keine AniList-Wertung, kein AniList-Block'),F('p','Empfehlungen nur über TMDB')],
+ book:[F('p','Versionstabelle zeigt nur vorhandene Dateien (Band, Typ, Qualität, Sprache, Status)'),F('y','Gelesen/Gestartet-Chips, gelesen/ungelesen, von vorn'),F('n','Ausgaben (WorkEditions) existieren, werden nicht gelesen')],
+ manga:[F('p','Bände/Kapitel nur als Dateizeilen; kein Cover pro Band'),F('y','Gelesen/Gestartet-Chips, gelesen/ungelesen, von vorn'),F('n','Fehlende Bände unsichtbar')],
+ novel:[F('p','Bände/Kapitel nur als Dateizeilen; kein Cover pro Band'),F('y','Gelesen/Gestartet-Chips, gelesen/ungelesen, von vorn'),F('n','Fehlende Bände unsichtbar')],
+ music:[F('p','Tracktabelle nur mit vorhandenen Tracks; spielt Track für Track'),F('n','Keine fehlenden Tracks, keine Disc-Gruppen, keine Ausgaben')],
+ game:[F('y','Plattformen in der Hero-Zeile; Plattformwahl im Anfrage-Formular'),F('p','Spielen-Zeile nur bei emulierbarem Asset (/Game/)')]}[t];
+ const pl=isVid(t)?[F('y','Player (nicht Seite): Skip-Marker, Kapitelmenü, Auto-Skip je Profil (#1397)')]:[];
+ return [...c,...x,...pl,F('x','Stand: origin/clean-start ccb66e9 (21.10.), Details.cshtml.cs; #1371 ist inzwischen gemerged')];
+}
+function factsC(t){
+ const c=[F('y','Hero: Labels (Typ, „Lokal verfügbar“, erster Tag), Titel, Meta mit Wertung ★, Zusammenfassung'),F('y','Aktionen: Hauptaktion, '+({book:'Leseprobe',manga:'Leseprobe',novel:'Leseprobe',music:'Hörprobe'}[t]||'Trailer')+', ♥ (Dialog: Favoriten + eigene Listen), ⋯ (Fortschritt bearbeiten, Link, fertig, ungesehen)'),F('y','Genau 3 Tabs je Typ: Inhalt · Details · Verknüpfte Werke'),F('y','Rechte Spalte: „Für dein Profil“ (Fortschritt, Bearbeiten, Zurücksetzen), Verknüpfte Werke, Werkdaten'),F('y','Darunter: Besetzung & Mitwirkende (Foto + Quelle/Lizenz), Weitere Empfehlungen'),F('p','Doppelt: Beziehungen (Panel + Tab), Fakten (Sidebar + Tab)')];
+ const x={movie:[F('y','Tab Versionen: 4K UHD / 1080p mit Chips')],series:[F('y','Tab Episoden: Staffel-Pillen, Liste ↔ Karten (gemerkt), Index, Status, Prozent')],anime:[F('y','Tab Episoden wie Serie; keine Kunst-Karte rechts'),F('y','AniList-Block: verbinden, jetzt synchronisieren, trennen (nur Demo)')],
+ book:[F('y','Tab Ausgaben: DE/EN EPUB, PDF (Picker + Liste)'),F('y','Leseprobe (Platzhalter)')],manga:[F('y','Tab Bände & Kapitel: Band-Karten mit Cover und Kapitelzahl'),F('y','AniList-Block (Demo)')],novel:[F('y','Tab Bände; Demo-Zustand „nicht lokal“'),F('y','AniList-Block (Demo)')],
+ music:[F('y','Tab Tracks: Disc-Gruppe, Länge, Fortschritt je Track'),F('y','Hörprobe (Platzhalter)')],game:[F('y','Tab Spielinhalte: Quests/Gebiete, Companion, Plattformen (PC lokal, PS5 anfragbar)'),F('p','Fortschritt nur bei verlässlicher Quelle')]}[t];
+ return [...c,...x,F('x','Stand: Datei „work-v3-sidebar-anilist-beziehungen (2)“; nur Demo-Daten')];
+}
+/* ---------- Part 1: matrix ---------- */
+const V=(def,o)=>t=>o&&o[t]!==undefined?o[t]:def;
+const vid=['movie','series','anime'],rd=['book','manga','novel'],ani=['anime','manga','novel'];
+const map=(keys,v,rest)=>{const o={};keys.forEach(k=>o[k]=v);return t=>o[t]!==undefined?o[t]:rest;};
+const ROWS=[
+['Backdrop-Hero',t=>t==='game'?'n:keine Nutzerseite':'y:Backdrop, sonst unscharfes Poster',()=>'y:Backdrop, kein Poster',t=>t==='anime'?'y:Backdrop':'y:Backdrop + Kunst-Karte rechts'],
+['Titel + Originaltitel',t=>vid.includes(t)?'y:Native + „auch bekannt als“':t==='game'?'n':'p:nur Titel',()=>'p:nur Titel',()=>'p:Original nur im Tab Details'],
+['Typ-/Status-Chips',t=>t==='anime'?'y:Status läuft / abgeschlossen':t==='game'?'n':'p:Typ in der Meta-Zeile',()=>'p:Typ in der Meta-Zeile',()=>'y:Typ · Lokal verfügbar · erster Tag'],
+['Wertung',t=>['movie','series'].includes(t)?'y:Wertung + Stimmen':t==='anime'?'y:AniList-Wertung':'n',()=>'n:nicht in WorkDetails',()=>'y:Hero + Werkdaten, feste Quelle'],
+['Alter, Tagline, Länder, Datum',t=>['movie','series'].includes(t)?'y:Über-Karte':t==='anime'?'p:Über-Karte':'n',()=>'n',t=>'p:Herkunft, Datum; Altersfreigabe nur beim Anime-Demo'],
+['Hauptaktion nach Zustand',t=>t==='game'?'n':'y:Jetzt ansehen / Weiter / Lesen',()=>'y:+ „In Plex öffnen“',()=>'y:inkl. „Anfragen“'],
+['Anfrage stellen',t=>t==='game'?'n':'y:geteilter Dialog',()=>'y:Sprache · Plattform · Qualität',()=>'y:Modal: Sprache · Qualität · Plattform'],
+['Live-Anfragephase',t=>t==='game'?'n':'p:Verbraucher-Status',()=>'y:Live per SSE → /Requests',()=>'p:nur Text, simuliert'],
+['Trailer / Probe',t=>vid.includes(t)?'y:Klick-Facade, kein Fremd-Frame':'n',t=>vid.includes(t)?'y:Link (YouTube)':'n',()=>'y:Trailer / Leseprobe / Hörprobe (Platzhalter)'],
+['Favoriten + Listen',t=>t==='game'?'n':'p:Watchlist + Sammlung',()=>'p:Favorit + Sammlungs-Abschnitt',()=>'y:ein Dialog, auch eigene Listen'],
+['Gesehen / ungesehen / von vorn',t=>vid.includes(t)?'p:je Folge':'n',t=>t==='music'||t==='game'?'n':t==='movie'?'y:Film':vid.includes(t)?'y:Serie · Staffel · Folge':'y:je Band/Datei',()=>'p:Menü, nur ganzes Werk'],
+['Fortschrittsüberblick',t=>t==='novel'?'y:Weiterlesen-Karte':vid.includes(t)?'p:% gesehen':'n',()=>'n:nur Zeilen-Fortschritt',()=>'y:Karte, Bearbeiten, Zurücksetzen'],
+['AniList-Sync',t=>ani.includes(t)?(t==='anime'||t==='novel'||t==='manga'?'y:Panel: Zuordnung + Remote-Stand':'y'):'x',t=>ani.includes(t)?'n':'x',t=>ani.includes(t)?'y:nur Demo: verbinden, sync, trennen':'x'],
+['Einheiten-Liste',t=>({series:'y:Schiene, Liste/Raster, Sortierung',anime:'y:Schiene, Liste/Raster, Sortierung',manga:'p:Kapitelliste',novel:'y:Bände + Kapitel',music:'y:Tracktabelle',movie:'x',book:'n',game:'n:nur Spec'})[t],t=>({series:'y:Staffelliste + Episoden-Karten',anime:'y:Staffelliste + Episoden-Karten',book:'p:Dateizeilen',manga:'p:Dateizeilen',novel:'p:Dateizeilen',music:'p:nur lokale Tracks',movie:'x',game:'p:Spielzeile'})[t],t=>({series:'y:Pillen, Liste ↔ Karten',anime:'y:Pillen, Liste ↔ Karten',manga:'y:Band-Karten mit Cover',novel:'y:Band-Karten',music:'y:Tracks + Disc',book:'y:Ausgaben',movie:'y:Versionen',game:'y:Spielinhalte'})[t]],
+['Fehlende Einheiten sichtbar',t=>['series','anime'].includes(t)?'y':t==='music'?'y:Haken':t==='movie'?'x':'n',t=>['series','anime'].includes(t)?'y:Status je Folge':t==='movie'?'x':'n',t=>t==='movie'?'x':'y:Demo-Daten'],
+['Versionen / Dateien / Ausgaben',t=>t==='movie'?'y:Versionen-Karte':t==='game'?'p:nur Spec':'n',()=>'y:Tabelle, 48 je Seite (WorkEditions ungenutzt)',t=>({movie:'y:4K UHD / 1080p',book:'y:Ausgaben-Picker',game:'y:Plattformen'})[t]||'p:nur Dateien im Inhalts-Tab'],
+['Personen',t=>t==='game'?'n':rd.includes(t)||t==='music'?'p:nur Autor/Künstler-Zeile':'p:Zeile, nur Initialen',()=>'y:Provider-Fotos, Link /People/id',()=>'y:Fotos + Quelle/Lizenz'],
+['Verknüpfte Werke (typisiert)',t=>['movie','series','anime','manga','novel'].includes(t)?'y:nach Typ gruppiert':'n',()=>'p:nur Franchise-Regal, keine Typen',()=>'y:Typ + Quelle, auch typübergreifend'],
+['Ähnliches',()=>'n:nur Spec',t=>vid.includes(t)?'y:TMDB-Empfehlungen':'n',()=>'y:6 Karten'],
+['Werkdaten-Karte',t=>vid.includes(t)?'y:Über-Karte':'p',()=>'n',()=>'y:Sidebar + Tab Details'],
+['Tabs',()=>'n:bewusst keine',()=>'n:eine Scroll-Seite',()=>'y:3 Tabs'],
+['Sidebar',t=>['series','anime'].includes(t)?'y:rechtes Panel':'n',()=>'n',()=>'y:rechts: Profil, Beziehungen, Werkdaten'],
+['Sammlungen (kuratiert)',()=>'y',()=>'y:hinzufügen / entfernen',()=>'p:im Listen-Dialog'],
+['Owner-Werkzeuge auf der Seite',t=>t==='game'?'n':'y:Manage-Sheet',()=>'n:Admin-Seite',()=>'n:Admin-Seite']
+];
+const sym={y:'✓',p:'~',n:'–',x:'·'};
+const cell=v=>{const [c,...n]=v.split(':');return `<div class="cell"><i class="sym ${c}">${sym[c]}</i>${n.length?`<small>${E(n.join(':'))}</small>`:''}</div>`};
+function renderP1(){
+ const t=S.type,name=TYPES.find(x=>x[0]===t)[1];
+ const col=(l,h,sub,wf,fs)=>`<article class="col"><div class="col-h"><span class="ltr">${l}</span><div><h2>${h}</h2><small>${sub}</small></div></div><div class="col-b"><div class="wf">${wf}</div><ul class="facts">${fs.map(f=>f.s==='x'?`<li class="stand">${E(f.t)}</li>`:`<li><i class="sym ${f.s}">${sym[f.s]}</i><span>${E(f.t)}</span></li>`).join('')}</ul></div></article>`;
+ $('cols').innerHTML=col('A','Dev (Alpha 90)','Was die Nutzerseite hatte: '+name,wfA(t),factsA(t))+col('B','Clean-start heute','Details.cshtml.cs und Dienste: '+name,wfB(t),factsB(t))+col('C','Mockup „work v3“','Entwurf des Owners: '+name,wfC(t),factsC(t));
+ $('mxTitle').textContent='Auf einen Blick: '+name;
+ $('mx').innerHTML=`<thead><tr><th>Baustein</th><th>A · Dev</th><th>B · Clean-start</th><th>C · Mockup</th></tr></thead><tbody>${ROWS.map(r=>`<tr><td class="f">${r[0]}</td>${[1,2,3].map(i=>`<td>${cell(r[i](t))}</td>`).join('')}</tr>`).join('')}</tbody>`;
+}
+JW.renderP1=renderP1;
+})();
+</script>
+<script>
+(()=>{'use strict';
+const ep=(n,t,len,pct,loc=true,air='')=>({n,t,len,pct,loc,air});
+const ch=(n,t,ch,done,loc=true)=>({n,t,ch,done,loc});
+const P=(n,r,ph=false)=>({n,r,ph});
+const R=(t,rel,type,year,src,loc,h)=>({t,rel,type,year,src,loc,h});
+const Sm=(t,type,year,rate,loc,h)=>({t,type,year,rate,loc,h});
+const DATA={
+movie:{label:'Film',icon:'film',h:[262,300],title:'Dune: Teil Eins',year:2021,len:'2 Std. 35 Min.',region:'USA',genres:['Science-Fiction','Abenteuer','Drama'],rate:['8,0','TMDB'],status:null,
+ summary:'Der junge Paul Atreides reist mit seiner Familie auf den gefährlichen Wüstenplaneten Arrakis, den einzigen Ort, an dem das wertvollste Gut des Universums wächst.',
+ sec:155,pct:36,pageLabel:null,trailer:'Trailer',
+ editions:[['4K UHD','2160p · HDR10 · H.265','DE, EN','DE, EN, FR','58 GB',true],['1080p','1080p · H.264 · AAC 5.1','DE, EN','DE, EN','11 GB',true],['Extended Cut','nicht vorhanden','EN','EN','–',false]],edLabel:'Version',
+ people:[P('Denis Villeneuve','Regie',true),P('Timothée Chalamet','Paul Atreides',true),P('Zendaya','Chani',true),P('Rebecca Ferguson','Lady Jessica',true),P('Oscar Isaac','Herzog Leto'),P('Hans Zimmer','Musik',true)],pplGroups:[['Besetzung',4],['Stab',2]],
+ rels:[R('Dune: Teil Zwei','Fortsetzung','movie',2024,'TMDB Collection',true,262),R('Dune (Roman)','Vorlage','book',1965,'Work-/Edition-Modell',false,40),R('Dune (1984)','Andere Verfilmung','movie',1984,'TMDB',false,20)],
+ sims:[Sm('Blade Runner 2049','Film',2017,'8,0',true,210),Sm('Arrival','Film',2016,'7,6',false,190),Sm('Interstellar','Film',2014,'8,4',true,230),Sm('Ex Machina','Film',2014,'7,6',false,180),Sm('Mad Max: Fury Road','Film',2015,'7,6',false,28),Sm('Gravity','Film',2013,'7,2',true,250)],
+ facts:[['Originaltitel','Dune: Part One',1],['Erscheinung','16. September 2021',1],['Herkunft','USA, Kanada',1],['Altersfreigabe','ab 12',1],['Laufzeit','155 Min.',0],['Studio','Legendary Pictures',0],['Audio (lokal)','Deutsch, Englisch',0],['Untertitel (lokal)','DE, EN, FR',0]],
+ tabs:{files:'Versionen'}},
+series:{label:'Serie',icon:'tv',h:[160,210],title:'The Last of Us',year:2023,len:'2 Staffeln',region:'USA',genres:['Drama','Endzeit','Action'],rate:['8,6','TMDB'],status:'Läuft',
+ summary:'Zwanzig Jahre nach dem Zusammenbruch der Zivilisation soll der Schmuggler Joel die 14-jährige Ellie durch das zerstörte Land bringen. Eine Reise, die beide für immer verändert.',
+ pageLabel:null,trailer:'Trailer',
+ groups:{'Staffel 1':[ep(1,'When You’re Lost in the Darkness','81 min',100,true,'15.01.2023'),ep(2,'Infected','53 min',100),ep(3,'Long, Long Time','76 min',100),ep(4,'Please Hold to My Hand','46 min',100),ep(5,'Endure and Survive','60 min',55),ep(6,'Kin','54 min',0),ep(7,'Left Behind','56 min',0),ep(8,'When We Are in Need','43 min',0),ep(9,'Look for the Light','43 min',0)],
+  'Staffel 2':[ep(1,'Future Days','60 min',0),ep(2,'Through the Valley','54 min',0),ep(3,'The Path','55 min',0,false),ep(4,'Day One','55 min',0,false),ep(5,'Feel Her Pain','60 min',0,false),ep(6,'Folge 6','–',0,false),ep(7,'Folge 7','–',0,false)]},
+ people:[P('Craig Mazin','Schöpfer',true),P('Neil Druckmann','Schöpfer',true),P('Pedro Pascal','Joel Miller',true),P('Bella Ramsey','Ellie Williams',true),P('Anna Torv','Tess'),P('Gustavo Santaolalla','Musik')],pplGroups:[['Besetzung',4],['Stab',2]],
+ rels:[R('The Last of Us','Vorlage','game',2013,'IGDB',false,120),R('The Last of Us Part II','Gleiches Universum','game',2020,'IGDB',false,300),R('Staffel 2 (Finale)','Fortsetzung','series',2025,'TMDB',false,160)],
+ sims:[Sm('Fallout','Serie',2024,'8,2',false,40),Sm('Chernobyl','Serie',2019,'8,7',true,30),Sm('Station Eleven','Serie',2021,'8,1',false,200),Sm('Severance','Serie',2022,'8,4',true,255),Sm('The Walking Dead','Serie',2010,'8,1',false,10),Sm('Silo','Serie',2023,'8,0',false,215)],
+ facts:[['Originaltitel','The Last of Us',1],['Erster Start','15. Januar 2023',1],['Herkunft','USA',1],['Altersfreigabe','ab 16',1],['Staffeln','2',0],['Folgen','16',0],['Sender','HBO',0],['Audio (lokal)','Deutsch, Englisch',0]],
+ tabs:{units:'Episoden',files:'Dateien'}},
+anime:{label:'Anime',icon:'anime',h:[8,350],title:'Chainsaw Man',year:2022,len:'12 Folgen',region:'Japan',genres:['Action','Dark Fantasy','Horror'],rate:['8,5','AniList'],status:'Abgeschlossen',
+ summary:'Denji ist ein Teenager voller Schulden, der als Teufelsjäger arbeitet. Nach einem Verrat verschmilzt er mit seinem Teufelshund Pochita und wird zu Chainsaw Man.',
+ pageLabel:null,trailer:'Trailer',
+ groups:{'Staffel 1':[ep(1,'Hund & Kettensäge','24 min',100),ep(2,'Ankunft in Tokio','24 min',100),ep(3,'Meowys Verbleib','24 min',100),ep(4,'Rettung','24 min',100),ep(5,'Waffenteufel','24 min',42),ep(6,'Töte Denji','24 min',0),ep(7,'Der Wert eines Menschen','24 min',0),ep(8,'Schüsse','24 min',0),ep(9,'Aus Kyoto','24 min',0),ep(10,'Zerschunden','24 min',0),ep(11,'Kettensäge gegen Bombe','24 min',0,false),ep(12,'Katana gegen Kettensäge','24 min',0,false)],
+  'Specials':[ep(1,'Creditless Opening','1 min',0),ep(2,'Creditless Ending','1 min',0)]},
+ people:[P('Tatsuki Fujimoto','Vorlage (Manga)'),P('Ryū Nakayama','Regie',true),P('Studio MAPPA','Animation'),P('Kikunosuke Toya','Denji (JP)',true),P('Tomori Kusunoki','Power (JP)'),P('Kensuke Satō','Musik')],pplGroups:[['Staff',3],['Sprecher',3]],
+ rels:[R('Chainsaw Man (Manga)','Vorlage','manga',2018,'AniList',true,8),R('Chainsaw Man – Der Film: Reze','Fortsetzung','movie',2025,'AniList',false,350)],
+ sims:[Sm('Jujutsu Kaisen','Anime',2020,'8,6',true,266),Sm('Hell’s Paradise','Anime',2023,'8,2',false,12),Sm('Demon Slayer','Anime',2019,'8,4',false,350),Sm('Frieren','Anime',2023,'9,1',true,150),Sm('Dandadan','Anime',2024,'8,5',false,320),Sm('Blue Box','Anime',2024,'8,3',false,205)],
+ facts:[['Originaltitel','チェンソーマン',1],['Erscheinung','12. Oktober 2022',1],['Herkunft','Japan',1],['Altersfreigabe','ab 16',1],['Studio','MAPPA',0],['Folgen','12',0],['Status','Abgeschlossen',0],['Audio (lokal)','Japanisch, Deutsch',0]],
+ tabs:{units:'Episoden',files:'Dateien'}},
+book:{label:'Buch',icon:'book',h:[212,240],title:'Project Hail Mary',year:2021,len:'496 Seiten',region:'USA',genres:['Science-Fiction','Abenteuer','Mystery'],rate:['4,5','Hardcover'],status:null,
+ summary:'Ryland Grace erwacht allein auf einem Raumschiff ohne Erinnerung daran, wer er ist. Erst nach und nach begreift er, dass seine Mission weit über die Rettung der Erde hinausgeht.',
+ pages:496,pct:31,pageLabel:'Seite',trailer:'Leseprobe',
+ editions:[['Deutsch · EPUB','496 Seiten · Heyne · 2021','DE','EPUB',true],['English · EPUB','Paperback · 476 Seiten','EN','EPUB',true],['Deutsch · PDF','Scan · Smart PDF','DE','PDF',true],['Deutsch · Hörbuch','M4B · 16 Std.','DE','M4B',false]],edLabel:'Ausgabe',
+ people:[P('Andy Weir','Autor',true),P('Jürgen Langowski','Übersetzung')],pplGroups:[['Autor & Team',2]],
+ rels:[R('Project Hail Mary (Film)','Adaption','movie',2026,'TMDB',false,262),R('Project Hail Mary (Hörbuch)','Andere Ausgabe','book',2021,'Work-/Edition-Modell',false,212)],
+ sims:[Sm('Der Marsianer','Buch',2011,'4,4',true,18),Sm('Das Dreikörperproblem','Buch',2008,'4,1',false,200),Sm('Artemis','Buch',2017,'3,7',false,330),Sm('Dune','Buch',1965,'4,3',false,40),Sm('Ready Player One','Buch',2011,'4,2',false,280),Sm('Sphere','Buch',1987,'3,8',false,180)],
+ facts:[['Originaltitel','Project Hail Mary',1],['Erstveröffentlichung','4. Mai 2021',1],['Herkunft','USA',1],['Seiten','496',1],['Verlag','Heyne',1],['Sprache (lokal)','Deutsch, Englisch',0],['Format (lokal)','EPUB, PDF',0],['Autor','Andy Weir',0]],
+ tabs:{files:'Ausgaben'}},
+manga:{label:'Manga',icon:'book',h:[8,330],title:'Chainsaw Man',year:2018,len:'19+ Bände',region:'Japan',genres:['Action','Horror','Dark Fantasy'],rate:['8,7','AniList'],status:'Laufend',
+ summary:'Denji lebt am Rand der Gesellschaft, bis ein unerwartetes Ereignis sein Leben verändert. Mit den Kräften von Chainsaw Man gerät er zwischen Teufel, Jäger und undurchsichtige Interessen.',
+ pageLabel:null,trailer:'Leseprobe',
+ vols:[ch(1,'Hund & Kettensäge',7,7),ch(2,'Chainsaw vs. Bat',7,7),ch(3,'Schusswaffe',9,9),ch(4,'Der Beginn',8,8),ch(5,'Minor',9,3),ch(6,'Boom Boom Boom',8,0,false),ch(7,'Schwarze Seele',9,0,false)],
+ people:[P('Tatsuki Fujimoto','Autor & Zeichner')],pplGroups:[['Autor & Zeichner',1]],
+ rels:[R('Chainsaw Man (Anime)','Adaption','anime',2022,'AniList',true,8),R('Chainsaw Man – Der Film: Reze','Adaption','movie',2025,'AniList',false,350)],
+ sims:[Sm('Jujutsu Kaisen','Manga',2018,'8,6',false,266),Sm('Dandadan','Manga',2021,'8,6',false,320),Sm('Fire Punch','Manga',2016,'8,3',false,12),Sm('Spy x Family','Manga',2019,'8,5',true,30),Sm('Kaiju No. 8','Manga',2020,'8,4',false,200),Sm('Blue Lock','Manga',2018,'8,3',false,215)],
+ facts:[['Originaltitel','チェンソーマン',1],['Erscheinung','3. Dezember 2018',1],['Herkunft','Japan',1],['Leserichtung','Rechts → Links',1],['Format (lokal)','CBZ',0],['Bände','19+',0],['Sprache (lokal)','Deutsch',0],['Autor','Tatsuki Fujimoto',0]],
+ tabs:{units:'Bände & Kapitel'}},
+novel:{label:'Light Novel',icon:'book',h:[286,320],title:'Re:Zero − Ein neues Leben in einer anderen Welt',year:2014,len:'38+ Bände',region:'Japan',genres:['Fantasy','Isekai','Drama'],rate:['8,5','AniList'],status:'Laufend',
+ summary:'Subaru Natsuki findet sich plötzlich in einer fremden Welt wieder. Seine ungewöhnliche Fähigkeit lässt ihn Fehler korrigieren, doch jeder neue Versuch fordert einen hohen Preis.',
+ pageLabel:null,trailer:'Leseprobe',
+ vols:[ch(1,'Der Anfang',5,5),ch(2,'Eine Woche im Herrenhaus',6,2),ch(3,'Zurück ins Herrenhaus',6,0),ch(4,'Der ewige Gefährte',7,0,false)],
+ editions:[['JP · Original','EPUB · MF Bunko J','JA','EPUB',true],['EN · Übersetzung','EPUB · Yen Press','EN','EPUB',true],['DE · Übersetzung','nicht vorhanden','DE','EPUB',false]],edLabel:'Ausgabe',
+ people:[P('Tappei Nagatsuki','Autor'),P('Shin’ichirō Ōtsuka','Illustration')],pplGroups:[['Autor & Illustration',2]],
+ rels:[R('Re:Zero (Anime)','Adaption','anime',2016,'AniList',false,286),R('Re:Zero (Manga, Kapitel 1–4)','Adaption','manga',2014,'AniList',false,320),R('Re:Zero Ex','Ableger','novel',2015,'AniList',false,300)],
+ sims:[Sm('Overlord','Light Novel',2010,'8,3',false,150),Sm('Sword Art Online','Light Novel',2009,'7,6',false,200),Sm('Mushoku Tensei','Light Novel',2012,'8,4',false,120),Sm('Konosuba','Light Novel',2013,'8,2',false,40),Sm('86','Light Novel',2017,'8,4',false,230),Sm('Spice and Wolf','Light Novel',2006,'8,3',true,28)],
+ facts:[['Originaltitel','Re:ゼロから始める異世界生活',1],['Erscheinung','20. Januar 2014',1],['Herkunft','Japan',1],['Verlag','MF Bunko J',1],['Bände','38+',0],['Original','Japanisch',0],['Sprache (lokal)','JA, EN',0],['Autor','Tappei Nagatsuki',0]],
+ tabs:{units:'Bände',files:'Ausgaben'}},
+music:{label:'Musik',icon:'music',h:[228,280],title:'Dawn FM',year:2022,len:'16 Tracks · 52 Min.',region:'Kanada',genres:['Synthpop','R&B','Pop'],rate:['7,8','MusicBrainz'],status:null,
+ summary:'The Weeknd verbindet Synthpop, R&B und das Konzept einer nächtlichen Radiosendung zu einem Album mit ineinander übergehenden Titeln.',
+ pageLabel:null,trailer:'Hörprobe',
+ tracks:[ep(1,'Dawn FM','1:36',100),ep(2,'Gasoline','3:32',100),ep(3,'How Do I Make You Love Me?','3:34',100),ep(4,'Take My Breath','5:39',100),ep(5,'Sacrifice','3:08',100),ep(6,'A Tale by Quincy','1:36',47),ep(7,'Out of Time','3:34',0),ep(8,'Here We Go… Again','3:29',0),ep(9,'Best Friends','2:43',0),ep(10,'Is There Someone Else?','3:19',0),ep(11,'Starry Eyes','2:28',0),ep(12,'Every Angel Is Terrifying','2:47',0),ep(13,'Don’t Break My Heart','3:25',0,false),ep(14,'I Heard You’re Married','4:23',0,false),ep(15,'Less Than Zero','3:31',0,false),ep(16,'Phantom Regret by Jim','4:26',0,false)],
+ editions:[['Standard · FLAC','16 Tracks · Lossless','FLAC','–',true],['Deluxe','zusätzliche Tracks','FLAC','–',false],['Vinyl-Master','24 bit / 96 kHz','FLAC','–',false]],edLabel:'Ausgabe',
+ people:[P('The Weeknd','Künstler',true),P('Oneohtrix Point Never','Produktion',true),P('Max Martin','Produktion'),P('Quincy Jones','Sprecher (Intro)'),P('Jim Carrey','Sprecher (Outro)')],pplGroups:[['Künstler',1],['Mitwirkende',4]],
+ rels:[R('After Hours','Vorheriges Album','music',2020,'MusicBrainz',true,250),R('Hurry Up Tomorrow','Nächstes Album','music',2025,'MusicBrainz',false,228),R('Dawn FM (Deluxe)','Andere Ausgabe','music',2022,'MusicBrainz',false,260)],
+ sims:[Sm('After Hours','Album',2020,'8,0',true,250),Sm('Starboy','Album',2016,'7,4',false,200),Sm('Random Access Memories','Album',2013,'8,1',false,40),Sm('Future Nostalgia','Album',2020,'7,6',false,330),Sm('Currents','Album',2015,'8,0',false,180),Sm('Blonde','Album',2016,'8,2',false,28)],
+ facts:[['Erscheinung','7. Januar 2022',1],['Herkunft','Kanada',1],['Label','XO / Republic',1],['Discs','1',1],['Tracks','16',0],['Dauer','52 Min.',0],['Format (lokal)','FLAC',0],['Künstler','The Weeknd',0]],
+ tabs:{units:'Tracks',files:'Ausgaben'}},
+game:{label:'Spiel',icon:'game',h:[40,24],title:'Elden Ring',year:2022,len:'Open-World-RPG',region:'Japan',genres:['Action-RPG','Open World','Fantasy'],rate:['9,0','IGDB'],status:null,
+ summary:'Erkunde die Zwischenlande, kämpfe gegen mächtige Gegner und finde deinen eigenen Weg zum Eldenfürsten. Der optionale Games Companion verwaltet Fortschritt, Guides und Entdeckungen getrennt vom Spiel.',
+ pageLabel:null,trailer:'Trailer',hours:45,
+ areas:[ep(1,'Limgrave erkunden','Hauptquest',100),ep(2,'Stormveil Castle','Hauptquest',100),ep(3,'Liurnia of the Lakes','Gebiet',38),ep(4,'Raya Lucaria Academy','Hauptquest',0),ep(5,'Altus Plateau','Gebiet',0)],
+ editions:[['PC · Windows','Installiert · Save-Sync verfügbar','PC','Steam',true],['PlayStation 5','keine lokale Installation','PS5','Disc / Digital',false],['Xbox Series','nicht vorhanden','Xbox','Digital',false]],edLabel:'Plattform',
+ people:[P('Hidetaka Miyazaki','Game Director',true),P('George R. R. Martin','Worldbuilding'),P('FromSoftware','Entwicklung'),P('Bandai Namco','Publisher')],pplGroups:[['Studios & Team',4]],
+ rels:[R('Shadow of the Erdtree','Erweiterung (DLC)','game',2024,'IGDB',false,40),R('Elden Ring Nightreign','Ableger','game',2025,'IGDB',false,24)],
+ sims:[Sm('Dark Souls III','Spiel',2016,'8,9',true,10),Sm('Hollow Knight','Spiel',2017,'9,0',false,190),Sm('Hades','Spiel',2020,'9,1',false,350),Sm('Sekiro','Spiel',2019,'8,8',false,20),Sm('Baldur’s Gate 3','Spiel',2023,'9,5',false,280),Sm('Bloodborne','Spiel',2015,'9,0',false,0)],
+ facts:[['Erscheinung','25. Februar 2022',1],['Herkunft','Japan',1],['Entwickler','FromSoftware',0],['Plattformen','PC, PS5, Xbox',0],['Spielzeit','45 Std.',1],['Speicherstand','Synchronisiert',1],['Genre','Action-RPG',0],['Version (lokal)','PC',0]],
+ tabs:{units:'Spielinhalte',files:'Versionen'}}
+};
+window.JW.DATA=DATA;
+})();
+</script>
+<script>
+(()=>{'use strict';
+const {S,TYPES,$,E,I,DATA}=window.JW;
+const S2={tab:'overview',avail:'local',sparse:false,rate:'provider',bf:true,season:{},sort:'asc',view:'list',vol:{},ed:{},menu:false,pop:false,sync:{},fav:{},expand:false,req:0,mini:0};
+const D=()=>DATA[S.type];
+const grad=(h,h2)=>`linear-gradient(150deg,hsl(${h} 52% 46%),hsl(${((h2==null?h+40:h2)%360)} 56% 22%))`;
+const isLocal=()=>S2.avail==='local';
+const ANI=['anime','manga','novel'];
+const bf=(txt)=>`<span class="bf" title="${E(txt)}">${I('tool')}Backend fehlt</span>`;
+const bfNote=(txt)=>`<div class="note">${bf(txt)}<span>${E(txt)}</span></div>`;
+const fmt=s=>{s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return h+':'+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0')};
+const word={movie:['gesehen','ungesehen'],series:['gesehen','ungesehen'],anime:['gesehen','ungesehen'],book:['gelesen','ungelesen'],manga:['gelesen','ungelesen'],novel:['gelesen','ungelesen'],music:['gehört','ungehört'],game:['abgeschlossen','offen']};
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2600)}
+/* ---------- unit helpers ---------- */
+function groups(t){const d=DATA[t];if(d.groups)return d.groups;if(d.tracks)return{'Disc 1':d.tracks};if(d.areas)return{'Spielfortschritt':d.areas};return null}
+function flat(t){const g=groups(t);return g?Object.entries(g).flatMap(([k,v])=>k==='Specials'?[]:v):[]}
+function progress(t){
+ const d=DATA[t];
+ if(t==='movie'){const p=d.pct;return{done:p,total:100,pct:p,label:'Filmposition',val:fmt(d.sec*p/100*60)+' / '+fmt(d.sec*60),next:p>=100?'Erneut ansehen':p>0?'Fortsetzen · '+fmt(d.sec*p/100*60):'Abspielen'}}
+ if(t==='book'){const p=d.pct,pg=Math.round(d.pages*p/100);return{pct:p,label:'Gelesen',val:'Seite '+pg+' / '+d.pages,next:p>=100?'Erneut lesen':p>0?'Weiterlesen · S. '+pg:'Lesen'}}
+ if(t==='manga'||t==='novel'){const tot=d.vols.reduce((a,v)=>a+v.ch,0),dn=d.vols.reduce((a,v)=>a+(v.loc?v.done:0),0);const nv=d.vols.find(v=>v.loc&&v.done<v.ch);const start=nv?d.vols.slice(0,d.vols.indexOf(nv)).reduce((a,v)=>a+v.ch,0)+nv.done+1:0;return{pct:Math.round(dn/tot*100),label:'Gelesen',val:dn+' / '+tot+' Kapitel',next:dn>=tot?'Erneut lesen':dn>0&&nv?'Weiterlesen · Band '+nv.n+', Kap. '+start:'Lesen'}}
+ if(t==='game'){const f=flat(t),dn=f.filter(u=>u.pct>=100).length;return{pct:Math.round(dn/f.length*100),label:'Spielstand',val:d.hours+' Std. · '+dn+' / '+f.length+' Gebiete',next:dn>0?'Weiterspielen':'Spielen'}}
+ const f=flat(t),dn=f.filter(u=>u.pct>=100).length,tot=f.length;
+ const nx=f.find(u=>u.pct<100&&u.loc);const g=groups(t);const key=Object.keys(g)[0];
+ if(t==='music')return{pct:Math.round(dn/tot*100),label:'Gehört',val:dn+' / '+tot+' Tracks',next:dn>=tot?'Erneut hören':dn>0&&nx?'Weiterhören · Track '+nx.n:'Anhören'};
+ return{pct:Math.round(dn/tot*100),label:'Gesehen',val:dn+' / '+tot+' Folgen',next:dn>=tot?'Erneut ansehen':dn>0&&nx?'Fortsetzen · S1 E'+nx.n:'Abspielen'};
+}
+function setAll(t,done){
+ const d=DATA[t];
+ if(t==='movie'||t==='book'){d.pct=done?100:0;return}
+ if(d.vols){d.vols.forEach(v=>{if(v.loc)v.done=done?v.ch:0});return}
+ const g=groups(t);Object.values(g).forEach(a=>a.forEach(u=>{if(u.loc)u.pct=done?100:0}));
+}
+/* ---------- tabs ---------- */
+function tabsFor(t,full){
+ const d=DATA[t],sp=!full&&S2.sparse,loc=full||isLocal();
+ const out=[{id:'overview',label:'Übersicht'}];
+ if(d.tabs.units)out.push({id:'units',label:d.tabs.units,n:t==='manga'||t==='novel'?d.vols.length:t==='music'?d.tracks.length:t==='game'?d.areas.length:flat(t).length+(groups(t).Specials?groups(t).Specials.length:0),bf:['book','manga','novel','music','game'].includes(t)});
+ if(!sp)out.push({id:'people',label:'Personen',n:d.people.length,bf:true});
+ if(!sp)out.push({id:'rel',label:'Verknüpfte Werke',n:d.rels.length,bf:true});
+ if(!sp)out.push({id:'sim',label:'Ähnliches',n:d.sims.length,bf:!['movie','series','anime'].includes(t)});
+ out.push({id:'details',label:'Details',bf:true});
+ if(d.tabs.files&&(loc||['book','novel','music','game'].includes(t)))out.push({id:'files',label:d.tabs.files,n:d.editions?d.editions.length:undefined,bf:!!d.editions});
+ return out;
+}
+/* ---------- hero ---------- */
+function tagHtml(){const a=S2.avail;return a==='local'?`<span class="tag local">${I('check','sm')}Lokal</span>`:a==='requested'?`<span class="tag req">${I('clock','sm')}Angefragt</span>`:`<span class="tag miss">${I('cloud','sm')}Nicht lokal</span>`}
+function phase(){const p=S2.req;if(p<8)return{t:'Freigabe',pct:null};if(p<20)return{t:'Suche',pct:null};if(p<90)return{t:'Download',pct:Math.round((p-20)/70*100)};if(p<100)return{t:'Import',pct:null};return{t:'Bereit',pct:null}}
+function liveBtn(){const ph=phase();return `<button class="btn live" data-a="live" title="Anfrage öffnen">${I('download')}<span id="liveTxt">${ph.t}${ph.pct!=null?' · '+ph.pct+' %':''}</span><span class="bar" id="liveBar" style="width:${S2.req}%"></span></button>`}
+function hero(){
+ const t=S.type,d=D(),loc=isLocal(),pr=progress(t);
+ const sel=d.editions?`<select class="sel" id="edSel" aria-label="${d.edLabel}">${d.editions.map((e,i)=>`<option value="${i}" ${(S2.ed[t]||0)===i?'selected':''}>${d.edLabel} · ${E(e[0])}</option>`).join('')}</select>`:'';
+ let main='';
+ if(loc)main=`<button class="btn primary" data-a="play">${I('play')}${E(pr.next)}</button>${sel}`;
+ else if(S2.avail==='requested')main=liveBtn();
+ else main=`<button class="btn primary" data-a="reqOpen">${I('plus')}Anfragen</button>`;
+ const sync=ANI.includes(t)?`<button class="sync ${S2.sync[t]?'on':''}" data-a="sync" title="${S2.sync[t]?'AniList verbunden, zuletzt vor 2 Min. synchronisiert':'Mit AniList verbinden'}"><span class="al">A</span>${S2.sync[t]?'Verbunden':'Verbinden'}${I('sync','sm')}</button>${S2.bf?bf('AniList-Konto-Sync pro Profil (Verbinden, Abgleich, Trennen) existiert nur im Dev-Stand'):''}`:'';
+ const prog=loc?`<div class="hero-prog"><div class="l"><span>${E(pr.label)}</span><span>${E(pr.val)}${ANI.includes(t)&&S2.sync[t]?' · AniList synchron':''}</span></div><div class="b"><span style="width:${pr.pct}%"></span></div></div>`:'';
+ const rate=S2.rate==='provider'&&d.rate?`<span class="rate" title="Quelle der Wertung: ${d.rate[1]}. Pro Profil einstellbar, auch „keine“.">${I('star')}${d.rate[0]}<small>${d.rate[1]}</small></span>`:'';
+ const kind=`<span class="chip">${I(d.icon,'sm')}${d.label}</span>`;
+ const status=d.status?`<span class="chip ${d.status==='Läuft'||d.status==='Laufend'?'ok':''}">${I(d.status==='Abgeschlossen'?'check':'clock','sm')}${d.status}</span>`:'';
+ const pop=S2.pop?`<div class="menu pop" id="pop"><label>Sprache</label><select class="sel"><option>Deutsch</option><option>Englisch</option><option>Originalsprache</option></select><label>Qualität</label><select class="sel"><option>Standard des Profils</option><option>Beste verfügbare</option><option>Kompakt</option></select>${t==='game'?'<label>Plattform</label><select class="sel"><option>PC</option><option>PlayStation 5</option></select>':''}<div class="row"><button class="btn sm" data-a="popClose">Abbrechen</button><button class="btn sm primary" data-a="reqGo">${I('plus','sm')}Anfragen</button></div></div>`:'';
+ const mw=word[t];
+ const menu=S2.menu?`<div class="menu" id="menu" style="left:${loc?'0':'0'}"><button data-a="mWatched">${I('check')}Als ${mw[0]} markieren</button><button data-a="mUn">${I('eye')}Als ${mw[1]} markieren</button><button data-a="mRestart">${I('restart')}Von vorn beginnen</button><hr><button data-a="mLink">${I('copy')}Link kopieren</button></div>`:'';
+ return `<div class="hero"><div class="hero-bg" style="background:radial-gradient(60% 90% at 85% 15%,hsl(${d.h[0]} 62% 48% / .85),transparent 70%),radial-gradient(50% 70% at 60% 100%,hsl(${d.h[1]} 60% 40% / .6),transparent 70%),linear-gradient(120deg,hsl(${d.h[0]} 40% 22%),hsl(${d.h[1]%360} 46% 12%))"></div>
+ <div class="hero-top">${sync}</div>
+ <div class="hero-in"><div class="poster" style="background:${grad(d.h[0],d.h[1])}">${tagHtml()}<div class="glyph">${I(d.icon)}</div></div>
+ <div class="hero-info"><div class="chips">${kind}${status}</div><h1 class="ell" title="${E(d.title)}">${E(d.title)}</h1>
+ <div class="hero-meta"><span>${d.year}</span><span>${E(d.len)}</span><span>${E(d.region)}</span><span class="ell">${d.genres.slice(0,3).join(' · ')}</span>${rate}${S2.bf&&S2.rate==='provider'?bf('Wertung steckt nicht in WorkDetails; Quelle pro Nutzer ist neu'):''}</div>
+ <p class="sum ell ${S2.expand?'open':''}" data-a="expand" title="Ganzer Text">${E(d.summary)}</p>
+ <div class="acts">${main}<button class="btn glass" data-a="trailer">${I('trailer')}${d.trailer}</button><button class="icon-btn ${S2.fav[t]?'active':''}" data-a="fav" title="Favoriten und Listen" aria-label="Favoriten">${I('heart')}</button><button class="icon-btn" data-a="more" title="Mehr" aria-label="Mehr">${I('dots')}</button>${menu}${pop}</div></div></div>${prog}</div>`;
+}
+/* ---------- units ---------- */
+function stateOf(u,t){
+ const w=word[t][0];
+ if(!isLocal()||!u.loc)return S2.avail==='requested'?{c:'req',i:'clock',l:'Angefragt'}:{c:'miss',i:'cloud',l:'Nicht lokal'};
+ if(u.pct>=100)return{c:'done',i:'check',l:w[0].toUpperCase()+w.slice(1)};
+ if(u.pct>0)return{c:'prog',i:'play',l:u.pct+' %'};
+ return{c:'todo',i:'clock',l:'Offen'};
+}
+const st=s=>`<span class="st ${s.c}">${I(s.i,'sm')}${s.l}</span>`;
+function seasonKey(t){const g=groups(t);const k=S2.season[t];return g[k]?k:Object.keys(g)[0]}
+function episodes(){
+ const t=S.type,g=groups(t),keys=Object.keys(g),key=seasonKey(t),list=g[key].map((u,i)=>({u,i}));
+ if(S2.sort==='desc')list.reverse();else if(S2.sort==='unwatched')list.sort((a,b)=>(a.u.pct>=100)-(b.u.pct>=100)||a.i-b.i);
+ const isSp=key==='Specials';
+ const tb=`<div class="tb">${keys.length>1?`<select class="sel" id="seasonSel" aria-label="Staffel">${keys.map(k=>`<option value="${E(k)}" ${k===key?'selected':''}>${E(k)} · ${g[k].length}</option>`).join('')}</select>`:''}<select class="sel" id="sortSel" aria-label="Sortierung"><option value="asc" ${S2.sort==='asc'?'selected':''}>Folge aufsteigend</option><option value="desc" ${S2.sort==='desc'?'selected':''}>Folge absteigend</option><option value="unwatched" ${S2.sort==='unwatched'?'selected':''}>Ungesehene zuerst</option></select><span class="sp"></span><button class="btn sm soft" data-a="seasonDone">${I('check','sm')}${E(key)} gesehen</button><button class="btn sm" data-a="seasonReset">${I('restart','sm')}Zurücksetzen</button><div class="vw" role="group" aria-label="Ansicht"><button class="${S2.view==='list'?'on':''}" data-a="vList" title="Liste" aria-label="Liste">${I('list')}</button><button class="${S2.view==='grid'?'on':''}" data-a="vGrid" title="Karten" aria-label="Karten">${I('grid')}</button></div></div>`;
+ const act=(u,i)=>{const s=stateOf(u,t);if(!isLocal()||!u.loc)return S2.avail==='missing'?`<button class="icon-btn" data-a="reqUnit" data-i="${i}" title="Diese Folge anfragen">${I('plus')}</button>`:'';
+  return `${u.pct>0?`<button class="icon-btn" data-a="restartUnit" data-i="${i}" title="Von vorn beginnen">${I('restart')}</button>`:''}<button class="icon-btn ${u.pct>=100?'done':''}" data-a="toggleUnit" data-i="${i}" title="${u.pct>=100?'Als ungesehen markieren':'Als gesehen markieren'}">${I('check')}</button>`};
+ const thumb=(u,i)=>`<div class="thumb" style="background:${grad(D().h[0]+i*14,D().h[1]+i*10)}"><span class="ix">${isSp?'S':'E'}${String(u.n).padStart(2,'0')}</span>${u.pct>0&&u.pct<100&&u.loc?`<div class="pb"><span style="width:${u.pct}%"></span></div>`:''}</div>`;
+ let body;
+ if(S2.view==='list')body=`<div class="card ep-list">${list.map(({u,i})=>`<div class="ep">${thumb(u,i)}<div class="t"><b>${E(u.t)}</b><small>${u.len}${u.air?' · '+u.air:''}</small></div>${st(stateOf(u,t))}<div class="ra">${act(u,i)}</div></div>`).join('')}</div>`;
+ else body=`<div class="card"><div class="ep-grid">${list.map(({u,i})=>`<div class="epc">${thumb(u,i)}<div class="in"><b class="ell">E${u.n} · ${E(u.t)}</b><small>${u.len}</small><div class="row">${st(stateOf(u,t))}<div class="ra">${act(u,i)}</div></div></div></div>`).join('')}</div></div>`;
+ return tb+body+(S2.bf?`<div style="margin-top:10px">${bf('Sprach-Chips je Folge und „fehlende Folgen anfragen“ aus Dev sind im Clean-start noch nicht übernommen')}</div>`:'');
+}
+function volumes(){
+ const t=S.type,d=D(),sel=Math.min(S2.vol[t]||0,d.vols.length-1),loc=isLocal();
+ const cards=d.vols.map((v,i)=>{const on=loc&&v.loc,p=on?Math.round(v.done/v.ch*100):0,s=!on?(S2.avail==='requested'?{c:'req',i:'clock',l:'Angefragt'}:{c:'miss',i:'cloud',l:'Nicht lokal'}):null;
+  return `<button class="vol ${i===sel?'picked':''} ${on?'':'off'}" data-a="vol" data-i="${i}"><div class="cover" style="background:${grad(d.h[0]+i*18,d.h[1]+i*8)}">${on?`<span class="tag local">${I('check','sm')}Lokal</span>`:`<span class="tag ${s.c==='req'?'req':'miss'}">${I(s.i,'sm')}${s.l}</span>`}${v.n}${on&&p>0?`<div class="pb"><span style="width:${p}%"></span></div>`:''}</div><div style="min-width:0"><b class="ell" style="display:block">Band ${v.n} · ${E(v.t)}</b><small>${v.ch} Kapitel${on?' · '+(p>=100?word[t][0]:p>0?p+' %':'offen'):''}</small></div></button>`}).join('');
+ const v=d.vols[sel],on=loc&&v.loc,start=d.vols.slice(0,sel).reduce((a,x)=>a+x.ch,0);
+ const rows=Array.from({length:v.ch},(_,k)=>{const dn=on&&k<v.done,s=!on?(S2.avail==='requested'?{c:'req',i:'clock',l:'Angefragt'}:{c:'miss',i:'cloud',l:'Nicht lokal'}):dn?{c:'done',i:'check',l:'Gelesen'}:{c:'todo',i:'clock',l:'Offen'};
+  return `<div class="row"><span class="num">${start+k+1}</span><b class="ell" style="font-weight:700">Kapitel ${start+k+1}</b>${st(s)}<div class="ra">${on?`<button class="icon-btn ${dn?'done':''}" data-a="toggleCh" data-i="${k}" title="${dn?'Als ungelesen markieren':'Als gelesen markieren'}">${I('check')}</button>`:''}</div></div>`}).join('');
+ return `<div class="vols">${cards}</div><div class="sub" style="margin-top:22px">Kapitel</div><div class="card chl"><div class="hd"><span class="ell">Band ${v.n} · ${E(v.t)}</span><span class="ra">${on?`<button class="btn sm soft" data-a="volDone">${I('check','sm')}Band gelesen</button><button class="btn sm" data-a="volReset">${I('restart','sm')}Von vorn</button>`:S2.avail==='missing'?`<button class="btn sm primary" data-a="reqUnit">${I('plus','sm')}Band anfragen</button>`:''}</span></div>${rows}</div>${S2.bf?`<div style="margin-top:10px">${bf('Bände/Kapitel, die bekannt aber nicht vorhanden sind, liefert die Verfügbarkeitsabfrage nicht (nur Dateien); Lesestand je Kapitel ebenso')}</div>`:''}`;
+}
+function tracks(){
+ const t='music',d=D();const loc=isLocal();
+ return `<div class="card"><table class="tbl"><thead><tr><th style="width:44px">#</th><th>Titel</th><th class="r" style="width:80px">Länge</th><th style="width:150px">Status</th><th class="r" style="width:110px"></th></tr></thead><tbody><tr class="grp"><td colspan="5">${I('disc','sm')} Disc 1</td></tr>${d.tracks.map((u,i)=>`<tr><td class="num" style="text-align:left">${u.n}</td><td><b class="ell" style="display:block;max-width:420px;font-weight:700">${E(u.t)}</b></td><td class="r">${u.len}</td><td>${st(stateOf(u,t))}</td><td class="r"><span class="ra" style="justify-content:flex-end">${loc&&u.loc?`<button class="icon-btn" data-a="playUnit" data-i="${i}" title="Abspielen">${I('play')}</button><button class="icon-btn ${u.pct>=100?'done':''}" data-a="toggleUnit" data-i="${i}" title="${u.pct>=100?'Als ungehört markieren':'Als gehört markieren'}">${I('check')}</button>`:''}</span></td></tr>`).join('')}</tbody></table></div>${S2.bf?`<div style="margin-top:10px">${bf('Fehlende Tracks (4 hier) und Hörstand je Track gibt es für nicht vorhandene Einheiten noch nicht')}</div>`:''}`;
+}
+function gameUnits(){
+ const d=D(),loc=isLocal();
+ return `<div class="card">${d.areas.map((u,i)=>{const p=loc?u.pct:0;return `<div class="gamerow"><span class="num" style="text-align:left">${String(u.n).padStart(2,'0')}</span><div style="min-width:0"><b class="ell" style="display:block;font-size:13px">${E(u.t)}</b><small style="color:var(--muted);font-size:11px">${u.len}</small></div><div class="pbar"><span style="width:${p}%"></span></div>${st(loc?(p>=100?{c:'done',i:'check',l:'Abgeschlossen'}:p>0?{c:'prog',i:'play',l:p+' %'}:{c:'todo',i:'clock',l:'Offen'}):{c:'miss',i:'cloud',l:'Nicht lokal'})}</div>`}).join('')}</div><div class="tb" style="margin-top:12px"><button class="btn sm soft" data-a="companion">${I('game','sm')}Companion öffnen</button></div>${S2.bf?bfNote('Spielinhalte, Gebiets-Fortschritt und Companion haben kein Datenmodell (nur Dev-Spec); Fortschritt nur aus verlässlicher Quelle'):''}`;
+}
+function unitsHtml(){const t=S.type;return t==='manga'||t==='novel'?volumes():t==='music'?tracks():t==='game'?gameUnits():episodes()}
+/* ---------- other blocks ---------- */
+function peopleHtml(){
+ const d=D();let i=0,out='';
+ d.pplGroups.forEach(([name,n])=>{const ps=d.people.slice(i,i+n);i+=n;
+  out+=(d.pplGroups.length>1?`<div class="sub">${name}</div>`:'')+`<div class="people">${ps.map((p,k)=>`<div class="person"><div class="pp" style="background:${grad(d.h[0]+(i+k)*30,d.h[1]+k*17)}">${E(p.n.split(' ').map(x=>x[0]).slice(0,2).join(''))}${p.ph?`<span class="ph" title="Foto mit sichtbarer Quelle">${I('image','sm')}Foto</span>`:''}</div><b class="ell">${E(p.n)}</b><small class="ell" style="display:block">${E(p.r)}</small></div>`).join('')}</div>`});
+ return out+(S2.bf?`<div style="margin-top:10px">${bf('Backend speichert nur eine Bild-URL je Person; Quelle und Lizenz je Foto fehlen. Entscheidung offen: Provider-Fotos oder nur frei lizenzierte')}</div>`:'');
+}
+const RELICON={'Fortsetzung':'seq','Nächstes Album':'seq','Vorheriges Album':'prev','Vorlage':'prev','Adaption':'film','Ableger':'layers','Andere Ausgabe':'copy','Andere Verfilmung':'film','Erweiterung (DLC)':'plus','Gleiches Universum':'layers'};
+function relsHtml(){
+ const d=D();
+ return `<div class="rels">${d.rels.map(r=>`<button class="rel" data-a="rel" data-t="${E(r.t)}"><div class="mini" style="background:${grad(r.h,r.h+40)}"><span class="dot ${r.loc?'':'no'}" title="${r.loc?'Lokal vorhanden':'Nicht lokal'}">${I(r.loc?'check':'cloud','sm')}</span></div><div class="x"><span class="rt">${I(RELICON[r.rel]||'layers','sm')}${r.rel}</span><b class="ell">${E(r.t)}</b><small class="ell">${TYPES.find(x=>x[0]===r.type)[1]} · ${r.year}</small><span class="src">${I('info','sm')}Quelle: ${r.src}</span></div></button>`).join('')}</div>${S2.bf?`<div style="margin-top:10px">${bf('Es gibt keine Tabelle für Werkbeziehungen (nur Franchise-Gruppen). Typen, Quellen und typübergreifende Verknüpfungen müssen neu importiert und gespeichert werden')}</div>`:''}`;
+}
+function simHtml(){
+ const d=D(),t=S.type;
+ return `<div class="sim">${d.sims.map(s=>`<div class="mc"><div class="poster" style="background:${grad(s.h,s.h+45)}"><span class="tag ${s.loc?'local':'miss'}">${I(s.loc?'check':'cloud','sm')}${s.loc?'Lokal':'Nicht lokal'}</span><div class="glyph">${I(d.icon)}</div></div><b class="ell">${E(s.t)}</b><small class="ell">${s.year} · ${s.type}${S2.rate==='provider'?' · ★ '+s.rate:''}</small></div>`).join('')}</div>${S2.bf&&!['movie','series','anime'].includes(t)?`<div style="margin-top:10px">${bf('Empfehlungen gibt es nur für Film und Serie (TMDB). Für diesen Typ fehlt eine Quelle')}</div>`:''}`;
+}
+function detailsHtml(){
+ const d=D(),t=S.type;
+ const gen=d.genres.map(g=>`<span class="lc">${g}</span>`).join('');
+ const facts=[...(S2.rate==='provider'&&d.rate?[['Bewertung',d.rate[0]+' · '+d.rate[1],1]]:[]),...d.facts];
+ return `<div class="dt"><div class="card"><div class="txt"><div class="sub">Handlung</div>${E(d.summary)}<div class="gen">${gen}</div></div></div><div class="card"><div class="fgrid">${facts.map(([k,v,m])=>`<div><span>${k}${m&&S2.bf?bf('Feld fehlt in den Werk-Fakten (erlaubt sind nur Beschreibung, Poster, Hintergrund, Genres, Trailer, Studio)').replace('Backend fehlt',''):''}</span><strong class="ell" title="${E(v)}">${E(v)}</strong></div>`).join('')}</div></div></div>`;
+}
+function filesHtml(){
+ const t=S.type,d=D(),loc=isLocal(),sel=S2.ed[t]||0;
+ if(t==='movie'){
+  return `<div class="card"><table class="tbl"><thead><tr><th>Version</th><th>Qualität</th><th>Audio</th><th>Untertitel</th><th class="r">Größe</th><th>Status</th><th class="r"></th></tr></thead><tbody>${d.editions.map((e,i)=>`<tr><td><b>${e[0]}</b><div style="color:var(--muted);font-size:11px;margin-top:2px">${e[1]}</div></td><td><span class="lc q">${e[0]==='4K UHD'?'4K':e[0]==='1080p'?'1080p':'–'}</span></td><td>${e[2].split(', ').map(x=>`<span class="lc">${x}</span>`).join('')}</td><td>${e[3].split(', ').map(x=>`<span class="lc">${x}</span>`).join('')}</td><td class="r">${e[4]}</td><td>${e[5]?st({c:'done',i:'check',l:'Lokal'}):st({c:'miss',i:'cloud',l:'Anfragbar'})}</td><td class="r">${e[5]?`<button class="btn sm soft" data-a="playEd" data-i="${i}">${I('play','sm')}Abspielen</button>`:`<button class="btn sm" data-a="reqEd" data-i="${i}">${I('plus','sm')}Anfragen</button>`}</td></tr>`).join('')}</tbody></table></div>${S2.bf?`<div style="margin-top:10px">${bf('Versionen/Ausgaben (WorkEditions) werden auf der Details-Seite noch nicht gelesen; heute nur die Dateiliste')}</div>`:''}`;
+ }
+ if(d.editions){
+  return `<div class="ed">${d.editions.map((e,i)=>`<button class="edc ${i===sel?'picked':''}" data-a="ed" data-i="${i}"><div class="row"><b class="ell">${e[0]}</b>${e[e.length-1]&&loc?st({c:'done',i:'check',l:'Lokal'}):S2.avail==='requested'?st({c:'req',i:'clock',l:'Angefragt'}):st({c:'miss',i:'cloud',l:'Anfragbar'})}</div><small class="ell">${e[1]}</small><div>${[e[2],e[3]].filter(x=>x&&x!=='–').map((x,k)=>`<span class="lc ${k===1?'q':''}">${x}</span>`).join('')}</div></button>`).join('')}</div>${S2.bf?`<div style="margin-top:10px">${bf(t==='game'?'Plattform-Releases je Spiel fehlen im Datenmodell':'Ausgabenwahl und Anfrage je Ausgabe/Plattform: Daten liegen in WorkEditions, aber nicht auf der Details-Seite')}</div>`:''}`;
+ }
+ /* series, anime: files with language summary */
+ const all=flat(t).filter(u=>u.loc),aud=t==='anime'?['JA','DE']:['DE','EN'],sub=['DE','EN'];
+ return `<div class="tb"><span class="lc q">Audio</span>${aud.map(x=>`<span class="lc">${x}</span>`).join('')}<span class="lc q" style="margin-left:8px">Untertitel</span>${sub.map(x=>`<span class="lc">${x}</span>`).join('')}<span class="lc q" style="margin-left:8px">Qualität</span><span class="lc">1080p</span></div><div class="card"><table class="tbl"><thead><tr><th>Folge</th><th>Qualität</th><th>Audio</th><th>Untertitel</th><th class="r">Dauer</th><th>Status</th></tr></thead><tbody>${all.slice(0,6).map(u=>`<tr><td><b class="ell" style="display:block;max-width:300px">S1 E${u.n} · ${E(u.t)}</b></td><td><span class="lc q">1080p</span></td><td>${aud.map(x=>`<span class="lc">${x}</span>`).join('')}</td><td>${sub.map(x=>`<span class="lc">${x}</span>`).join('')}</td><td class="r">${u.len}</td><td>${st({c:'done',i:'check',l:'Lokal'})}</td></tr>`).join('')}</tbody></table></div><div class="note"><span>${I('info','sm')}</span><span>Seitenweise (48 je Seite) wie heute; gruppiert nach den vom Owner benannten Abschnitten.</span></div>`;
+}
+/* ---------- compose ---------- */
+function sec(title,tab,html,bfTxt){return `<section class="sec"><div class="sh"><h2>${title}</h2><button class="go" data-tab="${tab}" title="Als eigenen Tab öffnen">Eigener Tab${I('chev','sm')}</button></div>${html}</section>`}
+function body(){
+ const tabs=tabsFor(S.type),has=id=>tabs.some(x=>x.id===id),lab=id=>tabs.find(x=>x.id===id).label;
+ const html={units:unitsHtml,people:peopleHtml,rel:relsHtml,sim:simHtml,details:detailsHtml,files:filesHtml};
+ if(S2.tab==='overview')return ['units','people','rel','sim','details','files'].filter(has).map(id=>sec(lab(id),id,html[id]())).join('');
+ return `<section class="sec">${html[S2.tab]()}</section>`;
+}
+function render(){
+ const t=S.type,d=D();
+ const tabs=tabsFor(t);if(!tabs.some(x=>x.id===S2.tab))S2.tab='overview';
+ $('bcType').textContent=d.label;$('bcTitle').textContent=d.title;
+ $('app').classList.toggle('nobf',!S2.bf);
+ $('page').innerHTML=hero()+`<nav class="tabrow" role="tablist" aria-label="Bereiche">${tabs.map(x=>`<button class="pill ${S2.tab===x.id?'on':''}" role="tab" aria-selected="${S2.tab===x.id}" data-tab="${x.id}">${x.label}${x.n!=null?`<span class="n">${x.n}</span>`:''}${x.bf?'<span class="bfdot" title="Backend fehlt teilweise"></span>':''}</button>`).join('')}</nav>`+body();
+ $('p2sub').textContent=d.label+': '+tabs.map(x=>x.label).join(' · ');
+ $('dAvail').value=S2.avail;
+ renderTables();
+}
+function renderTables(){
+ const t=S.type,d=D();
+ const desc={overview:'Alles untereinander in fester Reihenfolge (Inhalt, Personen, Verknüpfte Werke, Ähnliches, Details, Versionen). Jeder Block hat seine Überschrift einmal; „Eigener Tab“ springt zum selben Block allein.',
+ units:{movie:'',series:'Staffel per Auswahlliste (kein zweiter Chip-Streifen), Liste ↔ Karten, Sortierung, Status mit Symbol, Häkchen und „von vorn“ je Folge, Staffel gesehen/zurücksetzen',anime:'Wie Serie; Specials als eigene Gruppe in der Staffelauswahl; AniList-Stand zeigt die Hero-Leiste',manga:'Band-Karten mit Cover, Lokal-Tag und Fortschritt; darunter die Kapitel des gewählten Bandes mit Häkchen',novel:'Wie Manga; Ausgaben (JP/EN) im eigenen Tab',music:'Tracktabelle mit Disc-Gruppe, Länge, Status, Abspielen und Gehört-Häkchen; fehlende Tracks sichtbar',game:'Gebiete/Quests mit Fortschritt und Companion; nur wenn eine verlässliche Quelle da ist',book:''}[t],
+ people:'Porträtkarten mit Rolle in einer Zeile; Gruppen als kleine Zwischenüberschrift (Besetzung/Stab, Staff/Sprecher, Studios & Team)',
+ rel:'Karten mit Typ-Pille und Symbol (Fortsetzung, Vorlage, Adaption, Ableger, andere Ausgabe, DLC), Quelle, Lokal-Marker; Klick öffnet das Work, wenn die Zuordnung kanonisch ist',
+ sim:'Medienkarten wie in den Regalen (Lokal-Tag oben links, Jahr · Typ · Wertung in einer Zeile)',
+ details:'Handlung vollständig, Genres, Werkdaten als Raster (Wertung mit Quelle, Originaltitel, Datum, Herkunft, typabhängige Felder); keine Provider-IDs, keine Admin-Pfade',
+ files:{movie:'Tabelle der Versionen mit Qualitäts-, Audio- und Untertitel-Chips, Größe, Status, Abspielen oder Anfragen',series:'Sprach- und Qualitätszusammenfassung als Chips, darunter die Dateitabelle je Folge (seitenweise)',anime:'wie Serie',book:'Ausgabenkarten (Sprache, Format, Lokal/Anfragbar); die Wahl steuert auch die Hero-Hauptaktion',novel:'Ausgabenkarten (JP-Original, EN-Übersetzung) mit Anfrage je Ausgabe',music:'Ausgabenkarten (Standard, Deluxe, Vinyl-Master)',game:'Plattformkarten (PC lokal, PS5 anfragbar) mit Anfrage je Plattform',manga:''}[t]};
+ const stat={overview:['y','vorhanden'],units:null,people:['p','Fotoquelle/Lizenz fehlt'],rel:['n','Backend fehlt'],sim:null,details:['p','Felder fehlen'],files:null};
+ const cs=id=>{
+  if(id==='units')return ['series','anime'].includes(t)?['p','Folgen ja; Sprach-Chips je Folge fehlen']:t==='movie'?['x','–']:['n','Status fehlender Einheiten und Lesestand fehlen'];
+  if(id==='sim')return ['movie','series','anime'].includes(t)?['y','TMDB-Empfehlungen (Anime über TMDB)']:['n','Quelle für diesen Typ fehlt'];
+  if(id==='files')return t==='movie'?['p','Dateien ja, Editionen ungenutzt']:['series','anime'].includes(t)?['y','Dateitabelle vorhanden']:['p','WorkEditions ungenutzt'];
+  return stat[id];
+ };
+ const rows=tabsFor(t,true).map(x=>{const s=cs(x.id),ds=desc[x.id];return `<tr><td>${x.label}</td><td>${E(ds)}</td><td><div class="cell"><i class="sym ${s[0]}">${{y:'✓',p:'~',n:'–',x:'·'}[s[0]]}</i><small>${E(s[1])}</small></div></td></tr>`}).join('');
+ $('planTitle').textContent='Tab-Plan für '+d.label+': was hinter jedem Tab liegt';
+ $('plan').innerHTML=`<thead><tr><th>Tab</th><th>Inhalt</th><th>Daten im Backend</th></tr></thead><tbody>${rows}</tbody>`;
+ $('allTabs').innerHTML=`<thead><tr><th>Typ</th><th>Tabs (ein Streifen, leere Tabs entfallen)</th></tr></thead><tbody>${TYPES.map(([k,n])=>`<tr><td>${n}</td><td>${tabsFor(k,true).map(x=>x.label).join('  ·  ')}</td></tr>`).join('')}</tbody>`;
+}
+function renderStatic(){
+ const C=[['Typisierte Werkbeziehungen (Fortsetzung, Vorlage, Adaption, Ableger, andere Ausgabe) mit Quelle, auch typübergreifend','alle','groß','Neue Tabelle und Importe aus AniList, TMDB-Collections, MusicBrainz, Hardcover/Open Library, IGDB; heute nur Franchise-Gruppen'],
+ ['AniList-Konto-Sync pro Profil (verbinden, abgleichen, trennen, Fortschritt zurückschreiben)','Anime, Manga, Light Novel','groß','Clean-start matcht AniList nur für Metadaten; Dev hatte Konto, Abgleich, Ratenlimit (als Vorlage nutzbar)'],
+ ['Wertung auf der Details-Seite, Quelle pro Nutzer wählbar oder „keine“','alle','klein bis mittel','WorkDetails hat keine Wertung; Rating liegt nur an Karten und ExternalWorks'],
+ ['Fortschrittsübersicht je Work (n/Summe, nächste Einheit, Bearbeiten)','alle','mittel','Gesehen/ungesehen/von vorn ist da (#1371); eine Zusammenfassung und numerisches Bearbeiten nicht'],
+ ['Status bekannter, aber nicht vorhandener Bände, Kapitel, Tracks; Lesestand je Kapitel/Track','Buch, Manga, Light Novel, Musik','mittel','Verfügbarkeitsabfrage liefert nur Dateien; Episoden können es schon'],
+ ['Ausgaben/Versionen/Plattformen auf der Details-Seite lesen, wählen und anfragen','Film, Buch, Light Novel, Musik, Spiel','mittel','WorkEditions existiert; Details liest sie nicht; Anfrage je Ausgabe fehlt'],
+ ['Personenfotos mit Quelle und Lizenz (oder nur Provider-Fotos)','alle','klein (Provider) bis mittel (Commons)','People.ImageUrl ohne Lizenzfelder; Owner-Entscheidung nötig'],
+ ['Werkdaten-Felder: Originaltitel, Datum, Herkunft, Altersfreigabe, Seiten, Verlag, Leserichtung, Format, Discs','alle','mittel','WorkMetadataFacts kennt nur Beschreibung, Poster, Hintergrund, Genres, Trailer, Studio'],
+ ['Sprach-Chips je Folge/Datei, „fehlende Folgen anfragen“ auf der Seite','Serie, Anime','klein bis mittel','Daten liegen an den Assets; Dev zeigte sie, Clean-start nur beim Film'],
+ ['Ähnliches für Nicht-TMDB-Typen','Buch, Manga, Light Novel, Musik, Spiel','mittel bis groß','Eine Quelle je Typ wäre zu wählen'],
+ ['Leseprobe und Hörprobe','Buch, Manga, Light Novel, Musik','groß, später','Quelle und Rechte ungeklärt; im Vorschlag nur als Platzhalterknopf'],
+ ['Spielinhalte, Gebiets-Fortschritt, Companion','Spiel','groß, später','Kein Datenmodell, nur Dev-Spec; nur aus verlässlicher Quelle'],
+ ['Eigene Listen im Favoriten-Dialog (Favoriten + Sammlungen + neue Liste)','alle','klein bis mittel','Heute Favorit-Schalter plus kuratierte Sammlungen; „eigene Listen“ klärt der Owner']];
+ $('cost').innerHTML=`<thead><tr><th>Baustein</th><th>Betrifft</th><th>Aufwand (Schätzung)</th><th>Stand heute</th></tr></thead><tbody>${C.map(r=>`<tr><td>${E(r[0])}</td><td>${E(r[1])}</td><td><b>${E(r[2])}</b></td><td>${E(r[3])}</td></tr>`).join('')}</tbody>`;
+ const Q=['<b>Wertung:</b> Welche Quelle je Typ ist Standard (TMDB, AniList, Hardcover, MusicBrainz, IGDB), und darf das Profil „keine“ wählen oder pro Typ unterschiedlich?',
+ '<b>Verknüpfte Werke:</b> Sind das neue, typisierte Relationen aus den Providern (inklusive typübergreifend, etwa Anime ↔ Manga, Buch ↔ Film) oder reichen vorerst die Franchise-Gruppen mit Position? Und ist ein Eintrag nur klickbar, wenn das Ziel schon ein Work ist?',
+ '<b>Ausgaben und Hörbuch:</b> Bleibt ein Hörbuch eine „andere Ausgabe“ desselben Buch-Works (Auswahl in der Hero-Leiste und im Tab Ausgaben), oder soll es ein eigenes Work mit Beziehung sein? Dazu: Kann man eine einzelne Ausgabe, Version oder Plattform anfragen?',
+ '<b>Übersicht als lange Seite:</b> Soll die Übersicht wirklich alles ungekürzt zeigen (auch alle Folgen), oder pro Block nur eine Vorschau mit „Eigener Tab“? Und: Fortschrittsleiste unten rechts im Hero für alle Typen oder nur für Anime, Manga und Light Novel?',
+ '<b>Personenfotos und Umfang:</b> Provider-Fotos (TMDB u. a.) oder nur frei lizenzierte mit Quelle? Und: Proben, Companion und AniList-Sync mit dieser Seite bauen oder als spätere Pakete?'];
+ $('qs').innerHTML=Q.map(q=>`<li>${q}</li>`).join('');
+}
+/* ---------- events ---------- */
+const page=$('page');
+page.addEventListener('click',e=>{
+ const tb=e.target.closest('[data-tab]');
+ if(tb){S2.tab=tb.dataset.tab;S2.menu=S2.pop=false;render();if(tb.classList.contains('go'))$('page').querySelector('.tabrow').scrollIntoView({block:'start',behavior:'smooth'});return}
+ const b=e.target.closest('[data-a]');
+ if(!b){if(e.target.closest('.menu'))return;if(S2.menu||S2.pop){S2.menu=S2.pop=false;render()}return}
+ const a=b.dataset.a,t=S.type,d=D(),i=Number(b.dataset.i);
+ const g=groups(t),key=g?seasonKey(t):null;
+ const done=m=>{S2.menu=S2.pop=false;render();if(m)toast(m)};
+ switch(a){
+  case 'play':return toast(progress(t).next+' · '+d.title+' (Mockup, kein Player)');
+  case 'reqOpen':S2.pop=!S2.pop;S2.menu=false;return render();
+  case 'popClose':return done();
+  case 'reqGo':S2.avail='requested';S2.req=0;return done('Anfrage gestellt (simuliert)');
+  case 'live':return toast('Öffnet /Requests mit dieser Anfrage');
+  case 'trailer':return toast(d.trailer+' (Platzhalter, keine echte Quelle)');
+  case 'fav':S2.fav[t]=!S2.fav[t];return done(S2.fav[t]?'Zu Favoriten hinzugefügt (öffnet im Vorschlag den Listen-Dialog)':'Aus Favoriten entfernt');
+  case 'more':S2.menu=!S2.menu;S2.pop=false;return render();
+  case 'sync':S2.sync[t]=!S2.sync[t];return done(S2.sync[t]?'AniList verbunden (Demo, kein Konto)':'AniList getrennt (Demo)');
+  case 'expand':S2.expand=!S2.expand;return render();
+  case 'mWatched':setAll(t,true);return done('Alles als '+word[t][0]+' markiert');
+  case 'mUn':setAll(t,false);return done('Alles als '+word[t][1]+' markiert');
+  case 'mRestart':setAll(t,false);return done('Von vorn: Player öffnet am Anfang (Mockup)');
+  case 'mLink':return done('Link kopiert (Mockup)');
+  case 'vList':S2.view='list';return render();
+  case 'vGrid':S2.view='grid';return render();
+  case 'toggleUnit':{const u=g[key][i];u.pct=u.pct>=100?0:100;return render()}
+  case 'restartUnit':{g[key][i].pct=0;return done('Von vorn: Player öffnet bei Folge/Track '+g[key][i].n)}
+  case 'playUnit':return toast('Spielt Track '+g[key][i].n+' (Mockup)');
+  case 'seasonDone':g[key].forEach(u=>{if(u.loc)u.pct=100});return render();
+  case 'seasonReset':g[key].forEach(u=>{if(u.loc)u.pct=0});return render();
+  case 'reqUnit':S2.avail==='missing'&&(S2.avail='requested',S2.req=0);return done('Anfrage gestellt (simuliert)');
+  case 'vol':S2.vol[t]=i;return render();
+  case 'toggleCh':{const v=d.vols[S2.vol[t]||0];v.done=i<v.done?i:i+1;return render()}
+  case 'volDone':{const v=d.vols[S2.vol[t]||0];v.done=v.ch;return render()}
+  case 'volReset':{const v=d.vols[S2.vol[t]||0];v.done=0;return render()}
+  case 'ed':S2.ed[t]=i;return done('Ausgabe gewählt: '+d.editions[i][0]);
+  case 'playEd':S2.ed[t]=i;return done('Abspielen: '+d.editions[i][0]);
+  case 'reqEd':return toast('Anfrage für diese Version (Mockup)');
+  case 'rel':return toast(b.dataset.t+': öffnet das Work, sobald die Zuordnung kanonisch ist');
+  case 'companion':return toast('Games Companion (optional, später)');
+ }
+});
+page.addEventListener('change',e=>{
+ const t=S.type,id=e.target.id;
+ if(id==='seasonSel'){S2.season[t]=e.target.value;render()}
+ else if(id==='sortSel'){S2.sort=e.target.value;render()}
+ else if(id==='edSel'){S2.ed[t]=Number(e.target.value);toast('Gewählt: '+D().editions[S2.ed[t]][0]);render()}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(S2.menu||S2.pop)){S2.menu=S2.pop=false;render()}});
+$('dAvail').addEventListener('change',e=>{S2.avail=e.target.value;S2.req=0;S2.menu=S2.pop=false;render()});
+$('dData').addEventListener('change',e=>{S2.sparse=e.target.value==='sparse';render()});
+$('dRate').addEventListener('change',e=>{S2.rate=e.target.value;render()});
+$('dBf').addEventListener('change',e=>{S2.bf=e.target.checked;render()});
+/* live request simulation */
+setInterval(()=>{
+ if(S.part!==2||S2.avail!=='requested')return;
+ S2.req=Math.min(100,S2.req+3);
+ if(S2.req>=100){S2.avail='local';S2.req=0;render();toast('Anfrage abgeschlossen: lokal verfügbar');return}
+ const ph=phase(),tx=$('liveTxt'),bar=$('liveBar');
+ if(tx)tx.textContent=ph.t+(ph.pct!=null?' · '+ph.pct+' %':'');if(bar)bar.style.width=S2.req+'%';
+},900);
+window.JW.render2=render;window.JW.renderStatic=renderStatic;
+})();
+</script>
+<script>
+(()=>{'use strict';
+const {S,TYPES,$,I,renderP1,render2,renderStatic}=window.JW;
+function types(){$('typeSeg').innerHTML=TYPES.map(([k,n,ic])=>`<button class="pill ${S.type===k?'on':''}" data-type="${k}">${I(ic,'sm')}${n}</button>`).join('')}
+function show(){
+ $('part1').classList.toggle('hide',S.part!==1);$('part2').classList.toggle('hide',S.part!==2);
+ [...$('partSeg').children].forEach(b=>b.classList.toggle('on',Number(b.dataset.part)===S.part));
+ types();if(S.part===1)renderP1();else render2();
+}
+$('partSeg').addEventListener('click',e=>{const b=e.target.closest('[data-part]');if(!b)return;S.part=Number(b.dataset.part);show();window.scrollTo({top:0})});
+$('typeSeg').addEventListener('click',e=>{const b=e.target.closest('[data-type]');if(!b)return;S.type=b.dataset.type;show()});
+$('themeBtn').addEventListener('click',()=>{document.body.classList.toggle('dark');$('themeBtn').innerHTML=I(document.body.classList.contains('dark')?'sun':'moon')});
+renderStatic();show();
+})();
+</script>
+</body>
+</html>
