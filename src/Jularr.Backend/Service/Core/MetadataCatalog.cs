@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
 using Jularr.Backend.Data.Admin.Media.V1;
@@ -28,6 +29,12 @@ namespace Jularr.Backend.Service.Core
 
         // The details of one Work are read by one caller at a time; a caller that waited finds them stored.
         private static readonly SemaphoreSlim[] DetailGates = [.. Enumerable.Range(0, 64).Select(_ => new SemaphoreSlim(1, 1))];
+
+        // A Work whose catalog failed only after a long wait rests this long, so opening its page again does not wait for the same slow call every time; a quick
+        // failure is asked again on the next open.
+        private static readonly TimeSpan DetailRest = TimeSpan.FromMinutes(2);
+        private static readonly TimeSpan SlowDetail = TimeSpan.FromSeconds(2);
+        private static readonly ConcurrentDictionary<long, DateTime> DetailRests = new();
 
         // Narō is asked for the Japanese titles of only the first few light novel entries a search finds.
         private const int EditionLookups = 3;
@@ -434,10 +441,15 @@ namespace Jularr.Backend.Service.Core
         }
 
         // A Work the profile may open (any Work for a background pass without a profile) that has no details yet takes them from its catalog entry once, into the same Work.
-        // False while the catalog cannot give them now; nothing is retried, the next open asks again. A Work no catalog entry describes, such as an anime season no series
-        // holds yet, keeps its row.
+        // False while the catalog cannot give them now; nothing is retried in the background, an open after the rest of DetailRest asks again. A Work no catalog entry
+        // describes, such as an anime season no series holds yet, keeps its row.
         public async Task<bool> DetailAsync(LogicContext context, long workId, long? profileId, CancellationToken ct)
         {
+            if (DetailRests.TryGetValue(workId, out var restsUntil) && restsUntil > DateTime.UtcNow)
+            {
+                return false;
+            }
+
             var gate = DetailGates[(int)(workId % DetailGates.Length)];
             await gate.WaitAsync(ct);
             try
@@ -448,13 +460,30 @@ namespace Jularr.Backend.Service.Core
                     return true;
                 }
 
+                var watch = global::System.Diagnostics.Stopwatch.StartNew();
                 try
                 {
                     await ImportAsync(context, work.MediaTypeId, work.MediaSubtypeId, identity.Namespace, identity.Value, ct);
+                    DetailRests.TryRemove(workId, out _);
                     return true;
                 }
                 catch (Exception exception) when (exception is ServiceUnavailableException or KeyNotFoundException or DataValidationException)
                 {
+                    if (watch.Elapsed < SlowDetail)
+                    {
+                        return false;
+                    }
+
+                    if (DetailRests.Count > 512)
+                    {
+                        var now = DateTime.UtcNow;
+                        foreach (var (rested, until) in DetailRests)
+                        {
+                            if (until <= now) DetailRests.TryRemove(rested, out _);
+                        }
+                    }
+
+                    DetailRests[workId] = DateTime.UtcNow + DetailRest;
                     return false;
                 }
             }
