@@ -1,0 +1,33 @@
+name: Stage Jularr v0.2.31 (one time)
+
+on:
+  push:
+    paths:
+      - '.github/workflows/stage-jularr-v0.2.31.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  stage:
+    if: "github.event.head_commit.message == 'chore(release): stage v0.2.31'"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create tag on the tested main commit and dispatch Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TARGET_SHA: 92cafe6d3f9e7631cf14a9131740d5fdf5c1f9e0
+        run: |
+          set -euo pipefail
+          if gh api "repos/${GH_REPO}/git/ref/tags/v0.2.31" >/dev/null 2>&1; then
+            echo "::error::v0.2.31 already exists"
+            exit 1
+          fi
+          gh api "repos/${GH_REPO}/git/refs" -X POST \
+            -f ref='refs/tags/v0.2.31' \
+            -f sha="${TARGET_SHA}"
+          # GitHub does not run tag push workflows for GITHUB_TOKEN-created tags.
+          # Trigger the existing release workflow explicitly on the new tag.
+          gh workflow run release.yml --ref v0.2.31 -f dry_run=false
