@@ -282,6 +282,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, Regex.Matches(transport, "disabled=\"disabled\"").Count);
             Assert.IsFalse(Regex.IsMatch(html, "<script[^>]*player-[^>]*\\.js"));
             Assert.IsTrue(response.Headers.CacheControl!.NoStore);
+
+            // A page is never cached, with exactly the values the antiforgery token sets itself, so it logs no overridden-header warning per page.
+            Assert.IsTrue(response.Headers.CacheControl.NoCache && response.Headers.CacheControl.NoStore && !response.Headers.CacheControl.Private);
+            Assert.AreEqual("no-cache", string.Join(",", response.Headers.Pragma.Select(item => item.Name)));
         }
 
         [TestMethod]

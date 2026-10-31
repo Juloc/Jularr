@@ -686,7 +686,8 @@ namespace Jularr.Backend.Tests
                     {
                         if (http.GetEndpoint()?.Metadata.GetMetadata<PageActionDescriptor>() is not null)
                         {
-                            http.Response.Headers.CacheControl = "private,no-store";
+                            http.Response.Headers.CacheControl = "no-cache, no-store";
+                            http.Response.Headers.Pragma = "no-cache";
                             await http.RequestServices.GetRequiredService<UiText>().InitializeAsync(http);
                         }
 
