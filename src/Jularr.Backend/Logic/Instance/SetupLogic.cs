@@ -142,7 +142,7 @@ namespace Jularr.Backend.Logic.Instance
                     )
                 UNION ALL
                 SELECT
-                    'downloadStorage.' || CASE WHEN settings."DownloadStorageAreaId" = 1 THEN 'Usenet' ELSE 'Direct' END,
+                    'downloadStorage.' || CASE settings."DownloadStorageAreaId" WHEN 1 THEN 'Usenet' WHEN 2 THEN 'Direct' ELSE 'Torrent' END,
                     TRUE
                 FROM
                     "DownloadStorageSettings" AS settings
@@ -156,8 +156,9 @@ namespace Jularr.Backend.Logic.Instance
                             "AcquisitionConnections" AS connection
                         WHERE
                             connection."IsEnabled"
-                            AND CASE WHEN settings."DownloadStorageAreaId" = 1 THEN connection."AcquisitionConnectionTypeId" = 6
-                                ELSE connection."AcquisitionConnectionTypeId" IN (3, 4, 5) END
+                            AND CASE settings."DownloadStorageAreaId" WHEN 1 THEN connection."AcquisitionConnectionTypeId" = 6
+                                WHEN 2 THEN connection."AcquisitionConnectionTypeId" IN (3, 4, 5)
+                                ELSE connection."AcquisitionConnectionTypeId" = 12 END
                     )
                 UNION ALL
                 -- No basic function chosen: nothing of Jularr is switched on.

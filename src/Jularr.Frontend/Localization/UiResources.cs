@@ -1002,6 +1002,7 @@ namespace Jularr.Frontend.Localization
             new("setup.check.anilist", "Profiles cannot sign in to AniList without the application's client ID and secret."),
             new("setup.check.downloadStorage.Usenet", "Choose and confirm download storage for the Jularr Usenet downloader."),
             new("setup.check.downloadStorage.Direct", "Choose and confirm storage for direct downloads."),
+            new("setup.check.downloadStorage.Torrent", "Choose and confirm download storage for the Jularr torrent engine."),
             new("setup.check.ffmpeg", "FFmpeg is not configured; files play only as they are."),
             new("admin.works.source", "Source"),
             new("admin.works.source.tmdb_movie", "TMDB"),
