@@ -19,12 +19,15 @@ namespace Jularr.Backend.Logic.Acquisition
         public const string FailedReasonKey = "download_failed";
         public const string InterruptedReasonKey = "download_interrupted";
 
+        // A release that failed to download or that the import threw out ("import_...": no video, wrong series, only extras) is never taken again; an interrupted download may be.
+        public const string ReleaseFaultSql = "(release.\"ReasonKey\" = 'download_failed' OR release.\"ReasonKey\" LIKE 'import\\_%')";
+
         public static Task<WantedTargetData> ReadWantedTargetAsync(this LogicContext ctx, long wantedItemId, CancellationToken ct)
         {
             // Search facts of one target.
             var sql = new SqlStatement();
             sql.Statement =
-                """
+                $$"""
                 SELECT
                     wanted."Id" AS "WantedItemId",
                     work."Id" AS "WorkId",
@@ -54,7 +57,7 @@ namespace Jularr.Backend.Logic.Acquisition
                         WHERE
                             release."WantedItemId" = wanted."Id"
                             AND (release."AcquisitionReleaseStatusTypeId" = 4
-                                OR (release."AcquisitionReleaseStatusTypeId" = 3 AND release."ReasonKey" = 'download_failed'))
+                                OR (release."AcquisitionReleaseStatusTypeId" = 3 AND {{ReleaseFaultSql}}))
                     ) AS "ReleaseIdentities",
                     wanted."IsPaused",
                     EXISTS (
@@ -1309,7 +1312,7 @@ namespace Jularr.Backend.Logic.Acquisition
             // Blocked releases are never taken; allowed ones may be taken again.
             var sql = new SqlStatement();
             sql.Statement =
-                """
+                $"""
                 UPDATE
                     "AcquisitionReleases" AS release
                 SET
@@ -1320,7 +1323,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     AND release."WantedItemId" = @WantedItemId
                     AND CASE @AcquisitionReleaseStatusTypeId
                         WHEN 4 THEN release."AcquisitionReleaseStatusTypeId" IN (2, 3, 5)
-                        WHEN 5 THEN release."AcquisitionReleaseStatusTypeId" = 4 OR release."AcquisitionReleaseStatusTypeId" = 3 AND release."ReasonKey" = 'download_failed'
+                        WHEN 5 THEN release."AcquisitionReleaseStatusTypeId" = 4 OR release."AcquisitionReleaseStatusTypeId" = 3 AND {ReleaseFaultSql}
                         ELSE FALSE
                     END;
                 """;
