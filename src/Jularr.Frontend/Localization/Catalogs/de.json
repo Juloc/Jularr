@@ -11869,7 +11869,7 @@
   ],
   "jobs.use.setting": [
    "Waits while Jularr is used",
-   "Wartet bei Nutzung"
+   "Wartet, solange Jularr genutzt wird"
   ],
   "jobs.detailsOf": [
    "Details of {0}",
