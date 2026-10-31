@@ -30,8 +30,10 @@ namespace Jularr.Backend.Service.Core
         // The details of one Work are read by one caller at a time; a caller that waited finds them stored.
         private static readonly SemaphoreSlim[] DetailGates = [.. Enumerable.Range(0, 64).Select(_ => new SemaphoreSlim(1, 1))];
 
-        // A Work its catalog could not detail rests this long, so opening its page again does not wait for the same failing call every time.
+        // A Work whose catalog failed only after a long wait rests this long, so opening its page again does not wait for the same slow call every time; a quick
+        // failure is asked again on the next open.
         private static readonly TimeSpan DetailRest = TimeSpan.FromMinutes(2);
+        private static readonly TimeSpan SlowDetail = TimeSpan.FromSeconds(2);
         private static readonly ConcurrentDictionary<long, DateTime> DetailRests = new();
 
         // Narō is asked for the Japanese titles of only the first few light novel entries a search finds.
@@ -458,6 +460,7 @@ namespace Jularr.Backend.Service.Core
                     return true;
                 }
 
+                var watch = global::System.Diagnostics.Stopwatch.StartNew();
                 try
                 {
                     await ImportAsync(context, work.MediaTypeId, work.MediaSubtypeId, identity.Namespace, identity.Value, ct);
@@ -466,6 +469,11 @@ namespace Jularr.Backend.Service.Core
                 }
                 catch (Exception exception) when (exception is ServiceUnavailableException or KeyNotFoundException or DataValidationException)
                 {
+                    if (watch.Elapsed < SlowDetail)
+                    {
+                        return false;
+                    }
+
                     if (DetailRests.Count > 512)
                     {
                         var now = DateTime.UtcNow;
