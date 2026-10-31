@@ -118,11 +118,18 @@ namespace Jularr.Backend.Logic.Acquisition
             (indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)mediaType)) && (!automatic || indexer.SearchesAutomatically);
 
         // Queries left today after the ones a search already used.
-        public static bool HasQueries(AcquisitionConnectionData indexer, int used) => indexer.QueryLimit is null || indexer.QueryCount + used < indexer.QueryLimit;
+        // An indexer without its own daily limit still guards the searches nobody asked for, so a loop over a large library cannot use up its plan; a manual search has no such guard.
+        public const int AutomaticQueryLimit = 1000;
+
+        public static bool HasQueries(AcquisitionConnectionData indexer, int used, bool automatic = false)
+        {
+            int? limit = indexer.QueryLimit ?? (automatic ? AutomaticQueryLimit : null);
+            return limit is null || indexer.QueryCount + used < limit;
+        }
 
         // Automatic searches also skip backed-off indexers and those without grabs left.
         public static bool CanSearch(AcquisitionConnectionData indexer, MediaType mediaType, bool automatic, DateTime now) =>
-            Serves(indexer, mediaType, automatic) && HasQueries(indexer, 0)
+            Serves(indexer, mediaType, automatic) && HasQueries(indexer, 0, automatic)
             && (!automatic || (indexer.RetryAt is null || indexer.RetryAt <= now) && (indexer.GrabLimit is null || indexer.GrabCount < indexer.GrabLimit));
 
         // Today's queries count against the limit; a failure backs off from 5 minutes doubling up to a day, or for the wait the indexer asked for if that is longer; an answer ends the backoff.

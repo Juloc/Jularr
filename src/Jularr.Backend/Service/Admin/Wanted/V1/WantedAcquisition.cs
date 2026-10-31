@@ -110,7 +110,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     async (source, inner) =>
                     {
                         var use = uses.GetOrAdd(source.Id, _ => new IndexerUse());
-                        if (!AcquisitionConnectionLogic.HasQueries(source, use.Queries)) return;
+                        if (!AcquisitionConnectionLogic.HasQueries(source, use.Queries, automatic)) return;
                         Interlocked.Increment(ref use.Queries);
                         if (await _nyaa.SearchAsync(source, wanted, inner) is not { } answers)
                         {
@@ -192,7 +192,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     await Parallel.ForEachAsync(newznab, new ParallelOptions { MaxDegreeOfParallelism = budget.MaxConcurrentIndexers, CancellationToken = ct }, async (indexer, token) =>
                     {
                         var use = uses.GetOrAdd(indexer.Id, _ => new IndexerUse());
-                        if (!await SearchIndexerAsync(indexer, kind, target.PlatformIgdbId, plans[indexer.Id].Where(query => query.Tier == current), budget, offers, use, token))
+                        if (!await SearchIndexerAsync(indexer, kind, target.PlatformIgdbId, plans[indexer.Id].Where(query => query.Tier == current), budget, offers, use, automatic, token))
                         {
                             use.Failed = true;
                             Interlocked.Increment(ref failures);
@@ -611,7 +611,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         }
 
         private async Task<bool> SearchIndexerAsync(AcquisitionConnectionData indexer, AcquisitionKind kind, int? igdbPlatform, IEnumerable<PlannedQuery> queries, SearchBudget budget,
-            ConcurrentDictionary<string, ReleaseOffer> offers, IndexerUse use, CancellationToken ct)
+            ConcurrentDictionary<string, ReleaseOffer> offers, IndexerUse use, bool automatic, CancellationToken ct)
         {
             // A slow indexer only costs its own share.
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -628,7 +628,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     for (var page = 0; page < budget.MaxPages && offers.Count < budget.MaxResults; page++)
                     {
                         // The daily query limit also holds within one search.
-                        if (!AcquisitionConnectionLogic.HasQueries(indexer, use.Queries))
+                        if (!AcquisitionConnectionLogic.HasQueries(indexer, use.Queries, automatic))
                         {
                             return true;
                         }
