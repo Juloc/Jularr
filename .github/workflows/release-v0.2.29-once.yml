@@ -1,0 +1,53 @@
+name: Publish Jularr v0.2.29 (one time)
+
+# This workflow is intentionally restricted to the initial merge of this file.
+# It creates a release tag on the already-tested main commit, then dispatches
+# the existing release.yml (a tag pushed with GITHUB_TOKEN does not trigger it).
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-v0.2.29-once.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  publish:
+    if: github.repository == 'Juloc/Jularr'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify the tested commit, tag it, and invoke the existing release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TARGET_SHA: 3607db31348994b98662a266cd29f3f1d14a1824
+          RELEASE_TAG: v0.2.29
+        run: |
+          set -euo pipefail
+          if gh api "repos/${GH_REPO}/git/ref/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo '::error::The release tag already exists; refusing to overwrite it.'
+            exit 1
+          fi
+          main_sha="$(gh api "repos/${GH_REPO}/git/ref/heads/main" --jq '.object.sha')"
+          status="$(gh api "repos/${GH_REPO}/compare/${TARGET_SHA}...${main_sha}" --jq '.status')"
+          if [[ "${status}" != 'ahead' && "${status}" != 'identical' ]]; then
+            echo '::error::The tested target commit is not reachable from main.'
+            exit 1
+          fi
+          for workflow in 'Frontend' 'Backend Full'; do
+            result="$(gh run list --commit "${TARGET_SHA}" --workflow "${workflow}" --limit 50 \
+              --json status,conclusion,createdAt \
+              --jq 'map(select(.status == "completed")) | sort_by(.createdAt) | last // empty | .conclusion')"
+            if [[ "${result}" != 'success' ]]; then
+              echo "::error::${workflow} on ${TARGET_SHA} is ${result:-missing}, not success."
+              exit 1
+            fi
+            echo "${workflow}: success"
+          done
+          gh api --method POST "repos/${GH_REPO}/git/refs" \
+            -f "ref=refs/tags/${RELEASE_TAG}" -f "sha=${TARGET_SHA}" > /dev/null
+          gh workflow run release.yml --ref "${RELEASE_TAG}" -f dry_run=false
+          echo "Release dispatched: ${RELEASE_TAG} at ${TARGET_SHA}"
