@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   stage:
-    if: "github.event.head_commit.message == 'chore(release): stage v0.2.31'"
+    if: "github.ref == 'refs/heads/main'"
     runs-on: ubuntu-latest
     steps:
       - name: Create tag on the tested main commit and dispatch Release
