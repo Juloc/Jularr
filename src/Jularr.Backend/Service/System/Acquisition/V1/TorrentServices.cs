@@ -19,6 +19,7 @@ using Jularr.Integrations.Data.Network;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Data.Torrent;
 using Jularr.Integrations.Logic.Storage;
+using Microsoft.Extensions.Logging;
 
 namespace Jularr.Backend.Service.System.Acquisition.V1
 {
@@ -72,13 +73,15 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private readonly DownloadImport _import;
         private readonly TimeProvider _time;
         private readonly DownloadStorage _downloads;
+        private readonly ILogger<RunTorrentJobV1> _logger;
 
-        internal RunTorrentJobV1(TorrentJob jobs, DownloadImport import, TimeProvider time, DownloadStorage downloads)
+        internal RunTorrentJobV1(TorrentJob jobs, DownloadImport import, TimeProvider time, DownloadStorage downloads, ILogger<RunTorrentJobV1> logger)
         {
             _jobs = jobs;
             _import = import;
             _time = time;
             _downloads = downloads;
+            _logger = logger;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -126,13 +129,15 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 await RestAsync(download, staging);
                 return false;
             }
-            catch (InvalidDataException)
+            catch (InvalidDataException exception)
             {
+                _logger.LogError(exception, "Torrent job {OperationId} failed: the torrent data is invalid.", download.OperationId);
                 await _import.FailAsync(Context, download.OperationId, DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime, CancellationToken);
                 return false;
             }
             catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
             {
+                _logger.LogWarning(exception, "Torrent job {OperationId} waits: its download storage is unavailable.", download.OperationId);
                 await _import.AttentionAsync(Context, download.OperationId, "download_storage_unavailable", null, CancellationToken);
                 return false;
             }
@@ -155,6 +160,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     if (!pass.Progressed && pass.ReasonKey is not null) await RestAsync(download, staging);
                     return pass.Progressed;
                 case TorrentPassState.Failed:
+                    _logger.LogError("Torrent job {OperationId} failed: {Reason}.", download.OperationId, pass.ReasonKey ?? "no reason given");
                     await _import.FailAsync(Context, download.OperationId, DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime, CancellationToken);
                     return false;
                 default:
