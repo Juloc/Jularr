@@ -9532,6 +9532,22 @@
    "The indexer or download client rejected the API key.",
    "Der Indexer oder Download-Client hat den API-Schlüssel abgelehnt."
   ],
+  "errors.usenet_credentials_rejected": [
+   "The news server rejected the user name or password.",
+   "Der News-Server hat Benutzername oder Passwort abgelehnt."
+  ],
+  "errors.usenet_connection_limit": [
+   "The news server allows no more connections right now. Lower this server's connections to what the plan includes.",
+   "Der News-Server erlaubt gerade keine weiteren Verbindungen. Senke die Verbindungen dieses Servers auf das, was der Tarif enthält."
+  ],
+  "acquisition.outcome.usenet_credentials_rejected": [
+   "The news server rejected the user name or password",
+   "Der News-Server hat Benutzername oder Passwort abgelehnt"
+  ],
+  "acquisition.outcome.usenet_connection_limit": [
+   "The news server allows no more connections",
+   "Der News-Server erlaubt keine weiteren Verbindungen"
+  ],
   "errors.acquisition_rate_limited": [
    "The indexer limits requests right now. Please try again later.",
    "Der Indexer begrenzt gerade die Anfragen. Bitte versuche es später erneut."

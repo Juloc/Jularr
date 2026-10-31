@@ -43,7 +43,14 @@ namespace Jularr.Integrations.Logic.Usenet
                 }
 
                 var connection = new NntpConnection(client, stream);
-                if ((await connection.ReadStatusAsync(timeout.Token)).Code is not (200 or 201))
+                var greeting = (await connection.ReadStatusAsync(timeout.Token)).Code;
+                if (greeting == 502)
+                {
+                    // Providers answer 502 when the account already holds its allowed number of connections.
+                    throw new UsenetException(UsenetFailure.ConnectionLimit, "The news server allows no more connections.");
+                }
+
+                if (greeting is not (200 or 201))
                 {
                     throw new UsenetException(UsenetFailure.Unavailable, "The news server refused the connection.");
                 }
@@ -60,6 +67,11 @@ namespace Jularr.Integrations.Logic.Usenet
                     if (status.Code == 381)
                     {
                         status = await connection.CommandAsync("AUTHINFO PASS " + server.Password, timeout.Token);
+                    }
+
+                    if (status.Code == 502)
+                    {
+                        throw new UsenetException(UsenetFailure.ConnectionLimit, "The news server allows no more connections.");
                     }
 
                     if (status.Code != 281)
@@ -104,7 +116,9 @@ namespace Jularr.Integrations.Logic.Usenet
                         break;
                     case 423 or 430:
                         throw new UsenetException(UsenetFailure.ArticleMissing, "The article is not available.");
-                    case 480 or 481 or 502:
+                    case 502:
+                        throw new UsenetException(UsenetFailure.ConnectionLimit, "The news server allows no more connections.");
+                    case 480 or 481:
                         throw new UsenetException(UsenetFailure.Unauthorized, "The news server refused the article.");
                     default:
                         throw new UsenetException(UsenetFailure.Unavailable, "The news server answered " + status.Code.ToString(CultureInfo.InvariantCulture) + ".");

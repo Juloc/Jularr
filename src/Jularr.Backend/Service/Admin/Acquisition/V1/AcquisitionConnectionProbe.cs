@@ -74,7 +74,12 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 }
                 catch (UsenetException exception)
                 {
-                    return (new AcquisitionConnectionTestV1(false, exception.Failure == UsenetFailure.Unauthorized ? "acquisition_authentication_failed" : "acquisition_unavailable", null, []), null);
+                    return (new AcquisitionConnectionTestV1(false, exception.Failure switch
+                    {
+                        UsenetFailure.Unauthorized => "usenet_credentials_rejected",
+                        UsenetFailure.ConnectionLimit => "usenet_connection_limit",
+                        _ => "acquisition_unavailable"
+                    }, null, []), null);
                 }
             }
 

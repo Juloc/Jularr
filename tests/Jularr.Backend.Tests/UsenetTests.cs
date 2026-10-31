@@ -273,6 +273,29 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(news.Logins.All(login => login == "reader:news-secret"));
         }
 
+        // A provider's 502 means the account holds all its connections, not that the login is wrong; each says what it is.
+        [TestMethod]
+        public async Task Usenet_ConnectionLimitAndWrongLogin_AreToldApart()
+        {
+            using var storage = new TemporaryDirectory();
+            using var staging = new TemporaryDirectory();
+            await using var news = new FakeNewsServer("reader", "news-secret");
+            news.Publish(Feature + ".mkv", new byte[1000], 1);
+            await using var host = await CreateHostAsync(storage.Path, staging.Path, new FakeIndexer(news.Nzb(Feature + ".mkv")), news.Port);
+            news.ConnectionLimit = true;
+            using var limited = await host.SendAsync(HttpMethod.Post, Connections + "/2/test");
+            var limit = (await limited.Content.ReadFromJsonAsync<AcquisitionConnectionTestV1>())!;
+            Assert.IsFalse(limit.IsAvailable);
+            Assert.AreEqual("usenet_connection_limit", limit.ErrorKey);
+
+            news.ConnectionLimit = false;
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"Username\" = 'someone-else' WHERE \"Id\" = 2");
+            using var wrong = await host.SendAsync(HttpMethod.Post, Connections + "/2/test");
+            var login = (await wrong.Content.ReadFromJsonAsync<AcquisitionConnectionTestV1>())!;
+            Assert.IsFalse(login.IsAvailable);
+            Assert.AreEqual("usenet_credentials_rejected", login.ErrorKey);
+        }
+
         [TestMethod]
         public async Task Usenet_MissingArticlesWithoutRepairFiles_FailTheRelease()
         {
@@ -431,6 +454,7 @@ namespace Jularr.Backend.Tests
 
             public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
             public List<string> Logins { get; } = [];
+            public bool ConnectionLimit { get; set; }
 
             public void Publish(string name, byte[] data, int parts)
             {
@@ -512,6 +536,12 @@ namespace Jularr.Backend.Tests
                 {
                     var stream = client.GetStream();
                     using var reader = new StreamReader(stream, Encoding.Latin1);
+                    if (ConnectionLimit)
+                    {
+                        await Write(stream, "502 too many connections\r\n");
+                        return;
+                    }
+
                     await Write(stream, "200 fake news ready\r\n");
                     string? user = null;
                     while (await reader.ReadLineAsync() is { } line)

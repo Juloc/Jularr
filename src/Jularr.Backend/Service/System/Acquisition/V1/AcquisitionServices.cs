@@ -401,9 +401,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     ? new UsenetPassResult(UsenetPassState.Completed, 100, 0, 0, outputPath: paths.Complete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId))
                     : await _jobs.RunAsync(connection, staging, _time.GetUtcNow() + PassLength, CancellationToken, paths, download.OperationId);
             }
-            catch (UsenetException exception) when (exception.Failure == UsenetFailure.Unauthorized)
+            catch (UsenetException exception) when (exception.Failure is UsenetFailure.Unauthorized or UsenetFailure.ConnectionLimit)
             {
-                await WaitAsync(download, staging, "acquisition_authentication_failed");
+                await WaitAsync(download, staging, exception.Failure == UsenetFailure.Unauthorized ? "usenet_credentials_rejected" : "usenet_connection_limit");
                 return false;
             }
             catch (ServiceUnavailableException exception)
