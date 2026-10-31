@@ -14799,6 +14799,10 @@
    "Choose and confirm storage for direct downloads.",
    "Wähle den Speicher für direkte Downloads und bestätige ihn."
   ],
+  "setup.check.downloadStorage.Torrent": [
+   "Choose and confirm download storage for the Jularr torrent engine.",
+   "Wähle den Download-Speicher für die Torrent-Engine von Jularr und bestätige ihn."
+  ],
   "nav.administration": [
    "Administration",
    "Verwaltung"

@@ -118,8 +118,9 @@ namespace Jularr.Backend.Logic.Storage
                             WHERE
                                 operation."OperationTypeId" = 2
                                 AND operation."OperationStatusTypeId" IN (1, 2)
-                                AND CASE WHEN @DownloadStorageAreaId = 1 THEN connection."AcquisitionConnectionTypeId" = 6
-                                    ELSE connection."AcquisitionConnectionTypeId" IN (3, 4, 5) END
+                                AND CASE @DownloadStorageAreaId WHEN 1 THEN connection."AcquisitionConnectionTypeId" = 6
+                                    WHEN 2 THEN connection."AcquisitionConnectionTypeId" IN (3, 4, 5)
+                                    ELSE connection."AcquisitionConnectionTypeId" = 12 END
                         )
                     );
                 """;
