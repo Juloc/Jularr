@@ -170,9 +170,10 @@ namespace Jularr.Backend.Logic.Reading
                 }
             }
 
-            // Numbered blocks are the semantic locator.
+            // Numbered blocks are the semantic locator. A book whose lines are divs (a converted PDF, a plain export) has its text in leaf divs: they are blocks too,
+            // else that text is never translated and its chapter heading never found.
             var count = 0;
-            foreach (var block in clean.Body!.QuerySelectorAll(string.Join(',', Blocks)))
+            foreach (var block in clean.Body!.QuerySelectorAll("*").Where(element => Blocks.Contains(element.LocalName) || IsTextDiv(element)).ToArray())
             {
                 block.SetAttribute("data-b", count.ToString(CultureInfo.InvariantCulture));
                 count++;
@@ -181,6 +182,11 @@ namespace Jularr.Backend.Logic.Reading
             var characters = clean.Body.TextContent.Count(character => !char.IsWhiteSpace(character));
             return new PreparedSection(clean.Body.InnerHtml, characters, count, resources);
         }
+
+        // A div that holds text and no other block or div: the smallest unit of text a book without paragraphs has.
+        private static bool IsTextDiv(AngleSharp.Dom.IElement element) =>
+            element.LocalName == "div" && !string.IsNullOrWhiteSpace(element.TextContent)
+            && !element.QuerySelectorAll("*").Any(child => child.LocalName == "div" || Blocks.Contains(child.LocalName));
 
         // Large pictures become figures: the declared kind where the book says so, else by the picture's size; a picture alone in its block takes the block's place.
         private static void Figures(IDocument clean, Dictionary<string, string> sources, Func<string, (int Width, int Height)?>? imageSize)
