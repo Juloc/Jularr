@@ -14,6 +14,9 @@
     text-align: start;
     font-size: var(--text-control);
 
+    // The cells hold the hidden labels (position: absolute); without a positioned cell they sit at the table's far edge, outside the wrap's clip, and the page scrolls sideways.
+    td, th { position: relative; }
+
     th {
         text-align: start;
         background: var(--field);
