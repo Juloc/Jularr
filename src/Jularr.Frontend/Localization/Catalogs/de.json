@@ -15176,8 +15176,16 @@
    "Der konfigurierte lokale Modellserver ist nicht erreichbar."
   ],
   "translation.local.capacity": [
-   "Model downloads require the administrator to check the Ollama model volume and configure LocalTranslation__OperatorVerifiedFreeBytes. Keep at least 2 GB free after downloading. Jularr cannot inspect the disk space of another container.",
-   "Für Modell-Downloads muss der Administrator das Ollama-Modellvolume prüfen und LocalTranslation__OperatorVerifiedFreeBytes konfigurieren. Nach dem Download sollten mindestens 2 GB frei bleiben. Jularr kann den Speicherplatz eines anderen Containers nicht prüfen."
+   "Model downloads need the free space of the Ollama model volume, which Jularr cannot inspect from another container: check it and type it into the field below. Keep at least 2 GB free after downloading. Free space now:",
+   "Für Modell-Downloads braucht Jularr den freien Platz des Ollama-Modellvolumes, den es von einem anderen Container aus nicht sehen kann: prüfe ihn und trage ihn unten ein. Nach dem Download sollten mindestens 2 GB frei bleiben. Freier Platz jetzt:"
+  ],
+  "translation.local.freeBytes": [
+   "Free space of the Ollama model volume",
+   "Freier Platz des Ollama-Modellvolumes"
+  ],
+  "translation.local.freeBytesHint": [
+   "Check the volume on the Ollama machine and type the free space here. Downloads are offered up to it, minus 2 GB. 0 leaves the configured value.",
+   "Prüfe das Volume auf dem Ollama-Rechner und trage den freien Platz hier ein. Downloads werden bis dahin angeboten, abzüglich 2 GB. 0 lässt den eingestellten Wert."
   ],
   "translation.local.loaded": [
    "Loaded",

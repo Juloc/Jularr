@@ -36,16 +36,17 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             var saved = await LocalTranslationMachines.SavedAsync(Context, CancellationToken);
+            var freeBytes = await LocalTranslationMachines.FreeBytesAsync(Context, _options.OperatorVerifiedFreeBytes, CancellationToken);
             var order = _machines.Order(saved);
             var progress = _downloads.Current();
             if (order.Length == 0) return new LocalTranslationModelsV1(false, OllamaLocalModels.Candidates, [], [], "Configure a local Ollama endpoint.",
-                _options.OperatorVerifiedFreeBytes, progress.Model, progress.State, progress.Progress, [], progress.Machine);
+                freeBytes, progress.Model, progress.State, progress.Progress, [], progress.Machine);
             var machines = await Task.WhenAll(order.Select(StatusAsync));
             var active = machines.FirstOrDefault(machine => machine.Reachable && machine.Installed.Any(OllamaLocalModels.Supported))
                 ?? machines.FirstOrDefault(machine => machine.Reachable);
             return new LocalTranslationModelsV1(true, OllamaLocalModels.Candidates, active?.Installed ?? [], active?.Running ?? [],
                 active is null ? "Ollama is not responding correctly." : null,
-                _options.OperatorVerifiedFreeBytes, progress.Model, progress.State, progress.Progress, machines, progress.Machine);
+                freeBytes, progress.Model, progress.State, progress.Progress, machines, progress.Machine);
         }
 
         private async Task<LocalTranslationMachineV1> StatusAsync(Uri server)
@@ -91,9 +92,10 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                 throw new ServiceUnavailableException("translation_local_unavailable");
             if (!OllamaLocalModels.Supported(Parameters.Model))
                 throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
-            if (_options.OperatorVerifiedFreeBytes == 0)
+            var freeBytes = await Context.ExecuteBatchAsync((ctx, ct) => LocalTranslationMachines.FreeBytesAsync(ctx, _options.OperatorVerifiedFreeBytes, ct), CancellationToken);
+            if (freeBytes == 0)
                 throw new ServiceUnavailableException("translation_local_space_unverified");
-            if (!_downloads.Queue(Parameters.Model, order[Parameters.Machine]))
+            if (!_downloads.Queue(Parameters.Model, order[Parameters.Machine], freeBytes))
                 throw new ServiceUnavailableException("translation_local_busy_or_capacity");
             return new UpdateResult(true);
         }
@@ -125,6 +127,25 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
             var sql = new SqlStatement();
             sql.Statement = """UPDATE "InstanceSettings" SET "TranslationMachines" = @Machines WHERE "Id" = 1;""";
             sql.Parameters.Add(new TranslationMachinesDataV1([.. machines]));
+            await Context.ExecuteAsyncForAffectedRows(sql, CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    // The free space of Ollama's model volume, which only the Owner can know: model downloads are offered up to it; 0 leaves the configured value.
+    [ServiceEndpoint("PUT", "/api/v1/admin/translation/free-bytes")]
+    public sealed class SaveTranslationFreeBytesV1 : AdminService<LocalTranslationModelsParametersV1, TranslationFreeBytesDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(LocalTranslationModelsParametersV1 parameters) => ModuleRequirement.All("Translation");
+        protected override ServicePermission GetPermission(LocalTranslationModelsParametersV1 parameters, Type resultType) => new("instance.settings.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            var sql = new SqlStatement();
+            sql.Statement = """UPDATE "InstanceSettings" SET "TranslationFreeBytes" = @FreeBytes WHERE "Id" = 1;""";
+            sql.Parameters.Add(Data);
             await Context.ExecuteAsyncForAffectedRows(sql, CancellationToken);
             return new UpdateResult(true);
         }
