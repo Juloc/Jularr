@@ -2043,6 +2043,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.outcome.import_storage_unavailable", "Storage became unavailable while importing"),
             new("acquisition.outcome.import_assignment_failed", "The copied files could not be fully assigned to the library. Download files were kept for recovery."),
             new("acquisition.outcome.import_target_conflict", "All available import filenames are occupied. The existing library files were not overwritten."),
+            new("acquisition.outcome.import_nothing_placeable", "Nothing in the download could be placed: no file is a readable book or names a volume. The files stay for you to assign"),
             new("acquisition.outcome.import_unmatched_files", "The matching volumes were imported; some files name no volume of the title and stayed in the download"),
             new("acquisition.outcome.import_storage_full", "Library space is insufficient or could not be checked"),
             new("acquisition.connection.downloadStorage", "Completed download storage"),

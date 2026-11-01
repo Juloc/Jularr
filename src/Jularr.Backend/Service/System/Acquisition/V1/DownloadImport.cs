@@ -33,6 +33,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, StorageAccess storage, TimeProvider time, SabnzbdClient sabnzbd, IDataProtectionProvider protection, WorkSignals signals)
     {
         public const string UnmatchedFilesKey = "import_unmatched_files";
+        public const string NothingPlaceableKey = "import_nothing_placeable";
 
         public async Task PlaceAsync(LogicContext context, DownloadData download, StorageFiles source, ImportSourceRef sourceRef, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct,
             IReadOnlyList<StorageFile>? allSourceFiles = null)
@@ -127,7 +128,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 }
                 else
                 {
-                    await FailAsync(context, download.OperationId, DownloadLogic.FailedReasonKey, time.GetUtcNow().UtcDateTime, ct);
+                    // Nothing could be placed (no readable book, no known layout): the files stay for a person, where a failed download would be cleaned up.
+                    await AttentionAsync(context, download.OperationId, NothingPlaceableKey, null, ct, UnmatchedProposal(sourceRef, [.. files.Select(file => file.RelativePath)]));
                 }
 
                 return;
