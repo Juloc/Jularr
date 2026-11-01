@@ -15175,6 +15175,26 @@
    "The configured local model server cannot be contacted.",
    "Der konfigurierte lokale Modellserver ist nicht erreichbar."
   ],
+  "translation.local.prepare.noMachine": [
+   "Book translations are waiting: no Ollama machine is entered yet. Add one below.",
+   "Die Buchübersetzung wartet: Es ist noch kein Ollama-Rechner eingetragen. Trage unten einen ein."
+  ],
+  "translation.local.prepare.unreachable": [
+   "Book translations are waiting: no entered Ollama machine answers.",
+   "Die Buchübersetzung wartet: Kein eingetragener Ollama-Rechner antwortet."
+  ],
+  "translation.local.prepare.noModel": [
+   "Book translations are waiting: no TranslateGemma model is installed on a machine that answers. Download one below.",
+   "Die Buchübersetzung wartet: Auf keinem antwortenden Rechner ist ein TranslateGemma-Modell installiert. Lade unten eines herunter."
+  ],
+  "translation.local.prepare.ready": [
+   "Book translations are running: the server translates every book into every language a profile uses, books being read first.",
+   "Die Buchübersetzung läuft: Der Server übersetzt jedes Buch in jede Sprache, die ein Profil nutzt, zuerst die Bücher, die gerade gelesen werden."
+  ],
+  "translation.local.prepare.jobs": [
+   "Pause or resume the job on the Jobs page",
+   "Den Job auf der Jobs-Seite pausieren oder fortsetzen"
+  ],
   "translation.local.capacity": [
    "Model downloads need the free space of the Ollama model volume, which Jularr cannot inspect from another container: check it and type it into the field below. Keep at least 2 GB free after downloading. Free space now:",
    "Für Modell-Downloads braucht Jularr den freien Platz des Ollama-Modellvolumes, den es von einem anderen Container aus nicht sehen kann: prüfe ihn und trage ihn unten ein. Nach dem Download sollten mindestens 2 GB frei bleiben. Freier Platz jetzt:"

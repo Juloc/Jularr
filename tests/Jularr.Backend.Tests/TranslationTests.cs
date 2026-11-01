@@ -180,6 +180,20 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, on.StatusCode, await on.Content.ReadAsStringAsync());
         }
 
+        [TestMethod]
+        public async Task TranslationPage_SaysWhatTheBookJobIsWaitingFor()
+        {
+            using var storage = new TemporaryDirectory();
+            using var models = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, models.Path, new FakeMozilla());
+
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            var state = System.Text.RegularExpressions.Regex.Match(html, "data-translation-prepare=\"([a-zA-Z]+)\"").Groups[1].Value;
+            Assert.AreEqual("ready", state, "A machine with the approved model answers, so the job runs.");
+        }
+
         private static async Task<string> ReadingLanguageAsync(Host host, long asset)
         {
             using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + asset);
@@ -206,7 +220,9 @@ namespace Jularr.Backend.Tests
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
                 Task.FromResult(request.RequestUri!.AbsolutePath == "/api/tags"
                     ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new { models = new[] { new { name = "translategemma:4b", digest = new string('a', 64) } } })) }
-                    : new HttpResponseMessage(HttpStatusCode.NotFound));
+                    : request.RequestUri.AbsolutePath == "/api/ps"
+                        ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new { models = Array.Empty<object>() })) }
+                        : new HttpResponseMessage(HttpStatusCode.NotFound));
         }
 
         // Mozilla's Remote Settings: engines 2.0, 3.0 and 3.1; en-de 1.0, 2.1 and a preview; en-ja 1.0 and a newer one for Android only; de-en 1.0. One file is served altered.
