@@ -137,8 +137,6 @@ jobs:
           --health-retries 10
     env:
       SHARD: ${{ matrix.shard }}
-      # Keep test download storage on the runner disk; /tmp may be tmpfs on hosted images.
-      TMPDIR: ${{ runner.temp }}
     steps:
       # Only the local actions are checked out; the build artifact brings the compiled workspace.
       - uses: actions/checkout@v7
@@ -159,6 +157,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/dotnet-runtime/.dotnet/shm"
           chmod 700 "$RUNNER_TEMP/dotnet-runtime"
           echo "XDG_RUNTIME_DIR=$RUNNER_TEMP/dotnet-runtime" >> "$GITHUB_ENV"
+          # Downloads reject tmpfs and overlay: use the real runner disk for test workspaces.
+          echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Cache the Playwright browser
         if: matrix.kind == 'e2e'
         uses: actions/cache@v6
