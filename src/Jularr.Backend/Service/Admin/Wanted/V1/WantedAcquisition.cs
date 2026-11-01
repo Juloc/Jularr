@@ -460,9 +460,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 try
                 {
                     Directory.CreateDirectory(staging);
+                    byte[] infoHash;
                     if (offer.DownloadUri.Scheme.Equals("magnet", StringComparison.OrdinalIgnoreCase))
                     {
-                        MagnetLink.Parse(offer.DownloadUri.OriginalString);
+                        infoHash = MagnetLink.Parse(offer.DownloadUri.OriginalString).InfoHash;
                         await File.WriteAllTextAsync(Path.Combine(staging, TorrentDownloader.MagnetName), offer.DownloadUri.OriginalString, ct);
                     }
                     else
@@ -470,9 +471,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         var file = Path.Combine(staging, TorrentDownloader.TorrentName);
                         File.Delete(file);
                         await _newznab.DownloadNzbAsync(offer.DownloadUri, file, ct, bytes => nativePaths.ReserveWrite(operationId, staging, bytes));
-                        TorrentMetainfo.Parse(await File.ReadAllBytesAsync(file, ct));
+                        infoHash = TorrentMetainfo.Parse(await File.ReadAllBytesAsync(file, ct)).InfoHash;
                     }
 
+                    // A retry of the same torrent goes on with the verified pieces of the earlier try.
+                    await TorrentResume.TakeOverAsync(staging, infoHash,
+                        async earlierId => (await context.ExecuteBatchAsync((ctx, token) => ctx.ReadActiveDownloadsAsync(token, earlierId), ct)).Count > 0, ct);
                     externalId = TorrentJob.ExternalId;
                 }
                 catch (NewznabException exception)

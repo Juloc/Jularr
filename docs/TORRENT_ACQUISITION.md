@@ -91,7 +91,9 @@ sleeps on `WorkSignals.Torrents` until a grab wakes it; with jobs it looks every
 - Jobs: staging holds `job.torrent`/`job.magnet`, `job.info`, `job.state` (verified pieces) and
   `data/`. A pass ([TorrentServices.cs](../src/Jularr.Backend/Service/System/Acquisition/V1/TorrentServices.cs),
   two minutes) writes only SHA-1 verified pieces; the next pass and a restart continue from them,
-  re-verifying from disk without a state file. A finished job contacts nobody and imports through
+  re-verifying from disk without a state file. A new try at the same torrent (same info hash) takes over the
+  folder of an earlier try that no longer runs ([TorrentResume.cs](../src/Jularr.Backend/Service/Admin/Wanted/V1/TorrentResume.cs)),
+  so its verified pieces are kept. A pass connects to up to 50 peers at once. A finished job contacts nobody and imports through
   the shared `DownloadImport`. Pause, resume and removal are those of Jularr's own downloaders.
 - Network: every pass takes a `VpnLease` through [TorrentJob.cs](../src/Jularr.Backend/Service/Admin/Wanted/V1/TorrentJob.cs);
   `NetworkRouteLogic` accepts only a tunnel that answers pings and whose exit differs from the host.
