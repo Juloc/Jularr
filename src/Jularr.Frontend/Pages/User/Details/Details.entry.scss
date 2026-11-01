@@ -221,6 +221,10 @@ td .details-chips { flex-wrap: nowrap; }
 // Volumes as covers with their state; the chosen one has its chapters under the row.
 .details-volumes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
 
+// A volume's cover and its read button under it.
+.details-volume-item { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.details-volume-item > .button { justify-content: center; text-align: center; }
+
 .details-volume {
     display: flex;
     flex-direction: column;

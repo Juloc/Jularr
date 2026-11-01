@@ -149,7 +149,9 @@ namespace Jularr.Frontend.Pages.User.Details
                 shown = [.. volumes.Skip(next).Take(5)];
             }
 
-            var covers = new Div([.. shown.Select(entry => VolumeCover(entry, entry == chosen && !preview))]).Class("details-volumes");
+            // Each volume has its own way to read it, so no volume needs a visit of its own first.
+            var covers = new Div([.. shown.Select(entry => (IUiComponent)new Div(VolumeCover(entry, entry == chosen && !preview), entry.Volume is { } own && CanOpen(own) ? Play(own) : new Span())
+                .Class("details-volume-item"))]).Class("details-volumes");
             return preview ? covers : new Div(covers, Chapters(chosen));
         }
 

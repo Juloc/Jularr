@@ -66,6 +66,9 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(overview.Contains("tab=related", StringComparison.Ordinal));
             var volumes = await GetAsync(host, "/Details/10?tab=volumes");
             StringAssert.Contains(volumes, "details-volume");
+            // Every volume that is here has its own read button next to its cover, so none needs a visit first.
+            StringAssert.Contains(volumes, "details-volume-item");
+            StringAssert.Matches(volumes, new System.Text.RegularExpressions.Regex("details-volume-item.*?href=\"/Read/\\d+\"", System.Text.RegularExpressions.RegexOptions.Singleline));
             Assert.IsFalse(volumes.Contains("details-block__heading", StringComparison.Ordinal));
             StringAssert.Contains(await GetAsync(host, "/Details/10?tab=editions"), "Deutsch EPUB");
 
