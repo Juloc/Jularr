@@ -62,6 +62,16 @@ if (status) {
     }
 }
 
+// The translations this browser kept (reader: Mozilla in the browser) live in its own database; this button empties it.
+document.querySelector<HTMLButtonElement>('[data-translation-clear-browser-cache]')?.addEventListener('click', () => {
+    const done = () => document.querySelector<HTMLElement>('[data-translation-browser-cache-cleared]')?.removeAttribute('hidden');
+    if (typeof indexedDB === 'undefined') { done(); return; }
+    const request = indexedDB.deleteDatabase('jularr-translation');
+    request.onsuccess = done;
+    request.onerror = done;
+    request.onblocked = done;
+});
+
 // A benchmark may take minutes. Acknowledge the form submission immediately and
 // prevent accidental duplicate downloads/benchmarks until the response navigates.
 document.querySelectorAll<HTMLFormElement>('form[data-translation-submit]').forEach(form => {

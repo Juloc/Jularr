@@ -72,6 +72,13 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             // How far the job is; the page reads this part again every ten seconds.
             if (_progress is not null) page.Content.Add(TranslationProgressView.Full(_progress, texts));
 
+            // What the browser of the Owner kept of its own Mozilla translations (a week, at most 300 MB): only this browser can empty it.
+            if (texts.CanTranslateInBrowser())
+                page.Content.Add(new Div(
+                    new Button(new Text("translation.browserCache.clear")).Attribute("type", "button").Attribute("data-translation-clear-browser-cache", ""),
+                    new P(new Text("translation.browserCache.cleared")).Attribute("data-translation-browser-cache-cleared", "").Attribute("role", "status").Attribute("hidden", "hidden")
+                ).Class("feature-card"));
+
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             // The Ollama machines in order: the first that answers with a model translates, the next takes over when it drops out.
             page.Content.Add(new Form<TranslationMachinesDataV1>(form =>

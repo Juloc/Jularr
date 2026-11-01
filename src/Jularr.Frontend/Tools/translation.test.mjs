@@ -166,3 +166,92 @@ test('without the Mozilla module, a page the server cannot translate stays origi
     assert.equal(blocks[0].innerText, 'original-0');
     assert.ok(!calls.includes('/route/en/de'));
 });
+
+test('a server that needs half a minute for a block, or twenty seconds on average, is too slow for a reader', () => {
+    assert.equal(exports.serverIsSlow([]), false);
+    assert.equal(exports.serverIsSlow([4_600, 4_800, 5_000]), false);
+    assert.equal(exports.serverIsSlow([4_600, 31_000]), true);
+    assert.equal(exports.serverIsSlow([25_000, 22_000]), false, 'two blocks are too few to average');
+    assert.equal(exports.serverIsSlow([25_000, 22_000, 21_000]), true);
+    assert.equal(exports.serverIsSlow([60_000, 4_000, 4_000, 4_000]), false, 'only the latest blocks count');
+});
+
+test('the browser keeps its translations a week and 300 MB, the oldest go first', () => {
+    const day = 24 * 3600 * 1000;
+    const mb = 1024 * 1024;
+    const now = 100 * day;
+    const entry = (key, ageDays, size) => ({ key, savedAt: now - ageDays * day, size });
+    assert.deepEqual(exports.entriesToDrop([entry('a', 1, mb), entry('b', 6, mb)], now), []);
+    assert.deepEqual(exports.entriesToDrop([entry('old', 8, mb), entry('new', 1, mb)], now), ['old']);
+    // 400 MB of recent entries: the oldest leave until 300 MB are left.
+    const big = [entry('c', 5, 150 * mb), entry('d', 3, 150 * mb), entry('e', 1, 100 * mb)];
+    assert.deepEqual(exports.entriesToDrop(big, now), ['c']);
+    assert.deepEqual(exports.entriesToDrop([entry('x', 2, 500 * mb)], now), ['x']);
+});
+
+function slowServerReader({ route }) {
+    const blocks = Array.from({ length: 5 }, (_, index) => {
+        let markup = 'original-' + index;
+        return {
+            get innerHTML() { return markup; },
+            set innerHTML(next) { markup = next; },
+            get innerText() { return markup; },
+            set textContent(next) { markup = next; },
+            querySelector: () => null
+        };
+    });
+    let clock = 0;
+    const calls = [];
+    const fetchStub = async (url, options) => {
+        calls.push((options?.method ?? 'GET') + ' ' + url);
+        if (url.startsWith('/local/de/translategemma%3A4b?')) return { ok: true, json: async () => ({ blocks: '[]' }) };
+        if (url.startsWith('/local/de/translategemma%3A4b/blocks/')) {
+            clock += 31_000;
+            return { ok: true, json: async () => ({ text: 'server ' + url.split('/').pop() }) };
+        }
+        if (url === '/route/en/de') return route
+            ? { ok: true, json: async () => [{ step: 0, fileType: 'engine', url: '/engine', precision: null }, { step: 1, fileType: 'model', url: '/model', precision: null }] }
+            : { ok: false };
+        throw new Error('Unexpected fetch: ' + url);
+    };
+    const fakeWorker = {
+        onmessage: null,
+        terminate() {},
+        postMessage(message) {
+            if (message.type === 'load') queueMicrotask(() => this.onmessage({ data: { type: 'ready' } }));
+            else if (message.type === 'translate') queueMicrotask(() => this.onmessage({
+                data: { type: 'translated', id: message.id, texts: message.texts.map(() => 'browser') }
+            }));
+        }
+    };
+    const dataset = {
+        language: 'en', translationEngine: 'gemma', localModel: 'translategemma:4b', browserTranslation: 'true',
+        localTranslationUrl: '/local/', translationUrl: '/translated/', routeUrl: '/route/', translatingLabel: 'Translating',
+        browserUnsupportedLabel: 'Mozilla has no models'
+    };
+    const localExports = {};
+    runInNewContext(script, { exports: localExports, fetch: fetchStub, Date: { now: () => clock }, ...lifetime });
+    const content = { querySelectorAll: () => blocks, innerText: 'English original text' };
+    const status = { hidden: true, textContent: '' };
+    const reader = { dataset, querySelector: selector => selector === '[data-role=translation-status]' ? status : null };
+    return { choose: localExports.translator(reader, content, () => fakeWorker), blocks, calls, dataset, status };
+}
+
+test('a server too slow for a reader hands the blocks nobody has to the browser, and nothing is stored on the server', async () => {
+    const { choose, blocks, calls, dataset } = slowServerReader({ route: true });
+    await choose('de');
+    assert.equal(blocks[0].innerText, 'server 0');
+    assert.deepEqual(blocks.slice(1).map(block => block.innerText), ['browser', 'browser', 'browser', 'browser']);
+    assert.equal(calls.filter(call => call.startsWith('POST /local/')).length, 1, 'the server is asked once, then the browser takes over');
+    assert.equal(calls.some(call => call.startsWith('PUT ')), false, 'the browser translation is not stored on the server');
+    assert.equal(dataset.translationState, 'ready');
+});
+
+test('a language Mozilla has no models for is left to the server, and the reader says so', async () => {
+    const { choose, blocks, calls, status } = slowServerReader({ route: false });
+    await choose('de');
+    assert.deepEqual(blocks.map(block => block.innerText), ['server 0', 'server 1', 'server 2', 'server 3', 'server 4']);
+    assert.equal(calls.filter(call => call.startsWith('POST /local/')).length, 5);
+    assert.equal(calls.filter(call => call === 'GET /route/en/de').length, 1, 'the route is asked for once');
+    assert.equal(status.textContent, '', 'the progress label is gone when the server is done');
+});
