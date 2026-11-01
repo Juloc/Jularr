@@ -13,21 +13,45 @@ permissions:
 jobs:
   stage:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
-      - name: Verify tested commit, create immutable tag and dispatch Release
+      - name: Verify Backend Full and Frontend, create tag and dispatch Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           TARGET_SHA: 2d9e5205ee869a502993580a9057c5b23afe8add
+          VERIFY_BRANCH: ci/frontend-verify-v0.2.35
         run: |
           set -euo pipefail
-          for workflow in "Frontend" "Backend Full"; do
-            outcome="$(gh run list --commit "${TARGET_SHA}" --workflow "${workflow}" --limit 50 \
+          latest_outcome() {
+            gh run list --commit "${TARGET_SHA}" --workflow "$1" --limit 50 \
               --json status,conclusion,createdAt \
-              --jq 'map(select(.status == "completed")) | sort_by(.createdAt) | last | .conclusion // empty')"
-            if [[ "${outcome}" != "success" ]]; then
-              echo "::error::${workflow} is not green for ${TARGET_SHA}: ${outcome:-missing}"
+              --jq 'map(select(.status == "completed")) | sort_by(.createdAt) | last | .conclusion // empty'
+          }
+          if [[ "$(latest_outcome "Backend Full")" != "success" ]]; then
+            echo "::error::Backend Full is not green for ${TARGET_SHA}"
+            exit 1
+          fi
+          if [[ "$(latest_outcome "Frontend")" != "success" ]]; then
+            # A workflow-only change does not start Frontend automatically.
+            if ! gh api "repos/${GH_REPO}/git/ref/heads/${VERIFY_BRANCH}" >/dev/null 2>&1; then
+              gh api "repos/${GH_REPO}/git/refs" -X POST \
+                -f ref="refs/heads/${VERIFY_BRANCH}" -f sha="${TARGET_SHA}"
+            fi
+            gh workflow run frontend.yml --ref "${VERIFY_BRANCH}"
+            for attempt in $(seq 1 90); do
+              outcome="$(latest_outcome "Frontend")"
+              if [[ "${outcome}" == "success" ]]; then break; fi
+              if [[ "${outcome}" == "failure" || "${outcome}" == "cancelled" || "${outcome}" == "timed_out" ]]; then
+                echo "::error::Frontend verification failed: ${outcome}"
+                exit 1
+              fi
+              sleep 10
+            done
+          fi
+          for workflow in "Frontend" "Backend Full"; do
+            if [[ "$(latest_outcome "${workflow}")" != "success" ]]; then
+              echo "::error::${workflow} is not green for ${TARGET_SHA}"
               exit 1
             fi
           done
@@ -37,5 +61,4 @@ jobs:
           fi
           gh api "repos/${GH_REPO}/git/refs" -X POST \
             -f ref='refs/tags/v0.2.35' -f sha="${TARGET_SHA}"
-          # Tags made by GITHUB_TOKEN do not trigger tag-push workflows.
           gh workflow run release.yml --ref v0.2.35 -f dry_run=false
