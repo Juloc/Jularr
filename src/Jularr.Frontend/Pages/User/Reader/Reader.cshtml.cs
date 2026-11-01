@@ -295,7 +295,8 @@ namespace Jularr.Frontend.Pages.User.Reader
                 if (texts.CanTranslateInBrowser())
                 {
                     view.Attribute("data-browser-translation", "true")
-                        .Attribute("data-route-url", "/api/v1/translation/routes/");
+                        .Attribute("data-route-url", "/api/v1/translation/routes/")
+                        .Attribute("data-browser-unsupported-label", texts["reader.translation.browserUnsupported"]);
                 }
             }
 

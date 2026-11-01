@@ -1432,6 +1432,18 @@
    "Translating",
    "Wird übersetzt"
   ],
+  "reader.translation.browserUnsupported": [
+   "Mozilla has no models for this language; the server keeps translating",
+   "Mozilla hat keine Modelle für diese Sprache; der Server übersetzt weiter"
+  ],
+  "translation.browserCache.clear": [
+   "Clear the browser's translation cache",
+   "Übersetzungs-Cache dieses Browsers leeren"
+  ],
+  "translation.browserCache.cleared": [
+   "The browser's translation cache is empty",
+   "Der Übersetzungs-Cache dieses Browsers ist leer"
+  ],
   "reader.translationFailed": [
    "Translation is unavailable right now; the text stays in its language.",
    "Die Übersetzung ist gerade nicht verfügbar; der Text bleibt in seiner Sprache."
