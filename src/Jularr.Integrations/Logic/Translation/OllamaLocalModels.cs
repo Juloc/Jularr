@@ -155,6 +155,18 @@ namespace Jularr.Integrations.Logic.Translation
             return true;
         }
 
+        // One block with the passage before it as context. The model sometimes translates that context as well, which makes the answer longer than the block or leaves it in the
+        // block's own language; such an answer is asked again without context. Null when no answer passes the checks.
+        internal async Task<string?> TranslateBlockAsync(Uri server, string model, string source, string target, string text, string? context, CancellationToken ct)
+        {
+            var result = (await TranslateAsync(server, model, source, target, text, ct, context)).Text;
+            if (!string.IsNullOrWhiteSpace(context) && (!LooksComplete(text, result, target) || text.Length <= 2400 && Paragraphs(result) > Paragraphs(text)))
+                result = (await TranslateAsync(server, model, source, target, text, ct)).Text;
+            return LooksComplete(text, result, target) ? result : null;
+        }
+
+        private static int Paragraphs(string text) => text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length;
+
         internal async Task<(string Text, double Seconds, double TokensPerSecond)> TranslateAsync(Uri server, string model,
             string source, string target, string text, CancellationToken ct, string? previousContext = null)
         {

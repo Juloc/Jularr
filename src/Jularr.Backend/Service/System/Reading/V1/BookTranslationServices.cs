@@ -76,9 +76,8 @@ namespace Jularr.Backend.Service.System.Reading.V1
                     try
                     {
                         var context = ReadingHtml.TranslationContext(nodes, index);
-                        var result = (await _models.TranslateAsync(server, model, unit.SourceLanguage, unit.Language, source, CancellationToken, context)).Text;
                         // A failed block keeps its readable original rather than caching a nonsensical translation.
-                        value = OllamaLocalModels.LooksComplete(source, result, unit.Language) ? result : source;
+                        value = await _models.TranslateBlockAsync(server, model, unit.SourceLanguage, unit.Language, source, context, CancellationToken) ?? source;
                     }
                     catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException && !CancellationToken.IsCancellationRequested)
                     {
@@ -178,7 +177,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
                     JOIN "ReadingResources" AS text ON text."ReadingDocumentId" = book."Id"
                         AND text."Path" = section."Path"
                     LEFT JOIN "ReadingResources" AS cache ON cache."ReadingDocumentId" = book."Id"
-                        AND cache."Path" = ':localtranslation/v3/' || @Model || '/' || target."Language" || '/' || section."Key"
+                        AND cache."Path" = ':localtranslation/v4/' || @Model || '/' || target."Language" || '/' || section."Key"
                 WHERE
                     length(target."Language") BETWEEN 2 AND 3
                     AND length(book."SourceLanguage") BETWEEN 2 AND 3

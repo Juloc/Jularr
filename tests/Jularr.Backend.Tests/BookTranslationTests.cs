@@ -55,8 +55,8 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(await Translate(scope));
             }
             Assert.IsTrue(ollama.GenerationCount > 0);
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v3/translategemma:4b/de/%'"));
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v3/translategemma:4b/de/%' AND \"ReadingDocumentId\" = " + secondDocument.DocumentId));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/translategemma:4b/de/%'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/translategemma:4b/de/%' AND \"ReadingDocumentId\" = " + secondDocument.DocumentId));
 
             // Round after round until the library is done; then there is nothing left, and nothing is translated twice.
             var rounds = 0;
@@ -73,7 +73,7 @@ namespace Jularr.Backend.Tests
             foreach (var document in new[] { firstDocument, secondDocument })
             {
                 var sections = Convert.ToInt64(await host.ScalarAsync("SELECT jsonb_array_length(\"Structure\" -> 'Sections') FROM \"ReadingDocuments\" WHERE \"Id\" = " + document.DocumentId), System.Globalization.CultureInfo.InvariantCulture);
-                Assert.AreEqual(sections, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v3/translategemma:4b/de/%' AND \"ReadingDocumentId\" = " + document.DocumentId));
+                Assert.AreEqual(sections, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/translategemma:4b/de/%' AND \"ReadingDocumentId\" = " + document.DocumentId));
             }
 
             // The Reader finds the chapter translated without asking the model.
@@ -92,8 +92,8 @@ namespace Jularr.Backend.Tests
             {
                 while (await Translate(scope)) Assert.IsTrue(++rounds < 400, "The job never finishes.");
             }
-            Assert.IsTrue(await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v3/translategemma:4b/fr/%' AND \"ReadingDocumentId\" = " + firstDocument.DocumentId) is > 0L);
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v3/translategemma:4b/fr/%' AND \"ReadingDocumentId\" = " + secondDocument.DocumentId));
+            Assert.IsTrue(await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/translategemma:4b/fr/%' AND \"ReadingDocumentId\" = " + firstDocument.DocumentId) is > 0L);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/translategemma:4b/fr/%' AND \"ReadingDocumentId\" = " + secondDocument.DocumentId));
         }
 
         private static async Task<bool> Translate(AsyncServiceScope scope) =>

@@ -83,7 +83,7 @@ namespace Jularr.Backend.Tests
             using var reopened = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/assets/" + first + "/open");
             Assert.AreEqual(HttpStatusCode.OK, reopened.StatusCode);
             Assert.IsFalse((await reopened.Content.ReadFromJsonAsync<ReadingDocumentV1>())!.TranslatedLanguages.Contains("local-v1"));
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v3/%'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/%'"));
 
             ollama.Digest = new string('b', 64);
             using var stale = await host.SendAsync(HttpMethod.Get, baseUrl + "?sourceLanguage=en");

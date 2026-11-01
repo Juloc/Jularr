@@ -22,9 +22,9 @@ namespace Jularr.Backend.Service.User.Translation.V1
     // Provider-specific cache: intentionally outside the canonical :translation/{language} paths.
     internal static class LocalReadingPaths
     {
-        public const int Algorithm = 3;
+        public const int Algorithm = 4;
         public static string Cache(int section, string language, string model) =>
-            ":localtranslation/v3/" + model + "/" + language + "/" + section.ToString("D5", global::System.Globalization.CultureInfo.InvariantCulture);
+            ":localtranslation/v4/" + model + "/" + language + "/" + section.ToString("D5", global::System.Globalization.CultureInfo.InvariantCulture);
 
         public static string SourceHash(string html, string sourceLanguage) =>
             Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(html + "\n" + sourceLanguage)));
@@ -230,10 +230,8 @@ namespace Jularr.Backend.Service.User.Translation.V1
                             return new LocalReadingBlockV1(previous.Texts[Parameters.BlockIndex]);
 
                         var context = ReadingHtml.TranslationContext(nodes, Parameters.BlockIndex);
-                        var translated = await _models.TranslateAsync(server, Parameters.Model, Data.SourceLanguage, Parameters.Language, source, CancellationToken, context);
-                        var value = translated.Text;
-                        if (!OllamaLocalModels.LooksComplete(source, value, Parameters.Language))
-                            throw new ServiceUnavailableException("translation_local_unverified");
+                        var value = await _models.TranslateBlockAsync(server, Parameters.Model, Data.SourceLanguage, Parameters.Language, source, context, CancellationToken)
+                            ?? throw new ServiceUnavailableException("translation_local_unverified");
 
                         // Serialize competing writes across instances on the canonical ReadingDocument.
                         // The row lock exists even when there is no resource yet. Never lock during inference.
