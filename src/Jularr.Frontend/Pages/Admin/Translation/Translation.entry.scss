@@ -1,0 +1,40 @@
+// The progress of the book translation: one line of text over a bar, the volumes of a series folded under their title.
+[data-translation-progress] {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+
+    p { margin: 0; }
+
+    .translation-progress__now { font-size: var(--text-body); font-weight: 650; }
+    .translation-progress__pace { color: var(--muted); }
+
+    .translation-progress__row {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+
+        progress {
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            border: 0;
+            border-radius: 999px;
+            background: var(--border);
+            color: var(--accent);
+            overflow: hidden;
+
+            &::-webkit-progress-bar { background: var(--border); }
+            &::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
+            &::-moz-progress-bar { background: var(--accent); }
+        }
+    }
+
+    // A series: its title row opens the volumes below, indented under a quiet line.
+    .translation-progress__work, .translation-progress__more {
+        > summary { cursor: pointer; list-style-position: outside; }
+        > div { display: grid; gap: 12px; margin: 10px 0 2px 18px; padding-left: 14px; border-left: 1px solid var(--border); }
+    }
+    .translation-progress__more { display: grid; gap: 14px; }
+    .translation-progress__more > summary { color: var(--accent-text); font-weight: 650; }
+}

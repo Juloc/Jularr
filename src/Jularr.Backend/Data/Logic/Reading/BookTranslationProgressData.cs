@@ -7,9 +7,10 @@ namespace Jularr.Backend.Data.Logic.Reading
     // One book into one language: how many of its sections are translated completely.
     internal sealed class BookTranslationProgressRowData : BaseData
     {
-        public BookTranslationProgressRowData(long documentId, string title, string? volume, string language, int total, int done, int totalBlocks, int doneBlocks)
+        public BookTranslationProgressRowData(long documentId, long workId, string title, string? volume, string language, int total, int done, int totalBlocks, int doneBlocks)
         {
             DocumentId = documentId;
+            WorkId = workId;
             Title = title;
             Volume = volume;
             Language = language;
@@ -21,6 +22,9 @@ namespace Jularr.Backend.Data.Logic.Reading
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
         public long DocumentId { get; }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.WorkId))]
+        public long WorkId { get; }
 
         [DataField(typeof(TranslationFields), nameof(TranslationFields.Title))]
         public string Title { get; }
