@@ -39,6 +39,16 @@ namespace Jularr.Backend.Service.Core
                 Statement = """SELECT "TranslationMachines" AS "Machines" FROM "InstanceSettings" WHERE "Id" = 1;"""
             }, ct))?.Machines ?? [];
 
+        // The free space the Owner typed on the translation page, else the configured value; 0 means no model download is allowed.
+        public static async Task<long> FreeBytesAsync(LogicContext ctx, long configured, CancellationToken ct)
+        {
+            var saved = (await ctx.ReadSql.ReadOptionalAsync<TranslationFreeBytesV1>(new SqlStatement
+            {
+                Statement = """SELECT "TranslationFreeBytes" AS "FreeBytes" FROM "InstanceSettings" WHERE "Id" = 1;"""
+            }, ct))?.FreeBytes ?? 0;
+            return saved > 0 ? saved : configured;
+        }
+
         public Uri[] Order(string[] saved) =>
             [.. (saved.Length > 0 ? saved : [options.Value.Endpoint]).Select(OllamaLocalModels.Endpoint).OfType<Uri>().Distinct()];
 
@@ -109,7 +119,7 @@ namespace Jularr.Backend.Service.Core
         }
 
         // The model is downloaded onto the given machine of the order.
-        public bool Queue(string model, Uri server)
+        public bool Queue(string model, Uri server, long freeBytes)
         {
             if (!OllamaLocalModels.Supported(model))
                 return false;
@@ -122,7 +132,7 @@ namespace Jularr.Backend.Service.Core
                 "translategemma:27b" => 17_000_000_000L,
                 _ => long.MaxValue
             };
-            if (_settings.Value.OperatorVerifiedFreeBytes < size + 2_000_000_000L) return false;
+            if (freeBytes < size + 2_000_000_000L) return false;
             lock (_guard)
             {
                 if (_active is not null || !_storageHealthy) return false;

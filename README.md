@@ -36,9 +36,8 @@ In `.env` kann `JULARR_OLLAMA_ENDPOINT=http://ollama:11434` gesetzt werden, wenn
 der Dienst unter diesem Namen aus dem Jularr-Container erreichbar ist. Der
 Ollama-Port darf nicht öffentlich freigegeben sein. Nach Neustart des Jularr-Dienstes:
 `/Admin/Instance/Translation` öffnen, Speicherbedarf des persistenten Ollama-Volumes
-prüfen, `JULARR_OLLAMA_VERIFIED_FREE_BYTES` mit den dort wirklich freien Bytes konfigurieren
-(Nullwert sperrt jeden Download; mindestens 2 GB Reserve) und Jularr danach neu
-starten. Download in der Modellansicht ausdrücklich auslösen; der Vorgang läuft
+prüfen und die dort wirklich freien Bytes im Feld „Freier Platz des Ollama-Modellvolumes“ eintragen
+(`JULARR_OLLAMA_VERIFIED_FREE_BYTES` bleibt als Rückfall; Null sperrt jeden Download; mindestens 2 GB Reserve). Download in der Modellansicht ausdrücklich auslösen; der Vorgang läuft
 im begrenzten Host-Worker weiter und der Status ist durch Aktualisieren sichtbar.
 Nach einer Jularr-Unterbrechung kann ein angehaltener Pull erneut gestartet werden;
 dies ist noch keine dauerhafte Job-Historie. Anschließend den kurzen Benchmark ausführen.

@@ -37,6 +37,19 @@ namespace Jularr.Backend.Data.Admin.Translation.V1
         public string[] Machines { get; } = machines;
     }
 
+    // The free space of Ollama's model volume as the Owner typed it; 0 leaves the configured value.
+    public sealed class TranslationFreeBytesV1(long freeBytes) : BaseResponse
+    {
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.TranslationFreeBytes))]
+        public long FreeBytes { get; } = freeBytes;
+    }
+
+    public sealed class TranslationFreeBytesDataV1(long freeBytes) : BaseData
+    {
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.TranslationFreeBytes))]
+        public long FreeBytes { get; } = freeBytes;
+    }
+
     // One machine of the order as it answered just now: its address, whether it answered, and its installed and loaded models.
     public sealed class LocalTranslationMachineV1(string address, bool reachable, string[] installed, string[] running)
     {
