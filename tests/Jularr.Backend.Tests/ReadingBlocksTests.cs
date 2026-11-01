@@ -30,5 +30,23 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "div", "div", "p" }, blocks.Select(block => block.LocalName).ToArray());
             CollectionAssert.AreEqual(new[] { "First line.", "Second line.", "Inside a paragraph." }, blocks.Select(block => block.TextContent.Trim()).ToArray());
         }
+
+        [TestMethod]
+        public void TranslationText_IgnoresJapaneseRubyReadingsWithoutChangingTheReaderDisplay()
+        {
+            var prepared = Prepare("<p>肋<ruby>骨<rt>こつ</rt><rp>（こつ）</rp></ruby>が痛む。</p>");
+            var block = new HtmlParser().ParseDocument(prepared.Html).QuerySelector("[data-b]")!;
+            Assert.AreEqual("肋骨が痛む。", ReadingHtml.TranslationText(block));
+            StringAssert.Contains(prepared.Html, "<rt>こつ</rt>", "Ruby readings must stay visible in the original Reader.");
+        }
+
+        [TestMethod]
+        public void TranslationContext_ContainsOnlyEarlierCleanBlocks()
+        {
+            var prepared = Prepare("<p>俺は<ruby>無職<rt>むしょく</rt></ruby>だ。</p><p>両親が死んだ。</p><p>どうしよう。</p>");
+            var blocks = new HtmlParser().ParseDocument(prepared.Html).QuerySelectorAll("[data-b]").ToArray();
+            Assert.AreEqual("俺は無職だ。\n両親が死んだ。", ReadingHtml.TranslationContext(blocks, 2));
+            Assert.AreEqual("", ReadingHtml.TranslationContext(blocks, 0));
+        }
     }
 }
