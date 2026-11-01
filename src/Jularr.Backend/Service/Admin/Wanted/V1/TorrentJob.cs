@@ -24,6 +24,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 VpnLease lease;
                 try
                 {
+                    // A tunnel that was just started has no measured exit yet, and the route policy refuses an unmeasured tunnel: measure it now, once, or the job
+                    // would rest for minutes and the tunnel would stop again without a lease.
+                    if (!tunnels.Health().Any(health => health.ProfileId == profile.Id))
+                        await tunnels.CheckAsync(profile.Id, profile.ProtectedConfiguration, ct);
                     lease = await tunnels.AcquireAsync(profile.Id, profile.ProtectedConfiguration, ct);
                 }
                 catch (TunnelUnavailableException)
