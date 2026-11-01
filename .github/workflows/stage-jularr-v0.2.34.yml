@@ -1,0 +1,41 @@
+name: Stage Jularr v0.2.34 (one time)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/stage-jularr-v0.2.34.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify tested commit, create immutable tag and dispatch Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TARGET_SHA: 90c7a993f0b50a0f140ae21c86e625693e9c773d
+        run: |
+          set -euo pipefail
+          for workflow in "Frontend" "Backend Full"; do
+            outcome="$(gh run list --commit "${TARGET_SHA}" --workflow "${workflow}" --limit 50 \
+              --json status,conclusion,createdAt \
+              --jq 'map(select(.status == "completed")) | sort_by(.createdAt) | last | .conclusion // empty')"
+            if [[ "${outcome}" != "success" ]]; then
+              echo "::error::${workflow} not green for ${TARGET_SHA}: ${outcome:-missing}"
+              exit 1
+            fi
+          done
+          if gh api "repos/${GH_REPO}/git/ref/tags/v0.2.34" >/dev/null 2>&1; then
+            echo "::error::Tag v0.2.34 already exists; refusing to overwrite"
+            exit 1
+          fi
+          gh api "repos/${GH_REPO}/git/refs" -X POST \
+            -f ref='refs/tags/v0.2.34' -f sha="${TARGET_SHA}"
+          # GITHUB_TOKEN-created tags do not start push workflows automatically.
+          gh workflow run release.yml --ref v0.2.34 -f dry_run=false
