@@ -60,6 +60,13 @@ namespace Jularr.Backend.Service.System.Reading.V1
             var nodes = new HtmlParser().ParseDocument(unit.Html).QuerySelectorAll("[data-b]").ToArray();
             var path = LocalReadingPaths.Cache(unit.SectionIndex, unit.Language, model);
             var texts = (unit.Cache is null ? null : LocalReadingPaths.Parse(unit.Cache, unit.Html, unit.SourceLanguage, digest, nodes.Length))?.Texts ?? new string[nodes.Length];
+            if (nodes.Length == 0)
+            {
+                // A page of one picture has nothing to translate; it is done once its empty cache exists.
+                await Context.ExecuteBatchAsync((ctx, ct) => LocalReadingPaths.StoreAsync(ctx, unit.DocumentId, path, unit.Html, unit.SourceLanguage, digest, 0, new Dictionary<int, string>(), ct), CancellationToken);
+                return new UpdateResult(true);
+            }
+
             var translated = 0;
             for (var index = 0; index < nodes.Length && translated < BlocksPerCall; index++)
             {
