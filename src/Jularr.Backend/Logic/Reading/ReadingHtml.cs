@@ -279,6 +279,8 @@ namespace Jularr.Backend.Logic.Reading
             // Reader typography replaces book styles.
             var sanitizer = new HtmlSanitizer();
             sanitizer.AllowedTags.ExceptWith(["form", "input", "button", "select", "option", "textarea", "label", "fieldset", "legend", "style", "font", "center"]);
+            // Keep ruby markup so the Reader displays readings, but translation extraction can ignore them.
+            sanitizer.AllowedTags.UnionWith(["ruby", "rt", "rp"]);
             sanitizer.AllowedAttributes.ExceptWith(["style", "class", "align", "bgcolor", "color", "background", "width", "height"]);
             sanitizer.AllowedAttributes.Add("data-b");
             sanitizer.AllowedAttributes.Add("data-figure");
