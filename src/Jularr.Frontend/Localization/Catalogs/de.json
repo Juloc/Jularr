@@ -15215,6 +15215,70 @@
    "Pause or resume the job on the Jobs page",
    "Den Job auf der Jobs-Seite pausieren oder fortsetzen"
   ],
+  "translation.progress.title": [
+   "Book translation progress",
+   "Fortschritt der Buchübersetzung"
+  ],
+  "translation.progress.books": [
+   "Books",
+   "Bücher"
+  ],
+  "translation.progress.nothing": [
+   "Nothing to translate: no profile reads a language other than a book's own",
+   "Nichts zu übersetzen: Kein Profil liest eine andere Sprache als die des Buches"
+  ],
+  "translation.progress.current": [
+   "Translating now",
+   "Übersetzt gerade"
+  ],
+  "translation.progress.chapter": [
+   "chapter",
+   "Kapitel"
+  ],
+  "translation.progress.chapters": [
+   "chapters",
+   "Kapitel"
+  ],
+  "translation.progress.of": [
+   "of",
+   "von"
+  ],
+  "translation.progress.stalled": [
+   "No progress for",
+   "Ohne Fortschritt seit"
+  ],
+  "translation.progress.pace": [
+   "Pace",
+   "Tempo"
+  ],
+  "translation.progress.blocks": [
+   "blocks per minute",
+   "Blöcke pro Minute"
+  ],
+  "translation.progress.remaining": [
+   "Time left",
+   "Restzeit"
+  ],
+  "translation.progress.unknown": [
+   "not known yet",
+   "noch nicht schätzbar"
+  ],
+  "translation.progress.issue.noMachine": [
+   "No Ollama machine answers with a model, so nothing is translated",
+   "Kein Ollama-Rechner antwortet mit einem Modell, deshalb wird nichts übersetzt"
+  ],
+  "translation.progress.issue.machineFailed": [
+   "The Ollama machine dropped out; the job tries the next one",
+   "Der Ollama-Rechner ist ausgefallen; der Job versucht den nächsten"
+  ],
+  "translation.progress.more": [
+   "Details",
+   "Einzelheiten"
+  ],
+  "translation.progress.open": [
+   "Open the translation page",
+   "Übersetzungs-Seite öffnen"
+  ],
   "translation.local.capacity": [
    "Model downloads need the free space of the Ollama model volume, which Jularr cannot inspect from another container: check it and type it into the field below. Keep at least 2 GB free after downloading. Free space now:",
    "Für Modell-Downloads braucht Jularr den freien Platz des Ollama-Modellvolumes, den es von einem anderen Container aus nicht sehen kann: prüfe ihn und trage ihn unten ein. Nach dem Download sollten mindestens 2 GB frei bleiben. Freier Platz jetzt:"

@@ -276,6 +276,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<ReadingActivity>();
             services.TryAddSingleton<TranslationFiles>();
             services.TryAddSingleton<LocalTranslationGate>();
+            services.TryAddSingleton<BookTranslationProgress>();
             services.TryAddSingleton<LocalTranslationMachines>();
             services.TryAddSingleton<LocalTranslationDownloads>();
             services.AddHostedService(provider => provider.GetRequiredService<LocalTranslationDownloads>());

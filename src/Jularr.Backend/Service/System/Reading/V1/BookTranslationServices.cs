@@ -25,12 +25,14 @@ namespace Jularr.Backend.Service.System.Reading.V1
         private readonly OllamaLocalModels _models;
         private readonly LocalTranslationMachines _machines;
         private readonly LocalTranslationGate _gate;
+        private readonly BookTranslationProgress _progress;
 
-        internal TranslateReadingBooksV1(OllamaLocalModels models, LocalTranslationMachines machines, LocalTranslationGate gate)
+        internal TranslateReadingBooksV1(OllamaLocalModels models, LocalTranslationMachines machines, LocalTranslationGate gate, BookTranslationProgress progress)
         {
             _models = models;
             _machines = machines;
             _gate = gate;
+            _progress = progress;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -42,7 +44,11 @@ namespace Jularr.Backend.Service.System.Reading.V1
         {
             // The first machine of the order that answers; one that fails rests, and the next round goes to the next one.
             var saved = await Context.ExecuteBatchAsync(LocalTranslationMachines.SavedAsync, CancellationToken);
-            if (await _machines.ChooseAsync(saved, CancellationToken) is not var (server, model)) return new UpdateResult(false);
+            if (await _machines.ChooseAsync(saved, CancellationToken) is not var (server, model))
+            {
+                _progress.Idle("noMachine");
+                return new UpdateResult(false);
+            }
             string digest;
             try
             {
@@ -51,11 +57,18 @@ namespace Jularr.Backend.Service.System.Reading.V1
             catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException && !CancellationToken.IsCancellationRequested)
             {
                 _machines.Fail(server);
+                _progress.Idle("machineFailed");
                 return new UpdateResult(false);
             }
 
             var unit = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadOptionalAsync<BookTranslationUnitData>(NextSection(model, digest), ct), CancellationToken);
-            if (unit is null) return new UpdateResult(false);
+            if (unit is null)
+            {
+                _progress.Idle(null);
+                return new UpdateResult(false);
+            }
+
+            _progress.Picked(unit.DocumentId, unit.SectionIndex, unit.Language);
 
             var nodes = new HtmlParser().ParseDocument(unit.Html).QuerySelectorAll("[data-b]").ToArray();
             var path = LocalReadingPaths.Cache(unit.SectionIndex, unit.Language, model);
@@ -64,6 +77,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
             {
                 // A page of one picture has nothing to translate; it is done once its empty cache exists.
                 await Context.ExecuteBatchAsync((ctx, ct) => LocalReadingPaths.StoreAsync(ctx, unit.DocumentId, path, unit.Html, unit.SourceLanguage, digest, 0, new Dictionary<int, string>(), ct), CancellationToken);
+                _progress.SectionDone();
                 return new UpdateResult(true);
             }
 
@@ -85,10 +99,12 @@ namespace Jularr.Backend.Service.System.Reading.V1
                         var context = ReadingHtml.TranslationContext(nodes, index);
                         // A failed block keeps its readable original rather than caching a nonsensical translation.
                         value = await _models.TranslateBlockAsync(server, model, unit.SourceLanguage, unit.Language, source, context, CancellationToken) ?? source;
+                        _progress.BlockDone();
                     }
                     catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException && !CancellationToken.IsCancellationRequested)
                     {
                         _machines.Fail(server);
+                        _progress.Idle("machineFailed");
                         break;
                     }
                     finally { _gate.HeavyWork.Release(); }
@@ -101,6 +117,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
                     new Dictionary<int, string> { [block] = value }, ct), CancellationToken);
             }
 
+            if (texts.All(text => text is not null)) _progress.SectionDone();
             return new UpdateResult(translated > 0 || texts.All(text => text is not null));
         }
 
