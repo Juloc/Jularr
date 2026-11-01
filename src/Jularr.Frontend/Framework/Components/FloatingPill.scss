@@ -35,3 +35,12 @@
         bottom: calc(96px + env(safe-area-inset-bottom));
     }
 }
+
+// With the bar of the book being read on the page the pill sits above it, not on it: at the end of a page the bar rests 84 px above the edge and is 82 px high.
+body:has(.continue-bar) .floating-pill {
+    bottom: calc(176px + env(safe-area-inset-bottom));
+
+    @media (max-width: 780px) {
+        bottom: calc(176px + env(safe-area-inset-bottom));
+    }
+}
