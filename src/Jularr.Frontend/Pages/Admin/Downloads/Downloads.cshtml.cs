@@ -244,14 +244,16 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             if (all) cells.Add(ClientCell(item));
             cells.Add(CategoryCell(item));
             cells.Add(StatusCell(item, phase));
-            cells.Add(ProgressCell(item, phase));
-            cells.Add(new Span(new Span(new ValueText(LiveEntities.Percent(item.ProgressPercent))).Attribute("data-live-text", "percent")).Class("list-value")
+            // A waiting or failed entry says why instead of how far it is.
+            var progress = says ? null : item.ProgressPercent;
+            cells.Add(ProgressCell(item, phase, progress));
+            cells.Add(new Span(new Span(new ValueText(LiveEntities.Percent(progress))).Attribute("data-live-text", "percent")).Class("list-value")
                 .Attribute("data-live", LiveKeys.Operation(item.Id)));
             cells.Add(Value(item.SizeBytes is { } size ? ByteSize.Format(size) : null));
             cells.Add(LiveValue(item, "speed", says ? "" : LiveEntities.OperationSpeed(texts, item.OperationStatusTypeId, item.DownloadStateTypeId, item.BytesPerSecond)));
             cells.Add(LiveValue(item, "eta", says ? "" : LiveFacts.Eta(item.EtaSeconds)));
             cells.Add(QueueActions(item, csrf));
-            return new ListRow(cells, [ListPanel.Fact("downloads.progress", new ValueText(LiveEntities.Percent(item.ProgressPercent)))], (item.WorkTitle ?? "") + " " + item.Title);
+            return new ListRow(cells, [ListPanel.Fact("downloads.progress", new ValueText(LiveEntities.Percent(progress)))], (item.WorkTitle ?? "") + " " + item.Title);
         }
 
         // Pause or go on, put it first, take it out (after a question).
@@ -343,10 +345,10 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             new Div(new Span(new Span(new ValueText(LiveEntities.OperationStatus(texts, item.IsWaiting, item.OperationStatusTypeId, Says(item) ? null : item.DownloadStateTypeId))).Attribute("data-live-text", "status"))
                 .Class("downloads-pill")).Class("downloads-phase downloads-status").Attribute("data-phase", phase).Attribute("data-live", LiveKeys.Operation(item.Id));
 
-        private IUiComponent ProgressCell(ActivityItemV1 item, string phase)
+        private IUiComponent ProgressCell(ActivityItemV1 item, string phase, int? progress)
         {
             var bar = new Progress().Attribute("max", "100").TextAttribute("aria-label", "live.progress").Class("downloads-bar").Attribute("data-live-value", "percent");
-            if (item.ProgressPercent is { } value) bar.Attribute("value", value.ToString(CultureInfo.InvariantCulture));
+            if (progress is { } value) bar.Attribute("value", value.ToString(CultureInfo.InvariantCulture));
             return new Div(bar).Class("downloads-phase downloads-progress").Attribute("data-phase", phase).Attribute("data-live", LiveKeys.Operation(item.Id));
         }
 

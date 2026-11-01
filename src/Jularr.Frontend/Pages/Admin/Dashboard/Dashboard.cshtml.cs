@@ -100,7 +100,7 @@ namespace Jularr.Frontend.Pages.Admin.Dashboard
                     .Class("dashboard-recent__text"),
                 new Div(new Span(new ValueText(LiveEntities.OperationStatus(texts, item.IsWaiting, item.OperationStatusTypeId, says ? null : item.DownloadStateTypeId))).Class("live-progress__phase")
                         .Attribute("data-live-text", "status"),
-                    item.ProgressPercent is { } percent ? bar.Attribute("value", percent.ToString(CultureInfo.InvariantCulture)) : bar.Attribute("hidden", "hidden"))
+                    !says && item.ProgressPercent is { } percent ? bar.Attribute("value", percent.ToString(CultureInfo.InvariantCulture)) : bar.Attribute("hidden", "hidden"))
                     .Class("live-progress dashboard-recent__state").Attribute("data-live", LiveKeys.Operation(item.Id))).Class("dashboard-recent__row");
         }
 
