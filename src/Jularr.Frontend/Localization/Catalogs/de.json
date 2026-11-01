@@ -14867,6 +14867,18 @@
    "Download storage must be mounted inside Jularr",
    "Der Download-Speicher muss in Jularr eingebunden sein"
   ],
+  "acquisition.outcome.torrent_no_peers": [
+   "No peer is reachable yet; the torrent keeps looking",
+   "Noch kein Peer erreichbar; der Torrent sucht weiter"
+  ],
+  "acquisition.outcome.torrent_no_metadata": [
+   "The torrent's file list has not arrived yet; it keeps looking",
+   "Die Dateiliste des Torrents ist noch nicht da; er sucht weiter"
+  ],
+  "acquisition.outcome.vpn_unavailable": [
+   "The VPN tunnel is not up; nothing is sent until it is",
+   "Der VPN-Tunnel steht nicht; bis dahin wird nichts gesendet"
+  ],
   "acquisition.outcome.download_storage_unavailable": [
    "Download storage is unavailable or its mount changed",
    "Der Download-Speicher ist nicht erreichbar oder seine Einbindung hat sich geändert"

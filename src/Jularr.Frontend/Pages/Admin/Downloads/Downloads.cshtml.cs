@@ -368,7 +368,7 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             return (item.IsWaiting ? "waiting" : (running && item.DownloadStateTypeId is { } state ? state.ToString() : item.OperationStatusTypeId.ToString())).ToLowerInvariant();
         }
 
-        private static bool Says(ActivityItemV1 item) => item.ReasonKey is not null && (item.IsWaiting || item.OperationStatusTypeId == OperationStatusType.Failed);
+        private static bool Says(ActivityItemV1 item) => item.ReasonKey is not null && (item.IsWaiting || item.OperationStatusTypeId is OperationStatusType.Failed or OperationStatusType.Queued or OperationStatusType.Running);
 
         // The category and priority menus of the queue.
         private IUiComponent CategoryFilter() => new ChoiceSelect(ClientAddress(_client), "Category", "downloads.category",

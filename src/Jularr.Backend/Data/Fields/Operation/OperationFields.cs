@@ -17,6 +17,7 @@ namespace Jularr.Backend.Data.Fields.Operation
         public static readonly IntField QueueCount = new() { Minimum = 0 };
         public static readonly StringField ErrorKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly StringField AttentionKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
+        public static readonly StringField HintKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly StringField AttentionUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, Required = false, Format = StringFormat.HttpUrl };
         public static readonly StringField AttentionProposal = new() { Required = false };
         public static readonly StringField SourceLinkUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, Required = false, Format = StringFormat.HttpUrl };

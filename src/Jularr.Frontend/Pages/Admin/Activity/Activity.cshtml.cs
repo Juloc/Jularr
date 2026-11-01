@@ -221,7 +221,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 .Class("activity-transfer").Attribute("data-live", LiveKeys.Operation(item.Id));
         }
 
-        private static bool Says(ActivityItemV1 item) => item.ReasonKey is not null && (item.IsWaiting || item.OperationStatusTypeId == OperationStatusType.Failed);
+        private static bool Says(ActivityItemV1 item) => item.ReasonKey is not null && (item.IsWaiting || item.OperationStatusTypeId is OperationStatusType.Failed or OperationStatusType.Queued or OperationStatusType.Running);
 
         private static IUiComponent LivePart(string name, string text, string className)
         {

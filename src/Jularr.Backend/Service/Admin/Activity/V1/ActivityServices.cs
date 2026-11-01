@@ -35,7 +35,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     work."Id" AS "WorkId",
                     work."CanonicalTitle" AS "WorkTitle",
                     operation."ProgressPercent"::integer AS "ProgressPercent",
-                    coalesce(operation."AttentionKey", operation."ErrorKey") AS "ReasonKey",
+                    coalesce(operation."AttentionKey", operation."ErrorKey", operation."HintKey") AS "ReasonKey",
                     operation."CreatedAt",
                     operation."FinishedAt",
                     connection."Name" AS "ConnectionName",

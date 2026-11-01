@@ -52,7 +52,7 @@ namespace Jularr.Backend.Service.Admin.Live.V1
                     operation."SizeBytes",
                     operation."RemainingBytes",
                     operation."EtaSeconds",
-                    coalesce(operation."AttentionKey", operation."ErrorKey") AS "ReasonKey",
+                    coalesce(operation."AttentionKey", operation."ErrorKey", operation."HintKey") AS "ReasonKey",
                     release."WantedItemId",
                     wanted."WorkId",
                     release."Title" AS "ReleaseTitle",
@@ -86,7 +86,7 @@ namespace Jularr.Backend.Service.Admin.Live.V1
                 var own = requestDownloads[request.Id].OrderByDescending(row => row.Id).ToArray();
                 var phase = LivePhases.OfRequest(request.AcquisitionRequestStatusTypeId, LivePhases.Combine(own.Select(Facts)));
                 var current = own.FirstOrDefault(row => row.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running);
-                var reason = own.FirstOrDefault(row => row.ReasonKey is not null && (row.IsWaiting || row.OperationStatusTypeId == OperationStatusType.Failed))?.ReasonKey;
+                var reason = own.FirstOrDefault(row => row.ReasonKey is not null && (row.IsWaiting || row.OperationStatusTypeId is OperationStatusType.Failed or OperationStatusType.Queued or OperationStatusType.Running))?.ReasonKey;
                 return new LiveAdminRequestV1(request.Id, request.WorkId, phase.Phase, phase.ProgressPercent, phase.EtaSeconds, phase.BytesPerSecond,
                     current?.ReleaseTitle, current?.IndexerName, current?.ClientName, reason);
             });
