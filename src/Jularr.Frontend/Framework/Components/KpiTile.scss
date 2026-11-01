@@ -43,6 +43,15 @@
 
 .kpi-tile__value { overflow: hidden; font-size: 26px; font-weight: 750; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
 
+// A date and time is longer than a figure: smaller, in two lines if need be, without the invisible width of the server's UTC text.
+.kpi-tile__value:has(.local-time) {
+    font-size: 18px;
+    white-space: normal;
+
+    .local-time { display: inline; }
+    .local-time__measure { display: none; }
+}
+
 // The strip: one panel, four cells divided by the quiet line, a tinted icon tile before each figure.
 .kpi-tiles--strip {
     container: kpi-strip / inline-size;

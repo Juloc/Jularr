@@ -168,13 +168,15 @@
 
 .downloads-queue {
     --list-columns: minmax(160px, 2.4fr) minmax(64px, .7fr) minmax(96px, .8fr) minmax(100px, 200px) 36px minmax(64px, .6fr) minmax(64px, .6fr) minmax(56px, .6fr) 108px;
-    --list-columns-medium: minmax(200px, 2.4fr) minmax(96px, .8fr) minmax(120px, 200px) 40px minmax(70px, .6fr) 108px;
-    --list-columns-narrow: minmax(160px, 2fr) minmax(96px, .9fr) minmax(110px, 1.1fr) 40px 108px;
+    // One track per column that is shown: name, category, status, bar, percent, speed, actions; at the narrow step without the category.
+    --list-columns-medium: minmax(200px, 2.4fr) minmax(96px, .8fr) minmax(96px, .8fr) minmax(100px, 200px) 40px minmax(70px, .6fr) 108px;
+    --list-columns-narrow: minmax(160px, 2fr) minmax(96px, .9fr) minmax(100px, 1.1fr) 40px minmax(64px, .6fr) 108px;
 }
 
 .downloads-queue.downloads-list--all {
     --list-columns: minmax(150px, 2.2fr) minmax(90px, .8fr) minmax(64px, .7fr) minmax(96px, .8fr) minmax(100px, 200px) 36px minmax(64px, .6fr) minmax(64px, .6fr) minmax(56px, .6fr) 108px;
-    --list-columns-medium: minmax(180px, 2.2fr) minmax(96px, .8fr) minmax(96px, .8fr) minmax(120px, 200px) 40px minmax(70px, .6fr) 108px;
+    // With the downloader as well: name, downloader, category, status, bar, percent, speed, actions.
+    --list-columns-medium: minmax(180px, 2.2fr) minmax(96px, .8fr) minmax(96px, .8fr) minmax(96px, .8fr) minmax(100px, 200px) 40px minmax(70px, .6fr) 108px;
 }
 
 .downloads-history {

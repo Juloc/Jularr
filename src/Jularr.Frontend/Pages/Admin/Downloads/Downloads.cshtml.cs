@@ -253,7 +253,7 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             cells.Add(LiveValue(item, "speed", says ? "" : LiveEntities.OperationSpeed(texts, item.OperationStatusTypeId, item.DownloadStateTypeId, item.BytesPerSecond)));
             cells.Add(LiveValue(item, "eta", says ? "" : LiveFacts.Eta(item.EtaSeconds)));
             cells.Add(QueueActions(item, csrf));
-            return new ListRow(cells, [ListPanel.Fact("downloads.progress", new ValueText(LiveEntities.Percent(progress)))], (item.WorkTitle ?? "") + " " + item.Title);
+            return new ListRow(cells, progress is null ? [] : [ListPanel.Fact("downloads.progress", new ValueText(LiveEntities.Percent(progress)))], (item.WorkTitle ?? "") + " " + item.Title);
         }
 
         // Pause or go on, put it first, take it out (after a question).
