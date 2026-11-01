@@ -4,6 +4,7 @@ using AngleSharp.Html.Parser;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Reading;
+using Jularr.Backend.Logic.Reading;
 using Jularr.Backend.Data.System.Reading.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
@@ -56,7 +57,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
             var unit = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadOptionalAsync<BookTranslationUnitData>(NextSection(model, digest), ct), CancellationToken);
             if (unit is null) return new UpdateResult(false);
 
-            var nodes = new HtmlParser().ParseDocument(unit.Html).QuerySelectorAll("[data-b]");
+            var nodes = new HtmlParser().ParseDocument(unit.Html).QuerySelectorAll("[data-b]").ToArray();
             var path = LocalReadingPaths.Cache(unit.SectionIndex, unit.Language, model);
             var texts = (unit.Cache is null ? null : LocalReadingPaths.Parse(unit.Cache, unit.Html, unit.SourceLanguage, digest, nodes.Length))?.Texts ?? new string[nodes.Length];
             var translated = 0;
@@ -64,7 +65,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
             {
                 if (!string.IsNullOrWhiteSpace(texts[index])) continue;
                 var node = nodes[index];
-                var source = node.TextContent.Trim();
+                var source = ReadingHtml.TranslationText(node);
                 string value;
                 // A block holding others, or one without text, has nothing of its own to translate; an oversized one keeps its text.
                 if (node.QuerySelector("[data-b]") is not null || source.Length == 0) value = "";
@@ -74,9 +75,10 @@ namespace Jularr.Backend.Service.System.Reading.V1
                     if (!await _gate.HeavyWork.WaitAsync(GateWait, CancellationToken)) break;
                     try
                     {
-                        var result = (await _models.TranslateAsync(server, model, unit.SourceLanguage, unit.Language, source, CancellationToken)).Text;
-                        // As in the Reader: no truncated, identical-length nonsense; a block the model cannot translate keeps its own text, so the job never loops on it.
-                        value = result.Length < Math.Min(3, source.Length / 12) || result.Length > 20_000 || result.Length > source.Length * 6 + 200 ? source : result;
+                        var context = ReadingHtml.TranslationContext(nodes, index);
+                        var result = (await _models.TranslateAsync(server, model, unit.SourceLanguage, unit.Language, source, CancellationToken, context)).Text;
+                        // A failed block keeps its readable original rather than caching a nonsensical translation.
+                        value = OllamaLocalModels.LooksComplete(source, result, unit.Language) ? result : source;
                     }
                     catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException && !CancellationToken.IsCancellationRequested)
                     {
@@ -176,7 +178,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
                     JOIN "ReadingResources" AS text ON text."ReadingDocumentId" = book."Id"
                         AND text."Path" = section."Path"
                     LEFT JOIN "ReadingResources" AS cache ON cache."ReadingDocumentId" = book."Id"
-                        AND cache."Path" = ':localtranslation/v2/' || @Model || '/' || target."Language" || '/' || section."Key"
+                        AND cache."Path" = ':localtranslation/v3/' || @Model || '/' || target."Language" || '/' || section."Key"
                 WHERE
                     length(target."Language") BETWEEN 2 AND 3
                     AND length(book."SourceLanguage") BETWEEN 2 AND 3

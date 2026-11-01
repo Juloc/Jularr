@@ -141,8 +141,22 @@ namespace Jularr.Integrations.Logic.Translation
                 throw new InvalidDataException("Ollama did not register the downloaded model.");
         }
 
+        // Basic safeguards: a translation must not be an echo, heavily untranslated Japanese, or an obvious truncation.
+        internal static bool LooksComplete(string source, string output, string target)
+        {
+            if (string.IsNullOrWhiteSpace(output) || output.Length < (source.Length >= 12 ? Math.Max(3, source.Length / 12) : 1)
+                || output.Length > 20_000 || output.Length > source.Length * 6 + 200) return false;
+            if (source.Length > 16 && string.Equals(source.Trim(), output.Trim(), StringComparison.Ordinal)) return false;
+            if (target is "de" or "en" or "fr" or "it" or "es" or "pt")
+            {
+                var japanese = output.Count(character => character is >= '\u3040' and <= '\u30ff' or >= '\u3400' and <= '\u9fff');
+                if (japanese >= 8 && japanese * 3 > output.Length) return false;
+            }
+            return true;
+        }
+
         internal async Task<(string Text, double Seconds, double TokensPerSecond)> TranslateAsync(Uri server, string model,
-            string source, string target, string text, CancellationToken ct)
+            string source, string target, string text, CancellationToken ct, string? previousContext = null)
         {
             if (!Supported(model)) throw new ArgumentException("Unknown approved model.", nameof(model));
             if (source.Length is < 2 or > 3 || target.Length is < 2 or > 3
@@ -153,25 +167,36 @@ namespace Jularr.Integrations.Logic.Translation
             {
                 var output = new List<string>();
                 double seconds = 0, chunkSpeed = 0;
+                var context = previousContext ?? "";
                 foreach (var part in Segments(text))
                 {
-                    var translated = await TranslateAsync(server, model, source, target, part, ct);
+                    var translated = await TranslateAsync(server, model, source, target, part, ct, context);
                     output.Add(translated.Text);
                     seconds += translated.Seconds;
                     chunkSpeed += translated.TokensPerSecond;
+                    context = (context + "\n" + part).Trim();
+                    if (context.Length > 800) context = context[^800..];
                 }
                 return (string.Join(" ", output), Math.Round(seconds, 2), Math.Round(chunkSpeed / output.Count, 2));
             }
             var sourceName = global::System.Globalization.CultureInfo.GetCultureInfo(source).EnglishName;
             var targetName = global::System.Globalization.CultureInfo.GetCultureInfo(target).EnglishName;
-            // Ollama TranslateGemma prompt guide: exactly two blank lines before source text.
+            // Keep the official TranslateGemma text delimiter, with context confined to the instruction.
+            var guidance = "Preserve the narrator's point of view, speaker identity and character names. Do not invent or omit information.\n";
+            if (!string.IsNullOrWhiteSpace(previousContext))
+            {
+                var context = previousContext.Trim();
+                if (context.Length > 800) context = context[^800..];
+                guidance += "Earlier source passage for context only (do not translate or repeat it):\n" + context + "\n";
+            }
             var prompt = $"You are a professional {sourceName} ({source}) to {targetName} ({target}) translator. "
                 + $"Your goal is to accurately convey the meaning and nuances of the original {sourceName} text while adhering to {targetName} grammar, vocabulary, and cultural sensitivities.\n"
+                + guidance
                 + $"Produce only the {targetName} translation, without any additional explanations or commentary. "
                 + $"Please translate the following {sourceName} text into {targetName}:\n\n\n{text}";
             var timer = Stopwatch.StartNew();
             using var response = await JsonAsync(server, "api/generate",
-                new { model, prompt, stream = false, keep_alive = "5m", options = new { temperature = 0, num_ctx = 3072, num_predict = 1536 } }, ct);
+                new { model, prompt, stream = false, keep_alive = "5m", options = new { temperature = 0, num_ctx = 4096, num_predict = 1536 } }, ct);
             timer.Stop();
             if (!response.RootElement.TryGetProperty("response", out var result) || result.ValueKind != JsonValueKind.String)
                 throw new InvalidDataException("Ollama translation response was invalid.");

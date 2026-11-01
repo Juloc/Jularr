@@ -63,7 +63,7 @@ namespace Jularr.Backend.Service.Core
                     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     timeout.CancelAfter(Answer);
                     var installed = await models.InstalledAsync(server, timeout.Token);
-                    var chosen = model is null ? OllamaLocalModels.Candidates.FirstOrDefault(candidate => installed.Contains(candidate, StringComparer.Ordinal))
+                    var chosen = model is null ? OllamaLocalModels.Candidates.Reverse().FirstOrDefault(candidate => installed.Contains(candidate, StringComparer.Ordinal))
                         : installed.Contains(model, StringComparer.Ordinal) ? model : null;
                     if (chosen is not null) return (server, chosen);
                 }

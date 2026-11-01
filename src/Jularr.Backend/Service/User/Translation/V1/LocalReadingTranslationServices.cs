@@ -22,9 +22,9 @@ namespace Jularr.Backend.Service.User.Translation.V1
     // Provider-specific cache: intentionally outside the canonical :translation/{language} paths.
     internal static class LocalReadingPaths
     {
-        public const int Algorithm = 2;
+        public const int Algorithm = 3;
         public static string Cache(int section, string language, string model) =>
-            ":localtranslation/v2/" + model + "/" + language + "/" + section.ToString("D5", global::System.Globalization.CultureInfo.InvariantCulture);
+            ":localtranslation/v3/" + model + "/" + language + "/" + section.ToString("D5", global::System.Globalization.CultureInfo.InvariantCulture);
 
         public static string SourceHash(string html, string sourceLanguage) =>
             Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(html + "\n" + sourceLanguage)));
@@ -187,14 +187,15 @@ namespace Jularr.Backend.Service.User.Translation.V1
             var saved = await Context.ExecuteBatchAsync(LocalTranslationMachines.SavedAsync, CancellationToken);
             var section = await _sections.ExecuteAsync<ReadingSectionV1>(new ReadingSectionParametersV1(Parameters.DocumentId, Parameters.SectionIndex), CancellationToken);
             var html = new HtmlParser().ParseDocument(section.Html);
-            var nodes = html.QuerySelectorAll("[data-b]");
+            var nodes = html.QuerySelectorAll("[data-b]").ToArray();
             if (nodes.Length != section.Blocks || Parameters.BlockIndex >= nodes.Length)
                 throw new DataValidationException(nameof(Parameters.BlockIndex), "translation_mismatch");
 
             var original = nodes[Parameters.BlockIndex];
-            if (original.QuerySelector("[data-b]") is not null || string.IsNullOrWhiteSpace(original.TextContent))
+            if (original.QuerySelector("[data-b]") is not null)
                 return new LocalReadingBlockV1("");
-            var source = original.TextContent.Trim();
+            var source = ReadingHtml.TranslationText(original);
+            if (source.Length == 0) return new LocalReadingBlockV1("");
             if (source.Length > 20_000) throw new DataValidationException(nameof(Parameters.BlockIndex), "translation_mismatch");
 
             if (!await _gate.HeavyWork.WaitAsync(TimeSpan.FromSeconds(20), CancellationToken))
@@ -228,10 +229,10 @@ namespace Jularr.Backend.Service.User.Translation.V1
                         if (!string.IsNullOrWhiteSpace(previous?.Texts[Parameters.BlockIndex]))
                             return new LocalReadingBlockV1(previous.Texts[Parameters.BlockIndex]);
 
-                        var translated = await _models.TranslateAsync(server, Parameters.Model, Data.SourceLanguage, Parameters.Language, source, CancellationToken);
+                        var context = ReadingHtml.TranslationContext(nodes, Parameters.BlockIndex);
+                        var translated = await _models.TranslateAsync(server, Parameters.Model, Data.SourceLanguage, Parameters.Language, source, CancellationToken, context);
                         var value = translated.Text;
-                        // Do not silently accept truncation, identical language or absurd length.
-                        if (value.Length < Math.Min(3, source.Length / 12) || value.Length > 20_000 || value.Length > source.Length * 6 + 200)
+                        if (!OllamaLocalModels.LooksComplete(source, value, Parameters.Language))
                             throw new ServiceUnavailableException("translation_local_unverified");
 
                         // Serialize competing writes across instances on the canonical ReadingDocument.
