@@ -192,6 +192,29 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void LightNovel_JapanesePack_NumbersTheVolumesByTheirFileNames()
+        {
+            TargetUnit[] volumes = [new(1, null, 1, false), new(2, null, 2, false), new(3, null, 3, true)];
+            static Jularr.Integrations.Data.Storage.StorageFile[] Files(params string[] names) => [.. names.Select(name => new Jularr.Integrations.Data.Storage.StorageFile("Pack/" + name, 1000, DateTime.UtcNow))];
+            IReadOnlyList<ImportPlacementData> Plan(params string[] names) => ImportPlacementLogic.Plan(MediaType.Book, MediaSubtype.LightNovel, "Novel", null, null, Files(names),
+                NamingPatternTests.DefaultSet, null, episodes: volumes);
+
+            // "<title> 01": the main title's files carry the volumes; a spin-off with its own title and the special book stay in the download.
+            string[] trailing = ["無職転生 ～異世界行ったら本気だす～ 01.epub", "無職転生 ～異世界行ったら本気だす～ 02.epub", "無職転生 ～異世界行ったら本気だす～ 03.epub",
+                "無職転生 ～蛇足編～ 01.epub", "無職転生 ～蛇足編～ 02.epub", "無職転生 ～異世界行ったら本気だす～ スペシャルブック.epub"];
+            CollectionAssert.AreEqual(new decimal?[] { 1, 2 }, Plan(trailing).Select(placement => placement.UnitNumber).ToArray());
+            CollectionAssert.AreEquivalent(new[] { "Pack/無職転生 ～蛇足編～ 01.epub", "Pack/無職転生 ～蛇足編～ 02.epub", "Pack/無職転生 ～異世界行ったら本気だす～ スペシャルブック.epub" },
+                ImportPlacementLogic.UnmatchedVolumes(MediaSubtype.LightNovel, Files(trailing), volumes)!.ToArray());
+
+            // "第01巻": the Japanese volume marker.
+            CollectionAssert.AreEqual(new decimal?[] { 1, 2 }, Plan("小説 第01巻.epub", "小説 第02巻.epub", "小説 第03巻.epub").Select(placement => placement.UnitNumber).ToArray());
+
+            // One numbered file is still one book, and two files that differ in no number are no pack.
+            Assert.IsNull(Plan("無職転生 01.epub").Single().UnitNumber);
+            Assert.IsNull(ImportPlacementLogic.UnmatchedVolumes(MediaSubtype.LightNovel, Files("Alpha story.epub", "Beta story.epub"), volumes));
+        }
+
+        [TestMethod]
         public async Task AniList_NullFields_ReadAsMissing()
         {
             var sources = new FakeMangaSources { Manga = """{"id":102,"title":{"romaji":"Reidai","english":null,"native":null},"startDate":null,"volumes":null,"description":null,"coverImage":null,"staff":null}""" };

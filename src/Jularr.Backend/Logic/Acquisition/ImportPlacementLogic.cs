@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
@@ -189,14 +190,39 @@ namespace Jularr.Backend.Logic.Acquisition
                 return null;
             }
 
-            var named = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Ebook)
-                .Select(file => (File: file, Name: BookReleaseJudge.ReadName(Path.GetFileNameWithoutExtension(file.RelativePath)))).ToArray();
-            if (named.Where(item => item.Name.VolumeEnd is null).Select(item => item.Name.VolumeStart).OfType<int>().Distinct().Count() < 2)
+            var ebooks = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Ebook).ToArray();
+            var named = ebooks.Select(file => (File: file, Name: BookReleaseJudge.ReadName(Path.GetFileNameWithoutExtension(file.RelativePath)))).ToArray();
+            var numbered = NumberedFiles(ebooks);
+
+            // The volume a file names: "v01" style names first, else the number the pack's own file names carry; a range is no single volume.
+            int? NumberOf((StorageFile File, BookReleaseName Name) item) =>
+                item.Name.VolumeStart is { } start ? item.Name.VolumeEnd is null ? start : null : numbered.TryGetValue(item.File.RelativePath, out var number) ? number : null;
+
+            if (named.Select(NumberOf).OfType<int>().Distinct().Count() < 2)
             {
                 return null;
             }
 
-            return [.. named.Select(item => (item.File, item.Name is { VolumeStart: { } number, VolumeEnd: null } ? volumes.FirstOrDefault(unit => unit.ParentNumber is null && unit.Number == number) : null))];
+            return [.. named.Select(item => (item.File, NumberOf(item) is { } number ? volumes.FirstOrDefault(unit => unit.ParentNumber is null && unit.Number == number) : null))];
+        }
+
+        // Volume numbers of a pack whose names have no "v01": the Japanese "第01巻", or "<title> 01" where most files share the title and differ in the number
+        // (a spin-off or special with another title stays unnumbered, so it never lands on a volume of the main work).
+        private static Dictionary<string, int> NumberedFiles(IReadOnlyList<StorageFile> ebooks)
+        {
+            var kanji = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var file in ebooks)
+            {
+                if (KanjiVolume().Match(Path.GetFileNameWithoutExtension(file.RelativePath)) is { Success: true } match) kanji[file.RelativePath] = int.Parse(match.Groups["number"].Value, CultureInfo.InvariantCulture);
+            }
+
+            if (kanji.Values.Distinct().Count() >= 2) return kanji;
+            var group = ebooks.Select(file => (File: file, Match: TrailingNumber().Match(Path.GetFileNameWithoutExtension(file.RelativePath)))).Where(item => item.Match.Success)
+                .GroupBy(item => item.Match.Groups["title"].Value.Trim(), StringComparer.Ordinal).OrderByDescending(item => item.Count()).FirstOrDefault();
+            var result = new Dictionary<string, int>(StringComparer.Ordinal);
+            if (group is null || group.Select(item => item.Match.Groups["number"].Value).Distinct().Count() < 2) return result;
+            foreach (var item in group) result[item.File.RelativePath] = int.Parse(item.Match.Groups["number"].Value, CultureInfo.InvariantCulture);
+            return result;
         }
 
         // One file per volume, the largest; a single unnumbered file is the whole series. A file holding a range is no single volume.
@@ -332,6 +358,12 @@ namespace Jularr.Backend.Logic.Acquisition
 
         [GeneratedRegex(@"^\s*(?:\d{1,2}[-.])?\d{1,3}(?=[\s._-]|$)")]
         private static partial Regex TrackNumber();
+
+        [GeneratedRegex(@"第\s?(?<number>\d{1,4})\s?巻")]
+        private static partial Regex KanjiVolume();
+
+        [GeneratedRegex(@"^(?<title>.*\D)[\s._-]+(?<number>\d{1,3})$")]
+        private static partial Regex TrailingNumber();
 
         [GeneratedRegex(@"\d+")]
         private static partial Regex Digits();
