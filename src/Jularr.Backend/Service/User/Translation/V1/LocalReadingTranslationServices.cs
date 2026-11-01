@@ -22,9 +22,9 @@ namespace Jularr.Backend.Service.User.Translation.V1
     // Provider-specific cache: intentionally outside the canonical :translation/{language} paths.
     internal static class LocalReadingPaths
     {
-        public const int Algorithm = 2;
+        public const int Algorithm = 3;
         public static string Cache(int section, string language, string model) =>
-            ":localtranslation/v2/" + model + "/" + language + "/" + section.ToString("D5", global::System.Globalization.CultureInfo.InvariantCulture);
+            ":localtranslation/v3/" + model + "/" + language + "/" + section.ToString("D5", global::System.Globalization.CultureInfo.InvariantCulture);
 
         public static string SourceHash(string html, string sourceLanguage) =>
             Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(html + "\n" + sourceLanguage)));
