@@ -2,6 +2,7 @@ using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.System.V1;
+using Jularr.Backend.Data.Admin.Translation.V1;
 using Jularr.Backend.Data.Admin.Worker.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Instance;
@@ -9,6 +10,8 @@ using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Enums.Worker;
 using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Backend.Service.Admin.System.V1;
+using Jularr.Backend.Service.Admin.Translation.V1;
+using Jularr.Frontend.Pages.Admin.Translation;
 using Jularr.Backend.Service.Admin.Worker.V1;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Modules.Live;
@@ -19,7 +22,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Jobs
 {
     // Every background job with its state and the Owner's controls, and below it what the operations did; both are lists of the shared list kit.
-    public sealed class JobsModel(ReadWorkerJobsV1 read, PauseWorkerJobV1 pause, RunWorkerJobV1 run, SetWorkerJobUseV1 use, ReadActivityV1 readHistory, ReadHealthV1 readHealth, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class JobsModel(ReadWorkerJobsV1 read, ReadBookTranslationProgressV1 readTranslation, PauseWorkerJobV1 pause, RunWorkerJobV1 run, SetWorkerJobUseV1 use, ReadActivityV1 readHistory, ReadHealthV1 readHealth, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string Address = "/Admin/Jobs";
         private const int PageSize = 25;
@@ -64,6 +67,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
         private IReadOnlyList<WorkerJobV1> _jobs = [];
         private PageResult<ActivityItemV1>? _history;
         private HealthV1? _health;
+        private BookTranslationProgressV1? _translation;
 
         // The chosen chip and the filter words live in the address.
         [BindProperty(SupportsGet = true, Name = "state")]
@@ -254,6 +258,11 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             };
             if (job.LastErrorKey is { } key) body.Add(Drawer.Block("jobs.error", new P(Time(job.LastFinishedAt), new ValueText(" · "), new ValueText(Failure(key)))));
             body.Add(Drawer.Block("jobs.about", new P(new Text("jobs.about." + job.Key))));
+            if (job.Key == "bookTranslations" && _translation is not null)
+            {
+                body.Add(Drawer.Block("translation.progress.title", new Div([.. TranslationProgressView.Summary(_translation, texts)])));
+                body.Add(Drawer.Block("translation.progress.more", new A(new Text("translation.progress.open")).Attribute("href", "/Admin/Instance/Translation")));
+            }
 
             var footer = new List<IUiComponent>();
             if (canControl)
@@ -384,6 +393,18 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             var ct = HttpContext.RequestAborted;
             _jobs = await read.ExecuteAsync<BaseDataList<WorkerJobV1>>(new ReadWorkerJobsParametersV1(), ct);
             _health = await readHealth.ExecuteAsync<HealthV1>(new ReadHealthParametersV1(), ct);
+            if (_jobs.Any(job => job.Key == "bookTranslations") && texts.Can("instance.settings.read"))
+            {
+                try
+                {
+                    _translation = await readTranslation.ExecuteAsync<BookTranslationProgressV1>(cancellationToken: ct);
+                }
+                catch (global::System.Security.SecurityException)
+                {
+                    // The Translation module is off: the job has nothing to show.
+                }
+            }
+
             if (texts.Can("media.read"))
             {
                 _history = await readHistory.ExecuteAsync<PageResult<ActivityItemV1>>(new ReadActivityParametersV1(ActivityFilterType.History, 1, 10), ct);

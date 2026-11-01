@@ -10,11 +10,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Translation
 {
-    public sealed class TranslationModelPage(ReadLocalTranslationModelsV1 read, PullLocalTranslationModelV1 pull,
+    public sealed class TranslationModelPage(ReadLocalTranslationModelsV1 read, ReadBookTranslationProgressV1 readProgress, PullLocalTranslationModelV1 pull,
         BenchmarkLocalTranslationModelV1 benchmark, SaveTranslationMachinesV1 saveMachines, SaveTranslationFreeBytesV1 saveFreeBytes, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string Home = "/Admin/Instance/Translation";
         private LocalTranslationModelsV1? _models;
+        private BookTranslationProgressV1? _progress;
         private LocalTranslationBenchmarkV1? _benchmark;
         private TranslationMachinesDataV1? _machines;
         private TranslationFreeBytesDataV1? _freeBytes;
@@ -67,6 +68,9 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             page.Content.Add(new Div(new P(new Text("translation.local.prepare." + preparing)),
                 new A(new Text("translation.local.prepare.jobs")).Attribute("href", "/Admin/Jobs")).Class("feature-card")
                 .Attribute("data-translation-prepare", preparing).Attribute("role", "status"));
+
+            // How far the job is; the page reads this part again every ten seconds.
+            if (_progress is not null) page.Content.Add(TranslationProgressView.Full(_progress, texts));
 
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             // The Ollama machines in order: the first that answers with a model translates, the next takes over when it drops out.
@@ -133,6 +137,16 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             return Page();
         }
 
+        // Only the progress part, for the page to read again while it is open.
+        public async Task<IActionResult> OnGetProgressAsync()
+        {
+            var progress = await readProgress.ExecuteAsync<BookTranslationProgressV1>(cancellationToken: HttpContext.RequestAborted);
+            using var writer = new StringWriter(CultureInfo.InvariantCulture);
+            TranslationProgressView.Full(progress, texts).WriteTo(writer, global::System.Text.Encodings.Web.HtmlEncoder.Default, texts);
+            Response.Headers.CacheControl = "no-store";
+            return Content(writer.ToString(), "text/html");
+        }
+
         public async Task<IActionResult> OnPostPullAsync(string model, int machine)
         {
             await pull.ExecuteAsync<UpdateResult>(new LocalTranslationPullParametersV1(model, machine), new NoData(), HttpContext.RequestAborted);
@@ -164,6 +178,7 @@ namespace Jularr.Frontend.Pages.Admin.Translation
         protected override async Task LoadDataAsync()
         {
             _models = await read.ExecuteAsync<LocalTranslationModelsV1>(cancellationToken: HttpContext.RequestAborted);
+            _progress = await readProgress.ExecuteAsync<BookTranslationProgressV1>(cancellationToken: HttpContext.RequestAborted);
         }
     }
 }

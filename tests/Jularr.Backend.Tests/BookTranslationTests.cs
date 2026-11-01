@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Jularr.Backend.Data.Admin.Translation.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.System.Reading.V1;
 using Jularr.Backend.Data.User.Reading.V1;
@@ -122,6 +123,115 @@ namespace Jularr.Backend.Tests
             }
             var sections = Convert.ToInt64(await host.ScalarAsync("SELECT jsonb_array_length(\"Structure\" -> 'Sections') FROM \"ReadingDocuments\" WHERE \"Id\" = " + document.DocumentId), System.Globalization.CultureInfo.InvariantCulture);
             Assert.AreEqual(sections, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/translategemma:4b/de/%' AND \"ReadingDocumentId\" = " + document.DocumentId));
+        }
+
+        [TestMethod]
+        public async Task Progress_CountsFinishedSectionsPerLanguageAndBook_AndNamesTheSectionInWork()
+        {
+            using var storage = new TemporaryDirectory();
+            var ollama = new FakeOllama();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
+                settings: new Dictionary<string, string> { ["LocalTranslation:Endpoint"] = "http://ollama:11434" },
+                services: services => services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => ollama));
+            var (first, second) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var firstDocument = await ReadingTests.OpenAsync(host, first);
+            await ReadingTests.OpenAsync(host, second);
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en'");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" LIKE 'de%' ORDER BY \"Locale\" LIMIT 1)");
+
+            // Before the first round: every section of both books waits, nothing is in work, nothing can be estimated.
+            var before = await ReadProgressAsync(host);
+            Assert.AreEqual(1, before.Languages.Length);
+            Assert.AreEqual("de", before.Languages[0].Language);
+            Assert.AreEqual(0, before.Languages[0].Done);
+            Assert.IsTrue(before.Languages[0].Total > 0);
+            Assert.AreEqual(2, before.Books.Length);
+            Assert.IsNull(before.Current);
+            Assert.IsNull(before.SecondsRemaining);
+
+            // One round: the section it picked is named, and a pace shows once sections are done.
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                Assert.IsTrue(await Translate(scope));
+            }
+            var during = await ReadProgressAsync(host);
+            Assert.IsNotNull(during.Current);
+            Assert.IsTrue(during.Current.Title is "First Book" or "Second Book");
+            Assert.IsTrue(during.Current.Section >= 1);
+            Assert.AreEqual("de", during.Current.Language);
+
+            var rounds = 0;
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                while (await Translate(scope)) Assert.IsTrue(++rounds < 200, "The job never finishes.");
+            }
+            var done = await ReadProgressAsync(host);
+            Assert.AreEqual(done.Languages[0].Total, done.Languages[0].Done);
+            Assert.IsTrue(done.Books.All(book => book.Done == book.Total && book.Total > 0));
+            Assert.IsNull(done.Current);
+            Assert.IsNull(done.SecondsRemaining);
+            Assert.IsNull(done.IssueKey);
+            Assert.IsTrue(firstDocument.DocumentId > 0);
+
+            // The page shows the part, and reading only that part answers the fragment the page swaps in; the Jobs page loads.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "data-translation-progress");
+            StringAssert.Contains(html, "First Book");
+            using var fragment = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation?handler=Progress");
+            var part = await fragment.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, fragment.StatusCode, part);
+            Assert.IsTrue(part.TrimStart().StartsWith("<div", StringComparison.Ordinal) && part.Contains("data-translation-progress", StringComparison.Ordinal), part);
+            // The Jobs page still loads with the translation module on (its drawer needs the job row, which a started worker creates).
+            using var jobs = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs");
+            Assert.AreEqual(HttpStatusCode.OK, jobs.StatusCode, await jobs.Content.ReadAsStringAsync());
+        }
+
+        [TestMethod]
+        public void Progress_TracksTheSectionPaceAndWhyNothingHappens()
+        {
+            var clock = new Clock();
+            var progress = new Jularr.Backend.Service.Core.BookTranslationProgress(clock);
+            Assert.IsNull(progress.Snapshot().Current);
+
+            progress.Picked(7, 3, "de");
+            clock.Now += TimeSpan.FromSeconds(90);
+            var waiting = progress.Snapshot();
+            Assert.AreEqual(3, waiting.Current!.Section);
+            Assert.AreEqual(90, waiting.SecondsWithoutProgress);
+
+            // A block resets the time without progress; blocks and sections count towards the pace of the last ten minutes.
+            progress.BlockDone();
+            for (var block = 0; block < 9; block++) progress.BlockDone();
+            progress.SectionDone();
+            progress.SectionDone();
+            var moving = progress.Snapshot();
+            Assert.AreEqual(0, moving.SecondsWithoutProgress);
+            Assert.AreEqual(1.0, moving.BlocksPerMinute);
+            Assert.AreEqual(0.2, moving.SectionsPerMinute);
+
+            clock.Now += TimeSpan.FromMinutes(11);
+            Assert.AreEqual(0.0, progress.Snapshot().BlocksPerMinute);
+
+            progress.Idle("noMachine");
+            var idle = progress.Snapshot();
+            Assert.IsNull(idle.Current);
+            Assert.AreEqual("noMachine", idle.IssueKey);
+        }
+
+        private static async Task<BookTranslationProgressV1> ReadProgressAsync(AuthenticationTests.Host host)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/translation/progress");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<BookTranslationProgressV1>(JsonSerializerOptions.Web))!;
+        }
+
+        private sealed class Clock : TimeProvider
+        {
+            public DateTimeOffset Now { get; set; } = new(2026, 11, 1, 12, 0, 0, TimeSpan.Zero);
+            public override DateTimeOffset GetUtcNow() => Now;
         }
 
         private static async Task<bool> Translate(AsyncServiceScope scope) =>
