@@ -52,6 +52,14 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             if (_models.DownloadState is "failed")
                 page.Content.Add(new P(new Text("translation.local.failureInfo")).Attribute("role", "alert"));
 
+            // What the job "Book translations" does now: it translates every book into every language a profile uses as soon as a machine answers with a model.
+            var preparing = !_models.Configured ? "noMachine"
+                : _models.Machines.All(machine => !machine.Reachable) ? "unreachable"
+                : _models.Machines.Any(machine => machine.Reachable && machine.Installed.Any(_models.Approved.Contains)) ? "ready" : "noModel";
+            page.Content.Add(new Div(new P(new Text("translation.local.prepare." + preparing)),
+                new A(new Text("translation.local.prepare.jobs")).Attribute("href", "/Admin/Jobs")).Class("feature-card")
+                .Attribute("data-translation-prepare", preparing).Attribute("role", "status"));
+
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             // The Ollama machines in order: the first that answers with a model translates, the next takes over when it drops out.
             page.Content.Add(new Form<TranslationMachinesDataV1>(form =>
