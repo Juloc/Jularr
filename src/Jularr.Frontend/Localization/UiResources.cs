@@ -560,6 +560,8 @@ namespace Jularr.Frontend.Localization
             new("translation.local.prepare.noModel", "Book translations are waiting: no TranslateGemma model is installed on a machine that answers. Download one below."),
             new("translation.local.prepare.ready", "Book translations are running: the server translates every book into every language a profile uses, books being read first."),
             new("translation.local.prepare.jobs", "Pause or resume the job on the Jobs page"),
+            new("translation.local.freeBytes", "Free space of the Ollama model volume"),
+            new("translation.local.freeBytesHint", "Check the volume on the Ollama machine and type the free space here. Downloads are offered up to it, minus 2 GB. 0 leaves the configured value."),
             new("translation.local.loaded", "Loaded"),
             new("translation.local.machines", "Ollama machines, one address per line; the first that answers translates"),
             new("translation.local.machine.offline", "not reachable"),

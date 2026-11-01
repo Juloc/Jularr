@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Jularr.Backend.Data.Admin.Translation.V1;
 using Jularr.Backend.Service.User.Translation.V1;
 using Jularr.Backend.Service.Core;
 using Microsoft.Extensions.Options;
@@ -138,15 +139,15 @@ namespace Jularr.Backend.Tests
                 Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 0 }),
                 Options.Create(new MediaOptions { TranslationPath = Path.Combine(root, "denied") }),
                 new LocalTranslationGate());
-            Assert.IsFalse(noCapacity.Queue("translategemma:4b", Ollama));
-            Assert.IsFalse(noCapacity.Queue("other:27b", Ollama));
+            Assert.IsFalse(noCapacity.Queue("translategemma:4b", Ollama, 0));
+            Assert.IsFalse(noCapacity.Queue("other:27b", Ollama, 0));
 
             using var adequate = new LocalTranslationDownloads(client,
                 Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 6_000_000_000L }),
                 Options.Create(new MediaOptions { TranslationPath = Path.Combine(root, "approved") }),
                 new LocalTranslationGate());
-            Assert.IsTrue(adequate.Queue("translategemma:4b", Ollama));
-            Assert.IsFalse(adequate.Queue("translategemma:12b", Ollama));
+            Assert.IsTrue(adequate.Queue("translategemma:4b", Ollama, 6_000_000_000L));
+            Assert.IsFalse(adequate.Queue("translategemma:12b", Ollama, 6_000_000_000L));
             Assert.AreEqual("queued", adequate.Current().State);
         }
 
@@ -165,7 +166,7 @@ namespace Jularr.Backend.Tests
                 var media = Options.Create(new MediaOptions { TranslationPath = root });
                 using (var beforeRestart = new LocalTranslationDownloads(client, settings, media, new LocalTranslationGate()))
                 {
-                    Assert.IsTrue(beforeRestart.Queue("translategemma:4b", Ollama));
+                    Assert.IsTrue(beforeRestart.Queue("translategemma:4b", Ollama, 6_000_000_000L));
                     Assert.AreEqual("queued", beforeRestart.Current().State);
                     Assert.IsTrue(File.Exists(Path.Combine(root, "ollama-pull-state.json")));
                 }
@@ -175,7 +176,7 @@ namespace Jularr.Backend.Tests
                 {
                     Assert.AreEqual("interrupted", afterRestart.Current().State);
                     Assert.AreEqual("translategemma:4b", afterRestart.Current().Model);
-                    Assert.IsTrue(afterRestart.Queue("translategemma:4b", Ollama));
+                    Assert.IsTrue(afterRestart.Queue("translategemma:4b", Ollama, 6_000_000_000L));
                     Assert.AreEqual("queued", afterRestart.Current().State);
                 }
             }
@@ -202,12 +203,28 @@ namespace Jularr.Backend.Tests
                     Options.Create(new MediaOptions { TranslationPath = root }),
                     new LocalTranslationGate());
                 Assert.AreEqual("failed", downloads.Current().State);
-                Assert.IsFalse(downloads.Queue("translategemma:4b", Ollama));
+                Assert.IsFalse(downloads.Queue("translategemma:4b", Ollama, 6_000_000_000L));
             }
             finally
             {
                 if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
             }
+        }
+
+        [TestMethod]
+        public async Task FreeSpace_TypedByTheOwner_IsReadBackAndANegativeValueIsRefused()
+        {
+            await using var host = await LibraryTests.CreateHostAsync(Path.Combine(Path.GetTempPath(), "jularr-free-" + Guid.NewGuid().ToString("N")), razor: true);
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+
+            using var save = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/translation/free-bytes", new TranslationFreeBytesDataV1(50_000_000_000L));
+            Assert.AreEqual(System.Net.HttpStatusCode.OK, save.StatusCode, await save.Content.ReadAsStringAsync());
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/translation/models");
+            using var json = JsonDocument.Parse(await read.Content.ReadAsStringAsync());
+            Assert.AreEqual(50_000_000_000L, json.RootElement.GetProperty("verifiedFreeBytes").GetInt64());
+
+            using var negative = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/translation/free-bytes", new TranslationFreeBytesDataV1(-1));
+            Assert.AreEqual(System.Net.HttpStatusCode.BadRequest, negative.StatusCode);
         }
 
         private sealed class FakeOllama : HttpMessageHandler

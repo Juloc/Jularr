@@ -11,12 +11,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Admin.Translation
 {
     public sealed class TranslationModelPage(ReadLocalTranslationModelsV1 read, PullLocalTranslationModelV1 pull,
-        BenchmarkLocalTranslationModelV1 benchmark, SaveTranslationMachinesV1 saveMachines, IAntiforgery antiforgery, UiText texts) : JularrPage
+        BenchmarkLocalTranslationModelV1 benchmark, SaveTranslationMachinesV1 saveMachines, SaveTranslationFreeBytesV1 saveFreeBytes, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string Home = "/Admin/Instance/Translation";
         private LocalTranslationModelsV1? _models;
         private LocalTranslationBenchmarkV1? _benchmark;
         private TranslationMachinesDataV1? _machines;
+        private TranslationFreeBytesDataV1? _freeBytes;
 
         protected override void Define(Page page)
         {
@@ -33,6 +34,13 @@ namespace Jularr.Frontend.Pages.Admin.Translation
 
             page.Content.Add(new P(new ValueText(texts["translation.local.capacity"] + " "
                 + Math.Round(_models.VerifiedFreeBytes / 1e9, 1).ToString("0.0", CultureInfo.InvariantCulture) + " GB")));
+            // The free space of Ollama's model volume, which only the Owner can know; model downloads are offered up to it.
+            var csrfFree = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            page.Content.Add(new Form<TranslationFreeBytesDataV1>(form =>
+            {
+                form.ByteSize(item => item.FreeBytes, "translation.local.freeBytes", new FieldHelp(Info: "translation.local.freeBytesHint"));
+                form.Save();
+            }, Home + "?handler=FreeBytes", csrfFree, _freeBytes ?? new TranslationFreeBytesDataV1(_models.VerifiedFreeBytes), _freeBytes is null ? null : FormError));
             // The queue belongs to Jularr and remains visible even when Ollama is offline.
             // Polling updates only this status; a finished download reloads the model actions.
             var download = new P(new ValueText(_models.DownloadState is "idle" ? ""
@@ -128,6 +136,13 @@ namespace Jularr.Frontend.Pages.Admin.Translation
         public async Task<IActionResult> OnPostPullAsync(string model, int machine)
         {
             await pull.ExecuteAsync<UpdateResult>(new LocalTranslationPullParametersV1(model, machine), new NoData(), HttpContext.RequestAborted);
+            return LocalRedirect(Home);
+        }
+
+        public async Task<IActionResult> OnPostFreeBytesAsync(long? freeBytes)
+        {
+            _freeBytes = new TranslationFreeBytesDataV1(freeBytes ?? 0);
+            await saveFreeBytes.ExecuteAsync<UpdateResult>(new LocalTranslationModelsParametersV1(), _freeBytes, HttpContext.RequestAborted);
             return LocalRedirect(Home);
         }
 
