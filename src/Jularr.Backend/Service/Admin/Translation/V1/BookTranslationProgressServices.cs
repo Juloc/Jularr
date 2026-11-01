@@ -43,7 +43,12 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                         work."CanonicalTitle" AS "Title",
                         trim_scale(unit."Number")::text AS "Volume",
                         lower(split_part(split_part(coalesce(document."Language", work."OriginalLanguage"), '-', 1), '_', 1)) AS "SourceLanguage",
-                        jsonb_array_length(document."Structure" -> 'Sections') AS "Sections"
+                        jsonb_array_length(document."Structure" -> 'Sections') AS "Sections",
+                        (
+                            SELECT coalesce(sum(coalesce(section.value ->> 'Blocks', '0')::integer), 0)::integer
+                            FROM jsonb_array_elements(document."Structure" -> 'Sections') AS section (value)
+                        ) AS "TotalBlocks",
+                        document."Structure" AS "Structure"
                     FROM
                         "ReadingDocuments" AS document
                         JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
@@ -60,19 +65,28 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                     book."Volume",
                     target."Language",
                     book."Sections" AS "Total",
-                    (
-                        SELECT count(DISTINCT substring(cache."Path" FROM '[0-9]{5}$'))::integer
-                        FROM "ReadingResources" AS cache
-                        WHERE cache."ReadingDocumentId" = book."Id"
-                            AND cache."Path" ~ ('^:localtranslation/v4/[^/]+/' || target."Language" || '/[0-9]{5}$')
-                            AND NOT EXISTS (
-                                SELECT 1 FROM jsonb_array_elements(convert_from(cache."Bytes", 'UTF8')::jsonb -> 'Texts') AS block (value)
-                                WHERE block.value = 'null'::jsonb
-                            )
-                    ) AS "Done"
+                    finished."Done",
+                    book."TotalBlocks",
+                    finished."DoneBlocks"
                 FROM
                     books AS book
                     CROSS JOIN targets AS target
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            count(*)::integer AS "Done",
+                            coalesce(sum(coalesce(book."Structure" -> 'Sections' -> keys."Section" ->> 'Blocks', '0')::integer), 0)::integer AS "DoneBlocks"
+                        FROM (
+                            SELECT substring(cache."Path" FROM '[0-9]{5}$')::integer AS "Section"
+                            FROM "ReadingResources" AS cache
+                            WHERE cache."ReadingDocumentId" = book."Id"
+                                AND cache."Path" ~ ('^:localtranslation/v4/[^/]+/' || target."Language" || '/[0-9]{5}$')
+                                AND NOT EXISTS (
+                                    SELECT 1 FROM jsonb_array_elements(convert_from(cache."Bytes", 'UTF8')::jsonb -> 'Texts') AS block (value)
+                                    WHERE block.value = 'null'::jsonb
+                                )
+                            GROUP BY 1
+                        ) AS keys
+                    ) AS finished
                 WHERE
                     length(target."Language") BETWEEN 2 AND 3
                     AND length(book."SourceLanguage") BETWEEN 2 AND 3
@@ -94,9 +108,12 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
             if (snapshot.Current is { } unit && rows.FirstOrDefault(row => row.DocumentId == unit.DocumentId) is { } row0)
                 current = new BookTranslationCurrentV1(row0.Title, row0.Volume, unit.Section + 1, unit.Language, snapshot.SecondsWithoutProgress ?? 0);
 
-            var remaining = rows.Sum(row => (long)Math.Max(0, row.Total - row.Done));
-            long? secondsRemaining = remaining > 0 && snapshot.SectionsPerMinute > 0 ? (long)Math.Round(remaining / snapshot.SectionsPerMinute * 60) : null;
-            return new BookTranslationProgressV1(languages, books, current, snapshot.BlocksPerMinute, secondsRemaining, remaining == 0 ? null : snapshot.IssueKey);
+            // What is left in blocks over the blocks per minute of the last ten minutes: sections differ too much in size (a picture, a chapter of a thousand blocks) to count them.
+            // Blocks without text cost nothing, so the time is a rough upper bound; it needs a pace of at least one block a minute to say anything.
+            var remainingSections = rows.Sum(row => (long)Math.Max(0, row.Total - row.Done));
+            var remainingBlocks = rows.Sum(row => (long)Math.Max(0, row.TotalBlocks - row.DoneBlocks));
+            long? secondsRemaining = remainingSections > 0 && snapshot.BlocksPerMinute >= 1 ? (long)Math.Round(remainingBlocks / snapshot.BlocksPerMinute * 60) : null;
+            return new BookTranslationProgressV1(languages, books, current, snapshot.BlocksPerMinute, secondsRemaining, remainingSections == 0 ? null : snapshot.IssueKey);
         }
     }
 }

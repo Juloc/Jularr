@@ -1,13 +1,12 @@
 namespace Jularr.Backend.Service.Core
 {
-    // What the job "Book translations" is doing now, kept in memory for the Owner's progress view: the section it works on, how fast blocks and sections get
+    // What the job "Book translations" is doing now, kept in memory for the Owner's progress view: the section it works on, how fast blocks get
     // done, and why it does nothing. It starts empty after a restart; the counts of finished sections come from the database.
     internal sealed class BookTranslationProgress(TimeProvider time)
     {
         private static readonly TimeSpan Window = TimeSpan.FromMinutes(10);
         private readonly object _lock = new();
         private readonly Queue<DateTimeOffset> _blocks = new();
-        private readonly Queue<DateTimeOffset> _sections = new();
         private BookTranslationUnit? _current;
         private DateTimeOffset _activityAt;
         private string? _issue;
@@ -35,14 +34,6 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        public void SectionDone()
-        {
-            lock (_lock)
-            {
-                _sections.Enqueue(time.GetUtcNow());
-            }
-        }
-
         // Nothing left to do or nothing that can be done: no unit is worked on.
         public void Idle(string? issueKey)
         {
@@ -59,10 +50,9 @@ namespace Jularr.Backend.Service.Core
             {
                 var now = time.GetUtcNow();
                 Trim(_blocks, now);
-                Trim(_sections, now);
                 var minutes = Window.TotalMinutes;
                 return new BookTranslationSnapshot(_current, _current is null ? null : (int)Math.Max(0, (now - _activityAt).TotalSeconds), _issue,
-                    Math.Round(_blocks.Count / minutes, 1), Math.Round(_sections.Count / minutes, 2));
+                    Math.Round(_blocks.Count / minutes, 1));
             }
         }
 
@@ -74,5 +64,5 @@ namespace Jularr.Backend.Service.Core
 
     internal sealed record BookTranslationUnit(long DocumentId, int Section, string Language);
 
-    internal sealed record BookTranslationSnapshot(BookTranslationUnit? Current, int? SecondsWithoutProgress, string? IssueKey, double BlocksPerMinute, double SectionsPerMinute);
+    internal sealed record BookTranslationSnapshot(BookTranslationUnit? Current, int? SecondsWithoutProgress, string? IssueKey, double BlocksPerMinute);
 }

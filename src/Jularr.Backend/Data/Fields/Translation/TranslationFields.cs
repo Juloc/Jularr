@@ -15,6 +15,7 @@ namespace Jularr.Backend.Data.Fields.Translation
         // A title and a count of sections as the progress view reads them.
         public static readonly StringField Title = new() { MaximumLength = 500, AllowBlank = true };
         public static readonly StringField Volume = new() { MaximumLength = 16, Required = false };
+        public static readonly IntField BlockCount = new() { Minimum = 0, Maximum = 1_000_000_000 };
         public static readonly IntField Count = new() { Minimum = 0, Maximum = 10_000_000 };
         // An Ollama machine by its place in the Owner's order, from 0.
         public static readonly IntField Machine = new() { Minimum = 0, Maximum = 7 };

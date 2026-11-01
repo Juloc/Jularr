@@ -77,7 +77,6 @@ namespace Jularr.Backend.Service.System.Reading.V1
             {
                 // A page of one picture has nothing to translate; it is done once its empty cache exists.
                 await Context.ExecuteBatchAsync((ctx, ct) => LocalReadingPaths.StoreAsync(ctx, unit.DocumentId, path, unit.Html, unit.SourceLanguage, digest, 0, new Dictionary<int, string>(), ct), CancellationToken);
-                _progress.SectionDone();
                 return new UpdateResult(true);
             }
 
@@ -117,7 +116,6 @@ namespace Jularr.Backend.Service.System.Reading.V1
                     new Dictionary<int, string> { [block] = value }, ct), CancellationToken);
             }
 
-            if (texts.All(text => text is not null)) _progress.SectionDone();
             return new UpdateResult(translated > 0 || texts.All(text => text is not null));
         }
 
