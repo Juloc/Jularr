@@ -6126,6 +6126,10 @@
    "Translate books in the reader and subtitles in the player",
    "Bücher im Reader und Untertitel im Player übersetzen"
   ],
+  "instance.module.TranslationBrowser": [
+   "Translate book pages in the browser with Mozilla when the server cannot",
+   "Buchseiten im Browser mit Mozilla übersetzen, wenn der Server es nicht kann"
+  ],
   "instance.module.Ocr": [
    "Recognize the text of scanned books",
    "Text gescannter Bücher erkennen"
@@ -14054,6 +14058,10 @@
   "setup.module.help.Translation": [
    "Translate book text locally in the reader.",
    "Buchtext im Reader lokal übersetzen."
+  ],
+  "setup.module.help.TranslationBrowser": [
+   "Emergency only: translate a book page in the browser with Mozilla when the server cannot.",
+   "Nur für den Notfall: Eine Buchseite im Browser mit Mozilla übersetzen, wenn der Server es nicht kann."
   ],
   "setup.module.help.Ocr": [
    "Recognize the text of scanned book pages.",

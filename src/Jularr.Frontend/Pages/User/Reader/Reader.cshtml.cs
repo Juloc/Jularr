@@ -291,6 +291,12 @@ namespace Jularr.Frontend.Pages.User.Reader
                     .Attribute("data-translation-failed-label", texts["reader.translationFailed"])
                     .Attribute("data-provider-original-label", texts["reader.translation.provider.original"])
                     .Attribute("data-provider-local-label", texts["reader.translation.provider.local"]);
+                // The Mozilla module is an emergency only: with it on, a page the server cannot translate falls back to the browser.
+                if (texts.CanTranslateInBrowser())
+                {
+                    view.Attribute("data-browser-translation", "true")
+                        .Attribute("data-route-url", "/api/v1/translation/routes/");
+                }
             }
 
             page.Content.Add(view);

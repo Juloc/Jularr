@@ -28,8 +28,9 @@ Keine automatische Modellinstallation und keine serverseitige Sprachsynthese.
 
 ### Optionale TranslateGemma-Übersetzung
 
-Bergamot bleibt die kostenlose Browser-Standardübersetzung. Ein Owner kann zusätzlich
-TranslateGemma in einem **separat bereitgestellten, privaten Ollama-Dienst** verwenden.
+Der Server übersetzt mit TranslateGemma in einem **separat bereitgestellten, privaten Ollama-Dienst**.
+Mozillas Browser-Übersetzung (Bergamot) ist nur noch ein Notfall: das Modul „Buchseiten im Browser
+mit Mozilla übersetzen“ (Modulverwaltung, standardmäßig aus) springt ein, wenn der Server eine Seite nicht übersetzen kann.
 Dessen Modellgewichte und Modell-Laufzeit sind **nicht** Teil des Jularr-Images.
 In `.env` kann `JULARR_OLLAMA_ENDPOINT=http://ollama:11434` gesetzt werden, wenn
 der Dienst unter diesem Namen aus dem Jularr-Container erreichbar ist. Der

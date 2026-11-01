@@ -164,6 +164,22 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse((await capabilities.Content.ReadFromJsonAsync<InstanceCapabilitiesDetailsV1>())!.Modules.Contains("Translation"));
         }
 
+        [TestMethod]
+        public async Task MozillaModule_IsAnEmergencyOnlyAndAsksMozillaForNothingWhileOff()
+        {
+            using var storage = new TemporaryDirectory();
+            using var models = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, models.Path, new FakeMozilla());
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'TranslationBrowser'");
+
+            using var off = await host.SendAsync(HttpMethod.Get, "/api/v1/translation/routes/en/de");
+            Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
+
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'TranslationBrowser'");
+            using var on = await host.SendAsync(HttpMethod.Get, "/api/v1/translation/routes/en/de");
+            Assert.AreEqual(HttpStatusCode.OK, on.StatusCode, await on.Content.ReadAsStringAsync());
+        }
+
         private static async Task<string> ReadingLanguageAsync(Host host, long asset)
         {
             using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + asset);
@@ -180,7 +196,7 @@ namespace Jularr.Backend.Tests
                     services.AddHttpClient<MozillaTranslationsClient>().ConfigurePrimaryHttpMessageHandler(() => mozilla);
                     services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => new FakeOllama());
                 });
-            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" IN ('Translation', 'TranslationBrowser')");
             return host;
         }
 
