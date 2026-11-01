@@ -45,7 +45,7 @@ jobs:
             for attempt in $(seq 1 140); do
               state="$(gh run list --workflow backend.yml --branch "${VERIFY_BRANCH}" --limit 20 \
                 --json headSha,status,conclusion,createdAt \
-                --jq 'map(select(.headSha == env.TARGET_SHA)) | sort_by(.createdAt) | last | if . == null then "" else (.status + "/" + (.conclusion // "")) end')"
+                --jq 'sort_by(.createdAt) | last | if . == null then "" else (.status + "/" + (.conclusion // "")) end')"
               if [[ "${state}" == "completed/success" ]]; then
                 passed=true
                 break
