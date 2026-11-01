@@ -151,6 +151,17 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public bool IsPaused { get; }
     }
 
+    internal sealed class WantedItemPauseData : BaseData
+    {
+        public WantedItemPauseData(bool isPaused)
+        {
+            IsPaused = isPaused;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsPaused))]
+        public bool IsPaused { get; }
+    }
+
     internal sealed class WantedItemUpdateData : BaseData
     {
         public WantedItemUpdateData(long id, bool isPaused, long? acquisitionProfileId, long? libraryRootId, bool? monitorsNewUnits, long version, long[]? tagIds = null)
