@@ -87,7 +87,7 @@
   "downloads.category": ["Category", "Kategorie"],
   "downloads.category.all": ["Category: all", "Kategorie: alle"],
   "downloads.progress": ["Progress", "Fortschritt"],
-  "downloads.eta": ["ETA", "Restzeit"],
+  "downloads.eta": ["ETA", "Restzeit (grob)"],
   "downloads.finished": ["Finished", "Beendet"],
   "downloads.search": ["Search by name", "Nach Name suchen"],
   "downloads.select": ["Select download", "Download auswählen"],

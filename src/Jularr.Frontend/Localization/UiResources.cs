@@ -571,7 +571,7 @@ namespace Jularr.Frontend.Localization
             new("translation.progress.stalled", "No progress for"),
             new("translation.progress.pace", "Pace"),
             new("translation.progress.blocks", "blocks per minute"),
-            new("translation.progress.remaining", "Time left"),
+            new("translation.progress.remaining", "Time left (rough)"),
             new("translation.progress.unknown", "not known yet"),
             new("translation.progress.issue.noMachine", "No Ollama machine answers with a model, so nothing is translated"),
             new("translation.progress.issue.machineFailed", "The Ollama machine dropped out; the job tries the next one"),

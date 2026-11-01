@@ -180,7 +180,15 @@ namespace Jularr.Backend.Tests
             Assert.IsNull(before.Current);
             Assert.IsNull(before.SecondsRemaining);
 
-            // One round: the section it picked is named, and a pace shows once sections are done.
+            // The time left is the blocks still to do over the blocks per minute, not the sections: with 2 blocks a minute it is half the blocks in minutes.
+            var tracker = host.Services.GetRequiredService<Jularr.Backend.Service.Core.BookTranslationProgress>();
+            for (var block = 0; block < 20; block++) tracker.BlockDone();
+            var totalBlocks = Convert.ToInt64(await host.ScalarAsync("SELECT sum((section.value ->> 'Blocks')::integer) FROM \"ReadingDocuments\" AS document, jsonb_array_elements(document.\"Structure\" -> 'Sections') AS section (value)"), System.Globalization.CultureInfo.InvariantCulture);
+            var estimated = await ReadProgressAsync(host);
+            Assert.AreEqual(2.0, estimated.BlocksPerMinute);
+            Assert.AreEqual((long)Math.Round(totalBlocks / 2.0 * 60), estimated.SecondsRemaining);
+
+            // One round: the section it picked is named.
             await using (var scope = host.Services.CreateAsyncScope())
             {
                 Assert.IsTrue(await Translate(scope));
@@ -239,15 +247,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(3, waiting.Current!.Section);
             Assert.AreEqual(90, waiting.SecondsWithoutProgress);
 
-            // A block resets the time without progress; blocks and sections count towards the pace of the last ten minutes.
+            // A block resets the time without progress; blocks count towards the pace of the last ten minutes.
             progress.BlockDone();
             for (var block = 0; block < 9; block++) progress.BlockDone();
-            progress.SectionDone();
-            progress.SectionDone();
             var moving = progress.Snapshot();
             Assert.AreEqual(0, moving.SecondsWithoutProgress);
             Assert.AreEqual(1.0, moving.BlocksPerMinute);
-            Assert.AreEqual(0.2, moving.SectionsPerMinute);
 
             clock.Now += TimeSpan.FromMinutes(11);
             Assert.AreEqual(0.0, progress.Snapshot().BlocksPerMinute);
