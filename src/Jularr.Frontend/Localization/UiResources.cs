@@ -565,6 +565,7 @@ namespace Jularr.Frontend.Localization
             new("translation.progress.nothing", "Nothing to translate: no profile reads a language other than a book's own"),
             new("translation.progress.current", "Translating now"),
             new("translation.progress.chapter", "chapter"),
+            new("translation.progress.volume", "volume"),
             new("translation.progress.chapters", "chapters"),
             new("translation.progress.of", "of"),
             new("translation.progress.stalled", "No progress for"),

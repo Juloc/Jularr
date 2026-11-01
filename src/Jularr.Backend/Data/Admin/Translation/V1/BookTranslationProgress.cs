@@ -15,17 +15,20 @@ namespace Jularr.Backend.Data.Admin.Translation.V1
     }
 
     // A book with its sections translated completely, over every language a profile reads.
-    public sealed class BookTranslationBookV1(string title, int done, int total)
+    public sealed class BookTranslationBookV1(string title, string? volume, int done, int total)
     {
         public string Title { get; } = title;
+        // The volume's number when the book is one volume of a series.
+        public string? Volume { get; } = volume;
         public int Done { get; } = done;
         public int Total { get; } = total;
     }
 
     // The section the job works on now; Section counts from 1.
-    public sealed class BookTranslationCurrentV1(string title, int section, string language, int secondsWithoutProgress)
+    public sealed class BookTranslationCurrentV1(string title, string? volume, int section, string language, int secondsWithoutProgress)
     {
         public string Title { get; } = title;
+        public string? Volume { get; } = volume;
         public int Section { get; } = section;
         public string Language { get; } = language;
         public int SecondsWithoutProgress { get; } = secondsWithoutProgress;

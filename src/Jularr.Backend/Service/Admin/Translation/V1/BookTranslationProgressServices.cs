@@ -41,6 +41,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                     SELECT
                         document."Id",
                         work."CanonicalTitle" AS "Title",
+                        trim_scale(unit."Number")::text AS "Volume",
                         lower(split_part(split_part(coalesce(document."Language", work."OriginalLanguage"), '-', 1), '_', 1)) AS "SourceLanguage",
                         jsonb_array_length(document."Structure" -> 'Sections') AS "Sections"
                     FROM
@@ -48,6 +49,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                         JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
                         JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
                         JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                        LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
                     WHERE
                         coalesce(document."Language", work."OriginalLanguage") IS NOT NULL
                         AND jsonb_typeof(document."Structure" -> 'Sections') = 'array'
@@ -55,6 +57,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                 SELECT
                     book."Id" AS "DocumentId",
                     book."Title",
+                    book."Volume",
                     target."Language",
                     book."Sections" AS "Total",
                     (
@@ -81,13 +84,15 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
             var languages = rows.GroupBy(row => row.Language).OrderBy(group => group.Key, StringComparer.Ordinal)
                 .Select(group => new BookTranslationLanguageV1(group.Key, group.Sum(row => row.Done), group.Sum(row => row.Total))).ToArray();
             // The books being translated first, then those still to start, then the finished ones.
-            var books = rows.GroupBy(row => row.DocumentId).Select(group => new BookTranslationBookV1(group.First().Title, group.Sum(row => row.Done), group.Sum(row => row.Total)))
+            var books = rows.GroupBy(row => row.DocumentId).Select(group => new BookTranslationBookV1(group.First().Title, group.First().Volume, group.Sum(row => row.Done), group.Sum(row => row.Total)))
                 .OrderBy(book => book.Done >= book.Total ? 2 : book.Done > 0 ? 0 : 1).ThenByDescending(book => book.Total == 0 ? 0 : (double)book.Done / book.Total)
-                .ThenBy(book => book.Title, StringComparer.CurrentCultureIgnoreCase).Take(ShownBooks).ToArray();
+                .ThenBy(book => book.Title, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(book => decimal.TryParse(book.Volume, global::System.Globalization.NumberStyles.Number, global::System.Globalization.CultureInfo.InvariantCulture, out var number) ? number : 0m)
+                .Take(ShownBooks).ToArray();
 
             BookTranslationCurrentV1? current = null;
             if (snapshot.Current is { } unit && rows.FirstOrDefault(row => row.DocumentId == unit.DocumentId) is { } row0)
-                current = new BookTranslationCurrentV1(row0.Title, unit.Section + 1, unit.Language, snapshot.SecondsWithoutProgress ?? 0);
+                current = new BookTranslationCurrentV1(row0.Title, row0.Volume, unit.Section + 1, unit.Language, snapshot.SecondsWithoutProgress ?? 0);
 
             var remaining = rows.Sum(row => (long)Math.Max(0, row.Total - row.Done));
             long? secondsRemaining = remaining > 0 && snapshot.SectionsPerMinute > 0 ? (long)Math.Round(remaining / snapshot.SectionsPerMinute * 60) : null;

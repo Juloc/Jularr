@@ -122,7 +122,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
         }
 
         // The next section to translate: from a book someone is reading (most recently read first, from the chapter they are in, then
-        // the chapters before it), then the rest of the library; into each language a profile uses that is not the book's own.
+        // the chapters before it), then the rest of the library one book after the other (a book is finished before the next starts); into each language a profile uses that is not the book's own.
         // A scan's Smart Pages are units of their own (from 100000 on): first where someone reads the book's pages, from the page they are on.
         // Done means a cache from this model with every block filled in.
         private static SqlStatement NextSection(string model, string digest)
@@ -217,10 +217,10 @@ namespace Jularr.Backend.Service.System.Reading.V1
                 ORDER BY
                     book."ReadAt" IS NULL,
                     book."ReadAt" DESC,
+                    book."Id",
                     section."IsPage" <> book."ReadsPages",
                     CASE WHEN section."IsPage" THEN section."Page" < book."FromPage" ELSE section."Number" < book."FromSection" END,
                     section."Number",
-                    book."Id",
                     target."Language"
                 LIMIT 1;
                 """;
