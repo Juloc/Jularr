@@ -19,7 +19,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          TARGET_SHA: cbbbeaf90bd68494aa2df507c339c39ef3a32cb5
+          TARGET_SHA: 2d9e5205ee869a502993580a9057c5b23afe8add
         run: |
           set -euo pipefail
           for workflow in "Frontend" "Backend Full"; do
