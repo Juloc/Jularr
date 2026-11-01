@@ -5150,6 +5150,10 @@
    "Download client refused",
    "Download-Client hat abgelehnt"
   ],
+  "acquisition.outcome.acquisition_file_missing": [
+   "The release's download link no longer exists",
+   "Der Download-Link des Releases existiert nicht mehr"
+  ],
   "acquisition.outcome.acquisition_limit_reached": [
    "Indexer grab limit reached",
    "Grab-Limit des Indexers erreicht"

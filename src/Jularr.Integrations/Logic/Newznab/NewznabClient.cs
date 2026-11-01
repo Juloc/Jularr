@@ -176,6 +176,12 @@ namespace Jularr.Integrations.Logic.Newznab
                     throw RateLimited(host, "The indexer is rate limited.", NewznabGate.ReadRetryAfter(response.Headers), response.StatusCode);
                 }
 
+                // A link that no longer exists is no outage of the indexer or the client.
+                if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Gone)
+                {
+                    throw new NewznabException(NewznabFailure.NotFound, "The link of the file no longer exists.") { StatusCode = response.StatusCode };
+                }
+
                 if (!response.IsSuccessStatusCode)
                 {
                     throw new NewznabException(NewznabFailure.Unavailable, "The indexer did not deliver the NZB.") { StatusCode = response.StatusCode };

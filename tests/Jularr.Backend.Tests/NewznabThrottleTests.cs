@@ -93,6 +93,18 @@ namespace Jularr.Backend.Tests
 
         private static HttpResponseMessage Xml(string body) => new(HttpStatusCode.OK) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/xml") };
 
+        [TestMethod]
+        public async Task DownloadNzb_ALinkThatIsGone_IsNotFoundAndNoOutage()
+        {
+            var client = new NewznabClient(new HttpClient(new Indexer(_ => new HttpResponseMessage(HttpStatusCode.NotFound))), new NewznabGate(TimeSpan.Zero));
+            var gone = await Assert.ThrowsExactlyAsync<NewznabException>(() => client.DownloadNzbAsync(new Uri("https://nyaa.example.test/download/1.torrent"), Path.GetTempFileName(), CancellationToken.None));
+            Assert.AreEqual(NewznabFailure.NotFound, gone.Failure);
+
+            var broken = new NewznabClient(new HttpClient(new Indexer(_ => new HttpResponseMessage(HttpStatusCode.BadGateway))), new NewznabGate(TimeSpan.Zero));
+            var down = await Assert.ThrowsExactlyAsync<NewznabException>(() => broken.DownloadNzbAsync(new Uri("https://nyaa.example.test/download/1.torrent"), Path.GetTempFileName(), CancellationToken.None));
+            Assert.AreEqual(NewznabFailure.Unavailable, down.Failure);
+        }
+
         private sealed class Indexer(Func<HttpRequestMessage, HttpResponseMessage> answer) : HttpMessageHandler
         {
             private int _requests;
