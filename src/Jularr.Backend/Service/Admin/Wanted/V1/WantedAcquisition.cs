@@ -675,6 +675,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         {
             NewznabFailure.Unavailable => "acquisition_unavailable",
             NewznabFailure.RateLimited => "acquisition_rate_limited",
+            NewznabFailure.NotFound => "acquisition_file_missing",
             _ => "acquisition_grab_failed"
         };
 

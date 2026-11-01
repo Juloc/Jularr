@@ -2006,6 +2006,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.outcome.acquisition_paused", "Monitoring was paused during the search"),
             new("acquisition.outcome.acquisition_import_path_unconfigured", "Set up and verify the SABnzbd Complete folder"),
             new("acquisition.outcome.acquisition_grab_failed", "Download client refused"),
+            new("acquisition.outcome.acquisition_file_missing", "The release's download link no longer exists"),
             new("acquisition.outcome.acquisition_limit_reached", "Indexer grab limit reached"),
             new("acquisition.outcome.acquisition_download_path_unconfigured", "Download workspace is not configured or is unavailable"),
             new("acquisition.outcome.download_storage_mount_required", "Download storage must be mounted inside Jularr"),
