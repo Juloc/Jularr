@@ -36,11 +36,12 @@ namespace Jularr.Frontend.Modules.Live
             var says = operation.ReasonKey is not null && (operation.IsWaiting || operation.OperationStatusTypeId == OperationStatusType.Failed);
             var running = operation.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running;
             var phase = operation.IsWaiting ? "waiting" : (running && operation.DownloadStateTypeId is { } state ? state.ToString() : operation.OperationStatusTypeId.ToString()).ToLowerInvariant();
-            return new LiveEntity(phase, null, operation.ProgressPercent, Texts(("status", OperationStatus(texts, operation.IsWaiting, operation.OperationStatusTypeId, says || !running ? null : operation.DownloadStateTypeId)),
+            var progress = says ? null : operation.ProgressPercent;
+            return new LiveEntity(phase, null, progress, Texts(("status", OperationStatus(texts, operation.IsWaiting, operation.OperationStatusTypeId, says || !running ? null : operation.DownloadStateTypeId)),
                 ("reason", says ? Reason(texts, operation.OperationTypeId, operation.ReasonKey) : null),
                 ("speed", says ? null : OperationSpeed(texts, operation.OperationStatusTypeId, operation.DownloadStateTypeId, operation.BytesPerSecond)),
-                ("detail", says ? null : OperationDetail(operation.ProgressPercent, operation.SizeBytes, operation.RemainingBytes, operation.EtaSeconds)),
-                ("percent", Percent(operation.ProgressPercent)), ("eta", says ? null : LiveFacts.Eta(operation.EtaSeconds))));
+                ("detail", says ? null : OperationDetail(progress, operation.SizeBytes, operation.RemainingBytes, operation.EtaSeconds)),
+                ("percent", Percent(progress)), ("eta", says ? null : LiveFacts.Eta(operation.EtaSeconds))));
         }
 
         // The queue's tiles: how many run, the pace, how many import and how many failed.
