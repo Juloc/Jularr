@@ -1,0 +1,41 @@
+name: Stage Jularr v0.2.35 (one time)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/stage-jularr-v0.2.35.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify tested commit, create immutable tag and dispatch Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TARGET_SHA: cbbbeaf90bd68494aa2df507c339c39ef3a32cb5
+        run: |
+          set -euo pipefail
+          for workflow in "Frontend" "Backend Full"; do
+            outcome="$(gh run list --commit "${TARGET_SHA}" --workflow "${workflow}" --limit 50 \
+              --json status,conclusion,createdAt \
+              --jq 'map(select(.status == "completed")) | sort_by(.createdAt) | last | .conclusion // empty')"
+            if [[ "${outcome}" != "success" ]]; then
+              echo "::error::${workflow} is not green for ${TARGET_SHA}: ${outcome:-missing}"
+              exit 1
+            fi
+          done
+          if gh api "repos/${GH_REPO}/git/ref/tags/v0.2.35" >/dev/null 2>&1; then
+            echo "::error::v0.2.35 already exists; refusing to overwrite"
+            exit 1
+          fi
+          gh api "repos/${GH_REPO}/git/refs" -X POST \
+            -f ref='refs/tags/v0.2.35' -f sha="${TARGET_SHA}"
+          # Tags made by GITHUB_TOKEN do not trigger tag-push workflows.
+          gh workflow run release.yml --ref v0.2.35 -f dry_run=false
