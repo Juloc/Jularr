@@ -144,7 +144,7 @@ namespace Jularr.Integrations.Logic.Translation
         // Basic safeguards: a translation must not be an echo, heavily untranslated Japanese, or an obvious truncation.
         internal static bool LooksComplete(string source, string output, string target)
         {
-            if (string.IsNullOrWhiteSpace(output) || output.Length < Math.Min(3, source.Length / 12)
+            if (string.IsNullOrWhiteSpace(output) || output.Length < (source.Length >= 12 ? Math.Max(3, source.Length / 12) : 1)
                 || output.Length > 20_000 || output.Length > source.Length * 6 + 200) return false;
             if (source.Length > 16 && string.Equals(source.Trim(), output.Trim(), StringComparison.Ordinal)) return false;
             if (target is "de" or "en" or "fr" or "it" or "es" or "pt")
