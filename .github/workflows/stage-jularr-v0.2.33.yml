@@ -1,0 +1,77 @@
+name: Stage Jularr v0.2.33 (one time)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/stage-jularr-v0.2.33.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Verify CI, create immutable tag and start Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TARGET_SHA: 3f8ea575952861cb693f8f19a44bf570657d4156
+          VERIFY_BRANCH: ci/verify-v0.2.33
+        run: |
+          set -euo pipefail
+          latest_conclusion() {
+            gh run list --commit "${TARGET_SHA}" --workflow "$1" --limit 50 \
+              --json status,conclusion,createdAt \
+              --jq 'map(select(.status == "completed")) | sort_by(.createdAt) | last | .conclusion // empty'
+          }
+          if [[ "$(latest_conclusion "Frontend")" != "success" ]]; then
+            echo "::error::Frontend is not green for ${TARGET_SHA}"
+            exit 1
+          fi
+          if [[ "$(latest_conclusion "Backend Full")" != "success" ]]; then
+            # A new main commit can cancel in-progress Backend Full CI. Verify the
+            # exact release SHA on a temporary branch with its own concurrency group.
+            if ! gh api "repos/${GH_REPO}/git/ref/heads/${VERIFY_BRANCH}" >/dev/null 2>&1; then
+              gh api "repos/${GH_REPO}/git/refs" -X POST \
+                -f ref="refs/heads/${VERIFY_BRANCH}" \
+                -f sha="${TARGET_SHA}"
+            fi
+            gh workflow run backend.yml --ref "${VERIFY_BRANCH}"
+            passed=false
+            for attempt in $(seq 1 140); do
+              state="$(gh run list --workflow backend.yml --branch "${VERIFY_BRANCH}" --limit 20 \
+                --json headSha,status,conclusion,createdAt \
+                --jq 'sort_by(.createdAt) | last | if . == null then "" else (.status + "/" + (.conclusion // "")) end')"
+              if [[ "${state}" == "completed/success" ]]; then
+                passed=true
+                break
+              fi
+              if [[ "${state}" == "completed/failure" || "${state}" == "completed/cancelled" ]]; then
+                echo "::error::Verification Backend Full ended: ${state}"
+                exit 1
+              fi
+              sleep 15
+            done
+            if [[ "${passed}" != "true" ]]; then
+              echo "::error::Timed out waiting for verified Backend Full"
+              exit 1
+            fi
+          fi
+          for workflow in "Frontend" "Backend Full"; do
+            if [[ "$(latest_conclusion "${workflow}")" != "success" ]]; then
+              echo "::error::${workflow} is not green for ${TARGET_SHA}"
+              exit 1
+            fi
+          done
+          if gh api "repos/${GH_REPO}/git/ref/tags/v0.2.33" >/dev/null 2>&1; then
+            echo "::error::Tag v0.2.33 already exists"
+            exit 1
+          fi
+          gh api "repos/${GH_REPO}/git/refs" -X POST \
+            -f ref='refs/tags/v0.2.33' \
+            -f sha="${TARGET_SHA}"
+          gh workflow run release.yml --ref v0.2.33 -f dry_run=false
