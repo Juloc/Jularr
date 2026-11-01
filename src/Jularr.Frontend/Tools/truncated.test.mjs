@@ -6,33 +6,30 @@ import ts from './transpile.mjs';
 
 const source = readFileSync(new URL('../Framework/Components/Truncated.ts', import.meta.url), 'utf8');
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
+const exports = {};
+runInNewContext(script, { exports });
 
-function element(scrollWidth, clientWidth, linked = false) {
-    const classes = new Set();
-    const attributes = new Map();
-    const text = { scrollWidth, clientWidth };
-    return {
-        classes, attributes,
-        querySelector: selector => selector === '.truncated__text' ? text : linked ? {} : null,
-        classList: { toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)) },
-        setAttribute: (name, value) => attributes.set(name, value),
-        removeAttribute: name => attributes.delete(name)
-    };
-}
+const window = { width: 1280, height: 800 };
+const tip = { width: 320, height: 52 };
 
-test('only cut-off texts show their full text and become focusable', () => {
-    const exports = {};
-    runInNewContext(script, { exports });
-    const cut = element(300, 120);
-    const fits = element(100, 120);
-    const link = element(300, 120, true);
-    fits.attributes.set('tabindex', '0');
-    exports.markTruncated({ querySelectorAll: () => [cut, fits, link] });
+test('the tip sits under the text, level with its left edge', () => {
+    const spot = exports.tipPosition({ left: 300, top: 400, right: 500, bottom: 420 }, tip, window);
+    assert.deepEqual({ ...spot }, { left: 300, top: 424 });
+});
 
-    assert.ok(cut.classes.has('truncated--clipped'));
-    assert.equal(cut.attributes.get('tabindex'), '0');
-    assert.ok(!fits.classes.has('truncated--clipped'));
-    assert.equal(fits.attributes.has('tabindex'), false);
-    assert.ok(link.classes.has('truncated--clipped'));
-    assert.equal(link.attributes.has('tabindex'), false);
+test('the tip stays inside the window on the right', () => {
+    const spot = exports.tipPosition({ left: 1200, top: 100, right: 1270, bottom: 120 }, tip, window);
+    assert.equal(spot.left, 1280 - 320 - 8);
+    assert.equal(spot.top, 124);
+});
+
+test('the tip goes above the text when there is no room below', () => {
+    const spot = exports.tipPosition({ left: 100, top: 760, right: 300, bottom: 780 }, tip, window);
+    assert.equal(spot.top, 760 - 4 - 52);
+});
+
+test('the tip never leaves the window on the left or the top', () => {
+    const spot = exports.tipPosition({ left: -40, top: 2, right: 100, bottom: 790 }, tip, window);
+    assert.equal(spot.left, 8);
+    assert.equal(spot.top, 8);
 });
