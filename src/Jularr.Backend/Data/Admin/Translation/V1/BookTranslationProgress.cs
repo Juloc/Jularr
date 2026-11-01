@@ -15,8 +15,10 @@ namespace Jularr.Backend.Data.Admin.Translation.V1
     }
 
     // A book with its sections translated completely, over every language a profile reads.
-    public sealed class BookTranslationBookV1(string title, string? volume, int done, int total)
+    public sealed class BookTranslationBookV1(long workId, string title, string? volume, int done, int total)
     {
+        // The title the book belongs to: the volumes of a series share it.
+        public long WorkId { get; } = workId;
         public string Title { get; } = title;
         // The volume's number when the book is one volume of a series.
         public string? Volume { get; } = volume;

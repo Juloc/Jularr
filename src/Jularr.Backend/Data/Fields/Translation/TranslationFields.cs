@@ -13,6 +13,7 @@ namespace Jularr.Backend.Data.Fields.Translation
         public static readonly StringField Precision = new() { MaximumLength = 32, Required = false };
         public static readonly StringField Name = new() { MaximumLength = 80, AllowBlank = false, Trim = true };
         // A title and a count of sections as the progress view reads them.
+        public static readonly LongField WorkId = new() { Minimum = 1 };
         public static readonly StringField Title = new() { MaximumLength = 500, AllowBlank = true };
         public static readonly StringField Volume = new() { MaximumLength = 16, Required = false };
         public static readonly IntField BlockCount = new() { Minimum = 0, Maximum = 1_000_000_000 };

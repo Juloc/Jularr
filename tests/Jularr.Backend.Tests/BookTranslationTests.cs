@@ -229,6 +229,16 @@ namespace Jularr.Backend.Tests
             var part = await fragment.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, fragment.StatusCode, part);
             Assert.IsTrue(part.TrimStart().StartsWith("<div", StringComparison.Ordinal) && part.Contains("data-translation-progress", StringComparison.Ordinal), part);
+            // The page has two tabs: the progress (first) and the setup, each only with its own part.
+            Assert.IsFalse(html.Contains("data-translation-machine", StringComparison.Ordinal), "The progress tab holds no machine cards.");
+            using var setup = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation?tab=setup");
+            var setupHtml = await setup.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, setup.StatusCode, setupHtml);
+            Assert.IsFalse(setupHtml.Contains("data-translation-progress", StringComparison.Ordinal), "The setup tab holds no progress.");
+            StringAssert.Contains(setupHtml, "data-translation-machine");
+            StringAssert.Contains(setupHtml, "?handler=Machines");
+            Assert.IsFalse(setupHtml.Contains("LocalTranslation__", StringComparison.Ordinal), "No variable name in the text.");
+
             // The Jobs page still loads with the translation module on (its drawer needs the job row, which a started worker creates).
             using var jobs = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs");
             Assert.AreEqual(HttpStatusCode.OK, jobs.StatusCode, await jobs.Content.ReadAsStringAsync());
