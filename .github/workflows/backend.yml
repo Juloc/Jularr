@@ -137,6 +137,8 @@ jobs:
           --health-retries 10
     env:
       SHARD: ${{ matrix.shard }}
+      # Keep test download storage on the runner disk; /tmp may be tmpfs on hosted images.
+      TMPDIR: ${{ runner.temp }}
     steps:
       # Only the local actions are checked out; the build artifact brings the compiled workspace.
       - uses: actions/checkout@v7
