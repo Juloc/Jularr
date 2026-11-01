@@ -44,6 +44,8 @@ namespace Jularr.Backend.Tests
             clock.Now += TimeSpan.FromMinutes(2);
             Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default, "translategemma:12b"))?.Server);
             Assert.IsNull(await machines.ChooseAsync(saved, default, "translategemma:27b"));
+            // Within one machine prefer 12B over 4B, without changing the owner's machine priority.
+            Assert.AreEqual("translategemma:12b", (await machines.ChooseAsync(["http://10.0.0.2:11434"], default))?.Model);
         }
 
         private sealed class Clock : TimeProvider
@@ -78,7 +80,8 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task Client_ListsApprovedModels_AndBenchmarksWithBoundedInput()
         {
-            using var http = new HttpClient(new FakeOllama());
+            var handler = new FakeOllama();
+            using var http = new HttpClient(handler);
             var client = new OllamaLocalModels(http);
             var server = new Uri("http://ollama:11434/");
             CollectionAssert.AreEquivalent(new[] { "translategemma:4b" }, await client.InstalledAsync(server, default));
@@ -87,8 +90,22 @@ namespace Jularr.Backend.Tests
             var result = await client.TranslateAsync(server, "translategemma:4b", "id", "de", "Rina pulang.", default);
             Assert.AreEqual("Rina ging nach Hause.", result.Text);
             Assert.AreEqual(10.0, result.TokensPerSecond);
+            await client.TranslateAsync(server, "translategemma:4b", "id", "de", "Rina pulang.", default, "Rina tinggal di kota.");
+            StringAssert.Contains(handler.LastPrompt!, "Earlier source passage for context only");
+            StringAssert.Contains(handler.LastPrompt!, "Rina tinggal di kota.");
+            Assert.IsTrue(handler.LastPrompt!.EndsWith("into German:\n\n\nRina pulang.", StringComparison.Ordinal));
             await Assert.ThrowsExactlyAsync<ArgumentException>(async () => await client.TranslateAsync(server, "untrusted:90b", "id", "de", "Rina pulang.", default));
             await Assert.ThrowsExactlyAsync<ArgumentException>(async () => await client.TranslateAsync(server, "translategemma:4b", "id", "de", new string('x', 20001), default));
+        }
+
+        [TestMethod]
+        public void QualityGate_RejectsEchoedOrMostlyUntranslatedJapanese()
+        {
+            var source = "私は三十四歳で、仕事がなく、家もありません。";
+            Assert.IsTrue(OllamaLocalModels.LooksComplete(source, "Ich bin 34 Jahre alt, arbeitslos und obdachlos.", "de"));
+            Assert.IsFalse(OllamaLocalModels.LooksComplete(source, source, "de"));
+            Assert.IsFalse(OllamaLocalModels.LooksComplete(source, "私は三十四歳で仕事も家もありません。", "de"));
+            Assert.IsFalse(OllamaLocalModels.LooksComplete(source, "x", "de"));
         }
 
         [TestMethod]
@@ -229,6 +246,7 @@ namespace Jularr.Backend.Tests
 
         private sealed class FakeOllama : HttpMessageHandler
         {
+            public string? LastPrompt { get; private set; }
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 string body;
@@ -243,6 +261,7 @@ namespace Jularr.Backend.Tests
                     Assert.AreEqual("translategemma:4b", json.RootElement.GetProperty("model").GetString());
                     Assert.IsFalse(json.RootElement.GetProperty("stream").GetBoolean());
                     var prompt = json.RootElement.GetProperty("prompt").GetString()!;
+                    LastPrompt = prompt;
                     StringAssert.Contains(prompt, "Indonesian (id) to German (de) translator");
                     StringAssert.Contains(prompt, "into German:\n\n\nRina pulang.");
                     body = """{"response":"Rina ging nach Hause.","eval_count":20,"eval_duration":2000000000}""";
