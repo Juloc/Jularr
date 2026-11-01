@@ -32,9 +32,9 @@ namespace Jularr.Frontend.Modules.Live
 
         public static LiveEntity Operation(UiText texts, LiveOperationV1 operation)
         {
-            // A waiting or failed entry says why; a running one how far it is.
-            var says = operation.ReasonKey is not null && (operation.IsWaiting || operation.OperationStatusTypeId == OperationStatusType.Failed);
+            // A waiting or failed entry says why, and so does a running one that is hinted (no peers); otherwise a running one says how far it is.
             var running = operation.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running;
+            var says = operation.ReasonKey is not null && (operation.IsWaiting || running || operation.OperationStatusTypeId == OperationStatusType.Failed);
             var phase = operation.IsWaiting ? "waiting" : (running && operation.DownloadStateTypeId is { } state ? state.ToString() : operation.OperationStatusTypeId.ToString()).ToLowerInvariant();
             var progress = says ? null : operation.ProgressPercent;
             return new LiveEntity(phase, null, progress, Texts(("status", OperationStatus(texts, operation.IsWaiting, operation.OperationStatusTypeId, says || !running ? null : operation.DownloadStateTypeId)),

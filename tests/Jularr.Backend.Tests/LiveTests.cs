@@ -165,6 +165,14 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("download_storage_unavailable", all.Requests.Single(item => item.Id == 501).ReasonKey);
             CollectionAssert.AreEquivalent(new long[] { 800, 801 }, all.Operations.Select(item => item.Id).ToArray());
             Assert.IsTrue(all.Operations.Single(item => item.Id == 801).IsWaiting);
+
+            // A running download that does not move says why through its hint, without being a waiting one.
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"HintKey\" = 'torrent_no_peers' WHERE \"Id\" = 800");
+            using var hinted = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/live");
+            var hint = (await hinted.Content.ReadFromJsonAsync<LiveAdminV1>())!.Operations.Single(item => item.Id == 800);
+            Assert.AreEqual("torrent_no_peers", hint.ReasonKey);
+            Assert.IsFalse(hint.IsWaiting);
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"HintKey\" = NULL WHERE \"Id\" = 800");
             var target = all.Wanted.Single(item => item.Id == 600);
             Assert.AreEqual(10, target.WorkId);
             Assert.AreEqual(40, target.ProgressPercent);

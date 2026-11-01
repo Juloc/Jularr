@@ -25,7 +25,7 @@ namespace Jularr.Backend.Service.System.Live.V1
                         coalesce((
                             SELECT
                                 string_agg(concat_ws(':', operation."Id", operation."OperationStatusTypeId", operation."ProgressPercent", operation."SizeBytes", operation."RemainingBytes",
-                                    operation."EtaSeconds", operation."DownloadStateTypeId", operation."AttentionKey", operation."ErrorKey"), ',' ORDER BY operation."Id")
+                                    operation."EtaSeconds", operation."DownloadStateTypeId", operation."AttentionKey", operation."ErrorKey", operation."HintKey"), ',' ORDER BY operation."Id")
                             FROM
                                 "Operations" AS operation
                             WHERE

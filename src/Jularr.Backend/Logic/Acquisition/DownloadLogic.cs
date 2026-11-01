@@ -1229,6 +1229,26 @@ namespace Jularr.Backend.Logic.Acquisition
             return await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 1;
         }
 
+        // A running download says why nothing moves; unchanged hints are not rewritten.
+        public static async Task SetDownloadHintAsync(this LogicContext ctx, DownloadHintData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Operations" AS operation
+                SET
+                    "HintKey" = @HintKey
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2)
+                    AND operation."HintKey" IS DISTINCT FROM @HintKey;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task SetDownloadAttentionAsync(this LogicContext ctx, DownloadAttentionData data, CancellationToken ct)
         {
             // A waiting import or source tells the Owner why; unchanged reasons are not rewritten.

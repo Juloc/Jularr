@@ -92,7 +92,7 @@ namespace Jularr.Frontend.Pages.Admin.Dashboard
         {
             var failed = item.OperationStatusTypeId == OperationStatusType.Failed;
             var source = LiveFacts.Join(item.ConnectionName, item.IndexerName);
-            var says = item.ReasonKey is not null && (item.IsWaiting || failed);
+            var says = item.ReasonKey is not null && (item.IsWaiting || failed || item.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running);
             var bar = new Progress().Attribute("max", "100").TextAttribute("aria-label", "live.progress").Class("live-progress__bar").Attribute("data-live-value", "percent");
             return new Div(
                 new Span(new Icon(failed ? "info" : "download", assets, 15)).Class("dashboard-recent__symbol"),

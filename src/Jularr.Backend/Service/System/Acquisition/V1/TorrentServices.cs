@@ -126,6 +126,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             catch (TunnelUnavailableException)
             {
                 // Fail-closed: without a verified tunnel the job sends nothing and rests; the client card names the tunnel's state.
+                await HintAsync(download, "vpn_unavailable");
                 await RestAsync(download, staging);
                 return false;
             }
@@ -157,6 +158,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(JsonSerializer.Serialize(progress)), ct);
                         return true;
                     }, CancellationToken);
+                    await HintAsync(download, pass.Progressed ? null : pass.ReasonKey);
                     if (!pass.Progressed && pass.ReasonKey is not null) await RestAsync(download, staging);
                     return pass.Progressed;
                 case TorrentPassState.Failed:
@@ -164,6 +166,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     await _import.FailAsync(Context, download.OperationId, DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime, CancellationToken);
                     return false;
                 default:
+                    await HintAsync(download, null);
                     try
                     {
                         var extensions = LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId);
@@ -193,6 +196,14 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     return false;
             }
         }
+
+        // Why a running job does not move; the next pass that moves data clears it.
+        private async Task HintAsync(DownloadData download, string? hintKey) =>
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.SetDownloadHintAsync(new DownloadHintData(download.OperationId, hintKey), ct);
+                return true;
+            }, CancellationToken);
 
         // A job without a tunnel or without peers, or an import that waits for a person, looks again after a rest.
         private async Task RestAsync(DownloadData download, string staging)
