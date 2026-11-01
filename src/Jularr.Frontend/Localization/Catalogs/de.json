@@ -14895,6 +14895,10 @@
    "All available import filenames are occupied. The existing library files were not overwritten.",
    "Alle möglichen Dateinamen für den Import sind belegt. Die vorhandenen Dateien der Bibliothek wurden nicht überschrieben."
   ],
+  "acquisition.outcome.import_nothing_placeable": [
+   "Nothing in the download could be placed: no file is a readable book or names a volume. The files stay for you to assign",
+   "Im Download ließ sich nichts einsortieren: Keine Datei ist ein lesbares Buch oder nennt einen Band. Die Dateien bleiben zum Zuordnen"
+  ],
   "acquisition.outcome.import_unmatched_files": [
    "The matching volumes were imported; some files name no volume of the title and stayed in the download",
    "Die passenden Bände wurden importiert; einige Dateien nennen keinen Band des Titels und blieben im Download"
