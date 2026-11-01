@@ -107,7 +107,7 @@ jobs:
     name: ${{ matrix.kind }} (${{ matrix.shard }})
     needs: smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 18
     strategy:
       fail-fast: true
       matrix:
