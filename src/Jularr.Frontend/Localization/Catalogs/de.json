@@ -222,7 +222,7 @@
   "activity.files.view": ["View torrent files","Torrent-Dateien anzeigen"],
   "activity.files.empty": ["No torrent files were reported.","Keine Torrent-Dateien gefunden."],
   "activity.files.unavailable": ["The torrent client's file list is currently unavailable.","Die Dateiliste des Torrent-Clients ist derzeit nicht verfügbar."],
-  "hint.acquisition.Nyaa.placeholder": ["https://nyaa.media","https://nyaa.media"],
+  "hint.acquisition.Nyaa.placeholder": ["https://nyaa.si","https://nyaa.si"],
   "hint.acquisition.Nyaa.info": ["The address of the torrent index. Its files come through a torrent client.","Die Adresse des Torrent-Index. Seine Dateien kommen über einen Torrent-Client."],
   "hint.acquisition.Qbittorrent.placeholder": ["http://192.168.1.10:8080","http://192.168.1.10:8080"],
   "hint.acquisition.Qbittorrent.info": ["The torrent client's web address with its port.","Die Weboberflächen-Adresse des Torrent-Clients mit Port."],

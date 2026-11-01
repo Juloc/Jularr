@@ -1104,7 +1104,7 @@ namespace Jularr.Frontend.Localization
             new("hint.acquisition.AnnasArchive.info", "Only HTTPS; the member key travels in the address."),
             new("hint.acquisition.OpenSubtitles.placeholder", "https://api.opensubtitles.com"),
             new("hint.acquisition.OpenSubtitles.info", "Only HTTPS."),
-            new("hint.acquisition.Nyaa.placeholder", "https://nyaa.media"),
+            new("hint.acquisition.Nyaa.placeholder", "https://nyaa.si"),
             new("hint.acquisition.Nyaa.info", "The address of the torrent index. Its files come through a torrent client."),
             new("hint.acquisition.Qbittorrent.placeholder", "http://192.168.1.10:8080"),
             new("hint.acquisition.Qbittorrent.info", "The torrent client's web address with its port."),

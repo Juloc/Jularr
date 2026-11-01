@@ -9,7 +9,7 @@ namespace Jularr.Integrations.Logic.Nyaa
     internal sealed class NyaaClient(HttpClient http)
     {
          // Download from the same configured index host as the RSS item; do not redirect to a different provider.
-        private const string DefaultIndex = "https://nyaa.media";
+        private const string DefaultIndex = "https://nyaa.si";
 
         // The literature of the index: English translated, the other languages and the raw text.
         public static readonly string[] LiteratureCategories = ["3_1", "3_2", "3_3"];

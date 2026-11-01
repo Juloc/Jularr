@@ -40,7 +40,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("https://nyaa.si/download/2177106.torrent", entry.DownloadUri);
 
             // The file with the torrent is named after the number of the entry.
-            Assert.AreEqual("https://nyaa.media/download/2177106.torrent", NyaaClient.TorrentUri(entry.Id).ToString());
+            Assert.AreEqual("https://nyaa.si/download/2177106.torrent", NyaaClient.TorrentUri(entry.Id).ToString());
         }
 
         [TestMethod]
