@@ -15235,6 +15235,10 @@
    "chapter",
    "Kapitel"
   ],
+  "translation.progress.volume": [
+   "volume",
+   "Band"
+  ],
   "translation.progress.chapters": [
    "chapters",
    "Kapitel"

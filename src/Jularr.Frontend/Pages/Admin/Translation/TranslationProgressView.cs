@@ -14,7 +14,7 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             if (progress.Books.Length > 0)
             {
                 parts.Add(new H3(new Text("translation.progress.books")));
-                parts.AddRange(progress.Books.Select(book => Meter(book.Title, book.Done, book.Total, texts)));
+                parts.AddRange(progress.Books.Select(book => Meter(book.Volume is { } volume ? book.Title + " · " + texts["translation.progress.volume"] + " " + volume : book.Title, book.Done, book.Total, texts)));
             }
 
             return new Div([.. parts]).Class("feature-card").Attribute("data-translation-progress", "").Attribute("role", "status");
@@ -28,7 +28,7 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             parts.AddRange(progress.Languages.Select(language => Meter(language.Language, language.Done, language.Total, texts)));
             if (progress.Current is { } current)
             {
-                parts.Add(new P(new ValueText(texts["translation.progress.current"] + ": " + current.Title + " · " + texts["translation.progress.chapter"] + " "
+                parts.Add(new P(new ValueText(texts["translation.progress.current"] + ": " + current.Title + (current.Volume is { } volume ? " · " + texts["translation.progress.volume"] + " " + volume : "") + " · " + texts["translation.progress.chapter"] + " "
                     + current.Section.ToString(CultureInfo.CurrentCulture) + " → " + current.Language)));
                 if (current.SecondsWithoutProgress >= 120)
                     parts.Add(new P(new ValueText(texts["translation.progress.stalled"] + " " + Duration(current.SecondsWithoutProgress))).Attribute("role", "alert"));

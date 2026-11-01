@@ -98,6 +98,36 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Job_BooksNobodyReads_AreTranslatedOneAfterTheOther()
+        {
+            using var storage = new TemporaryDirectory();
+            var ollama = new FakeOllama();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
+                settings: new Dictionary<string, string> { ["LocalTranslation:Endpoint"] = "http://ollama:11434" },
+                services: services => services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => ollama));
+            var (first, second) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var firstDocument = await ReadingTests.OpenAsync(host, first);
+            var secondDocument = await ReadingTests.OpenAsync(host, second);
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en'");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" LIKE 'de%' ORDER BY \"Locale\" LIMIT 1)");
+
+            // The book with the lower id is finished before a single section of the other one is translated.
+            var (early, late) = firstDocument.DocumentId < secondDocument.DocumentId ? (firstDocument, secondDocument) : (secondDocument, firstDocument);
+            var earlySections = Convert.ToInt64(await host.ScalarAsync("SELECT jsonb_array_length(\"Structure\" -> 'Sections') FROM \"ReadingDocuments\" WHERE \"Id\" = " + early.DocumentId), System.Globalization.CultureInfo.InvariantCulture);
+            var rounds = 0;
+            await using var scope = host.Services.CreateAsyncScope();
+            while (await Translate(scope))
+            {
+                Assert.IsTrue(++rounds < 200, "The job never finishes.");
+                var lateStarted = Convert.ToInt64(await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/%' AND \"ReadingDocumentId\" = " + late.DocumentId), System.Globalization.CultureInfo.InvariantCulture);
+                if (lateStarted == 0) continue;
+                var earlyDone = Convert.ToInt64(await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/%' AND \"ReadingDocumentId\" = " + early.DocumentId), System.Globalization.CultureInfo.InvariantCulture);
+                Assert.AreEqual(earlySections, earlyDone, "The second book started before the first one was done.");
+            }
+        }
+
+        [TestMethod]
         public async Task Job_ASectionWithoutText_IsDoneOnceAndTheRoundsMoveOn()
         {
             using var storage = new TemporaryDirectory();
@@ -160,6 +190,13 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(during.Current.Title is "First Book" or "Second Book");
             Assert.IsTrue(during.Current.Section >= 1);
             Assert.AreEqual("de", during.Current.Language);
+
+            // A book that is one volume of a series is listed with its number.
+            await host.Fixture.RunSqlAsync("INSERT INTO \"WorkUnits\" (\"WorkId\", \"WorkUnitTypeId\", \"Number\") SELECT asset.\"WorkId\", 3, 14 FROM \"MediaAssets\" AS asset WHERE asset.\"Id\" = " + first);
+            await host.Fixture.RunSqlAsync("UPDATE \"MediaAssets\" SET \"WorkUnitId\" = (SELECT unit.\"Id\" FROM \"WorkUnits\" AS unit WHERE unit.\"WorkId\" = \"MediaAssets\".\"WorkId\" AND unit.\"Number\" = 14) WHERE \"Id\" = " + first);
+            var labelled = await ReadProgressAsync(host);
+            Assert.AreEqual("14", labelled.Books.Single(book => book.Title == "First Book").Volume);
+            Assert.IsNull(labelled.Books.Single(book => book.Title == "Second Book").Volume);
 
             var rounds = 0;
             await using (var scope = host.Services.CreateAsyncScope())
