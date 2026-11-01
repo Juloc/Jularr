@@ -295,7 +295,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Book_ContentThatIsNoEbook_FailsTheReleaseAndStaysOutOfTheLibrary()
+        public async Task Book_ContentThatIsNoEbook_WaitsForManualReviewAndStaysOutOfTheLibrary()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
@@ -305,7 +305,7 @@ namespace Jularr.Backend.Tests
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             var wantedId = await CreateWantedAsync(host, work.Id);
 
-            // The direct source is the preferred one, so its file is the one that is taken and checked.
+            // The direct source is preferred, but invalid EPUB content must not enter the library.
             using var preferred = await host.SendAsync(HttpMethod.Put, Connections + "/3",
                 new SaveAcquisitionConnectionDataV1("Project Gutenberg", AcquisitionConnectionType.Gutenberg, "https://gutendex.example.test", null, true, 5, [], null, null, null));
             Assert.AreEqual(HttpStatusCode.OK, preferred.StatusCode, await preferred.Content.ReadAsStringAsync());
@@ -313,14 +313,17 @@ namespace Jularr.Backend.Tests
             await RunAsync<SearchDueWantedV1>(host);
             Assert.AreEqual(0, sources.SabGrabs);
             await RunAsync<MonitorDownloadsV1>(host);
-            Assert.AreEqual("download_failed", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""));
+
+            // A download with no placeable book now waits for a person instead of failing and deleting its files.
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual("import_nothing_placeable", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"ReasonKey\" IS NULL FROM \"AcquisitionReleases\""));
+            StringAssert.Contains((string)(await host.ScalarAsync("SELECT \"AttentionProposal\"::text FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!, ".epub");
             Assert.IsFalse(Directory.Exists(Path.Combine(storage.Path, "1", "Books", "Jane Austen")));
-            Assert.AreEqual(0, Directory.EnumerateFiles(downloads.Path, "*", SearchOption.AllDirectories).Count(),
-                "A rejected ebook must not leave payloads or .part files.");
-            var operationId = (await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2 LIMIT 1"))!.ToString();
-            Assert.IsFalse(Directory.EnumerateDirectories(downloads.Path, "*", SearchOption.AllDirectories)
-                .Any(directory => Path.GetFileName(directory) is { } name && (name == operationId || name == "j-" + operationId)),
-                "A terminal operation must not leave complete or incomplete staging folders.");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+
+            var kept = Directory.EnumerateFiles(downloads.Path, "*", SearchOption.AllDirectories).Single();
+            CollectionAssert.AreEqual(sources.EpubBytes, File.ReadAllBytes(kept), "The downloaded bytes must remain available for manual review.");
             using var activity = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=Queue");
             Assert.AreEqual(OperationType.Download, (await activity.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single().OperationTypeId);
             Assert.AreEqual(wantedId, (long)(await host.ScalarAsync("SELECT \"WantedItemId\" FROM \"AcquisitionReleases\""))!);
