@@ -99,6 +99,45 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Block_TheModelTranslatesTheContextToo_IsAskedAgainWithoutIt()
+        {
+            var handler = new EchoingOllama();
+            using var http = new HttpClient(handler);
+            var client = new OllamaLocalModels(http);
+
+            // With context the answer holds the context's translation as well: more paragraphs than the block.
+            Assert.AreEqual("Rina ging nach Hause.", await client.TranslateBlockAsync(Ollama, "translategemma:4b", "id", "de", "Rina pulang.", "Rina tinggal di kota.", default));
+            Assert.AreEqual(2, handler.Calls);
+            Assert.IsFalse(handler.LastPrompt!.Contains("Earlier source passage", StringComparison.Ordinal));
+
+            // Without context the first answer stands.
+            handler.Calls = 0;
+            Assert.AreEqual("Rina ging nach Hause.", await client.TranslateBlockAsync(Ollama, "translategemma:4b", "id", "de", "Rina pulang.", null, default));
+            Assert.AreEqual(1, handler.Calls);
+
+            // An answer that still fails the checks is none.
+            handler.Bad = true;
+            Assert.IsNull(await client.TranslateBlockAsync(Ollama, "translategemma:4b", "id", "de", "Rina pulang. Dia makan.", "Rina tinggal di kota.", default));
+        }
+
+        private sealed class EchoingOllama : HttpMessageHandler
+        {
+            public int Calls { get; set; }
+            public bool Bad { get; set; }
+            public string? LastPrompt { get; private set; }
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                Calls++;
+                using var json = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+                LastPrompt = json.RootElement.GetProperty("prompt").GetString()!;
+                var answer = Bad ? "Rina pulang. Dia makan." : LastPrompt.Contains("Earlier source passage", StringComparison.Ordinal)
+                    ? "Rina wohnt in der Stadt.\n\nRina ging nach Hause." : "Rina ging nach Hause.";
+                var body = JsonSerializer.Serialize(new { response = answer, eval_count = 20, eval_duration = 2000000000 });
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
+            }
+        }
+
+        [TestMethod]
         public void QualityGate_RejectsEchoedOrMostlyUntranslatedJapanese()
         {
             var source = "私は三十四歳で、仕事がなく、家もありません。";
