@@ -96,6 +96,34 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/translategemma:4b/fr/%' AND \"ReadingDocumentId\" = " + secondDocument.DocumentId));
         }
 
+        [TestMethod]
+        public async Task Job_ASectionWithoutText_IsDoneOnceAndTheRoundsMoveOn()
+        {
+            using var storage = new TemporaryDirectory();
+            var ollama = new FakeOllama();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
+                settings: new Dictionary<string, string> { ["LocalTranslation:Endpoint"] = "http://ollama:11434" },
+                services: services => services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => ollama));
+            var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var document = await ReadingTests.OpenAsync(host, first);
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en'");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" LIKE 'de%' ORDER BY \"Locale\" LIMIT 1)");
+
+            // The first section becomes a page of one picture: no text block at all.
+            var id = document.DocumentId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingResources\" SET \"Bytes\" = convert_to('<p><img src=\"a.png\"/></p>', 'UTF8') WHERE \"ReadingDocumentId\" = " + id + " AND \"Path\" = ':section/00000'");
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Structure\" = jsonb_set(\"Structure\", '{Sections,0,Blocks}', '0') WHERE \"Id\" = " + id);
+
+            var rounds = 0;
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                while (await Translate(scope)) Assert.IsTrue(++rounds < 200, "The job keeps picking the section without text.");
+            }
+            var sections = Convert.ToInt64(await host.ScalarAsync("SELECT jsonb_array_length(\"Structure\" -> 'Sections') FROM \"ReadingDocuments\" WHERE \"Id\" = " + document.DocumentId), System.Globalization.CultureInfo.InvariantCulture);
+            Assert.AreEqual(sections, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/translategemma:4b/de/%' AND \"ReadingDocumentId\" = " + document.DocumentId));
+        }
+
         private static async Task<bool> Translate(AsyncServiceScope scope) =>
             (await scope.ServiceProvider.GetRequiredService<TranslateReadingBooksV1>().ExecuteAsync<UpdateResult>(new BookTranslationParametersV1(), default, CancellationToken.None)).Success;
 

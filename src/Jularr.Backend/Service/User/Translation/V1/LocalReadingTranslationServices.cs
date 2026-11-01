@@ -66,8 +66,10 @@ namespace Jularr.Backend.Service.User.Translation.V1
                 """;
             query.Parameters.Add(new ReadingTranslationPathData(documentId, path));
             var existing = await ctx.ReadOptionalAsync<ReadingTranslationV1>(query, ct);
-            var texts = (existing is null ? null : Parse(existing.Blocks, html, sourceLanguage, digest, count))?.Texts ?? new string[count];
-            var changed = false;
+            var current = existing is null ? null : Parse(existing.Blocks, html, sourceLanguage, digest, count);
+            var texts = current?.Texts ?? new string[count];
+            // A section without text still gets its cache, or the job would pick it again and again.
+            var changed = current is null && count == 0;
             foreach (var (index, value) in blocks)
             {
                 if (!string.IsNullOrWhiteSpace(texts[index])) continue;
