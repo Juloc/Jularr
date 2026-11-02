@@ -103,9 +103,10 @@ namespace Jularr.Frontend.Pages.User.Details
                 actions.Add(new A(new Icon("link", assets, 16), new Span(new Text("media.openInPlex"))).Class("button button--primary").Attribute("href", plex));
             }
 
-            // The profile's request shows its phase live and can be withdrawn while it runs; once complete it plays or reads, and a withdrawn one is gone.
-            if (work.RequestStatusTypeId is { } requested && work.RequestId is { } requestId && texts.CanRequest() && requested != AcquisitionRequestStatusType.Cancelled
-                && !(requested == AcquisitionRequestStatusType.Completed && playable is not null))
+            // The profile's request shows its phase live and can be withdrawn while it runs; one that completes while the page is open plays or reads,
+            // one complete before leaves that to the page's own actions, and a withdrawn one is gone.
+            if (work.RequestStatusTypeId is { } requested and not AcquisitionRequestStatusType.Completed and not AcquisitionRequestStatusType.Cancelled && work.RequestId is { } requestId
+                && texts.CanRequest())
             {
                 var reads = kind is WorkKind.Book or WorkKind.Manga or WorkKind.LightNovel;
                 var running = requested is >= AcquisitionRequestStatusType.Open and <= AcquisitionRequestStatusType.Importing;
