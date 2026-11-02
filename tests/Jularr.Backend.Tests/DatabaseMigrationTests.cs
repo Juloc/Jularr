@@ -397,6 +397,48 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task CatalogFilterFacts_UpgradeOnlyAddsColumns_KeepsEveryWork_AndHasTheCatalogsReadAgain()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(CatalogFilterFacts_UpgradeOnlyAddsColumns_KeepsEveryWork_AndHasTheCatalogsReadAgain));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 37).ToArray()).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "CatalogNamespace", "Rating", "CountryOfOrigin", "Season", "SeasonYear", "FetchedAt", "DetailedAt")
+                VALUES
+                    (601, 1, NULL, 'Catalog Film', 'tmdb_movie', 8.2, 'US', NULL, NULL, now(), NULL),
+                    (602, 2, 1, 'Catalog Anime', 'anilist', 8.4, 'JP', 4, 2023, now(), now());
+                UPDATE "ExternalWorkSyncs" SET "ListedOn" = '2026-10-30', "Cursor" = 5000, "CompletedAt" = now() WHERE "Namespace" = 'anilist';
+                UPDATE "ExternalWorkSyncs" SET "ListedOn" = '2026-10-30', "CompletedAt" = now() WHERE "Namespace" = 'tmdb_movie';
+                """);
+            var before = await ScalarAsync(cs, """SELECT count(*) FROM "Works" """);
+
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            // Nothing is deleted and no existing value changes; the new facts start empty.
+            Assert.AreEqual(before, await ScalarAsync(cs, """SELECT count(*) FROM "Works" """));
+            Assert.AreEqual(3L, await ScalarAsync(cs, """
+                SELECT count(*) FROM "Works"
+                WHERE "CatalogFormatId" IS NULL AND "ReleaseStatusId" IS NULL AND "CatalogSourceId" IS NULL AND "Episodes" IS NULL AND "Chapters" IS NULL AND "Volumes" IS NULL
+                    AND "DurationMinutes" IS NULL AND "GenreIds" = '{}' AND "TagIds" = '{}' AND "SiteIds" = '{}'
+                """));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 501 AND "CanonicalTitle" = 'Kept Film' AND "CatalogNamespace" IS NULL"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """
+                SELECT count(*) FROM "Works" WHERE "Id" = 602 AND "CanonicalTitle" = 'Catalog Anime' AND "Rating" = 8.4 AND "CountryOfOrigin" = 'JP' AND "Season" = 4 AND "SeasonYear" = 2023
+                    AND "FetchedAt" IS NOT NULL AND "DetailedAt" IS NOT NULL
+                """));
+
+            // Only the sync bookkeeping moves: TMDB's films are read again, AniList walks again from its start; both stay whole meanwhile.
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 601 AND "CanonicalTitle" = 'Catalog Film' AND "Rating" = 8.2 AND "FetchedAt" IS NULL"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkSyncs" WHERE "Namespace" = 'anilist' AND "ListedOn" IS NULL AND "Cursor" IS NULL AND "CompletedAt" IS NOT NULL"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "ExternalWorkSyncs" WHERE "Namespace" = 'tmdb_movie' AND "ListedOn" = '2026-10-30' AND "CompletedAt" IS NOT NULL"""));
+            Assert.AreEqual(37, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0037_catalog_filter_facts'"""));
+        }
+
+        [TestMethod]
         public async Task ContentLanguages_UpgradePreservesExistingProfilesWithoutInferringTheirPreferences()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
