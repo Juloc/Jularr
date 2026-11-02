@@ -68,12 +68,22 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     work."MediaTypeId",
                     operation."OperationStatusTypeId" = 4 AND operation."DismissedAt" IS NULL AS "CanRetry",
                     operation."DownloadPriorityTypeId",
-                    CASE WHEN operation."AttentionKey" = 'import_unmatched_files' THEN ARRAY(
+                    CASE WHEN operation."AttentionKey" IN ('import_unmatched_files', 'import_nothing_placeable') THEN ARRAY(
                         SELECT
-                            proposed."Path"
+                            proposed."File" ->> 'Path'
                         FROM
-                            jsonb_to_recordset(operation."AttentionProposal" -> 'Files') AS proposed ("Path" text)
-                    ) END AS "UnmatchedFiles"
+                            jsonb_array_elements(operation."AttentionProposal" -> 'Files') WITH ORDINALITY AS proposed ("File", "Position")
+                        ORDER BY
+                            proposed."Position"
+                    ) END AS "UnmatchedFiles",
+                    CASE WHEN operation."AttentionKey" IN ('import_unmatched_files', 'import_nothing_placeable') THEN ARRAY(
+                        SELECT
+                            coalesce(proposed."File" ->> 'Reason', 'unknown')
+                        FROM
+                            jsonb_array_elements(operation."AttentionProposal" -> 'Files') WITH ORDINALITY AS proposed ("File", "Position")
+                        ORDER BY
+                            proposed."Position"
+                    ) END AS "UnmatchedFileReasons"
                 FROM
                     "Operations" AS operation
                     LEFT JOIN "LibraryRoots" AS root ON root."Id" = operation."LibraryRootId"

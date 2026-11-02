@@ -26,7 +26,7 @@ namespace Jularr.Backend.Logic.Reading
                 throw new InvalidDataException("The EPUB exceeds the size limits.");
             }
 
-            if (archive.GetEntry("mimetype") is not { } mimetype || ReadText(mimetype).Trim() != "application/epub+zip")
+            if (!IsMarked(archive))
             {
                 throw new InvalidDataException("The file is not an EPUB.");
             }
@@ -78,6 +78,11 @@ namespace Jularr.Backend.Logic.Reading
 
             return new EpubPackage(title, language, spine, toc, manifest.Values.DistinctBy(item => item.Path).ToDictionary(item => item.Path, item => item.MediaType, StringComparer.Ordinal));
         }
+
+        // The archive says it is an EPUB: its mimetype entry, or without one its container.
+        public static bool IsMarked(ZipArchive archive) => archive.GetEntry("mimetype") is { } mimetype
+            ? mimetype.Length <= 128 && ReadText(mimetype).Trim() == "application/epub+zip"
+            : archive.GetEntry("META-INF/container.xml") is not null;
 
         public static string ReadText(ZipArchiveEntry entry)
         {

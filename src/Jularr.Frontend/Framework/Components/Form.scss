@@ -1,4 +1,5 @@
 @use "Toggle";
+@use "HitArea";
 
 // Two columns of short fields where there is room, one in narrow panels; long fields, errors and the buttons take the whole row.
 .ui-form {
@@ -152,6 +153,8 @@
 
         // A larger touch target than the visible circle.
         &::before { content: ""; position: absolute; inset: -13px; }
+        // On a phone 44px wide and 40px high: 16px up (the gap to the field above), 6px down (the gap to its own field).
+        @media (max-width: 640px) { &::before { inset: -16px -13px -6px; } }
         &:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
     }
     &__tip {
@@ -219,6 +222,8 @@
 
     &:hover { background: var(--accent-soft); color: var(--accent); }
     .ui-icon { width: 18px; height: 18px; }
+
+    @include HitArea.phone-hit-area(9px, 12px, $border: 0px);
 }
 // What a field wears inside its frame: an icon circle at the start, a quiet unit at the end (before a number's plus and minus).
 .ui-field__control--affixed {
@@ -266,6 +271,13 @@
     background: var(--accent-soft);
 
     &[hidden] { display: none; }
+
+    // The steps' taps leave the small pill on a phone, so it no longer clips (its corners are the steps').
+    @media (max-width: 640px) {
+        overflow: visible;
+        .ui-field__step:first-child { border-radius: var(--radius-control) var(--radius-control) 0 0; }
+        .ui-field__step:last-child { border-radius: 0 0 var(--radius-control) var(--radius-control); }
+    }
 }
 .ui-field__step {
     display: grid;
@@ -285,6 +297,14 @@
     &:first-child { border-bottom: 1px solid color-mix(in srgb, var(--accent) 15%, transparent); }
     &:hover:not(:disabled) { background: var(--accent-edge); }
     &:disabled { color: var(--muted); cursor: default; opacity: .6; }
+
+    // On a phone the two stacked steps cannot both be 44px: each takes the free space around it, up (or down) to the frame and sideways to the frame's edge and the gap to the field.
+    @media (max-width: 640px) {
+        position: relative;
+        &::after { content: ""; position: absolute; inset: 0 -6px; }
+        &:first-child::after { top: -5px; }
+        &:last-child::after { bottom: -5px; }
+    }
 }
 .ui-field__control--segmented { padding: 4px; }
 .ui-segments { display: flex; gap: 4px; }
@@ -324,6 +344,9 @@
     & > input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: -2px; }
     & > input:disabled { cursor: default; }
     & > input:disabled + span { opacity: .4; }
+
+    // A segment is as high as its frame less the padding; on a phone its tap reaches over the frame's padding (the segments themselves sit 4px apart).
+    @include HitArea.phone-hit-area(0px, 14px, $border: 0px);
 }
 // A titled panel of fields inside one form.
 .ui-form__section {
