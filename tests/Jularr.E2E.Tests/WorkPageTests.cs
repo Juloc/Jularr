@@ -190,7 +190,7 @@ namespace Jularr.E2E.Tests
                 await Steps.RequestAsync(page, "Test Series", FakeServices.SeriesTitle);
 
                 // Both titles are rows with their cover.
-                await page.GotoAsync("/Admin/Works");
+                await page.GotoAsync("/Admin/Works?view=Table");
                 var rows = page.Locator(".list-body .list-row");
                 var movie = Steps.ListRow(page, FakeServices.MovieTitle);
                 var series = Steps.ListRow(page, FakeServices.SeriesTitle);

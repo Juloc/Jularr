@@ -141,8 +141,10 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     // The numbers of the library list's filter chips and figures: every title that passes the type, library, profile and words of the list, by state.
     public sealed class WorksSummaryV1 : BaseResponse
     {
-        public WorksSummaryV1(int totalCount, int availableCount, int missingCount, int downloadingCount, int unmonitoredCount, int monitoredCount)
+        public WorksSummaryV1(int totalCount, int availableCount, int missingCount, int downloadingCount, int unmonitoredCount, int monitoredCount, int fileCount, long sizeBytes)
         {
+            FileCount = fileCount;
+            SizeBytes = sizeBytes;
             TotalCount = totalCount;
             AvailableCount = availableCount;
             MissingCount = missingCount;
@@ -168,6 +170,13 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         [DataField(typeof(WorkListFields), nameof(WorkListFields.TitleCount))]
         public int MonitoredCount { get; }
+
+        // What the titles hold on disk together.
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.FileCount))]
+        public int FileCount { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.SizeBytes))]
+        public long SizeBytes { get; }
     }
 
     public sealed class WorkParametersV1 : BaseParameters

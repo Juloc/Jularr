@@ -47,15 +47,6 @@ namespace Jularr.Frontend.Pages.Admin.Works
             return Partial("_UiComponent", SearchResultRows());
         }
 
-        private IUiComponent SearchControls(string? csrf)
-        {
-            var actions = new List<IUiComponent>();
-            if (Filtered) actions.Add(new PostForm(Address("SearchAll"), csrf, [], new Button(Glyph("search", 16), new Text("works.search.filtered")).Primary().Submit()));
-            actions.Add(new PostForm(Address("SearchAll"), csrf, [("all", "true")], new Button(Glyph("search", 16), new Text("works.search.all")).Submit()));
-            actions.Add(new P(new Text("works.search.scope")).Class("works-search-scope"));
-            return new Div([.. actions]).Class("works-search-controls");
-        }
-
         private IUiComponent SearchPanel(string? csrf)
         {
             var items = new List<IUiComponent> { SearchProgress(csrf) };
@@ -68,7 +59,8 @@ namespace Jularr.Frontend.Pages.Admin.Works
                 else items.Add(new A(new Text("works.search.results")).Class("button button--compact").Attribute("href", SearchAddress(run.OperationId)));
             }
 
-            return new UiSection("works.search.title", items);
+            // One quiet line while it runs or was just asked for; the dock starts it.
+            return new Div([.. items]).Class("works-search-run");
         }
 
         private IUiComponent SearchResultRows()

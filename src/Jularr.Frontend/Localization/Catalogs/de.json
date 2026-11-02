@@ -13421,6 +13421,26 @@
    "Descending, turn to ascending",
    "Absteigend, auf aufsteigend umschalten"
   ],
+  "works.footer.titles": [
+   "Titles",
+   "Titel"
+  ],
+  "works.footer.monitored": [
+   "Monitored",
+   "Überwacht"
+  ],
+  "works.footer.unmonitored": [
+   "Unmonitored",
+   "Nicht überwacht"
+  ],
+  "works.footer.files": [
+   "Files",
+   "Dateien"
+  ],
+  "works.footer.size": [
+   "Total size",
+   "Gesamtgröße"
+  ],
   "works.filter.drawer": [
    "Filters",
    "Filter"
