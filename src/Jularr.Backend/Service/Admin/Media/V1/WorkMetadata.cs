@@ -105,7 +105,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         public async Task<IReadOnlyList<TmdbSearchResult>> ReadFeedAsync(TmdbConnection connection, MediaType mediaType, DiscoverFeedType feed, int page, CancellationToken ct)
         {
-            var region = connection.Language.Split('-') is [_, { Length: 2 } country] ? country.ToUpperInvariant() : null;
+            var region = TmdbClient.Region(connection);
             var failedKey = "metadata.feed.failed." + connection.Language;
             if (_cache.TryGetValue(failedKey, out string? failure))
             {

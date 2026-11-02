@@ -56,7 +56,7 @@ namespace Jularr.Integrations.Data.AniList
     internal sealed class AniListCatalogEntry
     {
         public AniListCatalogEntry(int id, string type, string? format, string title, string? originalTitle, DateOnly? releasedOn, int? year, string? description, string? coverUrl,
-            int? popularity, int? averageScore, int? favourites, string? country, string? season, int? seasonYear)
+            int? popularity, int? averageScore, int? favourites, string? country, string? season, int? seasonYear, AniListFacts facts)
         {
             Favourites = favourites;
             Country = country;
@@ -65,6 +65,7 @@ namespace Jularr.Integrations.Data.AniList
             Id = id;
             Type = type;
             Format = format;
+            Facts = facts;
             Title = title;
             OriginalTitle = originalTitle;
             ReleasedOn = releasedOn;
@@ -96,6 +97,40 @@ namespace Jularr.Integrations.Data.AniList
         // The anime season it began in, with its year.
         public string? Season { get; }
         public int? SeasonYear { get; }
+        public AniListFacts Facts { get; }
+    }
+
+    // What else AniList's search filters by, in AniList's own values.
+    internal sealed class AniListFacts
+    {
+        public AniListFacts(string? status, string? source, int? episodes, int? chapters, int? volumes, int? duration, IReadOnlyList<string> genres, IReadOnlyList<int> tagIds,
+            IReadOnlyList<int> siteIds, bool isAdult)
+        {
+            Status = status;
+            Source = source;
+            Episodes = episodes;
+            Chapters = chapters;
+            Volumes = volumes;
+            Duration = duration;
+            Genres = genres;
+            TagIds = tagIds;
+            SiteIds = siteIds;
+            IsAdult = isAdult;
+        }
+
+        // FINISHED, RELEASING, NOT_YET_RELEASED, CANCELLED or HIATUS.
+        public string? Status { get; }
+        public string? Source { get; }
+        public int? Episodes { get; }
+        public int? Chapters { get; }
+        public int? Volumes { get; }
+        // Minutes of one episode.
+        public int? Duration { get; }
+        public IReadOnlyList<string> Genres { get; }
+        public IReadOnlyList<int> TagIds { get; }
+        // The streaming or reading sites of its official links.
+        public IReadOnlyList<int> SiteIds { get; }
+        public bool IsAdult { get; }
     }
 
     internal enum AniListMediaType : byte

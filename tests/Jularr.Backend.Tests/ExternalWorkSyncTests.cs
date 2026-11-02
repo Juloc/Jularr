@@ -55,6 +55,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(8.2m, await host.ScalarAsync(Catalog("tmdb_movie", "603", "\"Rating\"")));
             Assert.AreEqual(1999, await host.ScalarAsync(Catalog("tmdb_movie", "603", "\"ReleaseYear\"::integer")));
             Assert.AreEqual("https://image.tmdb.org/t/p/w500/matrix.jpg", await host.ScalarAsync(Catalog("tmdb_movie", "603", "\"ImageUrl\"")));
+            Assert.AreEqual("{1,15}|136|1|US|{8}", await host.ScalarAsync(Catalog("tmdb_movie", "603",
+                "concat_ws('|'::text, \"GenreIds\", \"DurationMinutes\", \"ReleaseStatusId\", \"CountryOfOrigin\", \"SiteIds\")")), "The details read keep what Discover filters by, the streaming services of the language's country.");
+            Assert.IsTrue(tmdb.Requests.Any(request => request.AbsolutePath == "/3/movie/603" && request.Query.Contains("watch%2Fproviders", StringComparison.Ordinal)), "One read per film.");
             Assert.AreEqual(DBNull.Value, await host.ScalarAsync(Catalog("tmdb_movie", "604", "\"Rating\"")));
             Assert.AreEqual(true, await host.ScalarAsync(Catalog("tmdb_movie", "604", "\"CatalogNamespace\" = 'tmdb_movie' AND \"DetailedAt\" IS NULL")),
                 "A catalog title is a minimal Work without details.");
@@ -82,7 +85,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task AniList_WalksItsTitlesByPage_KeepsTheFormatsDiscoverShows_AndWaitsWhileUsed()
+        public async Task AniList_WalksItsTitlesByIds_KeepsWhatDiscoverFiltersBy_AndWaitsWhileUsed()
         {
             var aniList = new FakeAniListCatalog();
             var time = new FixedTime(new DateTimeOffset(2026, 10, 19, 3, 0, 0, TimeSpan.Zero));
@@ -102,17 +105,26 @@ namespace Jularr.Backend.Tests
 
             await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"PausesWhileUsed\" = FALSE WHERE \"Namespace\" = 'anilist'");
             await RunAsync(host);
-            CollectionAssert.AreEqual(new[] { 0, 3 }, aniList.Pages.ToArray());
+            CollectionAssert.AreEqual(new[] { 0, 50 }, aniList.Pages.ToArray());
             Assert.AreEqual("2:1", await host.ScalarAsync(Catalog("anilist", "1", "\"MediaTypeId\" || ':' || \"MediaSubtypeId\"")));
             Assert.AreEqual(8.4m, await host.ScalarAsync(Catalog("anilist", "1", "\"Rating\"")));
             Assert.AreEqual("Frieren", await host.ScalarAsync(Catalog("anilist", "1", "\"CanonicalTitle\"")));
             Assert.AreEqual("2023-09-29", await host.ScalarAsync(Catalog("anilist", "1", "\"ReleasedOn\"::text")));
             Assert.AreEqual("JP:40000:4:2023", await host.ScalarAsync(Catalog("anilist", "1", "\"CountryOfOrigin\" || ':' || \"Favourites\" || ':' || \"Season\" || ':' || \"SeasonYear\"")),
                 "Discover's season, manhwa and favourite lists read what the pass keeps.");
-            Assert.AreEqual("KR", await host.ScalarAsync(Catalog("anilist", "5", "\"CountryOfOrigin\"")));
             Assert.AreEqual("3:3", await host.ScalarAsync(Catalog("anilist", "3", "\"MediaTypeId\" || ':' || \"MediaSubtypeId\"")));
-            Assert.AreEqual("3:2", await host.ScalarAsync(Catalog("anilist", "5", "\"MediaTypeId\" || ':' || \"MediaSubtypeId\"")));
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '2'"), "A music video is no Discover title.");
+            Assert.AreEqual("3:2", await host.ScalarAsync(Catalog("anilist", "55", "\"MediaTypeId\" || ':' || \"MediaSubtypeId\"")));
+
+            // What AniList's search filters by is kept; only streaming links name a site, unknown genres are left out.
+            Assert.AreEqual("1|1|2|28|24|{2,4,6}|{1,2}|{5}", await host.ScalarAsync(Catalog("anilist", "1", "concat_ws('|'::text, \"CatalogFormatId\", \"ReleaseStatusId\", "
+                + "\"CatalogSourceId\", \"Episodes\", \"DurationMinutes\", \"GenreIds\", \"TagIds\", \"SiteIds\")")));
+            Assert.AreEqual("9|40|4", await host.ScalarAsync(Catalog("anilist", "3", "concat_ws('|'::text, \"CatalogFormatId\", \"Chapters\", \"Volumes\")")));
+            Assert.AreEqual("KR", await host.ScalarAsync(Catalog("anilist", "55", "\"CountryOfOrigin\"")));
+            Assert.AreEqual("{}|{}", await host.ScalarAsync(Catalog("anilist", "6", "concat_ws('|'::text, \"TagIds\", \"SiteIds\")")));
+
+            // Music videos and OVAs are series for the format filter; adult titles are kept and marked.
+            Assert.AreEqual("2:1:7", await host.ScalarAsync(Catalog("anilist", "2", "\"MediaTypeId\" || ':' || \"MediaSubtypeId\" || ':' || \"CatalogFormatId\"")));
+            Assert.AreEqual(true, await host.ScalarAsync(Catalog("anilist", "4", "\"IsAdult\"")));
             Assert.AreEqual("2026-10-19", await host.ScalarAsync("SELECT \"ListedOn\"::text FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist' AND \"Cursor\" IS NULL"));
 
             // A finished walk rests for a week.
@@ -288,16 +300,18 @@ namespace Jularr.Backend.Tests
         private sealed class FakeAniListCatalog : HttpMessageHandler
         {
             public List<int> Pages { get; } = [];
-            private const string Frieren = """{"id":1,"type":"ANIME","format":"TV","title":{"romaji":"Sousou no Frieren","english":"Frieren","native":"葬送のフリーレン"},"startDate":{"year":2023,"month":9,"day":29},"coverImage":{"large":"https://img.anili.st/1.jpg"},"popularity":500000,"averageScore":84,"favourites":40000,"countryOfOrigin":"JP","season":"FALL","seasonYear":2023}""";
+            private const string Frieren = """{"id":1,"type":"ANIME","format":"TV","title":{"romaji":"Sousou no Frieren","english":"Frieren","native":"葬送のフリーレン"},"startDate":{"year":2023,"month":9,"day":29},"coverImage":{"large":"https://img.anili.st/1.jpg"},"popularity":500000,"averageScore":84,"favourites":40000,"status":"FINISHED","source":"MANGA","countryOfOrigin":"JP","season":"FALL","seasonYear":2023,"episodes":28,"duration":24,"genres":["Adventure","Drama","Fantasy","Unknown"],"isAdult":false,"tags":[{"id":1},{"id":2}],"externalLinks":[{"siteId":5,"type":"STREAMING"},{"siteId":7,"type":"INFO"}]}""";
 
+            // Ids are asked fifty at a time; the newest id ends the walk.
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
-                var after = body.RootElement.GetProperty("variables").GetProperty("after").GetInt32();
+                var after = body.RootElement.GetProperty("variables").GetProperty("ids")[0].GetInt32() - 1;
                 Pages.Add(after);
-                var json = after == 0
-                    ? """{"data":{"Page":{"pageInfo":{"hasNextPage":true},"media":[""" + Frieren + "," + """{"id":2,"type":"ANIME","format":"MUSIC","title":{"romaji":"Song"},"startDate":{"year":2020}},{"id":3,"type":"MANGA","format":"NOVEL","title":{"romaji":"Novel"},"startDate":{"year":2019}}]}}}"""
-                    : """{"data":{"Page":{"pageInfo":{"hasNextPage":false},"media":[{"id":5,"type":"MANGA","format":"MANGA","title":{"romaji":"Manga"},"averageScore":0,"countryOfOrigin":"KR"}]}}}""";
+                var media = after == 0
+                    ? Frieren + "," + """{"id":2,"type":"ANIME","format":"MUSIC","title":{"romaji":"Song"},"startDate":{"year":2020}},{"id":3,"type":"MANGA","format":"NOVEL","title":{"romaji":"Novel"},"startDate":{"year":2019},"chapters":40,"volumes":4},{"id":4,"type":"ANIME","format":"OVA","title":{"romaji":"Adult"},"isAdult":true},{"id":6,"type":"ANIME","format":"TV","title":{"romaji":"Club"},"externalLinks":null}"""
+                    : """{"id":55,"type":"MANGA","format":"MANGA","title":{"romaji":"Manga"},"averageScore":0,"countryOfOrigin":"KR"}""";
+                var json = """{"data":{"Page":{"media":[""" + media + """]},"last":{"media":[{"id":60}]}}}""";
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
             }
         }
@@ -331,7 +345,7 @@ namespace Jularr.Backend.Tests
                 if (request.Headers.Authorization?.Parameter != Token) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
                 var body = uri.AbsolutePath switch
                 {
-                    "/3/movie/603" => """{"id":603,"title":"Matrix","original_title":"The Matrix","release_date":"1999-03-31","overview":"Ein Hacker.","poster_path":"/matrix.jpg","popularity":60,"vote_average":8.2,"imdb_id":"tt0133093"}""",
+                    "/3/movie/603" => """{"id":603,"title":"Matrix","original_title":"The Matrix","release_date":"1999-03-31","overview":"Ein Hacker.","poster_path":"/matrix.jpg","popularity":60,"vote_average":8.2,"imdb_id":"tt0133093","genres":[{"id":28},{"id":878}],"runtime":136,"status":"Released","origin_country":["US"],"watch/providers":{"results":{"US":{"flatrate":[{"provider_id":8},{"provider_id":8}]},"DE":{"flatrate":[{"provider_id":9}]}}}}""",
                     "/3/movie/604" => """{"id":604,"title":"Matrix Reloaded","original_title":"The Matrix Reloaded","release_date":"2003-05-15","vote_average":0}""",
                     "/3/movie/changes" => """{"results":[{"id":603,"adult":false}],"page":1,"total_pages":1}""",
                     _ => null

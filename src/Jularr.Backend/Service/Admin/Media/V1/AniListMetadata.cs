@@ -125,7 +125,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         // A Japanese reader sees the native title, everyone else the English or the romanized one.
         public static string Title(AniListMedia media, string? language) => language == "ja" && media.NativeTitle is { } native ? native : Title(media);
 
-        public async Task<(IReadOnlyList<AniListCatalogEntry> Entries, bool HasMore)> ReadCatalogPageAsync(int afterId, CancellationToken ct)
+        public async Task<(IReadOnlyList<AniListCatalogEntry> Entries, int NextAfterId, bool HasMore)> ReadCatalogPageAsync(int afterId, CancellationToken ct)
         {
             try
             {
