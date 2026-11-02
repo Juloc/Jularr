@@ -43,12 +43,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                         work."CanonicalTitle" AS "Title",
                         trim_scale(unit."Number")::text AS "Volume",
                         lower(split_part(split_part(coalesce(document."Language", work."OriginalLanguage"), '-', 1), '_', 1)) AS "SourceLanguage",
-                        jsonb_array_length(document."Structure" -> 'Sections') AS "Sections",
-                        (
-                            SELECT coalesce(sum(coalesce(section.value ->> 'Blocks', '0')::integer), 0)::integer
-                            FROM jsonb_array_elements(document."Structure" -> 'Sections') AS section (value)
-                        ) AS "TotalBlocks",
-                        document."Structure" AS "Structure"
+                        jsonb_array_length(document."Structure" -> 'Sections') AS "Sections"
                     FROM
                         "ReadingDocuments" AS document
                         JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
@@ -59,6 +54,20 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                         coalesce(document."Language", work."OriginalLanguage") IS NOT NULL
                         AND jsonb_typeof(document."Structure" -> 'Sections') = 'array'
                 )
+                , sections AS MATERIALIZED (
+                    -- The blocks of every section, read from the structure once for each book: a structure is megabytes, and picking one section out of it again and again is slow.
+                    SELECT
+                        book."Id" AS "DocumentId",
+                        (section.ordinal - 1)::integer AS "Section",
+                        coalesce(section.value ->> 'Blocks', '0')::integer AS "Blocks"
+                    FROM
+                        books AS book
+                        JOIN "ReadingDocuments" AS document ON document."Id" = book."Id"
+                        CROSS JOIN LATERAL jsonb_array_elements(document."Structure" -> 'Sections') WITH ORDINALITY AS section (value, ordinal)
+                ),
+                totals AS (
+                    SELECT section."DocumentId", sum(section."Blocks")::integer AS "TotalBlocks" FROM sections AS section GROUP BY section."DocumentId"
+                )
                 SELECT
                     book."Id" AS "DocumentId",
                     book."Title",
@@ -66,7 +75,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                     target."Language",
                     book."Sections" AS "Total",
                     finished."Done",
-                    book."TotalBlocks",
+                    coalesce(total."TotalBlocks", 0) AS "TotalBlocks",
                     finished."DoneBlocks"
                 FROM
                     books AS book
@@ -74,7 +83,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                     CROSS JOIN LATERAL (
                         SELECT
                             count(*)::integer AS "Done",
-                            coalesce(sum(coalesce(book."Structure" -> 'Sections' -> keys."Section" ->> 'Blocks', '0')::integer), 0)::integer AS "DoneBlocks"
+                            coalesce(sum(section."Blocks"), 0)::integer AS "DoneBlocks"
                         FROM (
                             SELECT substring(cache."Path" FROM '[0-9]{5}$')::integer AS "Section"
                             FROM "ReadingResources" AS cache
@@ -86,7 +95,9 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                                 )
                             GROUP BY 1
                         ) AS keys
+                        LEFT JOIN sections AS section ON section."DocumentId" = book."Id" AND section."Section" = keys."Section"
                     ) AS finished
+                    LEFT JOIN totals AS total ON total."DocumentId" = book."Id"
                 WHERE
                     length(target."Language") BETWEEN 2 AND 3
                     AND length(book."SourceLanguage") BETWEEN 2 AND 3
