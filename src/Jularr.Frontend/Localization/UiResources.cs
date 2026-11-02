@@ -1695,6 +1695,7 @@ namespace Jularr.Frontend.Localization
             new("discover.recentlyAdded", "Recently added"),
             new("discover.pages", "Result pages"),
             new("discover.end", "No more titles."),
+            new("discover.retry", "Try again"),
             new("discover.loadFailed", "Results could not be loaded. Try again or open the next page."),
             new("hero.label", "Highlights"),
             new("hero.previous", "Previous highlight"),

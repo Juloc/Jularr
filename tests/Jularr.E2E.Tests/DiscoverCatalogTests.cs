@@ -60,7 +60,9 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/?type=movies&view=Trending");
             var cards = page.Locator("#discover-results .media-grid .media-card");
             await Assertions.Expect(cards).ToHaveCountAsync(20);
+            await Assertions.Expect(page.Locator("[data-discover-next]")).ToBeHiddenAsync();
             await ScrollUntilAsync(cards, () => page.EvaluateAsync("window.scrollTo(0, document.documentElement.scrollHeight)"));
+            await Assertions.Expect(page.Locator(".discover-skeletons")).ToHaveCountAsync(0);
             await Assertions.Expect(cards).ToHaveCountAsync(45);
             await Assertions.Expect(page.Locator(".discover-paging .discover-end")).ToHaveTextAsync("No more titles.");
             await Assertions.Expect(page.Locator("[data-discover-next]")).ToHaveCountAsync(0);

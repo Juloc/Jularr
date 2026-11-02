@@ -174,15 +174,17 @@ namespace Jularr.Frontend.Pages.User.Discover
                     if (PageNumber > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(Current with { Page = PageNumber - 1 })));
                     if (!_providerUnavailable && PageNumber < 500 && (browsing ? answered > 0 : answered >= 20))
                     {
-                        paging.Add(new A(new Text("common.next")).Class("button").Attribute("data-discover-next", "true").Attribute("data-navigation", "full")
-                            .Attribute("href", Address(Current with { Page = PageNumber + 1 })));
+                        paging.Add(new A(new Text("list.loadMore")).Class("button").Attribute("data-discover-next", "true").Attribute("data-navigation", "full")
+                            .Attribute("data-retry-label", texts["discover.retry"]).Attribute("href", Address(Current with { Page = PageNumber + 1 })));
                     }
                     else if (browsing && !_providerUnavailable)
                     {
                         paging.Add(new P(new Text("discover.end")).Class("discover-end").Attribute("role", "status"));
                     }
 
-                    page.Content.Add(new Nav([.. paging]).Class("discover-paging").Attribute("aria-label", texts["discover.pages"]));
+                    var nav = new Nav([.. paging]).Class("discover-paging").Attribute("aria-label", texts["discover.pages"]);
+                    if (paging.Count > 0) nav.Attribute("data-automatic", "");
+                    page.Content.Add(nav);
                 }
 
                 return;

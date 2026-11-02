@@ -28,12 +28,14 @@ function discover(landing = false) {
     let observed;
     let observerAction;
     let address;
+    let created = 0;
 
     function region(ids, next = null, unavailable = false, recommendations = false) {
         const cards = ids.map(id => ({ querySelector: () => ({ getAttribute: () => '/Details/' + id }) }));
         const grid = { querySelectorAll: () => cards.map(card => card.querySelector()), append: card => cards.push(card) };
         const href = next ? 'https://jularr.test/?q=Matrix&p=' + next : null;
-        const paging = { next: next ? { href, getAttribute: () => href } : null, replaceChildren: (...nodes) => { paging.next = nodes[0] ?? null; } };
+        const paging = { dataset: {}, before() {}, next: next ? { href, dataset: { retryLabel: 'Try again' }, getAttribute: () => href } : null,
+            querySelector: () => paging.next?.end ? null : paging.next, replaceChildren: (...nodes) => { paging.next = nodes[0] ?? null; } };
         const end = next ? null : { end: true };
         const feedback = { textContent: '' };
         const slots = {};
@@ -67,7 +69,9 @@ function discover(landing = false) {
             assert.equal(name, '../../../Framework/Components/MediaShelf');
             return { initializeShelves() {} };
         },
-        document: { querySelector: selector => selector.includes('search-box') ? form : active, createElement: () => popup, addEventListener: (name, action) => { documentEvents[name] = action; } },
+        document: { querySelector: selector => selector.includes('search-box') ? form : active, addEventListener: (name, action) => { documentEvents[name] = action; },
+            createElement: () => created++ === 0 ? popup : { className: '', children: [], setAttribute() {}, append(node) { this.children.push(node); }, remove() { this.removed = true; } } },
+        getComputedStyle: () => ({ gridTemplateColumns: '150px 150px 150px' }),
         window: { IntersectionObserver: Observer }, IntersectionObserver: Observer,
         AbortController, URL, Set, Error, Element, location: { href: 'https://jularr.test/' },
         FormData: class { forEach(action) { action(input.value, 'q'); action('movies', 'type'); } },
@@ -148,11 +152,15 @@ test('viewport paging appends unique cards, retains existing identities and stop
 test('failed later pages retain results and do not hammer the provider with automatic retries', async () => {
     const ui = discover();
     const initial = ui.active;
+    const paging = initial.querySelector('.discover-paging');
+    assert.equal(paging.dataset.automatic, '');
     ui.intersect();
     await ui.answer(0, ui.region([], null, true));
     assert.equal(ui.active, initial);
     assert.equal(ui.active.cards.length, 2);
     assert.equal(ui.active.feedback.textContent, 'Try again');
+    assert.equal(paging.dataset.automatic, undefined);
+    assert.equal(paging.next.textContent, 'Try again');
     assert.equal(ui.observing, false);
     ui.intersect();
     assert.equal(ui.requests.length, 1);
@@ -186,7 +194,9 @@ test('a ranking shelf adds its next page near its end and shows where it ends', 
     const ui = discover();
     const links = [{ getAttribute: () => '/Details/1' }];
     const added = [];
-    const items = { scrollWidth: 2000, clientWidth: 500, scrollLeft: 0, querySelectorAll: () => links, append: node => added.push(node) };
+    const waiting = [];
+    const items = { scrollWidth: 2000, clientWidth: 500, scrollLeft: 0, querySelectorAll: () => links,
+        append: node => (node.className?.includes('discover-skeletons') ? waiting : added).push(node) };
     const shelf = { dataset: { shelfMore: '/?type=movies&view=Trending&p=2' }, querySelectorAll: () => [] };
     const target = { closest: selector => selector === '.media-shelf__items' ? items : null };
     items.closest = () => shelf.dataset.shelfMore ? shelf : null;
@@ -200,7 +210,11 @@ test('a ranking shelf adds its next page near its end and shows where it ends', 
     assert.equal(ui.requests.length, 1);
     assert.equal(ui.requests[0].url.searchParams.get('handler'), 'Results');
     assert.equal(ui.requests[0].url.searchParams.get('p'), '2');
+    assert.equal(waiting.length, 1);
+    assert.equal(waiting[0].children.length, 3);
+    assert.equal(waiting[0].removed, undefined);
     await ui.answer(0, ui.region([1, 2], 3));
+    assert.equal(waiting[0].removed, true);
     assert.equal(added.length, 1);
     assert.equal(shelf.dataset.shelfMore, 'https://jularr.test/?q=Matrix&p=3');
 
