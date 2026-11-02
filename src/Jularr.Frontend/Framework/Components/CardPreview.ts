@@ -3,7 +3,7 @@
 // muted, lazily loaded, wide and cropped so that none of the provider's own chrome shows, with Jularr's own pause, sound and progress. Nothing is requested before
 // the delay, only one preview is open at a time, and the cards of the row never change width or position (the card under the panel is only hidden).
 
-export const previewDelay = 550;
+export const previewDelay = 2000;
 export const settleDelay = 120;
 export const dwellDelay = 2000;
 const trailerStartDelay = 210;

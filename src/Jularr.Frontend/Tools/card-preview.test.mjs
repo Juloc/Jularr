@@ -128,8 +128,8 @@ test('the preview opens only after the mouse rested on the cover, not before', a
     const w = world();
     const cover = w.art;
     w.listeners.pointerover(w.event(cover));
-    await w.advance(500);
-    assert.equal(w.fetches.length, 0, 'nothing is requested before the delay of 550 ms');
+    await w.advance(1900);
+    assert.equal(w.fetches.length, 0, 'nothing is requested before the delay of 2 s');
     await w.advance(100);
     assert.deepEqual(w.fetches, ['/MediaPreview?work=2001']);
     assert.equal(w.card.appended?.popoverOpen, true);
@@ -164,13 +164,13 @@ test('a control of the card, a touch pointer or a device without hover start not
 test('leaving the cover before the delay cancels it, and leaving later closes the panel', async () => {
     const w = world();
     w.listeners.pointerover(w.event(w.art));
-    await w.advance(300);
+    await w.advance(1500);
     w.listeners.pointerout(w.event(w.art));
     await w.advance(3000);
     assert.equal(w.fetches.length, 0);
 
     w.listeners.pointerover(w.event(w.art));
-    await w.advance(700);
+    await w.advance(2100);
     const panel = w.card.appended;
     assert.equal(panel.popoverOpen, true);
     w.listeners.pointerout(w.event(w.art));
@@ -184,7 +184,7 @@ test('scrolling, Escape, a hidden page and resizing close the preview', async ()
     for (const close of [w => w.listeners.scroll({ target: null }), w => w.listeners.keydown({ key: 'Escape' }), w => { w.env.document.hidden = true; w.listeners.visibilitychange(); }, w => w.listeners['window:resize'](), w => w.listeners['window:pagehide']()]) {
         const w = world();
             w.listeners.pointerover(w.event(w.art));
-        await w.advance(600);
+        await w.advance(2050);
     await w.advance(300);
         const panel = w.card.appended;
         assert.equal(panel.popoverOpen, true);
@@ -196,7 +196,7 @@ test('scrolling, Escape, a hidden page and resizing close the preview', async ()
 test('the trailer controls send play, pause, mute and unmute to the embed and keep their state', async () => {
     const w = world();
     w.listeners.pointerover(w.event(w.art));
-    await w.advance(600);
+    await w.advance(2050);
     await w.advance(300);
     const panel = w.card.appended;
     assert.equal(panel.dataset.playing, 'true');
@@ -223,13 +223,13 @@ test('a title without a trailer shows its description and a slow embed falls bac
     const { parse } = plain.env;
     plain.env.parse = () => { const panel = parse(); panel.dataset.trailerId = undefined; delete panel.dataset.trailerId; return panel; };
     plain.listeners.pointerover(plain.event(plain.art));
-    await plain.advance(600);
+    await plain.advance(2050);
     await plain.advance(300);
     assert.equal(plain.frames.length, 0, 'no trailer, no embed');
 
     const slow = world();
     slow.listeners.pointerover(slow.event(slow.art));
-    await slow.advance(600);
+    await slow.advance(2050);
     await slow.advance(300);
     const panel = slow.card.appended;
     assert.equal(slow.frames.length, 1);
@@ -241,7 +241,7 @@ test('a title without a trailer shows its description and a slow embed falls bac
 test('a title the server has no preview for opens nothing', async () => {
     const w = world({ answer: { ok: true, status: 204, html: '' } });
     w.listeners.pointerover(w.event(w.art));
-    await w.advance(600);
+    await w.advance(2050);
     await w.advance(300);
     assert.equal(w.fetches.length, 1);
     assert.equal(w.card.appended, undefined);
@@ -287,7 +287,7 @@ test('the time of the trailer and what the provider reports', () => {
 test('the progress line follows the provider, and without a time it falls back to the running line', async () => {
     const live = world();
     live.listeners.pointerover(live.event(live.art));
-    await live.advance(600);
+    await live.advance(2050);
     await live.advance(300);
     const panel = live.card.appended;
     const frame = live.frames[0];
@@ -310,7 +310,7 @@ test('the progress line follows the provider, and without a time it falls back t
 
     const silent = world();
     silent.listeners.pointerover(silent.event(silent.art));
-    await silent.advance(600);
+    await silent.advance(2050);
     await silent.advance(300);
     silent.frames[0].listeners.load();
     await silent.advance(4100);
@@ -322,7 +322,7 @@ test('the keyboard focus opens it after the same rest, and leaving the card clos
     w.env.document.activeElement = w.surface;
     w.surface.focusVisible = true;
     w.listeners.focusin({ target: w.surface });
-    await w.advance(500);
+    await w.advance(1900);
     assert.equal(w.fetches.length, 0);
     await w.advance(100);
     assert.equal(w.card.appended?.popoverOpen, true);
