@@ -369,7 +369,7 @@ See [Frontend UX decisions](FRONTEND_UX.md) for design tokens, layout, page iden
   messages, a running line when it reports none) above the linked title, the year, type and runtime, and two lines of description;
   description mode, for a title without a trailer: a larger title, the facts and the longer description. The foot holds the
   card's action (a pill), its heart and Details. A touch device has no hover: a card that stays in view near the middle for 2 s
-  opens the same panel by itself, one at a time, unless the profile switched `AutoplayPreviews` off (rendered as
+  opens the same panel by itself, one at a time, but only a card of a shelf, never of a grid (the panel would cover the neighbouring covers and titles of the two columns of a phone), unless the profile switched `AutoplayPreviews` off (rendered as
   `data-autoplay-previews` on `#app-content`; data saver and offline also keep it off). It closes on leave, Escape, scrolling,
   resizing, a click elsewhere, a hidden document or page navigation, and drops its frame. The cached component
   module owns the delegated handlers once across app-shell visits. List contracts carry no trailer IDs: the page asks one Work at a
