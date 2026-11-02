@@ -40,7 +40,7 @@
         margin-top: auto;
     }
 
-    &__group { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    &__group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
     &__group form { display: inline-flex; margin: 0; }
     &__group--wrap { flex-wrap: wrap; justify-content: center; }
 
