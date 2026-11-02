@@ -213,6 +213,14 @@ namespace Jularr.E2E.Tests
             start.Environment["Storage__MountRoot"] = _storage;
             start.Environment["Storage__RequireMountPoint"] = "false";
             start.Environment["DataPath"] = _data;
+
+            // The providers that need no key would otherwise be asked on the internet by the catalog worker and fill the Works with real titles
+            // (colliding with the ids and counts a test seeds); a test points them at its fakes with its settings.
+            foreach (var provider in new[] { "AniList", "MusicBrainz", "OpenLibrary", "AnimeMappings" })
+            {
+                start.Environment["Providers__" + provider] = "http://127.0.0.1:1/";
+            }
+
             foreach (var (key, value) in _settings)
             {
                 start.Environment[key.Replace(":", "__", StringComparison.Ordinal)] = value;

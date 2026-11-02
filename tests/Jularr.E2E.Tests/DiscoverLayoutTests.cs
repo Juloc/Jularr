@@ -66,7 +66,7 @@ namespace Jularr.E2E.Tests
 
                 // One highlight per type leaves one slide for each of the two types: the films read whole, the series from Discover's series list.
                 await page.Locator("button[data-drawer-pane=view]").ClickAsync();
-                await page.Locator("#discover-panel .choice-group__item", new() { HasText = "1 title" }).ClickAsync();
+                await page.Locator("#discover-panel .choice-group__item", new() { HasTextRegex = new Regex("^1$") }).ClickAsync();
                 await Assertions.Expect(page.Locator(".hero-carousel__counter")).ToHaveTextAsync("1 / 2");
                 await Evidence.SaveAsync(page, "discover-layout");
             }
