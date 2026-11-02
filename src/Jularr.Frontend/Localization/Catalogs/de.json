@@ -3570,6 +3570,10 @@
    "Request this work",
    "Dieses Werk anfragen"
   ],
+  "request.quick.failed": [
+   "The request could not be made.",
+   "Die Anfrage konnte nicht gestellt werden."
+  ],
   "request.approve": [
    "Approve",
    "Freigeben"
@@ -4126,21 +4130,9 @@
    "Highlights per type",
    "Highlights pro Medientyp"
   ],
-  "discover.hero.perType.1": [
-   "1 title",
-   "1 Titel"
-  ],
-  "discover.hero.perType.2": [
-   "2 titles",
-   "2 Titel"
-  ],
-  "discover.hero.perType.3": [
-   "3 titles",
-   "3 Titel"
-  ],
-  "discover.hero.max": [
-   "Maximum highlights",
-   "Maximale Highlights"
+  "discover.hero.empty": [
+   "No highlights yet",
+   "Noch keine Highlights"
   ],
   "discover.hero.continue": [
    "Include continue",
@@ -4429,6 +4421,10 @@
   "search.global": [
    "Search movies and series",
    "Filme und Serien suchen"
+  ],
+  "search.all": [
+   "All results for “{0}”",
+   "Alle Ergebnisse für „{0}“"
   ],
   "library.scope.all": [
    "All",
@@ -8119,6 +8115,10 @@
   "errors.authentication_required": [
    "Please sign in to continue.",
    "Bitte melde dich an, um fortzufahren."
+  ],
+  "errors.invalid_credentials": [
+   "Wrong username or password.",
+   "Benutzername oder Passwort falsch."
   ],
   "errors.permission_denied": [
    "You do not have permission to perform this action.",
@@ -13358,6 +13358,18 @@
   "works.search": [
    "Search titles",
    "Titel suchen"
+  ],
+  "works.sort": [
+   "Sort by",
+   "Sortieren nach"
+  ],
+  "works.sort.ascending": [
+   "Ascending, turn to descending",
+   "Aufsteigend, auf absteigend umschalten"
+  ],
+  "works.sort.descending": [
+   "Descending, turn to ascending",
+   "Absteigend, auf aufsteigend umschalten"
   ],
   "works.filter.drawer": [
    "Filters",

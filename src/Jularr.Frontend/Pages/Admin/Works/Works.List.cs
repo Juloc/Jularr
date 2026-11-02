@@ -22,7 +22,9 @@ namespace Jularr.Frontend.Pages.Admin.Works
 
         private static readonly WorkListStatus[] Statuses = [WorkListStatus.Available, WorkListStatus.Missing, WorkListStatus.Downloading, WorkListStatus.Unmonitored];
 
-        private bool Filtered => TypeFilter is not null || MonitoredFilter is not null || StatusFilter is not null || LibraryFilter is not null || ProfileFilter is not null || !string.IsNullOrEmpty(QueryFilter);
+        private bool Filtered => FilteredBesidesQuery || !string.IsNullOrEmpty(QueryFilter);
+
+        private bool FilteredBesidesQuery => TypeFilter is not null || MonitoredFilter is not null || StatusFilter is not null || LibraryFilter is not null || ProfileFilter is not null;
 
         // The filters of the drawer (the chips and the title field are the list's own controls).
         private bool DrawerFiltered => TypeFilter is not null || MonitoredFilter is not null || LibraryFilter is not null || ProfileFilter is not null;
@@ -31,6 +33,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
         private bool Selectable => CanManageWanted || CanManageMedia;
 
         // The address of the list with its filters and order, or of a handler that returns to it; paging, sorting and the chosen chip change one part of it.
+        // Clearing the filters keeps the search words unless they are the only filter left.
         private string Address(string? handler = null, int? pageNumber = null, WorkSortType? sort = null, bool? descending = null, bool clearFilters = false, WorkListStatus? status = null, bool anyStatus = false, WorksViewType? view = null)
         {
             var values = new List<string>();
@@ -48,10 +51,15 @@ namespace Jularr.Frontend.Pages.Admin.Works
                 Add("profile", ProfileFilter?.ToString(CultureInfo.InvariantCulture));
                 Add("q", QueryFilter);
             }
+            else if (FilteredBesidesQuery)
+            {
+                Add("q", QueryFilter);
+            }
 
             var order = sort ?? Sort;
-            Add("sort", order == WorkSortType.Title ? null : ((byte)order).ToString(CultureInfo.InvariantCulture));
-            Add("desc", (descending ?? Descending) ? "true" : null);
+            var descends = descending ?? (sort is null ? IsDescending : DescendsFirst(order));
+            Add("sort", order == WorkSortType.Added ? null : ((byte)order).ToString(CultureInfo.InvariantCulture));
+            Add("desc", descends == DescendsFirst(order) ? null : descends ? "true" : "false");
             if (pageNumber is > 1) Add("pageNumber", pageNumber.Value.ToString(CultureInfo.InvariantCulture));
             Add("view", view?.ToString());
             Add("handler", handler);
@@ -59,6 +67,13 @@ namespace Jularr.Frontend.Pages.Admin.Works
         }
 
         private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);
+
+        // The order of the list as address values, left out where it is the first one.
+        private void KeepOrder(IDictionary<string, string> values)
+        {
+            if (Sort != WorkSortType.Added) values["sort"] = ((byte)Sort).ToString(CultureInfo.InvariantCulture);
+            if (IsDescending != DescendsFirst(Sort)) values["desc"] = IsDescending ? "true" : "false";
+        }
 
         private static HtmlElement Choice(string value, IUiComponent label, bool selected)
         {
@@ -85,22 +100,37 @@ namespace Jularr.Frontend.Pages.Admin.Works
             var chips = new List<NavigationTab> { new("common.all", Address(anyStatus: true), StatusFilter is null, Count: _summary?.TotalCount, Icon: Glyph("layers", 14)) };
             chips.AddRange(Statuses.Select(status => new NavigationTab("works.status." + status, Address(status: status), StatusFilter == status, Count: CountOf(status), Icon: Glyph(StatusIcon(status), 14))));
 
+            // The search keeps the filters and the order, the order keeps the filters and the search.
             var inv = CultureInfo.InvariantCulture;
-            var keep = new Dictionary<string, string>();
-            if (TypeFilter is { } type) keep["type"] = ((byte)type).ToString(inv);
-            if (MonitoredFilter is { } monitored) keep["monitored"] = monitored ? "true" : "false";
-            if (StatusFilter is { } status2) keep["status"] = ((byte)status2).ToString(inv);
-            if (LibraryFilter is { } library) keep["library"] = library.ToString(inv);
-            if (ProfileFilter is { } profile) keep["profile"] = profile.ToString(inv);
-            if (Sort != WorkSortType.Title) keep["sort"] = ((byte)Sort).ToString(inv);
-            if (Descending) keep["desc"] = "true";
+            var filtered = new Dictionary<string, string>();
+            if (TypeFilter is { } type) filtered["type"] = ((byte)type).ToString(inv);
+            if (MonitoredFilter is { } monitored) filtered["monitored"] = monitored ? "true" : "false";
+            if (StatusFilter is { } status2) filtered["status"] = ((byte)status2).ToString(inv);
+            if (LibraryFilter is { } library) filtered["library"] = library.ToString(inv);
+            if (ProfileFilter is { } profile) filtered["profile"] = profile.ToString(inv);
+            var keep = new Dictionary<string, string>(filtered);
+            KeepOrder(keep);
+            if (!string.IsNullOrEmpty(QueryFilter)) filtered["q"] = QueryFilter;
 
             var filters = Drawer.Opener(new Button(Glyph("filter", 16)).IconOnly(texts["works.filter.drawer"]), "works-filter");
             if (DrawerFiltered) filters.Class("button button--icon button--soft");
             var views = new ViewSwitch("works.views", [new ViewChoice("works.view.Posters", Address(view: WorksViewType.Posters), Glyph("grid", 16), _view == WorksViewType.Posters),
                 new ViewChoice("works.view.Overview", Address(view: WorksViewType.Overview), Glyph("overview", 16), _view == WorksViewType.Overview),
                 new ViewChoice("works.view.Table", Address(view: WorksViewType.Table), Glyph("table", 16), _view == WorksViewType.Table)]);
-            return new ListToolbar(AdminMenu.Row(texts, Request, chips, ariaLabelKey: "works.filters"), new SearchBox("/Admin/Works", "works.search", QueryFilter, keep, null, Glyph("search", 15)), views, filters);
+            return new ListToolbar(AdminMenu.Row(texts, Request, chips, ariaLabelKey: "works.filters"), new SearchBox("/Admin/Works", "works.search", QueryFilter, keep, null, Glyph("search", 15), live: true),
+                SortControls(filtered), views, filters);
+        }
+
+        // The order of every view: a choice of what it sorts by, each in its first direction, and the arrow that turns the direction.
+        private IUiComponent SortControls(IReadOnlyDictionary<string, string> keep)
+        {
+            (WorkSortType Sort, string LabelKey)[] orders = [(WorkSortType.Added, "works.col.added"), (WorkSortType.Title, "media.title"), (WorkSortType.Type, "works.col.type"),
+                (WorkSortType.Year, "works.col.year"), (WorkSortType.Size, "works.col.size"), (WorkSortType.Files, "works.col.files")];
+            var choices = orders.Select(order => new ChoiceOption(order.LabelKey, ((byte)order.Sort).ToString(CultureInfo.InvariantCulture), order.Sort == Sort)).ToList();
+            var label = IsDescending ? "works.sort.descending" : "works.sort.ascending";
+            var direction = new A(Glyph("arrow-up", 16)).Class("button button--icon works-sort__direction" + (IsDescending ? " works-sort__direction--down" : ""))
+                .Attribute("href", Address(descending: !IsDescending)).TextAttribute("aria-label", label).TextAttribute("title", label);
+            return new Div(new ChoiceSelect("/Admin/Works", "sort", "works.sort", choices, keep), direction).Class("works-sort");
         }
 
         // The icon and tone of a state, as its chip and its chips' filter say it.
@@ -132,10 +162,11 @@ namespace Jularr.Frontend.Pages.Admin.Works
                 body.Add(Field("profile", "works.col.profile", FilterSelect("profile", "works.filter.profile", ProfileFilter?.ToString(inv), _profiles.Select(profile => (profile.Id.ToString(inv), (IUiComponent)new ValueText(profile.Name))))));
             }
 
-            if (StatusFilter is { } status) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "status").Attribute("value", ((byte)status).ToString(inv)));
-            if (Sort != WorkSortType.Title) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "sort").Attribute("value", ((byte)Sort).ToString(inv)));
-            if (Descending) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "desc").Attribute("value", "true"));
-            if (!string.IsNullOrEmpty(QueryFilter)) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "q").Attribute("value", QueryFilter));
+            var kept = new Dictionary<string, string>();
+            if (StatusFilter is { } status) kept["status"] = ((byte)status).ToString(inv);
+            KeepOrder(kept);
+            if (!string.IsNullOrEmpty(QueryFilter)) kept["q"] = QueryFilter;
+            body.AddRange(kept.Select(value => new Input().Attribute("type", "hidden").Attribute("name", value.Key).Attribute("value", value.Value)));
 
             var footer = new List<IUiComponent> { new Button(new Text("works.filter.apply")).Primary().Submit() };
             if (DrawerFiltered) footer.Insert(0, new A(new Text("works.filter.clear")).Class("button").Attribute("href", AddressWithoutDrawerFilters()));
@@ -145,12 +176,11 @@ namespace Jularr.Frontend.Pages.Admin.Works
         // The list without the drawer's filters: the chip, the words and the order stay.
         private string AddressWithoutDrawerFilters()
         {
-            var values = new List<string>();
-            if (StatusFilter is { } status) values.Add("status=" + ((byte)status).ToString(CultureInfo.InvariantCulture));
-            if (!string.IsNullOrEmpty(QueryFilter)) values.Add("q=" + Uri.EscapeDataString(QueryFilter));
-            if (Sort != WorkSortType.Title) values.Add("sort=" + ((byte)Sort).ToString(CultureInfo.InvariantCulture));
-            if (Descending) values.Add("desc=true");
-            return "/Admin/Works" + (values.Count == 0 ? "" : "?" + string.Join('&', values));
+            var values = new Dictionary<string, string>();
+            if (StatusFilter is { } status) values["status"] = ((byte)status).ToString(CultureInfo.InvariantCulture);
+            if (!string.IsNullOrEmpty(QueryFilter)) values["q"] = QueryFilter;
+            KeepOrder(values);
+            return "/Admin/Works" + (values.Count == 0 ? "" : "?" + string.Join('&', values.Select(value => value.Key + "=" + Uri.EscapeDataString(value.Value))));
         }
 
         private static IUiComponent Field(string name, string titleKey, IUiComponent control) =>
@@ -242,14 +272,15 @@ namespace Jularr.Frontend.Pages.Admin.Works
             }
 
             columns.Add(new ListColumn("common.actions", ListRole.Actions, Key: "actions", Width: "minmax(130px, 1fr)", Fixed: true));
-            var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text(Filtered ? "works.emptyFiltered" : "media.empty")),
-                Filtered ? new A(new Text("works.filter.clear")).Class("button button--soft button--compact").Attribute("href", Address(clearFilters: true)) : new Span());
+            var clear = new A(new Text("works.filter.clear")).Class("button button--soft button--compact").Attribute("href", Address(clearFilters: true));
+            if (!FilteredBesidesQuery) clear.Attribute("data-search-clear", "");
+            var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text(Filtered ? "works.emptyFiltered" : "media.empty")), Filtered ? clear : new Span());
             return new ListPanel("works.list", columns, [.. items.Select(item => Row(item, csrf))], empty).Modifier("works-list").Pickable("works");
         }
 
         // A head that sorts: the link sets the order, the current one shows its arrow.
         private IUiComponent SortHead(string labelKey, WorkSortType order) =>
-            ListPanel.SortLink(labelKey, Address(sort: order, descending: Sort == order && !Descending), Sort == order ? (Descending ? "descending" : "ascending") : null);
+            ListPanel.SortLink(labelKey, Address(sort: order, descending: Sort == order ? !IsDescending : DescendsFirst(order)), Sort == order ? (IsDescending ? "descending" : "ascending") : null);
 
         // The title's head holds the select-all box where the rows hold theirs.
         private IUiComponent TitleHead()

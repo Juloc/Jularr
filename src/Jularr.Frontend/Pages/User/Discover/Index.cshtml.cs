@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Home.V1;
@@ -28,8 +30,12 @@ namespace Jularr.Frontend.Pages.User.Discover
         private static readonly TimeSpan ShelfLimit = TimeSpan.FromSeconds(8);
         private static readonly TimeSpan HeroLimit = TimeSpan.FromSeconds(2.5);
         private static readonly TimeSpan SlowShelf = TimeSpan.FromMilliseconds(700);
+        private const int SearchRowSize = 20;
 
         private const string HeroPreferences = "discover-hero";
+
+        // The most highlights of one type a device can choose to show.
+        private const int HeroPerType = 5;
 
         // Narō's catalog name: its titles are web novels, not published light novels.
         private const string WebNovelSource = "syosetu";
@@ -39,11 +45,14 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IReadOnlyList<DiscoverItemV1>? _results;
         private IReadOnlyList<(DiscoverScopeV1 Scope, DiscoverCatalogItemV1 Item)>? _catalog;
         private IReadOnlyList<ContinueItemV1> _continue = [];
+        private string? _csrf;
         private IReadOnlyList<HeroSlide> _hero = [];
         private IReadOnlyList<LibraryItemV1> _recent = [];
         private readonly Dictionary<long, WorkAvailabilityStateV1> _availabilityByWork = [];
         private IReadOnlyList<HomeShelfV1> _layout = [.. Enum.GetValues<HomeShelfType>().Select(type => new HomeShelfV1(type, false))];
         private bool _providerUnavailable;
+        private bool _searchIncomplete;
+        private IReadOnlyList<DiscoverSuggestionV1> _known = [];
         private string _providerNotice = "discover.providerUnavailable";
         private IReadOnlyList<DiscoverScopeV1>? _scopes;
         private string? _feed;
@@ -122,7 +131,9 @@ namespace Jularr.Frontend.Pages.User.Discover
             page.Asset("Pages/User/Discover/Index.entry.ts");
             page.Asset("Pages/User/Discover/Controls.entry.ts");
             page.Asset("Framework/Components/Drawer.entry.ts");
+            page.Asset("Framework/Components/LiveProgress.entry.ts");
             page.Asset("Framework/Components/ChoiceSelect.entry.ts");
+            page.Asset("Framework/Components/LiveSearch.entry.ts");
 
             // One server-rendered result region.
             var body = new Page();
@@ -148,6 +159,16 @@ namespace Jularr.Frontend.Pages.User.Discover
             if (_providerUnavailable && (_results is not null || _catalog is not null))
             {
                 page.Content.Add(new P(new Text(_providerNotice)).Attribute("role", "status"));
+            }
+
+            // A search of several types shows each type as its own row.
+            if (searching && selected is null)
+            {
+                if (_searchIncomplete) page.Content.Add(new P(new Text("discover.providerUnavailable")).Attribute("role", "status"));
+                var rows = SearchRows();
+                if (rows.Count == 0) page.Content.Add(new P(new Text("discover.noResults")).Attribute("role", "status"));
+                page.Content.AddRange(rows);
+                return;
             }
 
             // Every result is a Work and opens its page.
@@ -182,16 +203,14 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return;
             }
 
-            // The highlights are part of the initial response, never a late insertion above the shelves.
-            if (_hero.Count > 0)
-            {
-                page.Content.Add(new HeroCarousel(assets, _hero, HeroPreferences));
-            }
+            // The highlights are part of the initial response, never a late insertion above the shelves; they keep their place when nothing is highlighted.
+            page.Content.Add(new HeroCarousel(assets, _hero, HeroPreferences, "discover.hero.empty"));
 
             page.Content.Add(Toolbar());
+            if (texts.CanRequest()) page.Content.Add(MediaAvailability.RequestTemplates(assets));
 
             // Watching, listening and reading continue on their own shelves, in the profile's order.
-            var continuing = _continue.Where(item => MediaTypeChosen(item.MediaTypeId)).ToList();
+            var continuing = _continue.Where(item => MediaTypeChosen(item.MediaTypeId, item.MediaSubtypeId)).ToList();
             var canPlay = texts.CanPlay();
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             foreach (var shelf in _layout.Where(shelf => !shelf.IsHidden))
@@ -210,7 +229,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                     HomeShelfType.ContinueListening => ContinueShelf("discover.continueListening", canPlay ? continuing.Where(item => item.MediaAssetTypeId == MediaAssetType.Audio) : []),
                     HomeShelfType.ContinueReading => ContinueShelf("media.continueReading",
                         texts.CanRead() ? continuing.Where(item => ReadableMedia.IsReadable(item.MediaAssetTypeId)) : []),
-                    HomeShelfType.RecentlyAdded => new MediaShelf(assets, "discover.recentlyAdded", "/Library", [.. _recent.Where(item => MediaTypeChosen(item.MediaTypeId)).Select(item => MediaCard.For(assets, item)
+                    HomeShelfType.RecentlyAdded => new MediaShelf(assets, "discover.recentlyAdded", "/Library", [.. _recent.Where(item => MediaTypeChosen(item.MediaTypeId, item.MediaSubtypeId)).Select(item => MediaCard.For(assets, item)
                         .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]),
                     _ => Recommendations()
                 });
@@ -319,7 +338,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             return new DrawerPane("filter", "discover.tab.filter", "discover.filter.title", "filter", body,
             [
-                new A(new Text("discover.reset")).Class("button").Attribute("href", "/"),
+                new A(new Text("discover.reset")).Class("button").Attribute("href", Address(new State([], null, null, null, null, Query?.Trim(), null, 1))),
                 new Button(new Icon("check", assets, 16), new Text("discover.applyClose")).Primary().Submit()
             ], "/");
         }
@@ -328,10 +347,8 @@ namespace Jularr.Frontend.Pages.User.Discover
         private DrawerPane ViewPane() => new("view", "discover.tab.view", "discover.view.title", "sliders",
         [
             new Div(
-                new ChoiceGroup(assets, "discover.hero.perType", "hero-perType", [new("1", false, "discover.hero.perType.1"), new("2", true, "discover.hero.perType.2"), new("3", false, "discover.hero.perType.3")],
+                new ChoiceGroup(assets, "discover.hero.perType", "hero-perType", [.. Enumerable.Range(1, HeroPerType).Select(count => new ChoicePick(count.ToString(CultureInfo.InvariantCulture), count == 3))],
                     new ChoiceOptions(Attributes: new Dictionary<string, string> { ["data-hero-pref"] = "perType" })),
-                new ChoiceGroup(assets, "discover.hero.max", "hero-max", [new("8", false), new("19", true), new("27", false), new("0", false, "discover.all")],
-                    new ChoiceOptions(Minor: true, Attributes: new Dictionary<string, string> { ["data-hero-pref"] = "max" })),
                 new Div(HeroToggle("discover.hero.continue", "withContinue"), HeroToggle("discover.hero.auto", "auto")).Class("discover-switches")).Class("drawer__section"),
             new ChoiceGroup(assets, "discover.layout", "discover-layout", [new("rows", true, "discover.layout.rows"), new("grid", false, "discover.layout.grid")],
                 new ChoiceOptions(Attributes: new Dictionary<string, string> { ["data-discover-layout-choice"] = "" }))
@@ -421,29 +438,62 @@ namespace Jularr.Frontend.Pages.User.Discover
             return Partial("_UiComponent", Definition.Content[0]);
         }
 
-        // Titles Discover keeps, while typing; each opens its Work.
+        // Titles Discover keeps, while typing in the header search: grouped by type in the service's order, each opening its Work, then all results.
         public async Task<IActionResult> OnGetSuggestionsAsync()
         {
             if (!texts.CanReadMedia()) return Forbid();
-            if (string.IsNullOrWhiteSpace(Query)) return Partial("_UiComponent", new Div().Class("discover-suggestions__list"));
+            if (string.IsNullOrWhiteSpace(Query)) return Partial("_UiComponent", new Div().Class("app-search__results"));
 
             await LoadListedAsync();
             var found = await suggest.ExecuteAsync<BaseDataList<DiscoverSuggestionV1>>(new SuggestDiscoverDataV1(Query, Selected?.Slug), HttpContext.RequestAborted);
-            return Partial("_UiComponent", new Div([.. found.Where(item => Chosen.Any(scope => scope.Slug == item.ScopeSlug)).Select(Suggestion)]).Class("discover-suggestions__list")
-                .Attribute("aria-label", texts["discover.suggestions"]));
+            var groups = found.Where(item => Chosen.Any(scope => scope.Slug == item.ScopeSlug)).GroupBy(item => item.ScopeSlug).Select(group => new Div([
+                new A(new Icon(MediaAreas.Icons.GetValueOrDefault(group.Key, "search"), assets, 16), new Span(new Text("discover.type." + group.Key)).Class("app-search__type"),
+                    new Span(new Text("common.seeAll"), new Icon("chevron-right", assets, 14)).Class("app-search__more"))
+                    .Class("app-search__head").Attribute("href", Address(Current with { Types = [group.Key], Page = 1 })),
+                .. group.Select(Suggestion)]).Class("app-search__group"));
+            var all = new A(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["search.all"], Query.Trim()))).Class("app-search__all").Attribute("href", Address(Current with { Page = 1 }));
+            return Partial("_UiComponent", new Div([.. groups, all]).Class("app-search__results").Attribute("aria-label", texts["discover.suggestions"]));
         }
 
         private IUiComponent Suggestion(DiscoverSuggestionV1 item)
         {
-            var scope = Listed.First(scope => scope.Slug == item.ScopeSlug);
-            var href = "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture);
-            var meta = texts["discover.type." + scope.Slug] + (item.ReleaseYear is { } year ? " · " + year.ToString(CultureInfo.InvariantCulture) : "");
             IUiComponent poster = item.PosterUrl is { } url
-                ? new Img().Class("discover-suggestion__poster").Attribute("data-no-cover", "poster").Attribute("src", CoverPaths.Sized(url, 96)).Attribute("alt", "").Attribute("loading", "lazy")
-                : new NoCover(assets, NoCoverKind.Poster, "discover-suggestion__poster");
-            return new A(poster, new Span(new Strong(new ValueText(item.Title)), new Span(new ValueText(meta))).Class("discover-suggestion__text"),
-                new Span(new Icon("chevron-left", assets, 16)).Class("discover-suggestion__arrow"))
-                .Class("discover-suggestion").Attribute("href", href);
+                ? new Img().Class("app-search__poster").Attribute("data-no-cover", "poster").Attribute("src", CoverPaths.Sized(url, 120)).Attribute("alt", "").Attribute("loading", "lazy")
+                : new NoCover(assets, NoCoverKind.Poster, "app-search__poster");
+            // Year · genre · rating as on the cards; whatever is unknown is left out.
+            var facts = new List<IUiComponent>();
+            if (item.ReleaseYear is { } year) facts.Add(new Span(new ValueText(year.ToString(CultureInfo.InvariantCulture))).Class("app-search__fact"));
+            if (item.Genre is { } genre) facts.Add(new Span(new ValueText(genre)).Class("app-search__fact"));
+            if (item.Rating is { } rating) facts.Add(new Span(new Icon("star", assets, 11), new ValueText(rating.ToString("0.0", CultureInfo.CurrentCulture))).Class("app-search__fact"));
+            if (item.MediaStateTypeId == MediaStateType.Available) facts.Add(new Span(new Text("discover.known")).Class("app-search__known"));
+            return new A(poster, new Span(new Strong([.. Highlighted(item.Title)]), new Span([.. facts]).Class("app-search__facts")).Class("app-search__text"))
+                .Class("app-search__hit").Attribute("href", "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture));
+        }
+
+        // The typed words marked in a title, each where it begins a word of the title, else where it first appears.
+        private IEnumerable<IUiComponent> Highlighted(string title)
+        {
+            var marks = new List<(int Start, int End)>();
+            foreach (var word in Regex.Matches(Query!, @"[\p{L}\p{N}]+").Select(match => match.Value))
+            {
+                var first = title.IndexOf(word, StringComparison.CurrentCultureIgnoreCase);
+                var at = first;
+                while (at > 0 && char.IsLetterOrDigit(title[at - 1])) at = title.IndexOf(word, at + 1, StringComparison.CurrentCultureIgnoreCase);
+                var start = at >= 0 ? at : first;
+                if (start >= 0) marks.Add((start, Math.Min(start + word.Length, title.Length)));
+            }
+
+            var written = 0;
+            foreach (var (start, end) in marks.OrderBy(mark => mark.Start))
+            {
+                if (end <= written) continue;
+                var from = Math.Max(start, written);
+                if (from > written) yield return new ValueText(title[written..from]);
+                yield return new Mark(new ValueText(title[from..end]));
+                written = end;
+            }
+
+            if (written < title.Length) yield return new ValueText(title[written..]);
         }
 
         public async Task<IActionResult> OnGetRecommendationsAsync()
@@ -513,24 +563,27 @@ namespace Jularr.Frontend.Pages.User.Discover
                 _layout = await readLayout.ExecuteAsync<BaseDataList<HomeShelfV1>>(new HomeLayoutParametersV1(), HttpContext.RequestAborted);
             }
 
+            // The highlights continue and fill up from the same reads as the shelves, also while those shelves are hidden.
+            var hero = View is null && string.IsNullOrWhiteSpace(Query);
             var shown = _layout.Where(shelf => !shelf.IsHidden).Select(shelf => shelf.HomeShelfTypeId).ToHashSet();
-            var continueTask = ReadWhenAsync((texts.CanPlay() || texts.CanRead()) && shown.Overlaps([HomeShelfType.ContinueWatching, HomeShelfType.ContinueListening, HomeShelfType.ContinueReading]),
+            var continueTask = ReadWhenAsync((texts.CanPlay() || texts.CanRead()) && (hero || shown.Overlaps([HomeShelfType.ContinueWatching, HomeShelfType.ContinueListening, HomeShelfType.ContinueReading])),
                 () => continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted));
 
-            // One chosen type narrows the read; several are filtered when shown.
-            var recentType = Chosen.Select(scope => scope.MediaTypeId).Distinct().ToList() is [var single] ? single : (MediaType?)null;
-            var recentTask = ReadWhenAsync(shown.Contains(HomeShelfType.RecentlyAdded),
-                () => library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(recentType is { } only ? [only] : null, pageSize: 20), HttpContext.RequestAborted));
+            // The chosen types narrow the read: a type without its subtypes, a subtype across its types.
+            var recentTypes = IsAll ? null : Chosen.Where(scope => scope.MediaSubtypeId is null).Select(scope => scope.MediaTypeId).ToArray();
+            var recentSubtypes = IsAll ? null : Chosen.Where(scope => scope.MediaSubtypeId is not null).Select(scope => scope.MediaSubtypeId!.Value).ToArray();
+            var recentTask = ReadWhenAsync(hero || shown.Contains(HomeShelfType.RecentlyAdded),
+                () => library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(recentTypes, pageSize: 20, mediaSubtypeIds: recentSubtypes), HttpContext.RequestAborted));
             var heroFeed = Feed is null ? DiscoverFeedType.Trending : FeedType;
-            var keptTask = ReadWhenAsync(View is null && string.IsNullOrWhiteSpace(Query) && heroFeed is not null,
+            var keptTask = ReadWhenAsync(hero && heroFeed is not null,
                 () => readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(new ReadDiscoverShelvesDataV1(selected?.Slug), HttpContext.RequestAborted));
             await Task.WhenAll(continueTask, recentTask, keptTask);
 
             _continue = (await continueTask) ?? _continue;
             _recent = (await recentTask)?.Items ?? _recent;
-            if (View is null && string.IsNullOrWhiteSpace(Query))
+            if (hero)
             {
-                await LoadHeroAsync(selected, await keptTask);
+                await LoadHeroAsync(await keptTask);
             }
         }
 
@@ -543,6 +596,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             var ids = (_results ?? []).Concat(_shelves.SelectMany(shelf => shelf.Items)).Select(item => item.WorkId)
                 .Concat((_catalog ?? []).Select(entry => entry.Item.WorkId))
                 .Concat(_catalogShelves.SelectMany(shelf => shelf.Items).Select(item => item.WorkId))
+                .Concat(_known.Select(item => item.WorkId))
                 .Distinct().ToArray();
             foreach (var batch in ids.Chunk(500))
             {
@@ -551,7 +605,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
         }
 
-        // One scope searches its own catalog or TMDB; several search each catalog chosen and TMDB's answers for their types.
+        // One scope searches its own catalog or TMDB and pages; several ask each chosen catalog and TMDB for films and series together, once,
+        // and a provider that fails leaves the other rows.
         private async Task SearchAsync(DiscoverScopeV1? selected)
         {
             if (selected is { IsCatalog: true })
@@ -561,83 +616,141 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return;
             }
 
-            if (selected is not null || IsAll)
+            if (selected is not null)
             {
-                _results = await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query!, selected?.MediaTypeId, PageNumber), HttpContext.RequestAborted);
+                _results = await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query!, selected.MediaTypeId, PageNumber), HttpContext.RequestAborted);
                 return;
             }
 
-            var found = new List<(DiscoverScopeV1 Scope, DiscoverCatalogItemV1 Item)>();
-            foreach (var scope in Chosen.Where(scope => scope.IsCatalog))
-            {
-                found.AddRange((await catalogSearch.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new SearchDiscoverCatalogDataV1(scope.MediaTypeId, Query!, scope.MediaSubtypeId),
-                    HttpContext.RequestAborted)).Select(item => (scope, item)));
-            }
+            // The titles Jularr keeps answer too, so what the suggestions showed is never missing when a provider does not answer.
+            var known = suggest.ExecuteAsync<BaseDataList<DiscoverSuggestionV1>>(new SuggestDiscoverDataV1(Query!), HttpContext.RequestAborted);
+            using var gate = new SemaphoreSlim(ShelfConcurrency);
+            var catalogs = Chosen.Where(scope => scope.IsCatalog).Select(scope => SearchLimitedAsync(gate, async token =>
+                (await catalogSearch.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new SearchDiscoverCatalogDataV1(scope.MediaTypeId, Query!, scope.MediaSubtypeId), token))
+                    .Select(item => (scope, item)).ToList())).ToList();
+            var provider = Chosen.Any(scope => !scope.IsCatalog)
+                ? SearchLimitedAsync(gate, token => search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query!), token))
+                : Task.FromResult<BaseDataList<DiscoverItemV1>?>(new BaseDataList<DiscoverItemV1>([]));
+            await Task.WhenAll(catalogs.Cast<Task>().Append(provider).Append(known));
 
-            if (Chosen.Any(scope => !scope.IsCatalog))
-            {
-                _results = [.. (await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query!, null, PageNumber), HttpContext.RequestAborted))
-                    .Where(item => Chosen.Any(scope => !scope.IsCatalog && scope.MediaTypeId == item.MediaTypeId))];
-            }
+            _catalog = [.. catalogs.SelectMany(task => task.Result ?? [])];
+            _results = provider.Result is { } found ? [.. found] : [];
+            _searchIncomplete = provider.Result is null || catalogs.Any(task => task.Result is null);
+            _known = await known;
+        }
 
-            _catalog = found.Count > 0 || _results is null ? found : null;
+        // One provider's search within the shared limits; null when it failed or answered too late.
+        private async Task<TResult?> SearchLimitedAsync<TResult>(SemaphoreSlim gate, Func<CancellationToken, Task<TResult>> read) where TResult : class
+        {
+            var requestAborted = HttpContext.RequestAborted;
+            await gate.WaitAsync(requestAborted);
+            try
+            {
+                using var limit = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
+                limit.CancelAfter(ShelfLimit);
+                return await read(limit.Token);
+            }
+            catch (Exception exception) when (exception is ServiceUnavailableException || exception is OperationCanceledException && !requestAborted.IsCancellationRequested)
+            {
+                log.LogWarning("Discover search answered nothing: {Reason}", exception.Message);
+                return null;
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        // Each chosen type's results as one row: the kept titles, then the providers' others; the best match first and local titles before others that match
+        // as well (a chosen sort replaces this). The type with the best match leads, then the order of the media-type bar. See all searches that type alone.
+        private List<MediaShelf> SearchRows()
+        {
+            var text = Query!.Trim();
+            int Relevance(string title) => title.Equals(text, StringComparison.CurrentCultureIgnoreCase) ? 0 : title.StartsWith(text, StringComparison.CurrentCultureIgnoreCase) ? 1 : 2;
+
+            var rows = Chosen.Select((scope, order) =>
+            {
+                var kept = _known.Where(item => item.ScopeSlug == scope.Slug
+                        && Fits(item.MediaStateTypeId == MediaStateType.Available, item.MediaStateTypeId is null or MediaStateType.NotRequested, item.ReleaseYear))
+                    .Select(item => (item.WorkId, item.Title, item.ReleaseYear, Local: item.MediaStateTypeId == MediaStateType.Available, Card: KnownCard(scope, item)));
+                var found = scope.IsCatalog
+                    ? Filtered((_catalog ?? []).Where(entry => entry.Scope == scope))
+                        .Select(entry => (entry.Item.WorkId, entry.Item.Title, entry.Item.ReleaseYear, Local: entry.Item.MediaStateTypeId == MediaStateType.Available, Card: CatalogCard(scope, entry.Item)))
+                    : Filtered((_results ?? []).Where(item => item.MediaTypeId == scope.MediaTypeId))
+                        .Select(item => (item.WorkId, item.Title, item.ReleaseYear, Local: item.MediaStateTypeId == MediaStateType.Available, Card: Card(item)));
+                var hits = kept.Concat(found).DistinctBy(hit => hit.WorkId);
+                var ordered = (Sort switch
+                {
+                    "newest" => hits.OrderByDescending(hit => hit.ReleaseYear),
+                    "az" => hits.OrderBy(hit => hit.Title, StringComparer.CurrentCultureIgnoreCase),
+                    _ => hits.OrderBy(hit => Relevance(hit.Title)).ThenBy(hit => !hit.Local)
+                }).Take(SearchRowSize).ToList();
+                return (Scope: scope, Order: order, Hits: ordered);
+            }).Where(row => row.Hits.Count > 0).OrderBy(row => row.Hits.Min(hit => Relevance(hit.Title))).ThenBy(row => row.Order);
+
+            return [.. rows.Select(row => new MediaShelf(assets, "discover.type." + row.Scope.Slug, Address(Current with { Types = [row.Scope.Slug], Page = 1 }), [.. row.Hits.Select(hit => hit.Card)]))];
         }
 
         private async Task LoadListedAsync() =>
             _scopes ??= await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
 
-        // Continued titles first, then each chosen type's best titles of the feed, one rank after the other across the types.
-        // Read from the whole catalogs; series, which TheTVDB never gives whole, from Discover's series list (kept or asked live); one source of the first other type
-        // answers when none was found.
-        private async Task LoadHeroAsync(DiscoverScopeV1? selected, BaseDataList<DiscoverShelfV1>? kept)
+        // Per chosen type its continued titles, then its best titles of the feed, then what the library added last, each title once; the device shows the first few
+        // of each type, one place after the other across the types. Read from the whole catalogs; series, which TheTVDB never gives whole, from Discover's series list
+        // (kept or asked live); one source of the first other type answers when none was found.
+        private async Task LoadHeroAsync(BaseDataList<DiscoverShelfV1>? kept)
         {
-            var slides = new List<HeroSlide>();
-            if (Feed is null or "continue")
-            {
-                foreach (var item in _continue.Where(item => MediaTypeChosen(item.MediaTypeId)).Take(2))
-                {
-                    var scope = Chosen.FirstOrDefault(scope => scope.MediaTypeId == item.MediaTypeId);
-                    var readable = ReadableMedia.IsReadable(item.MediaAssetTypeId);
-                    var listening = item.MediaAssetTypeId == MediaAssetType.Audio;
-                    slides.Add(new HeroSlide(item.Title, null, item.PosterUrl, Overline(scope, "discover.feed.Continue"), null,
-                        readable ? "discover.action.continueRead" : listening ? "discover.action.continueHear" : "media.continue",
-                        (readable ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture), readable ? "book" : "play",
-                        "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), scope?.Slug ?? "", 0, true));
-                }
-            }
-
+            var featured = new Dictionary<DiscoverScopeV1, List<(long WorkId, HeroSlide Slide)>>();
             var feed = Feed is null ? DiscoverFeedType.Trending : FeedType;
             if (feed is { } heroFeed && kept is not null)
             {
-                var perScope = new List<List<HeroSlide>>();
                 foreach (var scope in Chosen.Where(scope => scope.Feeds.Contains(heroFeed)))
                 {
                     // Titles with artwork lead; the others fill up.
-                    var own = new List<HeroSlide>();
                     if (kept.FirstOrDefault(shelf => shelf.ScopeSlug == scope.Slug && shelf.DiscoverFeedTypeId == heroFeed) is { } shelf)
                     {
-                        own.AddRange(scope.IsCatalog
-                            ? Filtered(shelf.CatalogItems.Select(item => (scope, item))).Select(entry => entry.Item).OrderBy(item => item.PosterUrl is null).Take(3).Select((item, rank) => CatalogSlide(scope, item, heroFeed, rank))
-                            : Filtered(shelf.Items).OrderBy(item => item.BackdropUrl is null && item.PosterUrl is null).Take(3).Select((item, rank) => ItemSlide(scope, item, heroFeed, rank)));
+                        featured[scope] = scope.IsCatalog
+                            ? [.. Filtered(shelf.CatalogItems.Select(item => (scope, item))).Select(entry => entry.Item).OrderBy(item => item.PosterUrl is null).Take(HeroPerType)
+                                .Select(item => (item.WorkId, CatalogSlide(scope, item, heroFeed)))]
+                            : [.. Filtered(shelf.Items).OrderBy(item => item.BackdropUrl is null && item.PosterUrl is null).Take(HeroPerType).Select(item => (item.WorkId, ItemSlide(scope, item, heroFeed)))];
                     }
                     else if (IsSeriesList(scope) && await ReadHeroFeedAsync(scope, heroFeed) is { } listed)
                     {
-                        own.AddRange(Filtered(listed).OrderBy(item => item.BackdropUrl is null && item.PosterUrl is null).Take(3).Select((item, rank) => ItemSlide(scope, item, heroFeed, rank)));
+                        featured[scope] = [.. Filtered(listed).OrderBy(item => item.BackdropUrl is null && item.PosterUrl is null).Take(HeroPerType).Select(item => (item.WorkId, ItemSlide(scope, item, heroFeed)))];
                     }
-
-                    if (own.Count > 0) perScope.Add(own);
-                }
-
-                for (var rank = 0; rank < 3; rank++)
-                {
-                    slides.AddRange(perScope.Where(own => own.Count > rank).Select(own => own[rank]));
                 }
 
                 // The series list does not stand in for the other types.
-                if (!slides.Any(slide => !slide.IsContinue && Chosen.Any(scope => scope.Slug == slide.Group && !IsSeriesList(scope))) && heroFeed == DiscoverFeedType.Trending)
+                if (heroFeed == DiscoverFeedType.Trending && !featured.Any(entry => entry.Value.Count > 0 && !IsSeriesList(entry.Key)))
                 {
-                    await AddFallbackSlideAsync(slides, selected);
+                    await AddFallbackSlidesAsync(featured);
                 }
+            }
+
+            // Continued titles count only while the device shows them, so a type keeps enough others to fill its places; Pass is the place within the type.
+            var perScope = new List<List<HeroSlide>>();
+            foreach (var scope in Chosen)
+            {
+                var own = new List<(long WorkId, HeroSlide Slide)>();
+                if (Feed is null or "continue")
+                {
+                    own.AddRange(_continue.Where(item => InScope(scope, item.MediaTypeId, item.MediaSubtypeId)).Take(HeroPerType).Select(item => (item.WorkId, ContinueSlide(scope, item))));
+                }
+
+                own.AddRange(featured.GetValueOrDefault(scope) ?? []);
+                if (Feed is null)
+                {
+                    own.AddRange(_recent.Where(item => InScope(scope, item.MediaTypeId, item.MediaSubtypeId) && Fits(true, item.MediaStateTypeId == MediaStateType.NotRequested, item.ReleaseYear))
+                        .Select(item => (item.Id, RecentSlide(scope, item))));
+                }
+
+                var unique = own.DistinctBy(entry => entry.WorkId).Select(entry => entry.Slide).ToList();
+                perScope.Add([.. unique.Where(slide => slide.IsContinue).Concat(unique.Where(slide => !slide.IsContinue).Take(HeroPerType)).Select((slide, pass) => slide with { Pass = pass })]);
+            }
+
+            var slides = new List<HeroSlide>();
+            for (var pass = 0; perScope.Any(own => own.Count > pass); pass++)
+            {
+                slides.AddRange(perScope.Where(own => own.Count > pass).Select(own => own[pass]));
             }
 
             _hero = slides;
@@ -661,8 +774,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
         }
 
-        // Without a catalog read whole, the first other type that has trending titles asks its provider for one; the series list was asked already.
-        private async Task AddFallbackSlideAsync(List<HeroSlide> slides, DiscoverScopeV1? selected)
+        // Without a catalog read whole, the first other type that has trending titles asks its provider; the series list was asked already.
+        private async Task AddFallbackSlidesAsync(Dictionary<DiscoverScopeV1, List<(long WorkId, HeroSlide Slide)>> featured)
         {
             var scope = Chosen.FirstOrDefault(scope => scope.Feeds.Contains(DiscoverFeedType.Trending) && !IsSeriesList(scope));
             if (scope is null)
@@ -679,14 +792,14 @@ namespace Jularr.Frontend.Pages.User.Discover
                 {
                     var items = await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(
                         new ReadDiscoverCatalogFeedDataV1(scope.MediaTypeId, DiscoverFeedType.Trending, scope.MediaSubtypeId), limit.Token);
-                    var item = Filtered(items.Select(value => (scope, value))).Select(entry => entry.Item).OrderBy(value => value.PosterUrl is null).FirstOrDefault();
-                    if (item is not null) slides.Add(CatalogSlide(scope, item, DiscoverFeedType.Trending, 0));
+                    featured[scope] = [.. Filtered(items.Select(value => (scope, value))).Select(entry => entry.Item).OrderBy(value => value.PosterUrl is null).Take(HeroPerType)
+                        .Select(item => (item.WorkId, CatalogSlide(scope, item, DiscoverFeedType.Trending)))];
                     return;
                 }
 
                 var results = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(scope.MediaTypeId, DiscoverFeedType.Trending), limit.Token);
-                var featured = Filtered(results).OrderBy(value => value.BackdropUrl is null && value.PosterUrl is null).FirstOrDefault();
-                if (featured is not null) slides.Add(ItemSlide(scope, featured, DiscoverFeedType.Trending, 0));
+                featured[scope] = [.. Filtered(results).OrderBy(value => value.BackdropUrl is null && value.PosterUrl is null).Take(HeroPerType)
+                    .Select(item => (item.WorkId, ItemSlide(scope, item, DiscoverFeedType.Trending)))];
             }
             catch (Exception exception) when (exception is ServiceUnavailableException || exception is OperationCanceledException && !HttpContext.RequestAborted.IsCancellationRequested)
             {
@@ -694,23 +807,37 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
         }
 
-        private string Overline(DiscoverScopeV1? scope, string feedKey) => scope is null ? texts[feedKey] : texts["discover.type." + scope.Slug] + " · " + texts[feedKey];
+        private string Overline(DiscoverScopeV1 scope, string feedKey) => texts["discover.type." + scope.Slug] + " · " + texts[feedKey];
 
         // The title opens its Work, where one nobody asked for yet is requested.
-        private HeroSlide CatalogSlide(DiscoverScopeV1 scope, DiscoverCatalogItemV1 item, DiscoverFeedType feed, int rank)
+        private HeroSlide CatalogSlide(DiscoverScopeV1 scope, DiscoverCatalogItemV1 item, DiscoverFeedType feed)
         {
             var href = CatalogHref(item);
             var requestable = item.MediaStateTypeId == MediaStateType.NotRequested && texts.CanRequest();
             return new HeroSlide(item.Title, null, item.PosterUrl, Overline(scope, "discover.feed." + feed), item.Author, requestable ? "discover.action.request" : "media.details", href,
-                requestable ? "plus" : null, requestable ? href : null, scope.Slug, rank);
+                requestable ? "plus" : null, requestable ? href : null, scope.Slug, 0);
         }
 
-        private HeroSlide ItemSlide(DiscoverScopeV1 scope, DiscoverItemV1 item, DiscoverFeedType feed, int rank)
+        private HeroSlide ItemSlide(DiscoverScopeV1 scope, DiscoverItemV1 item, DiscoverFeedType feed)
         {
             var (actionKey, actionHref) = Action(item);
             return new HeroSlide(item.Title, item.BackdropUrl, item.PosterUrl, Overline(scope, "discover.feed." + feed), item.Overview, ShortKey(actionKey) ?? "media.details", actionHref ?? DetailsHref(item),
-                actionKey switch { "request.create" => "plus", "media.watch" => "play", _ => null }, actionKey is null ? null : DetailsHref(item), scope.Slug, rank);
+                actionKey switch { "request.create" => "plus", "media.watch" => "play", _ => null }, actionKey is null ? null : DetailsHref(item), scope.Slug, 0);
         }
+
+        private HeroSlide ContinueSlide(DiscoverScopeV1 scope, ContinueItemV1 item)
+        {
+            var readable = ReadableMedia.IsReadable(item.MediaAssetTypeId);
+            var listening = item.MediaAssetTypeId == MediaAssetType.Audio;
+            return new HeroSlide(item.Title, null, item.PosterUrl, Overline(scope, "discover.feed.Continue"), null,
+                readable ? "discover.action.continueRead" : listening ? "discover.action.continueHear" : "media.continue",
+                (readable ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture), readable ? "book" : "play",
+                "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), scope.Slug, 0, true);
+        }
+
+        // A title the library added lately opens its Work.
+        private HeroSlide RecentSlide(DiscoverScopeV1 scope, LibraryItemV1 item) =>
+            new(item.Title, null, item.PosterUrl, Overline(scope, "discover.recentlyAdded"), null, "media.details", "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), null, null, scope.Slug, 0);
 
         // One shelf of a provider: what it answered, or that it did not answer in time.
         private sealed record ShelfAnswer(DiscoverScopeV1 Scope, DiscoverFeedType Feed, IReadOnlyList<DiscoverItemV1>? Items, IReadOnlyList<DiscoverCatalogItemV1>? Catalog, bool Failed);
@@ -807,7 +934,13 @@ namespace Jularr.Frontend.Pages.User.Discover
             (Availability != "local" || isLocal) && (Availability != "request" || canBeRequested)
             && (Year != "2020" || releaseYear >= 2020) && (Year != "old" || releaseYear < 2020);
 
-        private bool MediaTypeChosen(MediaType type) => IsAll || Chosen.Any(scope => scope.MediaTypeId == type);
+        // The token of the quick request on the cards, taken once per request.
+        private string Csrf => _csrf ??= antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "";
+
+        // A Work belongs to the scope of its subtype, else of its type: series without anime, books without manga and light novels.
+        private bool MediaTypeChosen(MediaType type, MediaSubtype? subtype) => IsAll || Chosen.Any(scope => InScope(scope, type, subtype));
+
+        private static bool InScope(DiscoverScopeV1 scope, MediaType type, MediaSubtype? subtype) => scope.Slug == LibraryScopes.Slug(type, subtype);
 
         private IUiComponent Card(DiscoverItemV1 item)
         {
@@ -815,7 +948,9 @@ namespace Jularr.Frontend.Pages.User.Discover
             var card = MediaCard.For(assets, item, DetailsHref(item));
             if (_availabilityByWork.TryGetValue(item.WorkId, out var state))
                 card.Availability(new MediaAvailability(assets, state.AvailabilityStateId, state.AvailableUnits, state.MonitoredUnits));
-            if (actionKey is not null && actionHref is not null) card.Action(ShortKey(actionKey)!, actionHref);
+            if (actionKey == "media.request") card.Request(item.WorkId, Csrf);
+            else if (item.MediaStateTypeId == MediaStateType.Requested && texts.CanRequest()) card.Request(item.WorkId, null, AcquisitionRequestStatusType.Open);
+            else if (actionKey is not null && actionHref is not null) card.Action(ShortKey(actionKey)!, actionHref);
             return card.Bookmark(new MediaBookmark(assets, item.WorkId));
         }
 
@@ -829,7 +964,21 @@ namespace Jularr.Frontend.Pages.User.Discover
                 .HoverPreview(MediaPreviewAddress.Work(item.WorkId)).State(item.MediaStateTypeId);
             if (_availabilityByWork.TryGetValue(item.WorkId, out var availability))
                 card.Availability(new MediaAvailability(assets, availability.AvailabilityStateId, availability.AvailableUnits, availability.MonitoredUnits));
-            if (item.MediaStateTypeId == MediaStateType.NotRequested && texts.CanRequest()) card.Action("discover.action.request", href);
+            if (item.MediaStateTypeId == MediaStateType.NotRequested && texts.CanRequest()) card.Request(item.WorkId, Csrf);
+            else if (item.MediaStateTypeId == MediaStateType.Requested && texts.CanRequest()) card.Request(item.WorkId, null, AcquisitionRequestStatusType.Open);
+            return card.Bookmark(new MediaBookmark(assets, item.WorkId));
+        }
+
+        // A kept title found by the search, shown like a catalog card.
+        private IUiComponent KnownCard(DiscoverScopeV1 scope, DiscoverSuggestionV1 item)
+        {
+            var href = "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture);
+            var state = item.MediaStateTypeId ?? MediaStateType.NotRequested;
+            var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId), item.Rating)
+                .HoverPreview(MediaPreviewAddress.Work(item.WorkId)).State(state);
+            if (_availabilityByWork.TryGetValue(item.WorkId, out var availability))
+                card.Availability(new MediaAvailability(assets, availability.AvailabilityStateId, availability.AvailableUnits, availability.MonitoredUnits));
+            if (state == MediaStateType.NotRequested && texts.CanRequest()) card.Action("discover.action.request", href);
             return card.Bookmark(new MediaBookmark(assets, item.WorkId));
         }
 

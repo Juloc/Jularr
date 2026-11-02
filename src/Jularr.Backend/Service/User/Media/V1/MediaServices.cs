@@ -148,19 +148,8 @@ namespace Jularr.Backend.Service.User.Media.V1
                             plex."WorkId" = work."Id"
                             AND plex."Namespace" = 'plex'
                     ))) AS "IsRequestable",
-                    (
-                        SELECT
-                            request."AcquisitionRequestStatusTypeId"
-                        FROM
-                            "AcquisitionRequests" AS request
-                        WHERE
-                            request."WorkId" = work."Id"
-                            AND request."RequestedByProfileId" = @ProfileId
-                        ORDER BY
-                            request."CreatedAt" DESC,
-                            request."Id" DESC
-                        LIMIT 1
-                    ) AS "RequestStatusTypeId",
+                    latest."Id" AS "RequestId",
+                    latest."AcquisitionRequestStatusTypeId" AS "RequestStatusTypeId",
                     work."RuntimeMinutes"::integer AS "RuntimeMinutes",
                     facts."Genres",
                     facts."TrailerKey",
@@ -199,6 +188,20 @@ namespace Jularr.Backend.Service.User.Media.V1
                         WHERE
                             fact."WorkId" = work."Id"
                     ) AS facts ON TRUE
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            request."Id",
+                            request."AcquisitionRequestStatusTypeId"
+                        FROM
+                            "AcquisitionRequests" AS request
+                        WHERE
+                            request."WorkId" = work."Id"
+                            AND request."RequestedByProfileId" = @ProfileId
+                        ORDER BY
+                            request."CreatedAt" DESC,
+                            request."Id" DESC
+                        LIMIT 1
+                    ) AS latest ON TRUE
                     LEFT JOIN "InstanceModules" AS module ON module."Key" = 'Franchises' AND module."IsEnabled"
                     LEFT JOIN "Franchises" AS franchise ON franchise."Id" = work."FranchiseId" AND module."Key" IS NOT NULL
                 WHERE
