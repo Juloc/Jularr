@@ -62,7 +62,8 @@
     --shadow-drawer: -10px 0 40px #0002;
     --shadow-menu: 10px 0 40px #0002;
     --shadow-overlay: 0 11px 30px #0004;
-    --scrim: #16122570;
+    // What lies behind a dialog or a drawer: dark enough that the page does not show through, blurred by the dialogs themselves.
+    --scrim: #16122599;
     // Shared colours for overlays on artwork, in both themes.
     --artwork-foreground: #fff;
     --artwork-shade: #120c22;
