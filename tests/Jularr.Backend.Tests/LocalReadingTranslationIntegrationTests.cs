@@ -41,14 +41,14 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(readerHtml, "data-role=" + (char)34 + "turn-tools" + (char)34);
             // The administration view must expose model management and the live status
             // without changing the ordinary Reader's permissions.
-            using var adminPage = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation");
+            using var adminPage = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation?tab=setup");
             Assert.AreEqual(HttpStatusCode.OK, adminPage.StatusCode, await adminPage.Content.ReadAsStringAsync());
             var adminHtml = await adminPage.Content.ReadAsStringAsync();
             StringAssert.Contains(adminHtml, "data-translation-download");
             StringAssert.Contains(adminHtml, "translategemma:4b");
 
             ollama.Unavailable = true;
-            using var offlineAdmin = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation");
+            using var offlineAdmin = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation?tab=setup");
             Assert.AreEqual(HttpStatusCode.OK, offlineAdmin.StatusCode, await offlineAdmin.Content.ReadAsStringAsync());
             var offlineHtml = await offlineAdmin.Content.ReadAsStringAsync();
             StringAssert.Contains(offlineHtml, "data-translation-download");
