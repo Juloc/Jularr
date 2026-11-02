@@ -1340,6 +1340,47 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(caching ? 1 : 2, Trending());
         }
 
+        [TestMethod]
+        public async Task Razor_Discover_KeepsEachTypeApart_AndTheHighlightsKeepTheirPlace()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            var mount = await LibraryTests.CreateMountAsync(host);
+            var root = await LibraryTests.CreateRootAsync(host, mount, "Library", MediaType.Movie);
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES
+                    (9810, 2, NULL, 'Plain Series'), (9820, 2, 1, 'Anime Series'), (9830, 1, 1, 'Anime Film'), (9840, 3, NULL, 'Plain Book'), (9850, 3, 2, 'Manga Volume');
+                INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works" WHERE "Id" BETWEEN 9810 AND 9850;
+                INSERT INTO "WorkEditions" ("WorkId") SELECT "Id" FROM "Works" WHERE "Id" BETWEEN 9810 AND 9850;
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "WorkId", "WorkId", "Id" FROM "WorkEditions" WHERE "WorkId" BETWEEN 9810 AND 9850;
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT "Id", "Id", "Id", 1 FROM "Works" WHERE "Id" BETWEEN 9810 AND 9850;
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
+                SELECT {root}, "Id" || '.mkv', 100, now(), now(), "Id" FROM "MediaAssets" WHERE "Id" BETWEEN 9810 AND 9850;
+                INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "ProgressPositionTypeId", "PositionMs", "DurationMs") VALUES (101, 9810, 1, 250, 1000), (101, 9820, 1, 250, 1000), (101, 9830, 1, 250, 1000);
+                """);
+
+            // Series leave anime out, in the shelves to continue and of the library and in the highlights; anime films and series are anime.
+            var series = await PageAsync(host, "/?type=series");
+            StringAssert.Contains(series, "Plain Series");
+            StringAssert.Contains(series, "data-hero-continue");
+            Assert.IsFalse(series.Contains("Anime Series", StringComparison.Ordinal) || series.Contains("Anime Film", StringComparison.Ordinal), series);
+            var anime = await PageAsync(host, "/?type=anime");
+            StringAssert.Contains(anime, "Anime Series");
+            StringAssert.Contains(anime, "Anime Film");
+            StringAssert.Contains(anime, "data-hero-group=\"anime\"");
+            Assert.IsFalse(anime.Contains("Plain Series", StringComparison.Ordinal), anime);
+
+            // Books leave manga out, added lately as anywhere else.
+            var books = await PageAsync(host, "/?type=books");
+            StringAssert.Contains(books, "Plain Book");
+            Assert.IsFalse(books.Contains("Manga Volume", StringComparison.Ordinal), books);
+            StringAssert.Contains(await PageAsync(host, "/?type=manga"), "Manga Volume");
+
+            // A type without highlights keeps the place of the carousel with its empty text.
+            var empty = await PageAsync(host, "/?type=movies&feed=continue");
+            StringAssert.Contains(empty, "class=\"hero-carousel__slide hero-carousel__slide--empty\" data-hero-empty=\"\"><");
+            Assert.IsFalse(empty.Contains("data-hero-slide", StringComparison.Ordinal), empty);
+        }
+
         private static async Task<string> PageAsync(Host host, string path)
         {
             using var page = await host.SendAsync(HttpMethod.Get, path);

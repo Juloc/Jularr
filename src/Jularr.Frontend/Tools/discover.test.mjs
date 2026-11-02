@@ -246,9 +246,12 @@ test('recommendation fragments preserve local content and obsolete responses are
 
 test('Hero never arrives in an asynchronous recommendations fragment', () => {
     const source = readFileSync(new URL('../Pages/User/Discover/Index.cshtml.cs', import.meta.url), 'utf8');
-    assert.match(source, /await LoadHeroAsync\(selected, /);
+    assert.match(source, /await LoadHeroAsync\(await keptTask\)/);
     assert.doesNotMatch(source, /discover-featured/);
-    assert.match(source, /if \(_hero\.Count > 0\)/);
+    // The carousel is part of the page itself and keeps its place without highlights.
+    assert.match(source, /page\.Content\.Add\(new HeroCarousel\(assets, _hero, HeroPreferences, "discover\.hero\.empty"\)\);/);
+    const fragment = source.slice(source.indexOf('private void DefineRecommendations'), source.indexOf('public async Task<IActionResult> OnGetAsync'));
+    assert.doesNotMatch(fragment, /HeroCarousel/);
 });
 
 test('suggestions follow typing, drop obsolete answers and close on Escape', async () => {

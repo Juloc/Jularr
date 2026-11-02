@@ -218,7 +218,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var actions = new List<IUiComponent>();
             foreach (var (addition, label) in Offered)
             {
-                actions.Add(new A(Glyph("plus", 16), new Span(new Text(label)).Class("action-dock__text")).Class("button").Attribute("href", Address(type: addition)));
+                // A phone shows only the icons, so the two indexer kinds need different ones.
+                actions.Add(new A(Glyph(addition == AcquisitionConnectionType.Nyaa ? "anime" : "plus", 16), new Span(new Text(label)).Class("action-dock__text")).Class("button").Attribute("href", Address(type: addition)));
             }
 
             if (Role == AcquisitionConnectionRole.Search)

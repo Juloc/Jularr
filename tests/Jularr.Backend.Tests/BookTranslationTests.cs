@@ -128,6 +128,125 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Job_WithTwoBooksBeingRead_TranslatesTheMostRecentlyReadFirst()
+        {
+            using var storage = new TemporaryDirectory();
+            var ollama = new FakeOllama();
+            await using var host = await CreateHostAsync(storage.Path, ollama);
+            var (first, second) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var firstDocument = await ReadingTests.OpenAsync(host, first);
+            var secondDocument = await ReadingTests.OpenAsync(host, second);
+            await PrepareGermanReadersAsync(host);
+
+            // The book with the higher id was read last, so the order cannot come from the ids.
+            var (early, late) = firstDocument.DocumentId < secondDocument.DocumentId ? ((first, firstDocument), (second, secondDocument)) : ((second, secondDocument), (first, firstDocument));
+            await ReadAsync(host, early.Item1, "s0/b0", "3 days");
+            await ReadAsync(host, late.Item1, "s0/b0", "1 hour");
+
+            await using var scope = host.Services.CreateAsyncScope();
+            Assert.IsTrue(await Translate(scope));
+            Assert.IsTrue(await TranslatedSectionCountAsync(host, late.Item2.DocumentId) > 0, "The book read last is translated first.");
+            Assert.AreEqual(0L, await TranslatedSectionCountAsync(host, early.Item2.DocumentId));
+
+            // The book read earlier follows once the other one is done.
+            var rounds = 0;
+            while (await TranslatedSectionCountAsync(host, late.Item2.DocumentId) < 2)
+            {
+                Assert.IsTrue(await Translate(scope));
+                Assert.IsTrue(++rounds < 200, "The job never finishes the first book.");
+                if (await TranslatedSectionCountAsync(host, late.Item2.DocumentId) < 2) Assert.AreEqual(0L, await TranslatedSectionCountAsync(host, early.Item2.DocumentId));
+            }
+            while (await Translate(scope)) Assert.IsTrue(++rounds < 400, "The job never finishes.");
+            Assert.AreEqual(2L, await TranslatedSectionCountAsync(host, early.Item2.DocumentId));
+        }
+
+        [TestMethod]
+        public async Task Job_ABookBeingRead_StartsAtTheChapterTheReaderIsIn_ThenWrapsAround()
+        {
+            using var storage = new TemporaryDirectory();
+            var ollama = new FakeOllama();
+            await using var host = await CreateHostAsync(storage.Path, ollama);
+            var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var document = await ReadingTests.OpenAsync(host, first);
+            await PrepareGermanReadersAsync(host);
+
+            // Four chapters (the two of the book twice); the reader is in the third one.
+            var id = document.DocumentId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "ReadingResources" ("ReadingDocumentId", "Path", "MediaType", "Bytes")
+                SELECT resource."ReadingDocumentId", ':section/' || lpad((substring(resource."Path" FROM 10)::integer + 2)::text, 5, '0'), resource."MediaType", resource."Bytes"
+                FROM "ReadingResources" AS resource
+                WHERE resource."ReadingDocumentId" = {{id}} AND resource."Path" LIKE ':section/%';
+                UPDATE "ReadingDocuments" SET "Structure" = jsonb_set("Structure", '{Sections}', ("Structure" -> 'Sections') || ("Structure" -> 'Sections')) WHERE "Id" = {{id}};
+                """.Replace("{{id}}", id));
+            await ReadAsync(host, first, "s2/b0", "1 hour");
+
+            // Each chapter is recorded when its translation starts: the third and fourth, then the first and second.
+            var started = new List<string>();
+            var rounds = 0;
+            await using var scope = host.Services.CreateAsyncScope();
+            while (await Translate(scope))
+            {
+                Assert.IsTrue(++rounds < 200, "The job never finishes.");
+                var paths = Convert.ToString(await host.ScalarAsync("SELECT coalesce(string_agg(right(\"Path\", 5), ',' ORDER BY \"Path\"), '') FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/translategemma:4b/de/%' AND \"ReadingDocumentId\" = " + id), System.Globalization.CultureInfo.InvariantCulture)!;
+                foreach (var section in paths.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                    if (!started.Contains(section)) started.Add(section);
+            }
+            CollectionAssert.AreEqual(new[] { "00002", "00003", "00000", "00001" }, started);
+        }
+
+        [TestMethod]
+        public async Task Job_ABookInAnUnknownLanguage_IsSkippedEvenWhenItIsBeingRead()
+        {
+            using var storage = new TemporaryDirectory();
+            var ollama = new FakeOllama();
+            await using var host = await CreateHostAsync(storage.Path, ollama);
+            var (first, second) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var unknown = await ReadingTests.OpenAsync(host, first);
+            var known = await ReadingTests.OpenAsync(host, second);
+            await PrepareGermanReadersAsync(host);
+
+            // Neither the book nor its Work names a language.
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = NULL WHERE \"Id\" = " + unknown.DocumentId);
+            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"OriginalLanguage\" = NULL");
+            await ReadAsync(host, first, "s0/b0", "1 hour");
+
+            var rounds = 0;
+            await using var scope = host.Services.CreateAsyncScope();
+            while (await Translate(scope)) Assert.IsTrue(++rounds < 200, "The job never finishes.");
+            Assert.AreEqual(0L, await TranslatedSectionCountAsync(host, unknown.DocumentId));
+            Assert.AreEqual(2L, await TranslatedSectionCountAsync(host, known.DocumentId));
+
+            // The same book with a language is translated, so the language was the only reason.
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en' WHERE \"Id\" = " + unknown.DocumentId);
+            while (await Translate(scope)) Assert.IsTrue(++rounds < 400, "The job never finishes.");
+            Assert.AreEqual(2L, await TranslatedSectionCountAsync(host, unknown.DocumentId));
+        }
+
+        [TestMethod]
+        public async Task Job_ABlockWithoutAVerifiableTranslation_KeepsItsOriginalAndIsDone()
+        {
+            using var storage = new TemporaryDirectory();
+            var ollama = new FakeOllama { Unverifiable = true };
+            await using var host = await CreateHostAsync(storage.Path, ollama);
+            var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var document = await ReadingTests.OpenAsync(host, first);
+            await PrepareGermanReadersAsync(host);
+
+            // The model answers, but never with a text that passes the checks: the job still ends, with the books' own texts.
+            var rounds = 0;
+            await using var scope = host.Services.CreateAsyncScope();
+            while (await Translate(scope)) Assert.IsTrue(++rounds < 200, "The job loops on a block it cannot translate.");
+            Assert.IsTrue(ollama.GenerationCount > 0);
+            Assert.AreEqual(2L, await TranslatedSectionCountAsync(host, document.DocumentId));
+
+            var cache = Convert.ToString(await host.ScalarAsync("SELECT convert_from(\"Bytes\", 'UTF8') FROM \"ReadingResources\" WHERE \"ReadingDocumentId\" = " + document.DocumentId + " AND \"Path\" = ':localtranslation/v4/translategemma:4b/de/00001'"), System.Globalization.CultureInfo.InvariantCulture)!;
+            using var parsed = JsonDocument.Parse(cache);
+            var texts = parsed.RootElement.GetProperty("Texts").EnumerateArray().Select(text => text.GetString()).ToArray();
+            CollectionAssert.AreEqual(new[] { "Part Two", "The second part begins.", "And it ends." }, texts);
+        }
+
+        [TestMethod]
         public async Task Job_ASectionWithoutText_IsDoneOnceAndTheRoundsMoveOn()
         {
             using var storage = new TemporaryDirectory();
@@ -273,6 +392,30 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("noMachine", idle.IssueKey);
         }
 
+        private static Task<AuthenticationTests.Host> CreateHostAsync(string storage, FakeOllama ollama) =>
+            LibraryTests.CreateHostAsync(storage, razor: true,
+                settings: new Dictionary<string, string> { ["LocalTranslation:Endpoint"] = "http://ollama:11434" },
+                services: services => services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => ollama));
+
+        // The books are English, Translation is on and every profile reads German.
+        private static async Task PrepareGermanReadersAsync(AuthenticationTests.Host host)
+        {
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en'");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" LIKE 'de%' ORDER BY \"Locale\" LIMIT 1)");
+        }
+
+        // Every profile is reading the book at the locator, last read that long ago.
+        private static Task ReadAsync(AuthenticationTests.Host host, long asset, string locator, string ago) =>
+            host.Fixture.RunSqlAsync($"""
+                INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "ProgressPositionTypeId", "Locator", "Progression", "IsCompleted", "UpdatedAt")
+                SELECT profile."Id", asset."WorkId", 2, '{locator}', 0.1, FALSE, now() - interval '{ago}'
+                FROM "Profiles" AS profile, "MediaAssets" AS asset WHERE asset."Id" = {asset}
+                """);
+
+        private static async Task<long> TranslatedSectionCountAsync(AuthenticationTests.Host host, long documentId) =>
+            Convert.ToInt64(await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/translategemma:4b/de/%' AND \"ReadingDocumentId\" = " + documentId), System.Globalization.CultureInfo.InvariantCulture);
+
         private static async Task<BookTranslationProgressV1> ReadProgressAsync(AuthenticationTests.Host host)
         {
             using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/translation/progress");
@@ -293,6 +436,9 @@ namespace Jularr.Backend.Tests
         {
             public int GenerationCount { get; private set; }
 
+            // Answers with a text no translation check accepts.
+            public bool Unverifiable { get; set; }
+
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 string body;
@@ -306,7 +452,8 @@ namespace Jularr.Backend.Tests
                     var prompt = input.RootElement.GetProperty("prompt").GetString()!;
                     GenerationCount++;
                     var language = prompt.Contains("into French", StringComparison.Ordinal) ? "FR" : "DE";
-                    body = JsonSerializer.Serialize(new { response = language + " " + prompt[(prompt.LastIndexOf('\n') + 1)..], eval_count = 2, eval_duration = 200000000 });
+                    var answer = Unverifiable ? new string('x', 19_000) : language + " " + prompt[(prompt.LastIndexOf('\n') + 1)..];
+                    body = JsonSerializer.Serialize(new { response = answer, eval_count = 2, eval_duration = 200000000 });
                 }
                 else throw new InvalidOperationException("Unexpected Ollama API: " + request.RequestUri.AbsolutePath);
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };

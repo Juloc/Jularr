@@ -4176,21 +4176,9 @@
    "Highlights per type",
    "Highlights pro Medientyp"
   ],
-  "discover.hero.perType.1": [
-   "1 title",
-   "1 Titel"
-  ],
-  "discover.hero.perType.2": [
-   "2 titles",
-   "2 Titel"
-  ],
-  "discover.hero.perType.3": [
-   "3 titles",
-   "3 Titel"
-  ],
-  "discover.hero.max": [
-   "Maximum highlights",
-   "Maximale Highlights"
+  "discover.hero.empty": [
+   "No highlights yet",
+   "Noch keine Highlights"
   ],
   "discover.hero.continue": [
    "Include continue",
@@ -8169,6 +8157,10 @@
   "errors.authentication_required": [
    "Please sign in to continue.",
    "Bitte melde dich an, um fortzufahren."
+  ],
+  "errors.invalid_credentials": [
+   "Wrong username or password.",
+   "Benutzername oder Passwort falsch."
   ],
   "errors.permission_denied": [
    "You do not have permission to perform this action.",
@@ -15242,7 +15234,7 @@
    "Lokale Übersetzungsmodelle"
   ],
   "translation.local.description": [
-   "Optional TranslateGemma on a separately installed private Ollama server. Its models are not included in the Jularr image.",
+   "The server translates books with TranslateGemma on an Ollama computer of yours. Ollama and the models are not part of Jularr.",
    "Der Server übersetzt Bücher mit TranslateGemma auf einem Ollama-Rechner von dir. Ollama und die Modelle gehören nicht zu Jularr."
   ],
   "translation.local.back": [
@@ -15250,7 +15242,7 @@
    "Zurück zu den Instanzeinstellungen"
   ],
   "translation.local.configure": [
-   "Configure LocalTranslation__Endpoint with a private Ollama address, such as http://ollama:11434.",
+   "No Ollama computer is entered yet. Add its address under Setup, for example http://ollama:11434.",
    "Es ist noch kein Ollama-Rechner eingetragen. Trag seine Adresse unter „Einrichtung“ ein, zum Beispiel http://ollama:11434."
   ],
   "translation.local.offline": [
@@ -15343,11 +15335,15 @@
   ],
   "translation.progress.sections": [
    "sections",
-   "Abschnitte"
+   "Abschnitten"
   ],
   "translation.progress.of": [
    "of",
    "von"
+  ],
+  "translation.progress.unitsHint": [
+   "Progress counts sections, the parts of a book. The pace counts paragraphs, the text units the translation works through one by one.",
+   "Der Fortschritt zählt Abschnitte, die Teile eines Buchs. Das Tempo zählt Absätze, die Texteinheiten, die die Übersetzung nacheinander abarbeitet."
   ],
   "translation.progress.stalled": [
    "No progress for",
@@ -15358,11 +15354,11 @@
    "Tempo"
   ],
   "translation.progress.blocks": [
-   "blocks per minute",
-   "Blöcke pro Minute"
+   "paragraphs per minute",
+   "Absätze pro Minute"
   ],
   "translation.progress.remaining": [
-   "Time left",
+   "Time left (rough)",
    "Restzeit"
   ],
   "translation.progress.unknown": [
@@ -15386,7 +15382,7 @@
    "Übersetzungs-Seite öffnen"
   ],
   "translation.local.capacity": [
-   "Model downloads need the free space of the Ollama model volume, which Jularr cannot inspect from another container: check it and type it into the field below. Keep at least 2 GB free after downloading. Free space now:",
+   "Free space for models on the Ollama computer. Jularr cannot measure it there, so you type it in below; downloads are offered up to that, keeping 2 GB spare. Free space now:",
    "Freier Platz für Modelle auf dem Ollama-Rechner. Jularr kann ihn dort nicht messen, deshalb trägst du ihn unten ein; Downloads werden bis dahin angeboten, mit 2 GB Reserve. Frei zurzeit:"
   ],
   "translation.local.freeBytes": [
