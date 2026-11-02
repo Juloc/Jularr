@@ -112,7 +112,7 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   global Search; do not add another search field inside Discover. Owner's decision 2 Nov, the header search: large in the middle of the header, no key hint
   or shortcut; from two letters, after a short pause, a popup under the field lists the titles Jularr keeps (no provider is asked) grouped by type, the type
   with the best match first, in each type the typed title, then titles beginning with it, then other matches, local before trending before popular, two to
-  six per type as the room allows, then All results. Enter opens Discover's results: one row per type in the same order, each with See all for that type
+  six per type as the room allows, then All results; each group has its type's icon and See all, titles show a 40×60 cover with the typed words marked, and two or more groups stand in two columns where there is room. Enter opens Discover's results: one row per type in the same order, each with See all for that type
   alone (which pages); the providers are asked once, together, only on Enter. On a phone the icon opens the field over the header, the suggestions fill
   the screen and the back button closes them. The Filter drawer lists the media types first, then the local availability
   (in Jularr, can be requested), then only what the chosen types have: the release year and their rankings; the rankings a chosen
