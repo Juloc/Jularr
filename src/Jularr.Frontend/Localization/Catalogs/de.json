@@ -3331,8 +3331,8 @@
    "News-Server hinzufügen"
   ],
   "nav.group.media": [
-   "Media",
-   "Medien"
+   "Works",
+   "Werke"
   ],
   "nav.group.acquisition": [
    "Arr+",
@@ -3519,8 +3519,8 @@
    "Werk"
   ],
   "admin.works.description": [
-   "Canonical media and monitoring",
-   "Kanonische Medien und Überwachung"
+   "Canonical works and monitoring",
+   "Kanonische Werke und Überwachung"
   ],
   "admin.works.title": [
    "Works",
@@ -3779,8 +3779,8 @@
    "Diese Sammlung löschen? Die Titel selbst bleiben erhalten."
   ],
   "collections.addMedia": [
-   "Add media",
-   "Medien hinzufügen"
+   "Add works",
+   "Werke hinzufügen"
   ],
   "collections.find": [
    "Find in the library",
@@ -3843,8 +3843,8 @@
    "Staffeln / Struktur"
   ],
   "details.title": [
-   "Media details",
-   "Mediendetails"
+   "Work details",
+   "Werkdetails"
   ],
   "details.unavailable": [
    "Details can't be loaded right now",
@@ -11283,8 +11283,8 @@
    "Usenet"
   ],
   "jobs.worker.Media": [
-   "Media",
-   "Medien"
+   "Works",
+   "Werke"
   ],
   "jobs.worker.Storage": [
    "Storage",
@@ -13032,8 +13032,8 @@
    "Systemstatus"
   ],
   "dashboard.kpi.media": [
-   "Media",
-   "Medien"
+   "Works",
+   "Werke"
   ],
   "dashboard.kpi.downloads": [
    "Downloads",
