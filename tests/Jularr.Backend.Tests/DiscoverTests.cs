@@ -703,7 +703,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
             var season = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '21'"))!;
             var action = "/Details/" + season + "?handler=QuickRequest";
-            StringAssert.Contains(html, "action=\"" + action + "\" data-quick-request=\"true\"");
+            StringAssert.Matches(html, new System.Text.RegularExpressions.Regex("<form[^>]*action=\"" + System.Text.RegularExpressions.Regex.Escape(action) + "\"[^>]*data-quick-request=\"true\""));
             StringAssert.Contains(html, "data-live=\"request-work:" + season + "\"");
             var token = WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
 
