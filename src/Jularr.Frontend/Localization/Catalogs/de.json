@@ -271,7 +271,7 @@
   "discover.format.Special": ["Special", "Special"],
   "discover.format.Ova": ["OVA", "OVA"],
   "discover.format.Ona": ["ONA", "ONA"],
-  "discover.format.Music": ["Music", "Music"],
+  "discover.format.Music": ["Music", "Musik"],
   "discover.format.Manga": ["Manga", "Manga"],
   "discover.format.Novel": ["Light novel", "Light Novel"],
   "discover.format.OneShot": ["One-shot", "One-Shot"],
@@ -13516,6 +13516,26 @@
   "works.sort.descending": [
    "Descending, turn to ascending",
    "Absteigend, auf aufsteigend umschalten"
+  ],
+  "works.footer.titles": [
+   "Titles",
+   "Titel"
+  ],
+  "works.footer.monitored": [
+   "Monitored",
+   "Überwacht"
+  ],
+  "works.footer.unmonitored": [
+   "Unmonitored",
+   "Nicht überwacht"
+  ],
+  "works.footer.files": [
+   "Files",
+   "Dateien"
+  ],
+  "works.footer.size": [
+   "Total size",
+   "Gesamtgröße"
   ],
   "works.filter.drawer": [
    "Filters",
