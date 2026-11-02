@@ -104,7 +104,9 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
 - Discover separates media-type scope, browse view and filters. Its All
   landing has a shared Hero/Continue followed by per-enabled-type shelves
   in the approved order; only provider-supported rankings may appear. A ranking
-  opens from its shelf's See all and names itself with a way back. Owner's mockup of 19 Oct
+  opens from its shelf's See all and names itself with a way back. Owner's decision 2 Nov: every ranking loads on while scrolling, its See all
+  grid and its shelf alike, 20 titles (the provider's next page) at a time; a page goes on while it has titles, three pages in a row
+  that add nothing stop the automatic loading (the grid keeps its Next), and both say *No more titles.* where the ranking ends. Owner's mockup of 19 Oct
   ("capsules"): one capsule row (All, then Watch, Read, Hear and Game with their types; several
   types may be chosen, `type=a,b`) with the Customize and Filter drawers at its end, the highlights
   as one carousel (continued titles first, then each type's best by rank, series from Discover's series list; the device keeps how many

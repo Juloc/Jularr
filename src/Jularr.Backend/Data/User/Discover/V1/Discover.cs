@@ -234,11 +234,12 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
     public sealed class ReadDiscoverCatalogFeedDataV1 : BaseData
     {
-        public ReadDiscoverCatalogFeedDataV1(MediaType mediaTypeId, DiscoverFeedType discoverFeedTypeId, MediaSubtype? mediaSubtypeId = null)
+        public ReadDiscoverCatalogFeedDataV1(MediaType mediaTypeId, DiscoverFeedType discoverFeedTypeId, MediaSubtype? mediaSubtypeId = null, int page = 1)
         {
             MediaTypeId = mediaTypeId;
             DiscoverFeedTypeId = discoverFeedTypeId;
             MediaSubtypeId = mediaSubtypeId;
+            Page = page;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
@@ -249,6 +250,9 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
         public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.Page))]
+        public int Page { get; }
     }
 
     // A film or series of a list as the Work it is.

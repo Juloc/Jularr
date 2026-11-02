@@ -39,5 +39,53 @@ namespace Jularr.E2E.Tests
             await search.PressAsync("Escape");
             await Assertions.Expect(page.Locator(".discover-suggestions")).ToBeHiddenAsync();
         }
+
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task WholeCatalog_RankingGridAndShelfLoadMoreWhileScrolling_UntilTheyEnd()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            await Owner.SetUpAndSignInAsync(page);
+            await jularr.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
+                UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'tmdb_movie';
+                INSERT INTO "Works" ("Id", "CatalogNamespace", "MediaTypeId", "CanonicalTitle", "ImageUrl", "TrendingRank")
+                SELECT 9700 + rank, 'tmdb_movie', 1, 'Ranked ' || rank, 'https://127.0.0.1/' || rank || '.jpg', rank FROM generate_series(1, 45) AS rank;
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT 9700 + rank, 'tmdb_movie', (9700 + rank)::text FROM generate_series(1, 45) AS rank;
+                """);
+
+            // The grid of a ranking adds its next page near its end, then says where the ranking ends.
+            await page.GotoAsync("/?type=movies&view=Trending");
+            var cards = page.Locator("#discover-results .media-grid .media-card");
+            await Assertions.Expect(cards).ToHaveCountAsync(20);
+            await ScrollUntilAsync(cards, () => page.EvaluateAsync("window.scrollTo(0, document.documentElement.scrollHeight)"));
+            await Assertions.Expect(cards).ToHaveCountAsync(45);
+            await Assertions.Expect(page.Locator(".discover-paging .discover-end")).ToHaveTextAsync("No more titles.");
+            await Assertions.Expect(page.Locator("[data-discover-next]")).ToHaveCountAsync(0);
+
+            // Its shelf does the same as it is scrolled to its end.
+            await page.GotoAsync("/?type=movies");
+            var shelf = page.Locator(".media-shelf", new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Trending", Exact = true }) });
+            var shelfCards = shelf.Locator(".media-card");
+            await Assertions.Expect(shelfCards).ToHaveCountAsync(20);
+            await ScrollUntilAsync(shelfCards, () => shelf.Locator(".media-shelf__items").EvaluateAsync("items => items.scrollLeft = items.scrollWidth"));
+            await Assertions.Expect(shelfCards).ToHaveCountAsync(45);
+            await Assertions.Expect(shelf.Locator(".discover-end")).ToHaveTextAsync("No more titles.");
+            await Evidence.SaveAsync(page, "discover-shelf-end");
+        }
+
+        // Scrolls to the end until no further card arrives.
+        private static async Task ScrollUntilAsync(ILocator cards, Func<Task> scroll)
+        {
+            for (int count = -1, now = await cards.CountAsync(), round = 0; now != count && round < 10; round++)
+            {
+                count = now;
+                await scroll();
+                await Task.Delay(1500);
+                now = await cards.CountAsync();
+            }
+        }
     }
 }

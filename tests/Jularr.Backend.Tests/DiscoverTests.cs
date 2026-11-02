@@ -75,6 +75,33 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Catalog_RankingPages_AskTheProviderForThatPage()
+        {
+            var provider = new FakeAniList();
+            await using var host = await CreateHostAsync(razor: true, anime: provider);
+            foreach (var (page, count) in new[] { (1, 1), (2, 0) })
+            {
+                using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Top, MediaSubtype.Anime, page));
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                Assert.AreEqual(count, (await response.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Count, "Page " + page);
+            }
+            CollectionAssert.AreEqual(new[] { 1, 2 }, provider.Pages, "Each page is the provider's own page, not the first again.");
+
+            // The ranking's grid goes on while its page has titles, however few, and says where it ends; its shelf names its next page.
+            using var first = await host.SendAsync(HttpMethod.Get, "/?type=anime&view=Top&handler=Results");
+            var html = await first.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, html);
+            StringAssert.Contains(html, "data-discover-next=\"true\"");
+            StringAssert.Contains(html, "href=\"/?type=anime&amp;view=Top&amp;p=2\"");
+            using var last = await host.SendAsync(HttpMethod.Get, "/?type=anime&view=Top&p=2&handler=Results");
+            html = await last.Content.ReadAsStringAsync();
+            StringAssert.Contains(html, "class=\"discover-end\"");
+            Assert.IsFalse(html.Contains("data-discover-next", StringComparison.Ordinal));
+            using var shelves = await host.SendAsync(HttpMethod.Get, "/?type=anime&handler=Recommendations");
+            StringAssert.Contains(await shelves.Content.ReadAsStringAsync(), "data-shelf-more=\"/?type=anime&amp;view=Top&amp;p=2\"");
+        }
+
+        [TestMethod]
         public async Task Catalog_OldAnimeTrending_ReadsStoredTitleWithoutProviderRefresh()
         {
             var provider = new FakeAniList();
@@ -1243,6 +1270,7 @@ namespace Jularr.Backend.Tests
         private sealed class FakeAniList : HttpMessageHandler
         {
             public int Requests { get; private set; }
+            public List<int> Pages { get; } = [];
             public bool IsUnavailable { get; set; }
             public bool FindsFirstSeason { get; init; }
             private const string First = """{"id":20,"type":"ANIME","format":"TV","title":{"romaji":"The Matrix Show"},"synonyms":[],"startDate":{"year":2020},"episodes":12,"relations":{"edges":[{"relationType":"SEQUEL","node":{"id":21,"type":"ANIME"}}]}}""";
@@ -1255,6 +1283,12 @@ namespace Jularr.Backend.Tests
                 using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
                 var variables = body.RootElement.GetProperty("variables");
                 var found = FindsFirstSeason && variables.TryGetProperty("search", out _) ? First : Second;
+                // A ranking has one page.
+                if (variables.TryGetProperty("page", out var page))
+                {
+                    Pages.Add(page.GetInt32());
+                    if (page.GetInt32() > 1) found = "";
+                }
                 var json = variables.TryGetProperty("id", out var id) ? "{\"data\":{\"Media\":" + (id.GetInt32() == 20 ? First : Second) + "}}" : "{\"data\":{\"Page\":{\"media\":[" + found + "]}}}";
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
             }

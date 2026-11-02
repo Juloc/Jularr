@@ -26,6 +26,13 @@
     padding: 24px 0;
 }
 
+// Where a ranking ends: under its grid, or after the last card of its shelf.
+.discover-end {
+    margin: 0;
+    color: var(--muted);
+    .media-shelf__items > & { flex: 0 0 auto; align-self: center; padding-inline: 16px; white-space: nowrap; }
+}
+
 .capsule-bar__tool.button {
     position: relative;
     flex: none;
