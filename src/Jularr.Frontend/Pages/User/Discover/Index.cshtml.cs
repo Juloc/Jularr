@@ -177,7 +177,9 @@ namespace Jularr.Frontend.Pages.User.Discover
                 var cards = new List<IUiComponent>();
                 cards.AddRange(Filtered(_results ?? []).Select(Card));
                 cards.AddRange(Filtered(_catalog ?? []).Select(entry => CatalogCard(entry.Scope, entry.Item)));
-                if (cards.Count == 0)
+                // A ranking pages on while its provider answers, a page the filter empties included, and says where it ends; a search pages while its page is full.
+                var browsing = View is not null && !searching;
+                if (cards.Count == 0 && (PageNumber == 1 || !browsing))
                 {
                     page.Content.Add(new P(new Text(searching ? "discover.noResults" : "discover.empty")).Attribute("role", "status"));
                     if (PageNumber > 1) page.Content.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(Current with { Page = PageNumber - 1 })));
@@ -186,18 +188,24 @@ namespace Jularr.Frontend.Pages.User.Discover
 
                 page.Content.Add(new Div([.. cards]).Class("media-grid"));
 
-                // Catalogs answer in one read; provider results page.
-                if (_results is { } results && _catalog is null)
+                var answered = (_results?.Count ?? 0) + (_catalog?.Count ?? 0);
+                if (browsing || _catalog is null)
                 {
                     var paging = new List<IUiComponent>();
                     if (PageNumber > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(Current with { Page = PageNumber - 1 })));
-                    if (!_providerUnavailable && PageNumber < 500 && results.Count >= 20)
+                    if (!_providerUnavailable && PageNumber < 500 && (browsing ? answered > 0 : answered >= 20))
                     {
-                        paging.Add(new A(new Text("common.next")).Class("button").Attribute("data-discover-next", "true").Attribute("data-navigation", "full")
-                            .Attribute("href", Address(Current with { Page = PageNumber + 1 })));
+                        paging.Add(new A(new Text("list.loadMore")).Class("button").Attribute("data-discover-next", "true").Attribute("data-navigation", "full")
+                            .Attribute("data-retry-label", texts["discover.retry"]).Attribute("href", Address(Current with { Page = PageNumber + 1 })));
+                    }
+                    else if (browsing && !_providerUnavailable)
+                    {
+                        paging.Add(new P(new Text("discover.end")).Class("discover-end").Attribute("role", "status"));
                     }
 
-                    page.Content.Add(new Nav([.. paging]).Class("discover-paging").Attribute("aria-label", texts["discover.pages"]));
+                    var nav = new Nav([.. paging]).Class("discover-paging").Attribute("aria-label", texts["discover.pages"]);
+                    if (paging.Count > 0) nav.Attribute("data-automatic", "");
+                    page.Content.Add(nav);
                 }
 
                 return;
@@ -406,9 +414,11 @@ namespace Jularr.Frontend.Pages.User.Discover
                     page.Content.Add(new H2(new Text("discover.type." + scope.Slug)).Class("discover-media-heading"));
                 }
 
+                // A shelf goes on with the next pages of its ranking.
                 foreach (var (feed, cards) in shown)
                 {
-                    page.Content.Add(new MediaShelf(assets, "discover.feed." + feed, Address(Current with { Types = [scope.Slug], Feed = null, View = feed, Page = 1 }), [.. cards]));
+                    var ranking = Current with { Types = [scope.Slug], Feed = null, View = feed, Page = 1 };
+                    page.Content.Add(new MediaShelf(assets, "discover.feed." + feed, Address(ranking), [.. cards], Address(ranking with { Page = 2 })));
                 }
             }
         }
@@ -536,8 +546,8 @@ namespace Jularr.Frontend.Pages.User.Discover
 
                 if (selected is { IsCatalog: true } && View is { } catalogView && selected.Feeds.Contains(catalogView))
                 {
-                    _catalog = [.. (await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new ReadDiscoverCatalogFeedDataV1(selected.MediaTypeId, catalogView, selected.MediaSubtypeId),
-                        HttpContext.RequestAborted)).Select(item => (selected, item))];
+                    _catalog = [.. (await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new ReadDiscoverCatalogFeedDataV1(selected.MediaTypeId, catalogView, selected.MediaSubtypeId,
+                        PageNumber), HttpContext.RequestAborted)).Select(item => (selected, item))];
                     return;
                 }
 

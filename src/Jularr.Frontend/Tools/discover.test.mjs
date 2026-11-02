@@ -25,13 +25,16 @@ function discover(landing = false) {
     function region(ids, next = null, unavailable = false, recommendations = false) {
         const cards = ids.map(id => ({ querySelector: () => ({ getAttribute: () => '/Details/' + id }) }));
         const grid = { querySelectorAll: () => cards.map(card => card.querySelector()), append: card => cards.push(card) };
-        const paging = { next: next ? { href: 'https://jularr.test/?q=Matrix&p=' + next } : null, replaceChildren: (...nodes) => { paging.next = nodes[0] ?? null; } };
+        const href = next ? 'https://jularr.test/?q=Matrix&p=' + next : null;
+        const paging = { dataset: {}, before() {}, next: next ? { href, dataset: { retryLabel: 'Try again' }, getAttribute: () => href } : null,
+            querySelector: () => paging.next?.end ? null : paging.next, replaceChildren: (...nodes) => { paging.next = nodes[0] ?? null; } };
+        const end = next ? null : { end: true };
         const feedback = { textContent: '' };
         const slots = {};
         return {
             cards, feedback, slots, attributes: {}, dataset: { loadError: 'Try again', providerUnavailable: String(unavailable) },
             querySelector: selector => selector === '.media-grid' ? grid : selector === '.discover-paging' ? paging
-                : selector === '.discover-feedback' ? feedback : selector === '[data-discover-next]' ? paging.next
+                : selector === '.discover-feedback' ? feedback : selector === '[data-discover-next]' ? (paging.next?.end ? null : paging.next) : selector === '.discover-end' ? end
                 : selector === '[data-discover-recommendations]' ? recommendations ? { href: 'https://jularr.test/?handler=Recommendations' } : null
                 : selector === '#discover-recommendations' ? { replaceWith: value => slots.shelves = value } : null,
             querySelectorAll: () => cards,
@@ -42,6 +45,7 @@ function discover(landing = false) {
     }
 
     active = region([1, 2], landing ? null : 2, false, landing);
+    class Element {}
     class Observer {
         constructor(action) { observerAction = action; }
         disconnect() { observed = undefined; }
@@ -57,9 +61,11 @@ function discover(landing = false) {
             assert.equal(name, '../../../Framework/Components/MediaShelf');
             return { initializeShelves() {} };
         },
-        document: { querySelector: selector => selector.includes('search-box') ? form : active, addEventListener: (name, action) => { documentEvents[name] = action; } },
+        document: { querySelector: selector => selector.includes('search-box') ? form : active, addEventListener: (name, action) => { documentEvents[name] = action; },
+            createElement: () => ({ className: '', children: [], setAttribute() {}, append(node) { this.children.push(node); }, remove() { this.removed = true; } }) },
+        getComputedStyle: () => ({ gridTemplateColumns: '150px 150px 150px' }),
         window: { IntersectionObserver: Observer }, IntersectionObserver: Observer,
-        AbortController, URL, Set, Error,
+        AbortController, URL, Set, Error, Element, location: { href: 'https://jularr.test/' },
         FormData: class { forEach(action) { action(input.value, 'q'); action('movies', 'type'); } },
         DOMParser: class { parseFromString(key) { return { querySelector: selector => {
             const value = pages.get(key);
@@ -71,9 +77,10 @@ function discover(landing = false) {
     });
 
     return {
-        requests, region,
+        requests, region, Element,
         get active() { return active; }, get address() { return address; }, get observing() { return !!observed; },
         search(value) { input.value = value; formEvents.submit({ preventDefault() {} }); },
+        scroll(target) { documentEvents.scroll({ target }); },
         intersect() { if (observed) observerAction([{ isIntersecting: true }]); },
         async answer(index, incoming) {
             const key = String(index);
@@ -123,11 +130,15 @@ test('viewport paging appends unique cards, retains existing identities and stop
 test('failed later pages retain results and do not hammer the provider with automatic retries', async () => {
     const ui = discover();
     const initial = ui.active;
+    const paging = initial.querySelector('.discover-paging');
+    assert.equal(paging.dataset.automatic, '');
     ui.intersect();
     await ui.answer(0, ui.region([], null, true));
     assert.equal(ui.active, initial);
     assert.equal(ui.active.cards.length, 2);
     assert.equal(ui.active.feedback.textContent, 'Try again');
+    assert.equal(paging.dataset.automatic, undefined);
+    assert.equal(paging.next.textContent, 'Try again');
     assert.equal(ui.observing, false);
     ui.intersect();
     assert.equal(ui.requests.length, 1);
@@ -135,11 +146,75 @@ test('failed later pages retain results and do not hammer the provider with auto
 
 test('a repeated provider page cannot create an automatic loading loop', async () => {
     const ui = discover();
-    ui.intersect();
-    await ui.answer(0, ui.region([1, 2], 3));
+    for (const page of [3, 4, 5]) {
+        assert.equal(ui.observing, true);
+        ui.intersect();
+        await ui.answer(page - 3, ui.region([1, 2], page));
+    }
     assert.equal(ui.active.cards.length, 2);
     assert.equal(ui.observing, false);
-    assert.equal(ui.active.querySelector('[data-discover-next]').href, 'https://jularr.test/?q=Matrix&p=3');
+    assert.equal(ui.active.querySelector('[data-discover-next]').href, 'https://jularr.test/?q=Matrix&p=5');
+});
+
+test('a page the filter empties keeps loading, and the last page says the ranking ends', async () => {
+    const ui = discover();
+    ui.intersect();
+    await ui.answer(0, ui.region([], 3));
+    assert.equal(ui.observing, true);
+    ui.intersect();
+    await ui.answer(1, ui.region([5]));
+    assert.equal(ui.active.cards.length, 3);
+    assert.equal(ui.observing, false);
+    assert.deepEqual(ui.active.querySelector('.discover-paging').next, { end: true });
+});
+
+test('a ranking shelf adds its next page near its end and shows where it ends', async () => {
+    const ui = discover();
+    const links = [{ getAttribute: () => '/Details/1' }];
+    const added = [];
+    const waiting = [];
+    const items = { scrollWidth: 2000, clientWidth: 500, scrollLeft: 0, querySelectorAll: () => links,
+        append: node => (node.className?.includes('discover-skeletons') ? waiting : added).push(node) };
+    const shelf = { dataset: { shelfMore: '/?type=movies&view=Trending&p=2' }, querySelectorAll: () => [] };
+    const target = { closest: selector => selector === '.media-shelf__items' ? items : null };
+    items.closest = () => shelf.dataset.shelfMore ? shelf : null;
+    Object.setPrototypeOf(target, ui.Element.prototype);
+
+    ui.scroll(target);
+    assert.equal(ui.requests.length, 0);
+    items.scrollLeft = 1100;
+    ui.scroll(target);
+    ui.scroll(target);
+    assert.equal(ui.requests.length, 1);
+    assert.equal(ui.requests[0].url.searchParams.get('handler'), 'Results');
+    assert.equal(ui.requests[0].url.searchParams.get('p'), '2');
+    assert.equal(waiting.length, 1);
+    assert.equal(waiting[0].children.length, 3);
+    assert.equal(waiting[0].removed, undefined);
+    await ui.answer(0, ui.region([1, 2], 3));
+    assert.equal(waiting[0].removed, true);
+    assert.equal(added.length, 1);
+    assert.equal(shelf.dataset.shelfMore, 'https://jularr.test/?q=Matrix&p=3');
+
+    ui.scroll(target);
+    await ui.answer(1, ui.region([]));
+    assert.equal(shelf.dataset.shelfMore, undefined);
+    assert.deepEqual(added.at(-1), { end: true });
+    ui.scroll(target);
+    assert.equal(ui.requests.length, 2);
+
+    // A failing provider is asked again at the next scroll, three times at most.
+    shelf.dataset.shelfMore = '/?type=movies&view=Trending&p=4';
+    shelf.dataset.shelfEmpty = '0';
+    for (const index of [2, 3, 4]) {
+        assert.equal(shelf.dataset.shelfMore, '/?type=movies&view=Trending&p=4');
+        ui.scroll(target);
+        ui.requests[index].resolve({ ok: false, redirected: false });
+        await settle();
+    }
+    assert.equal(shelf.dataset.shelfMore, undefined);
+    ui.scroll(target);
+    assert.equal(ui.requests.length, 5);
 });
 
 test('recommendation fragments preserve local content and obsolete responses are discarded', async () => {

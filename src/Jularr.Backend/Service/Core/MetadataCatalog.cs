@@ -229,23 +229,24 @@ namespace Jularr.Backend.Service.Core
             TextLimit.Cut(AniListMetadata.Title(result), 500)!, TextLimit.Cut(result.RomajiTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null,
             TextLimit.Cut(result.Description, 4000), null, null, result.CoverUrl);
 
-        // Ranked catalog lists: Open Library trends books, AniList ranks manga, light novels and anime. A kept list already names its Works.
-        public async Task<IReadOnlyList<ExternalWorkData>?> ReadCachedFeedInBatchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, CancellationToken ct)
+        // Ranked catalog lists: Open Library trends books, AniList ranks manga, light novels and anime, page by page. A kept list already names its Works.
+        public async Task<IReadOnlyList<ExternalWorkData>?> ReadCachedFeedInBatchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, int page,
+            CancellationToken ct)
         {
             var ranking = Ranking(mediaType, subtype, feed);
             if (!await context.KeepsDiscoverListsAsync(ct))
             {
                 return null;
             }
-            var descriptor = new ExternalFeedData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype, feed, 1, null, null);
+            var descriptor = new ExternalFeedData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype, feed, page, null, null);
             return (await ExternalFeedCache.ReadAsync(context, descriptor, ct)).Items;
         }
 
         // Without kept lists the titles shown still become Works, so each card opens one.
-        public async Task<IReadOnlyList<ExternalWorkData>> ReadFeedAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, CancellationToken ct)
+        public async Task<IReadOnlyList<ExternalWorkData>> ReadFeedAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, int page, CancellationToken ct)
         {
             var ranking = Ranking(mediaType, subtype, feed);
-            var descriptor = new ExternalFeedData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype, feed, 1, null, null);
+            var descriptor = new ExternalFeedData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype, feed, page, null, null);
             var keeps = await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverListsAsync(token), ct, mode: SqlAccessMode.ReadOnly);
             if (keeps)
             {
@@ -269,9 +270,9 @@ namespace Jularr.Backend.Service.Core
                 }
                 try
                 {
-                    IReadOnlyList<MetadataSearchResultV1> results = ranking is not { } order ? [.. (await books.ReadTrendingAsync(ct)).Select(Book)]
-                        : feed.MediaTypeId == MediaType.Series ? [.. (await aniList.ReadAnimeRankingAsync(order, ct)).Select(AniListAnime)]
-                        : [.. (await aniList.ReadBookRankingAsync(feed.MediaSubtypeId!.Value, order, ct)).Select(AniListBook)];
+                    IReadOnlyList<MetadataSearchResultV1> results = ranking is not { } order ? [.. (await books.ReadTrendingAsync(feed.Page, ct)).Select(Book)]
+                        : feed.MediaTypeId == MediaType.Series ? [.. (await aniList.ReadAnimeRankingAsync(order, feed.Page, ct)).Select(AniListAnime)]
+                        : [.. (await aniList.ReadBookRankingAsync(feed.MediaSubtypeId!.Value, order, feed.Page, ct)).Select(AniListBook)];
                     return [.. results.Select(ExternalWork)];
                 }
                 catch (ServiceUnavailableException)
