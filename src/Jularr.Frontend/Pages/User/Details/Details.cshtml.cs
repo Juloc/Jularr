@@ -198,6 +198,16 @@ namespace Jularr.Frontend.Pages.User.Details
             return Page();
         }
 
+        // The round request icon of a card: the title is requested at once in the profile's language with the default quality; the card follows the live phase.
+        public async Task<IActionResult> OnPostQuickRequestAsync()
+        {
+            var ct = HttpContext.RequestAborted;
+            var languages = await locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: ct);
+            var language = languages.FirstOrDefault(locale => string.Equals(locale.Locale, texts.Locale, StringComparison.OrdinalIgnoreCase)) ?? languages.First();
+            await request.ExecuteAsync<CreateRequestResultV1>(new CreateRequestParametersV1(Id), new CreateRequestDataV1(language.Id), ct);
+            return new NoContentResult();
+        }
+
         public async Task<IActionResult> OnPostAsync([BindRequired] bool isWatchlisted, string? returnUrl = null)
         {
             await update.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), new UpdateWatchlistDataV1(isWatchlisted), HttpContext.RequestAborted);
