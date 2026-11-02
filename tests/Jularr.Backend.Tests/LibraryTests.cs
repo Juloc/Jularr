@@ -9,11 +9,13 @@ using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Data.User.Media.V1;
+using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Service.System.Operation.V1;
 using Jularr.Integrations.Logic.Media;
@@ -1453,6 +1455,65 @@ namespace Jularr.Backend.Tests
                 "Show/Season 01/Show - S01E02 [WEBDL-1080p].mkv", "Artist A, Artist B/Album (2019)/03 - Song - One.flac", "Manga/Manga v01.5.cbz", "Unknown/Game (2019)/game.sfc", "Artist A/Book (2019)/Book.epub",
                 "Wide (2019)/Wide (2019) [1080p].mkv"
             }, plan.Select(rename => rename.TargetPath).ToArray());
+        }
+
+        [TestMethod]
+        public void Rename_Plan_SubtitlesFollowTheLongestStemAndGameFoldersIgnoreCase()
+        {
+            static LibraryRenameFileData File(long id, long rootId, MediaType type, string path, string? title) =>
+                new(id, rootId, "Library", type, null, path, null, title is null ? null : id, title, 2019, null, null, null, null, null, null, null, null, 1, null);
+
+            var plan = LibraryRenameLogic.Plan([
+                File(1, 1, MediaType.Movie, "film/a.mkv", "A"),
+                File(2, 1, MediaType.Movie, "film/a.part2.mkv", "B"),
+                File(3, 1, MediaType.Movie, "film/a.mp4", "C"),
+                File(4, 1, MediaType.Movie, "film/a.part2.en.srt", null),
+                File(5, 1, MediaType.Movie, "film/a.en.srt", null),
+                File(6, 2, MediaType.Game, "roms/game.sfc", "Game"),
+                File(7, 2, MediaType.Game, "ROMS/readme.txt", null),
+                File(8, 2, MediaType.Game, "single/other.sfc", "Other")], NamingPatternTests.DefaultSet);
+
+            CollectionAssert.AreEqual(new[]
+            {
+                "1 A (2019)/A (2019).mkv", "5 A (2019)/A (2019).en.srt", "2 B (2019)/B (2019).mkv", "4 B (2019)/B (2019).en.srt", "3 C (2019)/C (2019).mp4", "8 Unknown/Other (2019)/other.sfc"
+            }, plan.Select(rename => rename.StoredFileId + " " + rename.TargetPath).ToArray());
+        }
+
+        [TestMethod]
+        public async Task RenameFiles_AbsoluteNumbers_CountTheTitlesRegularEpisodesOnly()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            Directory.CreateDirectory(Path.Combine(storage.Path, mountId.ToString(), "Shows"));
+            var rootId = await CreateRootAsync(host, mountId, "Shows", MediaType.Series);
+
+            // A catalog series without files, and a library series with specials and a double episode.
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (900001, 2, 'Catalog Show'), (900002, 2, 'Show');
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") VALUES
+                    (910001, 900001, NULL, 1, 1), (910002, 900001, 910001, 2, 1), (910003, 900001, 910001, 2, 2),
+                    (910010, 900002, NULL, 1, 0), (910011, 900002, 910010, 2, 1),
+                    (910020, 900002, NULL, 1, 1), (910021, 900002, 910020, 2, 1), (910022, 900002, 910020, 2, 2),
+                    (910030, 900002, NULL, 1, 2), (910031, 900002, 910030, 2, 1), (910032, 900002, 910030, 2, 2);
+                INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (920001, 900002);
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (930001, 900002, 920001);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId") VALUES (940001, 900002, 930001, 910031, 1), (940002, 900002, 930001, 910011, 1);
+                INSERT INTO "MediaAssetAdditionalUnits" ("MediaAssetId", "WorkId", "WorkUnitId") VALUES (940001, 900002, 910032);
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt") VALUES
+                    ({rootId}, 'double.mkv', 1, now(), 940001, now()), ({rootId}, 'double.en.srt', 1, now(), 940001, now()),
+                    ({rootId}, 'loose.mkv', 1, now(), NULL, now()), ({rootId}, 'special.mkv', 1, now(), 940002, now());
+                """);
+
+            await using var sql = new SqlContext(host.Fixture.Database);
+            await sql.BeginAsync(SqlAccessMode.ReadOnly);
+            var files = await new LogicContext(sql).ReadLibraryRenameFilesAsync(default);
+            await sql.CommitAsync();
+
+            CollectionAssert.AreEqual(new[]
+            {
+                "double.en.srt 3 [3, 4] [1.000, 2.000]", "double.mkv 3 [3, 4] [1.000, 2.000]", "loose.mkv  [] []", "special.mkv  [] [1.000]"
+            }, files.Select(file => file.RelativePath + " " + file.AbsoluteNumber + " " + file.AbsoluteNumbers + " " + file.EpisodeNumbers).ToArray());
         }
 
         // A catalog that knows no book.

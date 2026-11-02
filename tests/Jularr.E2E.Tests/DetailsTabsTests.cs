@@ -97,6 +97,15 @@ namespace Jularr.E2E.Tests
             Assert.IsNotNull(mobileActions);
             Assert.IsNotNull(mobileProgress);
             Assert.IsTrue(mobileProgress.Y >= mobileActions.Y + mobileActions.Height, "Mobile progress must follow the actions.");
+
+            // On a phone the menus of the actions and of the episode toolbar open inside the screen.
+            await page.SetViewportSizeAsync(375, 812);
+            await page.Locator(".media-hero__actions .action-menu__button.button--icon").ClickAsync();
+            await AssertInsideViewportAsync(page, ".media-hero__actions .action-menu[open] .action-menu__panel");
+            await page.GotoAsync("/Details/7001?tab=episodes");
+            await page.Locator(".details-toolbar .select-link-menu__button").Last.ClickAsync();
+            await AssertInsideViewportAsync(page, ".details-toolbar .select-link-menu[open] .select-link-menu__list");
+            await page.GotoAsync("/Details/7001");
             await page.SetViewportSizeAsync(1440, 900);
             await Assertions.Expect(hero.Locator(".media-hero__progress-bar")).ToHaveAttributeAsync("value", new Regex("^(1[0-9]|2[0-9])$"));
             await Assertions.Expect(hero.Locator(".media-hero__title")).ToHaveTextAsync("Tabbed Show");
@@ -133,6 +142,14 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/Details/7002");
             await Assertions.Expect(page.Locator(".media-hero__chips .media-availability-badge--inline")).ToContainTextAsync("Unavailable");
             await Assertions.Expect(page.Locator(".details-tabs .navigation-tabs__link")).ToHaveTextAsync(new[] { new Regex("Overview"), new Regex("Details") });
+        }
+
+        private static async Task AssertInsideViewportAsync(IPage page, string selector)
+        {
+            var box = await page.Locator(selector).BoundingBoxAsync();
+            Assert.IsNotNull(box, selector);
+            var width = await page.EvaluateAsync<double>("window.innerWidth");
+            Assert.IsTrue(box.X >= 0 && box.X + box.Width <= width + .5, selector + " leaves the phone screen: " + box.X + " + " + box.Width + " of " + width);
         }
     }
 }
