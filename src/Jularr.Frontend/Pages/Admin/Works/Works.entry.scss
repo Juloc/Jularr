@@ -63,6 +63,12 @@
     &__direction--down .ui-icon { transform: rotate(180deg); }
 }
 
+// A phone: the search takes its own line, the order, views and filters the next.
+@media (max-width: 640px) {
+    .list-toolbar__tools { flex-wrap: wrap; row-gap: 10px; }
+    .list-toolbar__tools .search-box { flex: 1 1 100%; }
+}
+
 // The poster view: the shared grid of covers, a little apart from the toolbar.
 .works-posters { padding-top: 6px; }
 

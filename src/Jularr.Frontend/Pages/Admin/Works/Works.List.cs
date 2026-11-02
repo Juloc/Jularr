@@ -373,7 +373,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
 
             // Searching the library: the titles of this list, or every monitored title across all pages.
             if (CanAcquire && Filtered) actions.Add(new PostForm(Address("SearchAll"), csrf, [], new Button(Glyph("search", 16), new Span(new Text("works.search.filtered")).Class("action-dock__text")).Submit()));
-            if (CanAcquire) actions.Add(new PostForm(Address("SearchAll"), csrf, [("all", "true")], new Button(Glyph("search", 16), new Span(new Text("works.search.all")).Class("action-dock__text")).Submit()
+            if (CanAcquire) actions.Add(new PostForm(Address("SearchAll"), csrf, [("all", "true")], new Button(Glyph("layers", 16), new Span(new Text("works.search.all")).Class("action-dock__text")).Submit()
                 .TextAttribute("title", "works.search.scope")));
             if (_view == WorksViewType.Table && works is { Items.Count: > 0 }) actions.Add(new Button(Glyph("settings", 16), new Span(new Text("work.columns")).Class("action-dock__text")).Attribute("data-columns-kind", "works"));
 
