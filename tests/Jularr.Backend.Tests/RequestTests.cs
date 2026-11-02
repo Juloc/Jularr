@@ -394,6 +394,12 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(detailsHtml, "Requested");
             Assert.IsFalse(detailsHtml.Contains("Request this work", StringComparison.Ordinal));
 
+            // The request shows as a live pill in its phase's colour that leads nowhere.
+            var pill = Regex.Match(detailsHtml, "<span class=\"live-phase-pill\"[^>]*>").Value;
+            StringAssert.Contains(pill, "data-live=\"request-work:" + requestedWork + "\"");
+            StringAssert.Contains(pill, "data-phase=\"approved\"");
+            Assert.IsFalse(Regex.IsMatch(detailsHtml, "<a [^>]*data-live=\"request-work:"), "The pill is not a link.");
+
             // Disabled does not erase data.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Requests'");
             using var denied = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted");

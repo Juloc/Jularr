@@ -163,28 +163,70 @@
     }
 }
 
-// The request button names the phase beside its percent.
-.button[data-live][data-phase="completed"] { color: var(--success); }
-
-// The request button of a title: the phase with its icon, and the download's percent as a thin bar along its foot.
-.live-phase-button {
+// The request of a title: a pill in the phase's colour, its icon in a filled circle; while it downloads the circle becomes a ring with the percent.
+.live-phase-pill {
     position: relative;
-    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: var(--control-height);
+    padding: 0 14px 0 5px;
+    border-radius: var(--radius-control);
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: var(--text-control);
+    font-weight: var(--weight-control);
+    white-space: nowrap;
+    transition: background-color var(--transition), color var(--transition);
 
-    &__bar {
+    &[data-phase="searching"], &[data-phase="downloading"], &[data-phase="importing"] { background: var(--info-soft); color: var(--info); }
+    &[data-phase="completed"] { background: var(--success-soft); color: var(--success); }
+    &[data-phase="rejected"], &[data-phase="failed"], &[data-phase="cancelled"] { background: var(--danger-soft); color: var(--danger); }
+
+    &__icons {
+        display: inline-grid;
+        flex: none;
+        place-items: center;
+        width: 27px;
+        height: 27px;
+        border-radius: 50%;
+        background: currentColor;
+        > span { grid-area: 1 / 1; display: none; color: var(--surface); }
+        .ui-icon { width: 14px; height: 14px; }
+    }
+    &:is([data-phase="open"], [data-phase="approved"]) .live-phase-pill__clock { display: inline-flex; }
+    &[data-phase="searching"] .live-phase-pill__search { display: inline-flex; animation: live-phase-pulse 1.3s ease-in-out infinite; }
+    &:is([data-phase="downloading"], [data-phase="importing"]) .live-phase-pill__download { display: inline-flex; }
+    &[data-phase="completed"] .live-phase-pill__check { display: inline-flex; }
+    &:is([data-phase="rejected"], [data-phase="failed"], [data-phase="cancelled"]) .live-phase-pill__alert { display: inline-flex; }
+
+    // The download's percent: an arc in the phase's colour around the number, in place of the circle.
+    &__ring {
         position: absolute;
-        right: 0;
-        bottom: 0;
-        left: 0;
-        appearance: none;
-        height: 3px;
-        border: 0;
-        background: transparent;
-        color: var(--accent);
-
-        &::-webkit-progress-bar { background: transparent; }
-        &::-webkit-progress-value { background: var(--accent); }
-        &::-moz-progress-bar { background: var(--accent); }
+        top: 50%;
+        left: 5px;
+        display: grid;
+        place-items: center;
+        width: 27px;
+        height: 27px;
+        margin-top: -13.5px;
+        counter-reset: percent var(--live-percent, 0);
+        font-size: var(--text-small);
+        line-height: 1;
+        &::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: conic-gradient(currentColor calc(var(--live-percent, 0) * 1%), color-mix(in srgb, currentColor 22%, transparent) 0);
+            mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+            transition: background .4s ease;
+        }
+        &::after { content: counter(percent); position: relative; }
         &[hidden] { display: none; }
     }
+    &:not([data-phase="downloading"]) .live-phase-pill__ring { display: none; }
+    &:has(.live-phase-pill__ring:not([hidden])) .live-phase-pill__icons { visibility: hidden; }
 }
+
+@keyframes live-phase-pulse { 50% { opacity: .45; } }

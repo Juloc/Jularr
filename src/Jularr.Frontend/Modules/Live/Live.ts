@@ -1,7 +1,7 @@
 // Live values without a reload. The server streams what changed as Server-Sent Events; pages mark what they show:
 //   data-live="kind:id"       the element (or block) shows that entity; data-live-optional hides it while the stream knows nothing for it
 //   data-live-text="name"     its text is the entity's text of that name, hidden while there is none
-//   data-live-value="percent" a <progress> takes the entity's percent, hidden while there is none
+//   data-live-value="percent" a <progress> takes the entity's percent (any element also as --live-percent, for a ring), hidden while there is none
 //   data-live-points="name"   an SVG line takes the entity's text of that name as its points (a speed line), left as it is while there is none
 // The entity's phase and step become data-phase and data-step, which the styles read. Nothing else on the page is touched.
 
@@ -50,9 +50,11 @@ export function applyLive(root: ParentNode, entities: LiveEntities): void {
                 const percent = entity.percent;
                 if (percent === undefined || percent === null) {
                     field.removeAttribute("value");
+                    field.style?.removeProperty("--live-percent");
                     field.hidden = true;
                 } else {
                     field.setAttribute("value", String(percent));
+                    field.style?.setProperty("--live-percent", String(percent));
                     field.hidden = false;
                 }
             }
