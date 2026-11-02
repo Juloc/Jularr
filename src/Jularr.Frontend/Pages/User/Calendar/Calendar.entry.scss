@@ -438,6 +438,7 @@ $types: (
         &__toolbar .search-box { max-width: none; }
         &__toolbar .navigation-tabs { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); justify-self: stretch; }
         &__toolbar .navigation-tabs__link { min-height: 40px; padding: 6px 8px; }
+        &__toolbar .select-link-menu__list { left: auto; right: 0; }
         &__navigation { grid-column: 1 / -1; justify-content: space-between; margin-left: 0; }
         &__period { flex: 1; min-width: 0; }
         &__board { border-radius: 17px; }
