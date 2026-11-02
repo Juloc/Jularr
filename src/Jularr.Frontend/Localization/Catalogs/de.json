@@ -15193,7 +15193,7 @@
   ],
   "translation.local.description": [
    "Optional TranslateGemma on a separately installed private Ollama server. Its models are not included in the Jularr image.",
-   "Optionales TranslateGemma auf einem separat installierten privaten Ollama-Server. Die Modelle sind nicht im Jularr-Image enthalten."
+   "Der Server übersetzt Bücher mit TranslateGemma auf einem Ollama-Rechner von dir. Ollama und die Modelle gehören nicht zu Jularr."
   ],
   "translation.local.back": [
    "Back to instance settings",
@@ -15201,7 +15201,7 @@
   ],
   "translation.local.configure": [
    "Configure LocalTranslation__Endpoint with a private Ollama address, such as http://ollama:11434.",
-   "Konfiguriere LocalTranslation__Endpoint mit einer privaten Ollama-Adresse, zum Beispiel http://ollama:11434."
+   "Es ist noch kein Ollama-Rechner eingetragen. Trag seine Adresse unter „Einrichtung“ ein, zum Beispiel http://ollama:11434."
   ],
   "translation.local.offline": [
    "The configured local model server cannot be contacted.",
@@ -15243,17 +15243,57 @@
    "Translating now",
    "Übersetzt gerade"
   ],
-  "translation.progress.chapter": [
-   "chapter",
-   "Kapitel"
+  "translation.progress.section": [
+   "section",
+   "Abschnitt"
+  ],
+  "translation.progress.now": [
+   "Translating now: {0}",
+   "Übersetzt gerade: {0}"
+  ],
+  "translation.progress.done": [
+   "Everything is translated",
+   "Alles ist übersetzt"
+  ],
+  "translation.progress.waiting": [
+   "Waiting for the next run",
+   "Wartet auf den nächsten Lauf"
+  ],
+  "translation.progress.volumesDone": [
+   "{0} of {1} volumes done",
+   "{0} von {1} Bänden fertig"
+  ],
+  "translation.progress.moreBooks": [
+   "{0} more books",
+   "{0} weitere Bücher"
+  ],
+  "translation.tab.progress": [
+   "Progress",
+   "Fortschritt"
+  ],
+  "translation.tab.setup": [
+   "Setup",
+   "Einrichtung"
+  ],
+  "translation.setup.machinesHelp": [
+   "The computers that translate, in this order: the first one that answers with a model translates, the next takes over when it drops out. One address per line.",
+   "Die Rechner, die übersetzen, in dieser Reihenfolge: Der erste, der mit einem Modell antwortet, übersetzt, der nächste springt ein, wenn er ausfällt. Eine Adresse pro Zeile."
+  ],
+  "translation.local.benchmarkHint": [
+   "The test takes a few minutes.",
+   "Der Test dauert einige Minuten."
+  ],
+  "translation.local.prepare.fix": [
+   "Fix it under Setup",
+   "Unter „Einrichtung“ beheben"
   ],
   "translation.progress.volume": [
    "volume",
    "Band"
   ],
-  "translation.progress.chapters": [
-   "chapters",
-   "Kapitel"
+  "translation.progress.sections": [
+   "sections",
+   "Abschnitte"
   ],
   "translation.progress.of": [
    "of",
@@ -15297,7 +15337,7 @@
   ],
   "translation.local.capacity": [
    "Model downloads need the free space of the Ollama model volume, which Jularr cannot inspect from another container: check it and type it into the field below. Keep at least 2 GB free after downloading. Free space now:",
-   "Für Modell-Downloads braucht Jularr den freien Platz des Ollama-Modellvolumes, den es von einem anderen Container aus nicht sehen kann: prüfe ihn und trage ihn unten ein. Nach dem Download sollten mindestens 2 GB frei bleiben. Freier Platz jetzt:"
+   "Freier Platz für Modelle auf dem Ollama-Rechner. Jularr kann ihn dort nicht messen, deshalb trägst du ihn unten ein; Downloads werden bis dahin angeboten, mit 2 GB Reserve. Frei zurzeit:"
   ],
   "translation.local.freeBytes": [
    "Free space of the Ollama model volume",
