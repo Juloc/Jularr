@@ -22,12 +22,26 @@ export const SlowAverageMs = 20_000;
 // What the browser keeps of its own translations: a week, and at most 300 MB; the oldest go first.
 export const CacheMaxAgeMs = 7 * 24 * 3600 * 1000;
 export const CacheMaxBytes = 300 * 1024 * 1024;
+// Mozilla translates the page in view and this many pages after it; the window moves along with the reader.
+export const AheadPages = 3;
 
 export function serverIsSlow(durations: number[]): boolean {
     if (durations.length === 0) return false;
     if (durations[durations.length - 1] > SlowBlockMs) return true;
     const last = durations.slice(-3);
     return last.length === 3 && last.reduce((sum, ms) => sum + ms, 0) / 3 > SlowAverageMs;
+}
+
+// The blocks in Mozilla's window: those reaching into the view (a page or a spread) or the next three pages after it; a scrolled text counts its
+// screen as a page. Each block's extents are its boxes as offsets from the start of the view along the reading direction.
+export function windowOf(extents: [number, number][][], view: number, page: number): number[] {
+    const end = view + AheadPages * page;
+    return extents.flatMap((boxes, index) => boxes.some(([from, to]) => to > 0 && from < end) ? [index] : []);
+}
+
+// The pages in Mozilla's window of a book shown page by page: the page in view and the next three, those that have blocks to translate.
+export function pagesAhead(page: number, has: (page: number) => boolean): number[] {
+    return Array.from({ length: AheadPages + 1 }, (_, offset) => page + offset).filter(has);
 }
 
 export interface CacheEntry { key: string; savedAt: number; size: number }
@@ -125,19 +139,147 @@ export function steps(source: Language, target: Language): [string, string][] {
 
 interface RouteFile { step: number; fileType: string; url: string; precision: string | null }
 
-export function translator(reader: HTMLElement, content: HTMLElement, createWorker: () => Worker) {
+// A section's blocks as both translators fill them: the source texts, the text shown for each (the server's, or the browser's where `bridge` is set,
+// which the server's replaces) and the blocks Mozilla was given already, so none is translated twice. Its key is where this browser keeps them.
+export interface BlockSet { key: string; list: string[]; result: string[]; bridge: boolean[]; asked: Set<number> }
+
+export function blockSet(prefix: string, target: Language, list: string[]): BlockSet {
+    return { key: prefix + target + "#" + fingerprint(list), list, result: list.map(() => ""), bridge: list.map(() => false), asked: new Set() };
+}
+
+// What this browser translated of the blocks earlier stands in for those that have no text yet; true when it found any.
+export async function recall(set: BlockSet): Promise<boolean> {
+    const earlier = await cacheRead(set.key, set.list.length);
+    let found = false;
+    earlier?.forEach((text, i) => {
+        if (set.result[i].trim() || !text.trim()) return;
+        set.result[i] = text;
+        set.bridge[i] = true;
+        found = true;
+    });
+    return found;
+}
+
+export interface BrowserTranslator {
+    // Translates the given blocks that have neither text nor were given to Mozilla before, one batch after another and after the work asked for earlier;
+    // false when Mozilla has no models for this language. `shown` gets the blocks it filled, `progress` a share of them and undefined at the end.
+    fill(target: Language, set: BlockSet, indices: number[], alive: () => boolean, shown: (filled: number[]) => void, progress?: (percent: number | undefined) => void): Promise<boolean>;
+}
+
+// Mozilla in the browser, the emergency translator of the Reader and of Smart Pages: one engine per route, loaded once; nothing of it reaches the server.
+export function browserTranslator(reader: HTMLElement, source: Language | undefined, createWorker: () => Worker): BrowserTranslator {
+    let loading: { route: string; worker: Promise<Worker> } | undefined;
+    let queue: Promise<unknown> = Promise.resolve();
+    let requests = 0;
+    const pending = new Map<number, { resolve: (texts: string[]) => void; reject: (error: Error) => void }>();
+    const stop = () => {
+        void loading?.worker.then(worker => worker.terminate(), () => undefined);
+        loading = undefined;
+        for (const request of pending.values()) request.reject(new Error("The browser translator stopped."));
+        pending.clear();
+    };
+    const signal = readerLifetime();
+    signal.addEventListener("abort", stop);
+
+    async function start(route: string, target: Language): Promise<Worker> {
+        const response = await fetch(reader.dataset.routeUrl! + route, { credentials: "same-origin" });
+        if (!response.ok) throw new Error("No translation route.");
+        const files = await response.json() as RouteFile[];
+        const models = steps(source!, target).map(([from, to], index) => {
+            const step = files.filter(file => file.step === index + 1);
+            return { source: from, target: to, precision: step[0]?.precision ?? "int8shiftAlphaAll", files: Object.fromEntries(step.map(file => [file.fileType, file.url])) };
+        });
+        const started = createWorker();
+        try {
+            await new Promise<void>((resolve, reject) => {
+                started.onmessage = event => event.data.type === "ready" ? resolve() : reject(new Error(event.data.message));
+                started.postMessage({ type: "load", engine: files.find(file => file.step === 0)!.url, models });
+            });
+        } catch (error) {
+            started.terminate();
+            throw error;
+        }
+        started.onmessage = event => {
+            const request = pending.get(event.data.id);
+            if (!request) return;
+            pending.delete(event.data.id);
+            event.data.type === "translated" ? request.resolve(event.data.texts) : request.reject(new Error(event.data.message));
+        };
+        return started;
+    }
+
+    // A route Mozilla has no models for is asked for once.
+    function engine(target: Language): Promise<Worker> {
+        const route = `${source}/${target}`;
+        if (loading?.route !== route) {
+            stop();
+            loading = { route, worker: start(route, target) };
+        }
+        return loading.worker;
+    }
+
+    function run(active: Worker, list: string[]): Promise<string[]> {
+        const id = requests++;
+        return new Promise((resolve, reject) => {
+            pending.set(id, { resolve, reject });
+            active.postMessage({ type: "translate", id, texts: list });
+        });
+    }
+
+    function fill(target: Language, set: BlockSet, indices: number[], alive: () => boolean, shown: (filled: number[]) => void, progress?: (percent: number | undefined) => void): Promise<boolean> {
+        const wanted = indices.filter(i => set.list[i]?.trim() && !set.result[i].trim() && !set.asked.has(i));
+        wanted.forEach(i => set.asked.add(i));
+        if (wanted.length === 0) return Promise.resolve(true);
+        const work = queue.then(async () => {
+            if (!alive() || signal.aborted) return true;
+            let active: Worker;
+            try {
+                active = await engine(target);
+            } catch {
+                return false;
+            }
+            for (let start = 0; start < wanted.length && alive(); start += Batch) {
+                const part = wanted.slice(start, start + Batch);
+                const out = await run(active, part.map(i => set.list[i]));
+                if (!alive()) return true;
+                // A block the server translated meanwhile keeps the server's text.
+                const filled = part.filter((i, offset) => {
+                    if (set.result[i].trim()) return false;
+                    set.result[i] = out[offset];
+                    set.bridge[i] = true;
+                    return true;
+                });
+                shown(filled);
+                progress?.(Math.min(100, Math.round((start + Batch) * 100 / wanted.length)));
+            }
+            if (!alive()) return true;
+            await cacheWrite(set.key, set.result.map((text, i) => set.bridge[i] ? text : ""));
+            progress?.(undefined);
+            return true;
+        });
+        queue = work.catch(() => undefined);
+        return work;
+    }
+
+    return { fill };
+}
+
+// `ahead` gives the blocks of the page in view and the three pages after it (all of the section when it is not given); `moved` follows the reader's page turns.
+export function translator(reader: HTMLElement, content: HTMLElement, createWorker: () => Worker, ahead?: () => HTMLElement[]) {
     const blocks = Array.from(content.querySelectorAll<HTMLElement>("[data-b]"));
     // Parent blocks are never translated. Replacing a parent's innerHTML would detach
     // all nested [data-b] nodes, leaving the translator's block references stale.
     const originals = new Map(blocks.filter(block => !block.querySelector('[data-b]'))
         .map(block => [block, block.innerHTML]));
+    const positions = new Map(blocks.map((block, index) => [block, index]));
     const status = reader.querySelector<HTMLElement>("[data-role=translation-status]");
     const source = languageOf(reader.dataset.language, content.innerText.slice(0, 20_000));
+    const browser = browserTranslator(reader, source, createWorker);
     let current: Language | "" = "";
     let revision = 0;
-    let worker: Worker | undefined;
-    readerLifetime().addEventListener("abort", () => { worker?.terminate(); worker = undefined; });
-    let loaded: string | undefined;
+    let runs = 0;
+    // Once Mozilla stepped in, each page turn moves its window along.
+    let emergency: (() => void) | undefined;
 
     function say(text: string | undefined) {
         if (!status) return;
@@ -163,47 +305,10 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         reader.dataset.translated = "true";
     }
 
-    // Where the browser keeps its own translation of this section.
-    function browserKey(target: Language, list: string[]): string {
-        return reader.dataset.localTranslationUrl + target + "#" + fingerprint(list);
-    }
-
-    async function engine(target: Language): Promise<Worker> {
-        const route = `${source}/${target}`;
-        if (worker && loaded === route) return worker;
-        worker?.terminate();
-        worker = undefined;
-        loaded = undefined;
-        const response = await fetch(reader.dataset.routeUrl! + route, { credentials: "same-origin" });
-        if (!response.ok) throw new Error("No translation route.");
-        const files = await response.json() as RouteFile[];
-        const models = steps(source!, target).map(([from, to], index) => {
-            const step = files.filter(file => file.step === index + 1);
-            return { source: from, target: to, precision: step[0]?.precision ?? "int8shiftAlphaAll", files: Object.fromEntries(step.map(file => [file.fileType, file.url])) };
-        });
-        const started = createWorker();
-        try {
-            await new Promise<void>((resolve, reject) => {
-                started.onmessage = event => event.data.type === "ready" ? resolve() : reject(new Error(event.data.message));
-                started.postMessage({ type: "load", engine: files.find(file => file.step === 0)!.url, models });
-            });
-        } catch (error) {
-            started.terminate();
-            throw error;
-        }
-        worker = started;
-        loaded = route;
-        return started;
-    }
-
-    function run(active: Worker, list: string[], id: number): Promise<string[]> {
-        return new Promise((resolve, reject) => {
-            active.onmessage = event => {
-                if (event.data.id !== id) return;
-                event.data.type === "translated" ? resolve(event.data.texts) : reject(new Error(event.data.message));
-            };
-            active.postMessage({ type: "translate", id, texts: list });
-        });
+    // The blocks in Mozilla's window, by their place in the section.
+    function windowed(): number[] {
+        if (!ahead) return blocks.map((_, index) => index);
+        return ahead().flatMap(block => positions.has(block) ? [positions.get(block)!] : []);
     }
 
     // Local TranslateGemma uses the same section/block identities. Only validated completed
@@ -212,9 +317,11 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         const model = reader.dataset.localModel;
         const prefix = reader.dataset.localTranslationUrl;
         if (!model || !prefix || !source) throw new Error("Local translation is unavailable.");
+        const run = ++runs;
+        const alive = () => current === target && revision === generation && runs === run;
         const url = prefix + encodeURIComponent(target) + "/" + encodeURIComponent(model);
-        const list = texts();
-        const result = list.map(() => "");
+        const set = blockSet(prefix, target, texts());
+        const { list, result, bridge } = set;
         const cached = await fetch(url + "?sourceLanguage=" + encodeURIComponent(source), { credentials: "same-origin" });
         if (cached.ok) {
             const data = await cached.json() as { blocks: string };
@@ -223,16 +330,12 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
                 if (typeof text === "string") result[i] = text;
             });
         }
-        if (current !== target || revision !== generation) return;
+        if (!alive()) return;
         show(result);
 
         // What the browser translated earlier stands in for the blocks the server has not done yet; the server's text replaces it as soon as it arrives.
-        const key = browserKey(target, list);
-        const bridge: boolean[] = list.map(() => false);
-        const earlier = await cacheRead(key, list.length);
-        if (earlier) {
-            earlier.forEach((text, i) => { if (!result[i].trim() && text.trim()) { result[i] = text; bridge[i] = true; } });
-            if (current !== target || revision !== generation) return;
+        if (await recall(set)) {
+            if (!alive()) return;
             show(result);
         }
 
@@ -240,7 +343,7 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         let completed = list.filter((text, i) => text.trim().length > 0 && result[i].trim().length > 0 && !bridge[i]).length;
         const durations: number[] = [];
         let unsupported = false;
-        for (let index = 0; index < list.length && current === target && revision === generation; index++) {
+        for (let index = 0; index < list.length && alive(); index++) {
             if (!list[index].trim() || result[index].trim() && !bridge[index]) continue;
             say(`${reader.dataset.translatingLabel} ${Math.round(completed * 100 / Math.max(1, total))} %` + (unsupported ? " · " + reader.dataset.browserUnsupportedLabel : ""));
             const started = Date.now();
@@ -251,71 +354,48 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
             });
             if (!response.ok) throw new Error("Local model could not translate the requested block.");
             const translated = await response.json() as { text: string };
-            if (current !== target || revision !== generation) return;
+            if (!alive()) return;
             if (!translated.text?.trim()) throw new Error("Local model returned an empty block.");
             result[index] = translated.text;
             bridge[index] = false;
             completed++;
             show(result);
 
-            // A server that cannot keep up: the browser translates the blocks nobody has, with Mozilla, and keeps them for a week.
+            // A server that cannot keep up: Mozilla translates the page in view and the three after it while the server goes on; its text replaces Mozilla's.
             durations.push(Date.now() - started);
-            if (!unsupported && reader.dataset.browserTranslation === "true" && serverIsSlow(durations)) {
-                if (await browserFill(target, generation, list, result, bridge, key)) { say(undefined); return; }
-                unsupported = true;
+            if (!emergency && reader.dataset.browserTranslation === "true" && serverIsSlow(durations)) {
+                emergency = () => void browser.fill(target, set, windowed(), alive, () => show(result)).then(found => { if (!found) unsupported = true; }, () => undefined);
+                emergency();
             }
         }
-        if (current === target && revision === generation) say(undefined);
-    }
-
-    // Mozilla translates the blocks that still have no text; they stay marked as the browser's, so the server's text replaces them later.
-    async function browserFill(target: Language, generation: number, list: string[], result: string[], bridge: boolean[], key: string): Promise<boolean> {
-        const missing = list.map((text, i) => text.trim() && !result[i].trim() ? i : -1).filter(i => i >= 0);
-        if (missing.length === 0) return true;
-        let active: Worker;
-        try {
-            active = await engine(target);
-        } catch {
-            return false;
-        }
-        for (let start = 0; start < missing.length && current === target && revision === generation; start += Batch) {
-            const part = missing.slice(start, start + Batch);
-            const out = await run(active, part.map(i => list[i]), start);
-            if (current !== target || revision !== generation) return true;
-            part.forEach((i, offset) => { result[i] = out[offset]; bridge[i] = true; });
-            show(result);
-            say(`${reader.dataset.translatingLabel} ${Math.min(100, Math.round((start + Batch) * 100 / Math.max(1, missing.length)))} %`);
-        }
-
-        if (current === target && revision === generation) await cacheWrite(key, result.map((text, i) => bridge[i] ? text : ""));
-        return true;
+        if (alive()) say(undefined);
     }
 
     // The Reader page picks the server's TranslateGemma. The Mozilla path below runs only as an emergency: when the Mozilla module is on
-    // (data-browser-translation) and the server could not translate, see the fallback in choose().
-    // Mozilla's result is this browser's own: the server's translation cache is neither read nor written.
+    // (data-browser-translation) and the server could not translate, see the fallback in choose(). It translates the page in view and the
+    // three after it, and follows the reader. Mozilla's result is this browser's own: the server's translation cache is neither read nor written.
     async function translate(target: Language, generation: number) {
         if (reader.dataset.translationEngine === "gemma") return translateLocal(target, generation);
 
-        const list = texts();
-        const result: string[] = list.map(() => "");
-        const bridge: boolean[] = list.map(() => false);
-        const key = browserKey(target, list);
-        const earlier = await cacheRead(key, list.length);
-        if (current !== target || revision !== generation) return;
-        if (earlier) {
-            earlier.forEach((text, i) => { if (text.trim()) { result[i] = text; bridge[i] = true; } });
-            show(result);
-        }
+        const run = ++runs;
+        const alive = () => current === target && revision === generation && runs === run;
+        const set = blockSet(reader.dataset.localTranslationUrl ?? "", target, texts());
+        const found = await recall(set);
+        if (!alive()) return;
+        if (found) show(set.result);
 
         say(reader.dataset.translatingLabel + " 0 %");
-        if (!await browserFill(target, generation, list, result, bridge, key)) throw new Error("The browser has no models for this language.");
-        if (current === target && revision === generation) say(undefined);
+        const fill = () => browser.fill(target, set, windowed(), alive, () => show(set.result),
+            percent => { if (alive()) say(percent === undefined ? undefined : `${reader.dataset.translatingLabel} ${percent} %`); });
+        emergency = () => void fill().catch(() => undefined);
+        if (!await fill()) throw new Error("The browser has no models for this language.");
+        if (alive()) say(undefined);
     }
 
-    return async function choose(target: Language | "") {
+    async function choose(target: Language | "") {
         const generation = ++revision;
         current = target;
+        emergency = undefined;
         restore();
         say(undefined);
         reader.dataset.translationState = 'ready';
@@ -333,6 +413,7 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
                     // A failed browser batch may already have altered some text.
                     // Local TranslateGemma must receive the original source, not that partial translation.
                     restore();
+                    emergency = undefined;
                     reader.dataset.translationEngine = 'gemma';
                     const provider = reader.querySelector<HTMLElement>('[data-translation-provider]');
                     if (provider) provider.textContent =
@@ -356,7 +437,9 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
                     reader.dataset.translationEngine = 'gemma';
                 }
             }
-            if (current === target && generation === revision) { reader.dataset.translationState = 'failed'; restore(); say(reader.dataset.translationFailedLabel); }
+            if (current === target && generation === revision) { emergency = undefined; reader.dataset.translationState = 'failed'; restore(); say(reader.dataset.translationFailedLabel); }
         }
-    };
+    }
+
+    return { choose, moved: () => emergency?.() };
 }
