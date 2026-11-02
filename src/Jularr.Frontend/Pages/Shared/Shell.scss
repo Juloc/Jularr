@@ -1,4 +1,5 @@
 @use "./Brand";
+@use "../../Framework/Components/HitArea";
 
 // The mockups' shell: a 252px sidebar (230px, then 67px with icons only on a tablet, a drawer on a phone) and a 78px header on the panel
 // colour, separated by 1px quiet lines, one lavender tint for the current place. The header is one row at every width.
@@ -435,7 +436,14 @@ html[data-skin="original"] .sidebar-secondary {
     .app-header .app-menu-toggle { display: inline-grid; }
     .app-header .button--icon, .app-notifications { width: 34px; height: 34px; min-height: 34px; }
     .app-avatar { width: 31px; height: 31px; }
-    .breadcrumb { font-size: var(--text-control); }
+    // The header's own taps: 44px high in the 65px bar and as wide as the 8px gaps of the row allow (the buttons come from Button).
+    .app-header { --hit-gap-x: 8px; }
+    .app-notifications, .app-search { @include HitArea.hit-area(8px, 26px); }
+    .app-avatar { @include HitArea.hit-area(8px, 26px, $border: 3px); }
+    // The trail scrolls and so clips what leaves it: it is as high as the tap of its links, and the negative margin keeps the header as it was.
+    .breadcrumb { margin-block: -13px; padding-block: 13px; font-size: var(--text-control); }
+    .breadcrumb__item > a { @include HitArea.hit-area(8px, 26px, $border: 0px); }
+    .breadcrumb__item .link-menu__summary { min-height: 44px; }
     .breadcrumb__item:last-child { flex: 0 1 auto; min-width: 0; }
     .breadcrumb__item:nth-last-child(n + 3) { display: none; }
     .breadcrumb__item:nth-last-child(2)::before { display: none; }
