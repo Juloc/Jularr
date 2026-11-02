@@ -1,4 +1,4 @@
-// The preview of a card: after the mouse rested on the cover (a keyboard focus counts the same, a touch device that has a card linger in view starts it by itself)
+// The preview of a card: after the mouse rested on the cover (a keyboard focus counts the same, a touch device that has a card of a shelf, never of a grid, linger in view starts it by itself)
 // the card opens a panel over the row, as high as the card, with the title's description or, where it has one, its trailer: the one official embed Jularr frames,
 // muted, lazily loaded, wide and cropped so that none of the provider's own chrome shows, with Jularr's own pause, sound and progress. Nothing is requested before
 // the delay, only one preview is open at a time, and the cards of the row never change width or position (the card under the panel is only hidden).
@@ -413,7 +413,8 @@ export function attachCardPreview(env: PreviewEnvironment): (() => void) & { eva
     };
 
     // A touch device has no hover: a card that stays in view near the middle for the dwell opens by itself, one at a time, only where the profile allows it.
-    const allowed = (card: HTMLElement): boolean => !env.canHover() && env.canAutoplay() && !env.document.hidden
+    // Not in a grid: its panel is wider than the card and would cover the neighbouring covers and titles of a phone's two columns.
+    const allowed = (card: HTMLElement): boolean => !env.canHover() && env.canAutoplay() && !env.document.hidden && !card.closest('.media-grid')
         && card.closest('[data-autoplay-previews]')?.getAttribute('data-autoplay-previews') === 'true';
     const dwell = createDwell(dwellDelay, (action, milliseconds) => env.setTimeout(action, milliseconds), handle => env.clearTimeout(handle), id => {
         const card = lingering.get(id);

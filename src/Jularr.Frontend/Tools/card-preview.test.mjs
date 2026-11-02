@@ -20,7 +20,7 @@ class Element extends Node {
     constructor(kind, parent = null) { super(); this.kind = kind; this.parent = parent; this.dataset = {}; this.attributes = {}; this.isConnected = true; this.children = []; }
     closest(selector) {
         const kinds = {
-            '.media-card[data-preview-src]': 'card', '.media-card__surface': 'surface', '[data-trailer-action]': 'trailerButton', '.media-card__preview': 'panel', '[data-autoplay-previews]': 'shelf'
+            '.media-card[data-preview-src]': 'card', '.media-card__surface': 'surface', '[data-trailer-action]': 'trailerButton', '.media-card__preview': 'panel', '[data-autoplay-previews]': 'shelf', '.media-grid': 'grid'
         };
         const controls = 'button, a.button, form, input, .media-card__actions, .media-card__bookmark, .media-availability-badge, .media-card__preview';
         if (selector === controls) return ['button', 'actions', 'panel'].includes(this.kind) ? this : null;
@@ -56,7 +56,7 @@ class Element extends Node {
 
 
 // A tiny stand-in for the parts of the DOM the card preview touches, with a clock the test advances.
-function world({ canHover = true, autoplay = 'true', answer = { ok: true, status: 200, html: '<div class="media-card__preview" data-preview-mode="trailer" data-trailer-id="Way9Dexny3w"></div>' } } = {}) {
+function world({ canHover = true, autoplay = 'true', inGrid = false, answer = { ok: true, status: 200, html: '<div class="media-card__preview" data-preview-mode="trailer" data-trailer-id="Way9Dexny3w"></div>' } } = {}) {
     const listeners = {};
     const timers = [];
     let now = 0;
@@ -70,7 +70,7 @@ function world({ canHover = true, autoplay = 'true', answer = { ok: true, status
     surface.getAttribute = () => 'Dune';
     const shelf = new Element('shelf');
     shelf.attributes['data-autoplay-previews'] = autoplay;
-    const card = new Element('card', shelf);
+    const card = new Element('card', inGrid ? new Element('grid', shelf) : shelf);
     card.dataset.previewSrc = '/MediaPreview?work=2001';
     card.surface = surface;
     surface.parent = card;
@@ -387,6 +387,13 @@ test('a card that lingers on a touch device starts after the dwell, one at a tim
     off.stop.evaluate();
     await off.advance(5000);
     assert.equal(off.fetches.length, 0);
+
+    // A card of a grid never starts by itself: its wide panel would cover the neighbouring covers of a phone's two columns.
+    const grid = world({ canHover: false, inGrid: true });
+    grid.stop.evaluate();
+    await grid.advance(5000);
+    assert.equal(grid.fetches.length, 0);
+    assert.equal(grid.card.appended, undefined);
 
     // A tap elsewhere ends an open one and it does not come back by itself.
     const tap = world({ canHover: false });

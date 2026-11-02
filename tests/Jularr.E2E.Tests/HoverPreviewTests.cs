@@ -20,6 +20,14 @@ namespace Jularr.E2E.Tests
         // The provider's frame is a stand-in: it keeps the commands it receives and, once a listener registered, reports a time as the real player does.
         private const string Stub = "<!doctype html><title>trailer</title><script>window.commands = []; addEventListener('message', event => { try { const message = JSON.parse(event.data); if (message.event === 'listening') parent.postMessage(JSON.stringify({ event: 'infoDelivery', info: { currentTime: 12.4, duration: 144, playerState: 1 } }), '*'); else window.commands.push(message.func); } catch { } });</script><body>trailer</body>";
 
+        // The covers on the page are the seeded ones: nothing is fetched from the catalog providers of the internet.
+        private static readonly Dictionary<string, string> NoCatalogSync = new()
+        {
+            ["Providers:AniList"] = "http://127.0.0.1:9/",
+            ["Providers:OpenLibrary"] = "http://127.0.0.1:9/",
+            ["Providers:MusicBrainz"] = "http://127.0.0.1:9/"
+        };
+
         private static async Task<List<Box>> BoxesAsync(ILocator cards)
         {
             var boxes = new List<Box>();
@@ -197,9 +205,60 @@ namespace Jularr.E2E.Tests
 
         [TestMethod]
         [Timeout(300_000)]
+        public async Task Touch_AGridOfCoversNeverOpensAPreviewOverItsNeighbours()
+        {
+            await using var jularr = await JularrInstance.StartAsync(NoCatalogSync);
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            await Owner.SetUpAndSignInAsync(browser.Page);
+            await jularr.RunSqlAsync(Seed);
+            await jularr.SeedLibraryFilesAsync();
+
+            // A real phone context at 375px: touch input, no hover; it is signed in like the first one.
+            await using var phone = await browser.Context.Browser!.NewContextAsync(new()
+            {
+                BaseURL = jularr.Address.ToString(),
+                HasTouch = true,
+                IsMobile = true,
+                ViewportSize = new() { Width = 375, Height = 812 },
+                StorageState = await browser.Context.StorageStateAsync()
+            });
+            await Steps.KeepLocalAsync(phone);
+            var page = await phone.NewPageAsync();
+            try
+            {
+                var asked = new List<string>();
+                page.Request += (_, request) => { if (request.Url.Contains("/MediaPreview", StringComparison.Ordinal)) asked.Add(request.Url); };
+                await page.GotoAsync("/Library");
+                await Assertions.Expect(page.Locator("[data-autoplay-previews]")).ToHaveAttributeAsync("data-autoplay-previews", "true");
+                Assert.IsFalse(await page.EvaluateAsync<bool>("() => matchMedia('(hover: hover) and (pointer: fine)').matches"), "the phone context has no hover");
+                var cards = page.Locator(".media-grid .media-card");
+                Assert.IsTrue(await cards.CountAsync() >= 2, "The grid needs at least two cards.");
+
+                // The cards stay in view well past the 2 s dwell: nothing is asked and no panel covers a neighbour's cover or title.
+                await page.WaitForTimeoutAsync(4500);
+                Assert.AreEqual(0, asked.Count, "a grid card started its preview");
+                await Assertions.Expect(page.Locator(".media-card__preview")).ToHaveCountAsync(0);
+                var covered = await cards.EvaluateAllAsync<string[]>("""
+                    cards => cards.flatMap((card, position) => ['.media-card__surface', '.media-card__title'].map(part => {
+                        const box = card.querySelector(part).getBoundingClientRect();
+                        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+                        return hit?.closest('.media-card') === card ? '' : 'card ' + position + ' ' + part + ' is covered by ' + hit?.className;
+                    })).filter(problem => problem !== '')
+                    """);
+                CollectionAssert.AreEqual(Array.Empty<string>(), covered);
+            }
+            catch
+            {
+                await Evidence.SaveAsync(page, "hover-preview-grid-touch-failed");
+                throw;
+            }
+        }
+
+        [TestMethod]
+        [Timeout(300_000)]
         public async Task Touch_ACardThatLingers_StartsItsPreviewAfterTwoSeconds_UnlessTheProfileSwitchedItOff()
         {
-            await using var jularr = await JularrInstance.StartAsync();
+            await using var jularr = await JularrInstance.StartAsync(NoCatalogSync);
             await using var browser = await BrowserSession.StartAsync(jularr);
             var page = browser.Page;
             await Owner.SetUpAndSignInAsync(page);
@@ -209,13 +268,13 @@ namespace Jularr.E2E.Tests
 
             try
             {
-                // A phone: no hover, a narrow screen.
+                // A phone: no hover, a narrow screen. The shelf of recently added titles on Discover carries the cards (a grid never starts one by itself).
                 await page.SetViewportSizeAsync(390, 800);
                 await page.AddInitScriptAsync("const query = window.matchMedia.bind(window); window.matchMedia = text => text.includes('hover: hover') ? query('not all') : text.includes('hover: none') || text.includes('pointer: coarse') ? query('all') : query(text);");
                 var asked = new List<(string Url, DateTime At)>();
                 page.Request += (_, request) => { if (request.Url.Contains("/MediaPreview", StringComparison.Ordinal)) asked.Add((request.Url, DateTime.UtcNow)); };
                 var loaded = DateTime.UtcNow;
-                await page.GotoAsync("/Library");
+                await page.GotoAsync("/");
                 await Assertions.Expect(page.Locator("[data-autoplay-previews]")).ToHaveAttributeAsync("data-autoplay-previews", "true");
                 var panel = page.Locator(".media-card__preview");
 
@@ -236,7 +295,7 @@ namespace Jularr.E2E.Tests
                 // The profile's switch: off means no automatic preview.
                 await jularr.RunSqlAsync("""INSERT INTO "ProfilePlaybackPreferences" ("ProfileId", "AutoplayPreviews") SELECT "Id", FALSE FROM "Profiles" ON CONFLICT ("ProfileId") DO UPDATE SET "AutoplayPreviews" = FALSE;""");
                 asked.Clear();
-                await page.GotoAsync("/Library");
+                await page.GotoAsync("/");
                 await Assertions.Expect(page.Locator("[data-autoplay-previews]")).ToHaveAttributeAsync("data-autoplay-previews", "false");
                 await page.WaitForTimeoutAsync(4000);
                 Assert.AreEqual(0, asked.Count, "the switch is off: nothing starts by itself");

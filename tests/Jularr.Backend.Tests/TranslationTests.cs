@@ -137,7 +137,8 @@ namespace Jularr.Backend.Tests
             // The reader offers it; switched off, translation is gone.
             using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
             var reader = await page.Content.ReadAsStringAsync();
-            StringAssert.Contains(reader, "data-translation-url=\"/api/v1/reading/documents/" + document.DocumentId + "/sections/0/translations/\"");
+            StringAssert.Contains(reader, "data-local-translation-url=\"/api/v1/reading/documents/" + document.DocumentId + "/sections/0/local-translations/\"");
+            Assert.IsFalse(reader.Contains("data-translation-url=", StringComparison.Ordinal));
             StringAssert.Contains(reader, "href=\"" + ebook + "?language=de\"");
 
             // A book opens in the profile's language; its language button offers the original and the other allowed languages the server's TranslateGemma translates into.

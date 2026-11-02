@@ -30,29 +30,30 @@ html:not([data-skin="original"]) body:has(.login-card) {
     background: radial-gradient(ellipse 76% 75% at 49% 45%, color-mix(in srgb, var(--accent) 4%, var(--background)) 0%, var(--background) 76%);
 }
 
+// The app's panel: its corners, its 12px text and its 40px pill fields.
 .login-card {
     width: 100%;
-    padding: 29px 30px 26px;
+    padding: 26px 26px 24px;
     border: 1px solid var(--border);
-    border-radius: 24px;
+    border-radius: var(--radius-panel);
     background: var(--surface);
     box-shadow: var(--shadow);
-    font-size: 16px;
+    font-size: var(--text-body);
     line-height: normal;
 
     // The mark and the name, centred above the form.
-    .auth-brand { flex-wrap: nowrap; gap: 10px; min-height: 52px; margin: 0 0 28px; }
-    .auth-symbol { width: 57px; height: 57px; }
-    .auth-brand-name { font-size: 27px; font-weight: 850; letter-spacing: -1.5px; }
+    .auth-brand { flex-wrap: nowrap; gap: 10px; min-height: 48px; margin: 0 0 22px; }
+    .auth-symbol { width: 48px; height: 48px; }
+    .auth-brand-name { font-size: 24px; font-weight: 850; letter-spacing: -1.3px; }
 
     // One column of fields, the label above its field, the eye and the forgot link inside the field's row.
-    .ui-form { display: flex; flex-direction: column; align-items: stretch; gap: 18px; }
+    .ui-form { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
     .ui-field { gap: 0; }
-    .ui-field__top { flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 6px; max-width: none; margin: 0 0 8px var(--field-label-inset); line-height: normal; }
+    .ui-field__top { flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 6px; max-width: none; margin: 0 0 6px var(--field-label-inset); line-height: normal; }
     .ui-field__control {
         display: flex;
         align-items: center;
-        height: 46px;
+        height: var(--field-height);
         padding: 0;
         border: 1px solid var(--border);
         border-radius: var(--radius-field);
@@ -60,8 +61,8 @@ html:not([data-skin="original"]) body:has(.login-card) {
         transition: border-color .2s, box-shadow .2s;
 
         &:focus-within { border-color: var(--accent-outline); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
-        &:has([aria-invalid="true"]) { border-color: var(--danger); }
-        & > input { flex: 1; width: 100%; min-width: 0; height: 100%; min-height: 0; padding: 0 15px; border: 0; background: transparent; color: var(--text); font-size: 13px; }
+        &:has([aria-invalid="true"]) { border-color: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 12%, transparent); }
+        & > input { flex: 1; width: 100%; min-width: 0; height: 100%; min-height: 0; padding: 0 15px; border: 0; background: transparent; color: var(--text); font-size: var(--text-body); }
         & > input::placeholder { color: color-mix(in srgb, var(--muted) 78%, transparent); }
     }
     .field-error { margin: 7px 0 0; line-height: 1.5; }
@@ -69,24 +70,51 @@ html:not([data-skin="original"]) body:has(.login-card) {
     .ui-form__actions { display: block; margin-top: 2px; }
 }
 
+// Sign in: every field keeps one line free below it for its error, so a message never moves the card.
+// A message of the whole form (an expired page) takes the password's line.
+.login-card--signin {
+    .ui-form { position: relative; gap: 2px; }
+    .ui-field { position: relative; padding-bottom: 24px; }
+    .ui-field > .field-error, .ui-form > .field-error {
+        position: absolute;
+        right: 0;
+        bottom: 4px;
+        left: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0 0 0 var(--field-label-inset);
+        overflow: hidden;
+        color: var(--danger);
+        font-size: var(--text-control);
+        font-weight: 650;
+        line-height: 16px;
+        white-space: nowrap;
+
+        &::before { content: "!"; display: grid; flex: none; place-items: center; width: 13px; height: 13px; border-radius: 50%; background: var(--danger); color: var(--surface); font-size: 9px; font-weight: 900; line-height: 1; }
+    }
+    .ui-form > .field-error { bottom: calc(var(--auth-submit-height) + 5px); }
+}
+
 .auth-forgot { color: var(--muted); font-size: 11px; font-weight: 650; text-decoration: none; white-space: nowrap; &:hover { color: var(--accent); } }
 
-// The one filled action: the accent in a soft gradient. The same look serves a link (back to sign in).
+// The one filled action: an accent pill in a soft gradient. The same look serves a link (back to sign in).
+.auth-main { --auth-submit-height: 42px; }
 .auth-submit {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 5px;
     width: 100%;
-    height: 45px;
+    height: var(--auth-submit-height);
     padding: 0;
     border: 0;
-    border-radius: 13px;
+    border-radius: var(--radius-control);
     background: linear-gradient(95deg, var(--accent), color-mix(in srgb, var(--accent) 92%, #fff));
     box-shadow: 0 6px 15px color-mix(in srgb, var(--accent) 16%, transparent);
     color: var(--accent-contrast);
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--text-body);
     font-weight: 750;
     text-decoration: none;
     transition: filter var(--transition), transform var(--transition);
@@ -246,7 +274,7 @@ html:not([data-skin="original"]) body:has(.login-card) {
 
 @media (max-width: 500px) {
     .auth-main:has(.login-card) { padding: max(24px, calc(12px + env(safe-area-inset-top))) max(13px, env(safe-area-inset-right)) max(82px, calc(20px + env(safe-area-inset-bottom))) max(13px, env(safe-area-inset-left)); }
-    .login-card { padding: 27px 22px 24px; border-radius: 22px; .auth-brand { margin-bottom: 24px; } .auth-brand-name { font-size: 25px; } }
+    .login-card { padding: 24px 20px 22px; }
     .login-card--register { padding-top: 25px; .auth-brand { margin-bottom: 20px; } .auth-brand-name { font-size: 24px; } }
     .auth-providers { gap: 7px; }
     .auth-provider { gap: 5px; font-size: 11px; }
