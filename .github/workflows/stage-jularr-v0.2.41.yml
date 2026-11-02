@@ -19,8 +19,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          TARGET_SHA: 0b8ca4333f0a3ad5ce0be684452c30015039bee5
-          VERIFY_BRANCH: ci/release-verify-v0.2.41
+          TARGET_SHA: e6f5a29262415c5b180580549e0ebd3b7b2bd51b
+          VERIFY_BRANCH: ci/release-verify-v0.2.41-r2
         run: |
           set -euo pipefail
           has_success() {
