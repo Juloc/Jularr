@@ -50,6 +50,8 @@
         position: absolute;
         inset: 0;
         display: grid;
+        // A definite cell: the picture's percentage limits fit it to the screen (an auto row let a tall page picture grow past it).
+        grid-template: minmax(0, 1fr) / minmax(0, 1fr);
         place-items: center;
         overflow: hidden;
         touch-action: none;

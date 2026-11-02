@@ -68,30 +68,41 @@ namespace Jularr.Backend.Tests
             var aniList = new FakeAniList();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList));
 
-            // A manga names an anime adaptation and a sequel; neither is a Work yet, so both are catalog titles.
+            // A manga names an anime adaptation and a sequel; neither was a Work, so both are kept as catalog Works without details.
             var manga = await ImportAsync(host, 101);
             var relations = await ReadAsync(host, manga);
-            CollectionAssert.AreEquivalent(new[] { (WorkRelationType.Adaptation, "201"), (WorkRelationType.Sequel, "102") }, relations.Select(relation => (relation.WorkRelationTypeId, relation.ExternalId!)).ToArray());
-            Assert.IsTrue(relations.All(relation => relation.RelatedWorkId is null && relation.Namespace == "anilist" && relation.SourceKey == "anilist" && relation.WorkRelationId is not null));
-            Assert.AreEqual(("Example Anime", MediaType.Series, MediaSubtype.Anime), relations.Where(relation => relation.ExternalId == "201").Select(relation => (relation.Title, relation.MediaTypeId, relation.MediaSubtypeId!.Value)).Single());
+            var catalog = new Dictionary<string, long>();
+            foreach (var value in new[] { "201", "102" })
+            {
+                catalog[value] = (long)(await host.ScalarAsync($"""SELECT "WorkId" FROM "WorkExternalIdentities" WHERE "Namespace" = 'anilist' AND "Value" = '{value}'"""))!;
+            }
+            CollectionAssert.AreEquivalent(new[] { (WorkRelationType.Adaptation, catalog["201"]), (WorkRelationType.Sequel, catalog["102"]) },
+                relations.Select(relation => (relation.WorkRelationTypeId, relation.RelatedWorkId)).ToArray());
+            Assert.IsTrue(relations.All(relation => relation.SourceKey == "anilist" && relation.WorkRelationId is not null));
+            Assert.AreEqual(2L, await host.ScalarAsync($"""SELECT count(*) FROM "Works" WHERE "Id" IN ({catalog["201"]}, {catalog["102"]}) AND "DetailedAt" IS NULL AND "CatalogNamespace" = 'anilist'"""));
+            Assert.AreEqual(("Example Anime", MediaType.Series, MediaSubtype.Anime), relations.Where(relation => relation.RelatedWorkId == catalog["201"]).Select(relation => (relation.Title, relation.MediaTypeId, relation.MediaSubtypeId!.Value)).Single());
 
-            // The sequel becomes a Work: the first sees it as its sequel, the second its prequel, and the relation is shown once although both providers name it.
+            // The sequel's import fills its catalog Work: the first sees it as its sequel, the second its prequel, and the relation is shown once although both providers name it.
             var sequel = await ImportAsync(host, 102);
+            Assert.AreEqual(catalog["102"], sequel);
+            Assert.AreEqual(true, await host.ScalarAsync($"""SELECT "DetailedAt" IS NOT NULL FROM "Works" WHERE "Id" = {sequel}"""));
             var fromFirst = await ReadAsync(host, manga);
             var sequelRow = fromFirst.Single(relation => relation.RelatedWorkId == sequel);
             Assert.AreEqual(WorkRelationType.Sequel, sequelRow.WorkRelationTypeId);
             var fromSecond = await ReadAsync(host, sequel);
-            Assert.AreEqual((WorkRelationType.Prequel, manga), fromSecond.Select(relation => (relation.WorkRelationTypeId, relation.RelatedWorkId!.Value)).Single());
+            Assert.AreEqual((WorkRelationType.Prequel, manga), fromSecond.Select(relation => (relation.WorkRelationTypeId, relation.RelatedWorkId)).Single());
             Assert.IsNotNull(fromSecond.Single().AvailabilityStateId);
 
-            // The anime is requested later: its Work (found by the season's identity) now answers for the adaptation, and the anime sees its source material.
+            // The anime is requested later: from the next sync its series (found by the season's identity) answers for the adaptation, and the anime sees its source material.
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear") VALUES (900, 2, 1, 'Example Anime', 2021);
                 INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (9000, 900, 1, 1);
                 INSERT INTO "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value") VALUES (9000, 'anilist', '201');
                 """);
+            await ImportAsync(host, 101);
+            Assert.IsFalse((await ReadAsync(host, manga)).Any(relation => relation.RelatedWorkId == catalog["201"]));
             Assert.AreEqual((WorkRelationType.Adaptation, 900L), (await ReadAsync(host, manga)).Where(relation => relation.RelatedWorkId == 900).Select(relation => (relation.WorkRelationTypeId, 900L)).Single());
-            Assert.AreEqual((WorkRelationType.SourceMaterial, manga), (await ReadAsync(host, 900)).Select(relation => (relation.WorkRelationTypeId, relation.RelatedWorkId!.Value)).Single());
+            Assert.AreEqual((WorkRelationType.SourceMaterial, manga), (await ReadAsync(host, 900)).Select(relation => (relation.WorkRelationTypeId, relation.RelatedWorkId)).Single());
 
             // Removing a provider's relation hides it for good: the next sync does not bring it back, and it leaves the other Work's view too.
             using var hidden = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/works/" + manga + "/relations/" + sequelRow.WorkRelationId);
@@ -99,7 +110,7 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse((await ReadAsync(host, manga)).Any(relation => relation.RelatedWorkId == sequel));
             ForgetAniListReads(host);
             await ImportAsync(host, 101);
-            Assert.IsFalse((await ReadAsync(host, manga)).Any(relation => relation.RelatedWorkId == sequel || relation.ExternalId == "102"));
+            Assert.IsFalse((await ReadAsync(host, manga)).Any(relation => relation.RelatedWorkId == sequel));
             Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"WorkRelations\" WHERE \"WorkId\" = {manga} AND \"IsSuppressed\""));
 
             // A person puts it back: it is theirs now, shown on both Works.
@@ -123,14 +134,15 @@ namespace Jularr.Backend.Tests
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "FranchiseId") VALUES (10, 1, 'First Film', 2001, NULL), (20, 1, 'Second Film', 2003, NULL), (30, 3, 'The Book', 1999, NULL);
-                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear") VALUES (500, 'tmdb_movie', '77', 1, 'Remake Elsewhere', 2020);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (500, 1, 'Remake Elsewhere', 2020, 'tmdb_movie');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (500, 'tmdb_movie', '77');
                 INSERT INTO "Franchises" ("Id", "Name") VALUES (1, 'The Films');
                 UPDATE "Works" SET "FranchiseId" = 1 WHERE "Id" IN (10, 20);
                 """);
 
             // The series alone relates two Works as one universe; a person's relation between them replaces that row instead of adding a second.
             var series = await ReadAsync(host, 10);
-            Assert.AreEqual((WorkRelationType.SharedUniverse, 20L, (long?)null, "manual"), series.Select(relation => (relation.WorkRelationTypeId, relation.RelatedWorkId!.Value, relation.WorkRelationId, relation.SourceKey)).Single());
+            Assert.AreEqual((WorkRelationType.SharedUniverse, 20L, (long?)null, "manual"), series.Select(relation => (relation.WorkRelationTypeId, relation.RelatedWorkId, relation.WorkRelationId, relation.SourceKey)).Single());
             await AddAsync(host, 20, new CreateWorkRelationDataV1(WorkRelationType.Prequel, 10));
             var viewed = await ReadAsync(host, 10);
             Assert.AreEqual((WorkRelationType.Sequel, "manual"), viewed.Select(relation => (relation.WorkRelationTypeId, relation.SourceKey)).Single());
@@ -153,10 +165,10 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode, workId + " " + data.WorkRelationTypeId + " " + data.RelatedWorkId + await refused.Content.ReadAsStringAsync());
             }
 
-            // A catalog title that is no Work is related as the Work sees it; a second type for the same title is another relation.
+            // A catalog title named by its identity is its catalog Work; a second type for the same title is another relation.
             await AddAsync(host, 10, new CreateWorkRelationDataV1(WorkRelationType.Alternative, null, "tmdb_movie", "77"));
             await AddAsync(host, 10, new CreateWorkRelationDataV1(WorkRelationType.Other, null, "tmdb_movie", "77"));
-            var external = (await ReadAsync(host, 10)).Where(relation => relation.ExternalId == "77").ToArray();
+            var external = (await ReadAsync(host, 10)).Where(relation => relation.RelatedWorkId == 500).ToArray();
             CollectionAssert.AreEquivalent(new[] { WorkRelationType.Alternative, WorkRelationType.Other }, external.Select(relation => relation.WorkRelationTypeId).ToArray());
             Assert.AreEqual("Remake Elsewhere", external[0].Title);
 

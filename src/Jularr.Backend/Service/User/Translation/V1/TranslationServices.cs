@@ -56,7 +56,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<TranslationFileV1>>()];
-        protected override ModuleRequirement GetInstanceModules(TranslationRouteParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
+        protected override ModuleRequirement GetInstanceModules(TranslationRouteParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation", "TranslationBrowser");
         protected override ServicePermission GetPermission(TranslationRouteParametersV1 parameters, Type resultType) => new("profile.media.read");
 
         protected override async Task<IServiceOutput> OnRead()
@@ -82,7 +82,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
         private static partial Regex FileName();
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<TranslationFileContentV1>()];
-        protected override ModuleRequirement GetInstanceModules(TranslationFileParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
+        protected override ModuleRequirement GetInstanceModules(TranslationFileParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation", "TranslationBrowser");
         protected override ServicePermission GetPermission(TranslationFileParametersV1 parameters, Type resultType) => new("profile.media.read");
 
         protected override async Task<IServiceOutput> OnRead()

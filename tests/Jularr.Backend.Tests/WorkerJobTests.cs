@@ -22,6 +22,21 @@ namespace Jularr.Backend.Tests
         private static readonly DateTimeOffset Start = new(2026, 10, 20, 9, 0, 0, TimeSpan.Zero);
 
         [TestMethod]
+        public void Definitions_EveryGroupAndJob_HaveTheirTextOnTheJobsPage()
+        {
+            var keys = Jularr.Frontend.Localization.UiResources.English.Select(resource => resource.Key).ToHashSet();
+            foreach (var group in Enum.GetValues<WorkerGroupType>())
+            {
+                Assert.IsTrue(keys.Contains("jobs.worker." + group), "jobs.worker." + group);
+            }
+
+            foreach (var job in WorkerJobs.Definitions)
+            {
+                Assert.IsTrue(keys.Contains("jobs.job." + job.Key), "jobs.job." + job.Key);
+            }
+        }
+
+        [TestMethod]
         public void Definitions_CoverEveryWorkerAndTheSampler_AndStaggerTheirStart()
         {
             var jobs = WorkerJobs.Definitions;
@@ -31,9 +46,9 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(WorkerJobs.Of(group).Count > 0, group.ToString());
             }
 
-            // Fifteen workers and the sampler. Queues and interrupted downloads start at once; other workers have their own offset;
+            // Sixteen workers and the sampler. Queues and interrupted downloads start at once; other workers have their own offset;
             // a provider of the provider sync has no schedule of its own.
-            Assert.AreEqual(16, Enum.GetValues<WorkerGroupType>().Length);
+            Assert.AreEqual(17, Enum.GetValues<WorkerGroupType>().Length);
             foreach (var key in new[] { "operations", "backupQueue", "mediaImportQueue", "benchmarkQueue", "searchQueue", "downloads", "resources" })
             {
                 Assert.AreEqual(TimeSpan.Zero, WorkerJobs.Definition(key).StartDelay, key);
@@ -283,6 +298,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(WorkerJobResultType.Failed, await runner.RunAsync("subtitles", (_, _) => throw new InvalidOperationException("No provider."), default));
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs");
             var html = await page.Content.ReadAsStringAsync();
+            // The list has 25 jobs to a page; the failed one may be on the next.
+            using var secondPage = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs?pageNumber=2");
+            html += await secondPage.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "Seek thumbnails");
             StringAssert.Contains(html, "An unknown error occurred.");
@@ -309,6 +327,39 @@ namespace Jularr.Backend.Tests
                 using var hidden = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs");
                 Assert.IsFalse((await hidden.Content.ReadAsStringAsync()).Contains("Seek thumbnails", StringComparison.Ordinal), "role " + role);
             }
+        }
+
+        [TestMethod]
+        public async Task JobsPage_AFailedPass_SaysWhy_InTheRowAndInTheHistory_AndAnUnknownCodeReadsAsUnknownError()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var time = new FixedTime(Start);
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddSingleton<TimeProvider>(time));
+            var runner = host.Services.GetRequiredService<WorkerJobRunner>();
+
+            // A job that failed and runs well again keeps its entry in the history, with the reason of its error code.
+            time.Now = Start.AddHours(1);
+            Assert.AreEqual(WorkerJobResultType.Failed, await runner.RunAsync("aniListSync", (_, _) => throw new ServiceUnavailableException("anilist_unavailable"), default));
+            time.Now = Start.AddHours(2);
+            Assert.AreEqual(WorkerJobResultType.Succeeded, await runner.RunAsync("aniListSync", (_, _) => Task.CompletedTask, default));
+            Assert.AreEqual(0L, await OpenNoticesAsync(host, "aniListSync"));
+            using var recovered = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs");
+            var html = await recovered.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, recovered.StatusCode, html);
+            StringAssert.Contains(html, "AniList could not be reached.");
+            StringAssert.Contains(html, "Background job");
+
+            // A failure whose code has no text reads as an unknown error, in the row and in the drawer, never as the raw exception.
+            time.Now = Start.AddHours(3);
+            Assert.AreEqual(WorkerJobResultType.Failed, await runner.RunAsync("metadataFill", (_, _) => throw new ServiceUnavailableException("code_without_text"), default));
+            using var unknown = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs");
+            html = await unknown.Content.ReadAsStringAsync();
+            using var secondPage = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs?pageNumber=2");
+            html += await secondPage.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, unknown.StatusCode, html);
+            StringAssert.Contains(html, "An unknown error occurred.");
+            Assert.IsFalse(html.Contains("code_without_text", StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains("temporarily unavailable", StringComparison.Ordinal));
         }
 
         private static async Task<long> OpenNoticesAsync(Host host, string key) =>

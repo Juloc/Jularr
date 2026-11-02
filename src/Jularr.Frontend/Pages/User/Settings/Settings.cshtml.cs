@@ -278,7 +278,7 @@ namespace Jularr.Frontend.Pages.User.Settings
         private IUiComponent PlaybackForm(PlaybackPreferencesV1 preferences)
         {
             var input = _playbackInput ?? new SavePlaybackPreferencesDataV1(preferences.AudioLanguage, preferences.SubtitleLanguage, preferences.SubtitleModeTypeId, preferences.Speed,
-                preferences.AutoplayNext, preferences.IntroSkipModeTypeId, preferences.OutroSkipModeTypeId, preferences.AutoplayPreviews);
+                preferences.AutoplayNext, preferences.IntroSkipModeTypeId, preferences.OutroSkipModeTypeId, preferences.AutoplayPreviews, preferences.KeepScreenOn, preferences.SecondSubtitleLanguage);
             IEnumerable<SelectOption> LanguageOptions(string? chosen, string emptyKey) => [new SelectOption("", texts[emptyKey]),
                 .. Languages.Concat(chosen is null || Languages.Contains(chosen) ? [] : [chosen]).Select(code => new SelectOption(code, LanguageLabel.Name(code) ?? code))];
             return new Form<SavePlaybackPreferencesDataV1>(form =>
@@ -287,6 +287,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                 form.Select(item => item.SubtitleModeTypeId, "playback.subtitleMode", Enum.GetValues<SubtitleMode>()
                     .Select(mode => new SelectOption(((byte)mode).ToString(CultureInfo.InvariantCulture), texts["playback.subtitleMode." + mode])));
                 form.Select(item => item.SubtitleLanguage, "playback.subtitleLanguage", LanguageOptions(input.SubtitleLanguage, "playback.language.profile"));
+                form.Select(item => item.SecondSubtitleLanguage, "playback.secondSubtitleLanguage", LanguageOptions(input.SecondSubtitleLanguage, "playback.language.none"));
                 form.Select(item => item.Speed, "playback.speed", Speeds.Select(speed => new SelectOption(speed.ToString("0.00", CultureInfo.InvariantCulture),
                     speed.ToString("0.##", CultureInfo.CurrentCulture) + "×")));
                 form.Toggle(item => item.AutoplayNext, "playback.autoplayNext");
@@ -294,6 +295,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                 form.Select(item => item.IntroSkipModeTypeId, "playback.introSkipMode", skipModes);
                 form.Select(item => item.OutroSkipModeTypeId, "playback.outroSkipMode", skipModes);
                 form.Toggle(item => item.AutoplayPreviews, "playback.autoplayPreviews");
+                form.Toggle(item => item.KeepScreenOn, "playback.keepScreenOn");
                 form.Save();
             }, Url.Page("/User/Settings/Settings", "Playback"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, input, _playbackInput is not null ? FormError : null);
         }

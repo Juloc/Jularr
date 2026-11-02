@@ -84,15 +84,40 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
         public long Version { get; }
     }
 
-    // Every module as shown with its new state; the save is one step that must leave the switches consistent.
+    // The Caching module's settings as saved; they are saved with the switches (UpdateInstanceModulesDataV1).
+    public sealed class CachingSettingsV1 : BaseResponse
+    {
+        public CachingSettingsV1(int catalogDetailKeepDays, bool detailsDiscoverAhead)
+        {
+            CatalogDetailKeepDays = catalogDetailKeepDays;
+            DetailsDiscoverAhead = detailsDiscoverAhead;
+        }
+
+        // Days unused extended data of titles outside the library is kept.
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.CatalogDetailKeepDays))]
+        public int CatalogDetailKeepDays { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.DetailsDiscoverAhead))]
+        public bool DetailsDiscoverAhead { get; }
+    }
+
+    // Every module as shown with its new state and the Caching module's settings; the save is one step that must leave the switches consistent.
     public sealed class UpdateInstanceModulesDataV1 : BaseData
     {
-        public UpdateInstanceModulesDataV1(BaseDataList<InstanceModuleInputV1> modules)
+        public UpdateInstanceModulesDataV1(BaseDataList<InstanceModuleInputV1> modules, int catalogDetailKeepDays, bool detailsDiscoverAhead)
         {
             Modules = modules;
+            CatalogDetailKeepDays = catalogDetailKeepDays;
+            DetailsDiscoverAhead = detailsDiscoverAhead;
         }
 
         public BaseDataList<InstanceModuleInputV1> Modules { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.CatalogDetailKeepDays))]
+        public int CatalogDetailKeepDays { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.DetailsDiscoverAhead))]
+        public bool DetailsDiscoverAhead { get; }
 
         public override void Validate()
         {

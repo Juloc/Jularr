@@ -259,12 +259,7 @@ namespace Jularr.Integrations.Logic.Browser
                     _lastOutcome = _refused ? "refused" : "no answer";
                     _lastError = _refused ? "the source refused this browser" : null;
                     Note(_lastOutcome, _lastError ?? $"no answer for {DiagnosticOrigin(uri)}");
-                    // Restart a refused process, keeping the source session until an explicit reset.
-                    if (_refused)
-                    {
-                        await CloseAsync();
-                    }
-
+                    // Keep the check page and its live session available for manual assistance.
                     return null;
                 }
 
@@ -366,21 +361,29 @@ namespace Jularr.Integrations.Logic.Browser
             }
             finally
             {
-                foreach (var page in opened)
+                try
                 {
-                    if (page.Target is { } target) await ClosePageAsync(target, ct);
+                    // An expired search token cannot close its temporary mirror tabs.
+                    // Keep cleanup bounded and leave the primary page/session in place.
+                    using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    foreach (var page in opened)
+                    {
+                        if (page.Target is { } target) await ClosePageAsync(target, cleanup.Token);
+                    }
                 }
-
-                _gate.Release();
+                finally
+                {
+                    _gate.Release();
+                }
             }
         }
 
         // Keep the primary page's session; alternative addresses use temporary background pages.
         private async Task<OpenPage?> OpenPageAsync(Uri address, bool primary, CancellationToken ct)
         {
+            string? target = null;
             try
             {
-                string? target = null;
                 string? session = null;
                 if (!primary)
                 {
@@ -396,6 +399,11 @@ namespace Jularr.Integrations.Logic.Browser
             }
             catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException or System.Text.Json.JsonException)
             {
+                if (target is not null)
+                {
+                    using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await ClosePageAsync(target, cleanup.Token);
+                }
                 return null;
             }
         }
@@ -598,7 +606,7 @@ namespace Jularr.Integrations.Logic.Browser
             if (_packages is not null && executable == _packages.ExecutablePath)
             {
                 // The optional managed package uses Linux headless mode and does not need a display server.
-                arguments += " --headless=new";
+                arguments += " --headless=new --disable-gpu";
             }
             if (_options.NoSandbox)
             {

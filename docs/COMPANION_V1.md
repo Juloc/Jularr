@@ -42,7 +42,7 @@ Per-IP limits: invite/claim 10/min, command 30/min, reads/state/dispatch 120/min
 
 ## Acceptance/verification
 
-Critical automated cases: invitation once/expiry/replacement; owner-only invitation; same-account/profile proof; command UUID replay and stale revision; single delivery; acknowledgement from the TV; grant revoke; playback end; TV token rotation. Further coverage to add before release: wrong profile/account with independent session credentials, parallel claims under contention, controller rotation and revocation while commands are in flight, network partition between dispatch and ack, and native device/phone integration.
+Critical automated cases: invitation once/expiry/replacement; owner-only invitation; same-account/profile proof; command UUID replay and stale revision; single delivery; acknowledgement from the TV; grant revoke; playback end; TV token rotation. Further coverage to add: wrong profile/account with independent session credentials, parallel claims under contention, controller rotation and revocation while commands are in flight, network partition between dispatch and ack, and native device/phone integration.
 
 Release acceptance additionally requires **real Android TV + phone E2E**: scan QR, play/pause/seek, multiple accounts/profiles, network drop/reconnect, logout/end, interrupted command, and displayed command feedback. This PR alone does not pass that hardware gate. A Draft PR must not be merged on implementation existence alone.
 

@@ -80,7 +80,9 @@ app.Use(async (context, next) =>
 {
     if (context.GetEndpoint()?.Metadata.GetMetadata<PageActionDescriptor>() is not null)
     {
-        context.Response.Headers.CacheControl = "private,no-store";
+        // The same values the antiforgery token sets itself: any other value is overridden by it and logged as a warning on every page with a form.
+        context.Response.Headers.CacheControl = "no-cache, no-store";
+        context.Response.Headers.Pragma = "no-cache";
         var texts = context.RequestServices.GetRequiredService<UiText>();
         await texts.InitializeAsync(context);
 

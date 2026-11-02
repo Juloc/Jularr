@@ -5,7 +5,7 @@ import de.juloc.jularr.core.api.catalog.TvDiscoverItemV1
 
 /**
  * One featured card from the actual ranked clean-start Discover results.
- * A catalog namespace/externalId and a TMDB id are not Jularr WorkIds.
+ * Every card opens its Work by workId.
  */
 internal data class TvV1HomeHero(
     val key: String,
@@ -39,8 +39,7 @@ internal fun tvV1HomeHeroCandidates(
     val lists = ranked.map { feed ->
         if (feed.isCatalog) feed.catalogItems.mapNotNull { item ->
             if (item.title.isBlank() || item.posterUrl.isNullOrBlank()) return@mapNotNull null
-            val identity = item.workId?.let { "work:$it" }
-                ?: "catalog:${item.namespace}:${item.externalId}"
+            val identity = "catalog:${item.namespace}:${item.externalId}"
             TvV1HomeHero(
                 key = identity, title = item.title, releaseYear = item.releaseYear,
                 subtitle = tvV1HomeFeedTitle(feed),
@@ -51,9 +50,7 @@ internal fun tvV1HomeHeroCandidates(
             if (item.title.isBlank() ||
                 (item.backdropUrl.isNullOrBlank() && item.posterUrl.isNullOrBlank())
             ) return@mapNotNull null
-            val identity = item.workId?.let { "work:$it" }
-                ?: item.tmdbId?.let { "tmdb:${item.mediaTypeId}:$it" }
-                ?: return@mapNotNull null
+            val identity = "work:${item.workId}"
             TvV1HomeHero(
                 key = identity, title = item.title, releaseYear = item.releaseYear,
                 subtitle = tvV1HomeFeedTitle(feed),

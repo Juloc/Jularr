@@ -22,7 +22,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
             var settings = await Context.ReadDownloadStorageSettingsAsync(Parameters.DownloadStorageAreaId, CancellationToken);
             return new DownloadStorageSettingsV1(settings.DownloadStorageAreaId, settings.IncompleteStorageMountId, settings.IncompletePath, settings.IncompleteFilesystemIdentity,
                 settings.CompleteStorageMountId, settings.CompletePath, settings.CompleteFilesystemIdentity, settings.FreeSpaceReserveBytes, settings.MaxJobBytes,
-                settings.MaxWorkspaceBytes, settings.MaxParallelJobs, settings.Version, DownloadStorageLogic.IsConfigured(settings));
+                settings.MaxWorkspaceBytes, settings.MaxParallelJobs, settings.Version, DownloadStorageLogic.IsConfigured(settings), settings.MaxBytesPerSecond);
         }
     }
 

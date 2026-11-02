@@ -137,10 +137,11 @@ namespace Jularr.Backend.Tests
             // The reader offers it; switched off, translation is gone.
             using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
             var reader = await page.Content.ReadAsStringAsync();
-            StringAssert.Contains(reader, "data-translation-url=\"/api/v1/reading/documents/" + document.DocumentId + "/sections/0/translations/\"");
+            StringAssert.Contains(reader, "data-local-translation-url=\"/api/v1/reading/documents/" + document.DocumentId + "/sections/0/local-translations/\"");
+            Assert.IsFalse(reader.Contains("data-translation-url=", StringComparison.Ordinal));
             StringAssert.Contains(reader, "href=\"" + ebook + "?language=de\"");
 
-            // A book opens in the profile's language; its language button offers the original and the other allowed languages Mozilla reaches.
+            // A book opens in the profile's language; its language button offers the original and the other allowed languages the server's TranslateGemma translates into.
             await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" = 'de-DE') WHERE \"Id\" = 101");
             Assert.AreEqual("de", await ReadingLanguageAsync(host, first));
             using var options = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
@@ -164,6 +165,36 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse((await capabilities.Content.ReadFromJsonAsync<InstanceCapabilitiesDetailsV1>())!.Modules.Contains("Translation"));
         }
 
+        [TestMethod]
+        public async Task MozillaModule_IsAnEmergencyOnlyAndAsksMozillaForNothingWhileOff()
+        {
+            using var storage = new TemporaryDirectory();
+            using var models = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, models.Path, new FakeMozilla());
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'TranslationBrowser'");
+
+            using var off = await host.SendAsync(HttpMethod.Get, "/api/v1/translation/routes/en/de");
+            Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
+
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'TranslationBrowser'");
+            using var on = await host.SendAsync(HttpMethod.Get, "/api/v1/translation/routes/en/de");
+            Assert.AreEqual(HttpStatusCode.OK, on.StatusCode, await on.Content.ReadAsStringAsync());
+        }
+
+        [TestMethod]
+        public async Task TranslationPage_SaysWhatTheBookJobIsWaitingFor()
+        {
+            using var storage = new TemporaryDirectory();
+            using var models = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, models.Path, new FakeMozilla());
+
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            var state = System.Text.RegularExpressions.Regex.Match(html, "data-translation-prepare=\"([a-zA-Z]+)\"").Groups[1].Value;
+            Assert.AreEqual("ready", state, "A machine with the approved model answers, so the job runs.");
+        }
+
         private static async Task<string> ReadingLanguageAsync(Host host, long asset)
         {
             using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + asset);
@@ -172,10 +203,27 @@ namespace Jularr.Backend.Tests
 
         private static async Task<Host> CreateHostAsync(string storage, string models, FakeMozilla mozilla)
         {
-            var host = await LibraryTests.CreateHostAsync(storage, razor: true, settings: new Dictionary<string, string> { ["Media:TranslationPath"] = models },
-                services: services => services.AddHttpClient<MozillaTranslationsClient>().ConfigurePrimaryHttpMessageHandler(() => mozilla));
-            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            // The server's TranslateGemma is the Reader's only translator (#1726): it offers languages only where a model is installed.
+            var host = await LibraryTests.CreateHostAsync(storage, razor: true,
+                settings: new Dictionary<string, string> { ["Media:TranslationPath"] = models, ["LocalTranslation:Endpoint"] = "http://ollama:11434" },
+                services: services =>
+                {
+                    services.AddHttpClient<MozillaTranslationsClient>().ConfigurePrimaryHttpMessageHandler(() => mozilla);
+                    services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => new FakeOllama());
+                });
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" IN ('Translation', 'TranslationBrowser')");
             return host;
+        }
+
+        // An Ollama machine with the approved translation model installed.
+        private sealed class FakeOllama : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+                Task.FromResult(request.RequestUri!.AbsolutePath == "/api/tags"
+                    ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new { models = new[] { new { name = "translategemma:4b", digest = new string('a', 64) } } })) }
+                    : request.RequestUri.AbsolutePath == "/api/ps"
+                        ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new { models = Array.Empty<object>() })) }
+                        : new HttpResponseMessage(HttpStatusCode.NotFound));
         }
 
         // Mozilla's Remote Settings: engines 2.0, 3.0 and 3.1; en-de 1.0, 2.1 and a preview; en-ja 1.0 and a newer one for Android only; de-en 1.0. One file is served altered.

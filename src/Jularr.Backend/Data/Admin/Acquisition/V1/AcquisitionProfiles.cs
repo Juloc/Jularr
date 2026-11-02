@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Media;
+using Jularr.Backend.Data.Logic.Acquisition;
 
 namespace Jularr.Backend.Data.Admin.Acquisition.V1
 {
@@ -89,7 +90,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             int? minimumSizeMb, int? maximumSizeMb, long? version = null, MediaSubtype? mediaSubtypeId = null, string[]? qualityOrder = null,
             BaseDataList<QualityGroupV1>? qualityGroups = null, BaseDataList<CustomFormatScoreV1>? formatScores = null,
             int minimumFormatScore = 0, int cutoffFormatScore = 0, int minimumUpgradeFormatScore = 1, string[]? languageOrder = null,
-            LanguageFallbackType languageFallback = LanguageFallbackType.Any)
+            LanguageFallbackType languageFallback = LanguageFallbackType.Any, int goodGroupScore = AcquisitionProfileDefinition.DefaultGoodGroupScore,
+            int badGroupScore = AcquisitionProfileDefinition.DefaultBadGroupScore)
         {
             Name = name;
             MediaTypeId = mediaTypeId;
@@ -109,6 +111,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             MinimumUpgradeFormatScore = minimumUpgradeFormatScore;
             LanguageOrder = languageOrder ?? [];
             LanguageFallback = languageFallback;
+            GoodGroupScore = goodGroupScore;
+            BadGroupScore = badGroupScore;
         }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Name))]
@@ -164,6 +168,14 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         // The fallback when no file carries an asked language: the original language of the work, English, or nothing.
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.LanguageFallback), false)]
         public LanguageFallbackType LanguageFallback { get; }
+
+        // The points of a release group rated good or bad for the profile's media type.
+        [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.GoodScore))]
+        public int GoodGroupScore { get; }
+
+        [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.BadScore))]
+        public int BadGroupScore { get; }
+
         public override void Validate()
         {
             base.Validate();
@@ -180,7 +192,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             int? minimumSizeMb, int? maximumSizeMb, MediaSubtype? mediaSubtypeId, string[]? qualityOrder, BaseDataList<QualityGroupV1>? qualityGroups,
             BaseDataList<CustomFormatScoreV1>? formatScores, int minimumFormatScore, int cutoffFormatScore, int minimumUpgradeFormatScore,
             int wantedCount, long version, string[] monitoredTypes, string[] monitoredLanguages, int? minimumPages,
-            string[]? languageOrder = null, LanguageFallbackType languageFallback = LanguageFallbackType.Any)
+            string[]? languageOrder = null, LanguageFallbackType languageFallback = LanguageFallbackType.Any, int goodGroupScore = AcquisitionProfileDefinition.DefaultGoodGroupScore,
+            int badGroupScore = AcquisitionProfileDefinition.DefaultBadGroupScore)
         {
             Id = id;
             Name = name;
@@ -205,6 +218,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             MinimumPages = minimumPages;
             LanguageOrder = languageOrder ?? [];
             LanguageFallback = languageFallback;
+            GoodGroupScore = goodGroupScore;
+            BadGroupScore = badGroupScore;
         }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
@@ -275,6 +290,13 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         // The fallback when no file carries an asked language: the original language of the work, English, or nothing.
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.LanguageFallback), false)]
         public LanguageFallbackType LanguageFallback { get; }
+
+        // The points of a release group rated good or bad for the profile's media type.
+        [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.GoodScore))]
+        public int GoodGroupScore { get; }
+
+        [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.BadScore))]
+        public int BadGroupScore { get; }
     }
     public sealed class CreateAcquisitionProfileResultV1 : BaseResponse
     {

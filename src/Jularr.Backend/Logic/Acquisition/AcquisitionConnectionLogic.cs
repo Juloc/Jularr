@@ -118,14 +118,21 @@ namespace Jularr.Backend.Logic.Acquisition
             (indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)mediaType)) && (!automatic || indexer.SearchesAutomatically);
 
         // Queries left today after the ones a search already used.
-        public static bool HasQueries(AcquisitionConnectionData indexer, int used) => indexer.QueryLimit is null || indexer.QueryCount + used < indexer.QueryLimit;
+        // An indexer without its own daily limit still guards the searches nobody asked for, so a loop over a large library cannot use up its plan; a manual search has no such guard.
+        public const int AutomaticQueryLimit = 1000;
+
+        public static bool HasQueries(AcquisitionConnectionData indexer, int used, bool automatic = false)
+        {
+            int? limit = indexer.QueryLimit ?? (automatic ? AutomaticQueryLimit : null);
+            return limit is null || indexer.QueryCount + used < limit;
+        }
 
         // Automatic searches also skip backed-off indexers and those without grabs left.
         public static bool CanSearch(AcquisitionConnectionData indexer, MediaType mediaType, bool automatic, DateTime now) =>
-            Serves(indexer, mediaType, automatic) && HasQueries(indexer, 0)
+            Serves(indexer, mediaType, automatic) && HasQueries(indexer, 0, automatic)
             && (!automatic || (indexer.RetryAt is null || indexer.RetryAt <= now) && (indexer.GrabLimit is null || indexer.GrabCount < indexer.GrabLimit));
 
-        // Today's queries count against the limit; a failure backs off from 5 minutes doubling up to a day, an answer ends the backoff.
+        // Today's queries count against the limit; a failure backs off from 5 minutes doubling up to a day, or for the wait the indexer asked for if that is longer; an answer ends the backoff.
         public static async Task RecordIndexerUseAsync(this LogicContext ctx, IndexerUseData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -138,7 +145,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "GrabCount" = CASE WHEN connection."CountedOn" = current_date THEN connection."GrabCount" ELSE 0 END,
                     "CountedOn" = current_date,
                     "FailureCount" = CASE WHEN @IsAvailable THEN 0 ELSE connection."FailureCount" + 1 END,
-                    "RetryAt" = CASE WHEN NOT @IsAvailable THEN now() + least(interval '5 minutes' * power(2, least(connection."FailureCount", 9)), interval '1 day') END,
+                    "RetryAt" = CASE WHEN NOT @IsAvailable THEN now() + greatest(least(interval '5 minutes' * power(2, least(connection."FailureCount", 9)), interval '1 day'), interval '1 second' * COALESCE(@RetryAfterSeconds, 0)) END,
                     "LastErrorKey" = CASE WHEN NOT @IsAvailable THEN 'acquisition_unavailable' END,
                     "CheckedAt" = now()
                 WHERE
@@ -208,6 +215,17 @@ namespace Jularr.Backend.Logic.Acquisition
         // A news server is a host with SSL and an optional port; everything else an HTTP address. The Anna's Archive member key travels in the address and only over HTTPS.
         private static void ValidateAddress(AcquisitionConnectionSaveData data)
         {
+            // Jularr's own torrent engine runs here and has no address.
+            if (data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent)
+            {
+                if (data.BaseUrl is not null || data.Host is not null || data.Port is not null || data.UseSsl is not null)
+                {
+                    throw new DataValidationException(nameof(data.BaseUrl), "invalid_transition");
+                }
+
+                return;
+            }
+
             if (data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
                 if (data.Host is null)
@@ -235,6 +253,12 @@ namespace Jularr.Backend.Logic.Acquisition
 
             var secure = data.AcquisitionConnectionTypeId is AcquisitionConnectionType.AnnasArchive or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl;
             if (secure && new Uri(baseUrl).Scheme != "https")
+            {
+                throw new DataValidationException(nameof(data.BaseUrl), "invalid_url");
+            }
+
+            // Narō is asked at its own hosts only; the address names the novel site.
+            if (data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Narou && new Uri(baseUrl) is not { Scheme: "https", Host: "ncode.syosetu.com", AbsolutePath: "/" })
             {
                 throw new DataValidationException(nameof(data.BaseUrl), "invalid_url");
             }

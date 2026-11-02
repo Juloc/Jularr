@@ -1,0 +1,30 @@
+# Golden corpus of book release names: what the parser reads and what the automatic choice decides, one tab-separated row per release.
+# Requests (BookReleaseCorpusTests): mushoku = the light novel "Mushoku Tensei: Jobless Reincarnation" by Rifujin na Magonote; waykings = the book
+# "The Way of Kings" by Brandon Sanderson; pride = the book "Pride and Prejudice" by Jane Austen. Each asks for English, allows every book format and
+# uses the default sizes per volume (e-book 150 MB, illustrated 300 MB, manga 700 MB). "-" is empty; volumes are a single number or a range;
+# reason is the last reason of the decision; score is the sum of the points.
+# The first eleven rows are the Nyaa answers of 2026-10-29 for "Mushoku Tensei: Jobless Reincarnation" (the shared series name restored in front).
+# request	title	size_mb	kind	format	volumes	editions	publisher	group	year	languages	size	decision	reason	score
+mushoku	Mushoku Tensei - Jobless Reincarnation - Web Novel Vol 01-24 EPUB [Complete] [Baka-Tsuki] (EN)	20.0	Ebook	EPUB	1-24	WebNovel,Complete	-	Baka-Tsuki	-	EN	Fits	ManualReview	WebNovel	60
+mushoku	Mushoku Tensei - Jobless Reincarnation v01-23 (2015-2026) (Digital) (danke-Empire, Ushi) (EN)	7884.8	MangaComic	-	1-23	Digital	-	danke-Empire, Ushi	2015	EN	Fits	Rejected	MangaNotWanted	20
+mushoku	Mushoku Tensei: Jobless Reincarnation ~Eris Sharpens Her Fangs~ (2023-2024) (Digital-Compilation) (Square Enix) (DigitalMangaFan) (EN)	439.5	MangaComic	-	-	Digital,Compilation	Square Enix	DigitalMangaFan	2023	EN	Fits	Rejected	MangaNotWanted	20
+mushoku	Mushoku Tensei: Jobless Reincarnation - A Journey of Two Lifetimes [Audiobook] [Seven Seas Siren] [Stick] (EN)	519.7	Audiobook	-	-	-	Seven Seas Siren	Stick	-	EN	NoLimit	Rejected	AudiobookNotWanted	20
+mushoku	Mushoku Tensei: Jobless Reincarnation - Recollections [Audiobook] [Seven Seas Siren] [Stick] (EN)	307.3	Audiobook	-	-	-	Seven Seas Siren	Stick	-	EN	NoLimit	Rejected	AudiobookNotWanted	20
+mushoku	Mushoku Tensei: Jobless Reincarnation [Audiobook] [Seven Seas Siren] [Stick] (EN)	12595.2	Audiobook	-	-	-	Seven Seas Siren	Stick	-	EN	NoLimit	Rejected	AudiobookNotWanted	20
+mushoku	Mushoku Tensei: Jobless Reincarnation - A Journey of Two Lifetimes [Seven Seas] [LuCaZ] (EN)	48.9	Ebook	-	-	-	Seven Seas	LuCaZ	-	EN	Fits	ManualReview	ExtraTitleWords	20
+mushoku	Mushoku Tensei: Jobless Reincarnation - Recollections [Seven Seas] [LuCaZ] (EN)	86.0	Ebook	-	-	-	Seven Seas	LuCaZ	-	EN	Fits	ManualReview	ExtraTitleWords	20
+mushoku	Mushoku Tensei: Jobless Reincarnation [Seven Seas] [LuCaZ] (EN)	410.2	Ebook	-	-	-	Seven Seas	LuCaZ	-	EN	Unknown	Eligible	MatchesTitle	20
+mushoku	Mushoku Tensei: Jobless Reincarnation [Seven Seas] [Stick] (EN)	319.8	Ebook	-	-	-	Seven Seas	Stick	-	EN	Unknown	Eligible	MatchesTitle	20
+mushoku	Mushoku Tensei: Jobless Reincarnation ~Eris Sharpens Her Fangs~ v01 (2023) (Digital-Compilation) (DigitalMangaFan) (EN)	627.8	MangaComic	-	1	Digital,Compilation	-	DigitalMangaFan	2023	EN	Fits	Rejected	MangaNotWanted	20
+mushoku	Mushoku Tensei: Jobless Reincarnation Vol. 3 (Light Novel) [Seven Seas] [Stick] (EN) (epub)	12.4	Ebook	EPUB	3	-	Seven Seas	Stick	-	EN	Fits	Eligible	MatchesTitle	60
+mushoku	Mushoku.Tensei.Jobless.Reincarnation.S01E01.1080p.WEB-DL.AAC2.0.H.264-VARYG	1433.6	Ebook	-	-	-	-	VARYG	-	-	Unknown	ManualReview	ExtraTitleWords	20
+mushoku	Seven Seas Siren - Mushoku Tensei Jobless Reincarnation Vol 1 (2021) [MP3 320]	450.0	Audiobook	MP3	1	-	-	-	2021	-	NoLimit	Rejected	AudiobookNotWanted	20
+mushoku	Various Artists - Isekai Anthems (2019) [FLAC]	380.0	Audiobook	FLAC	-	-	-	-	2019	-	NoLimit	Rejected	WrongTitle	0
+mushoku	Weekly Shonen Jump Magazine 2023-05-01 (Digital)	120.0	Magazine	-	-	Digital	-	-	2023	-	NoLimit	Rejected	WrongTitle	0
+waykings	Brandon Sanderson - The Way of Kings (2010) [Retail] (EN) (epub)	3.2	Ebook	EPUB	-	-	-	-	2010	EN	Fits	Eligible	MatchesTitleAndAuthor	70
+waykings	Brandon.Sanderson-The.Way.of.Kings.2010.RETAIL.EPUB-eBookGrp	4.1	Ebook	EPUB	-	-	-	eBookGrp	2010	-	Fits	Eligible	MatchesTitleAndAuthor	70
+waykings	Brandon Sanderson - The Way of Kings (2010) [M4B] Unabridged	1200.0	Audiobook	M4B	-	-	-	-	2010	-	NoLimit	Rejected	AudiobookNotWanted	30
+waykings	The.Way.of.Kings.2010.1080p.BluRay.x264-GROUP	8000.0	Ebook	-	-	-	-	GROUP	2010	-	AboveMaximum	Rejected	SizeAboveVolumeMaximum	20
+pride	Pride and Prejudice - Jane Austen (1813) (EN) (azw3)	1.5	Ebook	AZW3	-	-	-	-	1813	EN	Fits	Eligible	MatchesTitleAndAuthor	60
+pride	Pride.and.Prejudice.Illustrated.Edition.2019.English.PDF-GRP	250.0	Ebook	PDF	-	Illustrated	-	GRP	2019	EN	Fits	Eligible	MatchesTitle	45
+pride	Pride and Prejudice (EN) (epub)	700.0	Ebook	EPUB	-	-	-	-	-	EN	AboveMaximum	Rejected	SizeAboveVolumeMaximum	60

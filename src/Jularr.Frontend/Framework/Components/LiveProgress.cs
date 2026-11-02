@@ -19,6 +19,11 @@ namespace Jularr.Frontend.Framework
         // The numbers of the queue's tiles.
         public const string Queue = "queue";
 
+        // The figures of the Downloads page: All or one client (its speed line's name), and what a news server's last pass measured.
+        public static string Downloads(string client) => "downloads:" + client;
+        public static string NewsServer(long id) => "news-server:" + id.ToString(CultureInfo.InvariantCulture);
+        public const string AllDownloads = "all";
+
         // The figures of the administration menu: open downloads, failed jobs, requests that wait.
         public const string Menu = "menu";
     }

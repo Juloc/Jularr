@@ -27,7 +27,7 @@ namespace Jularr.Backend.Data.Fields.Reading
         public static readonly StringField MediaType = new(NpgsqlDbType.Varchar) { MaximumLength = 128, AllowBlank = false };
         public static readonly ByteArrayField Bytes = new();
         public static readonly StringField Html = new() { AllowBlank = true };
-        public static readonly IntField SectionIndex = new() { Minimum = 0, Maximum = 100_000 };
+        public static readonly IntField SectionIndex = new() { Minimum = 0, Maximum = 200_000 };
 
         // "original" or a language code such as "de"; empty follows the profile's language.
         public static readonly StringField ReadingLanguage = new(NpgsqlTypes.NpgsqlDbType.Varchar) { MaximumLength = 8, Required = false, AllowBlank = false, Trim = true };
@@ -48,6 +48,7 @@ namespace Jularr.Backend.Data.Fields.Reading
         public static readonly EnumField ReadingDerivationStatusTypeIdOptional = new(typeof(ReadingDerivationStatus)) { Required = false };
         public static readonly StringField Reason = new(NpgsqlDbType.Varchar) { MaximumLength = 32, Required = false };
         public static readonly IntField Pages = new() { Minimum = 0, Required = false };
+        public static readonly IntArrayField SmartPages = new() { Minimum = 1, Maximum = 5000, MaximumLength = 5000 };
         public static readonly IntField Chapters = new() { Minimum = 0, Required = false };
         public static readonly IntField Figures = new() { Minimum = 0, Required = false };
         public static readonly IntField Attempts = new() { Minimum = 0 };

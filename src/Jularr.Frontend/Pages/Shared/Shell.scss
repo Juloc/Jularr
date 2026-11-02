@@ -58,6 +58,7 @@
 
         & + &::before {
             content: "";
+            flex: none;
             width: 6px;
             height: 6px;
             margin: 0 12px 0 8px;
@@ -78,10 +79,12 @@
 // A part with sub-pages is a link on a wide header and a menu of those pages on a narrow one.
 .breadcrumb__item--menu .link-menu { display: none; }
 .breadcrumb__item .link-menu__summary { min-height: 40px; color: var(--muted); font-weight: 400; }
-.breadcrumb__item .link-menu__list { left: 12px; }
+.breadcrumb__item .link-menu__list { left: 12px; max-height: calc(100dvh - var(--shell-header-offset) - 24px - env(safe-area-inset-bottom)); }
 
-// Narrow header: only the last two parts.
+// Narrow header: only the last two parts, closer together so that both usually fit; the first stays whole and a longer title (the last part) ends in an ellipsis.
 @container crumbs (max-width: 460px) {
+    .breadcrumb__item + .breadcrumb__item::before { margin: 0 8px 0 6px; }
+    .breadcrumb__item:last-child { flex: 0 1 auto; min-width: 0; }
     .breadcrumb__item:nth-last-child(n + 3) { display: none; }
     .breadcrumb__item:nth-last-child(2)::before { display: none; }
     .breadcrumb__item--menu > .breadcrumb__link { display: none; }
@@ -425,7 +428,7 @@ html[data-skin="original"] .sidebar-secondary {
 
     // Mark in the sidebar; the header has the menu button, the last two parts of the trail, search and inbox: always one row.
     .app-header {
-        gap: 10px;
+        gap: 8px;
         height: calc(65px + env(safe-area-inset-top));
         padding: env(safe-area-inset-top) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
     }
@@ -433,6 +436,7 @@ html[data-skin="original"] .sidebar-secondary {
     .app-header .button--icon, .app-notifications { width: 34px; height: 34px; min-height: 34px; }
     .app-avatar { width: 31px; height: 31px; }
     .breadcrumb { font-size: var(--text-control); }
+    .breadcrumb__item:last-child { flex: 0 1 auto; min-width: 0; }
     .breadcrumb__item:nth-last-child(n + 3) { display: none; }
     .breadcrumb__item:nth-last-child(2)::before { display: none; }
     .breadcrumb__item--menu > .breadcrumb__link { display: none; }

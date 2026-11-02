@@ -23,6 +23,10 @@ namespace Jularr.Backend.Data.Fields.Instance
         public static readonly IntField UnitGroupLimit = new() { Minimum = 1, Maximum = 1000 };
         public static readonly StringArrayField SubtitleLanguages = new() { ItemMaximumLength = 8, MaximumLength = 10, SplitsCommas = true };
         public static readonly StringArrayField TrustedProxies = new() { ItemMaximumLength = 43, MaximumLength = 20, SplitsCommas = true };
+        // Ollama addresses in the Owner's order, one per line on the Admin page.
+        public static readonly StringArrayField TranslationMachines = new() { ItemMaximumLength = 255, MaximumLength = 8 };
+        // The free bytes of the Ollama model volume as the Owner typed them; 0 leaves the configured value.
+        public static readonly LongField TranslationFreeBytes = new() { Minimum = 0 };
         public static readonly StringField PublicUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false, Trim = true, Format = Enums.Field.StringFormat.HttpUrl };
         public static readonly BoolField KeepsReleases = new();
         public static readonly EnumField RecycleModeId = new(typeof(Enums.Library.RecycleMode));
@@ -30,5 +34,8 @@ namespace Jularr.Backend.Data.Fields.Instance
         public static readonly StringField RecyclePath = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false, Trim = true, Format = Enums.Field.StringFormat.RelativePath };
         public static readonly IntField RecycleDays = new() { Minimum = 0, Maximum = 3650 };
         public static readonly BoolField UnmonitorsDeletedUnits = new();
+        // The Caching module's settings: days unused extended data of titles outside the library is kept, and whether Discover's lists are detailed in advance.
+        public static readonly IntField CatalogDetailKeepDays = new() { Minimum = 1, Maximum = 365 };
+        public static readonly BoolField DetailsDiscoverAhead = new();
     }
 }

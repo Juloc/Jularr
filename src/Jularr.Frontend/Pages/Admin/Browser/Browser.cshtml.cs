@@ -1,6 +1,7 @@
 using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Browser.V1;
 using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
@@ -19,7 +20,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
     // Temporary: the browser of the instance, what it does and what an administrator can make it do.
     public sealed class BrowserModel(ReadBrowserStatusV1 status, RunBrowserActionV1 run, ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection,
         TestAcquisitionConnectionV1 test, UpdateAcquisitionConnectionV1 update, ReadWantedV1 wanted, SearchWantedV1 search, OpenBrowserAssistanceV1 openView,
-        CloseBrowserAssistanceV1 closeView, ReadInstanceModulesV1 readModules, UpdateInstanceModuleV1 updateModule, IAntiforgery antiforgery, UiText texts) : JularrPage
+        CloseBrowserAssistanceV1 closeView, OpenDownloadBrowserAssistanceV1 openDownloadView, ReadInstanceModulesV1 readModules, UpdateInstanceModuleV1 updateModule, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private BrowserStatusV1? _status;
         private PageResult<AcquisitionConnectionDetailsV1>? _connections;
@@ -88,7 +89,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
                 var selected = _status?.ManualView?.AcquisitionConnectionId ?? sources[0].Id;
                 page.Content.Add(new Form<AcquisitionConnectionParametersV1>(form =>
                 {
-                    form.Select(item => item.AcquisitionConnectionId, "admin.browser.source", [.. sources.Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), new Uri(item.BaseUrl).Host))]);
+                    form.Select(item => item.AcquisitionConnectionId, "admin.browser.source", [.. sources.Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), item.BaseUrl is { } address ? new Uri(address).Host : item.Id.ToString(CultureInfo.InvariantCulture)))]);
                     form.Submit("admin.browser.manualOpen");
                 }, "/Admin/Browser?handler=OpenView", csrf, new AcquisitionConnectionParametersV1(selected)));
             }
@@ -136,6 +137,15 @@ namespace Jularr.Frontend.Pages.Admin.Browser
         public async Task<IActionResult> OnPostOpenViewAsync(long acquisitionConnectionId)
         {
             await openView.ExecuteAsync<BrowserViewV1>(new AcquisitionConnectionParametersV1(acquisitionConnectionId), default, HttpContext.RequestAborted);
+            await LoadDataAsync();
+            PreparePage();
+            NoHint();
+            return Page();
+        }
+
+        public async Task<IActionResult> OnPostOpenDownloadViewAsync(long operationId)
+        {
+            await openDownloadView.ExecuteAsync<BrowserViewV1>(new ActivityOperationParametersV1(operationId), default, HttpContext.RequestAborted);
             await LoadDataAsync();
             PreparePage();
             NoHint();

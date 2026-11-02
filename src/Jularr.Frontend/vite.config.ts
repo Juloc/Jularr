@@ -34,6 +34,8 @@ export default defineConfig({
     // Match the host asset root.
     base: "/build/",
     publicDir: false,
+    // Module workers (the subtitle renderer's own worker splits into chunks).
+    worker: { format: "es" },
     build: {
         outDir: resolve(root, "wwwroot/build"),
         emptyOutDir: true,

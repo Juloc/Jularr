@@ -14,6 +14,7 @@ namespace Jularr.Workers
             services.AddHostedService<DownloadWorker>();
             services.AddHostedService<ProviderSyncWorker>();
             services.AddHostedService<UsenetWorker>();
+            services.AddHostedService<TorrentWorker>();
             services.AddHostedService<MediaWorker>();
             services.AddHostedService<StorageWorker>();
             services.AddHostedService<BackupWorker>();
@@ -22,6 +23,7 @@ namespace Jularr.Workers
             services.AddHostedService<SubtitleWorker>();
             services.AddHostedService<RecognitionWorker>();
             services.AddHostedService<DerivationWorker>();
+            services.AddHostedService<TranslationWorker>();
             services.AddHostedService<CatalogWorker>();
             services.AddHostedService<HealthWorker>();
             return services;

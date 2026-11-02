@@ -31,6 +31,101 @@ namespace Jularr.Backend.Tests
         private const string Connections = "/api/v1/admin/acquisition/connections";
         private const string Feature = "Example.Movie.2020.1080p.WEB-DL.H264-GRP";
 
+        [TestMethod]
+        [DataRow("redirect", "HTTP 302", "acquisition_unavailable")]
+        [DataRow("authentication", "HTTP 403", "acquisition_grab_failed")]
+        [DataRow("rate-limit", "HTTP 429", "acquisition_rate_limited")]
+        [DataRow("server", "HTTP 503", "acquisition_unavailable")]
+        [DataRow("timeout", "timeout True", "acquisition_unavailable")]
+        [DataRow("network", "transport NameResolutionError", "acquisition_unavailable")]
+        [DataRow("write", "stage transfer: IOException", "acquisition_unavailable")]
+        public async Task Usenet_NzbGrabFailure_LogsSafeDiagnosticsAndPreservesTheFailureState(string scenario, string diagnostic, string reason)
+        {
+            using var storage = new TemporaryDirectory();
+            using var staging = new TemporaryDirectory();
+            const string secretUrl = "https://private.example.test/signed-secret?apikey=private-key";
+            var indexer = new FakeIndexer("<nzb />")
+            {
+                NzbResponse = () =>
+                {
+                    if (scenario == "timeout") throw new TaskCanceledException(secretUrl);
+                    if (scenario == "network") throw new HttpRequestException(HttpRequestError.NameResolutionError, secretUrl);
+                    if (scenario == "write")
+                    {
+                        // Simulate a competing file appearing after preparation, before CreateNew.
+                        var job = Directory.EnumerateDirectories(staging.Path, "j-*", SearchOption.AllDirectories).Single();
+                        File.WriteAllText(Path.Combine(job, UsenetJob.NzbName), secretUrl);
+                    }
+
+                    var status = scenario switch
+                    {
+                        "redirect" => HttpStatusCode.Found,
+                        "authentication" => HttpStatusCode.Forbidden,
+                        "rate-limit" => HttpStatusCode.TooManyRequests,
+                        "server" => HttpStatusCode.ServiceUnavailable,
+                        _ => HttpStatusCode.OK
+                    };
+                    var response = new HttpResponseMessage(status) { Content = new StringContent(secretUrl), ReasonPhrase = "private-key" };
+                    response.Headers.Location = new Uri(secretUrl);
+                    response.Headers.TryAddWithoutValidation("Set-Cookie", "session=private-cookie");
+                    return response;
+                }
+            };
+            await using var host = await CreateHostAsync(storage.Path, staging.Path, indexer, 1);
+            await CreateWantedMovieAsync(host);
+
+            await RunAsync<SearchDueWantedV1>(host);
+
+            var operationId = await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2");
+            var log = host.Services.GetRequiredService<RecentLogs>().Read(100)
+                .Single(entry => entry.Category == typeof(WantedAcquisition).FullName);
+            StringAssert.Contains(log.Message, $"operation {operationId}, indexer 1");
+            StringAssert.Contains(log.Message, diagnostic);
+            Assert.IsFalse(log.Message.Contains("private", StringComparison.OrdinalIgnoreCase));
+            Assert.IsFalse(log.Message.Contains("https://", StringComparison.OrdinalIgnoreCase));
+            Assert.IsFalse(log.Message.Contains(staging.Path, StringComparison.Ordinal));
+            Assert.AreEqual(1, indexer.NzbRequests, "Diagnostics must not retry or follow a redirect.");
+            Assert.AreEqual(reason, await host.ScalarAsync("SELECT \"ErrorKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual((short)4, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
+            Assert.IsFalse(Directory.EnumerateFiles(staging.Path, "*", SearchOption.AllDirectories).Any());
+        }
+
+        [TestMethod]
+        public async Task Newznab_CallerCancellation_PropagatesWithoutBecomingAnUnavailableDownload()
+        {
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+            using var handler = new FakeIndexer("<nzb />") { NzbResponse = () => throw new OperationCanceledException(cancellation.Token) };
+            using var http = new HttpClient(handler);
+            var client = new NewznabClient(http, new NewznabGate(TimeSpan.Zero));
+
+            await Assert.ThrowsAsync<OperationCanceledException>(() => client.DownloadNzbAsync(new Uri("https://indexer.example.test/getnzb/feature"),
+                "unused.nzb", cancellation.Token));
+        }
+
+        [TestMethod]
+        public async Task Usenet_NzbAccessDenied_LogsSafeDiagnosticsAndPropagatesTheException()
+        {
+            using var storage = new TemporaryDirectory();
+            using var staging = new TemporaryDirectory();
+            // Filesystem collisions have different exception types across operating systems.
+            var denied = new UnauthorizedAccessException($"{staging.Path}/private-key/job.nzb");
+            var indexer = new FakeIndexer("<nzb />") { NzbResponse = () => throw denied };
+            await using var host = await CreateHostAsync(storage.Path, staging.Path, indexer, 1);
+            await CreateWantedMovieAsync(host);
+
+            var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(() => RunAsync<SearchDueWantedV1>(host));
+            Assert.AreSame(denied, exception);
+
+            var log = host.Services.GetRequiredService<RecentLogs>().Read(100)
+                .Single(entry => entry.Category == typeof(WantedAcquisition).FullName);
+            StringAssert.Contains(log.Message, "stage transfer: UnauthorizedAccessException");
+            Assert.IsFalse(log.Message.Contains(staging.Path, StringComparison.Ordinal));
+            Assert.IsFalse(log.Message.Contains(UsenetJob.NzbName, StringComparison.Ordinal));
+            Assert.IsFalse(log.Message.Contains("private-key", StringComparison.Ordinal));
+            Assert.AreEqual(1, indexer.NzbRequests);
+        }
 
         [TestMethod]
         public async Task Usenet_UnsetJobLimitAllowsReleasesAnnouncingMoreThanTwentyGiB()
@@ -178,6 +273,29 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(news.Logins.All(login => login == "reader:news-secret"));
         }
 
+        // A provider's 502 means the account holds all its connections, not that the login is wrong; each says what it is.
+        [TestMethod]
+        public async Task Usenet_ConnectionLimitAndWrongLogin_AreToldApart()
+        {
+            using var storage = new TemporaryDirectory();
+            using var staging = new TemporaryDirectory();
+            await using var news = new FakeNewsServer("reader", "news-secret");
+            news.Publish(Feature + ".mkv", new byte[1000], 1);
+            await using var host = await CreateHostAsync(storage.Path, staging.Path, new FakeIndexer(news.Nzb(Feature + ".mkv")), news.Port);
+            news.ConnectionLimit = true;
+            using var limited = await host.SendAsync(HttpMethod.Post, Connections + "/2/test");
+            var limit = (await limited.Content.ReadFromJsonAsync<AcquisitionConnectionTestV1>())!;
+            Assert.IsFalse(limit.IsAvailable);
+            Assert.AreEqual("usenet_connection_limit", limit.ErrorKey);
+
+            news.ConnectionLimit = false;
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"Username\" = 'someone-else' WHERE \"Id\" = 2");
+            using var wrong = await host.SendAsync(HttpMethod.Post, Connections + "/2/test");
+            var login = (await wrong.Content.ReadFromJsonAsync<AcquisitionConnectionTestV1>())!;
+            Assert.IsFalse(login.IsAvailable);
+            Assert.AreEqual("usenet_credentials_rejected", login.ErrorKey);
+        }
+
         [TestMethod]
         public async Task Usenet_MissingArticlesWithoutRepairFiles_FailTheRelease()
         {
@@ -190,7 +308,7 @@ namespace Jularr.Backend.Tests
             await CreateWantedMovieAsync(host);
             await RunAsync<SearchDueWantedV1>(host);
             await RunAsync<DownloadUsenetV1>(host);
-            Assert.AreEqual("download_failed", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""));
+            Assert.AreEqual("usenet_incomplete", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""), "The release says why it failed.");
             Assert.IsTrue(Directory.EnumerateFiles(staging.Path, UsenetJob.NzbName, SearchOption.AllDirectories).Any(),
                 "A failed release retains its own job files until explicit cancellation or a successful import.");
         }
@@ -297,6 +415,7 @@ namespace Jularr.Backend.Tests
         private sealed class FakeIndexer(string nzb) : HttpMessageHandler
         {
             public int NzbRequests { get; private set; }
+            public Func<HttpResponseMessage>? NzbResponse { get; init; }
 
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
@@ -304,7 +423,7 @@ namespace Jularr.Backend.Tests
                 if (uri.AbsolutePath == "/getnzb/feature")
                 {
                     NzbRequests++;
-                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(nzb, Encoding.UTF8, "application/x-nzb") });
+                    return Task.FromResult(NzbResponse?.Invoke() ?? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(nzb, Encoding.UTF8, "application/x-nzb") });
                 }
 
                 var body = uri.Query.Contains("t=caps", StringComparison.Ordinal)
@@ -335,6 +454,7 @@ namespace Jularr.Backend.Tests
 
             public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
             public List<string> Logins { get; } = [];
+            public bool ConnectionLimit { get; set; }
 
             public void Publish(string name, byte[] data, int parts)
             {
@@ -416,6 +536,12 @@ namespace Jularr.Backend.Tests
                 {
                     var stream = client.GetStream();
                     using var reader = new StreamReader(stream, Encoding.Latin1);
+                    if (ConnectionLimit)
+                    {
+                        await Write(stream, "502 too many connections\r\n");
+                        return;
+                    }
+
                     await Write(stream, "200 fake news ready\r\n");
                     string? user = null;
                     while (await reader.ReadLineAsync() is { } line)

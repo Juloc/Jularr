@@ -24,7 +24,7 @@ namespace Jularr.Backend.Tests
             await SaveAsync(host, Trending, [Work("902", "Second"), Work("901", "First")]);
             await host.Fixture.RunSqlAsync("""
                 UPDATE "ExternalWorkFeeds" SET "RefreshedAt" = now() - interval '30 days';
-                UPDATE "ExternalWorks" SET "Title" = 'Updated canonical title' WHERE "Namespace" = 'tmdb_movie' AND "Value" = '902';
+                UPDATE "Works" SET "CanonicalTitle" = 'Updated canonical title' WHERE "Id" = (SELECT "WorkId" FROM "WorkExternalIdentities" WHERE "Namespace" = 'tmdb_movie' AND "Value" = '902');
                 """);
 
             await using var read = new SqlContext(host.Fixture.Database);
@@ -34,6 +34,7 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "902", "901" }, items.Select(item => item.Value).ToArray());
             Assert.AreEqual("Updated canonical title", items[0].Title);
             Assert.AreEqual(8.25m, items[0].Rating);
+            Assert.IsNotNull(items[0].WorkId, "Every feed entry is a Work.");
         }
 
         [TestMethod]
@@ -50,7 +51,7 @@ namespace Jularr.Backend.Tests
             var items = await new LogicContext(read).ReadExternalFeedAsync(Trending, default);
             Assert.IsNotNull(items);
             Assert.AreEqual("Original", items.Single().Title);
-            Assert.AreEqual(1L, await read.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT count(*) FROM \"ExternalWorks\"" }));
+            Assert.AreEqual(1L, await read.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT count(*) FROM \"Works\" WHERE \"CatalogNamespace\" = 'tmdb_movie'" }));
         }
 
         [TestMethod]
@@ -218,7 +219,7 @@ namespace Jularr.Backend.Tests
             return context;
         }
 
-        private static ExternalWorkData Work(string value, string title) => new("tmdb_movie", value, title, null, 2026, null, null, null, null, DateTime.MinValue, 8.25m);
+        private static ExternalWorkData Work(string value, string title) => new("tmdb_movie", value, title, null, 2026, null, null, null, null, null, 8.25m);
 
         private static async Task SaveAsync(Host host, ExternalFeedData feed, IReadOnlyList<ExternalWorkData> works)
         {

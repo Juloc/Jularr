@@ -157,8 +157,15 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public ReleaseIdentityEvidence Evidence { get; }
         public SelectionCoverage Coverage { get; }
         public string? SafetyRejection { get; }
-        public int ContextScore { get; init; }
         public IReadOnlyList<string>? Languages { get; init; }
+
+        // Preference points the media type gives from the request, each with its rule.
+        public IReadOnlyList<ScorePoint> Points { get; init; } = [];
+
+        // A rule of the media type that rejects the release, or only marks it for a person (a manual search).
+        public SelectionReason? Rejection { get; init; }
+        public SelectionReason? Flag { get; init; }
+        public ReleaseSizeMark? SizeMark { get; init; }
     }
 
     // One canonical unit a search targets: an episode in its season or a volume; movies and books have none.

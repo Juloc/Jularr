@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Enums.Field;
+using Jularr.Backend.Data.Enums.Provider;
 using NpgsqlTypes;
 
 namespace Jularr.Backend.Data.Fields.Provider
@@ -32,6 +33,14 @@ namespace Jularr.Backend.Data.Fields.Provider
         public static readonly BoolField IsCompleted = new();
         public static readonly LongField WorkId = new() { Minimum = 1 };
         public static readonly LongField WorkUnitId = new() { Minimum = 1, Required = false };
+        public static readonly LongField OptionalWorkId = new() { Minimum = 1, Required = false };
+        public static readonly StringField Title = new(NpgsqlDbType.Varchar) { MaximumLength = 500 };
+        public static readonly StringField CoverUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false };
+        public static readonly StringField OptionalStatus = new(NpgsqlDbType.Varchar) { MaximumLength = 16, Required = false };
+        public static readonly BoolField IsOnList = new();
+        public static readonly EnumField SyncStateId = new(typeof(AniListSyncStateType)) { Required = false };
+        public static readonly EnumField SyncProblemId = new(typeof(AniListSyncProblemType)) { Required = false };
+        public static readonly BoolField IsInLibrary = new();
 
         // JSON rows handed to one statement.
         public static readonly StringField Rows = new() { AllowBlank = false };

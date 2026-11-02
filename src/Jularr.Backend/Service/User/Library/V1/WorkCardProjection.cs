@@ -7,20 +7,15 @@ namespace Jularr.Backend.Service.User.Library.V1
     // A query aliases "visible" (the profile's Work) and "work" (the Work itself).
     internal static class WorkCardProjection
     {
+        // The rating of the catalog the title came from; needs only the Work's id as "work"."Id".
         public const string Rating =
             """
-                -- The rating of the catalog entry the title came from; the best known one when several exist.
                 SELECT
-                    catalogEntry."Rating"
+                    rated."Rating"
                 FROM
-                    "WorkExternalIdentities" AS identity
-                    JOIN "ExternalWorks" AS catalogEntry ON catalogEntry."Namespace" = identity."Namespace" AND catalogEntry."Value" = identity."Value"
+                    "Works" AS rated
                 WHERE
-                    identity."WorkId" = work."Id"
-                    AND catalogEntry."Rating" IS NOT NULL
-                ORDER BY
-                    catalogEntry."Votes" DESC NULLS LAST
-                LIMIT 1
+                    rated."Id" = work."Id"
             """;
 
         // The columns every card carries.
@@ -31,8 +26,8 @@ namespace Jularr.Backend.Service.User.Library.V1
             visible."MediaSubtypeId",
             visible."Title" AS "Title",
             work."ReleaseYear"::integer AS "ReleaseYear",
-            ({{Rating}}) AS "Rating",
-            (
+            work."Rating",
+            coalesce((
                 SELECT
                     fact."Value"
                 FROM
@@ -43,7 +38,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                 ORDER BY
                     fact."IsManual" DESC
                 LIMIT 1
-            ) AS "PosterUrl",
+            ), work."ImageUrl") AS "PosterUrl",
             profileState."MediaStateTypeId",
             acquisition."AvailabilityStateId",
             availability."AvailableUnits",
@@ -56,6 +51,7 @@ namespace Jularr.Backend.Service.User.Library.V1
 
         // Where the profile stands with the title: finished when its own progress or every unit is completed,
         // in progress when anything was started, else not started. Needs only the Work as "work" and the profile.
+        // Only Works with progress of the profile are counted: without any, the state is "not started" either way, and catalog units are never read.
         private const string ProgressCounts =
             """
                 SELECT
@@ -67,7 +63,8 @@ namespace Jularr.Backend.Service.User.Library.V1
                     "WorkUnits" AS leaf
                     LEFT JOIN "MediaProgress" AS unitProgress ON unitProgress."ProfileId" = @ProfileId AND unitProgress."WorkId" = leaf."WorkId" AND unitProgress."WorkUnitId" = leaf."Id"
                 WHERE
-                    NOT EXISTS (
+                    leaf."WorkId" IN (SELECT progress."WorkId" FROM "MediaProgress" AS progress WHERE progress."ProfileId" = @ProfileId)
+                    AND NOT EXISTS (
                         SELECT
                             1
                         FROM
@@ -79,7 +76,32 @@ namespace Jularr.Backend.Service.User.Library.V1
                     leaf."WorkId"
             """;
 
-        public const string ProgressJoin = "LEFT JOIN (" + ProgressCounts + ") AS unitCounts ON unitCounts.\"WorkId\" = work.\"Id\"\n" + ProgressStateJoin;
+        // The same counts for the one Work of the row alone: the units of other Works are never read.
+        private const string WorkProgressCounts =
+            """
+                SELECT
+                    count(*)::integer AS "Total",
+                    count(*) FILTER (WHERE unitProgress."IsCompleted")::integer AS "Done",
+                    count(*) FILTER (WHERE NOT unitProgress."IsCompleted" AND (coalesce(unitProgress."PositionMs", 0) > 0 OR coalesce(unitProgress."Progression", 0) > 0))::integer AS "Started"
+                FROM
+                    "WorkUnits" AS leaf
+                    LEFT JOIN "MediaProgress" AS unitProgress ON unitProgress."ProfileId" = @ProfileId AND unitProgress."WorkId" = leaf."WorkId" AND unitProgress."WorkUnitId" = leaf."Id"
+                WHERE
+                    leaf."WorkId" = work."Id"
+                    AND EXISTS (SELECT 1 FROM "MediaProgress" AS progress WHERE progress."ProfileId" = @ProfileId AND progress."WorkId" = work."Id")
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkUnits" AS child
+                        WHERE
+                            child."ParentWorkUnitId" = leaf."Id"
+                    )
+                GROUP BY
+                    leaf."WorkId"
+            """;
+
+        public const string ProgressJoin = "LEFT JOIN LATERAL (" + WorkProgressCounts + ") AS unitCounts ON TRUE\n" + ProgressStateJoin;
         public const string PageProgressJoin = "LEFT JOIN \"UnitProgressCounts\" AS unitCounts ON unitCounts.\"WorkId\" = work.\"Id\"\n" + ProgressStateJoin;
 
         private const string ProgressStateJoin =
@@ -163,29 +185,14 @@ namespace Jularr.Backend.Service.User.Library.V1
                     coalesce(bool_or(present."HasKnownLanguage" AND NOT present."HasPreferredLanguage" AND NOT present."HasUnknownLanguage" AND present."HasPreferredSubtitles"), FALSE) AS "HasPreferredSubtitles"
                 FROM (
                     -- The units the profile monitors; a unit that groups others is no unit of its own.
+                    -- A Work without a monitored unit is the title itself: the outer join keeps its one empty row.
                     SELECT
-                        leaf."Id" AS "UnitId"
+                        monitored."UnitId"
                     FROM
-                        "WorkUnits" AS leaf
-                    WHERE
-                        leaf."WorkId" = work."Id"
-                        AND leaf."IsMonitored"
-                        AND NOT EXISTS (
+                        (SELECT 1) AS anchor
+                        LEFT JOIN (
                             SELECT
-                                1
-                            FROM
-                                "WorkUnits" AS child
-                            WHERE
-                                child."ParentWorkUnitId" = leaf."Id"
-                        )
-                    UNION ALL
-                    -- A Work without a monitored unit is the title itself.
-                    SELECT
-                        NULL::bigint
-                    WHERE
-                        NOT EXISTS (
-                            SELECT
-                                1
+                                leaf."Id" AS "UnitId"
                             FROM
                                 "WorkUnits" AS leaf
                             WHERE
@@ -199,7 +206,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                                     WHERE
                                         child."ParentWorkUnitId" = leaf."Id"
                                 )
-                        )
+                        ) AS monitored ON TRUE
                 ) AS unitSet
                 LEFT JOIN LATERAL (
                     SELECT
@@ -285,18 +292,17 @@ namespace Jularr.Backend.Service.User.Library.V1
                         ) AS subtitles
                 ) AS present ON TRUE
             ) AS availability
-            LEFT JOIN (
+            LEFT JOIN LATERAL (
                 SELECT
-                    asset."WorkId",
                     coalesce(array_agg(DISTINCT track."Language") FILTER (WHERE track."MediaTrackTypeId" = 2 AND track."Language" IS NOT NULL), '{}') AS "AudioLanguages",
                     coalesce(array_agg(DISTINCT track."Language") FILTER (WHERE track."MediaTrackTypeId" = 3 AND track."Language" IS NOT NULL), '{}') AS "SubtitleLanguages"
                 FROM
                     "MediaAssets" AS asset
                     JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL
                     JOIN "MediaTracks" AS track ON track."StoredFileId" = file."Id"
-                GROUP BY
-                    asset."WorkId"
-            ) AS tracks ON tracks."WorkId" = work."Id"
+                WHERE
+                    asset."WorkId" = work."Id"
+            ) AS tracks ON TRUE
             CROSS JOIN LATERAL (
                 -- What happens with the title before the library holds it: a running download,
                 -- a running search, a request that waits.

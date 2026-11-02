@@ -44,7 +44,8 @@ namespace Jularr.Backend.Service.User.Profile.V1
                     profile."SecondContentLanguage",
                     profile."AccentHex",
                     (profile."PinHash" IS NOT NULL) AS "HasPin",
-                    coalesce(preference."AutoplayPreviews", TRUE) AS "AutoplayPreviews"
+                    coalesce(preference."AutoplayPreviews", TRUE) AS "AutoplayPreviews",
+                    coalesce(preference."KeepScreenOn", TRUE) AS "KeepScreenOn"
                 FROM
                     "Profiles" AS profile
                     LEFT JOIN "ProfilePlaybackPreferences" AS preference ON preference."ProfileId" = profile."Id"

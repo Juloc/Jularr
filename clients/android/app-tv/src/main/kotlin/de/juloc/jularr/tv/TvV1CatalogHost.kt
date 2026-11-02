@@ -28,7 +28,6 @@ import de.juloc.jularr.core.api.AppApiException
 import de.juloc.jularr.core.api.catalog.HttpTvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvContinueItemV1
 import de.juloc.jularr.core.api.catalog.TvCollectionV1
-import de.juloc.jularr.core.api.catalog.TvDiscoverItemV1
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvWorkAvailabilityV1
 import de.juloc.jularr.core.api.catalog.TvPersonV1
@@ -108,8 +107,8 @@ fun TvV1CatalogHost(
     var showContinueWatching by remember(serverOrigin) { mutableStateOf(true) }
     var homeShelfOrder by remember(serverOrigin) { mutableStateOf(listOf(1, 4, 5)) }
     var discoverHomeFeeds by remember(serverOrigin) { mutableStateOf<List<TvV1HomeVideoFeed>>(emptyList()) }
-    var selectedDiscoverItem by remember(serverOrigin) { mutableStateOf<TvDiscoverItemV1?>(null) }
-    var selectedCatalogEntry by remember(serverOrigin) { mutableStateOf<TvV1CatalogSelection?>(null) }
+    var detailSeasonNumber by remember(serverOrigin) { mutableStateOf<Int?>(null) }
+    var detailRequestable by remember(serverOrigin) { mutableStateOf(false) }
     var watchlist by remember(serverOrigin) { mutableStateOf<List<WatchlistItem>>(emptyList()) }
     var collections by remember(serverOrigin) { mutableStateOf<List<TvCollectionV1>>(emptyList()) }
     var selectedCollectionId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
@@ -157,13 +156,15 @@ fun TvV1CatalogHost(
         )
     }
 
-    fun openWork(rawId: String) {
+    fun openWork(rawId: String, seasonNumber: Int? = null) {
         val workId = rawId.toLongOrNull()
         if (workId == null || workId <= 0) {
             error = "Ungültige Work-ID der Jularr-Instanz."
             return
         }
         detailWorkId = workId
+        detailSeasonNumber = seasonNumber
+        detailRequestable = false
         details = null
         episodeByUnit = emptyMap()
         playableMovieAssets = emptyList()
@@ -349,8 +350,12 @@ fun TvV1CatalogHost(
                     pagingError = null
                 }
                 TvV1CatalogPage.Details -> {
-                    val result = flow.work(requireNotNull(detailWorkId))
+                    val workId = requireNotNull(detailWorkId)
+                    // Like the web Details page: a title without details takes them from its catalog first.
+                    check(!catalog.openWork(workId)) { "Die Details dieses Titels sind derzeit nicht verfügbar." }
+                    val result = flow.work(workId)
                     isWatchlisted = result.isWatchlisted
+                    detailRequestable = result.isRequestable
                     watchlistError = null
                     detailedTitle = result.title
                     playableMovieAssets = result.availableMovieAssets
@@ -480,28 +485,9 @@ fun TvV1CatalogHost(
                             showV1Continue = showContinueWatching,
                             shelfOrder = homeShelfOrder,
                             discoverFeeds = discoverHomeFeeds,
-                            onDiscoverItem = { item ->
-                                val local = item.workId
-                                if (local != null) {
-                                    openWork(local.toString())
-                                } else if (item.tmdbId != null) {
-                                    selectedCatalogEntry = null
-                                    selectedDiscoverItem = item
-                                    openPage(TvV1CatalogPage.Discover)
-                                }
-                            },
-                            onDiscoverCatalogItem = { feed, item ->
-                                val local = item.workId
-                                if (local != null) {
-                                    openWork(local.toString())
-                                } else if (item.namespace.isNotBlank() && item.externalId.isNotBlank()) {
-                                    selectedDiscoverItem = null
-                                    selectedCatalogEntry = TvV1CatalogSelection(
-                                        feed.mediaTypeId, item.namespace, item.externalId,
-                                        feed.mediaSubtypeId,
-                                    )
-                                    openPage(TvV1CatalogPage.Discover)
-                                }
+                            onDiscoverItem = { item -> openWork(item.workId.toString()) },
+                            onDiscoverCatalogItem = { _, item ->
+                                openWork(item.workId.toString(), item.seasonNumber)
                             },
                             onLoadMoreVideos = if (homeNextPage != null && !fetchingNextPage) {
                                 { loadNextPage(TvV1CatalogPage.Home) }
@@ -646,8 +632,6 @@ fun TvV1CatalogHost(
                         serverQueryResults = true,
                         pagingError = pagingError,
                         onOpenDiscover = {
-                            selectedDiscoverItem = null
-                            selectedCatalogEntry = null
                             openPage(TvV1CatalogPage.Discover)
                         },
                         onLoadMore = if (searchNextPage != null && !fetchingNextPage) {
@@ -659,8 +643,6 @@ fun TvV1CatalogHost(
         }
         TvV1CatalogPage.Discover -> TvV1DiscoverScreen(
             catalog = catalog,
-            initialItem = selectedDiscoverItem,
-            initialCatalog = selectedCatalogEntry,
             serverOrigin = serverOrigin,
             requestHeaders = authorization,
             onLocalWork = { id -> openWork(id.toString()) },
@@ -689,6 +671,17 @@ fun TvV1CatalogHost(
                             onOpenCredits = {
                                 openPage(TvV1CatalogPage.Credits, workId = detailWorkId)
                             },
+                            initialSeason = detailSeasonNumber,
+                            requestContent = if (detailRequestable && capabilities.hasModule("Requests") &&
+                                capabilities.hasPermission("profile.requests.update")
+                            ) {{
+                                TvV1RequestActions(
+                                    catalog = catalog,
+                                    workId = requireNotNull(detailWorkId),
+                                    canRequest = true,
+                                    onUnauthorized = onAuthenticationExpired,
+                                )
+                            }} else null,
                             specialEpisodes = fractionalEpisodes,
                             onPlaySpecialEpisode = { episode ->
                                 playAsset(episode.playableMediaAssetId(), episode.id.toString())

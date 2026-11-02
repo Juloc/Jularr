@@ -83,6 +83,8 @@ namespace Jularr.Backend.Service.Core
             new("aniListMatching", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(30), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             // The relations of the matched anime, manga and light novels; skipped while the AniList module is off.
             new("aniListRelations", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(32), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
+            // Once a day the AniBridge mappings from AniList to TheTVDB; skipped while the AniList module is off.
+            new("animeMappings", WorkerGroupType.Media, TimeSpan.FromHours(24), TimeSpan.FromSeconds(34), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             // Every profile's own AniList list and progress; waits while Jularr is used, as the other syncs do.
             new("aniListSync", WorkerGroupType.Media, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(45), canPauseWhileUsed: true),
             // Titles that came without a description and cover (a media server's sync names only title, year and ids) get them from the catalog, a few at a time.
@@ -92,6 +94,8 @@ namespace Jularr.Backend.Service.Core
             new("covers", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(35), canPauseWhileUsed: true),
             // Brings stored covers into the Owner's format, a few at a time, and only while nobody uses Jularr.
             new("coverBackfill", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(55), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
+            // Once a day: the details and catalog rows of titles nobody uses leave (see CleanCatalogTitlesV1).
+            new("catalogCleanup", WorkerGroupType.Media, TimeSpan.FromHours(24), TimeSpan.FromSeconds(58), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             new("storage", WorkerGroupType.Storage, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(5)),
             new("scanScheduling", WorkerGroupType.Storage, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(15), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             // Looks every half hour whether a backup is due; the Owner's interval says how old the newest may get.
@@ -100,7 +104,10 @@ namespace Jularr.Backend.Service.Core
             new("trickplay", WorkerGroupType.Trickplay, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(75), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             new("subtitles", WorkerGroupType.Subtitle, TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(100), canPauseWhileUsed: true),
             new("recognition", WorkerGroupType.Recognition, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(20), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
+            new("readingPreparation", WorkerGroupType.Derivation, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(22), canPauseWhileUsed: true),
             new("readingCopies", WorkerGroupType.Derivation, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(25), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
+            // Translates the library ahead of reading into the languages profiles use; it keeps going while Jularr is used, as readers profit from it.
+            new("bookTranslations", WorkerGroupType.Translation, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(50), canPauseWhileUsed: true),
 
             // Each catalog decides for itself whether it waits while Jularr is used.
             new("discoverFeeds", WorkerGroupType.Catalog, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(8)),

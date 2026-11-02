@@ -15,6 +15,10 @@ const errors = [];
 if (declarations.length === 0) errors.push("No UI source resources found.");
 if (declarations.length !== declared.size) errors.push("Duplicate UI resource key declarations.");
 
+// Service error texts are declared by the backend and shown by pages under the same keys.
+const serviceErrors = path.resolve(frontend, "..", "Jularr.Backend", "Service", "Core", "Localization", "ServiceErrorResources.cs");
+if (fs.existsSync(serviceErrors)) for (const match of fs.readFileSync(serviceErrors, "utf8").matchAll(/new\("(errors\.[A-Za-z0-9_.-]+)",/g)) declared.add(match[1]);
+
 function inspect(directory) {
   for (const item of fs.readdirSync(directory, { withFileTypes: true })) {
     const full = path.join(directory, item.name);

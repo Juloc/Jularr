@@ -4,9 +4,11 @@ using System.Reflection;
 using System.Security;
 using System.Text;
 using System.Text.Json;
+using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Playback;
+using Jularr.Backend.Data.Enums.Provider;
 using Jularr.Backend.Data.Logic.AniList;
 using Jularr.Backend.Data.System.Provider.V1;
 using Jularr.Backend.Data.User.AniList.V1;
@@ -77,6 +79,146 @@ namespace Jularr.Backend.Tests
         {
             CollectionAssert.AreEqual(new[] { 1, 2, 4, 8 }, new[] { 1, 2, 3, 4 }.Select(attempt => (int)AniListSyncRules.RetryDelay(attempt).TotalMinutes).ToArray());
             Assert.AreEqual(TimeSpan.FromHours(6), AniListSyncRules.RetryDelay(40));
+        }
+
+        [TestMethod]
+        public void StateOf_ComparesWhatIsFinishedHereWithWhatAniListCounts()
+        {
+            Assert.AreEqual(AniListSyncStateType.Synchronized, AniListSyncRules.StateOf("CURRENT", 4, 12, 4));
+            Assert.AreEqual(AniListSyncStateType.LocalAhead, AniListSyncRules.StateOf("CURRENT", 4, 12, 6));
+            Assert.AreEqual(AniListSyncStateType.AniListAhead, AniListSyncRules.StateOf("CURRENT", 8, 12, 4));
+
+            // A completed entry names everything, whatever its progress says; without a total it counts what it has.
+            Assert.AreEqual(AniListSyncStateType.AniListAhead, AniListSyncRules.StateOf("COMPLETED", 0, 12, 4));
+            Assert.AreEqual(AniListSyncStateType.Synchronized, AniListSyncRules.StateOf("COMPLETED", 0, 12, 12));
+            Assert.AreEqual(AniListSyncStateType.Synchronized, AniListSyncRules.StateOf("COMPLETED", 7, null, 7));
+        }
+
+        [TestMethod]
+        public void ProblemOf_NamesOnlyWhatTheNextPassDoesNotSettle()
+        {
+            const AniListSyncStateType ahead = AniListSyncStateType.LocalAhead;
+            Assert.IsNull(AniListSyncRules.ProblemOf(AniListSyncStateType.Synchronized, false, true, "anilist_unavailable", "x"));
+            Assert.AreEqual(AniListSyncProblemType.SendingOff, AniListSyncRules.ProblemOf(ahead, false, false, null, null));
+            Assert.IsNull(AniListSyncRules.ProblemOf(ahead, true, false, null, null));
+            Assert.AreEqual(AniListSyncProblemType.SendFailed, AniListSyncRules.ProblemOf(ahead, true, false, null, "anilist_unavailable"));
+            Assert.AreEqual(AniListSyncProblemType.SignInNeeded, AniListSyncRules.ProblemOf(ahead, true, true, null, null));
+            Assert.AreEqual(AniListSyncProblemType.SignInNeeded, AniListSyncRules.ProblemOf(AniListSyncStateType.AniListAhead, true, false, "anilist_authentication_failed", null));
+            Assert.AreEqual(AniListSyncProblemType.Unreachable, AniListSyncRules.ProblemOf(AniListSyncStateType.AniListAhead, true, false, "anilist_unavailable", null));
+            Assert.IsNull(AniListSyncRules.ProblemOf(AniListSyncStateType.AniListAhead, true, false, null, null));
+        }
+
+        [TestMethod]
+        public async Task Lists_ShowTheProfilesEntriesWithTheirTitles_AndTheWorkStandsAgainstItsEntry()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var anilist = new FakeAniList();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
+                services: services => services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => anilist));
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (20, 2, 1, 'Example Anime'), (30, 1, 1, 'Example Movie'), (40, 3, 2, 'Example Manga'), (50, 2, 1, 'Unlisted Anime');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (30, 'anilist', '5002'), (40, 'anilist', '6001');
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (21, 20, 1, 1), (41, 40, 3, 1), (42, 40, 3, 2), (43, 40, 3, 3);
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number")
+                    VALUES (22, 20, 21, 2, 1), (23, 20, 21, 2, 2), (24, 20, 21, 2, 3), (25, 20, 21, 2, 4), (26, 20, 21, 2, 5), (27, 20, 21, 2, 6);
+                INSERT INTO "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value", "EpisodeOffset") VALUES (21, 'anilist', '5001', 0);
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('ProgressSync', 'AniList', 'Library');
+                """);
+
+            // Nothing is connected: no figures, no lists.
+            var providerId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'anilist'"))!;
+            using var configured = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + providerId + "/secret", new SaveProviderSecretDataV1(FakeAniList.Secret, FakeAniList.ClientId));
+            Assert.AreEqual(HttpStatusCode.OK, configured.StatusCode, await configured.Content.ReadAsStringAsync());
+            var before = await ReadWorkAsync(host, 20);
+            Assert.AreEqual((false, false), (before.IsConnected, before.IsOnList));
+            Assert.AreEqual(0, (await ReadListsAsync(host)).Count);
+
+            using var connected = await host.SendAsync(HttpMethod.Post, Route, new ConnectAniListDataV1(FakeAniList.Code));
+            Assert.AreEqual(HttpStatusCode.OK, connected.StatusCode, await connected.Content.ReadAsStringAsync());
+            await using var scope = host.Services.CreateAsyncScope();
+            var sync = scope.ServiceProvider.GetRequiredService<SyncAniListV1>();
+            Assert.IsTrue((await sync.ExecuteAsync<UpdateResult>(new AniListSyncParametersV1(), default)).Success);
+
+            // The lists count by status; an entry of a library title carries its Work, the others their AniList cover.
+            var counts = (await ReadListsAsync(host)).ToDictionary(item => item.Status, item => item.Count);
+            Assert.AreEqual((3, 1), (counts["CURRENT"], counts["COMPLETED"]));
+            var current = await ReadEntriesAsync(host, "CURRENT");
+            CollectionAssert.AreEquivalent(new[] { true, true, false }, current.Select(entry => entry.IsInLibrary).ToArray());
+            CollectionAssert.IsSubsetOf(new long?[] { 20, 40 }, current.Select(entry => entry.WorkId).ToArray());
+
+            // An entry of no library title is a catalog Work all the same, so it has a page of its own.
+            var pending = current.Single(entry => !entry.IsInLibrary);
+            Assert.AreEqual((7777, "Title 7777", "https://s4.anilist.co/cover-7777.jpg", 3, 24), (pending.MediaId, pending.Title, pending.CoverUrl, pending.Progress, pending.Total));
+            Assert.IsNotNull(pending.WorkId);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" AS identity JOIN \"Works\" AS work ON work.\"Id\" = identity.\"WorkId\" WHERE identity.\"Namespace\" = 'anilist' AND identity.\"Value\" = '7777' AND work.\"MediaTypeId\" = 2 AND work.\"MediaSubtypeId\" = 1"));
+            var catalogOnly = await ReadWorkAsync(host, pending.WorkId!.Value);
+            Assert.AreEqual((true, 3, null, null), (catalogOnly.IsOnList, catalogOnly.Progress, catalogOnly.SyncStateId, catalogOnly.SyncProblemId));
+            Assert.AreEqual(0, (await ReadEntriesAsync(host, "DROPPED")).Count);
+            Assert.AreEqual(0, (await ReadEntriesAsync(host, "NOT-A-STATUS")).Count);
+
+            // Taken over from AniList, the title agrees with it; finished further here it is ahead, further there it is behind.
+            var agreed = await ReadWorkAsync(host, 20);
+            Assert.AreEqual((true, true, "CURRENT", false, 2, 12, 2, AniListSyncStateType.Synchronized), (agreed.IsConnected, agreed.IsOnList, agreed.Status, agreed.IsVolume, agreed.Progress, agreed.Total, agreed.LocalProgress, agreed.SyncStateId));
+            // The pages: a card per status with entries in Favorites, the entries of one, and the line under the title's progress.
+            using var strip = await host.SendAsync(HttpMethod.Get, "/Favorites");
+            var stripHtml = await strip.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, strip.StatusCode, stripHtml);
+            StringAssert.Contains(stripHtml, "AniList: Current");
+            StringAssert.Contains(stripHtml, "AniList: Completed");
+            Assert.IsFalse(stripHtml.Contains("AniList: Dropped", StringComparison.Ordinal));
+            using var shown = await host.SendAsync(HttpMethod.Get, "/Favorites?anilist=current");
+            var shownHtml = await shown.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, shown.StatusCode, shownHtml);
+            StringAssert.Contains(shownHtml, "Title 7777");
+            StringAssert.Contains(shownHtml, "Not in library");
+            StringAssert.Contains(shownHtml, "/Details/20");
+            StringAssert.Contains(shownHtml, "/Details/" + pending.WorkId);
+            using var catalogPage = await host.SendAsync(HttpMethod.Get, "/Details/" + pending.WorkId);
+            var catalogHtml = await catalogPage.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, catalogPage.StatusCode, catalogHtml);
+            StringAssert.Contains(catalogHtml, "AniList 3 / 24");
+            Assert.IsFalse(catalogHtml.Contains("In sync", StringComparison.Ordinal));
+            using var details = await host.SendAsync(HttpMethod.Get, "/Details/20");
+            var detailsHtml = await details.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, detailsHtml);
+            StringAssert.Contains(detailsHtml, "AniList 2 / 12");
+            StringAssert.Contains(detailsHtml, "In sync");
+            using var unlistedPage = await host.SendAsync(HttpMethod.Get, "/Details/50");
+            StringAssert.Contains(await unlistedPage.Content.ReadAsStringAsync(), "Not on your AniList");
+
+            await WatchAsync(host, 20, 24, 25);
+            var ahead = await ReadWorkAsync(host, 20);
+            Assert.AreEqual((2, 4, AniListSyncStateType.LocalAhead), (ahead.Progress, ahead.LocalProgress, ahead.SyncStateId));
+
+            // With sending off the difference stays, and the page says why; a failed write or an account that fails says so too.
+            Assert.AreEqual(AniListSyncProblemType.SendingOff, ahead.SyncProblemId);
+            using var reason = await host.SendAsync(HttpMethod.Get, "/Details/20");
+            StringAssert.Contains(await reason.Content.ReadAsStringAsync(), "Sending is off");
+            await host.Fixture.RunSqlAsync("UPDATE \"AniListConnections\" SET \"PushEnabledAt\" = now()");
+            Assert.IsNull((await ReadWorkAsync(host, 20)).SyncProblemId, "The next pass sends it.");
+            await host.Fixture.RunSqlAsync("UPDATE \"AniListEntries\" SET \"LastError\" = 'anilist_unavailable' WHERE \"MediaId\" = 5001");
+            Assert.AreEqual(AniListSyncProblemType.SendFailed, (await ReadWorkAsync(host, 20)).SyncProblemId);
+            await host.Fixture.RunSqlAsync("UPDATE \"AniListConnections\" SET \"FailureCode\" = 'anilist_unavailable'");
+            Assert.AreEqual(AniListSyncProblemType.Unreachable, (await ReadWorkAsync(host, 20)).SyncProblemId);
+            await host.Fixture.RunSqlAsync("UPDATE \"AniListConnections\" SET \"FailureCode\" = NULL");
+            await host.Fixture.RunSqlAsync("UPDATE \"AniListEntries\" SET \"Progress\" = 8 WHERE \"MediaId\" = 5001");
+            var behind = await ReadWorkAsync(host, 20);
+            Assert.AreEqual((AniListSyncStateType.AniListAhead, (AniListSyncProblemType?)null), (behind.SyncStateId, behind.SyncProblemId), "The next pass takes it over.");
+
+            // A film that AniList completed and a book counted in volumes; a title that is not on the list says so.
+            var film = await ReadWorkAsync(host, 30);
+            Assert.AreEqual(("COMPLETED", AniListSyncStateType.Synchronized), (film.Status, film.SyncStateId));
+            var manga = await ReadWorkAsync(host, 40);
+            Assert.AreEqual((true, 1, 1), (manga.IsVolume, manga.Progress, manga.LocalProgress));
+            var unlisted = await ReadWorkAsync(host, 50);
+            Assert.AreEqual((true, false, null), (unlisted.IsConnected, unlisted.IsOnList, unlisted.SyncStateId));
+
+            // Both are the profile's to see only while the module is on.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'AniList'");
+            using var hidden = await host.SendAsync(HttpMethod.Get, Route + "/lists");
+            Assert.AreEqual(HttpStatusCode.Forbidden, hidden.StatusCode);
+            using var hiddenWork = await host.SendAsync(HttpMethod.Get, "/api/v1/works/20/anilist");
+            Assert.AreEqual(HttpStatusCode.Forbidden, hiddenWork.StatusCode);
         }
 
         [TestMethod]
@@ -265,6 +407,27 @@ namespace Jularr.Backend.Tests
             return (await response.Content.ReadFromJsonAsync<AniListConnectionV1>())!;
         }
 
+        private static async Task<WorkAniListV1> ReadWorkAsync(Host host, long workId)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + workId + "/anilist");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<WorkAniListV1>())!;
+        }
+
+        private static async Task<BaseDataList<AniListStatusCountV1>> ReadListsAsync(Host host)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, Route + "/lists");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<BaseDataList<AniListStatusCountV1>>())!;
+        }
+
+        private static async Task<IReadOnlyList<AniListEntryV1>> ReadEntriesAsync(Host host, string status)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, Route + "/lists/" + status);
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<PageResult<AniListEntryV1>>())!.Items;
+        }
+
         private static async Task WatchAsync(Host host, long workId, params long[] unitIds)
         {
             foreach (var unitId in unitIds)
@@ -376,7 +539,7 @@ namespace Jularr.Backend.Tests
                 var state = _state[id];
                 var total = manga ? "\"chapters\":null,\"volumes\":null" : "\"episodes\":" + episodes + ",\"chapters\":null,\"volumes\":null";
                 return "{\"id\":" + id + ",\"mediaId\":" + mediaId + ",\"status\":\"" + status + "\",\"progress\":" + state.Progress + ",\"progressVolumes\":" + state.Volumes + ",\"score\":80,\"updatedAt\":" + _stamp
-                    + ",\"media\":{" + total + ",\"title\":{\"romaji\":\"Title " + mediaId + "\",\"english\":null}}}";
+                    + ",\"media\":{" + total + ",\"title\":{\"romaji\":\"Title " + mediaId + "\",\"english\":null},\"coverImage\":{\"large\":\"https://s4.anilist.co/cover-" + mediaId + ".jpg\"}}}";
             }
 
             private static HttpResponseMessage Json(string body) => new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };

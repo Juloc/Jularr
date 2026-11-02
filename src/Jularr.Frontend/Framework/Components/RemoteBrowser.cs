@@ -13,8 +13,11 @@ namespace Jularr.Frontend.Framework
                 .Attribute("tabindex", "-1").Attribute("draggable", "false").Attribute("data-browser-image", "")
                 .Attribute("width", view.Width.ToString(CultureInfo.InvariantCulture)).Attribute("height", view.Height.ToString(CultureInfo.InvariantCulture));
             if (view.IsActive) image.Attribute("src", address + "/frame");
+            var reopen = view.OperationId is { } operationId
+                ? "/Admin/Browser?handler=OpenDownloadView&operationId=" + operationId.ToString(CultureInfo.InvariantCulture)
+                : "/Admin/Browser?handler=OpenView&acquisitionConnectionId=" + view.AcquisitionConnectionId.ToString(CultureInfo.InvariantCulture);
             var reconnect = new Div(new Form<BrowserParametersV1>(form => form.Submit("admin.browser.manualReconnect"),
-                "/Admin/Browser?handler=OpenView&acquisitionConnectionId=" + view.AcquisitionConnectionId.ToString(CultureInfo.InvariantCulture), csrf, new BrowserParametersV1()))
+                reopen, csrf, new BrowserParametersV1()))
                 .Attribute("data-browser-reconnect", "");
             if (view.IsActive) reconnect.Attribute("hidden", "");
             var content = new Div(

@@ -7,11 +7,13 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 {
     public sealed class ReadAcquisitionConnectionsParametersV1 : BaseParameters
     {
-        public ReadAcquisitionConnectionsParametersV1(int page = 1, int pageSize = 25, AcquisitionConnectionRole? acquisitionConnectionRoleId = null)
+        public ReadAcquisitionConnectionsParametersV1(int page = 1, int pageSize = 25, AcquisitionConnectionRole? acquisitionConnectionRoleId = null,
+            AcquisitionConnectionType[]? acquisitionConnectionTypeIds = null)
         {
             Page = page;
             PageSize = pageSize;
             AcquisitionConnectionRoleId = acquisitionConnectionRoleId;
+            AcquisitionConnectionTypeIds = acquisitionConnectionTypeIds ?? [];
         }
 
         public int Page { get; }
@@ -20,6 +22,10 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         // Without a role, every connection.
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionRoleId), false)]
         public AcquisitionConnectionRole? AcquisitionConnectionRoleId { get; }
+
+        // Without kinds, every kind of the role.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionTypeIds))]
+        public AcquisitionConnectionType[] AcquisitionConnectionTypeIds { get; }
     }
 
     public sealed class AcquisitionConnectionParametersV1 : BaseParameters

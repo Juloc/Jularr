@@ -51,10 +51,10 @@ namespace Jularr.Frontend.Modules.Speech
                     new Button(new Text("speech.model.install")).Attribute("type", "button").Attribute("data-speech-install", "").Attribute("hidden", "hidden"),
                     new Button(new Text("speech.model.remove")).Attribute("type", "button").Attribute("data-speech-remove", "").Attribute("hidden", "hidden")
                 ).Class("speech-settings__actions"),
-                new P(new A(new Text("speech.runtimeLicenses")).Attribute("href", "https://github.com/Juloc/Jularr/blob/clean-start/docs/SPEECH.md#browser-runtime-licenses")
+                new P(new A(new Text("speech.runtimeLicenses")).Attribute("href", "https://github.com/Juloc/Jularr/blob/main/docs/SPEECH.md#browser-runtime-licenses")
                     .Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"),
                     new A(new Text("speech.runtimeNotices")).Attribute("data-speech-runtime-notices", "")
-                        .Attribute("href", "https://github.com/Juloc/Jularr/blob/clean-start/src/Jularr.Frontend/Modules/Speech/Runtime/NOTICE.md")
+                        .Attribute("href", "https://github.com/Juloc/Jularr/blob/main/src/Jularr.Frontend/Modules/Speech/Runtime/NOTICE.md")
                         .Attribute("target", "_blank").Attribute("rel", "noopener noreferrer")).Class("speech-settings__licenses")
             ).Class("speech-settings").Attribute("data-speech-settings", "").Attribute("data-speech-language", language)
                 .Attribute("data-speech-preferences", JsonSerializer.Serialize(preferences, Json))

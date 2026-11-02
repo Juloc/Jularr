@@ -30,7 +30,7 @@ function initializeSeasons(): void {
             syncCollapseAll();
         };
         set(sectionState.get(panel.id) ?? panel.dataset.open === 'true');
-        button.addEventListener('click', () => set(panel.hidden));
+        button.addEventListener('click', () => set(panel.hidden === true));
     });
 
     document.querySelectorAll<HTMLButtonElement>('[data-collapse-all]').forEach(button => {

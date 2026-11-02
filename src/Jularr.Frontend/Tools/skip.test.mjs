@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { test } from 'node:test';
-import ts from 'typescript';
+import ts from './transpile.mjs';
 
 const source = readFileSync(new URL('../Modules/Player/Skip.ts', import.meta.url), 'utf8');
 const script = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
@@ -73,4 +73,13 @@ test('The chapter playing is the last one that has begun', () => {
     assert.equal(exports.chapterIndexAt(chapters, 5000), 2);
     assert.equal(exports.chapterIndexAt([{ start: 10 }], 5), -1);
     assert.equal(exports.chapterIndexAt([], 5), -1);
+});
+
+test('A Skip button fades after a few seconds and returns only while the controls are shown and the stretch lasts', () => {
+    assert.equal(exports.skipShown(true, false, false), true);
+    assert.equal(exports.skipShown(true, true, false), false);
+    assert.equal(exports.skipShown(true, true, true), true);
+    assert.equal(exports.skipShown(false, false, true), false);
+    assert.equal(exports.skipShown(false, true, true), false);
+    assert.equal(exports.SkipShowSeconds, 6);
 });

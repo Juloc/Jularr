@@ -28,6 +28,32 @@ namespace Jularr.Backend.Logic.Reading
 
         public static string Text(string html) => string.Join(' ', (Parser.ParseDocument(html).Body?.TextContent ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
+        // Ruby annotations (<rt>/<rp>) belong to the display, not to the text sent to machine translation.
+        // Keep the prepared HTML intact for reading and only extract the base text here.
+        public static string TranslationText(IElement block) => TranslationNode(block).Trim();
+
+        private static string TranslationNode(INode node)
+        {
+            if (node is IElement element && element.LocalName is "rt" or "rp") return "";
+            if (node.NodeType == NodeType.Text) return node.TextContent;
+            return string.Concat(node.ChildNodes.Select(TranslationNode));
+        }
+
+        // A small amount of preceding source text helps the model keep names, speaker and point of view.
+        // Context must never be included in the translated output or alter block positions.
+        public static string TranslationContext(IReadOnlyList<IElement> blocks, int index)
+        {
+            var previous = new List<string>();
+            for (var i = Math.Max(0, index - 3); i < index; i++)
+            {
+                if (blocks[i].QuerySelector("[data-b]") is not null) continue;
+                var value = TranslationText(blocks[i]);
+                if (value.Length > 0) previous.Add(value);
+            }
+            var context = string.Join("\n", previous);
+            return context.Length > 800 ? context[^800..] : context;
+        }
+
         // The page of a converted PDF the first block holding the words starts on.
         public static int? PageOfText(string html, string query)
         {
@@ -170,9 +196,10 @@ namespace Jularr.Backend.Logic.Reading
                 }
             }
 
-            // Numbered blocks are the semantic locator.
+            // Numbered blocks are the semantic locator. A book whose lines are divs (a converted PDF, a plain export) has its text in leaf divs: they are blocks too,
+            // else that text is never translated and its chapter heading never found.
             var count = 0;
-            foreach (var block in clean.Body!.QuerySelectorAll(string.Join(',', Blocks)))
+            foreach (var block in clean.Body!.QuerySelectorAll("*").Where(element => Blocks.Contains(element.LocalName) || IsTextDiv(element)).ToArray())
             {
                 block.SetAttribute("data-b", count.ToString(CultureInfo.InvariantCulture));
                 count++;
@@ -181,6 +208,11 @@ namespace Jularr.Backend.Logic.Reading
             var characters = clean.Body.TextContent.Count(character => !char.IsWhiteSpace(character));
             return new PreparedSection(clean.Body.InnerHtml, characters, count, resources);
         }
+
+        // A div that holds text and no other block or div: the smallest unit of text a book without paragraphs has.
+        private static bool IsTextDiv(AngleSharp.Dom.IElement element) =>
+            element.LocalName == "div" && !string.IsNullOrWhiteSpace(element.TextContent)
+            && !element.QuerySelectorAll("*").Any(child => child.LocalName == "div" || Blocks.Contains(child.LocalName));
 
         // Large pictures become figures: the declared kind where the book says so, else by the picture's size; a picture alone in its block takes the block's place.
         private static void Figures(IDocument clean, Dictionary<string, string> sources, Func<string, (int Width, int Height)?>? imageSize)
@@ -247,6 +279,8 @@ namespace Jularr.Backend.Logic.Reading
             // Reader typography replaces book styles.
             var sanitizer = new HtmlSanitizer();
             sanitizer.AllowedTags.ExceptWith(["form", "input", "button", "select", "option", "textarea", "label", "fieldset", "legend", "style", "font", "center"]);
+            // Keep ruby markup so the Reader displays readings, but translation extraction can ignore them.
+            sanitizer.AllowedTags.UnionWith(["ruby", "rt", "rp"]);
             sanitizer.AllowedAttributes.ExceptWith(["style", "class", "align", "bgcolor", "color", "background", "width", "height"]);
             sanitizer.AllowedAttributes.Add("data-b");
             sanitizer.AllowedAttributes.Add("data-figure");

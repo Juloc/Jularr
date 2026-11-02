@@ -27,7 +27,18 @@ namespace Jularr.Backend.Service.User.Library.V1
                 FROM
                     unnest(@WorkIds::bigint[]) AS picked("Id")
                     JOIN "Works" AS work ON work."Id" = picked."Id"
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = work."Id" AND visible."ProfileId" = @ProfileId AND NOT visible."IsHidden"
+                    JOIN LATERAL (
+                        SELECT
+                            profileWork."WorkId"
+                        FROM
+                            "ProfileWorks" AS profileWork
+                        WHERE
+                            profileWork."ProfileId" = @ProfileId
+                            AND profileWork."WorkId" = work."Id"
+                            AND NOT profileWork."IsHidden"
+                        -- Keep the profile view parameterized by the selected Work.
+                        OFFSET 0
+                    ) AS visible ON TRUE
                     {{WorkCardProjection.CardJoins}}
                 """;
             sql.Parameters.Add(Parameters);

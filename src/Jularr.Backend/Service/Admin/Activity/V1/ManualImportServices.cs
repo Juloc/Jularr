@@ -252,7 +252,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
                 WHERE
-                    work."MediaTypeId" IN (1, 2)
+                    (@AnyMediaType OR work."MediaTypeId" IN (1, 2))
                     AND EXISTS (
                         SELECT
                             1

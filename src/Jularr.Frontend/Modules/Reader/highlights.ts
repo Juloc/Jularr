@@ -1,3 +1,5 @@
+import { readerLifetime } from "./Lifetime";
+
 // Highlights and notes: drawn from the saved offsets, created from a selection, edited in place.
 interface Annotation {
     id: number;
@@ -20,6 +22,7 @@ interface Point {
 }
 
 export function highlights(reader: HTMLElement, content: HTMLElement, section: number): void {
+    const signal = readerLifetime();
     const url = reader.dataset.annotationsUrl!;
     const antiforgery = reader.dataset.antiforgery!;
     const toolbar = reader.querySelector<HTMLElement>("[data-role=toolbar]")!;
@@ -35,7 +38,7 @@ export function highlights(reader: HTMLElement, content: HTMLElement, section: n
     }
 
     // A selection offers colours and a note; pressing a colour keeps the selection.
-    document.addEventListener("selectionchange", () => window.setTimeout(offer, 0));
+    document.addEventListener("selectionchange", () => window.setTimeout(offer, 0), { signal });
     toolbar.addEventListener("mousedown", event => event.preventDefault());
     toolbar.querySelectorAll<HTMLButtonElement>("[data-color]").forEach(button => button.addEventListener("click", () => void create(Number(button.dataset.color), null)));
     toolbar.querySelector<HTMLButtonElement>("[data-role=add-note]")?.addEventListener("click", () => {
@@ -68,7 +71,7 @@ export function highlights(reader: HTMLElement, content: HTMLElement, section: n
     popover.querySelector<HTMLButtonElement>("[data-role=delete-note]")?.addEventListener("click", () => { if (open) void remove(open); });
     document.addEventListener("keydown", event => {
         if (event.key === "Escape") hide();
-    });
+    }, { signal });
 
     function offer() {
         // Marks belong to the original text, not to a translation of it.

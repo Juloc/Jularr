@@ -17,6 +17,10 @@ namespace Jularr.Workers
             await Runner.RunIfConnectedAsync("aniListSync", async (services, token) =>
                 (await services.GetRequiredService<SyncAniListV1>().ExecuteAsync<UpdateResult>(new AniListSyncParametersV1(), default, token)).Success, ct);
 
+            // The AniBridge mappings first, so a new release maps the anime of this pass.
+            await Runner.RunAsync("animeMappings", (services, token) =>
+                services.GetRequiredService<SyncAnimeMappingsV1>().ExecuteAsync<UpdateResult>(new MediaMatchParametersV1(), default, token), ct);
+
             await Runner.RunAsync("aniListMatching", (services, token) =>
                 services.GetRequiredService<MatchAniListV1>().ExecuteAsync<UpdateResult>(new MediaMatchParametersV1(), default, token), ct);
 
@@ -31,6 +35,10 @@ namespace Jularr.Workers
             // Titles with files and no target get a paused one, so every title page offers the same buttons.
             await Runner.RunWhileBusyAsync("wantedTargets", async (services, token) =>
                 (await services.GetRequiredService<EnsureWantedTargetsV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(2), Time, ct);
+
+            // Catalog titles nobody uses lose their details, then their rows; once a day.
+            await Runner.RunAsync("catalogCleanup", (services, token) =>
+                services.GetRequiredService<CleanCatalogTitlesV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token), ct);
 
             // Covers still named by a provider, a pass of twenty at a time with a short pause.
             await Runner.RunWhileBusyAsync("covers", async (services, token) =>

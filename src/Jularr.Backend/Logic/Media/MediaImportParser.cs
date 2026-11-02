@@ -14,7 +14,7 @@ namespace Jularr.Backend.Logic.Media
 
     // One entry of a list after validation; a problem makes it unusable, never silently different.
     internal sealed record MediaImportItem(int Index, string TypeKey, MediaType? Type, MediaSubtype? Subtype, string? Title, int? Year, string? Creator, IReadOnlyList<MediaImportId> Ids,
-        string? Problem, string? ProblemDetail);
+        string? Problem, string? ProblemDetail, IReadOnlyList<string>? Authors = null);
 
     // The one-time media list, version 1: a closed set of keys, bounded sizes, plain text only.
     internal static partial class MediaImportParser
@@ -134,6 +134,7 @@ namespace Jularr.Backend.Logic.Media
             if (element.ValueKind != JsonValueKind.Object) return Invalid(index, "", "not_object");
 
             string? typeKey = null, title = null, creator = null;
+            IReadOnlyList<string>? authors = null;
             int? year = null;
             JsonElement? ids = null;
             var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -154,6 +155,21 @@ namespace Jularr.Backend.Logic.Media
                     case "year":
                         if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out var number) || number is < 1800 or > 2200) return Invalid(index, typeKey, "invalid_year");
                         year = number;
+                        break;
+                    case "author" when value.ValueKind == JsonValueKind.Array:
+                        var names = new List<string>();
+                        foreach (var author in value.EnumerateArray())
+                        {
+                            if (author.ValueKind != JsonValueKind.String) return Invalid(index, typeKey, "invalid_text", "author");
+                            var name = Text(author.GetString()!, out var authorProblem);
+                            if (authorProblem is not null || name is null) return Invalid(index, typeKey, "invalid_text", "author");
+                            names.Add(name);
+                        }
+                        var joined = string.Join(", ", names);
+                        if (names.Count is 0 or > 50 || joined.Length > 500) return Invalid(index, typeKey, "invalid_text", "author");
+                        if (creator is not null) return Invalid(index, typeKey, "duplicate_key", "author");
+                        authors = names;
+                        creator = joined;
                         break;
                     default:
                         if (value.ValueKind != JsonValueKind.String) return Invalid(index, typeKey, "invalid_text", property.Name);
@@ -191,7 +207,7 @@ namespace Jularr.Backend.Logic.Media
             }
 
             if (identities.Count == 0 && title is null) return Invalid(index, typeKey, "no_identity");
-            return new MediaImportItem(index, typeKey, kind.Type, kind.Subtype, title, year, creator, identities, null, null);
+            return new MediaImportItem(index, typeKey, kind.Type, kind.Subtype, title, year, creator, identities, null, null, authors);
         }
 
         private static MediaImportItem Invalid(int index, string? typeKey, string problem, string? detail = null) =>
@@ -351,7 +367,13 @@ namespace Jularr.Backend.Logic.Media
 
                     if (item.Title is not null) writer.WriteString("title", item.Title);
                     if (item.Year is { } year) writer.WriteNumber("year", year);
-                    if (item.Creator is not null) writer.WriteString("author", item.Creator);
+                    if (item.Authors is { } authors)
+                    {
+                        writer.WriteStartArray("author");
+                        foreach (var author in authors) writer.WriteStringValue(author);
+                        writer.WriteEndArray();
+                    }
+                    else if (item.Creator is not null) writer.WriteString("author", item.Creator);
                     writer.WriteEndObject();
                 }
 

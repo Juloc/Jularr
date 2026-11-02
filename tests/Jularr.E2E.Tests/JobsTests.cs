@@ -30,6 +30,7 @@ namespace Jularr.E2E.Tests
             {
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
                 ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
                 ["Providers:OpenLibrary"] = fakes.OpenLibrary.ToString(),
                 ["Providers:AniList"] = fakes.AniList.ToString()
             });
@@ -54,7 +55,8 @@ namespace Jularr.E2E.Tests
                     await Steps.FollowAsync(page, next);
                 }
                 CollectionAssert.AreEquivalent(expectedJobs, shownJobs.ToArray());
-                await page.GotoAsync("/Admin/Jobs");
+                // The list is paged; the filter brings each job used below onto the first page.
+                await page.GotoAsync("/Admin/Jobs?q=thumbnails");
 
                 // Pausing shows at once and keeps the job from running; resuming undoes it.
                 var trickplay = Row(page, "Seek thumbnails");
@@ -72,11 +74,13 @@ namespace Jularr.E2E.Tests
                 waits = await OpenDetailsAsync(page, "Seek thumbnails", "Waits while Jularr is used");
                 await Assertions.Expect(waits).ToHaveAttributeAsync("aria-checked", "false");
                 await page.Keyboard.PressAsync("Escape");
+                await page.GotoAsync("/Admin/Jobs?q=tracking");
                 await OpenDetailsAsync(page, "Download tracking", null);
                 Assert.AreEqual(0, await page.GetByRole(AriaRole.Dialog, new() { Name = "Download tracking" }).GetByRole(AriaRole.Switch, new() { Name = "Waits while Jularr is used" }).CountAsync());
                 await page.Keyboard.PressAsync("Escape");
 
                 // The chips count the states and narrow the list; the filter field narrows it by words.
+                await page.GotoAsync("/Admin/Jobs?q=plex");
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Navigation, new() { Name = "Job states" }).GetByRole(AriaRole.Link, new() { Name = "Paused" }));
                 await Assertions.Expect(page.Locator(".list-body .list-row")).ToHaveCountAsync(0);
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Navigation, new() { Name = "Job states" }).GetByRole(AriaRole.Link, new() { Name = "All" }));

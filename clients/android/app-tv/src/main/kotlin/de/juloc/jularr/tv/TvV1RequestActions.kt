@@ -23,13 +23,12 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun TvV1RequestActions(
     catalog: TvCatalogV1Client,
-    itemKey: String,
+    workId: Long,
     canRequest: Boolean,
     onUnauthorized: () -> Unit,
-    tmdb: Pair<Int, Int>? = null,
-    catalogItem: TvV1CatalogSelection? = null,
 ) {
-    if (!canRequest || (tmdb == null && catalogItem == null)) return
+    if (!canRequest) return
+    val itemKey = workId
 
     var locales by remember(catalog, itemKey) { mutableStateOf<List<TvRequestLocaleV1>>(emptyList()) }
     var loading by remember(catalog, itemKey) { mutableStateOf(true) }
@@ -80,14 +79,7 @@ internal fun TvV1RequestActions(
                 error = null
                 scope.launch {
                     try {
-                        val result = if (tmdb != null) {
-                            catalog.requestDiscoverTmdb(tmdb.first, tmdb.second, localeId)
-                        } else {
-                            val item = requireNotNull(catalogItem)
-                            catalog.requestDiscoverCatalog(
-                                item.mediaTypeId, item.namespace, item.externalId, item.mediaSubtypeId, localeId,
-                            )
-                        }
+                        val result = catalog.requestWork(workId, localeId)
                         check(result > 0) { "Jularr hat keine gültige Anfragen-ID bestätigt." }
                         createdId = result
                     } catch (cancel: CancellationException) {

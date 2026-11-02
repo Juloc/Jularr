@@ -167,8 +167,9 @@ namespace Jularr.E2E.Tests
             // Two short choices are a segmented control of radios.
             await page.Locator("dialog#connection-editor form").GetByLabel(searchesAutomatically ? "Automatic and manual" : "Manual only", new() { Exact = true }).CheckAsync();
             await SubmitAsync(page, page.Locator("dialog#connection-editor form"));
-            await page.GotoAsync("/Admin/Acquisition/Downloads");
-            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }).And(page.Locator("[href*='Type=Sabnzbd']")));
+            await page.GotoAsync("/Admin/Downloads/Clients");
+            await page.GetByRole(AriaRole.Button, new() { Name = "Add client", Exact = true }).ClickAsync();
+            await FollowAsync(page, page.Locator("dialog#downloaders-add").GetByRole(AriaRole.Link, new() { Name = "SABnzbd", Exact = true }));
             await page.FillAsync("dialog#connection-editor form [name=Name]", "SABnzbd");
             await page.FillAsync("dialog#connection-editor form [name=BaseUrl]", new Uri(fakes.Address, "sabnzbd/").ToString());
             await page.FillAsync("dialog#connection-editor form [name=ApiKey]", FakeServices.ClientKey);
@@ -176,23 +177,30 @@ namespace Jularr.E2E.Tests
             await SubmitAsync(page, page.Locator("dialog#connection-editor form"));
         }
 
-        // Found in Discover and requested; the Owner's request is approved at once.
+        // Found in Discover and requested on its Work's page; the Owner's request is approved at once.
         public static async Task RequestAsync(IPage page, string query, string title)
         {
             await page.GotoAsync("/?q=" + Uri.EscapeDataString(query));
             var card = page.Locator(".media-card", new() { HasText = title });
             await card.HoverAsync();
             await FollowAsync(page, card.GetByRole(AriaRole.Link, new() { Name = "Request", Exact = true }));
-            await SubmitAsync(page, FormWith(page, "Request this work"));
+            await RequestHereAsync(page);
         }
 
-        // Found in its catalog on Discover and requested on its own page.
-        public static async Task RequestFromCatalogAsync(IPage page, string type, string title, string source)
+        // Found in its catalog on Discover and requested on its Work's page.
+        public static async Task RequestFromCatalogAsync(IPage page, string type, string title)
         {
             await page.GotoAsync("/?type=" + type + "&q=" + Uri.EscapeDataString(title));
-            var card = page.Locator(".media-card", new() { HasText = title }).Filter(new() { Has = page.Locator("a[href*='/" + type + "/" + source + "/']") }).First;
+            var card = page.Locator(".media-card", new() { HasText = title }).First;
             await card.HoverAsync();
             await FollowAsync(page, card.GetByRole(AriaRole.Link, new() { Name = "Request", Exact = true }));
+            await RequestHereAsync(page);
+        }
+
+        // A Work's page asks in the menu of its Request button.
+        private static async Task RequestHereAsync(IPage page)
+        {
+            await page.Locator("summary.action-menu__button", new() { HasText = "Request" }).ClickAsync();
             await SubmitAsync(page, FormWith(page, "Request this work"));
         }
 

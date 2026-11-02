@@ -62,48 +62,35 @@ namespace Jularr.Backend.Logic.Media
             .DistinctBy(target => (target.Value, target.WorkRelationTypeId))
             .Take(ProviderLimit)];
 
-        // What a provider names replaces its earlier relations of the Work; the titles it names that Discover does not know yet are kept in its catalog, and a relation a person hid stays hidden.
+        // What a provider names replaces its earlier relations of the Work; the titles it names are kept as catalog Works, and a relation a person hid stays hidden.
+        // A title that turns out to be the Work itself (one of its own seasons) is no relation.
         public static async Task SaveWorkRelationsAsync(this LogicContext ctx, WorkRelationSyncData data, CancellationToken ct)
         {
+            var related = new List<WorkRelationTargetWorkData>();
+            foreach (var group in data.Targets.GroupBy(target => (target.Namespace, target.MediaTypeId, target.MediaSubtypeId)))
+            {
+                var list = new ExternalWorkListData(group.Key.Namespace, group.Key.MediaTypeId, group.Key.MediaSubtypeId);
+                var works = group.DistinctBy(target => target.Value)
+                    .Select(target => new ExternalWorkData(target.Namespace, target.Value, target.Title, null, target.ReleaseYear, null, null, target.ImageUrl, null, null)).ToArray();
+                var saved = (await ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, works, false), ct)).ToDictionary(work => work.Value, StringComparer.Ordinal);
+                related.AddRange(group.Where(target => saved.ContainsKey(target.Value)).Select(target => new WorkRelationTargetWorkData(saved[target.Value].WorkId, target.WorkRelationTypeId)));
+            }
+
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO
-                    "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "MediaSubtypeId", "Title", "ReleaseYear", "ImageUrl")
-                SELECT DISTINCT ON (item."Namespace", item."Value")
-                    item."Namespace",
-                    item."Value",
-                    item."MediaTypeId",
-                    item."MediaSubtypeId",
-                    item."Title",
-                    item."ReleaseYear",
-                    CASE WHEN item."ImageUrl" ~ '^https://' AND length(item."ImageUrl") <= 500 THEN item."ImageUrl" END
-                FROM
-                    jsonb_to_recordset(@Targets::jsonb) AS item ("Namespace" text, "Value" text, "WorkRelationTypeId" smallint, "MediaTypeId" smallint, "MediaSubtypeId" smallint, "Title" text, "ReleaseYear" integer, "ImageUrl" text)
-                ON CONFLICT ("Namespace", "Value") DO NOTHING;
-
-                INSERT INTO
-                    "WorkRelations" ("WorkId", "ExternalWorkId", "WorkRelationTypeId", "SourceKey")
-                SELECT DISTINCT ON (listed."Id", item."WorkRelationTypeId")
+                    "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey")
+                SELECT DISTINCT
                     @WorkId,
-                    listed."Id",
+                    item."WorkId",
                     item."WorkRelationTypeId",
                     @SourceKey
                 FROM
-                    jsonb_to_recordset(@Targets::jsonb) AS item ("Namespace" text, "Value" text, "WorkRelationTypeId" smallint, "MediaTypeId" smallint, "MediaSubtypeId" smallint, "Title" text, "ReleaseYear" integer, "ImageUrl" text)
-                    JOIN "ExternalWorks" AS listed ON listed."Namespace" = item."Namespace" AND listed."Value" = item."Value"
+                    jsonb_to_recordset(@Related::jsonb) AS item ("WorkId" bigint, "WorkRelationTypeId" smallint)
                 WHERE
-                    NOT EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            "WorkExternalIdentities" AS own
-                        WHERE
-                            own."WorkId" = @WorkId
-                            AND own."Namespace" = item."Namespace"
-                            AND own."Value" = item."Value"
-                    )
-                ON CONFLICT ("WorkId", "ExternalWorkId", "WorkRelationTypeId") WHERE "ExternalWorkId" IS NOT NULL DO NOTHING;
+                    item."WorkId" <> @WorkId
+                ON CONFLICT ("WorkId", "RelatedWorkId", "WorkRelationTypeId") WHERE "RelatedWorkId" IS NOT NULL DO NOTHING;
 
                 DELETE FROM
                     "WorkRelations" AS relation
@@ -114,14 +101,13 @@ namespace Jularr.Backend.Logic.Media
                         SELECT
                             1
                         FROM
-                            jsonb_to_recordset(@Targets::jsonb) AS item ("Namespace" text, "Value" text, "WorkRelationTypeId" smallint)
-                            JOIN "ExternalWorks" AS listed ON listed."Namespace" = item."Namespace" AND listed."Value" = item."Value"
+                            jsonb_to_recordset(@Related::jsonb) AS item ("WorkId" bigint, "WorkRelationTypeId" smallint)
                         WHERE
-                            listed."Id" = relation."ExternalWorkId"
+                            item."WorkId" = relation."RelatedWorkId"
                             AND item."WorkRelationTypeId" = relation."WorkRelationTypeId"
                     );
                 """;
-            sql.Parameters.Add(data);
+            sql.Parameters.Add(new WorkRelationSaveData(data.WorkId, data.SourceKey, related));
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
@@ -150,13 +136,12 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(data);
             _ = await ctx.ReadOptionalAsync<WorkRelationWorkRow>(sql, ct) ?? throw new KeyNotFoundException("The work was not found.");
 
-            // The related title: a Work, or a catalog title that may be a Work already.
+            // The related title is a Work; a catalog title is its anime season's series or the Work that holds its identity.
             sql = new SqlStatement();
             sql.Statement = data.RelatedWorkId is not null
                 ? """
                   SELECT
-                      work."Id" AS "RelatedWorkId",
-                      NULL::bigint AS "ExternalWorkId"
+                      work."Id" AS "RelatedWorkId"
                   FROM
                       "Works" AS work
                   WHERE
@@ -165,16 +150,24 @@ namespace Jularr.Backend.Logic.Media
                   """
                 : """
                   SELECT
-                      coalesce(identity."WorkId", unit."WorkId") AS "RelatedWorkId",
-                      listed."Id" AS "ExternalWorkId"
+                      work."Id" AS "RelatedWorkId"
                   FROM
-                      "ExternalWorks" AS listed
-                      LEFT JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = listed."Namespace" AND identity."Value" = listed."Value"
-                      LEFT JOIN "WorkUnitExternalIdentities" AS seasonIdentity ON seasonIdentity."Namespace" = listed."Namespace" AND seasonIdentity."Value" = listed."Value"
-                      LEFT JOIN "WorkUnits" AS unit ON unit."Id" = seasonIdentity."WorkUnitId"
+                      "Works" AS work
                   WHERE
-                      listed."Namespace" = @Namespace
-                      AND listed."Value" = @ExternalId;
+                      work."Id" = coalesce(
+                          (
+                              SELECT
+                                  unit."WorkId"
+                              FROM
+                                  "WorkUnitExternalIdentities" AS seasonIdentity
+                                  JOIN "WorkUnits" AS unit ON unit."Id" = seasonIdentity."WorkUnitId"
+                              WHERE
+                                  seasonIdentity."Namespace" = @Namespace
+                                  AND seasonIdentity."Value" = @ExternalId
+                          ),
+                          (SELECT identity."WorkId" FROM "WorkExternalIdentities" AS identity WHERE identity."Namespace" = @Namespace AND identity."Value" = @ExternalId)
+                      )
+                  FOR SHARE;
                   """;
             sql.Parameters.Add(data);
             var target = await ctx.ReadOptionalAsync<WorkRelationTargetRow>(sql, ct) ?? throw new DataValidationException(nameof(data.RelatedWorkId), "unknown_reference");
@@ -183,10 +176,10 @@ namespace Jularr.Backend.Logic.Media
                 throw new DataValidationException(nameof(data.RelatedWorkId), "invalid_value");
             }
 
-            // Between two Works the relation is stored forward from the side that names it; a title that is no Work keeps the type as the Work sees it.
-            var turned = target.RelatedWorkId is not null && !IsStoredForward(data.WorkRelationTypeId);
-            var insert = new WorkRelationInsertData(data.WorkId, data.WorkRelationTypeId, target.RelatedWorkId, target.ExternalWorkId, turned ? target.RelatedWorkId!.Value : data.WorkId,
-                turned ? data.WorkId : target.RelatedWorkId, target.RelatedWorkId is null ? target.ExternalWorkId : null, turned ? Inverse(data.WorkRelationTypeId) : data.WorkRelationTypeId);
+            // The relation is stored forward from the side that names it.
+            var turned = !IsStoredForward(data.WorkRelationTypeId);
+            var insert = new WorkRelationInsertData(data.WorkId, data.WorkRelationTypeId, target.RelatedWorkId, turned ? target.RelatedWorkId : data.WorkId,
+                turned ? data.WorkId : target.RelatedWorkId, turned ? Inverse(data.WorkRelationTypeId) : data.WorkRelationTypeId);
 
             // A hidden relation of a provider is the person's now.
             sql = new SqlStatement();
@@ -203,7 +196,7 @@ namespace Jularr.Backend.Logic.Media
                     link."RelationId" = relation."Id"
                     AND link."WorkId" = @WorkId
                     AND link."WorkRelationTypeId" = @WorkRelationTypeId
-                    AND (link."OtherWorkId" = @RelatedWorkId OR link."ExternalWorkId" = @ExternalWorkId)
+                    AND link."OtherWorkId" = @RelatedWorkId
                     AND link."IsSuppressed";
                 """;
             sql.Parameters.Add(insert);
@@ -217,11 +210,10 @@ namespace Jularr.Backend.Logic.Media
             sql.Statement =
                 """
                 INSERT INTO
-                    "WorkRelations" ("WorkId", "RelatedWorkId", "ExternalWorkId", "WorkRelationTypeId", "SourceKey")
+                    "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey")
                 SELECT
                     @StoredWorkId,
                     @StoredRelatedWorkId,
-                    @StoredExternalWorkId,
                     @StoredWorkRelationTypeId,
                     'manual'
                 WHERE
@@ -233,7 +225,7 @@ namespace Jularr.Backend.Logic.Media
                         WHERE
                             link."WorkId" = @WorkId
                             AND link."WorkRelationTypeId" = @WorkRelationTypeId
-                            AND (link."OtherWorkId" = @RelatedWorkId OR link."ExternalWorkId" = @ExternalWorkId)
+                            AND link."OtherWorkId" = @RelatedWorkId
                     );
                 """;
             sql.Parameters.Add(insert);
@@ -262,7 +254,7 @@ namespace Jularr.Backend.Logic.Media
                         FROM
                             "WorkRelationLinks" AS chosen
                             JOIN "WorkRelationLinks" AS same ON same."WorkId" = chosen."WorkId" AND same."WorkRelationTypeId" = chosen."WorkRelationTypeId"
-                                AND (same."OtherWorkId" = chosen."OtherWorkId" OR same."ExternalWorkId" = chosen."ExternalWorkId")
+                                AND same."OtherWorkId" = chosen."OtherWorkId"
                         WHERE
                             chosen."RelationId" = @WorkRelationId
                             AND chosen."WorkId" = @WorkId
@@ -284,7 +276,7 @@ namespace Jularr.Backend.Logic.Media
                         FROM
                             "WorkRelationLinks" AS chosen
                             JOIN "WorkRelationLinks" AS same ON same."WorkId" = chosen."WorkId" AND same."WorkRelationTypeId" = chosen."WorkRelationTypeId"
-                                AND (same."OtherWorkId" = chosen."OtherWorkId" OR same."ExternalWorkId" = chosen."ExternalWorkId")
+                                AND same."OtherWorkId" = chosen."OtherWorkId"
                         WHERE
                             chosen."RelationId" = @WorkRelationId
                             AND chosen."WorkId" = @WorkId

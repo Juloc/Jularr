@@ -103,6 +103,18 @@ namespace Jularr.Backend.Data.User.Media.V1
         public long WorkId { get; }
     }
 
+    // A Work just opened: true while it lacks the details its catalog could not give now; it then shows its catalog row.
+    public sealed class OpenedWorkV1 : BaseResponse
+    {
+        public OpenedWorkV1(bool areDetailsUnavailable)
+        {
+            AreDetailsUnavailable = areDetailsUnavailable;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.AreDetailsUnavailable))]
+        public bool AreDetailsUnavailable { get; }
+    }
+
     // A platform a game can be requested for.
     public sealed class GamePlatformV1 : BaseResponse
     {

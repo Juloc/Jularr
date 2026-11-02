@@ -1,6 +1,7 @@
 using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Activity.V1;
+using Jularr.Backend.Data.Admin.Browser.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Service.Admin.Activity.V1;
@@ -220,7 +221,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 .Class("activity-transfer").Attribute("data-live", LiveKeys.Operation(item.Id));
         }
 
-        private static bool Says(ActivityItemV1 item) => item.ReasonKey is not null && (item.IsWaiting || item.OperationStatusTypeId == OperationStatusType.Failed);
+        private static bool Says(ActivityItemV1 item) => item.ReasonKey is not null && (item.IsWaiting || item.OperationStatusTypeId is OperationStatusType.Failed or OperationStatusType.Queued or OperationStatusType.Running);
 
         private static IUiComponent LivePart(string name, string text, string className)
         {
@@ -312,6 +313,11 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             facts.Add(("operation.created", new LocalTime(item.CreatedAt)));
 
             var body = new List<IUiComponent> { Drawer.State("table.status", state), Drawer.Facts([.. facts]) };
+            if (item.UnmatchedFiles is { Length: > 0 } unmatched)
+            {
+                body.Add(Drawer.Block("activity.unmatched", new Div([.. unmatched.Select(path => new Div(new Truncated(path[(path.LastIndexOf('/') + 1)..])).Class("activity-file-row"))])));
+            }
+
             if (item.OperationTypeId == OperationType.Download && !(item.OperationStatusTypeId == OperationStatusType.Failed))
             {
                 if (item.ManualUrl is { } manual) body.Add(Drawer.Block("activity.source.check", ManualLink(item, manual, csrf)));
@@ -324,7 +330,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 {
                     body.Add(Drawer.Block("activity.files",
                         new A(Glyph("folder", 16), new Text("console.files")).Class("button button--soft")
-                            .Attribute("href", "/Admin/Acquisition/Downloads?PageNumber=1&AcquisitionConnectionId="
+                            .Attribute("href", "/Admin/Downloads/Clients?PageNumber=1&AcquisitionConnectionId="
                                 + sabnzbdConnectionId.ToString(CultureInfo.InvariantCulture) + "&Pane=files")));
                 }
                 else if (OpenOperationId == item.Id && ShowFiles)
@@ -389,8 +395,10 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         private IUiComponent Confirmed(ActivityItemV1 item, string handler, string labelKey, string confirmKey, string? csrf) =>
             new Details(new Summary(new Text(labelKey)), Action(item, handler, confirmKey, csrf)).Class("activity-confirm");
 
-        // The person passes the source's check in their own browser; the server takes the file link from there.
+        // The shared browser resumes automatic links; pasting a file URL remains an optional fallback.
         private IUiComponent ManualLink(ActivityItemV1 item, string manual, string? csrf) => new Div(
+            new Form<BrowserParametersV1>(form => form.Submit("admin.browser.manualOpen"),
+                "/Admin/Browser?handler=OpenDownloadView&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new BrowserParametersV1()),
             new A(new Text("activity.openSource")).Class("button").Attribute("href", manual).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"),
             new Form<SaveActivitySourceLinkDataV1>(form =>
             {

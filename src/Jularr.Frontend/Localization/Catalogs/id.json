@@ -1281,12 +1281,12 @@
    "Tidak ada kecocokan yang jelas"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted (paused)",
-   "Akan dipantau (dijeda)"
+   "Will be wanted",
+   "Akan dipantau"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted (paused)",
-   "Pemantauan dijeda"
+   "Wanted",
+   "Dipantau"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",
@@ -2167,10 +2167,6 @@
   "hint.WorkMetadataFields.Query.info": [
    "A title, optionally with its year.",
    "Sebuah judul, boleh disertai tahunnya."
-  ],
-  "hint.CollectionFields.IsSmart.info": [
-   "A smart collection fills itself from the filters below.",
-   "Koleksi cerdas terisi sendiri dari filter di bawah."
   ],
   "hint.CollectionFields.ReleaseYear.placeholder": [
    "Any year",
@@ -4633,8 +4629,8 @@
    "Jenis"
   ],
   "collections.smartToggle": [
-   "Smart filter instead of hand-picked titles",
-   "Filter cerdas, bukan judul pilihan sendiri"
+   "Smart filter",
+   "Filter cerdas"
   ],
   "collections.manual": [
    "Hand-picked",

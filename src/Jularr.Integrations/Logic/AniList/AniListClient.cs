@@ -18,7 +18,7 @@ namespace Jularr.Integrations.Logic.AniList
 
         private const string Fields =
             "id type format countryOfOrigin title { romaji english native } synonyms startDate { year } episodes volumes description(asHtml: false) coverImage { large } bannerImage trailer { id site } "
-            + "staff(perPage: 8, sort: RELEVANCE) { edges { role node { id name { full } } } } relations { edges { relationType node { id type format title { romaji english } startDate { year } coverImage { large } } } }";
+            + "staff(perPage: 8, sort: RELEVANCE) { edges { role node { id name { full native } } } } relations { edges { relationType node { id type format title { romaji english } startDate { year } coverImage { large } } } }";
 
         public async Task<IReadOnlyList<AniListMedia>> SearchAsync(AniListMediaType type, IReadOnlyCollection<string> formats, string query, CancellationToken ct)
         {
@@ -109,6 +109,12 @@ namespace Jularr.Integrations.Logic.AniList
                     .OfType<ProviderPerson>().DistinctBy(person => person.Id ?? person.Name).Take(3).ToArray()
                 : [];
             var authors = people.Select(person => person.Name).ToArray();
+            var nativeAuthors = Child(media, "staff") is { } credits && credits.TryGetProperty("edges", out var credited) && credited.ValueKind == JsonValueKind.Array
+                ? credited.EnumerateArray()
+                    .Select(edge => Text(edge, "role") is { } role && role.Contains("Story", StringComparison.OrdinalIgnoreCase) && Child(edge, "node") is { } node
+                        && Child(node, "name") is { } name ? Text(name, "native") : null)
+                    .OfType<string>().Distinct(StringComparer.Ordinal).Take(3).ToArray()
+                : [];
             var sequels = Related(media, "SEQUEL");
             var prequels = Related(media, "PREQUEL");
             var synonyms = media.TryGetProperty("synonyms", out var names) && names.ValueKind == JsonValueKind.Array
@@ -126,6 +132,7 @@ namespace Jularr.Integrations.Logic.AniList
                 Count(media, "volumes", 500), description, Https(cover), authors, sequels, prequels, Https(banner), trailer)
             {
                 People = people,
+                NativeAuthors = nativeAuthors,
                 Relations = Relations(media),
                 OriginalLanguage = Text(media, "countryOfOrigin") switch { "JP" => "ja", "KR" => "ko", "CN" or "TW" => "zh", _ => null }
             };

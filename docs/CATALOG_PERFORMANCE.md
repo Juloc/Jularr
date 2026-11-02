@@ -4,7 +4,7 @@ The approved scope is to reduce the remaining slow local Discover reads without 
 
 `ExternalWorkLogic.ReadExternalWorkShelvesAsync` serves both feed endpoints and the batched shelves endpoint. It now resolves the indexed Work/season identities before consulting the canonical `ProfileWorks` and `ProfileWorkStates` views. Lateral `OFFSET 0` barriers keep those lookups parameterized. A union preserves the previous membership semantics when both identity routes resolve the same Work. The statement and `ReadWorkV1` disable JIT only within their transactions using the existing SQL-context option. `ReadDiscoverShelvesV1` reads module state, scopes and shelves in one centrally authorized local batch, reducing commands from 15 to 11. There are no schema, index, contract or visibility-rule changes.
 
-The first successful `CompleteExternalWorkSyncAsync` now prepares `ExternalWorks` planner statistics with `ANALYZE` before its transaction exposes the completed catalog. The atomic update's affected-row count ensures this happens only on initial completion, not each worker pass. This work belongs to the background import; user reads do not run maintenance. The benchmark publishes its seeded catalogs through that same completion owner.
+The first successful `CompleteExternalWorkSyncAsync` now prepares the catalog's planner statistics (`Works` since the catalog lives there) with `ANALYZE` before its transaction exposes the completed catalog. The atomic update's affected-row count ensures this happens only on initial completion, not each worker pass. This work belongs to the background import; user reads do not run maintenance. The benchmark publishes its seeded catalogs through that same completion owner.
 
 ## Evidence, 23–24 October 2026
 
@@ -90,3 +90,91 @@ The batching implementation is already included in #1587. #1561 retains its addi
 | Books cached trending | 17.4 | 21.8 |
 
 These are local sequential integration measurements, not production or concurrent-load acceptance. TRX: `cached-discover-persistent-integration.trx`.
+
+## Catalog in Works: Library, Calendar and Admin list (#1651), 27 October 2026
+
+Since every catalog title is a row in `Works`, the reads of the library must never visit catalog rows. `CatalogScale_LibraryCalendarAdminListAndCleanup_ReportLatency` seeds the 411-Work library fixture next to `JULARR_TEST_CATALOG_SCALE` catalog Works (minimal rows, one in fifty with old details, 100 trending, a 500-title feed) and reports warm HTTP latency over ten calls after two warm-ups (P95 is the slowest call). Same isolated server and machine as above, shared with another agent's runs.
+
+`EXPLAIN (ANALYZE, BUFFERS)` causes:
+- Library and its search: the scope read `ProfileWorks` for all Works and dropped those without a present file or open request afterwards (500,411 rows through the view, 2.4 s). The planner estimates the view's category join at one percent of its rows, so it hashes the whole view even beside a small outer side. The scope now limits `visible."WorkId"` to the ids with a present file or open request (`= ANY(ARRAY(...))`), which becomes an index condition inside the view. Two card costs that grow with catalog details are bounded too: the "no monitored unit" check ran as a sequential scan of all `WorkUnits` per card (0.9 ms each) and is now an outer join on the indexed leaf units; unit progress is counted only for Works with progress of the profile.
+- Calendar: the part for Works without units read every Work through `ProfileWorks` and 37,500 catalog release dates. Both parts now read only the tied Works (watchlist, own requests, assets); the unit availability check also matches the asset's Work, so it uses `IX_MediaAssets_Work`.
+- Admin list and summary: JIT compilation of 194 and 433 functions (1.0–2.0 s) dominated the unfiltered list and the summary at every catalog size, and the search from 500,000 on; execution itself took about 80 ms. Of that, two parts of `WorkLibraryRelations` were parallel sequential scans of every identity and Work (about 50 ms at 500,000); migration [0021](../database/migrations/0021_library_tie_indexes.sql) adds partial indexes for them. The three statements now disable JIT (`SqlStatement.DisableJit`, as the Library read does).
+- Continue: the join with `ProfileWorks` read the view for all 500,411 Works (1.5 s), then a lateral per started item (12,237 rows) looked its asset up, filtering all assets of the Work. The view is now read for the started Works alone (`= ANY(ARRAY(...))`), the playable assets of those Works are read once and joined by hash, and the statement disables JIT. The result is the same rows in the same order.
+
+| Read, warm HTTP ms (median / P95) | 5,000 before | 500,000 before | 5,000 after | 500,000 after | 1,500,000 after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Library | 115 / 146 | 1971 / 2357 | 37 / 52 | 84 / 100 | 95 / 119 |
+| Library search | 58 / 74 | 1795 / 2006 | 40 / 52 | 61 / 84 | 76 / 128 |
+| Calendar | 31 / 35 | 1835 / 1977 | 18 / 27 | 30 / 34 | 29 / 35 |
+| Admin Works list | 1254 / 1369 | 1724 / 1813 | 856 / 919 | 143 / 173 | 158 / 239 |
+| Admin Works search | 139 / 163 | 1629 / 1973 | 87 / 97 | 30 / 35 | 30 / 44 |
+| Admin Works summary | 1469 / 1584 | 2377 / 2450 | 1092 / 1302 | 165 / 205 | 144 / 190 |
+| Continue | not measured | 1354 / 1546 | not measured | 70 / 77 | 58 / 74 |
+| System health | 16 / 23 | 315 / 353 | 12 / 13 | 174 / 201 | 293 / 343 |
+
+The Library, Calendar, WorkList, Statistics, Collection, Media, WorkRelation and migration tests are the contract for unchanged results. The 500,000 and 1,500,000 columns come from the extended fixture: 200 library series with 35 episodes each (7,000 progress rows, files for twelve episodes each), their ids spread evenly through the catalog id range instead of below it. The 5,000 columns are from the earlier fixture without them, and the "500,000 before" Continue figure is the unchanged statement on the extended fixture. The sequential runs share the machine with other work, so single figures vary by about a third.
+
+Open: the Admin list and summary stay at 140–240 ms. The remaining time does not grow with the catalog: `WorkListEntries` computes file counts and sizes per library-tied Work (611 here) with a merge join that scans `IX_StoredFiles_Asset` from the start for every Work (about 0.3 ms each); changing it needs a new migration. System health counts every catalog Work by design.
+
+Reproduce with `$env:JULARR_TEST_CATALOG_SCALE = '500000'` and `dotnet test tests/Jularr.Backend.Tests --configuration Release --filter 'FullyQualifiedName~CatalogScale_' --logger 'console;verbosity=detailed'`.
+`JULARR_TEST_CATALOG_PLANS=1` prints the Continue statement's `EXPLAIN (ANALYZE, BUFFERS)`; `JULARR_TEST_LIBRARY_MAX_MS` fails the run when a read's P95 reaches that many milliseconds.
+
+## Work page (`/Details/{id}`), 30 October 2026
+
+On the instance the stored page took 1.2–1.6 s. `WorkPage_CatalogScale_ServicesStayWithinBudget` seeds the library fixture next to `JULARR_TEST_CATALOG_SCALE` catalog Works with people, relations in both directions and episodes, times every service the page reads, then the page itself (`GET /Details/{id}`: a film, a library series, a detailed catalog title, a library series among the catalog ids), without provider access.
+
+Causes (`EXPLAIN (ANALYZE, BUFFERS)` on 500,000 catalog Works):
+- Relations (3–14 s of the page): the related Works joined `ProfileWorks` as a plain join, so the planner built the view for all Works (500,411 rows, 4 million joined rows) and, without JIT disabled, compiled the statement on top (1.6 s for a film without a single relation). The view is now read through a lateral per related Work (`OFFSET 0`), the statements disable JIT, and the franchise part asks only for a Work that has a franchise.
+- Seasons and episodes (0.2–1.2 s): the file check of each episode filtered by the unit alone, which no index leads with, so every episode read every file record of the library. It now also names the Work (`IX_MediaAssets_Work`), and the visibility check is asked once for the Work instead of once per row.
+- The Work read computed the track languages and unit progress for the whole library before joining the one Work, and checked "has a file" with a hashed read of all file records. Both are now asked for the one Work (`LATERAL`, `OFFSET 0`); the card projection's track languages and the single-Work unit progress share this.
+- The page asked its services one after the other; independent reads now run together, and the first open of a title reads the series, its episodes, their translations, TMDB's rating and the credited people together and keeps a Work's poster and backdrop together. Only what uses the database waits for the other database reads.
+
+| Work page, 500,000 catalog Works | before: slowest service, page (ms) | after: page median / fastest (ms) |
+| --- | ---: | ---: |
+| Film (library) | relations 3184, page 2914 | 112 / 86 |
+| Series (library) | relations 5988, page 9414 | 129 / 111 |
+| Catalog title with details | relations 6328, page 6305 | 94 / 85 |
+| Catalog title, library series | relations 2233, page 2807 | 93 / 87 |
+
+Fastest of 2 samples before, median and fastest of 10 after, on a server shared with other runs (single figures vary by about a third). What remains does not grow with the catalog except one read: a Work in a franchise finds the other titles of it by a scan of `Works`, because `Works."FranchiseId"` has no index; a partial index `CREATE INDEX "IX_Works_Franchise" ON "Works" ("FranchiseId") WHERE "FranchiseId" IS NOT NULL;` needs a new migration.
+
+`JULARR_TEST_DETAILS_MAX_MS` (300) fails the run when the fastest sample of a page reaches it; `JULARR_TEST_DETAILS_PLANS=1` prints the plans of the slow statements. Reproduce with `$env:JULARR_TEST_CATALOG_SCALE = '500000'` and `--filter 'FullyQualifiedName~WorkPage_CatalogScale'`.
+
+## Discover search and My requests, 30 October 2026
+
+On an instance that keeps the whole TMDB film catalog, `/?q=Dune` took 1.7–2 s and `/Requests` 1.4–1.7 s with a handful of requests. Both read a Work's profile view for the Works they show: `ProfileWorks` (every Work joined with the profile's categories) and `ProfileWorkStates` (every Work for every profile). Joined by Work id like an ordinary table, the planner walks the view through `Works_pkey` or hashes all of it, so the cost grows with the catalog instead of with the page:
+- My requests: the view was merge-joined to the request rows; the request's Work sits at the end of the id range, so the merge read all 500,411 Works (1.1 s). The view is now read per request row (`LEFT JOIN LATERAL ... OFFSET 0`), 1 ms.
+- Discover cards (`DiscoverQueries.ReadStatesInBatchAsync`, one read per provider type and for every feed and list): `ProfileWorkStates` was hash-joined as a whole (0.2–0.6 s each, twice per search). It is now read per card Work.
+- The Discover page's availability read (`/api/v1/library/availability`) started from `ProfileWorks` for the whole catalog (2.3 s at 500,000 Works, 5.3 s in the plan). It now reads the view per picked Work like the library page does.
+- The provider search itself: TMDB and TheTVDB were asked one after the other. TMDB's request now runs while TheTVDB's is asked; the answers are kept one after the other, since one context runs one batch at a time. The types the profile lists are read in the local search's batch.
+
+Searching films does not use the kept catalog today: Discover's result search asks TMDB for films and TheTVDB for series; only the suggestions while typing use `SearchText` and its GIN index `IX_Works_CatalogSearch`. No index is missing.
+
+`SearchAndRequests_CatalogScale_ReportLatency` seeds the library fixture next to `JULARR_TEST_CATALOG_SCALE` film Works (a Dune in 5000 titles; requests at the end of the id range), answers both providers at once and reports the local part (whole time minus the time the provider stub spent) over ten warm calls. The median is held to 500 ms for the search and 300 ms for My requests. `JULARR_TEST_PROVIDER_DELAY_MS` gives each provider request a round trip to see that the searches wait together.
+
+| Local part, warm ms (median / P95) | 500,000 before | 500,000 after | 1,500,000 after |
+| --- | ---: | ---: | ---: |
+| Search API, films and series | 1240 / 2023 | 189 / 238 | 148 / 311 |
+| Search API, films | 314 / 433 | 106 / 152 | 85 / 116 |
+| Discover page `/?q=Dune` | 3638 / 7848 | 214 / 421 | 354 / 942 |
+| My requests API | 983 / 1232 | 44 / 173 | 36 / 50 |
+| My requests page `/Requests` | 1244 / 1319 | 69 / 140 | 76 / 188 |
+
+The run shared one four-core Docker VM with other test runs, so the P95 shows that noise; with a 200 ms provider round trip the search of films and series took 450 ms against 189 ms without, one round trip instead of two. The Discover, Request, SeriesCatalog, ExternalFeed and Library availability tests are the contract for unchanged results. Other statements still join the two views by Work id; they are fast as long as a small outer side drives them, and each needs its own plan before it is changed. The 1,500,000 column was not measured before the change.
+
+Reproduce with `$env:JULARR_TEST_CATALOG_SCALE = '500000'` and `dotnet test tests/Jularr.Backend.Tests --filter 'Name=SearchAndRequests_CatalogScale_ReportLatency' --logger 'console;verbosity=detailed'`.
+
+## Library rename plan (`/Admin/Library/Rename`, a Work's Files tab), 2 November 2026
+
+On the instance (about 1.2 million Works) the plan took 5.8 s. `ReadLibraryRenamesV1` and `ApplyLibraryRenamesV1` read every library file (`LibraryRenameLogic.ReadLibraryRenameFilesAsync`) and plan the whole library in C#, since the whole plan decides which names are taken and its fingerprint guards the apply; both stay so. Reproduced in a scratch database with 1.2 million Works, 1.26 million catalog episodes of 15,000 detailed series, and 45,333 files (4,000 films, 30,000 episodes of 1,000 series, a subtitle beside every third file).
+
+Causes:
+- SQL: the absolute numbers of each file's covered episodes were a correlated subquery joined to the CTE of numbered episodes, which PostgreSQL materializes without an index, so every episode file scanned all numbered episodes of the catalog (182–265 ms per file, more than 300 s for the statement). The CTE now numbers only Works with an asset (the numbering is per Work, so the numbers are the same) and the numbers of each asset are gathered once in a grouped CTE joined by hash. With the statement's estimated cost JIT compiled about 440 functions (2–6 s); it now disables JIT (`SqlStatement.DisableJit`).
+- C#: each subtitle compared its name with the stem of every media file of its library (30,000 × 10,000 in the series library, 63 s). The stems before each dot of the subtitle's name are now looked up; the owner is still the longest, the first of equal length. A game library counts its present files per folder once instead of once per ROM.
+
+| Scratch reproduction, shared four-core VM | before | after |
+| --- | ---: | ---: |
+| `ReadLibraryRenameFilesAsync` statement | > 300 s (aborted) | 3.1–3.4 s |
+| `LibraryRenameLogic.Plan` for 45,333 files | 150–430 s | 2.0–3.5 s |
+
+The VM's load average stood between 8 and 90 during the runs, so the figures show the order, not the instance's time. The plan and fingerprint of the 45,333 files and the statement's rows for a subset with specials and double episodes were identical before and after. Tests `LibraryTests.RenameFiles_AbsoluteNumbers_CountTheTitlesRegularEpisodesOnly`, `LibraryTests.Rename_Plan_SubtitlesFollowTheLongestStemAndGameFoldersIgnoreCase`, `LibraryTests.Rename_*`, `AllMediaNamingTests`.

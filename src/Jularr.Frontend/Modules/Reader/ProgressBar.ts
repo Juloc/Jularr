@@ -1,5 +1,6 @@
 import { updateRangeValue } from '../../Framework/Components/Range';
 import { bookFraction, chapterAt, fractionInSection, Resolution, sectionAt, type Chapter } from './ProgressMath';
+import { openChapter } from './ChapterNavigation';
 
 interface Paging { seek(fraction: number): void; share(): number }
 
@@ -60,7 +61,7 @@ export function initializeProgressBar(reader: HTMLElement, paging: Paging) {
         const near = fractionInSection(offsets, total, target, fraction);
         const inside = near >= .995 ? 1 : near;
         if (target === section) { paging.seek(inside); return; }
-        location.assign(`?s=${target}&f=${inside.toFixed(4)}`);
+        openChapter(`?s=${target}&f=${inside.toFixed(4)}`);
     });
     input.addEventListener('blur', () => { dragging = false; refresh(); });
     return { refresh };

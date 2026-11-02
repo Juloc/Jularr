@@ -3,13 +3,14 @@ using Jularr.Backend.Data.Common;
 using Jularr.Integrations.Logic.Ocr;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using SkiaSharp;
 
 namespace Jularr.Backend.Service.Core
 {
-    // Reads the text of scanned pages (the picture and the degrees clockwise the page shows it turned); the models come from the OCR folder.
+    // Reads the text of scanned pages, drawn upright; the models come from the OCR folder.
     internal interface IPageRecognizer
     {
-        Task<Func<byte[], int, OcrPage>> RecognizerAsync(string? language, CancellationToken ct);
+        Task<Func<SKBitmap, OcrPage>> RecognizerAsync(string? language, CancellationToken ct);
     }
 
     // The PP-OCRv5 models in the OCR folder, each fetched the first time a scanned book needs it; one engine per script stays loaded.
@@ -18,7 +19,7 @@ namespace Jularr.Backend.Service.Core
         private static readonly SemaphoreSlim Downloads = new(1, 1);
         private readonly ConcurrentDictionary<string, OcrEngine> _engines = new(StringComparer.Ordinal);
 
-        public async Task<Func<byte[], int, OcrPage>> RecognizerAsync(string? language, CancellationToken ct)
+        public async Task<Func<SKBitmap, OcrPage>> RecognizerAsync(string? language, CancellationToken ct)
         {
             var root = options.Value.OcrPath;
             var recognition = OcrModels.Recognition(language);

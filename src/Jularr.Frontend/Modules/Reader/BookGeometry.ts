@@ -147,28 +147,28 @@ export function paperColour(base: string, warmth: number, brightness: number): s
         (value + ([0, -14, -39][index] * warmth / 100)) * brightness / 100))).toString(16).padStart(2, '0')).join('');
 }
 
-// Orthographic, almost-overhead projection of a cross-section, in A5 millimetres.
-// Surface and cut edge MUST share these samples. More leaves add physical height,
-// not extra DOM. The small inner crown represents paper relaxing over the binding.
-export function paperProfile(depth: number, centre: number, curve: number, angle: number) {
+// Orthographic, almost-overhead projection of a page, in A5 millimetres. The page itself stays as flat as a
+// bare leaf (only the small inner crown remains, so the text never bends); the thickness of the stack is
+// `drop`, the height of its cut edge below the page. More leaves add physical height, not extra DOM.
+// How much of a millimetre of stack shows below the page: the same 14° view main's raised pages had.
+export const stackSlope = Math.sin(14 * Math.PI / 180);
+
+export function paperProfile(depth: number, curve: number, angle: number) {
     const radians = angle * Math.PI / 180;
     const height = 210 * Math.cos(radians);
     const points = Array.from({ length: 41 }, (_, index) => {
         const u = index / 40;
-        const shoulder = (1 - Math.exp(-u * 11)) / (1 - Math.exp(-11));
-        // A stronger inner shoulder, not a broad sinusoidal dome across all text.
-        // The crown relaxes back to the physical block thickness at the outer edge.
         const crown = 4 * u * (1 - u) * Math.exp(-3 * u) / .3557 * curve / 100 * 8;
-        const z = centre + (depth - centre) * shoulder + crown;
-        return { x: u * 148, y: -z * Math.sin(radians) };
+        return { x: u * 148, y: -crown * Math.sin(radians) };
     });
+    // The block's outer side shows beside the page, as wide as main's 3D view had it.
     const inset = .25 + depth * .12;
     const projectedX = (p: Point) => p.x - inset * (p.x / 148) ** 3;
     const index = points.findIndex(p => projectedX(p) >= 74);
     const a = points[index - 1], b = points[index];
     const fraction = (74 - projectedX(a)) / (projectedX(b) - projectedX(a));
     const footerLift = -(a.y + (b.y - a.y) * fraction);
-    return { points, height, inset, footerLift, lift: Math.max(...points.map(point => -point.y)) };
+    return { points, height, inset, footerLift, lift: Math.max(...points.map(point => -point.y)), drop: depth * stackSlope };
 }
 
 // Where a page's printed text box sits on its own paper. The stack beside the spine lifts the sheet and pulls the outer

@@ -14,6 +14,9 @@ namespace Jularr.Backend.Service.Core
         public Uri Hardcover { get; set; } = new("https://api.hardcover.app/v1/");
         public Uri AcoustId { get; set; } = new("https://api.acoustid.org/v2/");
 
+        // The AniBridge mappings release (AniList to TheTVDB) of the current schema version.
+        public Uri AnimeMappings { get; set; } = new("https://github.com/anibridge/anibridge-mappings/releases/download/v3/");
+
         // RapidOCR's model files; every one is checked against its pinned hash.
         public Uri OcrModels { get; set; } = new("https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/master/");
 
@@ -23,7 +26,7 @@ namespace Jularr.Backend.Service.Core
         // Keys travel along, so plain HTTP only stays on this machine.
         internal ProviderOptions Validated()
         {
-            Uri[] addresses = [Tmdb, Tvdb, MusicBrainz, AniList, AniListAccount, OpenLibrary, Hardcover, AcoustId, OcrModels, .. Images.Values];
+            Uri[] addresses = [Tmdb, Tvdb, MusicBrainz, AniList, AniListAccount, OpenLibrary, Hardcover, AcoustId, AnimeMappings, OcrModels, .. Images.Values];
             return addresses.All(address => address.IsAbsoluteUri && (address.Scheme == "https" || address.Scheme == "http" && address.IsLoopback)
                 && address.AbsolutePath.EndsWith('/') && address.UserInfo.Length == 0 && address.Query.Length == 0)
                 ? this

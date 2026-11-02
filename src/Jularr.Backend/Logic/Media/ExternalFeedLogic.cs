@@ -1,14 +1,15 @@
 using System.Security;
 using Jularr.Backend.Data.Enums.Media;
-using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
-using Jularr.Backend.Logic.Instance;
 
 namespace Jularr.Backend.Logic.Media
 {
     internal static class ExternalFeedLogic
     {
+        // The catalog a list's titles belong to: TMDB's series lists give only the order of TheTVDB series.
+        public static string CatalogOf(string feedNamespace) => feedNamespace == "tmdb_tv" ? "tvdb" : feedNamespace;
+
         public static async Task<IReadOnlyList<ExternalFeedData>> ReadMissingExternalFeedsAsync(this LogicContext ctx, ExternalFeedRefreshData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -36,7 +37,21 @@ namespace Jularr.Backend.Logic.Media
                         1,
                         identity."Value"
                     FROM
-                        "WorkExternalIdentities" AS identity
+                        -- Recommendations are prepared for Works with details or a tie to the library, not for every catalog title.
+                        (
+                            SELECT
+                                work."Id"
+                            FROM
+                                "Works" AS work
+                            WHERE
+                                work."DetailedAt" IS NOT NULL
+                            UNION
+                            SELECT
+                                library."WorkId"
+                            FROM
+                                "WorkLibraryRelations" AS library
+                        ) AS kept
+                        JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = kept."Id"
                     WHERE
                         identity."Namespace" IN ('tmdb_movie', 'tmdb_tv')
                         AND CASE WHEN identity."Value" ~ '^[1-9][0-9]{0,9}$' THEN identity."Value"::bigint BETWEEN 1 AND 2147483647 ELSE FALSE END
@@ -142,50 +157,81 @@ namespace Jularr.Backend.Logic.Media
 
         public static async Task<IReadOnlyList<ExternalWorkData>?> ReadExternalFeedAsync(this LogicContext ctx, ExternalFeedData feed, CancellationToken ct)
         {
+            if (!await ctx.KeepsDiscoverListsAsync(ct))
+            {
+                throw new SecurityException("Discover keeps no lists without the Caching module.");
+            }
+
             var state = new SqlStatement();
             state.Statement =
                 """
                 SELECT
-                    module."IsEnabled",
-                    CASE WHEN feed."RefreshedAt" IS NOT NULL THEN feed."Id" END AS "FeedId"
+                    feed."Id" AS "FeedId"
                 FROM
-                    "InstanceModules" AS module
-                    LEFT JOIN "ExternalWorkFeeds" AS feed ON feed."Key" = @Key
+                    "ExternalWorkFeeds" AS feed
                 WHERE
-                    module."Key" = 'DiscoverCache';
+                    feed."Key" = @Key
+                    AND feed."RefreshedAt" IS NOT NULL;
                 """;
             state.Parameters.Add(feed);
-            var current = await ctx.ReadSql.ReadOptionalAsync<ExternalFeedStateData>(state, ct);
-            if (current is not { IsEnabled: true })
-            {
-                throw new SecurityException("The Discover cache is unavailable.");
-            }
-            if (current.FeedId is null)
+            if (await ctx.ReadSql.ReadOptionalAsync<ExternalFeedStateData>(state, ct) is null)
             {
                 return null;
             }
 
+            // Each Work under its identity in the list's catalog; an anime season under the entry of that season. A Work's own cover comes before the catalog's.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
-                    work."Namespace",
-                    work."Value",
-                    work."Title",
+                    CASE feed."Namespace" WHEN 'tmdb_tv' THEN 'tvdb' ELSE feed."Namespace" END AS "Namespace",
+                    coalesce(season."Value", identity."Value") AS "Value",
+                    work."CanonicalTitle" AS "Title",
                     work."OriginalTitle",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     work."Overview",
                     work."Creator",
-                    work."ImageUrl",
-                    work."BackdropUrl",
+                    coalesce(cover."PosterUrl", work."ImageUrl") AS "ImageUrl",
+                    coalesce(work."BackdropUrl", cover."BackdropUrl") AS "BackdropUrl",
                     work."FetchedAt",
-                    work."Rating"
+                    work."Rating",
+                    work."Id" AS "WorkId",
+                    item."SeasonNumber"::integer AS "SeasonNumber"
                 FROM
                     "ExternalWorkFeeds" AS feed
                     JOIN "ExternalWorkFeedItems" AS item ON item."FeedId" = feed."Id"
-                    JOIN "ExternalWorks" AS work ON work."Id" = item."ExternalWorkId"
+                    JOIN "Works" AS work ON work."Id" = item."WorkId"
+                    LEFT JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = work."Id"
+                        AND identity."Namespace" = CASE feed."Namespace" WHEN 'tmdb_tv' THEN 'tvdb' ELSE feed."Namespace" END
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            mapped."Value"
+                        FROM
+                            "WorkUnits" AS unit
+                            JOIN "WorkUnitExternalIdentities" AS mapped ON mapped."WorkUnitId" = unit."Id" AND mapped."Namespace" = feed."Namespace"
+                        WHERE
+                            item."SeasonNumber" IS NOT NULL
+                            AND unit."WorkId" = work."Id"
+                            AND unit."WorkUnitTypeId" = 1
+                            AND unit."Number" = item."SeasonNumber"
+                        ORDER BY
+                            mapped."EpisodeOffset",
+                            mapped."Id"
+                        LIMIT 1
+                    ) AS season ON TRUE
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            (array_agg(fact."Value" ORDER BY fact."Value" LIKE '/api/v1/covers/%' DESC, fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Poster'))[1] AS "PosterUrl",
+                            (array_agg(fact."Value" ORDER BY fact."Value" LIKE '/api/v1/covers/%' DESC, fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Backdrop'))[1] AS "BackdropUrl"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" IN ('Poster', 'Backdrop')
+                    ) AS cover ON TRUE
                 WHERE
                     feed."Key" = @Key
+                    AND coalesce(season."Value", identity."Value") IS NOT NULL
                 ORDER BY
                     item."Position";
                 """;
@@ -195,15 +241,14 @@ namespace Jularr.Backend.Logic.Media
 
         public static async Task SaveExternalFeedAsync(this LogicContext ctx, ExternalFeedData feed, IReadOnlyList<ExternalWorkData> works, CancellationToken ct)
         {
-            var modules = await ctx.ReadInstanceModulesAsync(new InstanceModuleParameters(["DiscoverCache"]), ct);
-            if (modules.Count != 1 || !modules[0].IsEnabled)
+            if (!await ctx.KeepsDiscoverListsAsync(ct))
             {
-                throw new SecurityException("The Discover cache is unavailable.");
+                throw new SecurityException("Discover keeps no lists without the Caching module.");
             }
 
-            var list = new ExternalWorkListData(feed.Namespace, feed.MediaTypeId, feed.MediaSubtypeId);
-            await ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, works, feed.DiscoverFeedTypeId == DiscoverFeedType.Trending && feed.Page == 1 && feed.SourceValue is null), ct);
-            var data = new ExternalFeedUpdateData(feed, works);
+            var list = new ExternalWorkListData(CatalogOf(feed.Namespace), feed.MediaTypeId, feed.MediaSubtypeId);
+            var saved = await ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, works, feed.DiscoverFeedTypeId == DiscoverFeedType.Trending && feed.Page == 1 && feed.SourceValue is null), ct);
+            var data = new ExternalFeedUpdateData(feed, works, saved);
 
             var upsert = new SqlStatement();
             upsert.Statement =
@@ -257,21 +302,22 @@ namespace Jularr.Backend.Logic.Media
                 INSERT INTO "ExternalWorkFeedItems" (
                     "FeedId",
                     "Position",
-                    "ExternalWorkId"
+                    "WorkId",
+                    "SeasonNumber"
                 )
                 SELECT
                     feed."Id",
-                    entry."Position"::integer,
-                    work."Id"
+                    entry."Position",
+                    entry."WorkId",
+                    entry."SeasonNumber"
                 FROM
                     "ExternalWorkFeeds" AS feed
-                    CROSS JOIN unnest(@Values::varchar[]) WITH ORDINALITY AS entry ("Value", "Position")
-                    JOIN "ExternalWorks" AS work ON work."Namespace" = @Namespace AND work."Value" = entry."Value"
+                    CROSS JOIN jsonb_to_recordset(@Items::jsonb) AS entry ("Position" integer, "WorkId" bigint, "SeasonNumber" smallint)
                 WHERE
                     feed."Key" = @Key;
                 """;
             insert.Parameters.Add(data);
-            if (await ctx.ExecuteAsyncForAffectedRows(insert, ct) != data.Values.Length)
+            if (await ctx.ExecuteAsyncForAffectedRows(insert, ct) != data.Count)
             {
                 throw new InvalidOperationException("The feed contains an unknown provider identity.");
             }
@@ -279,10 +325,9 @@ namespace Jularr.Backend.Logic.Media
 
         public static async Task PostponeExternalFeedAsync(this LogicContext ctx, ExternalFeedRetryData data, CancellationToken ct)
         {
-            var modules = await ctx.ReadInstanceModulesAsync(new InstanceModuleParameters(["DiscoverCache"]), ct);
-            if (modules.Count != 1 || !modules[0].IsEnabled)
+            if (!await ctx.KeepsDiscoverListsAsync(ct))
             {
-                throw new SecurityException("The Discover cache is unavailable.");
+                throw new SecurityException("Discover keeps no lists without the Caching module.");
             }
             var sql = new SqlStatement();
             sql.Statement =
@@ -316,6 +361,71 @@ namespace Jularr.Backend.Logic.Media
             {
                 throw new InvalidOperationException("The feed retry was not saved.");
             }
+        }
+
+        // With the Caching module's sub-option on, the catalogs whose Discover lists get their details in advance, each with its own request budget; none while it is off.
+        // A catalog without settings of its own has no budget. The refresh runs only while Discover keeps its lists.
+        public static async Task<IReadOnlyList<CatalogPrefetchData>> ReadCatalogPrefetchesAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    sync."Namespace",
+                    sync."RequestsPerMinute"::integer AS "RequestsPerMinute",
+                    sync."PausesWhileUsed"
+                FROM
+                    "ExternalWorkSyncs" AS sync
+                    JOIN "InstanceSettings" AS settings ON settings."Id" = 1 AND settings."DetailsDiscoverAhead"
+                ORDER BY
+                    sync."Namespace";
+                """;
+            return await ctx.ReadSql.ReadListAsync<CatalogPrefetchData>(sql, ct);
+        }
+
+        // The next titles of a catalog's Discover lists that have no details yet and a catalog entry that can give them, in the lists' order; TMDB's series lists
+        // are TheTVDB's. Recommendations of a Work are no Discover list.
+        public static async Task<IReadOnlyList<WorkIdData>> ReadUndetailedDiscoverWorksAsync(this LogicContext ctx, CatalogPrefetchQueryData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    listed."Id"
+                FROM (
+                    SELECT DISTINCT ON (work."Id")
+                        work."Id",
+                        item."Position",
+                        feed."Id" AS "FeedId"
+                    FROM
+                        "ExternalWorkFeeds" AS feed
+                        JOIN "ExternalWorkFeedItems" AS item ON item."FeedId" = feed."Id"
+                        JOIN "Works" AS work ON work."Id" = item."WorkId"
+                    WHERE
+                        CASE feed."Namespace" WHEN 'tmdb_tv' THEN 'tvdb' ELSE feed."Namespace" END = @Namespace
+                        AND feed."SourceValue" IS NULL
+                        AND work."DetailedAt" IS NULL
+                        AND work."Id" <> ALL(@Skipped)
+                        AND EXISTS (
+                            SELECT 1
+                            FROM
+                                "WorkExternalIdentities" AS identity
+                            WHERE
+                                identity."WorkId" = work."Id"
+                                AND (identity."Namespace" IN ('tmdb_movie', 'tvdb', 'openlibrary', 'musicbrainz', 'igdb') OR identity."Namespace" = 'anilist' AND work."MediaTypeId" = 3))
+                    ORDER BY
+                        work."Id",
+                        item."Position",
+                        feed."Id"
+                ) AS listed
+                ORDER BY
+                    listed."Position",
+                    listed."FeedId",
+                    listed."Id"
+                LIMIT @Limit;
+                """;
+            sql.Parameters.Add(data);
+            return await ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
         }
     }
 }

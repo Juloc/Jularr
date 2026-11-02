@@ -1,4 +1,4 @@
-# Jularr clean start
+# Jularr
 
 Ein ASP.NET-Host: `Jularr.Frontend` startet Razor Pages und API.
 `Jularr.Backend` ist eine referenzierte .NET-Klassenbibliothek mit Services, Logic,
@@ -28,16 +28,16 @@ Keine automatische Modellinstallation und keine serverseitige Sprachsynthese.
 
 ### Optionale TranslateGemma-Übersetzung
 
-Bergamot bleibt die kostenlose Browser-Standardübersetzung. Ein Owner kann zusätzlich
-TranslateGemma in einem **separat bereitgestellten, privaten Ollama-Dienst** verwenden.
+Der Server übersetzt mit TranslateGemma in einem **separat bereitgestellten, privaten Ollama-Dienst**.
+Mozillas Browser-Übersetzung (Bergamot) ist nur noch ein Notfall: das Modul „Buchseiten im Browser
+mit Mozilla übersetzen“ (Modulverwaltung, standardmäßig aus) springt ein, wenn der Server eine Seite nicht übersetzen kann.
 Dessen Modellgewichte und Modell-Laufzeit sind **nicht** Teil des Jularr-Images.
 In `.env` kann `JULARR_OLLAMA_ENDPOINT=http://ollama:11434` gesetzt werden, wenn
 der Dienst unter diesem Namen aus dem Jularr-Container erreichbar ist. Der
 Ollama-Port darf nicht öffentlich freigegeben sein. Nach Neustart des Jularr-Dienstes:
 `/Admin/Instance/Translation` öffnen, Speicherbedarf des persistenten Ollama-Volumes
-prüfen, `JULARR_OLLAMA_VERIFIED_FREE_BYTES` mit den dort wirklich freien Bytes konfigurieren
-(Nullwert sperrt jeden Download; mindestens 2 GB Reserve) und Jularr danach neu
-starten. Download in der Modellansicht ausdrücklich auslösen; der Vorgang läuft
+prüfen und die dort wirklich freien Bytes im Feld „Freier Platz des Ollama-Modellvolumes“ eintragen
+(`JULARR_OLLAMA_VERIFIED_FREE_BYTES` bleibt als Rückfall; Null sperrt jeden Download; mindestens 2 GB Reserve). Download in der Modellansicht ausdrücklich auslösen; der Vorgang läuft
 im begrenzten Host-Worker weiter und der Status ist durch Aktualisieren sichtbar.
 Nach einer Jularr-Unterbrechung kann ein angehaltener Pull erneut gestartet werden;
 dies ist noch keine dauerhafte Job-Historie. Anschließend den kurzen Benchmark ausführen.
@@ -318,7 +318,7 @@ Anmeldeangebot.
 Plex-Anmeldung und -Registrierung stellt der Owner unter `/Admin/Providers` beim verbundenen
 Plex-Server ein (`ReadPlexSignInV1`, `UpdatePlexSignInV1`; standardmäßig aus): Anmeldung,
 Registrierung, Freigabe neuer Konten (standardmäßig an) und die Bibliotheken, deren Nutzer sich
-registrieren dürfen (keine gewählt: jede). Neue Plex-Konten starten in der Instanzsprache.
+registrieren dürfen (keine gewählt: jede). Die Bibliotheken zeigt die Seite aus der Liste, die der Server zuletzt geliefert hat (Test, Sync oder Gesundheitsprüfung); beim Öffnen fragt sie den Server nicht. Neue Plex-Konten starten in der Instanzsprache.
 `Authentication:SessionLifetimeHours` bleibt 720 (30 Tage), zulässig 1–720.
 
 Plex-Neuregistrierung braucht eine bestätigte E-Mail und Zugriff auf eine dieser Libraries
@@ -463,6 +463,7 @@ Vorschaubilder beim Spulen (Modul „Trickplay“, standardmäßig aus) rendert 
 mit FFmpeg nach `DataPath/trickplay`.
 Metadaten-Spiegel ersetzen die Adressen von TMDB, MusicBrainz, AniList und Open Library über
 `Providers:Tmdb`, `Providers:MusicBrainz`, `Providers:AniList` und `Providers:OpenLibrary` (HTTPS, auf dem eigenen Rechner auch HTTP).
+Anime finden ihre TheTVDB-Serie über die [AniBridge-Mappings](https://github.com/anibridge/anibridge-mappings) (MIT, täglich geladen, Modul „AniList“; Adresse `Providers:AnimeMappings`).
 Filme nennen ihre TMDB-Filmreihe (Modul „Franchises“, eigene Seite `/Franchise/{id}`). Jede Datei
 behält die Release-Angaben ihres Namens (Gruppe, Qualität, Edition, Proper); Admin → Bibliothek → Benennung
 legt die Namen von Film- und Folgendateien mit Sonarr-artigen Platzhaltern fest. Ein selbstsigniertes
@@ -484,12 +485,12 @@ nur einer ausdrücklich gewählten einmaligen Übernahme (`/Admin/Acquisition/Ta
 Vorschau, dann Übernahme von Indexern, SABnzbd und fehlenden Titeln), nicht dem laufenden Betrieb.
 Der Player wird von Jularr selbst gehostet; vorhandene Dev-Technik ist Referenz.
 
-Der Update-Pfad ab dem ersten offiziellen Clean-Start-Release verwendet eine versionierte
+Der Update-Pfad verwendet eine versionierte
 Schemahistorie: das Schema ist eingefroren, Änderungen sind nummerierte Migrationen
 (`database/migrations`). Neue Migrationen laufen beim Start automatisch, nach einem
 automatischen Backup (Datenbank und Schlüssel); ohne Backup oder bei einer fehlgeschlagenen
 Migration wird alles zurückgerollt, Jularr startet nicht und zeigt eine Wartungsseite. Ablauf und
-verbleibende Release-Abnahme: [Datenbank-Migrationen](docs/DATABASE_MIGRATIONS.md).
+[Datenbank-Migrationen](docs/DATABASE_MIGRATIONS.md).
 Ein Release ist ein Git-Tag `vX.Y.Z`; der Workflow baut das Image und veröffentlicht `ghcr.io/juloc/jularr:X.Y.Z`
 (und `latest`): [Release](docs/RELEASE.md).
 

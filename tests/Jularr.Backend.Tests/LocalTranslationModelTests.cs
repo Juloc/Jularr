@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Jularr.Backend.Data.Admin.Translation.V1;
 using Jularr.Backend.Service.User.Translation.V1;
 using Jularr.Backend.Service.Core;
 using Microsoft.Extensions.Options;
@@ -10,6 +11,61 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class LocalTranslationModelTests
     {
+        private static readonly Uri Ollama = new("http://ollama:11434/");
+
+        [TestMethod]
+        public async Task Machines_TranslateInTheOwnersOrder_PassOverOneThatFails_AndReturnToItAfterItsRest()
+        {
+            var handler = new Machines();
+            using var http = new HttpClient(handler);
+            var clock = new Clock();
+            var machines = new LocalTranslationMachines(new OllamaLocalModels(http),
+                Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434" }), clock);
+
+            // Nothing saved: the configured endpoint alone, so an upgraded install translates as before; addresses outside the private network never count.
+            CollectionAssert.AreEqual(new[] { Ollama }, machines.Order([]));
+            CollectionAssert.AreEqual(new[] { new Uri("http://192.168.1.20:11434/"), new Uri("http://10.0.0.2:11434/") },
+                machines.Order(["http://192.168.1.20:11434", "http://8.8.8.8:11434", "http://10.0.0.2:11434", "http://192.168.1.20:11434"]));
+
+            string[] saved = ["http://192.168.1.20:11434", "http://10.0.0.2:11434"];
+            Assert.AreEqual(new Uri("http://192.168.1.20:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+
+            // The first drops out: the next takes over, and the first rests even once it answers again.
+            handler.Offline = "192.168.1.20";
+            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            handler.Offline = null;
+            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            clock.Now += TimeSpan.FromMinutes(2);
+            Assert.AreEqual(new Uri("http://192.168.1.20:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+
+            // A machine that failed a block rests too; a machine without the wanted model is passed over.
+            machines.Fail(new Uri("http://192.168.1.20:11434/"));
+            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            clock.Now += TimeSpan.FromMinutes(2);
+            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default, "translategemma:12b"))?.Server);
+            Assert.IsNull(await machines.ChooseAsync(saved, default, "translategemma:27b"));
+            // Within one machine prefer 12B over 4B, without changing the owner's machine priority.
+            Assert.AreEqual("translategemma:12b", (await machines.ChooseAsync(["http://10.0.0.2:11434"], default))?.Model);
+        }
+
+        private sealed class Clock : TimeProvider
+        {
+            public DateTimeOffset Now { get; set; } = new(2026, 10, 30, 12, 0, 0, TimeSpan.Zero);
+            public override DateTimeOffset GetUtcNow() => Now;
+        }
+
+        // Two machines: 192.168.1.20 with the small model, 10.0.0.2 with the small and the middle one.
+        private sealed class Machines : HttpMessageHandler
+        {
+            public string? Offline { get; set; }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                if (request.RequestUri!.Host == Offline) throw new HttpRequestException("No route to host.");
+                var models = request.RequestUri.Host == "10.0.0.2" ? """[{"name":"translategemma:4b"},{"name":"translategemma:12b"}]""" : """[{"name":"translategemma:4b"}]""";
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"models\":" + models + "}") });
+            }
+        }
         [TestMethod]
         public void Endpoint_AllowsOnlyLocalOrPrivateTargets()
         {
@@ -24,7 +80,8 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task Client_ListsApprovedModels_AndBenchmarksWithBoundedInput()
         {
-            using var http = new HttpClient(new FakeOllama());
+            var handler = new FakeOllama();
+            using var http = new HttpClient(handler);
             var client = new OllamaLocalModels(http);
             var server = new Uri("http://ollama:11434/");
             CollectionAssert.AreEquivalent(new[] { "translategemma:4b" }, await client.InstalledAsync(server, default));
@@ -33,8 +90,61 @@ namespace Jularr.Backend.Tests
             var result = await client.TranslateAsync(server, "translategemma:4b", "id", "de", "Rina pulang.", default);
             Assert.AreEqual("Rina ging nach Hause.", result.Text);
             Assert.AreEqual(10.0, result.TokensPerSecond);
+            await client.TranslateAsync(server, "translategemma:4b", "id", "de", "Rina pulang.", default, "Rina tinggal di kota.");
+            StringAssert.Contains(handler.LastPrompt!, "Earlier source passage for context only");
+            StringAssert.Contains(handler.LastPrompt!, "Rina tinggal di kota.");
+            Assert.IsTrue(handler.LastPrompt!.EndsWith("into German:\n\n\nRina pulang.", StringComparison.Ordinal));
             await Assert.ThrowsExactlyAsync<ArgumentException>(async () => await client.TranslateAsync(server, "untrusted:90b", "id", "de", "Rina pulang.", default));
             await Assert.ThrowsExactlyAsync<ArgumentException>(async () => await client.TranslateAsync(server, "translategemma:4b", "id", "de", new string('x', 20001), default));
+        }
+
+        [TestMethod]
+        public async Task Block_TheModelTranslatesTheContextToo_IsAskedAgainWithoutIt()
+        {
+            var handler = new EchoingOllama();
+            using var http = new HttpClient(handler);
+            var client = new OllamaLocalModels(http);
+
+            // With context the answer holds the context's translation as well: more paragraphs than the block.
+            Assert.AreEqual("Rina ging nach Hause.", await client.TranslateBlockAsync(Ollama, "translategemma:4b", "id", "de", "Rina pulang.", "Rina tinggal di kota.", default));
+            Assert.AreEqual(2, handler.Calls);
+            Assert.IsFalse(handler.LastPrompt!.Contains("Earlier source passage", StringComparison.Ordinal));
+
+            // Without context the first answer stands.
+            handler.Calls = 0;
+            Assert.AreEqual("Rina ging nach Hause.", await client.TranslateBlockAsync(Ollama, "translategemma:4b", "id", "de", "Rina pulang.", null, default));
+            Assert.AreEqual(1, handler.Calls);
+
+            // An answer that still fails the checks is none.
+            handler.Bad = true;
+            Assert.IsNull(await client.TranslateBlockAsync(Ollama, "translategemma:4b", "id", "de", "Rina pulang. Dia makan.", "Rina tinggal di kota.", default));
+        }
+
+        private sealed class EchoingOllama : HttpMessageHandler
+        {
+            public int Calls { get; set; }
+            public bool Bad { get; set; }
+            public string? LastPrompt { get; private set; }
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                Calls++;
+                using var json = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+                LastPrompt = json.RootElement.GetProperty("prompt").GetString()!;
+                var answer = Bad ? "Rina pulang. Dia makan." : LastPrompt.Contains("Earlier source passage", StringComparison.Ordinal)
+                    ? "Rina wohnt in der Stadt.\n\nRina ging nach Hause." : "Rina ging nach Hause.";
+                var body = JsonSerializer.Serialize(new { response = answer, eval_count = 20, eval_duration = 2000000000 });
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
+            }
+        }
+
+        [TestMethod]
+        public void QualityGate_RejectsEchoedOrMostlyUntranslatedJapanese()
+        {
+            var source = "私は三十四歳で、仕事がなく、家もありません。";
+            Assert.IsTrue(OllamaLocalModels.LooksComplete(source, "Ich bin 34 Jahre alt, arbeitslos und obdachlos.", "de"));
+            Assert.IsFalse(OllamaLocalModels.LooksComplete(source, source, "de"));
+            Assert.IsFalse(OllamaLocalModels.LooksComplete(source, "私は三十四歳で仕事も家もありません。", "de"));
+            Assert.IsFalse(OllamaLocalModels.LooksComplete(source, "x", "de"));
         }
 
         [TestMethod]
@@ -85,15 +195,15 @@ namespace Jularr.Backend.Tests
                 Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 0 }),
                 Options.Create(new MediaOptions { TranslationPath = Path.Combine(root, "denied") }),
                 new LocalTranslationGate());
-            Assert.IsFalse(noCapacity.Queue("translategemma:4b"));
-            Assert.IsFalse(noCapacity.Queue("other:27b"));
+            Assert.IsFalse(noCapacity.Queue("translategemma:4b", Ollama, 0));
+            Assert.IsFalse(noCapacity.Queue("other:27b", Ollama, 0));
 
             using var adequate = new LocalTranslationDownloads(client,
                 Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 6_000_000_000L }),
                 Options.Create(new MediaOptions { TranslationPath = Path.Combine(root, "approved") }),
                 new LocalTranslationGate());
-            Assert.IsTrue(adequate.Queue("translategemma:4b"));
-            Assert.IsFalse(adequate.Queue("translategemma:12b"));
+            Assert.IsTrue(adequate.Queue("translategemma:4b", Ollama, 6_000_000_000L));
+            Assert.IsFalse(adequate.Queue("translategemma:12b", Ollama, 6_000_000_000L));
             Assert.AreEqual("queued", adequate.Current().State);
         }
 
@@ -112,7 +222,7 @@ namespace Jularr.Backend.Tests
                 var media = Options.Create(new MediaOptions { TranslationPath = root });
                 using (var beforeRestart = new LocalTranslationDownloads(client, settings, media, new LocalTranslationGate()))
                 {
-                    Assert.IsTrue(beforeRestart.Queue("translategemma:4b"));
+                    Assert.IsTrue(beforeRestart.Queue("translategemma:4b", Ollama, 6_000_000_000L));
                     Assert.AreEqual("queued", beforeRestart.Current().State);
                     Assert.IsTrue(File.Exists(Path.Combine(root, "ollama-pull-state.json")));
                 }
@@ -122,7 +232,7 @@ namespace Jularr.Backend.Tests
                 {
                     Assert.AreEqual("interrupted", afterRestart.Current().State);
                     Assert.AreEqual("translategemma:4b", afterRestart.Current().Model);
-                    Assert.IsTrue(afterRestart.Queue("translategemma:4b"));
+                    Assert.IsTrue(afterRestart.Queue("translategemma:4b", Ollama, 6_000_000_000L));
                     Assert.AreEqual("queued", afterRestart.Current().State);
                 }
             }
@@ -149,7 +259,7 @@ namespace Jularr.Backend.Tests
                     Options.Create(new MediaOptions { TranslationPath = root }),
                     new LocalTranslationGate());
                 Assert.AreEqual("failed", downloads.Current().State);
-                Assert.IsFalse(downloads.Queue("translategemma:4b"));
+                Assert.IsFalse(downloads.Queue("translategemma:4b", Ollama, 6_000_000_000L));
             }
             finally
             {
@@ -157,8 +267,25 @@ namespace Jularr.Backend.Tests
             }
         }
 
+        [TestMethod]
+        public async Task FreeSpace_TypedByTheOwner_IsReadBackAndANegativeValueIsRefused()
+        {
+            await using var host = await LibraryTests.CreateHostAsync(Path.Combine(Path.GetTempPath(), "jularr-free-" + Guid.NewGuid().ToString("N")), razor: true);
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+
+            using var save = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/translation/free-bytes", new TranslationFreeBytesDataV1(50_000_000_000L));
+            Assert.AreEqual(System.Net.HttpStatusCode.OK, save.StatusCode, await save.Content.ReadAsStringAsync());
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/translation/models");
+            using var json = JsonDocument.Parse(await read.Content.ReadAsStringAsync());
+            Assert.AreEqual(50_000_000_000L, json.RootElement.GetProperty("verifiedFreeBytes").GetInt64());
+
+            using var negative = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/translation/free-bytes", new TranslationFreeBytesDataV1(-1));
+            Assert.AreEqual(System.Net.HttpStatusCode.BadRequest, negative.StatusCode);
+        }
+
         private sealed class FakeOllama : HttpMessageHandler
         {
+            public string? LastPrompt { get; private set; }
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 string body;
@@ -173,6 +300,7 @@ namespace Jularr.Backend.Tests
                     Assert.AreEqual("translategemma:4b", json.RootElement.GetProperty("model").GetString());
                     Assert.IsFalse(json.RootElement.GetProperty("stream").GetBoolean());
                     var prompt = json.RootElement.GetProperty("prompt").GetString()!;
+                    LastPrompt = prompt;
                     StringAssert.Contains(prompt, "Indonesian (id) to German (de) translator");
                     StringAssert.Contains(prompt, "into German:\n\n\nRina pulang.");
                     body = """{"response":"Rina ging nach Hause.","eval_count":20,"eval_duration":2000000000}""";

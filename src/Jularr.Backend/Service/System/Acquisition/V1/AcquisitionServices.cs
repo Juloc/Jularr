@@ -32,6 +32,7 @@ using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
 
@@ -175,11 +176,13 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     {
         private readonly WorkMetadata _metadata;
         private readonly AniListMetadata _aniList;
+        private readonly ILogger<RefreshWantedMetadataV1> _logger;
 
-        internal RefreshWantedMetadataV1(WorkMetadata metadata, AniListMetadata aniList)
+        internal RefreshWantedMetadataV1(WorkMetadata metadata, AniListMetadata aniList, ILogger<RefreshWantedMetadataV1> logger)
         {
             _metadata = metadata;
             _aniList = aniList;
+            _logger = logger;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -189,7 +192,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Wanted series and Manga learn about new episodes and volumes once a day.
+            // Wanted series and Manga learn about new episodes and volumes once a day; a series by its TheTVDB id, by its TMDB id only while it has none.
             var stale = await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
@@ -202,16 +205,29 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     FROM
                         "WantedItems" AS wanted
                         JOIN "Works" AS work ON work."Id" = wanted."WorkId"
-                        JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = work."Id"
-                            AND (identity."Namespace" = 'tmdb_tv' OR identity."Namespace" = 'anilist' AND work."MediaTypeId" = 3 AND NOT EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "WorkExternalIdentities" AS book
-                                WHERE
-                                    book."WorkId" = work."Id"
-                                    AND book."Namespace" = 'openlibrary'
-                            ))
+                        JOIN LATERAL (
+                            SELECT
+                                known."Namespace",
+                                known."Value",
+                                known."WorkId",
+                                known."UpdatedAt"
+                            FROM
+                                "WorkExternalIdentities" AS known
+                            WHERE
+                                known."WorkId" = work."Id"
+                                AND (known."Namespace" IN ('tvdb', 'tmdb_tv') AND work."MediaTypeId" = 2 OR known."Namespace" = 'anilist' AND work."MediaTypeId" = 3 AND NOT EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "WorkExternalIdentities" AS book
+                                    WHERE
+                                        book."WorkId" = work."Id"
+                                        AND book."Namespace" = 'openlibrary'
+                                ))
+                            ORDER BY
+                                known."Namespace" <> 'tvdb'
+                            LIMIT 1
+                        ) AS identity ON TRUE
                     WHERE
                         NOT wanted."IsPaused"
                         AND identity."UpdatedAt" < now() - interval '1 day'
@@ -245,12 +261,25 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     }
                 }
 
-                if (stale.Any(identity => identity.Namespace != AniListMetadata.Namespace))
+                foreach (var identity in stale.Where(identity => identity.Namespace != AniListMetadata.Namespace))
                 {
-                    var connection = await _metadata.ConnectAsync(Context, CancellationToken);
-                    foreach (var identity in stale.Where(identity => identity.Namespace != AniListMetadata.Namespace))
+                    try
                     {
-                        await _metadata.ImportAsync(Context, connection, MediaType.Series, null, int.Parse(identity.Value, CultureInfo.InvariantCulture), CancellationToken);
+                        await _metadata.ImportSeriesAsync(Context, null, identity.Namespace, identity.Value, CancellationToken);
+                    }
+                    catch (Exception exception) when (exception is KeyNotFoundException or DataValidationException)
+                    {
+                        // An identity that belongs to another Work must not hold back the others; it is asked again after a day.
+                        if (exception is DataValidationException)
+                        {
+                            _logger.LogWarning(exception, "Metadata of Work {WorkId} ({Namespace} {Value}) conflicts with another Work and is skipped until its next daily refresh.", identity.WorkId, identity.Namespace, identity.Value);
+                        }
+
+                        await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                        {
+                            await ctx.TouchWorkIdentityAsync(identity, ct);
+                            return true;
+                        }, CancellationToken);
                     }
                 }
             }
@@ -302,6 +331,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 jobs.AddRange(group.Where(download => download.ExternalId == UsenetJob.ExternalId && !download.IsPaused));
             }
 
+            // Across its news servers the downloader keeps the queue's order: priority first, then the order a person gave.
+            var order = downloads.Select((download, index) => (download.OperationId, index)).ToDictionary(item => item.OperationId, item => item.index);
+            jobs.Sort((left, right) => order[left.OperationId].CompareTo(order[right.OperationId]));
             var progressed = 0;
             await Parallel.ForEachAsync(jobs, new ParallelOptions { MaxDegreeOfParallelism = settings.MaxParallelJobs, CancellationToken = CancellationToken }, async (download, ct) =>
             {
@@ -369,9 +401,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     ? new UsenetPassResult(UsenetPassState.Completed, 100, 0, 0, outputPath: paths.Complete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId))
                     : await _jobs.RunAsync(connection, staging, _time.GetUtcNow() + PassLength, CancellationToken, paths, download.OperationId);
             }
-            catch (UsenetException exception) when (exception.Failure == UsenetFailure.Unauthorized)
+            catch (UsenetException exception) when (exception.Failure is UsenetFailure.Unauthorized or UsenetFailure.ConnectionLimit)
             {
-                await WaitAsync(download, staging, "acquisition_authentication_failed");
+                await WaitAsync(download, staging, exception.Failure == UsenetFailure.Unauthorized ? "usenet_credentials_rejected" : "usenet_connection_limit");
                 return false;
             }
             catch (ServiceUnavailableException exception)
@@ -411,7 +443,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     await WaitAsync(download, staging, pass.ReasonKey!);
                     return false;
                 case UsenetPassState.Failed:
-                    await _import.FailAsync(Context, download.OperationId, DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime, CancellationToken);
+                    await _import.FailAsync(Context, download.OperationId, pass.ReasonKey ?? DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime, CancellationToken);
                     break;
                 default:
                     try
@@ -512,8 +544,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     continue;
                 }
 
-                // Jularr's own Usenet downloads run in DownloadUsenetV1.
-                if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
+                // Jularr's own Usenet and torrent downloads run in DownloadUsenetV1 and DownloadTorrentsV1.
+                if (connection.AcquisitionConnectionTypeId is AcquisitionConnectionType.Usenet or AcquisitionConnectionType.Torrent)
                 {
                     continue;
                 }
@@ -614,7 +646,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                             job.SizeBytes,
                             job.RemainingBytes,
                             EtaSeconds = job.TimeLeftSeconds,
-                            DownloadStateTypeId = (byte)DownloadLogic.ReadDownloadState(job.Status)
+                            DownloadStateTypeId = (byte)DownloadLogic.ReadDownloadState(job.Status),
+
+                            // SABnzbd's own order and priority, as its queue shows them.
+                            DownloadPriorityTypeId = job.Priority is { } priority ? (byte?)(priority + 2) : null,
+                            QueuePosition = job.Index
                         };
                     })
                     .ToArray();
@@ -839,7 +875,25 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 {
                     await paths.PrepareIncompleteAsync(download.OperationId, CancellationToken, download.MediaTypeId, download.MediaSubtypeId);
                     File.Delete(path + ".part");
-                    await _direct.DownloadAsync(connection, download, path + ".part", paths, CancellationToken);
+                    if (await _direct.DownloadAsync(connection, download, path + ".part", paths, CancellationToken) is { } pass)
+                    {
+                        // A pass kept its part; the next job continues where it ended.
+                        var progress = new[]
+                        {
+                            new
+                            {
+                                download.OperationId, ProgressPercent = pass.Total > 0 ? (short?)Math.Min(99, pass.Done * 100 / pass.Total) : null, SizeBytes = (long?)null,
+                                RemainingBytes = (long?)null, EtaSeconds = (int?)null, DownloadStateTypeId = (byte)DownloadStateType.Downloading
+                            }
+                        };
+                        await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                        {
+                            await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(JsonSerializer.Serialize(progress)), ct);
+                            return true;
+                        }, CancellationToken);
+                        return;
+                    }
+
                     // A file of an earlier attempt is replaced; it never stays beside the new one.
                     File.Delete(path);
                     File.Move(path + ".part", path);

@@ -14,9 +14,9 @@ namespace Jularr.Backend.Logic.Media
             sql.Statement =
                 """
                 SELECT
-                    EXISTS (
+                    coalesce((
                         SELECT
-                            1
+                            array_agg(operation."Id" ORDER BY operation."Id")
                         FROM
                             "Operations" AS operation
                             JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
@@ -25,7 +25,7 @@ namespace Jularr.Backend.Logic.Media
                             wanted."WorkId" = work."Id"
                             AND operation."OperationTypeId" = 2
                             AND operation."OperationStatusTypeId" IN (1, 2)
-                    ) AS "HasActiveDownload",
+                    ), '{}') AS "ActiveDownloadIds",
                     coalesce((
                         SELECT
                             array_agg(file."Id" ORDER BY file."Id")
@@ -145,6 +145,29 @@ namespace Jularr.Backend.Logic.Media
                     AND identity."Value" = @Value;
                 """;
             sql.Parameters.Add(new ExclusionIdentityData(@namespace, value));
+            if (await ctx.ReadSql.ReadOptionalAsync<ExclusionIdentityData>(sql, ct) is not null)
+            {
+                throw new DataValidationException(nameof(ExclusionIdentityData.Value), "excluded");
+            }
+        }
+
+        // The same rule for a Work already kept: any of its provider identities that was excluded refuses the request.
+        public static async Task RequireWorkNotExcludedAsync(this LogicContext ctx, long workId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    exclusion."Namespace",
+                    exclusion."Value"
+                FROM
+                    "WorkExternalIdentities" AS identity
+                    JOIN "WorkExclusionIdentities" AS exclusion ON exclusion."Namespace" = identity."Namespace" AND exclusion."Value" = identity."Value"
+                WHERE
+                    identity."WorkId" = @Id
+                LIMIT 1;
+                """;
+            sql.Parameters.Add(new WorkIdData(workId));
             if (await ctx.ReadSql.ReadOptionalAsync<ExclusionIdentityData>(sql, ct) is not null)
             {
                 throw new DataValidationException(nameof(ExclusionIdentityData.Value), "excluded");

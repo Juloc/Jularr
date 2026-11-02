@@ -148,6 +148,7 @@ namespace Jularr.Backend.Logic.AniList
                         item."ListEntryId",
                         item."IsManga",
                         item."Title",
+                        item."CoverUrl",
                         item."Status",
                         item."Progress",
                         item."ProgressVolumes",
@@ -161,6 +162,7 @@ namespace Jularr.Backend.Logic.AniList
                             "ListEntryId" bigint,
                             "IsManga" boolean,
                             "Title" text,
+                            "CoverUrl" text,
                             "Status" text,
                             "Progress" integer,
                             "ProgressVolumes" integer,
@@ -185,13 +187,14 @@ namespace Jularr.Backend.Logic.AniList
                         )
                 )
                 INSERT INTO
-                    "AniListEntries" ("ProfileId", "MediaId", "ListEntryId", "IsManga", "Title", "Status", "Progress", "ProgressVolumes", "Score", "TotalCount", "TotalVolumes", "RemoteUpdatedAt")
+                    "AniListEntries" ("ProfileId", "MediaId", "ListEntryId", "IsManga", "Title", "CoverUrl", "Status", "Progress", "ProgressVolumes", "Score", "TotalCount", "TotalVolumes", "RemoteUpdatedAt")
                 SELECT
                     @ProfileId,
                     incoming."MediaId",
                     incoming."ListEntryId",
                     incoming."IsManga",
                     incoming."Title",
+                    incoming."CoverUrl",
                     incoming."Status",
                     incoming."Progress",
                     incoming."ProgressVolumes",
@@ -206,6 +209,7 @@ namespace Jularr.Backend.Logic.AniList
                     "ListEntryId" = EXCLUDED."ListEntryId",
                     "IsManga" = EXCLUDED."IsManga",
                     "Title" = EXCLUDED."Title",
+                    "CoverUrl" = EXCLUDED."CoverUrl",
                     "Status" = EXCLUDED."Status",
                     "Progress" = EXCLUDED."Progress",
                     "ProgressVolumes" = EXCLUDED."ProgressVolumes",

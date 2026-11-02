@@ -41,13 +41,16 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
     public sealed class SaveSetupModulesDataV1 : BaseData
     {
-        public SaveSetupModulesDataV1(string name, long version, long setupVersion, BaseDataList<InstanceModuleInputV1> modules, BaseDataList<UpdateInstanceMediaDataV1> media)
+        public SaveSetupModulesDataV1(string name, long version, long setupVersion, BaseDataList<InstanceModuleInputV1> modules, BaseDataList<UpdateInstanceMediaDataV1> media,
+            int catalogDetailKeepDays, bool detailsDiscoverAhead)
         {
             Name = name;
             Version = version;
             SetupVersion = setupVersion;
             Modules = modules;
             Media = media;
+            CatalogDetailKeepDays = catalogDetailKeepDays;
+            DetailsDiscoverAhead = detailsDiscoverAhead;
         }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.Name))]
@@ -62,6 +65,13 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
         // The media types and subtypes the instance offers, saved with the modules; types before the subtypes that need them.
         public BaseDataList<UpdateInstanceMediaDataV1> Media { get; }
+
+        // The Caching module's settings, saved with the switches.
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.CatalogDetailKeepDays))]
+        public int CatalogDetailKeepDays { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.DetailsDiscoverAhead))]
+        public bool DetailsDiscoverAhead { get; }
 
         public override void Validate()
         {

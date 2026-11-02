@@ -12,7 +12,7 @@ namespace Jularr.Integrations.Logic.Usenet
         private const long Slack = 1024 * 1024;
 
         public async Task<UsenetProgress> DownloadAsync(UsenetServer server, IReadOnlyList<NzbFile> files, string directory, IReadOnlySet<string> finished, DateTimeOffset until,
-            long maximumJobBytes, CancellationToken ct, long minimumFreeBytes = 0, Func<long, IDisposable>? reserveWrite = null)
+            long maximumJobBytes, CancellationToken ct, long minimumFreeBytes = 0, Func<long, IDisposable>? reserveWrite = null, Func<long, CancellationToken, ValueTask>? throttle = null)
         {
             var queue = new ConcurrentQueue<(NzbFile File, NzbSegment Segment)>(files.SelectMany(file => file.Segments.Where(segment => !finished.Contains(segment.MessageId))
                 .Select(segment => (file, segment))));
@@ -43,7 +43,7 @@ namespace Jularr.Integrations.Logic.Usenet
 
             if (queue.IsEmpty)
             {
-                return new UsenetProgress([], [], 0);
+                return new UsenetProgress([], [], 0, 0);
             }
 
             // The first session proves the server; further sessions are a bonus.
@@ -107,6 +107,12 @@ namespace Jularr.Integrations.Logic.Usenet
                             return;
                         }
 
+                        // The client's speed limit holds every session back by what it read.
+                        if (throttle is not null)
+                        {
+                            await throttle(part.Data.Length, ct);
+                        }
+
                         // A part never grows its file beyond what the NZB announced.
                         var limit = item.File.Bytes > 0 ? item.File.Bytes + Slack : MaximumFileBytes;
                         if (part.Offset < 0 || part.Offset > limit - part.Data.Length || item.Segment.Bytes > 0 && part.Data.Length > item.Segment.Bytes + Slack)
@@ -167,7 +173,7 @@ namespace Jularr.Integrations.Logic.Usenet
                 }
             }
 
-            return new UsenetProgress([.. done], [.. damaged], downloaded);
+            return new UsenetProgress([.. done], [.. damaged], downloaded, sessions.Count);
         }
 
         public async Task TestAsync(UsenetServer server, CancellationToken ct)

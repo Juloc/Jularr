@@ -323,7 +323,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
 
         // Button + dialog that opens directly on the library page: choose an existing storage mount,
         // enter a relative folder path, name and media type, then create the library root.
-        private IUiComponent AddLibraryButton(string csrf)
+        private IUiComponent AddLibraryButton(string? csrf)
         {
             var mediaTypes = Enum.GetValues<MediaType>().Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type]));
             var subtypes = new[] { new SelectOption("", texts["media.subtype.none"]) }

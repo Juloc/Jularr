@@ -18,11 +18,16 @@ using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Logic.Storage;
+using Jularr.Integrations.Logic.Torrent;
+using Jularr.Backend.Data.Logic.Instance;
+using Jularr.Backend.Logic.Instance;
+using Jularr.Backend.Data.Enums.Sql;
 using Microsoft.AspNetCore.DataProtection;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Logic.Storage;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 
 namespace Jularr.Backend.Service.Admin.Wanted.V1
 {
@@ -43,10 +48,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private readonly DownloadStorage _downloads;
         private readonly StorageAccess _storage;
         private readonly WorkSignals _signals;
+        private readonly ILogger<WantedAcquisition> _logger;
 
         public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DirectSources direct, NyaaSources nyaa,
-            IDataProtectionProvider protection, IMemoryCache offers, TimeProvider time, DownloadStorage downloads, StorageAccess storage, WorkSignals signals)
+            IDataProtectionProvider protection, IMemoryCache offers, TimeProvider time, DownloadStorage downloads, StorageAccess storage, WorkSignals signals, ILogger<WantedAcquisition> logger)
         {
+            _logger = logger;
             _storage = storage;
             _signals = signals;
             _downloads = downloads;
@@ -84,7 +91,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var newznab = allNewznab.Where(indexer => AcquisitionConnectionLogic.CanSearch(indexer, target.MediaTypeId, automatic, now)).ToArray();
             var skipped = allNewznab.Count(indexer => AcquisitionConnectionLogic.Serves(indexer, target.MediaTypeId, automatic)) - newznab.Length;
             var uses = new ConcurrentDictionary<long, IndexerUse>();
-            var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel ? indexers.Where(indexer => DirectSources.IsDirect(indexer.AcquisitionConnectionTypeId)).ToArray() : [];
+            var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel ? indexers.Where(indexer => DirectSources.IsDirect(indexer.AcquisitionConnectionTypeId)
+                && (kind == AcquisitionKind.LightNovel || indexer.AcquisitionConnectionTypeId != AcquisitionConnectionType.Narou)).ToArray() : [];
             var nyaaConnections = kind is AcquisitionKind.LightNovel ? indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Nyaa).ToArray() : [];
             var torrents = nyaaConnections.Where(indexer => AcquisitionConnectionLogic.CanSearch(indexer, target.MediaTypeId, automatic, now)).ToArray();
             skipped += nyaaConnections.Count(indexer => AcquisitionConnectionLogic.Serves(indexer, target.MediaTypeId, automatic)) - torrents.Length;
@@ -102,7 +110,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     async (source, inner) =>
                     {
                         var use = uses.GetOrAdd(source.Id, _ => new IndexerUse());
-                        if (!AcquisitionConnectionLogic.HasQueries(source, use.Queries)) return;
+                        if (!AcquisitionConnectionLogic.HasQueries(source, use.Queries, automatic)) return;
                         Interlocked.Increment(ref use.Queries);
                         if (await _nyaa.SearchAsync(source, wanted, inner) is not { } answers)
                         {
@@ -125,10 +133,19 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 await Parallel.ForEachAsync(sources, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, sources.Count), CancellationToken = token },
                     async (source, inner) =>
                     {
+                        // Include waiting for Chrome and every title/ISBN variant in the source's budget.
+                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(inner);
+                        timeout.CancelAfter(limits.IndexerTimeout);
                         IReadOnlyList<ReleaseOffer>? answers;
                         try
                         {
-                            answers = await _direct.SearchAsync(source, wanted, inner, Enough, annaSearch);
+                            answers = await _direct.SearchAsync(source, wanted, timeout.Token, Enough, annaSearch);
+                        }
+                        catch (OperationCanceledException) when (!inner.IsCancellationRequested)
+                        {
+                            sourceErrors.Add("source_timeout");
+                            Interlocked.Increment(ref failures);
+                            return;
                         }
                         catch (DirectSourceException exception)
                         {
@@ -154,60 +171,66 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             bool Enough(IReadOnlyList<ReleaseOffer> found)
             {
                 var all = found.Concat(offers.Values).ToArray();
-                return AcquisitionSelectionLogic.Select(profile, target, kind, scope, all, focusLanguage).Ranked.Any(evaluation =>
+                return AcquisitionSelectionLogic.Select(profile, target, kind, scope, all, focusLanguage, automatic).Ranked.Any(evaluation =>
                     evaluation.IsSelectable && (!profile.IsBook || profile.LanguageOrder.Length == 0
                         || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages)));
             }
 
-            var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
+            var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
 
-            // Expansion tiers only run while too few releases are usable.
-            for (var tier = 0; tier <= budget.MaxTier && offers.Count < budget.MaxResults; tier++)
+            async Task SearchIndexersAsync()
             {
-                var current = tier;
-                if (!plans.Values.Any(plan => plan.Any(query => query.Tier == current)))
+                // Expansion tiers only run while too few releases are usable.
+                for (var tier = 0; tier <= budget.MaxTier && offers.Count < budget.MaxResults; tier++)
                 {
-                    continue;
-                }
-
-                await Parallel.ForEachAsync(newznab, new ParallelOptions { MaxDegreeOfParallelism = budget.MaxConcurrentIndexers, CancellationToken = ct }, async (indexer, token) =>
-                {
-                    var use = uses.GetOrAdd(indexer.Id, _ => new IndexerUse());
-                    if (!await SearchIndexerAsync(indexer, kind, target.PlatformIgdbId, plans[indexer.Id].Where(query => query.Tier == current), budget, offers, use, token))
+                    var current = tier;
+                    if (!plans.Values.Any(plan => plan.Any(query => query.Tier == current)))
                     {
-                        use.Failed = true;
-                        Interlocked.Increment(ref failures);
+                        continue;
                     }
-                });
 
-                // The direct sources answered at the same time; their releases belong to the choice.
-                await direct;
-                await nyaaSearch;
-                selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
-                if (selection.Ranked.Count(evaluation => evaluation.IsSelectable
-                    && (!profile.IsBook || profile.LanguageOrder.Length == 0
-                        || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages))) >= budget.TargetUsable)
-                {
-                    break;
+                    await Parallel.ForEachAsync(newznab, new ParallelOptions { MaxDegreeOfParallelism = budget.MaxConcurrentIndexers, CancellationToken = ct }, async (indexer, token) =>
+                    {
+                        var use = uses.GetOrAdd(indexer.Id, _ => new IndexerUse());
+                        if (!await SearchIndexerAsync(indexer, kind, target.PlatformIgdbId, plans[indexer.Id].Where(query => query.Tier == current), budget, offers, use, automatic, token))
+                        {
+                            use.Failed = true;
+                            Interlocked.Increment(ref failures);
+                        }
+                    });
+
+                    // The direct sources answered at the same time; their releases belong to the choice.
+                    await direct;
+                    await nyaaSearch;
+                    selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
+                    if (selection.Ranked.Count(evaluation => evaluation.IsSelectable
+                        && (!profile.IsBook || profile.LanguageOrder.Length == 0
+                            || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages))) >= budget.TargetUsable)
+                    {
+                        break;
+                    }
                 }
             }
 
-            // The direct sources are waited for; they answered at the same time as the indexers.
-            await direct;
-            await nyaaSearch;
-            selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
+            // Join every source on cancellation before disposing their shared Anna search context.
+            await Task.WhenAll(direct, nyaaSearch, SearchIndexersAsync());
+            selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
 
             // Manual grabs pick from what was shown; the cache is bounded by offer count.
             var grabbable = selection.Ranked.Where(evaluation => evaluation.Decision != SelectionDecision.Rejected).Select(evaluation => evaluation.Candidate.Id).ToHashSet(StringComparer.Ordinal);
             var cached = offers.Where(pair => grabbable.Contains(pair.Key)).ToDictionary(StringComparer.Ordinal);
             _offers.Set(CacheKey(target.WantedItemId), cached, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = OfferLifetime, Size = Math.Max(1, cached.Count) });
+
+            // Every release group the search saw joins the media type's list, so it can be rated before anything is taken.
+            var groups = ReleaseGroupLogic.Sightings(selection.Ranked.Select(evaluation => evaluation.Candidate.Parsed?.ReleaseGroup));
             await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 foreach (var (id, use) in uses)
                 {
-                    await ctx.RecordIndexerUseAsync(new IndexerUseData(id, use.Queries, !use.Failed), token);
+                    await ctx.RecordIndexerUseAsync(new IndexerUseData(id, use.Queries, !use.Failed, use.RetryAfterSeconds > 0 ? use.RetryAfterSeconds : null), token);
                 }
 
+                await ctx.RecordReleaseGroupsAsync(new ReleaseGroupSightingsData(target.MediaTypeId, groups, now), token);
                 return true;
             }, ct);
 
@@ -336,9 +359,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var isTorrent = offer.Transport == DownloadTransport.Torrent
                 || offer.DownloadUri?.Scheme.Equals("magnet", StringComparison.OrdinalIgnoreCase) == true
                 || offer.DownloadUri?.AbsolutePath.EndsWith(".torrent", StringComparison.OrdinalIgnoreCase) == true;
-            var compatibleTypes = isTorrent
-                ? new[] { AcquisitionConnectionType.Qbittorrent }
-                : new[] { AcquisitionConnectionType.Sabnzbd, AcquisitionConnectionType.Usenet };
+            // Jularr's own torrent engine takes torrents only while its module is on.
+            var compatibleTypes = !isTorrent ? new[] { AcquisitionConnectionType.Sabnzbd, AcquisitionConnectionType.Usenet }
+                : (await context.ExecuteBatchAsync((ctx, token) => ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["Torrent"]), token), ct, SqlAccessMode.ReadOnly)).Any(module => module.IsEnabled)
+                    ? new[] { AcquisitionConnectionType.Qbittorrent, AcquisitionConnectionType.Torrent }
+                    : new[] { AcquisitionConnectionType.Qbittorrent };
             var client = DownloadClientSelectionLogic.Select(clients, target.MediaTypeId, _time.GetUtcNow().UtcDateTime, compatibleTypes);
             if (client is null)
             {
@@ -358,13 +383,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             // Refuse native downloads before reserving an operation or using an indexer grab.
             DownloadStoragePaths? nativePaths = null;
-            if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
+            if (client.AcquisitionConnectionTypeId is AcquisitionConnectionType.Usenet or AcquisitionConnectionType.Torrent)
             {
-                nativePaths = await _downloads.OpenAsync(context, DownloadStorageArea.Usenet, ct);
+                nativePaths = await _downloads.OpenAsync(context, client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? DownloadStorageArea.Usenet : DownloadStorageArea.Torrent, ct);
             }
 
-            // A grab counts against its indexer's daily limit.
-            if (!await context.ExecuteBatchAsync((ctx, token) => ctx.CountIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token), ct))
+            // A grab counts against its indexer's daily limit; a download added by hand (connection 0) has no indexer.
+            var manual = offer.ConnectionId <= 0;
+            if (!manual && !await context.ExecuteBatchAsync((ctx, token) => ctx.CountIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token), ct))
             {
                 throw new ServiceUnavailableException("acquisition_limit_reached");
             }
@@ -375,7 +401,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 ? EpisodeNumbering.Episodes(await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnitStatesAsync(target.WantedItemId, token), ct))
                 : [];
             var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(kind, offer.Title, episodes);
-            var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end,
+            var grab = new AcquisitionGrabData(target.WantedItemId, manual ? null : offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end,
                 requestedByAccountId: accountId) { IndexerFlags = [.. offer.IndexerFlags], RequiresActiveMonitoring = automatic };
             var operationId = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
@@ -386,20 +412,81 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // The best client by priority receives the release; Jularr's own downloader keeps the NZB in staging.
             string? failure = null;
             string? externalId = null;
+            NewznabException? rateLimited = null;
             if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
                 var staging = await nativePaths!.PrepareIncompleteAsync(operationId, ct, target.MediaTypeId, target.MediaSubtypeId);
+                var stage = "workspace";
                 try
                 {
                     Directory.CreateDirectory(staging);
                     File.Delete(Path.Combine(staging, UsenetJob.NzbName));
+                    stage = "transfer";
                     await _newznab.DownloadNzbAsync(offer.DownloadUri, Path.Combine(staging, UsenetJob.NzbName), ct,
                         bytes => nativePaths.ReserveWrite(operationId, staging, bytes));
                     externalId = UsenetJob.ExternalId;
                 }
                 catch (NewznabException exception)
                 {
-                    failure = exception.Failure == NewznabFailure.Unavailable ? "acquisition_unavailable" : "acquisition_grab_failed";
+                    // Never log an exception: its message or inner exception can contain the signed URL.
+                    _logger.LogWarning("NZB download failed for operation {OperationId}, indexer {IndexerId}: {Failure}; HTTP {StatusCode}; timeout {TimedOut}; transport {TransportError}.",
+                        operationId, offer.ConnectionId, exception.Failure, (int?)exception.StatusCode, exception.InnerException is OperationCanceledException,
+                        exception.InnerException is HttpRequestException transport ? transport.HttpRequestError : (HttpRequestError?)null);
+                    failure = GrabFailureKey(exception);
+                    rateLimited = exception.Failure == NewznabFailure.RateLimited ? exception : null;
+                }
+                catch (IOException exception)
+                {
+                    _logger.LogWarning("NZB I/O failed for operation {OperationId}, indexer {IndexerId}, stage {Stage}: {ExceptionType}; HResult {HResult}.",
+                        operationId, offer.ConnectionId, stage, exception.GetType().Name, exception.HResult);
+                    failure = "acquisition_unavailable";
+                }
+                catch (UnauthorizedAccessException exception)
+                {
+                    _logger.LogWarning("NZB access denied for operation {OperationId}, indexer {IndexerId}, stage {Stage}: {ExceptionType}; HResult {HResult}.",
+                        operationId, offer.ConnectionId, stage, exception.GetType().Name, exception.HResult);
+                    throw;
+                }
+
+                if (failure is not null && Directory.Exists(staging))
+                {
+                    Directory.Delete(staging, recursive: true);
+                }
+            }
+            else if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent)
+            {
+                // Jularr's own engine keeps the magnet or the checked .torrent in staging; peers are reached only later, through the VPN.
+                var staging = await nativePaths!.PrepareIncompleteAsync(operationId, ct, target.MediaTypeId, target.MediaSubtypeId);
+                try
+                {
+                    Directory.CreateDirectory(staging);
+                    byte[] infoHash;
+                    if (offer.DownloadUri.Scheme.Equals("magnet", StringComparison.OrdinalIgnoreCase))
+                    {
+                        infoHash = MagnetLink.Parse(offer.DownloadUri.OriginalString).InfoHash;
+                        await File.WriteAllTextAsync(Path.Combine(staging, TorrentDownloader.MagnetName), offer.DownloadUri.OriginalString, ct);
+                    }
+                    else
+                    {
+                        var file = Path.Combine(staging, TorrentDownloader.TorrentName);
+                        File.Delete(file);
+                        await _newznab.DownloadNzbAsync(offer.DownloadUri, file, ct, bytes => nativePaths.ReserveWrite(operationId, staging, bytes));
+                        infoHash = TorrentMetainfo.Parse(await File.ReadAllBytesAsync(file, ct)).InfoHash;
+                    }
+
+                    // A retry of the same torrent goes on with the verified pieces of the earlier try.
+                    await TorrentResume.TakeOverAsync(staging, infoHash,
+                        async earlierId => (await context.ExecuteBatchAsync((ctx, token) => ctx.ReadActiveDownloadsAsync(token, earlierId), ct)).Count > 0, ct);
+                    externalId = TorrentJob.ExternalId;
+                }
+                catch (NewznabException exception)
+                {
+                    failure = GrabFailureKey(exception);
+                    rateLimited = exception.Failure == NewznabFailure.RateLimited ? exception : null;
+                }
+                catch (InvalidDataException)
+                {
+                    failure = "acquisition_grab_failed";
                 }
                 catch (IOException)
                 {
@@ -460,14 +547,25 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // A refused grab releases the reservation and its indexer count; the target is searched again later.
             if (failure is not null)
             {
+                if (!manual)
+                {
+                    await context.ExecuteBatchAsync(async (ctx, token) =>
+                    {
+                        await ctx.ReturnIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token);
+                        return true;
+                    }, ct);
+                }
+
+                // A rate-limited indexer rests for the wait it asked for, and the grab tries again after it.
+                var retryAfter = rateLimited?.RetryAfter is { } asked && asked > TimeSpan.FromMinutes(30) ? asked : TimeSpan.FromMinutes(30);
                 await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
-                    await ctx.ReturnIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token);
-                    return true;
-                }, ct);
-                await context.ExecuteBatchAsync(async (ctx, token) =>
-                {
-                    await ctx.FailDownloadAsync(new DownloadFailureData(operationId, failure, DateTime.UtcNow.AddMinutes(30)), token);
+                    if (rateLimited is not null)
+                    {
+                        await ctx.RecordIndexerUseAsync(new IndexerUseData(offer.ConnectionId, 0, false, rateLimited.RetryAfter is { } wait ? (int)Math.Ceiling(wait.TotalSeconds) : null), token);
+                    }
+
+                    await ctx.FailDownloadAsync(new DownloadFailureData(operationId, failure, DateTime.UtcNow + retryAfter), token);
                     return true;
                 }, ct);
                 throw new ServiceUnavailableException(failure);
@@ -479,6 +577,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 return true;
             }, ct);
             _signals.Downloads.Notify();
+            if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent) _signals.Torrents.Notify();
         }
 
         private async Task RequireClientImportSourceAsync(LogicContext context, AcquisitionConnectionData client, CancellationToken ct)
@@ -516,7 +615,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         }
 
         private async Task<bool> SearchIndexerAsync(AcquisitionConnectionData indexer, AcquisitionKind kind, int? igdbPlatform, IEnumerable<PlannedQuery> queries, SearchBudget budget,
-            ConcurrentDictionary<string, ReleaseOffer> offers, IndexerUse use, CancellationToken ct)
+            ConcurrentDictionary<string, ReleaseOffer> offers, IndexerUse use, bool automatic, CancellationToken ct)
         {
             // A slow indexer only costs its own share.
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -533,7 +632,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     for (var page = 0; page < budget.MaxPages && offers.Count < budget.MaxResults; page++)
                     {
                         // The daily query limit also holds within one search.
-                        if (!AcquisitionConnectionLogic.HasQueries(indexer, use.Queries))
+                        if (!AcquisitionConnectionLogic.HasQueries(indexer, use.Queries, automatic))
                         {
                             return true;
                         }
@@ -556,8 +655,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
                 return true;
             }
-            catch (NewznabException)
+            catch (NewznabException exception)
             {
+                // The wait the indexer asked for outlasts the usual backoff.
+                if (exception.RetryAfter is { } wait)
+                {
+                    use.RetryAfterSeconds = Math.Max(use.RetryAfterSeconds, (int)Math.Ceiling(wait.TotalSeconds));
+                }
+
                 return false;
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -566,9 +671,18 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
         }
 
+        private static string GrabFailureKey(NewznabException exception) => exception.Failure switch
+        {
+            NewznabFailure.Unavailable => "acquisition_unavailable",
+            NewznabFailure.RateLimited => "acquisition_rate_limited",
+            NewznabFailure.NotFound => "acquisition_file_missing",
+            _ => "acquisition_grab_failed"
+        };
+
         private sealed class IndexerUse
         {
             public int Queries;
+            public int RetryAfterSeconds;
             public bool Failed;
         }
 

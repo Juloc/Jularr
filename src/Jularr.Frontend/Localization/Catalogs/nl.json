@@ -1281,12 +1281,12 @@
    "Geen duidelijke overeenkomst"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted (paused)",
-   "Wordt gevolgd (gepauzeerd)"
+   "Will be wanted",
+   "Wordt gevolgd"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted (paused)",
-   "Volgen gepauzeerd"
+   "Wanted",
+   "Gevolgd"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",
@@ -2167,10 +2167,6 @@
   "hint.WorkMetadataFields.Query.info": [
    "A title, optionally with its year.",
    "Een titel, eventueel met het jaar."
-  ],
-  "hint.CollectionFields.IsSmart.info": [
-   "A smart collection fills itself from the filters below.",
-   "Een slimme collectie vult zichzelf aan de hand van de onderstaande filters."
   ],
   "hint.CollectionFields.ReleaseYear.placeholder": [
    "Any year",
@@ -4633,8 +4629,8 @@
    "Soort"
   ],
   "collections.smartToggle": [
-   "Smart filter instead of hand-picked titles",
-   "Slim filter in plaats van handmatig gekozen titels"
+   "Smart filter",
+   "Slim filter"
   ],
   "collections.manual": [
    "Hand-picked",

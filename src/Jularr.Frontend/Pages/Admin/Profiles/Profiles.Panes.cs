@@ -102,16 +102,21 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         private void DefineSizes(Page page)
         {
             if (_sizes is null || _sizes.Rows.Count == 0) return;
+
+            // Books limit each kind's size per volume (e-book, illustrated, manga) and have no preferred size; video counts per minute.
+            var books = MediaTypeId == MediaType.Book;
+            var unit = FieldAffix.Unit(books ? "unit.megabytesPerVolume" : "unit.megabytesPerMinute");
             page.Content.Add(new Form<SaveQualityDefinitionsDataV1>(form =>
             {
                 form.Rows(item => item.Rows, (row, item) =>
                 {
                     row.Hidden(value => value.Quality);
                     row.Hidden(value => value.Version);
-                    row.Content(new P(new ValueText(item.Quality)));
-                    row.Number(value => value.MinimumMbPerMinute, "arr.minimumMb", affix: FieldAffix.Unit("unit.megabytesPerMinute"));
-                    row.Number(value => value.PreferredMbPerMinute, "arr.preferredMb", affix: FieldAffix.Unit("unit.megabytesPerMinute"));
-                    row.Number(value => value.MaximumMbPerMinute, "arr.maximumMb", affix: FieldAffix.Unit("unit.megabytesPerMinute"));
+                    row.Content(new P(books ? new Text("arr.size." + item.Quality) : new ValueText(item.Quality)));
+                    row.Number(value => value.MinimumMbPerMinute, "arr.minimumMb", affix: unit);
+                    if (books) row.Hidden(value => value.PreferredMbPerMinute);
+                    else row.Number(value => value.PreferredMbPerMinute, "arr.preferredMb", affix: unit);
+                    row.Number(value => value.MaximumMbPerMinute, "arr.maximumMb", affix: unit);
                 });
                 form.Save();
             }, Address("Sizes"), Token, _sizes, FormError));

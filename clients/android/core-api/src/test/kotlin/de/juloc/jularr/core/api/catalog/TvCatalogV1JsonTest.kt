@@ -88,16 +88,17 @@ class TvCatalogV1JsonTest {
         assertNull(item.copy(mediaAssetTypeId = 3).playableMediaAssetId())
     }
 
-    @Test fun discoverExternalIdentityNeverBecomesALocalWork() {
+    @Test fun discoverCatalogItemCarriesItsRequiredWorkIdAndSeason() {
         val shelves = JSONArray(
             """
             [{"scopeSlug":"books","discoverFeedTypeId":1,"items":[],
               "catalogItems":[{"namespace":"openlibrary","externalId":"OL12345W",
               "title":"A Book","releaseYear":null,"author":"Author",
-              "workId":null,"posterUrl":null,"rating":null,"mediaStateTypeId":null}]}]
+              "workId":88,"posterUrl":null,"rating":null,"mediaStateTypeId":1,"seasonNumber":3}]}]
             """.trimIndent(),
         ).objects { discoverShelf() }
-        assertNull(shelves.single().catalogItems.single().workId)
+        assertEquals(88L, shelves.single().catalogItems.single().workId)
+        assertEquals(3, shelves.single().catalogItems.single().seasonNumber)
         assertEquals("OL12345W", shelves.single().catalogItems.single().externalId)
         assertEquals("openlibrary", shelves.single().catalogItems.single().namespace)
     }

@@ -107,6 +107,10 @@ namespace Jularr.Integrations.Data.Servarr
         // Its folder there (an album's and a book's: its artist's or author's), which places it in a root folder.
         public string? Path { get; init; }
 
+        // A series' TheTVDB and IMDb ids.
+        public int? TvdbId { get; init; }
+        public string? ImdbId { get; init; }
+
         // An album's primary type, such as "Album", "EP" or "Single"; the metadata profile its artist or author follows.
         public string? AlbumType { get; init; }
         public int? MetadataProfileId { get; init; }

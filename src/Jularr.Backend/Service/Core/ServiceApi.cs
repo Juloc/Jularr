@@ -15,6 +15,7 @@ using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Browser;
+using Jularr.Integrations.Logic.AniBridge;
 using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.AnnasArchive;
 using Jularr.Integrations.Logic.Browser;
@@ -33,6 +34,7 @@ using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Nas;
 using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Newznab;
+using Jularr.Integrations.Logic.Narou;
 using Jularr.Integrations.Logic.Nyaa;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Qbittorrent;
@@ -73,6 +75,8 @@ namespace Jularr.Backend.Service.Core
         public const string AuthenticationNonceCookieName = "jularr.auth_nonce";
         public const string DevicePairingCookieName = "jularr.device_pairing";
         public const string DevicePairingRateLimit = "device-pairing";
+        // A cast device fetches a segment every few seconds, and several at once after a seek.
+        public const string CastRateLimit = "cast";
         public const string DeviceApprovalRateLimit = "device-approval";
         public const string SessionScheme = "jularr.session";
         public const string DeviceBearerScheme = "jularr.device";
@@ -139,6 +143,11 @@ namespace Jularr.Backend.Service.Core
                 configuration.GetSection("Browser").Bind(options);
                 options.ProfilePath = Folder(options.ProfilePath, "browser");
             });
+            services.Configure<VpnOptions>(options =>
+            {
+                configuration.GetSection("Vpn").Bind(options);
+                options.WorkPath = Folder(options.WorkPath, "vpn");
+            });
 
             // Metadata mirrors.
             var providers = (configuration.GetSection("Providers").Get<ProviderOptions>() ?? new ProviderOptions()).Validated();
@@ -190,6 +199,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<RecentLogs>();
             services.TryAddSingleton<ServiceTimings>();
             services.TryAddSingleton<ProviderObservations>();
+            services.TryAddSingleton(new NewznabGate(NewznabGate.DefaultSpacing));
             services.TryAddSingleton<HealthChecks>();
             services.TryAddSingleton<ResourceHistory>();
             services.AddHostedService(provider => provider.GetRequiredService<ResourceHistory>());
@@ -214,7 +224,10 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<TranscodeHardware>();
             services.TryAddSingleton<AudioFingerprinter>();
             services.TryAddSingleton<PlaybackTranscodes>();
+            services.TryAddSingleton<PlaybackCastTokens>();
             services.TryAddTransient<PlaybackSubtitles>();
+            services.TryAddTransient<PlaybackFonts>();
+            services.TryAddSingleton<SubtitleTranslations>();
             services.TryAddTransient<WantedAcquisition>();
             services.TryAddTransient<MetadataCatalog>();
             services.TryAddSingleton<ExternalFeedCache>();
@@ -222,6 +235,8 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<Jularr.Backend.Service.Admin.Media.V1.MediaImportProcessor>();
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<TvdbMetadata>();
+            services.TryAddSingleton<TvdbConnectionState>();
+            services.TryAddSingleton<PlexLibraries>();
             services.TryAddTransient<PlexServer>();
             services.TryAddTransient<MediaServers>();
             services.TryAddTransient<LibraryReplacements>();
@@ -229,6 +244,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<GameRomIdentification>();
             services.TryAddTransient<MusicTagIdentification>();
             services.TryAddTransient<AniListMetadata>();
+            services.TryAddTransient<NarouMetadata>();
             services.TryAddTransient<AniListMatcher>();
             services.TryAddTransient<AniListAccounts>();
             services.TryAddTransient<MusicMetadata>();
@@ -241,10 +257,12 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<SubtitleFiles>();
             services.TryAddTransient<DownloadImport>();
             services.TryAddSingleton<UsenetDownloader>();
+            services.TryAddSingleton<DownloadSpeeds>();
             services.TryAddSingleton<DirectDownloadCleanup>();
             services.TryAddSingleton<ArchiveTools>();
             services.TryAddSingleton<PostgresBackupTools>();
             services.TryAddTransient<UsenetJob>();
+            services.TryAddTransient<TorrentJob>();
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
             services.TryAddSingleton(provider => new BrowserPackages(provider.GetRequiredService<IOptions<BrowserOptions>>().Value));
             services.AddSingleton<SourceBrowser>(provider => new SourceBrowser(provider.GetRequiredService<IOptions<BrowserOptions>>().Value,
@@ -252,11 +270,14 @@ namespace Jularr.Backend.Service.Core
             services.AddSingleton<ISourceBrowser>(provider => provider.GetRequiredService<SourceBrowser>());
             services.AddSingleton<IBrowserInteraction>(provider => provider.GetRequiredService<SourceBrowser>());
             services.TryAddSingleton<BrowserAssistance>();
+            services.TryAddSingleton<VpnTunnels>();
             services.TryAddTransient<ReadingContent>();
             services.TryAddTransient<ReadingDerivation>();
             services.TryAddSingleton<ReadingActivity>();
             services.TryAddSingleton<TranslationFiles>();
             services.TryAddSingleton<LocalTranslationGate>();
+            services.TryAddSingleton<BookTranslationProgress>();
+            services.TryAddSingleton<LocalTranslationMachines>();
             services.TryAddSingleton<LocalTranslationDownloads>();
             services.AddHostedService(provider => provider.GetRequiredService<LocalTranslationDownloads>());
             services.AddHttpClient<OllamaLocalModels>(http => http.Timeout = TimeSpan.FromMinutes(65))
@@ -347,6 +368,8 @@ namespace Jularr.Backend.Service.Core
             AddClient<AcoustIdClient>(services, 15, 1, agent: true, baseAddress: providers.AcoustId, provider: "acoustid");
             services.TryAddSingleton(providers);
             AddClient<AniListClient>(services, 15, 4, agent: true, baseAddress: providers.AniList, provider: "anilist");
+            AddClient<AniBridgeClient>(services, 60, null, agent: true, baseAddress: providers.AnimeMappings,
+                handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
             AddClient<MusicBrainzClient>(services, 20, 4, agent: true, baseAddress: providers.MusicBrainz, provider: "musicbrainz");
             AddClient<IgdbClient>(services, 20, 8, agent: true, provider: "igdb");
             AddClient<LibretroClient>(services, 60, 16, agent: true);
@@ -362,6 +385,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<OpenSubtitlesClient>(services, 30, 12, agent: true);
             AddClient<SubDlClient>(services, 30, 12, agent: true);
     AddClient<NyaaClient>(services, 30, 16, agent: true, handler: PublicNetwork.CreateHandler);
+            AddClient<NarouClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
 
             // Covers come from the providers' image hosts only, over public addresses.
             var covers = new CoverMirrors(new Dictionary<string, Uri>(providers.Images, StringComparer.OrdinalIgnoreCase));
@@ -382,6 +406,14 @@ namespace Jularr.Backend.Service.Core
                         QueueLimit = 0
                     }));
                 // A TV page asks every few seconds until a phone confirms it; several may share one address.
+                options.AddPolicy(CastRateLimit, http => RateLimitPartition.GetFixedWindowLimiter(
+                    http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 600,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0
+                    }));
                 options.AddPolicy(DevicePairingRateLimit, http => RateLimitPartition.GetFixedWindowLimiter(
                     http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                     _ => new FixedWindowRateLimiterOptions
@@ -527,7 +559,7 @@ namespace Jularr.Backend.Service.Core
 
                 if (definition.ServiceArea == ServiceArea.Public)
                 {
-                    route.RequireRateLimiting("public").WithMetadata(new RequestSizeLimitAttribute(16 * 1024));
+                    route.RequireRateLimiting(endpoint.RateLimit ?? "public").WithMetadata(new RequestSizeLimitAttribute(16 * 1024));
                 }
                 else if (endpoint.RateLimit is { } policy)
                 {
@@ -580,6 +612,13 @@ namespace Jularr.Backend.Service.Core
                 }
 
                 var result = await service.ExecuteAsync(parameters, default!, cancellationToken);
+
+                // A cast device plays from another origin.
+                if (result is ICrossOriginOutput)
+                {
+                    http.Response.Headers["Access-Control-Allow-Origin"] = "*";
+                    http.Response.Headers["Access-Control-Expose-Headers"] = "Content-Length, Content-Range, Accept-Ranges";
+                }
 
                 // Authorized files stream after the service committed.
                 if (result is ICacheableFileOutput stored)

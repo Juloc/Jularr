@@ -16,7 +16,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     // What one row of the list is and what would happen to it.
     internal sealed record MediaImportPlanRow(MediaImportItem Item, MediaImportStatusType Status, string? Problem, string? ProblemDetail, long? WorkId, string? MatchTitle, int? MatchYear,
         string? MatchSource, MediaImportId? Import, bool HasTarget, bool CanMonitor, IReadOnlyList<MediaImportCandidateV1> Candidates, bool IsSearched, string? Query, int? DuplicateOf, bool IsIncluded,
-        MediaImportActionType Action, long? AcquisitionProfileId, long? LibraryRootId);
+        MediaImportActionType Action, long? AcquisitionProfileId, long? LibraryRootId, string? Choice = null, bool UsesListData = false);
 
     internal sealed record MediaImportPlan(IReadOnlyList<MediaImportPlanRow> Rows, int Unsearched, string? ProviderFailure);
 
@@ -27,12 +27,12 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         private const int LookupsPerPlan = 100;
         private static readonly TimeSpan Lifetime = TimeSpan.FromHours(1);
 
-        // Provider entries a title of each kind can be added from, the first being the preferred one.
+        // Provider entries a title of each kind can be added from, the first being the preferred one; a series named by TMDB is added as the TheTVDB series TMDB links.
         private static string[] ImportNamespaces(MediaType type, MediaSubtype? subtype) => (type, subtype) switch
         {
             (MediaType.Movie, _) => ["tmdb_movie"],
-            (MediaType.Series, MediaSubtype.Anime) => ["tmdb_tv", "anilist"],
-            (MediaType.Series, _) => ["tmdb_tv"],
+            (MediaType.Series, MediaSubtype.Anime) => ["tvdb", "tmdb_tv", "anilist"],
+            (MediaType.Series, _) => ["tvdb", "tmdb_tv"],
             (MediaType.Book, MediaSubtype.Manga or MediaSubtype.LightNovel) => ["anilist", "openlibrary"],
             (MediaType.Book, _) => ["openlibrary"],
             (MediaType.Music, _) => ["musicbrainz"],
@@ -51,7 +51,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             {
                 var item = items[index];
                 identities[index] = [.. item.Ids];
-                if (item.Problem is null && choices.GetValueOrDefault(index)?.Choice is { } choice)
+                if (item.Problem is null && choices.GetValueOrDefault(index)?.Choice is { } choice && !IsBookChoice(choice))
                 {
                     var chosen = ReadChoice(item, choice);
                     identities[index].RemoveAll(identity => identity.Namespace == chosen.Namespace);
@@ -60,6 +60,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
 
             var known = await ReadKnownAsync(context, identities.SelectMany(list => list), ct);
+            var localBooks = await context.ExecuteBatchAsync((ctx, token) => MediaImportQueries.ReadLocalBooksAsync(ctx, items, token), ct);
             // Large imports finish title/author matching in the server-owned job.
             // Do not block their preview on hundreds of per-ISBN provider calls.
             var lookups = new Budget(items.Count >= 100 ? 8 : LookupsPerPlan);
@@ -72,7 +73,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             for (var index = 0; index < items.Count; index++)
             {
                 var item = items[index];
-                if (item.Problem is not null || item.Type != MediaType.Book || Hits(identities[index], known).Count > 0
+                if (item.Problem is not null || item.Type != MediaType.Book || localBooks.Any(book => book.Index == item.Index) || IsBookChoice(choices.GetValueOrDefault(index)?.Choice)
+                    || Hits(identities[index], known).Count > 0
                     || identities[index].FirstOrDefault(identity => identity.Namespace == "isbn") is not { } isbn)
                 {
                     continue;
@@ -119,17 +121,18 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             // The ISBN-resolved Work may already exist with another ISBN in the local database.
             if (resolvedAny) known = await ReadKnownAsync(context, identities.SelectMany(list => list), ct);
 
-            // Video titles named only by IMDb or TVDB find their TMDB entry.
+            // Films named only by IMDb find their TMDB entry, series named only by IMDb their TheTVDB entry.
             var budget = new Budget(searches);
             var found = new Dictionary<int, MediaImportId>();
             for (var index = 0; index < items.Count; index++)
             {
                 var item = items[index];
-                if (item.Problem is not null || Hits(identities[index], known).Count > 0 || Preferred(item, identities[index]) is not null) continue;
-                if (await FindTmdbAsync(context, item, identities[index], lookups, ct) is { } tmdb)
+                if (item.Problem is not null || IsBookChoice(choices.GetValueOrDefault(index)?.Choice)
+                    || Hits(identities[index], known).Count > 0 || Preferred(item, identities[index]) is not null) continue;
+                if (await FindCatalogIdAsync(context, item, identities[index], lookups, ct) is { } entry)
                 {
-                    found[index] = tmdb;
-                    identities[index].Add(tmdb);
+                    found[index] = entry;
+                    identities[index].Add(entry);
                 }
             }
 
@@ -138,7 +141,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
             // Open rows with a title or a search of a person's own ask the provider; their own searches come first.
             var candidates = new Dictionary<int, IReadOnlyList<MediaImportCandidateV1>>();
-            var open = Enumerable.Range(0, items.Count).Where(index => items[index].Problem is null && Hits(identities[index], known).Count == 0 && Preferred(items[index], identities[index]) is null
+            var open = Enumerable.Range(0, items.Count).Where(index => items[index].Problem is null && !localBooks.Any(book => book.Index == items[index].Index)
+                    && !IsBookChoice(choices.GetValueOrDefault(index)?.Choice)
+                    && Hits(identities[index], known).Count == 0 && Preferred(items[index], identities[index]) is null
                     && (items[index].Title is not null || QueryOf(choices.GetValueOrDefault(index)) is not null))
                 .OrderBy(index => QueryOf(choices.GetValueOrDefault(index)) is null).ThenBy(index => index).ToArray();
             foreach (var index in open)
@@ -164,6 +169,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 var item = items[index];
                 var choice = choices.GetValueOrDefault(index);
                 candidates.TryGetValue(index, out var list);
+                var isSearched = list is not null;
+                var local = localBooks.Where(book => book.Index == item.Index).ToArray();
+                list = [.. local.Select(book => new MediaImportCandidateV1("local:" + book.WorkId.ToString(CultureInfo.InvariantCulture), book.Title, book.ReleaseYear,
+                    book.Creator, "local", book.WorkId, false)), .. list ?? []];
                 var canMonitor = item.Type is not null and not MediaType.Game;
                 if (item.Problem is not null)
                 {
@@ -173,7 +182,30 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
                 var hits = Hits(identities[index], known);
                 MediaImportPlanRow row;
-                if (conflicts.Contains(index) || hits.Count > 1)
+                if (IsBookChoice(choice?.Choice) && excluded.Any(identity => identities[index].Any(own => own.Namespace == identity.Namespace && own.Value == identity.Value)))
+                {
+                    row = Row(item, MediaImportStatusType.Invalid, "excluded", null, canMonitor, list, choice);
+                }
+                else if (IsBookChoice(choice?.Choice))
+                {
+                    if (item.TypeKey != "book" || item.Title is null || item.Creator is null
+                        || choice!.Choice == "list:book" && !CanUseListData(item)) throw new DataValidationException(nameof(data.Choices), "invalid_value");
+                    var selectedLocal = local.FirstOrDefault(book => choice!.Choice == "local:" + book.WorkId.ToString(CultureInfo.InvariantCulture));
+                    if (choice!.Choice != "list:book" && selectedLocal is null) throw new DataValidationException(nameof(data.Choices), "unknown_reference");
+                    // Repeating an explicitly manual import reuses an exact title/author match. Ambiguous local matches need a selection.
+                    selectedLocal ??= local.Length == 1 ? local[0] : null;
+                    row = selectedLocal is null && local.Length > 1
+                        ? Row(item, MediaImportStatusType.Invalid, "local_ambiguous", null, canMonitor, list, choice)
+                        : hits.Count > 1 || hits.Any(hit => hit.WorkId != selectedLocal?.WorkId)
+                        ? Row(item, MediaImportStatusType.Invalid, "ids_conflict", null, canMonitor, list, choice)
+                        : Row(item, selectedLocal is null ? MediaImportStatusType.New : MediaImportStatusType.InLibrary, null, null, canMonitor, list, choice) with
+                        {
+                            WorkId = selectedLocal?.WorkId, MatchTitle = selectedLocal?.Title ?? item.Title, MatchYear = selectedLocal?.ReleaseYear ?? item.Year,
+                            MatchSource = selectedLocal is null ? "list" : "local", HasTarget = selectedLocal?.HasTarget ?? false,
+                            Choice = choice.Choice, UsesListData = selectedLocal is null
+                        };
+                }
+                else if (conflicts.Contains(index) || hits.Count > 1)
                 {
                     row = Row(item, MediaImportStatusType.Invalid, "ids_conflict", null, canMonitor, list, choice);
                 }
@@ -190,6 +222,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                             MatchSource = hit.Namespace,
                             HasTarget = hit.HasTarget
                         };
+                }
+                else if (local.Length > 0 && string.IsNullOrEmpty(choice?.Choice))
+                {
+                    row = Row(item, MediaImportStatusType.Open, "local_match", null, canMonitor, list, choice);
                 }
                 else if (Preferred(item, identities[index]) is { } import)
                 {
@@ -210,14 +246,15 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 }
 
                 // The first row of the file that names a title keeps it.
-                var key = row.WorkId is { } workId ? "work:" + workId.ToString(CultureInfo.InvariantCulture) : row.Import is { } entry ? entry.Namespace + ":" + entry.Value : null;
+                var key = row.WorkId is { } workId ? "work:" + workId.ToString(CultureInfo.InvariantCulture) : row.Import is { } entry ? entry.Namespace + ":" + entry.Value
+                    : row.UsesListData ? "list:" + item.Title!.ToUpperInvariant() + "\n" + item.Creator!.ToUpperInvariant() : null;
                 if (key is not null && row.Status is MediaImportStatusType.New or MediaImportStatusType.InLibrary)
                 {
                     if (firstOf.TryGetValue(key, out var first)) row = row with { Status = MediaImportStatusType.Duplicate, DuplicateOf = first };
                     else firstOf[key] = index;
                 }
 
-                row = Decide(row, choice, data, defaults);
+                row = Decide(row with { IsSearched = isSearched }, choice, data, defaults);
                 rows.Add(row);
                 if (onProgressAsync is not null) await onProgressAsync(index, row.Status.ToString(), row.Candidates.Count, null, null, row.Problem);
             }
@@ -225,6 +262,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var unsearched = rows.Count(row => row.Status == MediaImportStatusType.Open && !row.IsSearched && (row.Item.Title is not null || row.Query is not null));
             return new MediaImportPlan(rows, unsearched, providerFailure);
         }
+
+        private static bool IsBookChoice(string? choice) => choice == "list:book" || choice?.StartsWith("local:", StringComparison.Ordinal) == true;
+
+        internal static bool CanUseListData(MediaImportItem item) => item.TypeKey == "book" && item.Problem is null && item.Title is not null && item.Creator is not null
+            && item.Ids.All(identity => identity.Namespace == "isbn") && (item.Authors ?? [item.Creator]).All(author => author.Length <= 300);
 
         private static string ProviderFailureKey(ServiceUnavailableException exception) =>
             exception.Code == "metadata_rate_limited" ? "rate_limited" : "unavailable";
@@ -279,10 +321,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             return identity is not null && identity.Namespace == @namespace ? identity : throw new DataValidationException("Choices", "invalid_value");
         }
 
-        private async Task<MediaImportId?> FindTmdbAsync(LogicContext context, MediaImportItem item, IReadOnlyList<MediaImportId> identities, Budget budget, CancellationToken ct)
+        private async Task<MediaImportId?> FindCatalogIdAsync(LogicContext context, MediaImportItem item, IReadOnlyList<MediaImportId> identities, Budget budget, CancellationToken ct)
         {
             if (item.Type is not (MediaType.Movie or MediaType.Series)) return null;
-            foreach (var identity in identities.Where(identity => identity.Namespace is "imdb" or "tvdb"))
+            var series = item.Type == MediaType.Series;
+            foreach (var identity in identities.Where(identity => identity.Namespace == "imdb"))
             {
                 var key = $"import.find.{item.Type}.{identity.Namespace}.{identity.Value}";
                 if (!cache.TryGetValue(key, out int? id))
@@ -290,7 +333,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     if (!budget.TrySpend()) return null;
                     try
                     {
-                        id = await metadata.FindExternalAsync(await metadata.ConnectAsync(context, ct), item.Type.Value, identity.Namespace, identity.Value, ct);
+                        id = series
+                            ? await metadata.FindTvdbIdAsync(context, identity.Namespace, identity.Value, ct)
+                            : await metadata.FindExternalAsync(await metadata.ConnectAsync(context, ct), item.Type.Value, identity.Namespace, identity.Value, ct);
+                    }
+                    catch (DataValidationException)
+                    {
+                        // An IMDb id that names several series leaves the row to a person.
+                        id = null;
                     }
                     catch (ServiceUnavailableException)
                     {
@@ -301,7 +351,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     cache.Set(key, id, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = Lifetime, Size = 1 });
                 }
 
-                if (id is { } tmdb) return new MediaImportId(WorkMetadata.Namespace(item.Type.Value), tmdb.ToString(CultureInfo.InvariantCulture));
+                if (id is { } found) return new MediaImportId(series ? "tvdb" : WorkMetadata.Namespace(item.Type.Value), found.ToString(CultureInfo.InvariantCulture));
             }
 
             return null;
@@ -444,7 +494,29 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
     internal static class MediaImportQueries
     {
-        // Titles of the library that identities name: Works, their editions and their seasons.
+        // Exact local titles (including aliases) and creator credits are choices, never fuzzy automatic matches.
+        public static Task<IReadOnlyList<MediaImportLocalBookData>> ReadLocalBooksAsync(LogicContext ctx, IReadOnlyList<MediaImportItem> items, CancellationToken ct)
+        {
+            var books = items.Where(item => item.TypeKey == "book" && item.Problem is null && item.Title is not null && item.Creator is not null)
+                .Select(item => new { item.Index, item.Title, item.Creator }).ToArray();
+            if (books.Length == 0) return Task.FromResult<IReadOnlyList<MediaImportLocalBookData>>([]);
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT DISTINCT item."Index", work."Id" AS "WorkId", work."CanonicalTitle" AS "Title", creator."Creator", work."ReleaseYear",
+                    EXISTS (SELECT 1 FROM "WantedItems" AS wanted WHERE wanted."WorkId" = work."Id") AS "HasTarget"
+                FROM jsonb_to_recordset(@Json::jsonb) AS item ("Index" integer, "Title" text, "Creator" text)
+                    JOIN "Works" AS work ON work."MediaTypeId" = 3 AND work."MediaSubtypeId" IS NULL
+                    JOIN "WorkCreators" AS creator ON creator."WorkId" = work."Id" AND lower(creator."Creator") = lower(item."Creator")
+                WHERE lower(work."CanonicalTitle") = lower(item."Title")
+                    OR EXISTS (SELECT 1 FROM "WorkTitles" AS title WHERE title."WorkId" = work."Id" AND lower(title."Title") = lower(item."Title"))
+                ORDER BY item."Index", work."Id";
+                """;
+            sql.Parameters.Add(new MediaImportBookLookupData(JsonSerializer.Serialize(books)));
+            return ctx.ReadSql.ReadListAsync<MediaImportLocalBookData>(sql, ct);
+        }
+
+        // Titles of the library that identities name: Works, their editions and their seasons. A catalog title nobody opened (a Discover list named it) is none yet.
         public static Task<IReadOnlyList<MediaImportKnownData>> ReadKnownAsync(LogicContext ctx, WorkIdentityLookupData lookup, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -493,7 +565,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                             JOIN "WorkUnits" AS unit ON unit."Id" = identity."WorkUnitId"
                             JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = identity."Namespace" AND item."Value" = identity."Value"
                     ) AS found
-                    JOIN "Works" AS work ON work."Id" = found."WorkId";
+                    JOIN "Works" AS work ON work."Id" = found."WorkId"
+                WHERE
+                    work."DetailedAt" IS NOT NULL
+                    OR EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id");
                 """;
             sql.Parameters.Add(lookup);
             return ctx.ReadSql.ReadListAsync<MediaImportKnownData>(sql, ct);

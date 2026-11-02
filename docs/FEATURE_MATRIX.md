@@ -49,7 +49,7 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 | Naming and folders | all | tested | `NamingPattern`, `LibraryRenameLogic` | NamingPatternTests, LibraryTests | Patterns for music, books, games | A rename preview moves nothing until confirmed |
 | Protected versions, several releases, recycle modes | all | tested | `ReplacementLogic`, `LibraryRecycleBin` | AcquisitionTests, DeviceTests | – | Delete by default; recycle cleanup touches only registered files |
 | Admin visibility of actions, errors, decisions | all | tested | Wanted, Activity, System pages | AcquisitionTests, StatisticsTests | Indexer log and statistics | Every grab, import and failure is visible with its reason |
-| One-time takeover | Movie, Series, Music, Book | tested (Prowlarr, Sonarr, Radarr, Lidarr, Readarr) | `TakeoverServices`, `ServarrProfileLogic`, `WantedLogic` | TakeoverTests, Sonarr takeover browser path | Live NAS/VM and Lidarr/Readarr acceptance | Inventory imports independently; new monitoring stays paused until explicit Owner resume |
+| One-time takeover | Movie, Series, Music, Book | tested (Prowlarr, Sonarr, Radarr, Lidarr, Readarr) | `TakeoverServices`, `ServarrProfileLogic`, `WantedLogic` | TakeoverTests, Sonarr takeover browser path | Live NAS/VM and Lidarr/Readarr acceptance | Inventory imports independently; every title taken over is in the library, monitored as the source monitored it |
 
 ## Radarr, Sonarr, Lidarr, Readarr, Bazarr
 

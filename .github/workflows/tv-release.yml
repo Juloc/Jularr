@@ -1,0 +1,218 @@
+name: TV Release
+
+# A TV release is a git tag `tv-v<MAJOR>.<MINOR>.<PATCH>` on a commit of main, independent of server releases.
+# It tests, lints and signs the TV app and swaps Jularr-TV-<version>.apk (+ .sha256) into the latest GitHub release,
+# which is the only release the TV app checks for updates; see docs/RELEASE.md.
+# workflow_dispatch with dry_run runs the tests and lint only: nothing is signed or published.
+
+on:
+  push:
+    tags: ['tv-v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Test and lint the TV app, sign and publish nothing (a branch may be chosen; publishing needs a tv-v tag)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tv-release
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      dry_run: ${{ steps.check.outputs.dry_run }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check tag, branch and version
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            echo "dry_run=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          # Devices install whatever the latest release carries, so there are no TV prereleases; the bounds keep versionCode valid.
+          if [[ "${REF_TYPE}" != "tag" || ! "${REF_NAME}" =~ ^tv-v(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})$ ]]; then
+            echo "::error::Publishing runs from a tag tv-v<MAJOR>.<MINOR>.<PATCH> (tv-v0.3.0), not from ${REF_NAME}. Choose the tag, or keep dry_run on."
+            exit 1
+          fi
+          version="${REF_NAME#tv-v}"
+
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+            echo "::error::Commit $(git rev-parse HEAD) is not on origin/main. Tag a commit that was merged."
+            exit 1
+          fi
+
+          newest="$(bash .github/scripts/newest-tv-apk.sh)"
+          current="${newest%% *}"
+          if [[ -n "${current}" && ( "${current}" == "${version}" || "$(printf '%s\n%s\n' "${current}" "${version}" | sort -V | tail -n 1)" != "${version}" ) ]]; then
+            echo "::error::TV ${current} is already published; the tag must be a higher version than that."
+            exit 1
+          fi
+          echo "TV ${version} replaces ${current:-nothing}."
+          {
+            echo "dry_run=false"
+            echo "version=${version}"
+          } >> "${GITHUB_OUTPUT}"
+
+  verify:
+    needs: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: android-actions/setup-android@v4
+      - name: Install SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "9.8.0"
+      - name: Test and lint the exact tree before signing
+        working-directory: clients/android
+        run: >-
+          gradle --parallel --build-cache
+          :core-api:testDebugUnitTest
+          :core-model:testDebugUnitTest
+          :core-player:testDebugUnitTest
+          :core-session:testDebugUnitTest
+          :core-design:testDebugUnitTest
+          :core-update:testDebugUnitTest
+          :app-tv:testDebugUnitTest
+          :app-tv:lintDebug
+
+  sign:
+    needs: [guard, verify]
+    if: needs.guard.outputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: android-actions/setup-android@v4
+      - name: Install SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "9.8.0"
+      - name: Load protected signing material
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for value in "$KEYSTORE_BASE64" "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD"; do
+            if [[ -z "$value" ]]; then
+              echo "::error::Android TV production signing secrets are incomplete."
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/jularr-tv-release.jks"
+          echo "JULARR_ANDROID_KEYSTORE=$RUNNER_TEMP/jularr-tv-release.jks" >> "$GITHUB_ENV"
+          echo "JULARR_ANDROID_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "JULARR_ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "JULARR_ANDROID_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+      - name: Build signed Android TV APK
+        working-directory: clients/android
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: gradle --build-cache :app-tv:assembleRelease "-PjularrVersion=${VERSION}"
+      - name: Verify signature and generate portable SHA-256
+        shell: bash
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: |
+          set -euo pipefail
+          apk="clients/android/app-tv/build/outputs/apk/release/app-tv-release.apk"
+          test -s "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$apk"
+          mkdir -p dist
+          cp "$apk" "dist/Jularr-TV-$VERSION.apk"
+          (cd dist && sha256sum "Jularr-TV-$VERSION.apk" > "Jularr-TV-$VERSION.apk.sha256")
+          (cd dist && sha256sum -c "Jularr-TV-$VERSION.apk.sha256")
+      - name: Store verified signed APK and checksum
+        uses: actions/upload-artifact@v7
+        with:
+          name: jularr-tv-release-assets
+          if-no-files-found: error
+          path: |
+            dist/*.apk
+            dist/*.sha256
+          retention-days: 1
+      - name: Remove signing file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/jularr-tv-release.jks"
+
+  publish:
+    needs: [guard, sign]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    # Shared with the Release workflow's release job, which copies the newest TV APK onto a new server release.
+    concurrency:
+      group: tv-assets
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v7
+        with:
+          name: jularr-tv-release-assets
+          path: dist
+      - name: Swap the APK into the latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: |
+          set -euo pipefail
+          apk="Jularr-TV-${VERSION}.apk"
+          (cd dist && sha256sum -c "${apk}.sha256")
+          # A server release may have been published since the guard ran; check again against the newest APK.
+          current="$(bash .github/scripts/newest-tv-apk.sh)"
+          current="${current%% *}"
+          if [[ -n "${current}" && ( "${current}" == "${VERSION}" || "$(printf '%s\n%s\n' "${current}" "${VERSION}" | sort -V | tail -n 1)" != "${VERSION}" ) ]]; then
+            echo "::error::TV ${current} is already published; ${VERSION} is not newer."
+            exit 1
+          fi
+          target="$(gh api "repos/${GH_REPO}/releases/latest" --jq .tag_name)"
+          # The new pair goes up first, so the release always carries a complete, signed package.
+          gh release upload "${target}" "dist/${apk}" "dist/${apk}.sha256" --clobber
+          gh release view "${target}" --json assets --jq '.assets[].name | select(startswith("Jularr-TV-"))' |
+            while read -r old; do
+              [[ "${old}" == "${apk}" || "${old}" == "${apk}.sha256" ]] || gh release delete-asset "${target}" "${old}" --yes
+            done
+          echo "TV ${VERSION} is on ${target}."

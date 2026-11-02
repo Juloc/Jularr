@@ -98,8 +98,15 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // The file is one part of a work; the rest of it is elsewhere.
         public bool IsPart { get; init; }
 
-        // Preference points the media type resolves from the request rather than from the profile (a preferred language, an exact volume), added to the profile's preference score.
-        public int ContextScore { get; init; }
+        // Preference points the media type resolves from the request rather than from the profile (a named author, a format's rank), each with its rule; their sum adds to the profile's
+        // preference score.
+        public IReadOnlyList<ScorePoint> ContextPoints { get; init; } = [];
+        public int ContextScore => ContextPoints.Sum(point => point.Points);
+
+        // A rule of the media type that rejects the release (a wrong kind, a size outside the limits) or, in a manual search, only marks it for a person.
+        public SelectionReason? Rejection { get; init; }
+        public SelectionReason? Flag { get; init; }
+        public ReleaseSizeMark? SizeMark { get; init; }
 
         // The languages the release carries (audio languages, the language of a book or chapter).
         public IReadOnlyList<string> Languages { get; init; } = [];

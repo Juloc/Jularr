@@ -150,7 +150,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     {
         public MediaImportRowV1(int index, string typeKey, MediaType? mediaTypeId, MediaSubtype? mediaSubtypeId, string? title, int? releaseYear, string? creator, MediaImportStatusType statusTypeId, string? problem, string? problemDetail,
             long? workId, string? matchTitle, int? matchYear, string? matchSource, string? choice, bool hasTarget, bool canMonitor, bool isIncluded, string? query, int? duplicateOf,
-            BaseDataList<MediaImportCandidateV1> candidates, MediaImportActionType action)
+            BaseDataList<MediaImportCandidateV1> candidates, MediaImportActionType action, bool canUseListData = false)
         {
             Index = index;
             TypeKey = typeKey;
@@ -174,7 +174,11 @@ namespace Jularr.Backend.Data.Admin.Media.V1
             DuplicateOf = duplicateOf;
             Candidates = candidates;
             Action = action;
+            CanUseListData = canUseListData;
         }
+
+        [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Flag))]
+        public bool CanUseListData { get; }
 
         [DataField(typeof(MediaImportFields), nameof(MediaImportFields.Index))]
         public int Index { get; }

@@ -9,5 +9,5 @@ internal fun JSONObject.discoverSuggestion(): TvDiscoverSuggestionV1 = TvDiscove
     title = getString("title"),
     releaseYear = nullableInt("releaseYear"),
     posterUrl = nullableString("posterUrl"),
-    workId = nullableLong("workId"),
+    workId = getLong("workId"),
 )

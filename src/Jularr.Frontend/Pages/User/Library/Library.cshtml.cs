@@ -186,7 +186,7 @@ namespace Jularr.Frontend.Pages.User.Library
                     new("InProgress", state.Progress == ProgressStateType.InProgress, "favorites.status.inProgress"),
                     new("Finished", state.Progress == ProgressStateType.Finished, "favorites.status.finished")]),
                 new ChoiceGroup(assets, "library.filter.genres", "genre",
-                    [.. _options.Genres.Concat(state.Genres).Distinct().Order().Select(value => new ChoicePick(value, state.Genres.Contains(value)))], new ChoiceOptions(Multiple: true, Layout: ChoiceLayout.Checks)),
+                    [.. _options.Genres.Concat(state.Genres).Distinct().Order().Select(value => new ChoicePick(value, state.Genres.Contains(value), Label: texts.Genre(value)))], new ChoiceOptions(Multiple: true, Layout: ChoiceLayout.Checks)),
                 Languages("library.filter.audio", "audio", _options.AudioLanguages, state.Audio),
                 Languages("library.filter.subtitles", "subtitle", _options.SubtitleLanguages, state.Subtitles),
                 new ChoiceGroup(assets, "library.filter.rating", "rating",

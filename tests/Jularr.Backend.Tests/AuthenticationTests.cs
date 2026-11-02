@@ -670,6 +670,8 @@ namespace Jularr.Backend.Tests
 
                 // Tests never reach a provider's image server; a test of covers names its own.
                 builder.Services.AddHttpClient<Jularr.Integrations.Logic.Media.CoverClient>().ConfigurePrimaryHttpMessageHandler(() => new NoImages());
+                // Indexer calls keep their spacing in production; a test does not wait for it.
+                builder.Services.AddSingleton(new Jularr.Integrations.Logic.Newznab.NewznabGate(TimeSpan.Zero));
                 services?.Invoke(builder.Services);
 
                 var app = builder.Build();
@@ -684,7 +686,8 @@ namespace Jularr.Backend.Tests
                     {
                         if (http.GetEndpoint()?.Metadata.GetMetadata<PageActionDescriptor>() is not null)
                         {
-                            http.Response.Headers.CacheControl = "private,no-store";
+                            http.Response.Headers.CacheControl = "no-cache, no-store";
+                            http.Response.Headers.Pragma = "no-cache";
                             await http.RequestServices.GetRequiredService<UiText>().InitializeAsync(http);
                         }
 

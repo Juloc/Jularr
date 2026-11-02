@@ -31,6 +31,9 @@ namespace Jularr.Backend.Service.User.Playback.V1
 
         public bool HasPriority { get; init; }
         public TranscodeEncoding? Encoding { get; init; }
+
+        // The audio runs later (positive) or earlier (negative) than the picture by this many milliseconds.
+        public int AudioOffsetMs { get; init; }
     }
 
     // One demand-driven FFmpeg job per playback session.
@@ -227,6 +230,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 job.Source.CopyVideo, job.Source.CopyAudio, encoding.VideoArguments, encoding.HardwareArguments)
             {
                 AudioKilobits = job.Source.AudioKilobits ?? 192,
+                AudioOffsetMs = job.Source.AudioOffsetMs,
                 MaxHeight = job.Source.MaxHeight,
                 VideoKilobits = job.Source.VideoKilobits,
                 ScaleFilter = encoding.ScaleFilter
@@ -337,6 +341,43 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 && StorageFileSystem.DownloadFilesystemIdentity(parent) == _cacheFilesystemIdentity;
         }
 
+        // What the cache holds. Another session ending removes its folder and files while this counts: what is gone no longer counts, it is no failure.
+        internal static long CacheBytes(string path)
+        {
+            var options = new EnumerationOptions { AttributesToSkip = 0 };
+            long total = 0;
+            var pending = new Stack<string>();
+            pending.Push(path);
+            while (pending.TryPop(out var folder))
+            {
+                try
+                {
+                    foreach (var entry in new DirectoryInfo(folder).EnumerateFileSystemInfos("*", options))
+                    {
+                        if (entry is DirectoryInfo)
+                        {
+                            pending.Push(entry.FullName);
+                        }
+                        else if (entry is FileInfo file)
+                        {
+                            try
+                            {
+                                total += file.Length;
+                            }
+                            catch (FileNotFoundException)
+                            {
+                            }
+                        }
+                    }
+                }
+                catch (DirectoryNotFoundException)
+                {
+                }
+            }
+
+            return total;
+        }
+
         private bool CacheWithinBudget()
         {
             if (_options.MaxTranscodeCacheBytes <= 0 || _options.TranscodeCacheFreeSpaceReserveBytes < 0) return false;
@@ -346,10 +387,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 Directory.CreateDirectory(_options.TranscodeCachePath);
                 var available = StorageFileSystem.AvailableFreeSpace(_options.TranscodeCachePath);
                 if (available is null || available <= _options.TranscodeCacheFreeSpaceReserveBytes) return false;
-                var state = new StorageScanState();
-                var used = StorageFileSystem.EnumerateFiles(_options.TranscodeCachePath, null, state, CancellationToken.None, includeHidden: true)
-                    .Sum(file => file.SizeBytes);
-                return state.IsComplete && used < _options.MaxTranscodeCacheBytes;
+                return CacheBytes(_options.TranscodeCachePath) < _options.MaxTranscodeCacheBytes;
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
             {

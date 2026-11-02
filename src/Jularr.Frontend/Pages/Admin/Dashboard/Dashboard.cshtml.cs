@@ -92,7 +92,7 @@ namespace Jularr.Frontend.Pages.Admin.Dashboard
         {
             var failed = item.OperationStatusTypeId == OperationStatusType.Failed;
             var source = LiveFacts.Join(item.ConnectionName, item.IndexerName);
-            var says = item.ReasonKey is not null && (item.IsWaiting || failed);
+            var says = item.ReasonKey is not null && (item.IsWaiting || failed || item.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running);
             var bar = new Progress().Attribute("max", "100").TextAttribute("aria-label", "live.progress").Class("live-progress__bar").Attribute("data-live-value", "percent");
             return new Div(
                 new Span(new Icon(failed ? "info" : "download", assets, 15)).Class("dashboard-recent__symbol"),
@@ -100,7 +100,7 @@ namespace Jularr.Frontend.Pages.Admin.Dashboard
                     .Class("dashboard-recent__text"),
                 new Div(new Span(new ValueText(LiveEntities.OperationStatus(texts, item.IsWaiting, item.OperationStatusTypeId, says ? null : item.DownloadStateTypeId))).Class("live-progress__phase")
                         .Attribute("data-live-text", "status"),
-                    item.ProgressPercent is { } percent ? bar.Attribute("value", percent.ToString(CultureInfo.InvariantCulture)) : bar.Attribute("hidden", "hidden"))
+                    !says && item.ProgressPercent is { } percent ? bar.Attribute("value", percent.ToString(CultureInfo.InvariantCulture)) : bar.Attribute("hidden", "hidden"))
                     .Class("live-progress dashboard-recent__state").Attribute("data-live", LiveKeys.Operation(item.Id))).Class("dashboard-recent__row");
         }
 

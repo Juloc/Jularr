@@ -189,7 +189,7 @@ internal fun JSONObject.discoverScope(): TvDiscoverScopeV1 = TvDiscoverScopeV1(
 internal fun JSONObject.discoverItem(): TvDiscoverItemV1 = TvDiscoverItemV1(
     mediaTypeId = getInt("mediaTypeId"),
     tmdbId = nullableInt("tmdbId"),
-    workId = nullableLong("workId"),
+    workId = getLong("workId"),
     title = getString("title"),
     releaseYear = nullableInt("releaseYear"),
     overview = nullableString("overview"),
@@ -207,10 +207,11 @@ internal fun JSONObject.discoverCatalogItem(): TvDiscoverCatalogItemV1 = TvDisco
     title = getString("title"),
     releaseYear = nullableInt("releaseYear"),
     author = nullableString("author"),
-    workId = nullableLong("workId"),
+    workId = getLong("workId"),
     posterUrl = nullableString("posterUrl"),
     rating = nullableDouble("rating"),
     mediaStateTypeId = nullableInt("mediaStateTypeId"),
+    seasonNumber = nullableInt("seasonNumber"),
 )
 
 internal fun JSONObject.discoverShelf(): TvDiscoverShelfV1 = TvDiscoverShelfV1(

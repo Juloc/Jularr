@@ -19,7 +19,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: '26'
       - name: Check tracked secrets, credential files and public lab IPs
         run: node scripts/verify-repository-hygiene.mjs
       - name: Verify hygiene test cases

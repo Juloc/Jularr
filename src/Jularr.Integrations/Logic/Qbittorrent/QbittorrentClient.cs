@@ -156,6 +156,36 @@ namespace Jularr.Integrations.Logic.Qbittorrent
             if (!response.IsSuccessStatusCode) throw new QbittorrentException("The torrent client did not change the torrent.");
         }
 
+        // The torrent goes first in the client's queue (only while the client queues torrents; otherwise it already runs).
+        public async Task MoveToTopAsync(QbittorrentConnection connection, string hash, CancellationToken ct)
+        {
+            var session = await LoginAsync(connection, ct);
+            if (session is null) throw new QbittorrentException("The torrent client did not accept the login.");
+            using var response = await SendAsync(connection, session, HttpMethod.Post, "/api/v2/torrents/topPrio", [new("hashes", hash)], ct);
+
+            // 409: the client does not queue torrents, so there is no order to change.
+            if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.Conflict) throw new QbittorrentException("The torrent client did not move the torrent.");
+        }
+
+        // The client's own download limit in bytes per second; 0 is none.
+        public async Task<long> GetDownloadLimitAsync(QbittorrentConnection connection, CancellationToken ct)
+        {
+            var session = await LoginAsync(connection, ct);
+            if (session is null) throw new QbittorrentException("The torrent client did not accept the login.");
+            using var response = await SendAsync(connection, session, HttpMethod.Get, "/api/v2/transfer/downloadLimit", null, ct);
+            if (!response.IsSuccessStatusCode) throw new QbittorrentException("The torrent client did not answer its download limit.");
+            return long.TryParse((await response.Content.ReadAsStringAsync(ct)).Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var limit) ? limit : 0;
+        }
+
+        public async Task SetDownloadLimitAsync(QbittorrentConnection connection, long bytesPerSecond, CancellationToken ct)
+        {
+            var session = await LoginAsync(connection, ct);
+            if (session is null) throw new QbittorrentException("The torrent client did not accept the login.");
+            using var response = await SendAsync(connection, session, HttpMethod.Post, "/api/v2/transfer/setDownloadLimit",
+                [new("limit", Math.Max(0, bytesPerSecond).ToString(System.Globalization.CultureInfo.InvariantCulture))], ct);
+            if (!response.IsSuccessStatusCode) throw new QbittorrentException("The torrent client did not take the download limit.");
+        }
+
         // The session cookie of a successful login; null when the client refuses the account.
         private async Task<string?> LoginAsync(QbittorrentConnection connection, CancellationToken ct)
         {

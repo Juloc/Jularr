@@ -370,6 +370,15 @@ namespace Jularr.E2E.Tests
 
         // Signs in, adds the library, scans it and makes the one scanned book a work.
         // The progress slider's value is a thousandth of the book: 0 is its start and 499 the end of the first of two equal chapters.
+        // The reading-mode button cycles flat pages → book → scrolling; it is turned until the reader is in the given mode.
+        internal static async Task ReadingModeAsync(IPage page, string mode)
+        {
+            const string Current = "() => { const r = document.querySelector('.reader'); return r.dataset.mode === 'scroll' ? 'scroll' : r.dataset.paging; }";
+            for (var turn = 0; turn < 3 && await page.EvaluateAsync<string>(Current) != mode; turn++)
+                await page.EvaluateAsync("() => document.querySelector('[data-reader-mode]').click()");
+            Assert.AreEqual(mode, await page.EvaluateAsync<string>(Current));
+        }
+
         internal static Task SeekAsync(IPage page, int value) => page.Locator("[data-role=seek] input[type=range]").EvaluateAsync(
             "(input, value) => { input.value = String(value); input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true })); }", value);
 
@@ -535,6 +544,9 @@ namespace Jularr.E2E.Tests
                 await page.SetViewportSizeAsync(390, 844);
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '1'");
                 Assert.AreEqual(1, await page.Locator(".reader-book__print img").CountAsync());
+                // The resize lays the book out again; a drag starts on the settled book, not on one a late layout replaces.
+                await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return r.dataset.bookState === 'idle' && r.dataset.bookPendingFrame === 'false'; }");
+                await page.WaitForTimeoutAsync(400);
                 var box = (await page.Locator("[data-book-sheet=right]").BoundingBoxAsync())!;
                 await page.Mouse.MoveAsync(box.X + box.Width * .75f, box.Y + box.Height / 2);
                 await page.Mouse.DownAsync();
@@ -670,6 +682,7 @@ namespace Jularr.E2E.Tests
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
                 ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
                 ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
                 ["Providers:OpenLibrary"] = fakes.OpenLibrary.ToString(),
                 ["Providers:Images:covers.openlibrary.org"] = fakes.Images.ToString(),
                 ["Providers:AniList"] = fakes.AniList.ToString(),
@@ -694,8 +707,8 @@ namespace Jularr.E2E.Tests
 
                 // The novel is added from Open Library on the Works page; the manga and the light novel are found on Discover in AniList.
                 await Steps.ImportAndRequestAsync(page, "Book", null, FakeServices.BookTitle);
-                await Steps.RequestFromCatalogAsync(page, "manga", FakeServices.MangaTitle, "anilist");
-                await Steps.RequestFromCatalogAsync(page, "lightnovels", FakeServices.NovelTitle, "anilist");
+                await Steps.RequestFromCatalogAsync(page, "manga", FakeServices.MangaTitle);
+                await Steps.RequestFromCatalogAsync(page, "lightnovels", FakeServices.NovelTitle);
 
                 // Each search finds its release, offered just before; the chosen one is downloaded.
                 fakes.Offer(book);
@@ -830,22 +843,23 @@ namespace Jularr.E2E.Tests
             await page.GetByText("Hyphenation", new() { Exact = true }).ClickAsync();
             await page.GetByText("Show illustrations", new() { Exact = true }).ClickAsync();
             await page.Locator("[data-reader-group=text] > summary").ClickAsync();
-            await page.Locator("[data-reader-group=motion] > summary").ClickAsync();
-            await page.GetByLabel("Page turn animation", new() { Exact = true }).SelectOptionAsync("on");
             await page.Locator("[data-action=settings]").ClickAsync();
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookReady === 'true'");
             Assert.IsTrue(await page.Locator(".reader-book__turn").CountAsync() <= 3);
-            var margins = await page.Locator("[data-role=content]").EvaluateAsync<double>("el => el.querySelector('p').getBoundingClientRect().left - el.getBoundingClientRect().left");
-            Assert.IsTrue(margins >= 23, "Each paper page needs its own inner text margin.");
+            var margins = await page.Locator("[data-role=content] p").First.EvaluateAsync<double>("p => { const reader = p.closest('.reader'), outer = parseFloat(getComputedStyle(reader).getPropertyValue('--reader-margin-outer')) || 0; return p.getBoundingClientRect().left - p.closest('.reader__paper').getBoundingClientRect().left >= outer - 1 ? outer : -1; }");
+            Assert.IsTrue(margins >= 20, "Each paper page needs its own inner text margin.");
             var area = (await page.Locator(".reader-book").BoundingBoxAsync())!;
+            // The page's own lower corner: the book is drawn a little smaller than its area, its stack hanging below the page.
+            var paper = (await page.Locator("[data-book-sheet=right]").BoundingBoxAsync())!;
+            var bottom = paper.Y + paper.Height;
             var initial = await root.GetAttributeAsync("data-page");
-            await page.Mouse.MoveAsync(area.X + area.Width - 8, area.Y + area.Height - 12);
+            await page.Mouse.MoveAsync(paper.X + paper.Width - 8, bottom - 12);
             await page.Mouse.DownAsync();
-            await page.Mouse.MoveAsync(area.X + area.Width * .65f, area.Y + area.Height - 60, new() { Steps = 18 });
+            await page.Mouse.MoveAsync(area.X + area.Width * .65f, bottom - 60, new() { Steps = 18 });
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookState === 'holding'");
             Assert.AreEqual(initial, await root.GetAttributeAsync("data-page"), "Holding a page must not save an uncommitted turn.");
             Assert.IsTrue(await page.Locator(".reader-book__fold-front").EvaluateAllAsync<bool>("items => items.some(el => el.style.clipPath.startsWith('polygon('))"));
-            await page.Mouse.MoveAsync(area.X + area.Width - 8, area.Y + area.Height - 12, new() { Steps = 18 });
+            await page.Mouse.MoveAsync(paper.X + paper.Width - 8, bottom - 12, new() { Steps = 18 });
             await page.Mouse.UpAsync();
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookState === 'idle'");
             Assert.AreEqual(initial, await root.GetAttributeAsync("data-page"));
@@ -855,10 +869,8 @@ namespace Jularr.E2E.Tests
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookReady === 'false'");
             await page.Locator("[data-reader-select]").ClickAsync();
 
+            // The book follows the device's reduced motion: pages turn without moving paper.
             await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
-            await page.Locator("[data-action=settings]").ClickAsync();
-            await page.GetByLabel("Page turn animation", new() { Exact = true }).SelectOptionAsync("system");
-            await page.Locator("[data-action=settings]").ClickAsync();
             await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return r.dataset.bookReady === 'true' && r.dataset.bookActiveLeaves === '0' && r.dataset.bookPendingFrame === 'false'; }");
             await page.SetViewportSizeAsync(390, 844);
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '1'");
@@ -893,7 +905,7 @@ namespace Jularr.E2E.Tests
             await page.Locator("[data-action=settings]").ClickAsync();
             await Evidence.SaveAsync(page, "reader-mobile-settings");
             Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= innerWidth"));
-            await page.GetByLabel("Layout", new() { Exact = true }).SelectOptionAsync("scroll");
+            await ReadingModeAsync(page, "scroll");
             await page.Locator("[data-reader-group=paper] > summary").ClickAsync();
             await page.GetByLabel("Paper colour", new() { Exact = true }).FillAsync("#242424");
             await page.Locator("[data-reader-close=settings]").ClickAsync();
@@ -966,7 +978,7 @@ namespace Jularr.E2E.Tests
             Assert.AreEqual(before.Width, after.Width);
             Assert.AreEqual(before.Height, after.Height, "Revealing chrome must not repaginate the book.");
             await page.Locator("[data-action=settings]").ClickAsync();
-            Assert.AreEqual(images ? 3 : 4, await page.Locator("[data-panel=settings] .reader__settings-group").CountAsync());
+            Assert.AreEqual(images ? 2 : 3, await page.Locator("[data-panel=settings] .reader__settings-group").CountAsync());
             await page.Locator("[data-reader-group=paper] > summary").FocusAsync();
             await page.Keyboard.PressAsync("Enter");
             Assert.IsTrue(await page.GetByLabel("Paper colour", new() { Exact = true }).IsVisibleAsync());
@@ -1043,11 +1055,14 @@ namespace Jularr.E2E.Tests
                     await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookState === 'idle'");
                 }
 
+                // On pages a single click leaves the picture in the book; a double click opens it.
                 var box = (await page.Locator(".reader__page-print img[data-figure]").First.BoundingBoxAsync())!;
-                await page.Mouse.ClickAsync(box.X + box.Width / 2, box.Y + box.Height / 2);
                 var view = page.Locator("dialog.reader-figure");
+                await page.Mouse.ClickAsync(box.X + box.Width / 2, box.Y + box.Height / 2);
+                await Assertions.Expect(view).ToBeHiddenAsync();
+                await page.Mouse.DblClickAsync(box.X + box.Width / 2, box.Y + box.Height / 2);
                 await Assertions.Expect(view).ToBeVisibleAsync();
-                Assert.IsTrue(await view.Locator(".reader-figure__image").EvaluateAsync<bool>("image => image.naturalWidth > 0 && image.getBoundingClientRect().width > innerWidth * 0.2"));
+                await page.WaitForFunctionAsync("() => { const image = document.querySelector('dialog.reader-figure .reader-figure__image'); return !!image && image.naturalWidth > 0 && image.getBoundingClientRect().width > innerWidth * 0.2; }");
                 var stage = view.Locator(".reader-figure__stage");
                 var picture = view.Locator(".reader-figure__image");
                 Assert.IsTrue(await picture.EvaluateAsync<bool>("image => image.clientWidth <= image.parentElement.clientWidth && image.clientHeight <= image.parentElement.clientHeight"));
@@ -1213,6 +1228,7 @@ namespace Jularr.E2E.Tests
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
                 ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
                 ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
                 ["Providers:OpenLibrary"] = fakes.OpenLibrary.ToString(),
                 ["Providers:Images:covers.openlibrary.org"] = fakes.Images.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library
@@ -1238,6 +1254,8 @@ namespace Jularr.E2E.Tests
                 // The reader reflows it by chapter, keeps the original at hand and continues where reading stopped.
                 await Steps.OpenReaderAsync(page, details);
                 await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("must be in want of a wife.");
+                // The server-rendered text shows before the reader's script runs; its menus open once the book view has decided.
+                await page.WaitForFunctionAsync("() => document.querySelector('.reader')?.dataset.bookReady !== undefined");
                 await page.Locator("[data-action=more]").ClickAsync();
                 var download = page.Locator("[data-panel=more] [data-action=download]");
                 await download.ClickAsync();

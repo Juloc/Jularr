@@ -25,7 +25,7 @@
         &[data-paper-edge="aged"] { --edge-wash: 1.4; --edge-line: .3; }
     &__body {
         position: absolute; top: 0; left: calc(100% - 200% / var(--columns)); width: calc(200% / var(--columns)); height: 100%;
-        transform: scale(var(--book-scale)); transform-origin: center 65%;
+        transform: scale(var(--book-scale)); transform-origin: center 0;
     }
     &__body--overlay { z-index: 2; transform-style: flat; pointer-events: none; }
     &__solid { position: absolute; inset: 0; pointer-events: none;

@@ -50,6 +50,22 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField GroupName = new() { MaximumLength = 128, AllowBlank = false, Trim = true };
     }
 
+    public static class ReleaseGroupFields
+    {
+        public static readonly LongField Id = new() { Minimum = 1 };
+        public static readonly StringField Name = new() { MaximumLength = 64, AllowBlank = false, Trim = true };
+        public static readonly StringField Search = new() { MaximumLength = 64, Required = false, Trim = true };
+        public static readonly StringArrayField Names = new() { MaximumLength = 200, ItemMaximumLength = 64 };
+        public static readonly EnumField Rating = new(typeof(ReleaseGroupRating)) { Required = false };
+        public static readonly IntField Count = new() { Minimum = 0 };
+        public static readonly DateTimeField LastSeenAt = new() { Required = false };
+        public static readonly DateTimeField SeenAt = new();
+
+        // A profile's points for a group rated good (plus) or bad (minus).
+        public static readonly IntField GoodScore = new() { Minimum = 0, Maximum = 1000000 };
+        public static readonly IntField BadScore = new() { Minimum = -1000000, Maximum = 0 };
+    }
+
     public static class AcquisitionTagFields
     {
         public static readonly LongField Id = new() { Minimum = 1 };

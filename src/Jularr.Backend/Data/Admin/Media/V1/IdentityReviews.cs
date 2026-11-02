@@ -19,8 +19,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     // A Work whose AniList match waits for a person, with its candidates.
     public sealed class IdentityReviewV1 : BaseResponse
     {
-        public IdentityReviewV1(long workId, string canonicalTitle, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, int[] candidateIds, string[] candidateLabels)
+        public IdentityReviewV1(long workId, string canonicalTitle, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, int[] candidateIds, string[] candidateLabels, bool isWebNovel)
         {
+            IsWebNovel = isWebNovel;
             WorkId = workId;
             CanonicalTitle = canonicalTitle;
             MediaTypeId = mediaTypeId;
@@ -44,9 +45,13 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.CandidateIds))]
         public int[] CandidateIds { get; }
 
-        // Title, year and format of each candidate, in the same order.
+        // Title, year and format of each candidate, in the same order; for a web novel also the Japanese title and writer.
         [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.CandidateLabels))]
         public string[] CandidateLabels { get; }
+
+        // A Narō web novel: accepting an entry gives it the entry's titles, never the entry itself.
+        [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.IsWebNovel))]
+        public bool IsWebNovel { get; }
     }
 
     public sealed class IdentityReviewParametersV1 : BaseParameters

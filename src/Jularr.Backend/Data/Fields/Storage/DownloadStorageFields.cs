@@ -2,6 +2,7 @@ namespace Jularr.Backend.Data.Fields.Storage
 {
     public static class DownloadStorageFields
     {
+        public static readonly LongField MaxBytesPerSecond = new() { Minimum = 1, Required = false };
         public static readonly LongField ConfiguredJobLimitBytes = new() { Required = false, Minimum = 1 };
         public static readonly EnumField DownloadStorageAreaId = new(typeof(Enums.Storage.DownloadStorageArea));
         public static readonly LongField FreeSpaceReserveBytes = new() { Minimum = 0 };

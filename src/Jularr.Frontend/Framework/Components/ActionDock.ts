@@ -26,3 +26,10 @@ export function update(dock: HTMLElement | null, boxes: ArrayLike<{ checked: boo
     const label = dock.querySelector<HTMLElement>('[data-dock-count]');
     if (label?.dataset.format) label.textContent = label.dataset.format.replace('{0}', String(count));
 }
+
+// Shift and a click choose the rows between the box clicked before and this one as this one now is: the positions from one to the other, both included.
+export function rangeBetween(from: number, to: number): number[] {
+    if (from < 0 || to < 0) return [];
+    const start = Math.min(from, to);
+    return Array.from({ length: Math.abs(to - from) + 1 }, (_, index) => start + index);
+}

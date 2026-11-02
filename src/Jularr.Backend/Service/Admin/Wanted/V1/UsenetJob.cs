@@ -58,9 +58,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private readonly UsenetDownloader _downloader;
         private readonly ArchiveTools _tools;
         private readonly IDataProtector _protector;
+        private readonly DownloadSpeeds _speeds;
 
-        public UsenetJob(UsenetDownloader downloader, ArchiveTools tools, IDataProtectionProvider protection)
+        public UsenetJob(UsenetDownloader downloader, ArchiveTools tools, IDataProtectionProvider protection, DownloadSpeeds speeds)
         {
+            _speeds = speeds;
             _downloader = downloader;
             _tools = tools;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
@@ -102,17 +104,21 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var finished = state.Select(line => line.TrimStart('!')).ToHashSet(StringComparer.Ordinal);
             var directory = Directory.CreateDirectory(Path.Combine(staging, FilesFolder)).FullName;
             maximumJobBytes = Math.Min(maximumJobBytes, paths.MaximumArticleBytes(directory));
+            // The workspace's speed limit holds every job of the downloader back together; the pass tells the news server's figures.
             UsenetProgress progress;
+            _speeds.Usenet.BytesPerSecond = settings.MaxBytesPerSecond ?? 0;
+            var started = global::System.Diagnostics.Stopwatch.GetTimestamp();
             try
             {
                 progress = await _downloader.DownloadAsync(Server(server), files, directory, finished, until, maximumJobBytes, ct, settings.FreeSpaceReserveBytes!.Value,
-                    bytes => paths.ReserveWrite(operationId, directory, bytes));
+                    bytes => paths.ReserveWrite(operationId, directory, bytes), _speeds.Usenet.WaitAsync);
             }
             catch (UsenetStorageBudgetException)
             {
                 return new UsenetPassResult(UsenetPassState.Waiting, 0, announced, 0, "usenet_disk_budget", progressed: false);
             }
 
+            _speeds.RecordServer(server.Id, progress.Sessions, progress.DownloadedBytes, global::System.Diagnostics.Stopwatch.GetElapsedTime(started), progress.Done.Count + progress.Damaged.Count, progress.Damaged.Count);
             await File.AppendAllLinesAsync(statePath, [.. progress.Done, .. progress.Damaged.Select(id => "!" + id)], ct);
             finished.UnionWith(progress.Done);
             finished.UnionWith(progress.Damaged);

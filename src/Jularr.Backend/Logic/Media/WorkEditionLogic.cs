@@ -70,7 +70,8 @@ namespace Jularr.Backend.Logic.Media
                     "WorkEditions" AS edition
                 WHERE
                     edition."Id" = identity."WorkEditionId"
-                    AND edition."WorkId" = @Id;
+                    AND edition."WorkId" = @Id
+                    AND (edition."LanguageCode" IS NOT NULL OR edition."EditionFormatId" IS NOT NULL);
 
                 INSERT INTO
                     "WorkEditionExternalIdentities" ("WorkEditionId", "Namespace", "Value")
@@ -83,6 +84,26 @@ namespace Jularr.Backend.Logic.Media
                     JOIN "WorkEditions" AS edition ON edition."WorkId" = @Id AND edition."Name" IS NULL AND edition."LanguageCode" = item."LanguageCode"
                         AND edition."EditionFormatId" = item."EditionFormatId"
                     CROSS JOIN LATERAL jsonb_to_recordset(item."Identities") AS identity ("Namespace" text, "Value" text)
+                ON CONFLICT DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // A list's ISBN names an edition whose language/format are unknown. Do not guess either or overwrite catalog editions.
+        public static async Task SaveManualBookIsbnAsync(this LogicContext ctx, WorkIdentityData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH edition AS (
+                    INSERT INTO "WorkEditions" ("WorkId", "Title", "ReleaseYear")
+                    SELECT work."Id", work."CanonicalTitle", work."ReleaseYear" FROM "Works" AS work WHERE work."Id" = @WorkId
+                    ON CONFLICT ("WorkId", "Name", "LanguageCode", "EditionFormatId") DO UPDATE SET "WorkId" = EXCLUDED."WorkId"
+                    RETURNING "Id"
+                )
+                INSERT INTO "WorkEditionExternalIdentities" ("WorkEditionId", "Namespace", "Value")
+                SELECT "Id", @Namespace, @Value FROM edition
                 ON CONFLICT DO NOTHING;
                 """;
             sql.Parameters.Add(data);

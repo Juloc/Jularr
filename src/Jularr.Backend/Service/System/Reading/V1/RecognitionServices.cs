@@ -9,7 +9,9 @@ using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.User.Reading.V1;
 using Jularr.Integrations.Data.Nas;
+using Jularr.Integrations.Logic.Pdf;
 using Jularr.Integrations.Logic.Storage;
+using SkiaSharp;
 using UglyToad.PdfPig;
 
 namespace Jularr.Backend.Service.System.Reading.V1
@@ -159,13 +161,22 @@ namespace Jularr.Backend.Service.System.Reading.V1
         }
 
         // The next pages in order, until the slice is full or its time is up; answers whether every page of the PDF has been read.
-        private async Task<bool> ReadSliceAsync(ReadingSourceData source, ReadingRecognitionQueueData queued, Func<byte[], int, Jularr.Integrations.Logic.Ocr.OcrPage> recognize)
+        private async Task<bool> ReadSliceAsync(ReadingSourceData source, ReadingRecognitionQueueData queued, Func<SKBitmap, Jularr.Integrations.Logic.Ocr.OcrPage> recognize)
         {
-            Stream file;
+            // PDFium draws the pages from the file's bytes, PdfPig tells which pages are scans.
+            if (source.SizeBytes > PdfBook.MaximumRenderBytes)
+            {
+                throw new InvalidDataException("The PDF is too large to draw.");
+            }
+
+            byte[] bytes;
             try
             {
                 var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(source.StorageMountId, ct), CancellationToken);
-                file = await _storage.Open(mount).OpenReadAsync(StoragePath.Combine(source.RootRelativePath, source.RelativePath), CancellationToken);
+                await using var file = await _storage.Open(mount).OpenReadAsync(StoragePath.Combine(source.RootRelativePath, source.RelativePath), CancellationToken);
+                using var copy = new MemoryStream();
+                await file.CopyToAsync(copy, CancellationToken);
+                bytes = copy.ToArray();
             }
             catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
             {
@@ -173,12 +184,12 @@ namespace Jularr.Backend.Service.System.Reading.V1
                 throw new ServiceUnavailableException("reading_unavailable");
             }
 
-            await using (file)
+            using (var rendering = PdfRendering.Open(bytes))
             {
                 PdfDocument pdf;
                 try
                 {
-                    pdf = PdfDocument.Open(file);
+                    pdf = PdfDocument.Open(bytes);
                 }
                 catch (Exception exception) when (exception is UglyToad.PdfPig.Core.PdfDocumentFormatException or ArgumentException or InvalidOperationException or NotSupportedException or IndexOutOfRangeException)
                 {
@@ -231,7 +242,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
                         RecognizedPage found;
                         try
                         {
-                            found = await Task.Run(() => PdfScanPages.Read(pdf.GetPage(number), recognize), CancellationToken);
+                            found = await Task.Run(() => PdfScanPages.Read(pdf.GetPage(number), rendering, recognize), CancellationToken);
                         }
                         catch (Exception exception) when (exception is UglyToad.PdfPig.Core.PdfDocumentFormatException or ArgumentException or InvalidOperationException or NotSupportedException
                             or IndexOutOfRangeException or KeyNotFoundException or NullReferenceException or InvalidCastException)

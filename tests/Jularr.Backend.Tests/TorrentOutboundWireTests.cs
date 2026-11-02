@@ -21,12 +21,12 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task ExtensionHandshake_IsBlockedBeforeWriting()
+        public async Task FastExtensionHandshake_IsBlockedBeforeWriting()
         {
             var handshake = new byte[68];
             handshake[0] = 19;
             Encoding.ASCII.GetBytes("BitTorrent protocol").CopyTo(handshake, 1);
-            handshake[25] = 0x10; // BEP10 extension protocol.
+            handshake[27] = 0x04; // BEP6 fast extension; only the BEP10 bit alone may be announced.
             await using var outbound = new MemoryStream();
 
             await Assert.ThrowsExactlyAsync<InvalidDataException>(() => TorrentOutboundWire.SendHandshakeAsync(outbound, handshake, CancellationToken.None));

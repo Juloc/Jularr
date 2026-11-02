@@ -86,6 +86,8 @@ fun TvAnimeScreen(
     onOpenCredits: (() -> Unit)? = null,
     specialEpisodes: List<TvWorkEpisodeV1> = emptyList(),
     onPlaySpecialEpisode: (TvWorkEpisodeV1) -> Unit = {},
+    initialSeason: Int? = null,
+    requestContent: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val accent = remember(context) { TvPlayerDesignLoader.load(context).accent }
@@ -94,7 +96,8 @@ fun TvAnimeScreen(
     val chapters = anime.seasons.sortedBy { it.number }
     var selectedSeason by remember(anime.id) {
         mutableStateOf(
-            focusMemory.recall("anime-season:${anime.id}")?.toIntOrNull()
+            initialSeason?.takeIf { value -> chapters.any { it.number == value } }
+                ?: focusMemory.recall("anime-season:${anime.id}")?.toIntOrNull()
                 ?.takeIf { value -> chapters.any { it.number == value } }
                 ?: chapters.firstOrNull { it.number > 0 }?.number
                 ?: chapters.firstOrNull()?.number,
@@ -282,6 +285,10 @@ fun TvAnimeScreen(
                     }
                 }
             }
+        }
+
+        if (requestContent != null) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "request") { requestContent() }
         }
 
         if (chapters.isNotEmpty()) {

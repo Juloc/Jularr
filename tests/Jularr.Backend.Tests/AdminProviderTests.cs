@@ -63,10 +63,49 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Providers\" WHERE \"Key\" = 'plex' AND \"ProtectedSecret\" IS NOT NULL"));
         }
 
+        [TestMethod]
+        [DataRow(true)]
+        [DataRow(false)]
+        public async Task PlexSignIn_Read_ListsTheLastKnownLibrariesWithoutAskingTheServer(bool listed)
+        {
+            var requests = new PinServer();
+            await using var host = await Host.CreateAsync(media: true, services: services => services.AddHttpClient<PlexServerClient>().ConfigurePrimaryHttpMessageHandler(() => requests));
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            using var started = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/providers/plex/pin", new SavePlexServerDataV1("http://pin-server.example.test:32400", null));
+            var attempt = (await started.Content.ReadFromJsonAsync<StartPlexResultV1>())!;
+            using var completed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/providers/plex/pin/" + attempt.AuthChallengePublicId);
+            Assert.AreEqual(HttpStatusCode.OK, completed.StatusCode, await completed.Content.ReadAsStringAsync());
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/plex/sign-in", new SavePlexSignInDataV1(true, true, true, ["7"]));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            if (!listed)
+            {
+                host.Services.GetRequiredService<PlexLibraries>().Keep([]);
+            }
+
+            // Opening the page reads what is stored; a server that is slow or gone costs it nothing.
+            var before = requests.Count;
+            for (var open = 0; open < 2; open++)
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/providers/plex/sign-in");
+                var settings = (await response.Content.ReadFromJsonAsync<PlexSignInV1>())!;
+                CollectionAssert.AreEqual(new[] { "7" }, settings.RegistrationSections);
+                CollectionAssert.AreEqual(new[] { "7" }, settings.SectionKeys);
+                CollectionAssert.AreEqual(new[] { listed ? "Movies" : "7" }, settings.SectionTitles);
+            }
+
+            Assert.AreEqual(before, requests.Count);
+        }
+
         private sealed class PinServer : HttpMessageHandler
         {
+            private int _count;
+
+            public int Count => Volatile.Read(ref _count);
+
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
+                Interlocked.Increment(ref _count);
                 Assert.AreEqual("pin-server.example.test", request.RequestUri!.Host);
                 Assert.AreEqual("verified-plex-token", request.Headers.GetValues("X-Plex-Token").Single());
                 object data = request.RequestUri.AbsolutePath == "/identity"

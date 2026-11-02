@@ -99,8 +99,15 @@ namespace Jularr.Backend.Logic.Instance
                     'tmdb',
                     TRUE
                 WHERE
-                    EXISTS (SELECT 1 FROM "MediaTypes" AS type WHERE type."Key" IN ('Movie', 'Series') AND type."IsEnabled")
+                    EXISTS (SELECT 1 FROM "MediaTypes" AS type WHERE type."Key" = 'Movie' AND type."IsEnabled")
                     AND NOT EXISTS (SELECT 1 FROM "Providers" AS provider WHERE provider."Key" = 'tmdb' AND provider."IsEnabled" AND provider."ProtectedSecret" IS NOT NULL)
+                UNION ALL
+                SELECT
+                    'tvdb',
+                    TRUE
+                WHERE
+                    EXISTS (SELECT 1 FROM "MediaTypes" AS type WHERE type."Key" = 'Series' AND type."IsEnabled")
+                    AND NOT EXISTS (SELECT 1 FROM "Providers" AS provider WHERE provider."Key" = 'tvdb' AND provider."IsEnabled" AND provider."ProtectedSecret" IS NOT NULL)
                 UNION ALL
                 SELECT
                     'indexer',
@@ -135,7 +142,7 @@ namespace Jularr.Backend.Logic.Instance
                     )
                 UNION ALL
                 SELECT
-                    'downloadStorage.' || CASE WHEN settings."DownloadStorageAreaId" = 1 THEN 'Usenet' ELSE 'Direct' END,
+                    'downloadStorage.' || CASE settings."DownloadStorageAreaId" WHEN 1 THEN 'Usenet' WHEN 2 THEN 'Direct' ELSE 'Torrent' END,
                     TRUE
                 FROM
                     "DownloadStorageSettings" AS settings
@@ -149,8 +156,9 @@ namespace Jularr.Backend.Logic.Instance
                             "AcquisitionConnections" AS connection
                         WHERE
                             connection."IsEnabled"
-                            AND CASE WHEN settings."DownloadStorageAreaId" = 1 THEN connection."AcquisitionConnectionTypeId" = 6
-                                ELSE connection."AcquisitionConnectionTypeId" IN (3, 4, 5) END
+                            AND CASE settings."DownloadStorageAreaId" WHEN 1 THEN connection."AcquisitionConnectionTypeId" = 6
+                                WHEN 2 THEN connection."AcquisitionConnectionTypeId" IN (3, 4, 5)
+                                ELSE connection."AcquisitionConnectionTypeId" = 12 END
                     )
                 UNION ALL
                 -- No basic function chosen: nothing of Jularr is switched on.

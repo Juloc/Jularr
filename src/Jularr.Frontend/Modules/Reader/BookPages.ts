@@ -1,11 +1,13 @@
 import { paperPageCount } from './PaperMeasure';
 import { readBookPageCounts, writeBookPageCounts } from './BookPageCache';
+import { readerLifetime } from './Lifetime';
 
 interface Layout { width: number; height: number; columns: number; gap: number; pages: number; rtl: boolean }
 const MaximumBytes = 2 * 1024 * 1024;
 
 // One additional chapter, one request and one inert ruler. Only numeric counts survive a job.
 export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
+    const signal = readerLifetime();
     const section = Number(reader.dataset.section), sections = Number(reader.dataset.sections);
     const status = reader.querySelector<HTMLElement>('[data-role=book-pages]')!;
     const measurement = document.createElement('div');
@@ -22,6 +24,25 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
     let cachePending = false, cacheTimer = 0;
     let running = false, failed = false, disposed = false, suspended = false, busyUntil = performance.now() + 450;
     let timer = 0, idle = 0, request: AbortController | undefined;
+    // The last complete count of this book, kept synchronously with its layout key: the next chapter of the same layout is
+    // counted at once, before the first paint, so page numbers and the book's thickness never fall back while pages turn.
+    // The drawn thickness keeps it even while a new layout is counted: it only needs to look right, never to be exact.
+    const thicknessKey = 'jularr.reader.thickness:' + reader.dataset.sectionsUrl;
+    let rememberedCounts = '', remembered: { key: string; counts: number[] } | undefined;
+    const thickness = (values: number[]): void => {
+        const total = values.reduce((sum, value) => sum + value, 0), before = values.slice(0, section).reduce((sum, value) => sum + value, 0);
+        if (reader.dataset.bookThickPages !== String(total)) reader.dataset.bookThickPages = String(total);
+        if (reader.dataset.bookThickBefore !== String(before)) reader.dataset.bookThickBefore = String(before);
+    };
+    try {
+        const stored: unknown = JSON.parse(localStorage.getItem(thicknessKey) ?? 'null');
+        const values: unknown = stored && typeof stored === 'object' && 'counts' in stored ? stored.counts : undefined;
+        if (stored && typeof stored === 'object' && 'key' in stored && typeof stored.key === 'string' && Array.isArray(values) && values.length === sections
+            && values.every(value => Number.isSafeInteger(value) && value > 0)) {
+            remembered = { key: stored.key, counts: values as number[] };
+            thickness(remembered.counts);
+        }
+    } catch { /* Without storage the book shows its thickness once counted. */ }
     const clearTotal = () => {
         delete reader.dataset.bookPageCount;
         delete reader.dataset.bookPageBefore;
@@ -70,6 +91,12 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
         if (key && reader.dataset.documentRevision && savedKey !== key) {
             savedKey = key;
             void writeBookPageCounts(key, counts as number[]);
+        }
+        const complete = JSON.stringify({ key, counts });
+        if (key && complete !== rememberedCounts) {
+            rememberedCounts = complete; thickness(counts as number[]);
+            remembered = { key, counts: counts as number[] };
+            try { localStorage.setItem(thicknessKey, complete); } catch { /* Storage is optional. */ }
         }
         return true;
     };
@@ -168,19 +195,20 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
         schedule();
     };
     reader.addEventListener('pointerdown', event => { pointers.add(event.pointerId); interact(); }, { passive: true });
-    window.addEventListener('pointerup', event => { if (pointers.delete(event.pointerId)) interact(); }, { passive: true });
-    window.addEventListener('pointercancel', event => { if (pointers.delete(event.pointerId)) interact(); }, { passive: true });
+    window.addEventListener('pointerup', event => { if (pointers.delete(event.pointerId)) interact(); }, { passive: true, signal });
+    window.addEventListener('pointercancel', event => { if (pointers.delete(event.pointerId)) interact(); }, { passive: true, signal });
     reader.addEventListener('pointermove', event => { if (pointers.has(event.pointerId)) interact(); }, { passive: true });
     reader.addEventListener('wheel', interact, { passive: true });
     reader.addEventListener('keydown', interact, { passive: true });
     reader.addEventListener('input', interact, { passive: true });
-    document.addEventListener('visibilitychange', () => { cancel(); schedule(); });
-    window.addEventListener('blur', () => { pointers.clear(); interact(); });
+    document.addEventListener('visibilitychange', () => { cancel(); schedule(); }, { signal });
+    window.addEventListener('blur', () => { pointers.clear(); interact(); }, { signal });
     window.addEventListener('pagehide', event => {
         suspended = true; cancel();
         if (!event.persisted) { disposed = true; measurement.remove(); }
-    });
-    window.addEventListener('pageshow', event => { if (event.persisted) { suspended = false; cachePending = false; schedule(); } });
+    }, { signal });
+    window.addEventListener('pageshow', event => { if (event.persisted) { suspended = false; cachePending = false; schedule(); } }, { signal });
+    signal.addEventListener('abort', () => { suspended = true; disposed = true; cancel(); measurement.remove(); });
     const update = (next: Layout): void => {
         const chosen = reader.querySelector<HTMLElement>('[data-language-choice][aria-pressed=true]')?.dataset.languageChoice ?? reader.dataset.readingLanguage;
         const original = reader.dataset.language?.toLowerCase().split(/[-_]/)[0];
@@ -201,9 +229,15 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
             return;
         }
         const style = getComputedStyle(content);
-        const nextKey = JSON.stringify(['book-page-layout-v3', reader.dataset.sectionsUrl, reader.dataset.documentRevision, sections, next.width, next.height, next.columns, next.gap, next.rtl, style.font, style.letterSpacing,
-            style.getPropertyValue('--reader-text-width'), style.getPropertyValue('--reader-paragraph'), reader.dataset.indent, reader.dataset.hyphenation, reader.dataset.illustrations, document.documentElement.lang]);
-        if (key !== nextKey) {
+        const nextKey = JSON.stringify(['book-page-layout-v4', reader.dataset.sectionsUrl, reader.dataset.documentRevision, sections, next.width, next.height, next.columns, next.gap, next.rtl, style.font, style.letterSpacing,
+            style.getPropertyValue('--reader-text-width'), style.getPropertyValue('--reader-paragraph'),
+            style.getPropertyValue('--reader-margin-top'), style.getPropertyValue('--reader-margin-bottom'), style.getPropertyValue('--reader-margin-outer'), style.getPropertyValue('--reader-margin-inner'), reader.dataset.indent, reader.dataset.hyphenation, reader.dataset.illustrations, document.documentElement.lang]);
+        if (key !== nextKey && remembered?.key === nextKey) {
+            // Same layout as the last complete count: take it at once; this chapter's own count follows from the live layout.
+            cancel(); key = nextKey; failed = false; resetCounts();
+            remembered.counts.forEach((value, index) => { if (index !== section) count(index, value); });
+            savedKey = key;
+        } else if (key !== nextKey) {
             cancel(); key = nextKey; failed = false; resetCounts(); clearTotal();
             cachePending = true;
             const version = generation;

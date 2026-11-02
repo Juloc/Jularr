@@ -7,13 +7,19 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Workers
 {
-    // Reading copies of PDFs one after another in the background; a person opening a book comes first, so without work or with one waiting it looks again shortly.
+    // The library's books prepared before anyone opens them, then reading copies of PDFs, one after another in the background; a person opening a book comes
+    // first, so without work or with one waiting it looks again shortly.
     internal sealed class DerivationWorker(TimeProvider time, WorkerJobs jobs, WorkerJobRunner runner) : PeriodicWorker(time, jobs, runner, WorkerGroupType.Derivation)
     {
         private static readonly TimeSpan Pause = TimeSpan.FromSeconds(2);
 
-        protected override async Task RunOnceAsync(CancellationToken ct) =>
+        protected override async Task RunOnceAsync(CancellationToken ct)
+        {
+            await Runner.RunWhileBusyAsync("readingPreparation", async (services, token) =>
+                (await services.GetRequiredService<PrepareReadingBooksV1>().ExecuteAsync<UpdateResult>(new ReadingPreparationParametersV1(), default, token)).Success, Pause, Time, ct);
+
             await Runner.RunWhileBusyAsync("readingCopies", async (services, token) =>
                 (await services.GetRequiredService<DeriveReadingEbooksV1>().ExecuteAsync<UpdateResult>(new ReadingDerivationParametersV1(), default, token)).Success, Pause, Time, ct);
+        }
     }
 }

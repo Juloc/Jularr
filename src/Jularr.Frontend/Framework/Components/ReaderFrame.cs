@@ -9,7 +9,10 @@ namespace Jularr.Frontend.Framework
                 new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("data-reader-close", "contents"))
                     .Class("reader__panel-heading"), contents).Class("reader__sidebar"),
         new Div(new Div(content).Class("reader__paper"),
-            new ReaderBook().Class("reader-book").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"))
+            new ReaderBook().Class("reader-book").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
+            // Arrows beside the page: they press the bar's page buttons, so they turn, wait and stop exactly as those do.
+            new Button(new Icon("chevron-left", assets)).IconOnly(texts["reader.previousPage"]).Class("button button--icon reader__side reader__side--back").Attribute("data-side-turn", "-1"),
+            new Button(new Icon("chevron-left", assets)).IconOnly(texts["reader.nextPage"]).Class("button button--icon reader__side reader__side--forward").Attribute("data-side-turn", "1"))
                 .Class("reader__canvas").Attribute("tabindex", "0").Attribute("role", "region").Attribute("aria-labelledby", "reader-document-title"),
         new Div(
             new Div(new Button(new Icon("player-list", assets)).IconOnly(texts["reader.contents"])

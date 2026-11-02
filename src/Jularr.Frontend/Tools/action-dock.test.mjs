@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
-import ts from 'typescript';
+import ts from './transpile.mjs';
 
 const source = readFileSync(new URL('../Framework/Components/ActionDock.ts', import.meta.url), 'utf8');
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
@@ -37,4 +37,11 @@ test('the select-all box follows the rows: all, some or none chosen', () => {
     const all = { checked: false, indeterminate: false };
     exports.update(null, [{ checked: true }, { checked: false }], all);
     assert.deepEqual([all.checked, all.indeterminate], [false, true]);
+});
+
+test('shift and a click choose every row between the two boxes, in either direction', () => {
+    assert.deepEqual([...exports.rangeBetween(1, 4)], [1, 2, 3, 4]);
+    assert.deepEqual([...exports.rangeBetween(4, 1)], [1, 2, 3, 4]);
+    assert.deepEqual([...exports.rangeBetween(2, 2)], [2]);
+    assert.deepEqual([...exports.rangeBetween(-1, 2)], []);
 });

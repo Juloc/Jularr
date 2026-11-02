@@ -28,7 +28,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
         private static readonly string[] ServerKeys = ["plex", "jellyfin", "emby"];
 
         // The cards follow this order, as in the mockup: movies and series first, then books, music, games, then the servers.
-        private static readonly string[] Order = ["tmdb", "tvdb", "anilist", "openlibrary", "musicbrainz", "igdb", "hardcover", "acoustid", "plex", "jellyfin", "emby"];
+        private static readonly string[] Order = ["tmdb", "tvdb", "anilist", "syosetu", "openlibrary", "musicbrainz", "igdb", "hardcover", "acoustid", "plex", "jellyfin", "emby"];
 
         private readonly Dictionary<MediaServerType, (MediaServerDetailsV1 Server, BaseDataList<MediaServerLinkV1> Links)> _servers = [];
         private BaseDataList<ProfileChoiceV1>? _profiles;

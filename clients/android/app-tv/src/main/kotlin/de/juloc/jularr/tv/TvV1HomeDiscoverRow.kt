@@ -56,13 +56,10 @@ internal fun tvV1HomeVideoFeeds(
                     it.scopeSlug == scope.slug && it.discoverFeedTypeId == feed
                 }
                 val items = if (scope.isCatalog) emptyList() else kept?.items.orEmpty()
-                    .filter { it.mediaTypeId == scope.mediaTypeId &&
-                        (it.workId != null || it.tmdbId != null) }
-                    .distinctBy { Triple(it.mediaTypeId, it.workId, it.tmdbId) }
+                    .filter { it.mediaTypeId == scope.mediaTypeId }
+                    .distinctBy { it.workId }
                 val catalog = if (scope.isCatalog) kept?.catalogItems.orEmpty()
-                    .filter { it.workId != null ||
-                        (it.namespace.isNotBlank() && it.externalId.isNotBlank()) }
-                    .sortedByDescending { it.workId != null }
+                    .sortedByDescending { it.mediaStateTypeId == MEDIA_STATE_AVAILABLE }
                     .distinctBy { it.namespace to it.externalId }
                     else emptyList()
                 if (items.isEmpty() && catalog.isEmpty()) null else TvV1HomeVideoFeed(
@@ -101,7 +98,7 @@ internal fun TvV1HomeDiscoverRow(
     val color = rememberTvFocusColor()
     val rowState = rememberLazyListState()
     val selected = feed.items.indexOfFirst {
-        restoringItem == "discover:${feed.key}:${it.mediaTypeId}:${it.workId ?: "tmdb-${it.tmdbId}"}"
+        restoringItem == "discover:${feed.key}:${it.mediaTypeId}:${it.workId}"
     }
     LaunchedEffect(selected) {
         if (selected >= 0) rowState.scrollToItem(selected)
@@ -111,9 +108,9 @@ internal fun TvV1HomeDiscoverRow(
         horizontalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         items(feed.items, key = {
-            "${it.mediaTypeId}:${it.workId ?: "tmdb-${it.tmdbId}"}"
+            "${it.mediaTypeId}:${it.workId}"
         }) { item ->
-            val id = "discover:${feed.key}:${item.mediaTypeId}:${item.workId ?: "tmdb-${item.tmdbId}"}"
+            val id = "discover:${feed.key}:${item.mediaTypeId}:${item.workId}"
             val requester = remember(id) { FocusRequester() }
             var focused by remember(id) { mutableStateOf(false) }
             LaunchedEffect(id, restoringItem) {
@@ -149,7 +146,7 @@ internal fun TvV1HomeDiscoverRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    listOfNotNull(item.releaseYear?.toString(), if (item.workId != null) "In Bibliothek" else null).joinToString(" · "),
+                    listOfNotNull(item.releaseYear?.toString(), if (item.mediaStateTypeId == MEDIA_STATE_AVAILABLE) "In Bibliothek" else null).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.LightGray,
                     maxLines = 1,

@@ -64,6 +64,30 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task DownloadLease_RetainsItsTargetAndInvalidatesControlsForThePreviousDownload()
+        {
+            var clock = new Clock();
+            var browser = new Interaction();
+            using var assistance = new BrowserAssistance(browser, clock);
+            var owner = Guid.NewGuid();
+            var first = await assistance.OpenAsync(owner, 7, Source, default, 101);
+            Assert.AreEqual(first.LeaseId, (await assistance.OpenAsync(owner, 7, Source, default, 101)).LeaseId);
+            var page = new Uri(Source, "slow_download/second/0/0");
+            var second = await assistance.OpenAsync(owner, 7, page, default, 102);
+            Assert.AreNotEqual(first.LeaseId, second.LeaseId);
+            await Assert.ThrowsExactlyAsync<ServiceGoneException>(() => assistance.FrameAsync(owner, first.LeaseId, default));
+            clock.Now += TimeSpan.FromMinutes(3);
+            var expired = (await assistance.ReadOwnAsync(owner, default))!;
+            Assert.IsFalse(expired.IsActive);
+            Assert.AreEqual(102L, expired.OperationId);
+            var reopened = await assistance.OpenAsync(owner, 7, page, default, expired.OperationId);
+            Assert.IsTrue(reopened.IsActive);
+            Assert.AreEqual(102L, reopened.OperationId);
+            Assert.AreEqual(page, browser.Address);
+            Assert.IsTrue(browser.OpensPage);
+        }
+
+        [TestMethod]
         public async Task Frames_AreBrieflyReusedAndInputInvalidatesThem()
         {
             var clock = new Clock();
@@ -221,6 +245,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);
             using var deniedOpen = await host.SendAsync(HttpMethod.Post, open);
             Assert.AreEqual(HttpStatusCode.Forbidden, deniedOpen.StatusCode);
+            using var deniedDownload = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/999/browser");
+            Assert.AreEqual(HttpStatusCode.Forbidden, deniedDownload.StatusCode);
             await host.Fixture.RunSqlAsync("""
                 UPDATE "Accounts" SET "AccountRoleTypeId" = 1 WHERE "Id" = 41;
                 UPDATE "InstanceModules" SET "IsEnabled" = FALSE WHERE "Key" = 'Browser';
@@ -230,6 +256,8 @@ namespace Jularr.Backend.Tests
             Assert.AreNotEqual(HttpStatusCode.OK, disabled.StatusCode);
             using var openDisabled = await host.SendAsync(HttpMethod.Post, open);
             Assert.AreNotEqual(HttpStatusCode.OK, openDisabled.StatusCode);
+            using var downloadDisabled = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/999/browser");
+            Assert.AreNotEqual(HttpStatusCode.OK, downloadDisabled.StatusCode);
             Assert.AreEqual(3, browser.Starts);
 
             async Task SignInAsync()
@@ -246,7 +274,7 @@ namespace Jularr.Backend.Tests
             public override DateTimeOffset GetUtcNow() => Now;
         }
 
-        private sealed class Interaction : IBrowserInteraction, ISourceBrowser
+        internal sealed class Interaction : IBrowserInteraction, ISourceBrowser
         {
             public static readonly byte[] Picture = [0xff, 0xd8, 0xff, 0xd9];
             public bool HasManualControl { get; set; }
@@ -260,9 +288,14 @@ namespace Jularr.Backend.Tests
             public bool FailNextCapture { get; set; }
             public bool FailNextStart { get; set; }
             public string? Text { get; private set; }
-            public Task<BrowserViewport> BeginManualAsync(Uri address, DateTimeOffset expiresAt, CancellationToken ct)
+            public Uri? Address { get; private set; }
+            public bool OpensPage { get; private set; }
+            public Func<Uri, CancellationToken, Task<string?>>? ReadHtml { get; init; }
+            public Task<BrowserViewport> BeginManualAsync(Uri address, DateTimeOffset expiresAt, CancellationToken ct, bool opensPage = false)
             {
                 Starts++;
+                Address = address;
+                OpensPage = opensPage;
                 if (FailNextStart)
                 {
                     FailNextStart = false;
@@ -294,8 +327,16 @@ namespace Jularr.Backend.Tests
                 HasManualControl = false;
                 return Task.CompletedTask;
             }
-            public Task<string?> ReadPageAsync(Uri uri, CancellationToken ct) => Task.FromResult<string?>(null);
-            public Task<BrowserPage?> ReadPagesAsync(IReadOnlyList<Uri> addresses, CancellationToken ct) => Task.FromResult<BrowserPage?>(null);
+            public Task<string?> ReadPageAsync(Uri uri, CancellationToken ct) =>
+                HasManualControl || ReadHtml is null ? Task.FromResult<string?>(null) : ReadHtml(uri, ct);
+            public async Task<BrowserPage?> ReadPagesAsync(IReadOnlyList<Uri> addresses, CancellationToken ct)
+            {
+                foreach (var address in addresses)
+                {
+                    if (await ReadPageAsync(address, ct) is { } html) return new BrowserPage(address, html);
+                }
+                return null;
+            }
             public Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct) => Task.CompletedTask;
             public Task<SourceBrowserStatus> StartAsync(CancellationToken ct) => Task.FromResult(Status);
             public Task StopAsync() => Task.CompletedTask;

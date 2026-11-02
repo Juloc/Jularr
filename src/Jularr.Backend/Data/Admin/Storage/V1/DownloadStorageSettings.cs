@@ -65,8 +65,9 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
     {
         public DownloadStorageSettingsV1(DownloadStorageArea downloadStorageAreaId, long? incompleteStorageMountId, string? incompletePath, string? incompleteFilesystemIdentity,
             long? completeStorageMountId, string? completePath, string? completeFilesystemIdentity, long? freeSpaceReserveBytes, long? maxJobBytes, long? maxWorkspaceBytes,
-            int maxParallelJobs, long version, bool isConfigured)
+            int maxParallelJobs, long version, bool isConfigured, long? maxBytesPerSecond = null)
         {
+            MaxBytesPerSecond = maxBytesPerSecond;
             DownloadStorageAreaId = downloadStorageAreaId;
             IncompleteStorageMountId = incompleteStorageMountId;
             IncompletePath = incompletePath;
@@ -120,5 +121,9 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
 
         [DataField(typeof(DownloadStorageFields), nameof(DownloadStorageFields.IsConfigured))]
         public bool IsConfigured { get; }
+
+        // The speed limit of Jularr's own downloader of this workspace; none when empty.
+        [DataField(typeof(DownloadStorageFields), nameof(DownloadStorageFields.MaxBytesPerSecond), false)]
+        public long? MaxBytesPerSecond { get; }
     }
 }

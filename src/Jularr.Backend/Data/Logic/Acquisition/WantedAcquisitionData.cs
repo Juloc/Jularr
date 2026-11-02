@@ -28,8 +28,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             string? profileName, string? definition, string[] releaseIdentities, bool isPaused, bool hasMedia, bool isDownloading, int searchCount, string[] externalIdentities,
             string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, string? installedFiles = null,
             string[]? editionTitles = null, string[]? isbns = null, string? originalLanguage = null, string? formats = null, string? qualitySizes = null,
-            int? runtimeMinutes = null, string? releaseProfiles = null, string[]? monitoredEditionLanguages = null, string[]? unmonitoredEditionLanguages = null)
+            int? runtimeMinutes = null, string? releaseProfiles = null, string[]? monitoredEditionLanguages = null, string[]? unmonitoredEditionLanguages = null,
+            string? releaseGroupRatings = null)
         {
+            ReleaseGroupRatings = releaseGroupRatings ?? "{}";
             MonitoredEditionLanguages = monitoredEditionLanguages ?? [];
             UnmonitoredEditionLanguages = unmonitoredEditionLanguages ?? [];
             ReleaseProfiles = releaseProfiles ?? "[]";
@@ -161,6 +163,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // The release profiles that apply to the title, as JSON.
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
         public string ReleaseProfiles { get; }
+
+        // The rated release groups of the media type as a JSON object of name and rating.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
+        public string ReleaseGroupRatings { get; }
     }
 
     internal sealed class UnitStateData : BaseData
@@ -237,7 +243,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.IndexerFlags))]
         public string[] IndexerFlags { get; init; } = [];
-        public AcquisitionGrabData(long wantedItemId, long indexerConnectionId, string releaseIdentity, string title, string? qualityKey, long downloadConnectionId, int? parentUnitNumber,
+        public AcquisitionGrabData(long wantedItemId, long? indexerConnectionId, string releaseIdentity, string title, string? qualityKey, long downloadConnectionId, int? parentUnitNumber,
             int? unitStart, int? unitEnd, string? sourceUrl = null, long? requestedByAccountId = null)
         {
             RequestedByAccountId = requestedByAccountId;
@@ -256,8 +262,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
         public long WantedItemId { get; }
 
-        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
-        public long IndexerConnectionId { get; }
+        // None for a download a person added by hand.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
+        public long? IndexerConnectionId { get; }
 
         // The administrator who took it by hand; automatic grabs have none.
         [DataField(typeof(Fields.Account.AccountFields), nameof(Fields.Account.AccountFields.Id), false)]
@@ -313,6 +320,15 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
         public long OperationId { get; } = operationId;
+    }
+
+    internal sealed class NewsServerIdData(long acquisitionConnectionId, int? maxConnections) : BaseData
+    {
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
+        public long AcquisitionConnectionId { get; } = acquisitionConnectionId;
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.MaxConnections))]
+        public int? MaxConnections { get; } = maxConnections;
     }
 
     internal sealed class DownloadLookupData(long? operationId) : BaseData
@@ -485,6 +501,22 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string RelativePath { get; }
     }
 
+    internal sealed class StoredFolderData : BaseData
+    {
+        public StoredFolderData(long libraryRootId, string folders)
+        {
+            LibraryRootId = libraryRootId;
+            Folders = folders;
+        }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id))]
+        public long LibraryRootId { get; }
+
+        // Folders below the root as a JSON array; an empty one is the root itself.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Payload))]
+        public string Folders { get; }
+    }
+
     internal sealed class WantedDueData : BaseData
     {
         public WantedDueData(DateTime now, int limit)
@@ -536,6 +568,21 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(OperationFields), nameof(OperationFields.AttentionProposal))]
         public string? AttentionProposal { get; }
+    }
+
+    internal sealed class DownloadHintData : BaseData
+    {
+        public DownloadHintData(long operationId, string? hintKey)
+        {
+            OperationId = operationId;
+            HintKey = hintKey;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.HintKey))]
+        public string? HintKey { get; }
     }
 
     // What a waiting download keeps after some of its files were imported by hand.
@@ -597,8 +644,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     internal sealed class DownloadActionData : BaseData
     {
         public DownloadActionData(long operationId, long acquisitionConnectionId, string? externalId, AcquisitionConnectionType acquisitionConnectionTypeId, string? attentionKey, bool hasProposal,
-            DownloadStateType? downloadStateTypeId)
+            DownloadStateType? downloadStateTypeId, DownloadPriorityType downloadPriorityTypeId = DownloadPriorityType.Normal, int? queuePosition = null)
         {
+            DownloadPriorityTypeId = downloadPriorityTypeId;
+            QueuePosition = queuePosition;
             OperationId = operationId;
             AcquisitionConnectionId = acquisitionConnectionId;
             ExternalId = externalId;
@@ -628,6 +677,95 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(OperationFields), nameof(OperationFields.DownloadStateTypeId))]
         public DownloadStateType? DownloadStateTypeId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadPriorityTypeId))]
+        public DownloadPriorityType DownloadPriorityTypeId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueuePosition))]
+        public int? QueuePosition { get; }
+    }
+
+    // One client's part of the queue: a kind, and for SABnzbd and qBittorrent its connection.
+    internal sealed class DownloadQueueScopeData : BaseData
+    {
+        public DownloadQueueScopeData(DownloadClientKind? downloadClientKindId, long? acquisitionConnectionId)
+        {
+            DownloadClientKindId = downloadClientKindId;
+            AcquisitionConnectionId = acquisitionConnectionId;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadClientKindId), false)]
+        public DownloadClientKind? DownloadClientKindId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
+        public long? AcquisitionConnectionId { get; }
+    }
+
+    // The downloads of a client in the order it takes them.
+    internal sealed class DownloadQueueEntryData : BaseData
+    {
+        public DownloadQueueEntryData(long operationId, DownloadPriorityType downloadPriorityTypeId, int? queuePosition)
+        {
+            OperationId = operationId;
+            DownloadPriorityTypeId = downloadPriorityTypeId;
+            QueuePosition = queuePosition;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadPriorityTypeId))]
+        public DownloadPriorityType DownloadPriorityTypeId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueuePosition))]
+        public int? QueuePosition { get; }
+    }
+
+    // A client's new order: every download in its place, from 0.
+    internal sealed class DownloadQueueOrderData : BaseData
+    {
+        public DownloadQueueOrderData(long[] operationIds)
+        {
+            OperationIds = operationIds;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueOrder))]
+        public long[] OperationIds { get; }
+    }
+
+    internal sealed class DownloadPriorityData : BaseData
+    {
+        public DownloadPriorityData(long[] operationIds, DownloadPriorityType downloadPriorityTypeId)
+        {
+            OperationIds = operationIds;
+            DownloadPriorityTypeId = downloadPriorityTypeId;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueOrder))]
+        public long[] OperationIds { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadPriorityTypeId))]
+        public DownloadPriorityType DownloadPriorityTypeId { get; }
+    }
+
+    // Finished downloads leaving the Downloads page's history: the chosen ones, or every completed one of a client (or of all).
+    internal sealed class DownloadHistoryDeletionData : BaseData
+    {
+        public DownloadHistoryDeletionData(long[]? operationIds, DownloadClientKind? downloadClientKindId = null, long? acquisitionConnectionId = null)
+        {
+            OperationIds = operationIds;
+            DownloadClientKindId = downloadClientKindId;
+            AcquisitionConnectionId = acquisitionConnectionId;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Ids), false)]
+        public long[]? OperationIds { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadClientKindId), false)]
+        public DownloadClientKind? DownloadClientKindId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
+        public long? AcquisitionConnectionId { get; }
     }
 
     // A download taken out of the queue: its release may be taken again or never, and the target is searched from this time on.

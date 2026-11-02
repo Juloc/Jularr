@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Admin.Performance
 {
     // How hard the process works: the processor and memory now, what answers take on average and how many fail, the load of the last 24 hours and what each service took.
-    public sealed class PerformanceModel(ReadResourceSamplesV1 readResources, ReadServiceTimingsV1 readTimings, UiText texts, FrontendAssets assets) : JularrPage
+    public sealed class PerformanceModel(ReadResourceSamplesV1 readResources, ReadServiceTimingsV1 readTimings, FrontendAssets assets) : JularrPage
     {
         private ResourceHistoryV1? _resources;
         private ServiceTimingsV1? _timings;

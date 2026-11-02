@@ -291,8 +291,8 @@ namespace Jularr.Backend.Tests
                 VALUES (10, 'Genres', 'Drama, Science Fiction', TRUE), (20, 'Genres', 'Comedy', TRUE), (30, 'Genres', 'Hidden', TRUE);
                 INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual", "ProviderId")
                 SELECT 10, 'Genres', 'Stale provider genre', FALSE, "Id" FROM "Providers" WHERE "Key" = 'tmdb' LIMIT 1;
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "Rating", "Votes")
-                VALUES ('tmdb_movie', '10', 1, 'A', 8.5, 100), ('tmdb_movie', '20', 1, 'B', 9, 100), ('tvdb', '10', 1, 'A alt', 4, 2);
+                UPDATE "Works" SET "Rating" = 8.5, "Votes" = 100, "CatalogNamespace" = 'tmdb_movie' WHERE "Id" = 10;
+                UPDATE "Works" SET "Rating" = 9, "Votes" = 100, "CatalogNamespace" = 'tmdb_movie' WHERE "Id" = 20;
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (10, 'tmdb_movie', '10'), (20, 'tmdb_movie', '20'), (10, 'tvdb', '10');
                 INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "ProgressPositionTypeId", "PositionMs", "DurationMs", "IsCompleted", "CompletedAt")
                 VALUES (101, 10, 1, 500, 1000, FALSE, NULL), (101, 20, 1, 1000, 1000, TRUE, now());
@@ -444,10 +444,8 @@ namespace Jularr.Backend.Tests
 
             // The rating is the one of the catalog entry the title came from; a title without one shows none.
             await host.Fixture.RunSqlAsync("""
-                WITH identity AS (
-                    INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (20, 'tvdb', '9020') RETURNING "Namespace"
-                )
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "Rating", "Votes") SELECT "Namespace", '9020', 1, 'The film', 7.65, 100 FROM identity;
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (20, 'tvdb', '9020');
+                UPDATE "Works" SET "Rating" = 7.65, "Votes" = 100, "CatalogNamespace" = 'tvdb' WHERE "Id" = 20;
                 """);
             Assert.IsNull(show.Rating);
 

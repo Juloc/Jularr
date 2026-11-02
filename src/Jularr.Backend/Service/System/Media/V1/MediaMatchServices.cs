@@ -8,7 +8,9 @@ using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.AniBridge;
 using Jularr.Integrations.Data.AniList;
+using Jularr.Integrations.Logic.AniBridge;
 
 namespace Jularr.Backend.Service.System.Media.V1
 {
@@ -36,8 +38,11 @@ namespace Jularr.Backend.Service.System.Media.V1
                 // An unreachable AniList ends the pass; the Works stay due.
                 try
                 {
-                    var seasons = target.MediaTypeId == MediaType.Series ? await Context.ExecuteBatchAsync((ctx, ct) => AniListMatcher.ReadSeasonsAsync(ctx, target.WorkId, ct), CancellationToken) : [];
-                    var result = await _matcher.MatchAsync(target, seasons, null, CancellationToken);
+                    var (seasons, mappings) = target.MediaTypeId == MediaType.Series
+                        ? await Context.ExecuteBatchAsync(async (ctx, ct) => (await AniListMatcher.ReadSeasonsAsync(ctx, target.WorkId, ct), await ctx.ReadAnimeMappingsOfWorkAsync(target.WorkId, ct)),
+                            CancellationToken)
+                        : ([], []);
+                    var result = await _matcher.MatchAsync(target, seasons, mappings, null, CancellationToken);
                     await Context.ExecuteBatchAsync(async (ctx, ct) =>
                     {
                         await ctx.SaveIdentityMatchAsync(result, ct);
@@ -50,6 +55,70 @@ namespace Jularr.Backend.Service.System.Media.V1
                 }
             }
 
+            return new UpdateResult(true);
+        }
+    }
+
+    // Once a day the AniBridge mappings (AniList to TheTVDB, MIT) replace the loaded ones, while the AniList module is on. An unchanged release is not downloaded again;
+    // a failed, unreadable or much smaller release leaves the loaded rows as they are.
+    public sealed class SyncAnimeMappingsV1 : SystemService<MediaMatchParametersV1, NoData>
+    {
+        private readonly AniBridgeClient _client;
+
+        internal SyncAnimeMappingsV1(AniBridgeClient client)
+        {
+            _client = client;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(MediaMatchParametersV1 parameters) => ModuleRequirement.All("Library", "AniList");
+        protected override ServicePermission GetPermission(MediaMatchParametersV1 parameters, Type resultType) => new("system.media");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var source = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAnimeMappingSourceAsync(ct), CancellationToken);
+            AniBridgeRelease? release;
+            try
+            {
+                release = await _client.ReadAsync(source.ETag, CancellationToken);
+            }
+            catch (Exception exception) when (exception is HttpRequestException or InvalidDataException or JsonException
+                || exception is TaskCanceledException && !CancellationToken.IsCancellationRequested)
+            {
+                throw new ServiceUnavailableException("metadata_unavailable");
+            }
+
+            if (release is null)
+            {
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.MarkAnimeMappingsCheckedAsync(ct);
+                    return true;
+                }, CancellationToken);
+                return new UpdateResult(false);
+            }
+
+            // A release with less than half the loaded rows is a broken one, not a smaller catalog.
+            if (release.Mappings.Count * 2L < source.Rows)
+            {
+                throw new ServiceUnavailableException("metadata_unavailable");
+            }
+
+            var rows = JsonSerializer.Serialize(release.Mappings.Select(mapping => new
+            {
+                mapping.AniListId,
+                mapping.TvdbId,
+                mapping.SeasonNumber,
+                mapping.AniListEpisode,
+                mapping.FirstEpisode,
+                mapping.LastEpisode
+            }));
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.SaveAnimeMappingsAsync(new AnimeMappingLoadData(rows, release.ETag, release.SchemaVersion, release.GeneratedAt?.UtcDateTime), ct);
+                return true;
+            }, CancellationToken);
             return new UpdateResult(true);
         }
     }
@@ -97,7 +166,7 @@ namespace Jularr.Backend.Service.System.Media.V1
                     return new UpdateResult(false);
                 }
 
-                var relations = JsonSerializer.Serialize(WorkRelationLogic.AniListTargets(entries, target.ProviderIds));
+                var relations = WorkRelationLogic.AniListTargets(entries, target.ProviderIds);
                 await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 {
                     if (entries.Count > 0)

@@ -1281,12 +1281,12 @@
    "Aucune correspondance claire"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted (paused)",
-   "Sera surveillé (en pause)"
+   "Will be wanted",
+   "Sera surveillé"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted (paused)",
-   "Surveillance en pause"
+   "Wanted",
+   "Surveillé"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",
@@ -2167,10 +2167,6 @@
   "hint.WorkMetadataFields.Query.info": [
    "A title, optionally with its year.",
    "Un titre, éventuellement suivi de l'année."
-  ],
-  "hint.CollectionFields.IsSmart.info": [
-   "A smart collection fills itself from the filters below.",
-   "Une collection intelligente se remplit d'elle-même d'après les filtres ci-dessous."
   ],
   "hint.CollectionFields.ReleaseYear.placeholder": [
    "Any year",
@@ -4633,8 +4629,8 @@
    "Type"
   ],
   "collections.smartToggle": [
-   "Smart filter instead of hand-picked titles",
-   "Filtre intelligent au lieu de titres choisis à la main"
+   "Smart filter",
+   "Filtre intelligent"
   ],
   "collections.manual": [
    "Hand-picked",

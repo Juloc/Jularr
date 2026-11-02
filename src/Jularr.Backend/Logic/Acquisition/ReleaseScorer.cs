@@ -85,6 +85,7 @@ namespace Jularr.Backend.Logic.Acquisition
             // Custom formats add their profile scores; the sum must reach the profile's minimum.
             var context = new FormatContext(profile.IsMovie, profile.OriginalLanguage, profile.Year);
             var formatScore = 0;
+            var formatPoints = new List<ScorePoint>();
             foreach (var (format, points) in profile.Formats)
             {
                 if (!CustomFormatMatcher.TryMatch(format, candidate, context, out var matches))
@@ -94,6 +95,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 else if (matches)
                 {
                     formatScore += points;
+                    formatPoints.Add(new ScorePoint("CustomFormat", format.Name, points));
                     scoreReasons.Add(new ReleaseReason("FormatScore", $"{format.Name}: {(points >= 0 ? "+" : "")}{points}"));
                 }
             }
@@ -103,13 +105,26 @@ namespace Jularr.Backend.Logic.Acquisition
                 rejections.Add(new ReleaseReason("FormatScoreBelowMinimum", formatScore.ToString(System.Globalization.CultureInfo.InvariantCulture)));
             }
 
+            // Each release group rated good or bad adds the profile's points; the minimum above holds for the custom formats alone.
+            foreach (var (group, rating) in GroupRatings(profile, candidate.Release).Where(rated => rated.Rating != ReleaseGroupRating.Blocked))
+            {
+                var points = rating == ReleaseGroupRating.Good ? profile.GoodGroupScore : profile.BadGroupScore;
+                formatScore += points;
+                formatPoints.Add(new ScorePoint("Group" + rating, group, points));
+            }
+
             var score = formatScore;
             return new ReleaseScoreResult(candidate, rejections.Count == 0, score, qualityKey, qualityRank, rejections, scoreReasons)
             {
                 InfoReasons = infoReasons,
-                FormatScore = formatScore
+                FormatScore = formatScore,
+                FormatPoints = formatPoints
             };
         }
+
+        // The rated groups of a release for the profile's media type; a release without a group or with unrated groups has none.
+        public static IReadOnlyList<(string Group, ReleaseGroupRating Rating)> GroupRatings(QualityProfile profile, ReleaseInfo release) =>
+            [.. ReleaseGroupLogic.Split(release.ReleaseGroup).Where(group => profile.GroupRatings.ContainsKey(group)).Select(group => (group, profile.GroupRatings[group]))];
 
         public static IReadOnlyList<string> ValidateProfile(QualityProfile profile)
         {

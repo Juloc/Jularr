@@ -5,9 +5,9 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class DownloadMappingTests
     {
-        // A saved connection closes its dialog; its settings are the inputs of its card.
+        // A saved connection closes its dialog; its settings are the inputs of the opened client panel.
         private static ILocator CardForm(IPage page) =>
-            page.Locator(".feature-card", new() { HasText = "My download client" }).Locator("form[data-save]").Filter(new() { Has = page.Locator("[name=BaseUrl]") });
+            page.Locator(".downloaders-detail", new() { HasText = "My download client" }).Locator("form[data-save]").Filter(new() { Has = page.Locator("[name=BaseUrl]") });
 
         [TestMethod]
         [DataRow(1440, 900)]
@@ -26,8 +26,9 @@ namespace Jularr.E2E.Tests
             {
                 await Owner.SetUpAndSignInAsync(page);
                 await Steps.AddLibraryAsync(page, folders.Library);
-                await page.GotoAsync("/Admin/Acquisition/Downloads");
-                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }).And(page.Locator("[href*='Type=Sabnzbd']")));
+                await page.GotoAsync("/Admin/Downloads/Clients");
+                await page.GetByRole(AriaRole.Button, new() { Name = "Add client", Exact = true }).ClickAsync();
+                await Steps.FollowAsync(page, page.Locator("dialog#downloaders-add").GetByRole(AriaRole.Link, new() { Name = "SABnzbd", Exact = true }));
                 var form = page.Locator("dialog#connection-editor form").Filter(new() { Has = page.Locator("[name=BaseUrl]") });
                 await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                 Assert.AreEqual(0d, await page.EvaluateAsync<double>("() => window.jularrLayoutShift"));

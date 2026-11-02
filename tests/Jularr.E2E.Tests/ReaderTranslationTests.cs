@@ -27,9 +27,10 @@ namespace Jularr.E2E.Tests
             await ReadingPathTests.AddBookAsync(page, folders, "Translation Reader");
             await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
 
+            // Benchmarks and model download state now live on the Setup tab.
             // Admin: model availability, benchmark and live status on the same
             // authenticated V1 endpoint used by the management page.
-            var admin = await page.GotoAsync("/Admin/Instance/Translation");
+            var admin = await page.GotoAsync("/Admin/Instance/Translation?tab=setup");
             Assert.AreEqual(200, admin!.Status);
             await Assertions.Expect(page.Locator("form[data-translation-submit=benchmark]")).ToHaveCountAsync(1);
             await page.Locator("form[data-translation-submit=benchmark] button[type=submit]").ClickAsync();
@@ -44,7 +45,7 @@ namespace Jularr.E2E.Tests
             }));
             // Exercise the entrypoint on a normal Admin GET, rather than the form
             // POST's response, and force an immediate refresh on the visible tab.
-            await page.GotoAsync("/Admin/Instance/Translation");
+            await page.GotoAsync("/Admin/Instance/Translation?tab=setup");
             await page.EvaluateAsync("() => document.dispatchEvent(new Event('visibilitychange'))");
             await page.WaitForFunctionAsync("() => document.querySelector('[data-translation-download]')?.textContent?.includes('50%') === true", null,
                 new() { Timeout = 15_000 });
@@ -53,10 +54,10 @@ namespace Jularr.E2E.Tests
             var response = await page.GotoAsync("/Read/1");
             Assert.AreEqual(200, response!.Status);
             await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Chapter One");
-            // The quality toggle lives inside the initially closed language panel.
+            // The language choices live inside the initially closed language panel; the server's TranslateGemma is the only translator.
             await page.Locator("[data-action=language]").ClickAsync();
             await Assertions.Expect(page.Locator("[data-language-choice=de]")).ToBeVisibleAsync();
-            await Assertions.Expect(page.Locator("[data-local-quality-toggle]")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator("[data-local-quality-toggle]")).ToHaveCountAsync(0);
             // A German profile immediately applies its default reading language.
             // Confirm the engine, then deliberately switch to Original and back.
             await Assertions.Expect(page.Locator("[data-translation-provider]")).ToContainTextAsync("TranslateGemma");

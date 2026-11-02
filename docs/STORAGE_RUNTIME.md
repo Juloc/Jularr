@@ -206,7 +206,7 @@ selected media types serves as fallback. No suitable download client means
 no grab. A generic high-priority SAB connection must not override an explicit
 category for a selected media type. The configured category name must exist
 in SABnzbd; further live category/path validation and storage limits are
-separate pre-release requirements (#1209).
+separate requirements (#1209).
 The fresh schema permits media scopes for SABnzbd and indexers; search scheduling
 and daily query/grab limits remain indexer-only. Workspace validation applies to
 the selected native client, so an unused news server cannot block a scoped SAB job.
@@ -255,6 +255,4 @@ own job files. SABnzbd retains its own cleanup configuration. Paths cannot be
 changed while jobs are active; limits remain editable.
 
 The previous environment-only download paths and size ceiling are replaced by
-this confirmed policy. This changes the fresh clean-start baseline only; it does
-not migrate or reset an active database. Real mounted-NAS/SABnzbd acceptance
-remains part of the release gate.
+this confirmed policy. Real mounted-NAS/SABnzbd acceptance remains open (#1600).

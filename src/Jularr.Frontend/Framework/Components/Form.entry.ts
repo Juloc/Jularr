@@ -7,6 +7,8 @@ function enhance(form: HTMLFormElement): void {
     initializeRanges(form);
     initializeSteppers(form);
     enhanceSizes(form);
+    // A choice that saves itself needs no button; the button is for browsers without script.
+    if (form.querySelector('[data-form-submit]')) form.querySelectorAll<HTMLButtonElement>('[data-form-submit-fallback]').forEach(button => { button.hidden = true; });
     if (form.dataset.refreshReady || !form.querySelector('[data-form-refresh]')) return;
     form.dataset.refreshReady = "true";
     form.querySelectorAll<HTMLButtonElement>('[data-form-refresh-submit]').forEach(button => { button.hidden = true; });
@@ -44,6 +46,33 @@ function enhance(form: HTMLFormElement): void {
         }
     });
 }
+
+// The change of such a choice is its save: the form posts as an action and the page keeps its place.
+document.addEventListener("change", event => {
+    const field = event.target;
+    if ((field instanceof HTMLInputElement || field instanceof HTMLSelectElement) && field.dataset.formSubmit !== undefined) field.form?.requestSubmit();
+});
+
+// An optional choice that saves itself goes back to none when its chosen segment is clicked again (or Space or Enter is pressed on it).
+document.addEventListener("pointerdown", event => {
+    if (event.target instanceof HTMLInputElement && event.target.dataset.formClearable !== undefined) event.target.dataset.wasChecked = String(event.target.checked);
+}, true);
+document.addEventListener("click", event => {
+    const field = event.target;
+    if (!(field instanceof HTMLInputElement) || field.dataset.formClearable === undefined) return;
+    const clear = field.dataset.wasChecked === "true";
+    delete field.dataset.wasChecked;
+    if (!clear) return;
+    field.checked = false;
+    field.form?.requestSubmit();
+});
+document.addEventListener("keydown", event => {
+    const field = event.target;
+    if (event.key !== " " && event.key !== "Enter" || !(field instanceof HTMLInputElement) || field.dataset.formClearable === undefined || !field.checked) return;
+    event.preventDefault();
+    field.checked = false;
+    field.form?.requestSubmit();
+});
 
 onPage(import.meta.url, () => {
     document.querySelectorAll<HTMLFormElement>('form').forEach(enhance);

@@ -11,12 +11,29 @@ namespace Jularr.Backend.Data.Logic.Storage
         public DownloadStorageArea DownloadStorageAreaId { get; } = downloadStorageAreaId;
     }
 
+    // The speed limit of Jularr's own downloader of one workspace; none when empty.
+    internal sealed class DownloadSpeedLimitData : BaseData
+    {
+        public DownloadSpeedLimitData(DownloadStorageArea downloadStorageAreaId, long? maxBytesPerSecond)
+        {
+            DownloadStorageAreaId = downloadStorageAreaId;
+            MaxBytesPerSecond = maxBytesPerSecond;
+        }
+
+        [DataField(typeof(DownloadStorageFields), nameof(DownloadStorageFields.DownloadStorageAreaId))]
+        public DownloadStorageArea DownloadStorageAreaId { get; }
+
+        [DataField(typeof(DownloadStorageFields), nameof(DownloadStorageFields.MaxBytesPerSecond), false)]
+        public long? MaxBytesPerSecond { get; }
+    }
+
     internal sealed class DownloadStorageSettingsData : BaseData
     {
         public DownloadStorageSettingsData(DownloadStorageArea downloadStorageAreaId, long? incompleteStorageMountId, string? incompletePath, string? incompleteFilesystemIdentity,
             long? completeStorageMountId, string? completePath, string? completeFilesystemIdentity, long? freeSpaceReserveBytes, long? maxJobBytes, long? maxWorkspaceBytes,
-            int maxParallelJobs, long version, Guid workspaceId)
+            int maxParallelJobs, long version, Guid workspaceId, long? maxBytesPerSecond = null)
         {
+            MaxBytesPerSecond = maxBytesPerSecond;
             WorkspaceId = workspaceId;
             DownloadStorageAreaId = downloadStorageAreaId;
             IncompleteStorageMountId = incompleteStorageMountId;
@@ -70,5 +87,9 @@ namespace Jularr.Backend.Data.Logic.Storage
 
         [DataField(typeof(DownloadStorageFields), nameof(DownloadStorageFields.WorkspaceId))]
         public Guid WorkspaceId { get; }
+
+        // The speed limit of Jularr's own downloader of this workspace; none when empty.
+        [DataField(typeof(DownloadStorageFields), nameof(DownloadStorageFields.MaxBytesPerSecond), false)]
+        public long? MaxBytesPerSecond { get; }
     }
 }

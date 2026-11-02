@@ -166,12 +166,12 @@ namespace Jularr.Integrations.Logic.Tmdb
 
         private static bool IsYouTubeKey(string? value) => value is { Length: 11 } && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
 
-        // TMDB's daily list of every id with its popularity: public, gzip, one JSON object per line; published around 08:00 UTC.
+        // TMDB's daily list of every film id with its popularity: public, gzip, one JSON object per line; published around 08:00 UTC.
         private static readonly Uri ExportHost = new("https://files.tmdb.org/p/exports/");
 
-        public async IAsyncEnumerable<TmdbExportEntry> ReadIdExportAsync(TmdbMediaKind kind, DateOnly day, [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<TmdbExportEntry> ReadMovieIdExportAsync(DateOnly day, [EnumeratorCancellation] CancellationToken ct)
         {
-            var file = (kind == TmdbMediaKind.Movie ? "movie" : "tv_series") + "_ids_" + day.ToString("MM_dd_yyyy", CultureInfo.InvariantCulture) + ".json.gz";
+            var file = "movie_ids_" + day.ToString("MM_dd_yyyy", CultureInfo.InvariantCulture) + ".json.gz";
             using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(ExportHost, file));
             HttpResponseMessage response;
             try
@@ -196,15 +196,15 @@ namespace Jularr.Integrations.Logic.Tmdb
                 using var reader = new StreamReader(unpacked);
                 while (await reader.ReadLineAsync(ct) is { } line)
                 {
-                    if (ParseExport(kind, line) is { } entry) yield return entry;
+                    if (ParseExport(line) is { } entry) yield return entry;
                 }
             }
         }
 
-        // The ids changed between two days (at most fourteen apart), one page of a hundred at a time.
-        public async Task<(IReadOnlyList<int> Ids, int Pages)> ReadChangesAsync(TmdbConnection connection, TmdbMediaKind kind, DateOnly from, DateOnly to, int page, CancellationToken ct)
+        // The film ids changed between two days (at most fourteen apart), one page of a hundred at a time.
+        public async Task<(IReadOnlyList<int> Ids, int Pages)> ReadMovieChangesAsync(TmdbConnection connection, DateOnly from, DateOnly to, int page, CancellationToken ct)
         {
-            using var document = await ReadAsync(connection, (kind == TmdbMediaKind.Movie ? "movie" : "tv") + "/changes", [
+            using var document = await ReadAsync(connection, "movie/changes", [
                 new("start_date", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
                 new("end_date", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
                 new("page", page.ToString(CultureInfo.InvariantCulture))], ct);
@@ -232,21 +232,25 @@ namespace Jularr.Integrations.Logic.Tmdb
             {
                 var item = document.RootElement;
                 if (Text(item, movie ? "title" : "name") is not { } title) return null;
-                var imdb = Text(item, "imdb_id") ?? (item.TryGetProperty("external_ids", out var external) ? Text(external, "imdb_id") : null);
+                var external = item.TryGetProperty("external_ids", out var ids) ? ids : default;
+                var imdb = Text(item, "imdb_id") ?? (external.ValueKind == JsonValueKind.Object ? Text(external, "imdb_id") : null);
                 return new TmdbCatalogEntry(id, title, Text(item, movie ? "original_title" : "original_name"), Date(item, movie ? "release_date" : "first_air_date"), Text(item, "overview"),
                     ImagePath(Text(item, "poster_path")), ImagePath(Text(item, "backdrop_path")), Number(item, "popularity"), Number(item, "vote_average"), Int(item, "vote_count"), imdb,
-                    item.TryGetProperty("adult", out var adult) && adult.ValueKind == JsonValueKind.True);
+                    item.TryGetProperty("adult", out var adult) && adult.ValueKind == JsonValueKind.True)
+                {
+                    TvdbId = !movie && external.ValueKind == JsonValueKind.Object && Int(external, "tvdb_id") is > 0 and var tvdb ? tvdb : null
+                };
             }
         }
 
-        private static TmdbExportEntry? ParseExport(TmdbMediaKind kind, string line)
+        private static TmdbExportEntry? ParseExport(string line)
         {
             if (line.Length == 0) return null;
             try
             {
                 using var document = JsonDocument.Parse(line);
                 var item = document.RootElement;
-                return Int(item, "id") is { } id and > 0 && Text(item, kind == TmdbMediaKind.Movie ? "original_title" : "original_name") is { } title
+                return Int(item, "id") is { } id and > 0 && Text(item, "original_title") is { } title
                     ? new TmdbExportEntry(id, title, Number(item, "popularity") ?? 0, item.TryGetProperty("adult", out var adult) && adult.ValueKind == JsonValueKind.True,
                         item.TryGetProperty("video", out var video) && video.ValueKind == JsonValueKind.True)
                     : null;

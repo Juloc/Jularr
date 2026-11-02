@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { test } from 'node:test';
-import ts from 'typescript';
+import ts from './transpile.mjs';
 import { Packages, target, tarEntries } from './emulator-assets.mjs';
 
 const source = readFileSync(new URL('../Modules/Game/Game.ts', import.meta.url), 'utf8');

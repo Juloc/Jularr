@@ -676,7 +676,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Cache_EvictsOldReadsBeyondTheBudgetAndKeepsPermanentData()
+        public async Task Cache_KeepsCurrentBooks_AndEvictsOldReadsOfVanishedFilesBeyondTheBudget()
         {
             using var storage = new TemporaryDirectory();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path);
@@ -685,7 +685,7 @@ namespace Jularr.Backend.Tests
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/reading/assets/" + first + "/progress", new SaveReadingProgressDataV1("s0/b2", 0.2m, false));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
 
-            // Recent reads are protected; an old one beyond the budget leaves the cache only.
+            // Recent reads are protected; an old one of a file that is gone leaves the cache only, beyond the budget.
             using var settingsRead = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/instance/settings");
             var settings = (await settingsRead.Content.ReadFromJsonAsync<InstanceSettingsDetailsV1>())!;
             Assert.AreEqual(2048, settings.ReadingCacheMegabytes);
@@ -693,6 +693,7 @@ namespace Jularr.Backend.Tests
                 new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, 0, 100));
             Assert.AreEqual(HttpStatusCode.OK, budget.StatusCode, await budget.Content.ReadAsStringAsync());
             await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"LastReadAt\" = now() - interval '30 days'");
+            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"MissingSince\" = now() WHERE \"MediaAssetId\" = " + first);
             var recent = await OpenAsync(host, second);
             Assert.IsTrue(recent.IsCached);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT \"CacheBytes\" FROM \"ReadingDocuments\" WHERE \"Id\" = " + old.DocumentId));
@@ -700,11 +701,14 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("s0/b2", await host.ScalarAsync("SELECT \"Locator\" FROM \"MediaProgress\""));
             Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Books", "Old Book", "Old Book.epub")));
 
-            // With the storage back the book is prepared again under the same document.
+            // With the file back the book is prepared again under the same document; a prepared book whose file is current stays, however old and over budget.
+            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"MissingSince\" = NULL WHERE \"MediaAssetId\" = " + first);
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"LastReadAt\" = now() - interval '30 days'");
             var reopened = await OpenAsync(host, first);
             Assert.AreEqual(old.DocumentId, reopened.DocumentId);
             Assert.IsTrue(reopened.IsCached);
             Assert.AreEqual("s0/b2", reopened.Locator);
+            Assert.IsTrue((long)(await host.ScalarAsync("SELECT \"CacheBytes\" FROM \"ReadingDocuments\" WHERE \"Id\" = " + recent.DocumentId))! > 0);
         }
 
         [TestMethod]

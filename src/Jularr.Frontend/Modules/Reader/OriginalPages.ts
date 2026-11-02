@@ -5,6 +5,7 @@ import { clampPage, clampZoom, pageAnchor, pageLocator, pageSize, pinchZoom, pro
 import { choiceOf, nextLook, offersSmartBook, viewAddress, type ReadingView } from './ViewSwitch';
 import { initializeViewChoice } from './ViewChoice';
 import { drawPage, openPdf, pageWords, type PDFDocumentProxy, type PDFPageProxy, type RenderTask } from './PdfEngine';
+import { smartPages } from './SmartPages';
 
 // A page's bitmap stays within this many pixels, however far it is zoomed.
 const MaximumPixels = 16_000_000;
@@ -21,6 +22,8 @@ export function initializeOriginalPages(reader: HTMLElement): void {
     const noteFields = { page: reader.querySelector<HTMLInputElement>('[name=PageNumber]'), anchor: reader.querySelector<HTMLInputElement>('[name=Anchor]') };
     const settings = initializeReaderSettings(reader, () => { layout(); settle(); });
     reader.dataset.mode = 'pages';
+    // Scanned pages set anew show in place of the scan; every other page is drawn from the PDF.
+    const smart = smartPages(reader);
     const save = progressReporter(reader.dataset.progressUrl!, reader.dataset.antiforgery!, failed => {
         reader.querySelector<HTMLElement>('[data-role=save-error]')!.hidden = !failed;
     });
@@ -54,6 +57,16 @@ export function initializeOriginalPages(reader: HTMLElement): void {
         if (!proxy || !natural.width) return;
         const token = ++generation;
         task?.cancel();
+        if (smart?.has(page)) {
+            const set = await smart.page(page);
+            if (token !== generation) return;
+            if (set) {
+                status.hidden = true;
+                if (sheet.firstElementChild !== set) sheet.replaceChildren(set);
+                smart.fit(set);
+                return;
+            }
+        }
         const cssWidth = sheet.getBoundingClientRect().width || stage.clientWidth;
         const next = globalThis.document.createElement('canvas');
         next.dataset.role = 'page';
@@ -244,7 +257,8 @@ function offerBetterView(reader: HTMLElement): void {
     const choice = choiceOf(reader.dataset.viewChosen);
     let dismissed = false, attempt = 0;
     const answer = (view: ReadingView | null): void => {
-        offer.hidden = !offersSmartBook(choice, 'original', view, dismissed);
+        // Smart Pages are a view of their own; only the scanned original pages are offered a better one.
+        offer.hidden = !offersSmartBook(choice, reader.dataset.smartPages ? 'smartpages' : 'original', view, dismissed);
     };
     offer.querySelector('[data-view-offer-dismiss]')?.addEventListener('click', () => { dismissed = true; offer.hidden = true; });
     offer.querySelector<HTMLButtonElement>('[data-view-offer-open]')?.addEventListener('click', () => {

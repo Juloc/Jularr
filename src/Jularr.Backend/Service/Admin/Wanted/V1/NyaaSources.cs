@@ -43,7 +43,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         }
 
         // The categories of the profile: the languages it asks for and the fallback it names.
-        private static Dictionary<string, string?> Categories(QualityProfile profile)
+        internal static Dictionary<string, string?> Categories(QualityProfile profile)
         {
             var categories = new Dictionary<string, string?>(StringComparer.Ordinal);
             foreach (var language in profile.LanguageOrder)
@@ -65,6 +65,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     break;
                 case LanguageFallbackType.English:
                     categories[English] = "en";
+                    break;
+                case LanguageFallbackType.Any:
+                    // Wanted languages first, then the original, then every language: all three categories are asked.
+                    categories.TryAdd(English, "en");
+                    categories.TryAdd(Translated, null);
+                    categories.TryAdd(Raw, null);
                     break;
                 case LanguageFallbackType.None:
                     break;

@@ -64,4 +64,20 @@ namespace Jularr.Backend.Data.Logic.Instance
         [DataField(typeof(InstanceModuleFields), nameof(InstanceModuleFields.Version))]
         public long Version { get; }
     }
+
+    // The Caching module's settings, saved with the switches: days unused extended data of titles outside the library is kept, and whether Discover's lists are detailed in advance.
+    internal sealed class CachingSettingsData : BaseData
+    {
+        public CachingSettingsData(int catalogDetailKeepDays, bool detailsDiscoverAhead)
+        {
+            CatalogDetailKeepDays = catalogDetailKeepDays;
+            DetailsDiscoverAhead = detailsDiscoverAhead;
+        }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.CatalogDetailKeepDays))]
+        public int CatalogDetailKeepDays { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.DetailsDiscoverAhead))]
+        public bool DetailsDiscoverAhead { get; }
+    }
 }

@@ -123,7 +123,7 @@ namespace Jularr.Backend.Logic.Media
             }
         }
 
-        // The one way a provider's item finds its Work: TMDB first, then IMDB and TVDB, always of the same media type.
+        // The one way a provider's item finds its Work, always of the same media type: a film by TMDB first, a series by TheTVDB first, then the other ids.
         public static async Task<WorkIdentityMatchesData> MatchWorksByIdentityAsync(this LogicContext ctx, WorkIdentityRowsData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -140,6 +140,7 @@ namespace Jularr.Backend.Logic.Media
                     JOIN "Works" AS work ON work."Id" = identity."WorkId" AND work."MediaTypeId" = item."MediaTypeId"
                 ORDER BY
                     item."Key",
+                    identity."Namespace" = CASE item."MediaTypeId" WHEN 2 THEN 'tvdb' ELSE 'tmdb_movie' END DESC,
                     identity."Namespace" LIKE 'tmdb%' DESC,
                     identity."WorkId";
                 """;

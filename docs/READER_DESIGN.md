@@ -14,7 +14,10 @@ reference is `9cd7fd3`. Later explicit decisions override the earlier mockups:
   arrows; revealed controls overlay the unchanged canvas.
 - Contents, search, notes and settings are overlays. Opening them never reserves a
   second column or reflows the book. Escape/Close returns focus to the opener.
-- Paged or vertical scroll, automatic one/two pages with manual override and RTL.
+- Three reading modes, cycled by one bar button with the current mode's icon: flat pages (instant turns, no book),
+  the book view, or vertical scroll. Automatic one/two pages with manual override and RTL. While paging, arrows beside
+  the page turn it (back left, on right, mirrored right to left); a scrolled text begins with the way back to the previous
+  chapter and ends with the way on to the next.
   Mobile shows one cropped right-hand leaf and advances one page; its two halves
   select backward/forward gestures. The shared tool strip moves below the book by
   CSS Grid, not duplicate markup or JavaScript panel placement.
@@ -43,7 +46,7 @@ reference is `9cd7fd3`. Later explicit decisions override the earlier mockups:
   same text begins (never by the line's box height), so tight line spacing cannot print the end of a
   broken word twice; `LocalEpub_PageBreakInsideAWord_NeverRepeatsTheFirstLine` checks it with a generated EPUB.
 
-This package starts from clean-start and carries forward the approved frame work.
+This package carries forward the approved frame work.
 The overlapping #1228 remains untouched; #289 is roadmap context, not permission
 to invent unavailable TTS/OCR/processing actions. No database/schema changes or
 active installation data are part of this work.
@@ -205,7 +208,7 @@ last rendered pose and retains the same substrate/shadow geometry. Rapid input
 moves concurrent leaves, reverses pending reservations and compresses long jumps
 into a bounded paper packet. Only actual commits update the canonical adapter.
 Stationary held paper and settled paper request no animation frames. Reduced
-motion/off use instant navigation while retaining the static book.
+motion uses instant navigation while retaining the static book; flat pages are the mode without it.
 
 The old `PaperCurl.ts`, PageFlip declarations/license, Vite alias and `page-flip`
 dependency/lock entry are removed. There is one active decorative renderer, not
@@ -216,7 +219,7 @@ full document navigation; app-shell navigation was not expanded in this package.
 
 Passed: TypeScript/Vite build without StPageFlip; 27 affected script, Range,
 background-count and book geometry tests; six typed Form.Range binding cases
-passed on the updated clean-start base. The latter verify invariant bounds/value,
+passed on the updated base. The latter verify invariant bounds/value,
 precision, indexed fields, error output and server/local/read-only guards.
 The current local-EPUB browser case passes, including distinct first leaves, final
 paragraph, bounded printing of fonts/lists/tables/images, stationary held paper,

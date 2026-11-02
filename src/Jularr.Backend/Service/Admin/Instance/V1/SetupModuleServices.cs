@@ -55,7 +55,8 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
             var settings = await Context.ReadInitialInstanceSettingsAsync(CancellationToken);
             await Context.UpdateInstanceSettingsAsync(new InstanceSettingsUpdateData(Data.Name, settings.UiLocaleId, Data.Version, null, null, null, null, null, null, null, null, null,
                 settings.PublicUrl, null), CancellationToken);
-            await Context.UpdateInstanceModulesAsync(Data.Modules.Select(module => new InstanceModuleUpdateData(module.Id, module.IsEnabled, module.Version)).ToArray(), CancellationToken);
+            await Context.UpdateInstanceModulesAsync(Data.Modules.Select(module => new InstanceModuleUpdateData(module.Id, module.IsEnabled, module.Version)).ToArray(),
+                new CachingSettingsData(Data.CatalogDetailKeepDays, Data.DetailsDiscoverAhead), CancellationToken);
             foreach (var media in Data.Media) await Context.UpdateMediaCategoryAsync(new MediaCategoryUpdateData(media.Key, media.IsEnabled, media.Version), CancellationToken);
             await Context.UpdateSetupStepAsync(new SetupStepData(SetupStepType.Profiles), CancellationToken);
             return new UpdateResult(true);

@@ -47,6 +47,31 @@ namespace Jularr.Backend.Service.User.Media.V1
         }
     }
 
+    // The Work page opens a title: the visit counts once a day, and a title without details takes them from its catalog now, so the page reads them locally.
+    // Details older than a day are shown as they are; the metadata job reads them again.
+    [ServiceEndpoint("POST", "/api/v1/works/{workId:long}/open")]
+    public sealed class OpenWorkV1 : UserService<WorkParametersV1, NoData>
+    {
+        private readonly MetadataCatalog _catalog;
+
+        internal OpenWorkV1(MetadataCatalog catalog)
+        {
+            _catalog = catalog;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<OpenedWorkV1>()];
+        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(WorkParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var opened = await Context.ExecuteBatchAsync((ctx, ct) => ctx.MarkWorkViewedAsync(Parameters.WorkId, Auth.ProfileId!.Value, ct), CancellationToken)
+                ?? throw new KeyNotFoundException("The work was not found.");
+            return new OpenedWorkV1(!opened.IsDetailed && !await _catalog.DetailAsync(Context, Parameters.WorkId, Auth.ProfileId!.Value, CancellationToken));
+        }
+    }
+
     [ServiceEndpoint("GET", "/api/v1/works/{workId:long}")]
     public sealed class ReadWorkV1 : UserService<WorkParametersV1>
     {
@@ -56,7 +81,7 @@ namespace Jularr.Backend.Service.User.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Persisted metadata of a Work the profile may open.
+            // Persisted metadata of a Work the profile may open; a catalog title without details shows what its catalog entry says.
             var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 $$"""
@@ -67,9 +92,9 @@ namespace Jularr.Backend.Service.User.Media.V1
                     visible."Title" AS "CanonicalTitle",
                     (entry."WorkId" IS NOT NULL) AS "IsWatchlisted",
                     work."ReleaseYear"::integer AS "ReleaseYear",
-                    visible."Overview",
-                    facts."PosterUrl",
-                    facts."BackdropUrl",
+                    coalesce(visible."Overview", work."Overview") AS "Overview",
+                    coalesce(facts."PosterUrl", work."ImageUrl") AS "PosterUrl",
+                    coalesce(facts."BackdropUrl", work."BackdropUrl") AS "BackdropUrl",
                     (
                         SELECT
                             'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"
@@ -112,6 +137,8 @@ namespace Jularr.Backend.Service.User.Media.V1
                             JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                         WHERE
                             asset."WorkId" = work."Id"
+                        -- Ask for this Work alone: without it every file record of the library is read once.
+                        OFFSET 0
                     ) OR EXISTS (
                         SELECT
                             1
@@ -143,9 +170,15 @@ namespace Jularr.Backend.Service.User.Media.V1
                     availability."MonitoredUnits",
                     workProgress."ProgressStateId",
                     workProgress."ProgressPercent",
-                    catalog."Rating",
-                    catalog."Namespace" AS "RatingSource",
-                    catalog."OriginalTitle",
+                    work."Rating",
+                    -- A series' rating is TMDB's, also while it is TheTVDB's catalog title; an AniList entry keeps AniList's, every other title its catalog's.
+                    CASE
+                        WHEN work."Rating" IS NULL THEN NULL
+                        WHEN work."CatalogNamespace" = 'anilist' THEN 'anilist'
+                        WHEN work."MediaTypeId" = 2 OR work."CatalogNamespace" = 'tvdb' THEN 'tmdb_tv'
+                        ELSE work."CatalogNamespace"
+                    END AS "RatingSource",
+                    work."OriginalTitle",
                     work."ReleasedOn",
                     work."OriginalLanguage",
                     CASE WHEN franchise."Id" IS NOT NULL THEN work."FranchisePosition" END AS "FranchisePosition"
@@ -153,22 +186,6 @@ namespace Jularr.Backend.Service.User.Media.V1
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
                     {{WorkCardProjection.Joins}}
-                    LEFT JOIN LATERAL (
-                        -- The catalog entry the title came from: the one with a rating, the best known one first.
-                        SELECT
-                            catalogEntry."Rating",
-                            catalogEntry."Namespace",
-                            catalogEntry."OriginalTitle"
-                        FROM
-                            "WorkExternalIdentities" AS identity
-                            JOIN "ExternalWorks" AS catalogEntry ON catalogEntry."Namespace" = identity."Namespace" AND catalogEntry."Value" = identity."Value"
-                        WHERE
-                            identity."WorkId" = work."Id"
-                        ORDER BY
-                            catalogEntry."Rating" IS NOT NULL DESC,
-                            catalogEntry."Votes" DESC NULLS LAST
-                        LIMIT 1
-                    ) AS catalog ON TRUE
                     LEFT JOIN "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = @ProfileId
                     LEFT JOIN LATERAL (
                         SELECT
@@ -304,7 +321,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     asset."WorkId" = @WorkId
                     AND files."FileCount" > 0
-                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = asset."WorkId")
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = @WorkId)
                 ORDER BY
                     parent."Number" NULLS FIRST,
                     unit."Number" NULLS FIRST,
@@ -412,13 +429,24 @@ namespace Jularr.Backend.Service.User.Media.V1
                     {{WorkCardProjection.Columns}},
                     entry."WorkId" IS NOT NULL AS "IsWatchlisted"
                 FROM
-                    "ProfileWorks" AS visible
-                    JOIN "Works" AS work ON work."Id" = visible."WorkId"
+                    "Works" AS work
+                    JOIN LATERAL (
+                        SELECT
+                            profileWork."Title",
+                            profileWork."MediaSubtypeId",
+                            profileWork."IsHidden"
+                        FROM
+                            "ProfileWorks" AS profileWork
+                        WHERE
+                            profileWork."ProfileId" = @ProfileId
+                            AND profileWork."WorkId" = work."Id"
+                        -- Keep the profile view parameterized by the selected Work, not built for every Work.
+                        OFFSET 0
+                    ) AS visible ON TRUE
                     {{WorkCardProjection.Joins}}
-                    LEFT JOIN "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = visible."ProfileId"
+                    LEFT JOIN "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = @ProfileId
                 WHERE
-                    visible."ProfileId" = @ProfileId
-                    AND NOT visible."IsHidden"
+                    NOT visible."IsHidden"
                     AND EXISTS (
                         SELECT
                             1
@@ -475,6 +503,8 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     entry."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
+                    -- The profile's view is read for the favorites' ids alone, never for the catalog.
+                    AND visible."WorkId" = ANY(ARRAY(SELECT favorite."WorkId" FROM "WatchlistEntries" AS favorite WHERE favorite."ProfileId" = @ProfileId))
                     AND (
                         cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
                         OR visible."MediaSubtypeId" IS NULL AND visible."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
@@ -492,6 +522,7 @@ namespace Jularr.Backend.Service.User.Media.V1
             sql.Parameters.Add(new WorkListFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.ReleaseYearFrom, Parameters.ReleaseYearTo, Parameters.ProgressStateId, Parameters.LibrarySortTypeId));
             sql.Parameters.Add(LanguageCodes.Aliases);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            sql.DisableJit = true;
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
         }
@@ -517,8 +548,10 @@ namespace Jularr.Backend.Service.User.Media.V1
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"
                 WHERE
                     entry."ProfileId" = @ProfileId
-                    AND NOT visible."IsHidden";
+                    AND NOT visible."IsHidden"
+                    AND visible."WorkId" = ANY(ARRAY(SELECT favorite."WorkId" FROM "WatchlistEntries" AS favorite WHERE favorite."ProfileId" = @ProfileId));
                 """;
+            sql.DisableJit = true;
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return await Context.ReadSql.ReadRequiredAsync<WatchlistCountV1>(sql, CancellationToken);
         }
@@ -565,7 +598,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                     credit."WorkId" = @WorkId
                     AND credit."WorkUnitId" IS NULL
                     AND credit."WorkEditionId" IS NULL
-                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = credit."WorkId")
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = @WorkId)
                 ORDER BY
                     credit."PersonRoleId",
                     credit."Position";
@@ -602,7 +635,8 @@ namespace Jularr.Backend.Service.User.Media.V1
                             "MediaAssets" AS asset
                             JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
                         WHERE
-                            asset."WorkUnitId" = episode."Id"
+                            asset."WorkId" = season."WorkId"
+                            AND asset."WorkUnitId" = episode."Id"
                             AND asset."MediaAssetTypeId" = 1
                             AND file."MissingSince" IS NULL
                             AND NOT file."IsSubtitle"
@@ -619,7 +653,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     season."WorkId" = @WorkId
                     AND season."WorkUnitTypeId" = 1
-                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = season."WorkId")
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = @WorkId)
                 GROUP BY
                     season."Id"
                 ORDER BY
@@ -687,7 +721,8 @@ namespace Jularr.Backend.Service.User.Media.V1
                             "MediaAssets" AS asset
                             JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
                         WHERE
-                            asset."WorkUnitId" = episode."Id"
+                            asset."WorkId" = episode."WorkId"
+                            AND asset."WorkUnitId" = episode."Id"
                             AND asset."MediaAssetTypeId" = 1
                         GROUP BY
                             asset."Id"
@@ -702,7 +737,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                     episode."WorkId" = @WorkId
                     AND episode."WorkUnitTypeId" = 2
                     AND season."Number" = @SeasonNumber
-                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = episode."WorkId")
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = @WorkId)
                 ORDER BY
                     episode."Number";
                 """;

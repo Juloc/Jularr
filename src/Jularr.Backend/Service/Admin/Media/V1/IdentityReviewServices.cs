@@ -32,10 +32,19 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     ARRAY(SELECT (candidate ->> 'Id')::integer FROM jsonb_array_elements(match."Candidates") AS candidate) AS "CandidateIds",
                     ARRAY(
                         SELECT
-                            left(concat_ws(' · ', candidate ->> 'Title', candidate ->> 'Year', candidate ->> 'Format'), 500)
+                            left(concat_ws(' · ', candidate ->> 'Title', candidate ->> 'Native', candidate ->> 'Author', candidate ->> 'Year', candidate ->> 'Format'), 500)
                         FROM
                             jsonb_array_elements(match."Candidates") AS candidate
-                    ) AS "CandidateLabels"
+                    ) AS "CandidateLabels",
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkExternalIdentities" AS novel
+                        WHERE
+                            novel."WorkId" = work."Id"
+                            AND novel."Namespace" = 'syosetu'
+                    ) AS "IsWebNovel"
                 FROM
                     "WorkIdentityMatches" AS match
                     JOIN "Works" AS work ON work."Id" = match."WorkId"
@@ -75,7 +84,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var result = Data.AniListId is { } chosen
                 ? await _matcher.MatchAsync(target, target.MediaTypeId == MediaType.Series
                     ? await Context.ExecuteBatchAsync((ctx, ct) => AniListMatcher.ReadSeasonsAsync(ctx, target.WorkId, ct), CancellationToken)
-                    : [], chosen, CancellationToken)
+                    : [], [], chosen, CancellationToken)
                 : new IdentityMatchResultData(target.WorkId, AniListMetadata.Namespace, IdentityMatchStatusType.Dismissed, "[]", null, "[]", true);
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {

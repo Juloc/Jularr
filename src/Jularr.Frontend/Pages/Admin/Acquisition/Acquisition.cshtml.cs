@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Encodings.Web;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
@@ -9,8 +10,10 @@ using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
+using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Backend.Service.Admin.Storage.V1;
 using Jularr.Frontend.Framework;
+using Jularr.Frontend.Modules.Live;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -21,14 +24,16 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
     public sealed partial class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
         UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, ReadDownloadStorageSettingsV1 downloadStorage, FrontendAssets assets,
         IAntiforgery antiforgery, UiText texts, ReadStorageMountsV1 mounts, ReadStorageDirectoriesV1 directories, InspectDownloadClientV1 inspect, ManageDownloadClientJobV1 manage,
-        BrowseDownloadClientFilesV1 browseFiles, PreviewDownloadClientFileDeleteV1 previewDelete, DeleteDownloadClientFilesV1 deleteFiles) : JularrPage
+        BrowseDownloadClientFilesV1 browseFiles, PreviewDownloadClientFileDeleteV1 previewDelete, DeleteDownloadClientFilesV1 deleteFiles, ReadTorrentEngineV1 torrentEngine,
+        ReadNewsServersV1 newsServers) : JularrPage
     {
         // The kinds each page adds.
         private static readonly IReadOnlyDictionary<AcquisitionConnectionRole, (AcquisitionConnectionType Type, string LabelKey)[]> Additions =
             new Dictionary<AcquisitionConnectionRole, (AcquisitionConnectionType, string)[]>
             {
                 [AcquisitionConnectionRole.Search] = [(AcquisitionConnectionType.Newznab, "acquisition.connection.addIndexer"), (AcquisitionConnectionType.Nyaa, "acquisition.connection.addNyaa")],
-                [AcquisitionConnectionRole.Download] = [(AcquisitionConnectionType.Sabnzbd, "acquisition.connection.addClient"), (AcquisitionConnectionType.Qbittorrent, "acquisition.connection.addClient"), (AcquisitionConnectionType.Usenet, "acquisition.connection.addUsenet")],
+                [AcquisitionConnectionRole.Download] = [(AcquisitionConnectionType.Sabnzbd, "acquisition.connection.addClient"), (AcquisitionConnectionType.Qbittorrent, "acquisition.connection.addClient"), (AcquisitionConnectionType.Usenet, "acquisition.connection.addUsenet"),
+                    (AcquisitionConnectionType.Torrent, "acquisition.connection.addTorrent")],
                 [AcquisitionConnectionRole.Subtitles] = []
             };
 
@@ -40,6 +45,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private readonly List<StorageMountDetailsV1> _storageMounts = [];
         private bool _directStorageReady = true;
         private bool _usenetStorageReady = true;
+        private bool _torrentStorageReady = true;
+        private TorrentEngineV1? _torrentEngine;
+        private IReadOnlyList<NewsServerV1> _newsServers = [];
+
+        // The kinds this page offers now: those it shows, Jularr's own torrent engine only while its module is on.
+        private IEnumerable<(AcquisitionConnectionType Type, string LabelKey)> Offered =>
+            Additions[Role].Where(addition => (Kinds.Length == 0 || Kinds.Contains(addition.Type)) && (addition.Type != AcquisitionConnectionType.Torrent || texts.Can(null, "Torrent")));
         private DownloadClientDashboardV1? _downloadDashboard;
         private DownloadClientBrowseResultV1? _fileBrowser;
         private DownloadClientDeletionPreviewV1? _deletePreview;
@@ -55,11 +67,35 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         private AcquisitionConnectionRole Role
         {
-            get => _role ?? (Request.Path.Value?.EndsWith("/Downloads", StringComparison.OrdinalIgnoreCase) is true ? AcquisitionConnectionRole.Download
-                : Request.Path.Value?.EndsWith("/Subtitles", StringComparison.OrdinalIgnoreCase) is true ? AcquisitionConnectionRole.Subtitles
+            get => _role ?? (IsPath("/Downloads") || IsPath("/Downloads/Servers") || IsPath("/Downloads/Clients") ? AcquisitionConnectionRole.Download
+                : IsPath("/Subtitles") ? AcquisitionConnectionRole.Subtitles
                 : AcquisitionConnectionRole.Search);
             set => _role = value;
         }
+
+        // The download clients are spread over two pages below Downloads: the news servers, and every other client (SABnzbd, qBittorrent, Jularr's torrent engine);
+        // the setup shows every kind on one page.
+        private AcquisitionConnectionType[] Kinds => Role != AcquisitionConnectionRole.Download || SetupWizard.IsActive(Request) ? []
+            : IsPath("/Downloads/Servers") ? [AcquisitionConnectionType.Usenet]
+            : [AcquisitionConnectionType.Sabnzbd, AcquisitionConnectionType.Qbittorrent, AcquisitionConnectionType.Torrent];
+
+        // The name of what the page shows, for its title and its empty list.
+        private string Scope => Kinds switch
+        {
+            [AcquisitionConnectionType.Usenet] => "Servers",
+            [_, ..] => "Clients",
+            _ => Role.ToString()
+        };
+
+        private bool IsPath(string end) => Request.Path.Value?.EndsWith(end, StringComparison.OrdinalIgnoreCase) is true;
+
+        // The page that shows a download client of this kind.
+        private static string? HomeOf(AcquisitionConnectionType type) => type switch
+        {
+            AcquisitionConnectionType.Usenet => "/Admin/Downloads/Servers",
+            AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.Qbittorrent or AcquisitionConnectionType.Torrent => "/Admin/Downloads/Clients",
+            _ => null
+        };
 
         // Deleting asks in a dialog; the test search of an indexer is a dialog too.
         [BindProperty(SupportsGet = true, Name = "delete")]
@@ -101,9 +137,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         protected override void Define(Page page)
         {
-            page.Title("acquisition.role." + Role);
+            page.Title(Scope switch { "Servers" => "downloads.servers.title", "Clients" => "downloads.clients.title", _ => "acquisition.role." + Role });
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/Modal.entry.ts");
+            if (Scope == "Servers") page.Asset("Framework/Components/LiveProgress.entry.ts");
             page.Asset("Pages/Admin/Acquisition/Acquisition.entry.scss");
             page.Asset("Pages/Admin/Acquisition/DownloadConsole.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
@@ -131,6 +168,28 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             {
                 page.Content.Add(StorageNotice(DownloadStorageArea.Usenet));
             }
+            if (!_torrentStorageReady && items.Any(item => item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent))
+            {
+                page.Content.Add(StorageNotice(DownloadStorageArea.Torrent));
+            }
+            // Servers and External clients: the heading, the list and the opened connection; the dock keeps the paging and the download storage.
+            if (Scope is "Servers" or "Clients")
+            {
+                DefineDownloaders(page, csrf, items);
+                AddDialogs(page, csrf);
+                if (_selected is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Sabnzbd } sabnzbd && Request.Query.ContainsKey("Pane"))
+                {
+                    page.Content.Add(DownloadClientTabs(sabnzbd.Id));
+                    page.Content.Add(DownloadClientPane(sabnzbd.Id, csrf));
+                }
+
+                IUiComponent[] storage = Scope == "Servers" || texts.Can(null, "Torrent")
+                    ? [new A(Glyph("drive", 16), new Span(new Text("downloadStorage.configure")).Class("action-dock__text")).Class("button button--soft").Attribute("href", "/Admin/DownloadStorage")]
+                    : [];
+                page.Content.Add(new ActionDock(assets, "acquisition.actions", storage));
+                return;
+            }
+
             var reachable = items.Count(item => State(item) == "healthy");
             var failing = items.Count(item => State(item) is "error" or "backoff");
             var figures = new KpiTiles(
@@ -143,7 +202,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             if (_connections is { } list)
             {
                 IUiComponent cards = items.Count == 0
-                    ? new Div(new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("acquisition.connection.none." + Role)).Attribute("role", "status")).Class("list-empty")).Class("list")
+                    ? new Div(new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("acquisition.connection.none." + Scope)).Attribute("role", "status")).Class("list-empty")).Class("list")
                     : new CardGrid([.. items.Select(item => Card(item, csrf))]);
                 page.Content.Add(new Region("connections", figures, cards).Class("connections__cards").Paged(items.Count, list.PageSize));
             }
@@ -157,9 +216,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
             // The page's actions and the paging float at the bottom.
             var actions = new List<IUiComponent>();
-            foreach (var (addition, label) in Additions[Role])
+            foreach (var (addition, label) in Offered)
             {
-                actions.Add(new A(Glyph("plus", 16), new Span(new Text(label)).Class("action-dock__text")).Class("button").Attribute("href", Address(type: addition)));
+                // A phone shows only the icons, so the two indexer kinds need different ones.
+                actions.Add(new A(Glyph(addition == AcquisitionConnectionType.Nyaa ? "anime" : "plus", 16), new Span(new Text(label)).Class("action-dock__text")).Class("button").Attribute("href", Address(type: addition)));
             }
 
             if (Role == AcquisitionConnectionRole.Search)
@@ -205,9 +265,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             {
                 page.Content.Add(StorageNotice(DownloadStorageArea.Usenet));
             }
+            if (!_torrentStorageReady && items.Any(item => item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent))
+            {
+                page.Content.Add(StorageNotice(DownloadStorageArea.Torrent));
+            }
 
             // The card that adds one: each kind opens its dialog.
-            var adds = Additions[Role].Select(addition => (IUiComponent)new A(Glyph("plus", 14), new Text(addition.LabelKey)).Class("button button--compact button--soft").Attribute("href", Address(type: addition.Type))).ToList();
+            var adds = Offered.Select(addition => (IUiComponent)new A(Glyph("plus", 14), new Text(addition.LabelKey)).Class("button button--compact button--soft").Attribute("href", Address(type: addition.Type))).ToList();
             adds.Add(Role == AcquisitionConnectionRole.Search
                 ? new A(Glyph("swap", 14), new Text("acquisition.connection.importProwlarr")).Class("button button--compact").Attribute("href", SetupWizard.Paths[SetupStepType.Takeover])
                 : new A(Glyph("drive", 14), new Text("downloadStorage.configure")).Class("button button--compact").Attribute("href", SetupWizard.Paths[SetupStepType.DownloadStorage]));
@@ -240,6 +304,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     .Class("feature-card__note")).Class("feature-card__row"));
             }
             body.Add(new Div(new Span(new Text("acquisition.connection.lastTest")).Class("feature-card__note"), Time(item.CheckedAt)).Class("feature-card__row"));
+            if (item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent && _torrentEngine is { } engine) body.Add(TorrentFacts(engine));
             if (Role == AcquisitionConnectionRole.Search && (item.AcquisitionConnectionTypeId is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa))
             {
                 body.Add(new Div(new Span(new Text("acquisition.connection.today")).Class("feature-card__note"), Usage(item)).Class("feature-card__row"));
@@ -248,6 +313,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             if (item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd)
                 body.Add(new A(Glyph("download", 14), new Text("console.open")).Class("button button--compact button--soft")
                     .Attribute("href", Address(item.Id) + "&Pane=downloads"));
+
+            // Every download client has its tab on the Downloads page; a SABnzbd or qBittorrent is a tab of its own.
+            if (DownloadClientKinds.Of(item.AcquisitionConnectionTypeId) is { } kind && kind != DownloadClientKind.Direct)
+                body.Add(new A(Glyph("download", 14), new Text("admin.menu.downloads")).Class("button button--compact button--soft")
+                    .Attribute("href", "/Admin/Downloads?Client=" + kind + (kind is DownloadClientKind.Sabnzbd or DownloadClientKind.Qbittorrent ? "&ConnectionId=" + item.Id.ToString(CultureInfo.InvariantCulture) : "")));
 
             // The settings are inputs of the card; the page's pill saves them. A key or password is never shown again.
             body.Add(ConnectionForm(item.AcquisitionConnectionTypeId, csrf, item));
@@ -265,6 +335,17 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var end = new List<IUiComponent> { Post("Toggle", item.Id, csrf, [("isEnabled", item.IsEnabled ? "false" : "true")], new SwitchButton(item.IsEnabled, "acquisition.connection.active")) };
             return new FeatureCard(new IconTile(Glyph(icon, 18), tone), item.Name, texts["acquisition.connection.type." + item.AcquisitionConnectionTypeId], StateChipOf(item, state), body, start, end).Wide();
         }
+
+        // The engine as measured in this process: the upload lock proven at this read, what went out to peers (never file data) and what came in.
+        private static IUiComponent TorrentFacts(TorrentEngineV1 engine) => new FactList(
+        [
+            ("acquisition.torrent.lock", new Text(engine.IsLockVerified ? "acquisition.torrent.lockVerified" : "acquisition.torrent.lockFailed")),
+            ("acquisition.torrent.uploaded", new Span(new Text("acquisition.torrent.fileData"), new ValueText(" " + ByteSize.Format(engine.SentPieceBytes) + " · "), new Text("acquisition.torrent.control"),
+                new ValueText(" " + ByteSize.Format(engine.SentBytes) + " · " + engine.RefusedFrames.ToString("N0", CultureInfo.CurrentCulture) + " "), new Text("acquisition.torrent.refused"))),
+            ("acquisition.torrent.received", new ValueText(ByteSize.Format(engine.ReceivedBytes))),
+            ("acquisition.torrent.peers", new ValueText(engine.ConnectedPeers.ToString("N0", CultureInfo.CurrentCulture))),
+            ("acquisition.torrent.vpn", new Text(engine.HasVerifiedTunnel ? "acquisition.torrent.vpnVerified" : "acquisition.torrent.vpnNone"))
+        ]);
 
         private IUiComponent StorageNotice(DownloadStorageArea area) =>
             NativeDownloadStorageNotice.Message(area, SetupWizard.IsActive(Request) ? SetupWizard.Paths[SetupStepType.DownloadStorage] : "/Admin/DownloadStorage");
@@ -326,7 +407,17 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         public async Task<IActionResult> OnGetAsync()
         {
+            // The download clients' former address is the External clients page now.
+            if (!SetupWizard.IsActive(Request) && IsPath("/Acquisition/Downloads")) return LocalRedirect("/Admin/Downloads/Clients" + Request.QueryString);
             await LoadDataAsync();
+
+            // A download client opened or added at another page's address (an older link) goes to the page that shows its kind.
+            if (!SetupWizard.IsActive(Request) && (_selected?.AcquisitionConnectionTypeId ?? Type) is { } kind && HomeOf(kind) is { } home
+                && !string.Equals(Request.Path.Value, home, StringComparison.OrdinalIgnoreCase))
+            {
+                return LocalRedirect(home + Request.QueryString);
+            }
+
             PreparePage();
             return Page();
         }
@@ -447,8 +538,16 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 Role = _selected.AcquisitionConnectionRoleId;
             }
 
-            _connections = await connections.ExecuteAsync<PageResult<AcquisitionConnectionDetailsV1>>(new ReadAcquisitionConnectionsParametersV1(PageNumber, acquisitionConnectionRoleId: Role),
-                HttpContext.RequestAborted);
+            var kinds = Kind is { } kind && Kinds.Contains(kind) ? [kind] : Kinds;
+            _connections = await connections.ExecuteAsync<PageResult<AcquisitionConnectionDetailsV1>>(new ReadAcquisitionConnectionsParametersV1(PageNumber, acquisitionConnectionRoleId: Role,
+                acquisitionConnectionTypeIds: kinds), HttpContext.RequestAborted);
+            if (Scope == "Clients" && !SetupWizard.IsActive(Request))
+            {
+                _allOfScope = kinds.Length == Kinds.Length ? _connections.Items : (await connections.ExecuteAsync<PageResult<AcquisitionConnectionDetailsV1>>(
+                    new ReadAcquisitionConnectionsParametersV1(1, 100, Role, Kinds), HttpContext.RequestAborted)).Items;
+            }
+
+            if (Scope == "Servers") _newsServers = await newsServers.ExecuteAsync<BaseDataList<NewsServerV1>>(new ReadDownloadClientsParametersV1(), HttpContext.RequestAborted);
             if (Type is { } requested && NativeDownloadStorageNotice.RequiresDirectStorage(requested)
                 || _selected is { } selected && NativeDownloadStorageNotice.RequiresDirectStorage(selected.AcquisitionConnectionTypeId)
                 || _connections.Items.Any(item => NativeDownloadStorageNotice.RequiresDirectStorage(item.AcquisitionConnectionTypeId)))
@@ -462,6 +561,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 var settings = await downloadStorage.ExecuteAsync<DownloadStorageSettingsV1>(
                     new DownloadStorageParametersV1(DownloadStorageArea.Usenet), HttpContext.RequestAborted);
                 _usenetStorageReady = settings.IsConfigured;
+            }
+            if (Role == AcquisitionConnectionRole.Download && texts.Can(null, "Torrent"))
+            {
+                _torrentStorageReady = (await downloadStorage.ExecuteAsync<DownloadStorageSettingsV1>(
+                    new DownloadStorageParametersV1(DownloadStorageArea.Torrent), HttpContext.RequestAborted)).IsConfigured;
+                if (_connections.Items.Any(item => item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent))
+                    _torrentEngine = await torrentEngine.ExecuteAsync<TorrentEngineV1>(new ReadTorrentEngineParametersV1(), HttpContext.RequestAborted);
             }
             if (_selected is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Sabnzbd } client && !SetupWizard.IsActive(Request))
             {
@@ -503,8 +609,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             var submitted = _input is not null && AcquisitionConnectionId == existing?.Id;
             var input = submitted ? _input! : existing is not null ? InputOf(existing)
-                : (_input ?? new SaveAcquisitionConnectionDataV1(SuggestedName ?? "", type, type == AcquisitionConnectionType.Usenet ? null : SuggestedUrl ?? "", null,
-                    !(NativeDownloadStorageNotice.RequiresDirectStorage(type) && !_directStorageReady || type == AcquisitionConnectionType.Usenet && !_usenetStorageReady),
+                : (_input ?? new SaveAcquisitionConnectionDataV1(SuggestedName ?? "", type, type is AcquisitionConnectionType.Usenet or AcquisitionConnectionType.Torrent ? null : SuggestedUrl ?? "", null,
+                    !(NativeDownloadStorageNotice.RequiresDirectStorage(type) && !_directStorageReady || type == AcquisitionConnectionType.Usenet && !_usenetStorageReady
+                        || type == AcquisitionConnectionType.Torrent && !_torrentStorageReady),
                     type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd ? 25 : 50, [], null, null, null, useSsl: type == AcquisitionConnectionType.Usenet ? true : null));
 
             return new Form<SaveAcquisitionConnectionDataV1>(form =>
@@ -518,6 +625,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 {
                     form.Content(StorageNotice(DownloadStorageArea.Usenet));
                 }
+                else if (type == AcquisitionConnectionType.Torrent && !_torrentStorageReady)
+                {
+                    form.Content(StorageNotice(DownloadStorageArea.Torrent));
+                }
                 form.Text(item => item.Name, "acquisition.connection.name");
                 // A news server is entered as in SABnzbd: server, port and SSL; every other connection by its web address.
                 if (type == AcquisitionConnectionType.Usenet)
@@ -526,7 +637,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     form.Number(item => item.Port, "acquisition.connection.port");
                     form.Select(item => item.UseSsl, "acquisition.connection.ssl", [new SelectOption("True", texts["acquisition.connection.on"]), new SelectOption("False", texts["acquisition.connection.off"])]);
                 }
-                else
+                else if (type != AcquisitionConnectionType.Torrent)
                 {
                     form.Text(item => item.BaseUrl, "acquisition.connection.baseUrl", help: new FieldHelp($"hint.acquisition.{type}.placeholder", $"hint.acquisition.{type}.info"));
                 }
@@ -551,7 +662,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 {
                     form.Password(item => item.ApiKey, "acquisition.connection.memberKey", "new-password");
                 }
-                else if (type is not (AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Nyaa))
+                else if (type is not (AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Nyaa or AcquisitionConnectionType.Narou or AcquisitionConnectionType.Torrent))
                 {
                     form.Password(item => item.ApiKey, "acquisition.connection.apiKey", "new-password");
                 }
@@ -670,11 +781,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             var home = Role switch
             {
-                AcquisitionConnectionRole.Download => SetupWizard.Address(Request, SetupStepType.Downloads, "/Admin/Acquisition/Downloads"),
+                AcquisitionConnectionRole.Download => SetupWizard.Address(Request, SetupStepType.Downloads, Kinds is [var kind, ..] ? HomeOf(kind)! : "/Admin/Downloads/Clients"),
                 AcquisitionConnectionRole.Subtitles => "/Admin/Acquisition/Subtitles",
                 _ => SetupWizard.Address(Request, SetupStepType.Indexers, "/Admin/Acquisition")
             };
-            var address = home + "?PageNumber=" + (pageNumber ?? PageNumber).ToString(CultureInfo.InvariantCulture);
+            var address = home + "?PageNumber=" + (pageNumber ?? PageNumber).ToString(CultureInfo.InvariantCulture) + (Kind is { } shownKind ? "&Kind=" + shownKind : "");
             if (id is { } connectionId) address += "&AcquisitionConnectionId=" + connectionId.ToString(CultureInfo.InvariantCulture);
             else if (type is { } connectionType) address += "&Type=" + connectionType + (SuggestedUrl is { } url ? "&url=" + Uri.EscapeDataString(url) : "")
                 + (SuggestedName is { } name ? "&name=" + Uri.EscapeDataString(name) : "");

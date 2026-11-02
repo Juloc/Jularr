@@ -16,8 +16,16 @@ namespace Jularr.Backend.Logic.Media
             .DistinctBy(pair => pair.Item1, StringComparer.OrdinalIgnoreCase)
             .ToFrozenDictionary(pair => pair.Item1, pair => pair.Item2, StringComparer.OrdinalIgnoreCase);
 
+        private static readonly FrozenDictionary<string, string> ThreeLetter = CultureInfo.GetCultures(CultureTypes.NeutralCultures)
+            .Where(culture => culture.TwoLetterISOLanguageName.Length == 2 && culture.TwoLetterISOLanguageName != "iv" && culture.ThreeLetterISOLanguageName.Length == 3)
+            .DistinctBy(culture => culture.TwoLetterISOLanguageName, StringComparer.OrdinalIgnoreCase)
+            .ToFrozenDictionary(culture => culture.TwoLetterISOLanguageName, culture => culture.ThreeLetterISOLanguageName, StringComparer.OrdinalIgnoreCase);
+
         // "de", "deu", "ger" and "de-AT" are German; anything else is unknown.
         public static string? ToTwoLetter(string? code) => code is null ? null : TwoLetter.GetValueOrDefault(code.Split('-', '_')[0]);
+
+        // The terminology form TheTVDB uses: "de" and "de-AT" are "deu".
+        public static string? ToThreeLetter(string? code) => ToTwoLetter(code) is { } two ? ThreeLetter.GetValueOrDefault(two) : null;
 
         // Card SQL compares indexed facts without maintaining another ISO mapping.
         internal static LanguageAliasesData Aliases { get; } = new(JsonSerializer.Serialize(TwoLetter));

@@ -119,6 +119,9 @@ namespace Jularr.Integrations.Data.AniList
         // The credited people with their ids at this provider.
         public IReadOnlyList<ProviderPerson> People { get; init; } = [];
 
+        // The story staff in their own script, as Japanese sites credit them.
+        public IReadOnlyList<string> NativeAuthors { get; init; } = [];
+
         // The language of its country of origin: Japanese, Korean or Chinese.
         public string? OriginalLanguage { get; init; }
 
@@ -154,9 +157,12 @@ namespace Jularr.Integrations.Data.AniList
     // One entry of a person's list; chapters and volumes of a title are read as its totals.
     internal sealed class AniListListEntry
     {
-        public AniListListEntry(int mediaId, long listEntryId, bool isManga, string title, string status, int progress, int progressVolumes, int score, int? totalCount, int? totalVolumes,
-            DateTimeOffset updatedAt)
+        public AniListListEntry(int mediaId, long listEntryId, bool isManga, string title, string? coverUrl, bool isNovel, int? releaseYear, string status, int progress, int progressVolumes, int score,
+            int? totalCount, int? totalVolumes, DateTimeOffset updatedAt)
         {
+            CoverUrl = coverUrl;
+            IsNovel = isNovel;
+            ReleaseYear = releaseYear;
             MediaId = mediaId;
             ListEntryId = listEntryId;
             IsManga = isManga;
@@ -174,6 +180,11 @@ namespace Jularr.Integrations.Data.AniList
         public long ListEntryId { get; }
         public bool IsManga { get; }
         public string Title { get; }
+        public string? CoverUrl { get; }
+
+        // A book of AniList's manga list that is a (light) novel.
+        public bool IsNovel { get; }
+        public int? ReleaseYear { get; }
         public string Status { get; }
 
         // Episodes or chapters, and volumes.

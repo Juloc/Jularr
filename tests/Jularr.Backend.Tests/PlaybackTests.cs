@@ -222,6 +222,16 @@ namespace Jularr.Backend.Tests
             StringAssert.StartsWith(vtt, "WEBVTT");
             StringAssert.Contains(vtt, "00:00:01.000 --> 00:00:02.000");
             StringAssert.Contains(vtt, "Grüße");
+            // An ASS file is marked styled and arrives as it is; a SubRip file has no styles to ask for.
+            var styledFile = tracks.Single(track => track.Language == "en" && track.Key.StartsWith('f'));
+            Assert.IsTrue(styledFile.IsStyled);
+            Assert.IsFalse(sidecar.IsStyled);
+            using var styled = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/" + assetId + "/subtitles/" + styledFile.Key + "?styled=true");
+            Assert.AreEqual(HttpStatusCode.OK, styled.StatusCode, await styled.Content.ReadAsStringAsync());
+            Assert.AreEqual("text/x-ssa", styled.Content.Headers.ContentType!.MediaType);
+            Assert.AreEqual("[Script Info]", await styled.Content.ReadAsStringAsync());
+            using var notStyled = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/" + assetId + "/subtitles/" + sidecar.Key + "?styled=true");
+            Assert.AreEqual(HttpStatusCode.NotFound, notStyled.StatusCode);
             using var image = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/" + assetId + "/subtitles/s4");
             Assert.AreEqual(HttpStatusCode.NotFound, image.StatusCode);
 
@@ -313,6 +323,30 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, playlist.StatusCode);
             StringAssert.Contains(await playlist.Content.ReadAsStringAsync(), "segments/2.ts");
 
+            // The Info pane asks what the playback is made of: the probed streams and what the server does with them.
+            using var factsResponse = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, plan.StreamUrl.Replace("playlist.m3u8", "facts", StringComparison.Ordinal)));
+            Assert.AreEqual(HttpStatusCode.OK, factsResponse.StatusCode, await factsResponse.Content.ReadAsStringAsync());
+            var facts = (await factsResponse.Content.ReadFromJsonAsync<PlaybackFactsV1>())!;
+            Assert.AreEqual(PlaybackModeType.Remux, facts.PlaybackModeTypeId);
+            Assert.AreEqual("h264", facts.VideoCodec);
+            Assert.AreEqual("aac", facts.AudioCodec);
+            Assert.AreEqual(true, facts.CopyVideo);
+            Assert.AreEqual(true, facts.CopyAudio);
+
+            // Moving the audio against the picture re-encodes it: the same file now needs a conversion of its own.
+            using var movedStart = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", new StartPlaybackDataV1(["hls"], ["h264"], ["aac"], audioOffsetMs: 250));
+            Assert.AreEqual(HttpStatusCode.OK, movedStart.StatusCode, await movedStart.Content.ReadAsStringAsync());
+            var moved = (await movedStart.Content.ReadFromJsonAsync<PlaybackPlanV1>())!;
+            Assert.AreEqual(PlaybackModeType.Transcode, moved.PlaybackModeTypeId);
+            StringAssert.EndsWith(moved.StreamUrl, "/playlist.m3u8");
+            using var movedFacts = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, moved.StreamUrl.Replace("playlist.m3u8", "facts", StringComparison.Ordinal)));
+            var movedInfo = (await movedFacts.Content.ReadFromJsonAsync<PlaybackFactsV1>())!;
+            Assert.AreEqual(true, movedInfo.CopyVideo);
+            Assert.AreEqual(false, movedInfo.CopyAudio);
+            Assert.AreEqual(192, movedInfo.AudioKilobits);
+            using var outOfRange = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", new StartPlaybackDataV1(["hls"], ["h264"], ["aac"], audioOffsetMs: 20_000));
+            Assert.AreEqual(HttpStatusCode.BadRequest, outOfRange.StatusCode);
+
             // Finished segments stream; missing ones need FFmpeg.
             var directory = Path.Combine(cache.Path, plan.PlaybackSessionId.ToString("N"));
             Directory.CreateDirectory(directory);
@@ -326,6 +360,27 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, unavailable.StatusCode);
             using var outside = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, segments + "9.ts"));
             Assert.AreEqual(HttpStatusCode.NotFound, outside.StatusCode);
+
+            // A cast device cannot sign in: it plays from a signed address of this session, fetched from another origin, and from nowhere else.
+            using var castAddress = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, plan.StreamUrl.Replace("playlist.m3u8", "cast", StringComparison.Ordinal)));
+            Assert.AreEqual(HttpStatusCode.OK, castAddress.StatusCode, await castAddress.Content.ReadAsStringAsync());
+            var cast = (await castAddress.Content.ReadFromJsonAsync<PlaybackCastV1>())!;
+            StringAssert.StartsWith(cast.Url, "/api/v1/cast/");
+            StringAssert.EndsWith(cast.Url, "/playlist.m3u8");
+            using var anonymous = ((TestServer)host.Services.GetRequiredService<IServer>()).CreateClient();
+            using var castPlaylist = await anonymous.GetAsync(cast.Url);
+            Assert.AreEqual(HttpStatusCode.OK, castPlaylist.StatusCode);
+            StringAssert.Contains(await castPlaylist.Content.ReadAsStringAsync(), "segments/2.ts");
+            Assert.AreEqual("*", castPlaylist.Headers.GetValues("Access-Control-Allow-Origin").Single());
+            using var castSegment = await anonymous.GetAsync(cast.Url.Replace("playlist.m3u8", "segments/0.ts", StringComparison.Ordinal));
+            Assert.AreEqual(HttpStatusCode.OK, castSegment.StatusCode);
+            Assert.AreEqual("ts0", await castSegment.Content.ReadAsStringAsync());
+            Assert.AreEqual("*", castSegment.Headers.GetValues("Access-Control-Allow-Origin").Single());
+            using var withoutAddress = await anonymous.GetAsync(plan.StreamUrl);
+            Assert.AreEqual(HttpStatusCode.Unauthorized, withoutAddress.StatusCode);
+            var token = cast.Url["/api/v1/cast/".Length..^"/playlist.m3u8".Length];
+            using var forged = await anonymous.GetAsync("/api/v1/cast/" + token[..^3] + "AAA/playlist.m3u8");
+            Assert.AreEqual(HttpStatusCode.NotFound, forged.StatusCode);
 
             // A deferred commit failure must leave the stream and its cache available.
             await host.Fixture.RunSqlAsync(
@@ -355,6 +410,42 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(Directory.Exists(directory));
             using var gone = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, plan.StreamUrl));
             Assert.AreEqual(HttpStatusCode.NotFound, gone.StatusCode);
+            using var castGone = await anonymous.GetAsync(cast.Url);
+            Assert.AreEqual(HttpStatusCode.NotFound, castGone.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task CacheSize_CountsEveryFileAndIgnoresFoldersRemovedWhileCounting()
+        {
+            using var cache = new LibraryTests.TemporaryDirectory();
+            Directory.CreateDirectory(Path.Combine(cache.Path, "a"));
+            File.WriteAllBytes(Path.Combine(cache.Path, "a", "segment0.ts"), new byte[100]);
+            Directory.CreateDirectory(Path.Combine(cache.Path, "b"));
+            var hidden = Path.Combine(cache.Path, "b", "segment1.tmp");
+            File.WriteAllBytes(hidden, new byte[50]);
+            File.SetAttributes(hidden, FileAttributes.Hidden);
+            Assert.AreEqual(150, PlaybackTranscodes.CacheBytes(cache.Path));
+            Assert.AreEqual(0, PlaybackTranscodes.CacheBytes(Path.Combine(cache.Path, "missing")));
+
+            // Sessions end while the cache is counted for a new one: their folders vanish, and the count is no failure.
+            using var stop = new CancellationTokenSource();
+            var churn = Task.Run(() =>
+            {
+                while (!stop.IsCancellationRequested)
+                {
+                    var folder = Path.Combine(cache.Path, Guid.NewGuid().ToString("N"));
+                    Directory.CreateDirectory(folder);
+                    File.WriteAllBytes(Path.Combine(folder, "segment0.ts"), new byte[10]);
+                    Directory.Delete(folder, true);
+                }
+            });
+            for (var index = 0; index < 300; index++)
+            {
+                Assert.IsTrue(PlaybackTranscodes.CacheBytes(cache.Path) >= 150);
+            }
+
+            await stop.CancelAsync();
+            await churn;
         }
 
         [TestMethod]
@@ -396,6 +487,69 @@ namespace Jularr.Backend.Tests
 
             transcodes.Stop(session);
             Assert.IsFalse(Directory.Exists(Path.GetDirectoryName(first)));
+        }
+
+        [TestMethod]
+        public async Task Fonts_OfAMatroskaFile_AreTakenOutOnceAndServedOneByOne()
+        {
+            // Opt-in: JULARR_TEST_FFMPEG names an ffmpeg executable; ffprobe stands beside it.
+            if (Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG") is not { Length: > 0 } ffmpeg)
+            {
+                Assert.Inconclusive("JULARR_TEST_FFMPEG is not configured.");
+                return;
+            }
+
+            var ffprobe = Path.Combine(Path.GetDirectoryName(ffmpeg)!, OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe");
+            using var storage = new LibraryTests.TemporaryDirectory();
+            using var cache = new LibraryTests.TemporaryDirectory();
+            using var media = new LibraryTests.TemporaryDirectory();
+            var font = Path.Combine(media.Path, "Lettering.ttf");
+            byte[] fontBytes = [0, 1, 0, 0, 7, 7, 7, 7];
+            File.WriteAllBytes(font, fontBytes);
+            var mkv = Path.Combine(media.Path, "clip.mkv");
+            using (var generate = System.Diagnostics.Process.Start(ffmpeg, ["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:d=1", "-c:v", "mpeg4",
+                "-attach", font, "-metadata:s:t:0", "mimetype=application/x-truetype-font", mkv]))
+            {
+                await generate.WaitForExitAsync();
+                Assert.AreEqual(0, generate.ExitCode);
+            }
+
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, settings: new Dictionary<string, string>
+            {
+                ["Media:FfmpegPath"] = ffmpeg,
+                ["Media:FfprobePath"] = ffprobe,
+                ["Media:TranscodeCachePath"] = cache.Path
+            });
+            var (assetId, _) = await CreatePlayableAsync(host, storage.Path, wakeOnDemand: false);
+            File.Copy(mkv, Directory.GetFiles(storage.Path, "Film.mp4", SearchOption.AllDirectories).Single(), true);
+            var route = "/api/v1/playback/assets/" + assetId + "/fonts";
+
+            using var listed = await host.SendAsync(HttpMethod.Get, route);
+            Assert.AreEqual(HttpStatusCode.OK, listed.StatusCode, await listed.Content.ReadAsStringAsync());
+            var fonts = (await listed.Content.ReadFromJsonAsync<BaseDataList<PlaybackFontV1>>())!;
+            Assert.AreEqual(1, fonts.Count);
+            Assert.AreEqual("Lettering.ttf", fonts[0].Name);
+            using var bytes = await host.SendAsync(HttpMethod.Get, route + "/" + fonts[0].Key);
+            Assert.AreEqual(HttpStatusCode.OK, bytes.StatusCode);
+            CollectionAssert.AreEqual(fontBytes, await bytes.Content.ReadAsByteArrayAsync());
+
+            // The second ask reads the cache, and a number the file does not have is no font.
+            using var again = await host.SendAsync(HttpMethod.Get, route);
+            Assert.AreEqual(1, (await again.Content.ReadFromJsonAsync<BaseDataList<PlaybackFontV1>>())!.Count);
+            using var other = await host.SendAsync(HttpMethod.Get, route + "/99");
+            Assert.AreEqual(HttpStatusCode.NotFound, other.StatusCode);
+        }
+
+        [TestMethod]
+        public void AttachmentList_NamesTheFontsOfTheContainer_AndNothingElse()
+        {
+            var attachments = MediaProbeClient.ParseAttachments("""
+                {"streams":[{"index":0,"codec_type":"video"},{"index":8,"codec_type":"attachment","tags":{"filename":"Arial.ttf","mimetype":"application/x-truetype-font"}},
+                {"index":9,"codec_type":"attachment","tags":{"filename":"cover.jpg","mimetype":"image/jpeg"}},{"index":10,"codec_type":"attachment"}]}
+                """);
+            CollectionAssert.AreEqual(new[] { 8, 9, 10 }, attachments.Select(item => item.Index).ToArray());
+            Assert.AreEqual("Arial.ttf", attachments[0].FileName);
+            CollectionAssert.AreEqual(new[] { true, false, false }, attachments.Select(PlaybackFonts.IsFont).ToArray());
         }
 
         [TestMethod]

@@ -28,6 +28,9 @@ namespace Jularr.Integrations.Data.Media
         public IReadOnlyList<string> VideoEncoderArguments { get; }
         public IReadOnlyList<string> HardwareAccelerationArguments { get; }
 
+        // The audio runs later (positive) or earlier (negative) than the picture by this many milliseconds; it is encoded, never copied.
+        public int AudioOffsetMs { get; init; }
+
         // Converted audio's rate in kilobits a second.
         public int AudioKilobits { get; init; } = 192;
 

@@ -22,6 +22,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly IntField ReleaseYear = new() { Minimum = 1800, Maximum = 2200, Required = false };
         // On a scale of ten, as the catalogs keep it.
         public static readonly DecimalField Rating = new() { Minimum = 0, Maximum = 10, Scale = 2, Required = false };
+        public static readonly IntField Votes = new() { Minimum = 0, Required = false };
         public static readonly StringField OriginalLanguage = new(NpgsqlDbType.Varchar) { MaximumLength = 2, Required = false };
         public static readonly DateField ReleasedOn = new() { Required = false };
         public static readonly IntField RuntimeMinutes = new() { Minimum = 1, Maximum = 1440, Required = false };

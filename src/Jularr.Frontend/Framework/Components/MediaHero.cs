@@ -17,6 +17,7 @@ namespace Jularr.Frontend.Framework
         private IUiComponent? _corner;
         private IUiComponent? _rating;
         private (int Percent, string Label, string? Value)? _progress;
+        private IUiComponent? _sync;
 
         // A plain cover; a title without art shows the type icon.
         public MediaHero Poster(string? posterUrl, IUiComponent? placeholder = null)
@@ -57,6 +58,13 @@ namespace Jularr.Frontend.Framework
         public MediaHero Progress(int percent, string label, string? value = null)
         {
             _progress = (Math.Clamp(percent, 0, 100), label, value);
+            return this;
+        }
+
+        // Where the profile's account of another service stands, one line under the progress bar.
+        public MediaHero Sync(IUiComponent line)
+        {
+            _sync = line;
             return this;
         }
 
@@ -111,14 +119,17 @@ namespace Jularr.Frontend.Framework
             var poster = _posterUrl is null ? new Div(_placeholder ?? new Span()).Class("media-hero__placeholder") : (IUiComponent)new MediaImage(_posterUrl, "", 342, 513);
             var footer = new List<IUiComponent>();
             if (actions.Count > 0) footer.Add(new Div([.. actions]).Class("media-hero__actions"));
+            var standing = new List<IUiComponent>();
             if (_progress is { } progress)
             {
                 var caption = new List<IUiComponent> { new Span(new ValueText(progress.Label)) };
                 if (progress.Value is not null) caption.Add(new Span(new ValueText(progress.Value)));
-                footer.Add(new Div(new Div([.. caption]).Class("media-hero__progress-caption"),
-                    new Progress().Attribute("max", "100").Attribute("value", progress.Percent.ToString(CultureInfo.InvariantCulture)).Attribute("aria-label", progress.Label).Class("media-hero__progress-bar"))
-                    .Class("media-hero__progress"));
+                standing.Add(new Div([.. caption]).Class("media-hero__progress-caption"));
+                standing.Add(new Progress().Attribute("max", "100").Attribute("value", progress.Percent.ToString(CultureInfo.InvariantCulture)).Attribute("aria-label", progress.Label).Class("media-hero__progress-bar"));
             }
+
+            if (_sync is not null) standing.Add(new Div(_sync).Class("media-hero__sync"));
+            if (standing.Count > 0) footer.Add(new Div([.. standing]).Class("media-hero__progress"));
 
             var layout = new List<IUiComponent>
             {
@@ -127,7 +138,7 @@ namespace Jularr.Frontend.Framework
             };
             if (footer.Count > 0)
             {
-                layout.Add(new Div([.. footer]).Class(_progress is not null && actions.Count > 0 ? "media-hero__footer media-hero__footer--progress" : "media-hero__footer"));
+                layout.Add(new Div([.. footer]).Class(standing.Count > 0 && actions.Count > 0 ? "media-hero__footer media-hero__footer--progress" : "media-hero__footer"));
             }
 
             parts.Add(new Div([.. layout]).Class("media-hero__layout"));

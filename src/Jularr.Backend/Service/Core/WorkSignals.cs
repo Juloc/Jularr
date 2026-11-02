@@ -40,7 +40,7 @@ namespace Jularr.Backend.Service.Core
         }
     }
 
-    // The queues the workers wait on: scans, backups, benchmarks, library searches and newly grabbed downloads.
+    // The queues the workers wait on: scans, backups, benchmarks, library searches, newly grabbed downloads and Jularr's own torrents.
     public sealed class WorkSignals
     {
         public WorkSignal Imports { get; } = new();
@@ -49,5 +49,6 @@ namespace Jularr.Backend.Service.Core
         public WorkSignal Benchmarks { get; } = new();
         public WorkSignal Searches { get; } = new();
         public WorkSignal Downloads { get; } = new();
+        public WorkSignal Torrents { get; } = new();
     }
 }

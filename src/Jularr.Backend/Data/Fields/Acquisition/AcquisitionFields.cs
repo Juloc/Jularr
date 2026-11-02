@@ -9,6 +9,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly StringField Name = new(NpgsqlDbType.Varchar) { MaximumLength = 128, AllowBlank = false, Trim = true };
         public static readonly EnumField AcquisitionConnectionTypeId = new(typeof(AcquisitionConnectionType));
+        public static readonly EnumArrayField AcquisitionConnectionTypeIds = new(typeof(AcquisitionConnectionType)) { MaximumLength = 12 };
         public static readonly StringField BaseUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, AllowBlank = false, Trim = true, TrimsTrailingSlash = true, Format = StringFormat.HttpUrl };
         public static readonly StringField Host = new(NpgsqlDbType.Varchar) { MaximumLength = 253, Required = false, AllowBlank = false, Trim = true, Format = StringFormat.HostName };
         public static readonly IntField Port = new() { Minimum = 1, Maximum = 65535, Required = false };
@@ -43,6 +44,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly IntField GrabLimit = new() { Minimum = 1, Maximum = 100000, Required = false };
         public static readonly IntField QueryCount = new() { Minimum = 0 };
         public static readonly IntField GrabCount = new() { Minimum = 0 };
+        public static readonly IntField RetryAfterSeconds = new() { Minimum = 1, Maximum = 86400, Required = false };
         public static readonly DateTimeField RetryAt = new() { Required = false };
         public static readonly BoolField IsBackedOff = new();
         public static readonly StringField ErrorKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
@@ -67,6 +69,9 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly IntField Score = new();
         public static readonly StringField ReasonCode = new() { MaximumLength = 64, AllowBlank = false };
         public static readonly StringField ReasonValue = new() { MaximumLength = 1000, Required = false };
+        public static readonly EnumField BookReleaseKindId = new(typeof(BookReleaseKind)) { Required = false };
+        public static readonly EnumField ReleaseSizeMarkId = new(typeof(ReleaseSizeMark)) { Required = false };
+        public static readonly BoolField IsComplete = new();
         public static readonly IntField ProgressPercent = new() { Minimum = 0, Maximum = 100, Required = false };
         public static readonly StringField Progress = new() { AllowBlank = false };
         public static readonly StringField ExternalId = new(NpgsqlDbType.Varchar) { MaximumLength = 128, Required = false };

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Jularr.Integrations.Data.Browser;
+using Jularr.Integrations.Logic.AnnasArchive;
 
 namespace Jularr.Integrations.Logic.Browser
 {
@@ -10,7 +11,7 @@ namespace Jularr.Integrations.Logic.Browser
         private BrowserViewport _viewport = new(1280, 900);
         public bool HasManualControl => DateTime.UtcNow.Ticks < Interlocked.Read(ref _manualUntil);
 
-        public async Task<BrowserViewport> BeginManualAsync(Uri address, DateTimeOffset expiresAt, CancellationToken ct)
+        public async Task<BrowserViewport> BeginManualAsync(Uri address, DateTimeOffset expiresAt, CancellationToken ct, bool opensPage = false)
         {
             if (!IsAvailable || !string.IsNullOrWhiteSpace(_options.RemoteAddress) || !await IsSafeSourceAsync(address, ct))
             {
@@ -26,7 +27,8 @@ namespace Jularr.Integrations.Logic.Browser
                 await _client!.SendAsync("Browser.setDownloadBehavior", new { behavior = "deny" }, ct);
                 await _client.SendAsync("Page.bringToFront", null, ct);
                 var current = await _client!.EvaluateAsync("location.href", ct);
-                if (!Uri.TryCreate(current, UriKind.Absolute, out var currentAddress) || !SameOrigin(currentAddress, address))
+                if (!Uri.TryCreate(current, UriKind.Absolute, out var currentAddress) || !CanResumeManualPage(address, currentAddress, opensPage)
+                    || !await IsSafeSourceAsync(currentAddress, ct))
                 {
                     await _client.SendAsync("Page.navigate", new { url = address.AbsoluteUri }, ct);
                 }
@@ -51,6 +53,10 @@ namespace Jularr.Integrations.Logic.Browser
                 _gate.Release();
             }
         }
+
+        internal static bool CanResumeManualPage(Uri address, Uri current, bool opensPage) =>
+            (SameOrigin(address, current) || AnnasArchiveClient.IsTrustedSource(address, current))
+            && (!opensPage || string.Equals(address.PathAndQuery, current.PathAndQuery, StringComparison.Ordinal));
 
         public async Task<byte[]> CaptureManualAsync(DateTimeOffset expiresAt, CancellationToken ct)
         {

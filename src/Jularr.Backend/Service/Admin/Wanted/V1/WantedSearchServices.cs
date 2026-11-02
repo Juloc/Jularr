@@ -49,9 +49,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 var reason = ReferenceEquals(evaluation, winner) && result.Selection.WinnerReason is { } won
                     ? (won.Code, won.Value)
                     : evaluation.Reasons.Count > 0 ? (evaluation.Reasons[^1].Code, evaluation.Reasons[^1].Value) : ("Eligible", null);
+                // Every rule with its points: the profile's custom formats, then the media type's rules.
+                var book = evaluation.Candidate.Parsed?.Book;
+                var points = (evaluation.Score?.FormatPoints ?? []).Concat(evaluation.Candidate.ContextPoints)
+                    .Select(point => new ReleaseScorePointV1(point.Code, TextLimit.Cut(point.Value, 1000), point.Points));
                 return new WantedReleaseCandidateV1(evaluation.Candidate.Id, offer.Title, offer.ConnectionName, offer.SizeBytes, offer.PublishedAt?.UtcDateTime, evaluation.Score?.QualityKey,
                     evaluation.Decision switch { SelectionDecision.Eligible => ReleaseDecisionType.Eligible, SelectionDecision.ManualReview => ReleaseDecisionType.ManualReview, _ => ReleaseDecisionType.Rejected },
-                    evaluation.PreferenceScore, reason.Item1, TextLimit.Cut(reason.Item2, 1000));
+                    evaluation.PreferenceScore, reason.Item1, TextLimit.Cut(reason.Item2, 1000), book?.Kind, book?.VolumeStart, book?.VolumeEnd, book?.IsComplete ?? false,
+                    evaluation.Candidate.SizeMark, new BaseDataList<ReleaseScorePointV1>(points), TextLimit.Cut(string.Join(", ", ReleaseGroupLogic.Split(evaluation.Candidate.Parsed?.ReleaseGroup)) is { Length: > 0 } groups ? groups : null, 64));
             }).ToArray());
         }
     }
@@ -120,7 +125,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // Grabbed, imported, failed and blocked releases of one target; release faults block like a manual block.
             var sql = new SqlStatement();
             sql.Statement =
-                """
+                $"""
                 SELECT
                     release."Id",
                     release."Title",
@@ -130,7 +135,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     release."ReasonKey",
                     operation."ProgressPercent"::integer AS "ProgressPercent",
                     release."CreatedAt",
-                    release."AcquisitionReleaseStatusTypeId" = 4 OR release."AcquisitionReleaseStatusTypeId" = 3 AND release."ReasonKey" = 'download_failed' AS "IsBlocked"
+                    release."AcquisitionReleaseStatusTypeId" = 4 OR release."AcquisitionReleaseStatusTypeId" = 3 AND {DownloadLogic.ReleaseFaultSql} AS "IsBlocked"
                 FROM
                     "AcquisitionReleases" AS release
                     LEFT JOIN "AcquisitionConnections" AS connection ON connection."Id" = release."AcquisitionConnectionId"

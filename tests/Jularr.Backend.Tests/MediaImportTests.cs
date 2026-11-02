@@ -12,6 +12,7 @@ using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.OpenLibrary;
 using Jularr.Integrations.Logic.Tmdb;
+using Jularr.Integrations.Logic.Tvdb;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
@@ -326,6 +327,33 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Import_Series_IsTheTvdbSeries_ByItsOwnIdImdbsIdOrItsTitle()
+        {
+            await using var host = await CreateHostAsync(new FakeProviders());
+            var list = """
+                {"version":1,"items":[
+                  {"type":"series","ids":{"imdb":"tt0081189"}},
+                  {"type":"series","ids":{"tvdb":"81189"}},
+                  {"type":"series","title":"Fake Show"}
+                ]}
+                """;
+
+            // An IMDb id finds TheTVDB's series, the same one the TheTVDB id names; a title proposes TheTVDB's search results.
+            var preview = await PreviewAsync(host, list);
+            CollectionAssert.AreEqual(new[] { MediaImportStatusType.New, MediaImportStatusType.Duplicate, MediaImportStatusType.Open }, preview.Rows.Select(row => row.StatusTypeId).ToArray());
+            Assert.AreEqual("tvdb:81189", preview.Rows[0].Choice);
+            Assert.AreEqual(0, preview.Rows[1].DuplicateOf);
+            Assert.AreEqual("tvdb:81189", preview.Rows[2].Candidates.Single().Choice);
+
+            // The series is TheTVDB's with TMDB's id beside it.
+            await RunAsync(host, list, MediaImportActionType.AddOnly);
+            Assert.AreEqual("tmdb_tv:1399 tvdb:81189", await host.ScalarAsync("""
+                SELECT string_agg(identity."Namespace" || ':' || identity."Value", ' ' ORDER BY identity."Namespace") FROM "WorkExternalIdentities" AS identity JOIN "Works" AS work ON work."Id" = identity."WorkId"
+                WHERE work."MediaTypeId" = 2
+                """));
+        }
+
+        [TestMethod]
         public async Task Import_AddOnlyThenMonitor_KeepsOneWorkAndGivesItATargetLater()
         {
             await using var host = await CreateHostAsync(new FakeProviders());
@@ -436,6 +464,8 @@ namespace Jularr.Backend.Tests
             {
                 using var refused = await host.SendAsync(HttpMethod.Post, path, Form(list, MediaImportActionType.MonitorAndSearch));
                 Assert.IsTrue(refused.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden, refused.StatusCode.ToString());
+                using var manualRefused = await host.SendAsync(HttpMethod.Post, path, ChosenBook("""{"version":1,"items":[{"type":"book","title":"Manual original","author":"An Author"}]}""", "list:book"));
+                Assert.IsTrue(manualRefused.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden);
             }
 
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
@@ -672,6 +702,142 @@ namespace Jularr.Backend.Tests
         private static MultipartFormDataContent Form(string json, MediaImportActionType action) =>
             new() { { new StringContent(json), "Json" }, { new StringContent(((byte)action).ToString(System.Globalization.CultureInfo.InvariantCulture)), "Action" } };
 
+        [TestMethod]
+        public void Parse_ExplicitAuthors_RoundTripWithoutSplittingCommasInNames()
+        {
+            const string json = """{"version":1,"items":[{"type":"book","title":"A book","author":["Gottman, John","Nan Silver"]},{"type":"book","title":"Another book","author":"Gottman, John"}]}""";
+            var items = MediaImportParser.Parse(json);
+            Assert.IsTrue(items.All(item => item.Problem is null));
+            CollectionAssert.AreEqual(new[] { "Gottman, John", "Nan Silver" }, items[0].Authors!.ToArray());
+            Assert.AreEqual("Gottman, John", items[1].Creator);
+            var restored = MediaImportParser.Parse(MediaImportParser.Write(items));
+            CollectionAssert.AreEqual(items[0].Authors!.ToArray(), restored[0].Authors!.ToArray());
+            Assert.IsNull(restored[1].Authors);
+        }
+
+        private const string ChosenPreview = "/Admin/Import?handler=Preview";
+        private const string ChosenRun = "/Admin/Import?handler=Apply";
+
+        private static FormUrlEncodedContent ChosenBook(string json, string choice, MediaImportActionType action = MediaImportActionType.MonitorAndSearch) => new(new Dictionary<string, string>
+        {
+            ["Json"] = json, ["Action"] = ((byte)action).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["Choices[0].Index"] = "0", ["Choices[0].Include"] = "true", ["Choices[0].Choice"] = choice
+        });
+
+        [TestMethod]
+        public async Task Import_ListBook_IsExplicitKeepsAuthorsAndEditionIsbnAndRepeatsWithoutDuplicates()
+        {
+            var providers = new FakeProviders { IsUnavailable = true };
+            await using var host = await CreateHostAsync(providers);
+            const string json = """{"version":1,"items":[{"type":"book","title":"A local original","author":["Gottman, John","Nan Silver"],"ids":{"isbn":"9780141439518"}}]}""";
+            using var previewResponse = await host.SendAsync(HttpMethod.Post, ChosenPreview, ChosenBook(json, "list:book"));
+            Assert.AreEqual(HttpStatusCode.OK, previewResponse.StatusCode, await previewResponse.Content.ReadAsStringAsync());
+            var preview = await previewResponse.Content.ReadAsStringAsync();
+            StringAssert.Contains(preview, "value=\"list:book\" selected");
+            StringAssert.Contains(preview, "List data");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+            Assert.AreEqual(0, providers.Requests.Count, "Explicit list data does not require a failing catalog.");
+
+            using var first = await host.SendAsync(HttpMethod.Post, ChosenRun, ChosenBook(json, "list:book"));
+            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
+            Assert.IsTrue(host.Services.GetRequiredService<AcquisitionSearchSignal>().TakeRequest());
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkPeople\""));
+            Assert.AreEqual("Gottman, John|Nan Silver", await host.ScalarAsync("SELECT string_agg(person.\"Name\", '|' ORDER BY credit.\"Position\") FROM \"WorkPeople\" credit JOIN \"People\" person ON person.\"Id\" = credit.\"PersonId\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\""));
+            Assert.AreEqual("9780141439518", await host.ScalarAsync("SELECT \"Value\" FROM \"WorkEditionExternalIdentities\" WHERE \"Namespace\" = 'isbn'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkEditions\" WHERE \"LanguageCode\" IS NULL AND \"EditionFormatId\" IS NULL"));
+
+            using var again = await host.SendAsync(HttpMethod.Post, ChosenRun, ChosenBook(json, "list:book"));
+            Assert.AreEqual(HttpStatusCode.OK, again.StatusCode, await again.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkEditionExternalIdentities\""));
+        }
+
+        [TestMethod]
+        public async Task Import_LocalBooks_AreChoicesEvenWithDifferentCatalogIdAndRejectForgedSelections()
+        {
+            await using var host = await CreateHostAsync(new FakeProviders());
+            const string original = """{"version":1,"items":[{"type":"book","title":"Local book","author":"Original Author"}]}""";
+            using var created = await host.SendAsync(HttpMethod.Post, ChosenRun, ChosenBook(original, "list:book", MediaImportActionType.AddOnly));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var id = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+            var withId = original.Replace("\"author\":\"Original Author\"", "\"author\":\"Original Author\",\"ids\":{\"openlibrary\":\"OL66554W\"}", StringComparison.Ordinal);
+            var preview = (await PreviewAsync(host, withId)).Rows.Single();
+            Assert.AreEqual((MediaImportStatusType.Open, "local_match"), (preview.StatusTypeId, preview.Problem));
+            Assert.IsTrue(preview.Candidates.Any(candidate => candidate.Choice == "local:" + id));
+            Assert.AreEqual(0, (await PreviewAsync(host, original.Replace("Original Author", "Different Author", StringComparison.Ordinal))).Rows.Single().Candidates.Count(candidate => candidate.Source == "local"));
+            using var reused = await host.SendAsync(HttpMethod.Post, ChosenRun, ChosenBook(withId, "local:" + id));
+            Assert.AreEqual(HttpStatusCode.OK, reused.StatusCode, await reused.Content.ReadAsStringAsync());
+            Assert.AreEqual(id, await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\""));
+            using var forged = await host.SendAsync(HttpMethod.Post, ChosenPreview, ChosenBook(original, "local:9999999"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, forged.StatusCode);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+            using var catalogOverride = await host.SendAsync(HttpMethod.Post, ChosenPreview, ChosenBook(withId, "list:book"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, catalogOverride.StatusCode, "A manual choice must not discard a supplied provider identity.");
+            await host.Fixture.RunSqlAsync("""
+                WITH copied AS (
+                    INSERT INTO "Works" ("CanonicalTitle", "MediaTypeId") SELECT "CanonicalTitle", "MediaTypeId" FROM "Works" RETURNING "Id"
+                )
+                INSERT INTO "WorkPeople" ("WorkId", "PersonId", "PersonRoleId", "Position")
+                SELECT copied."Id", credit."PersonId", credit."PersonRoleId", credit."Position" FROM copied CROSS JOIN "WorkPeople" AS credit;
+                """);
+            var ambiguous = (await PreviewAsync(host, original)).Rows.Single();
+            Assert.AreEqual(2, ambiguous.Candidates.Count(candidate => candidate.Source == "local"));
+            Assert.IsNull(ambiguous.Choice);
+            using var notGuessed = await host.SendAsync(HttpMethod.Post, ChosenPreview, ChosenBook(original, "list:book"));
+            StringAssert.Contains(await notGuessed.Content.ReadAsStringAsync(), "Invalid");
+            StringAssert.Contains(await notGuessed.Content.ReadAsStringAsync(), "Several existing books match");
+        }
+
+        [TestMethod]
+        public async Task Import_ListBook_WithConflictingIsbn_IsNotCreatedOrRebound()
+        {
+            await using var host = await CreateHostAsync(new FakeProviders());
+            const string json = """{"version":1,"items":[{"type":"book","title":"First original","author":"First Author","ids":{"isbn":"9780141439518"}}]}""";
+            using var created = await host.SendAsync(HttpMethod.Post, ChosenRun, ChosenBook(json, "list:book"));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            using var conflict = await host.SendAsync(HttpMethod.Post, ChosenPreview, ChosenBook(json.Replace("First", "Other", StringComparison.Ordinal), "list:book"));
+            Assert.AreEqual(HttpStatusCode.OK, conflict.StatusCode, await conflict.Content.ReadAsStringAsync());
+            StringAssert.Contains(await conflict.Content.ReadAsStringAsync(), "Invalid");
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+        }
+
+        [TestMethod]
+        public async Task Import_ListBook_ConcurrentRequests_CreateOneCanonicalBook()
+        {
+            await using var host = await CreateHostAsync(new FakeProviders());
+            const string json = """{"version":1,"items":[{"type":"book","title":"Concurrent original","author":"One Author"}]}""";
+            var responses = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => host.SendAsync(HttpMethod.Post, ChosenRun, ChosenBook(json, "list:book"))));
+            foreach (var response in responses)
+            {
+                using (response) Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            }
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+        }
+
+        [TestMethod]
+        public async Task Import_ListBook_CatalogMatchPreservesItsUnclassifiedIsbn()
+        {
+            var providers = new FakeProviders { IsUnavailable = true };
+            await using var host = await CreateHostAsync(providers);
+            const string json = """{"version":1,"items":[{"type":"book","title":"Pride and Prejudice","author":"Jane Austen","ids":{"isbn":"9780141439518"}}]}""";
+            using var created = await host.SendAsync(HttpMethod.Post, ChosenRun, ChosenBook(json, "list:book", MediaImportActionType.AddOnly));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var id = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+            var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"Works\""))!;
+            providers.IsUnavailable = false;
+            using var matched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/" + id + "/match", new RematchWorkDataV1("openlibrary", "OL66554W", "Pride and Prejudice", 1813, version));
+            Assert.AreEqual(HttpStatusCode.OK, matched.StatusCode, await matched.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("""
+                SELECT count(*) FROM "WorkEditionExternalIdentities" AS identity
+                JOIN "WorkEditions" AS edition ON edition."Id" = identity."WorkEditionId"
+                WHERE edition."LanguageCode" IS NULL AND edition."EditionFormatId" IS NULL AND identity."Namespace" = 'isbn' AND identity."Value" = '9780141439518'
+                """));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+        }
+
         private static async Task<MediaImportPreviewV1> PreviewAsync(Host host, string json, MediaImportActionType action = MediaImportActionType.MonitorAndSearch)
         {
             using var response = await host.SendAsync(HttpMethod.Post, Preview, Form(json, action));
@@ -691,15 +857,20 @@ namespace Jularr.Backend.Tests
             var host = await Host.CreateAsync(razor: true, library: true, services: services =>
             {
                 services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => providers);
+                services.AddHttpClient<TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => providers);
                 services.AddHttpClient<OpenLibraryClient>().ConfigurePrimaryHttpMessageHandler(() => providers);
                 services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => providers);
             });
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode, await login.Content.ReadAsStringAsync());
-            var provider = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
-            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1(Token));
-            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            foreach (var key in new[] { "tmdb", "tvdb" })
+            {
+                var provider = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = '" + key + "'"))!;
+                using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1(Token));
+                Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            }
+
             return host;
         }
 
@@ -740,6 +911,22 @@ namespace Jularr.Backend.Tests
                         "/works/OL66554W.json" => Json("""{"title":"Pride and Prejudice","first_publish_date":"1813","description":{"value":"A novel of manners."},"covers":[14348537],"authors":[{"author":{"key":"/authors/OL21594A"}}]}"""),
                         "/authors/OL21594A.json" => Json("""{"name":"Jane Austen"}"""),
                         "/works/OL66554W/editions.json" => Json("""{"entries":[{"key":"/books/OL1M","title":"Pride and Prejudice","languages":[{"key":"/languages/eng"}],"physical_format":"Paperback","isbn_13":["9780141439518"],"publishers":["Penguin"],"publish_date":"2003"}]}"""),
+                        _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+                    });
+                }
+
+                // TheTVDB describes the series TMDB names and finds it by its IMDb id and its name.
+                if (uri.Host == "api4.thetvdb.com")
+                {
+                    return Task.FromResult(uri.AbsolutePath switch
+                    {
+                        "/v4/login" => Json("""{"data":{"token":"tvdb-test-token"}}"""),
+                        "/v4/search/remoteid/tt0081189" => Json("""{"data":[{"series":{"id":81189}}]}"""),
+                        "/v4/search" when uri.Query.Contains("Fake%20Show", StringComparison.Ordinal)
+                            => Json("""{"data":[{"tvdb_id":"81189","name":"Fake Show","year":"2020","type":"series","translations":{"eng":"Fake Show"}}]}"""),
+                        "/v4/search" => Json("""{"data":[]}"""),
+                        "/v4/series/81189/extended" => Json("""{"data":{"id":81189,"name":"Fake Show","overview":"A show.","firstAired":"2020-01-01","remoteIds":[{"sourceName":"TheMovieDB.com","id":"1399"}]}}"""),
+                        "/v4/series/81189/episodes/default" => Json("""{"data":{"episodes":[]},"links":{"next":null}}"""),
                         _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                     });
                 }

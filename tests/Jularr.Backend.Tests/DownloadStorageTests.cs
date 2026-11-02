@@ -423,5 +423,61 @@ namespace Jularr.Backend.Tests
                 new SaveDownloadStorageDataV1(mountId, "", mountId, "Complete", 0, null, null, 2, saved.Version, true));
             Assert.AreNotEqual(HttpStatusCode.OK, overlap.StatusCode);
         }
+
+        // A running direct download holds the direct area's folders, never the torrent engine's; only the engine's own running jobs do.
+        [TestMethod]
+        public async Task Storage_TorrentFoldersAreHeldByTheEnginesJobsOnly()
+        {
+            using var folder = new TemporaryDirectory();
+            foreach (var name in new[] { "DirectIncomplete", "DirectComplete", "TorrentIncomplete", "TorrentComplete", "TorrentOther" })
+            {
+                Directory.CreateDirectory(Path.Combine(folder.Path, name));
+            }
+
+            await using var host = await LibraryTests.CreateHostAsync(folder.Path);
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts",
+                new SaveStorageMountDataV1("Downloads", StorageProtocolType.Local, null, folder.Path, null, null, null, false, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var mountId = (await created.Content.ReadFromJsonAsync<CreateStorageMountResultV1>())!.Id;
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "BaseUrl") VALUES (902, 'Gutenberg', 3, 'https://gutendex.example.test');
+                INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId") VALUES (903, 'Engine', 12);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (801, 3, 'Queue Book');
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (801, 801);
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId") VALUES (1, 801, 'd-1', 'Direct release', 1), (2, 801, 't-1', 'Torrent release', 1);
+                INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId") VALUES (1, 2, 2, 1, 902);
+                """);
+
+            async Task<HttpResponseMessage> SaveAsync(int area, string incomplete, string complete, int parallel)
+            {
+                using var current = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/downloads/" + area);
+                var version = (await current.Content.ReadFromJsonAsync<DownloadStorageSettingsV1>())!.Version;
+                return await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/downloads/" + area,
+                    new SaveDownloadStorageDataV1(mountId, incomplete, mountId, complete, 0, null, null, parallel, version, true));
+            }
+
+            using (var direct = await SaveAsync(2, "DirectIncomplete", "DirectComplete", 2))
+            {
+                Assert.AreEqual(HttpStatusCode.BadRequest, direct.StatusCode, "The running direct download keeps its area's folders.");
+                StringAssert.Contains(await direct.Content.ReadAsStringAsync(), "in_use");
+            }
+
+            using (var torrent = await SaveAsync(3, "TorrentIncomplete", "TorrentComplete", 2))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, torrent.StatusCode, await torrent.Content.ReadAsStringAsync());
+            }
+
+            await host.Fixture.RunSqlAsync("""INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId") VALUES (2, 2, 2, 2, 903);""");
+            using (var moved = await SaveAsync(3, "TorrentOther", "TorrentComplete", 2))
+            {
+                Assert.AreEqual(HttpStatusCode.BadRequest, moved.StatusCode, "The engine's own running job keeps its folders.");
+                StringAssert.Contains(await moved.Content.ReadAsStringAsync(), "in_use");
+            }
+
+            using (var limit = await SaveAsync(3, "TorrentIncomplete", "TorrentComplete", 3))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, limit.StatusCode, "Other settings change while a job runs.");
+            }
+        }
     }
 }

@@ -11,6 +11,7 @@ using Jularr.Backend.Service.User.Instance.V1;
 using Jularr.Backend.Service.User.Notification.V1;
 using Jularr.Backend.Service.User.Profile.V1;
 using Microsoft.AspNetCore.Http;
+using System.Text.RegularExpressions;
 
 namespace Jularr.Frontend.Framework
 {
@@ -36,12 +37,21 @@ namespace Jularr.Frontend.Framework
         // Whether the profile lets a card that lingers on a touch device play its preview by itself.
         public bool AutoplayPreviews { get; private set; } = true;
 
+        // Whether the profile keeps the screen on while a video plays or a book is read.
+        public bool KeepScreenOn { get; private set; } = true;
+
         // A permission inside enabled modules, as the capability service reports them; nothing for a visitor.
         public bool Can(string? permission, params string[] modules) => _capabilities is { } capabilities
             && (permission is null || capabilities.Permissions.Contains(permission, StringComparer.Ordinal))
             && modules.All(module => capabilities.Modules.Contains(module, StringComparer.Ordinal));
 
         public bool Has(string key) => Catalog.Texts.ContainsKey(key);
+
+        // A genre in the viewer's language: providers hand out their names in English or in the language they were asked for, so a known English name is translated here and any other stays as stored.
+        public string Genre(string name) => Catalog.Texts.TryGetValue("genre." + Regex.Replace(name.ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-'), out var value) ? value : name;
+
+        // The stored comma separated genre names, each in the viewer's language.
+        public string? Genres(string? names) => names is null ? null : string.Join(", ", names.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Genre));
 
         public string this[string key] => Catalog.Texts.TryGetValue(key, out var value)
             ? value
@@ -70,6 +80,7 @@ namespace Jularr.Frontend.Framework
                     var profile = await profileService.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(profileId), token);
                     ProfileName = profile.DisplayName;
                     AutoplayPreviews = profile.AutoplayPreviews;
+                    KeepScreenOn = profile.KeepScreenOn;
                 }
 
                 if (this.CanNotify())

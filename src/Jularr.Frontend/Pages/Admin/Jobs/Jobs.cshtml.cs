@@ -2,6 +2,7 @@ using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.System.V1;
+using Jularr.Backend.Data.Admin.Translation.V1;
 using Jularr.Backend.Data.Admin.Worker.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Instance;
@@ -9,8 +10,11 @@ using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Enums.Worker;
 using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Backend.Service.Admin.System.V1;
+using Jularr.Backend.Service.Admin.Translation.V1;
+using Jularr.Frontend.Pages.Admin.Translation;
 using Jularr.Backend.Service.Admin.Worker.V1;
 using Jularr.Frontend.Framework;
+using Jularr.Frontend.Modules.Live;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -18,7 +22,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Jobs
 {
     // Every background job with its state and the Owner's controls, and below it what the operations did; both are lists of the shared list kit.
-    public sealed class JobsModel(ReadWorkerJobsV1 read, PauseWorkerJobV1 pause, RunWorkerJobV1 run, SetWorkerJobUseV1 use, ReadActivityV1 readHistory, ReadHealthV1 readHealth, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class JobsModel(ReadWorkerJobsV1 read, ReadBookTranslationProgressV1 readTranslation, PauseWorkerJobV1 pause, RunWorkerJobV1 run, SetWorkerJobUseV1 use, ReadActivityV1 readHistory, ReadHealthV1 readHealth, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string Address = "/Admin/Jobs";
         private const int PageSize = 25;
@@ -37,11 +41,13 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             ["usenet"] = ("download", UiTone.Info),
             ["aniListMatching"] = ("layers", UiTone.Warning),
             ["aniListRelations"] = ("link", UiTone.Warning),
+            ["animeMappings"] = ("link", UiTone.Warning),
             ["aniListSync"] = ("sync", UiTone.Warning),
             ["metadataFill"] = ("layers", UiTone.Accent),
             ["wantedTargets"] = ("search", UiTone.Accent),
             ["covers"] = ("grid", UiTone.Accent),
             ["coverBackfill"] = ("grid", UiTone.Accent),
+            ["catalogCleanup"] = ("layers", UiTone.Accent),
             ["storage"] = ("drive", UiTone.Success),
             ["scanScheduling"] = ("calendar", UiTone.Success),
             ["backup"] = ("shield", UiTone.Success),
@@ -61,6 +67,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
         private IReadOnlyList<WorkerJobV1> _jobs = [];
         private PageResult<ActivityItemV1>? _history;
         private HealthV1? _health;
+        private BookTranslationProgressV1? _translation;
 
         // The chosen chip and the filter words live in the address.
         [BindProperty(SupportsGet = true, Name = "state")]
@@ -197,7 +204,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             var drawer = "job-" + job.Key;
             var name = new Text("jobs.job." + job.Key);
             var subline = child ? new Text("jobs.job." + job.ParentKey) : (IUiComponent)new Span(new Text("jobs.worker." + job.WorkerGroupTypeId), new ValueText(" · "), Cadence(job.IntervalSeconds));
-            var note = job.LastErrorKey is { } failure ? new Truncated(texts["errors." + failure]) : null;
+            var note = job.LastErrorKey is { } failure ? new Truncated(Failure(failure)) : null;
             var identity = new ListIdentity(new IconTile(Glyph(icon, child ? 15 : 18), tone, child), ListIdentity.TitleButton(name, drawer), subline, note);
 
             var waits = job.CanPauseWhileUsed && job.PausesWhileUsed;
@@ -249,8 +256,13 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
                 Drawer.State("table.status", StateChipOf(job)),
                 Drawer.Facts(("jobs.last", Time(job.LastFinishedAt)), ("jobs.next", Time(job.NextRunAt)), ("jobs.area", new Text("jobs.worker." + job.WorkerGroupTypeId)), ("jobs.interval", Cadence(interval)))
             };
-            if (job.LastErrorKey is { } key) body.Add(Drawer.Block("jobs.error", new P(Time(job.LastFinishedAt), new ValueText(" · "), new Text("errors." + key))));
+            if (job.LastErrorKey is { } key) body.Add(Drawer.Block("jobs.error", new P(Time(job.LastFinishedAt), new ValueText(" · "), new ValueText(Failure(key)))));
             body.Add(Drawer.Block("jobs.about", new P(new Text("jobs.about." + job.Key))));
+            if (job.Key == "bookTranslations" && _translation is not null)
+            {
+                body.Add(Drawer.Block("translation.progress.title", new Div([.. TranslationProgressView.Summary(_translation, texts)])));
+                body.Add(Drawer.Block("translation.progress.more", new A(new Text("translation.progress.open")).Attribute("href", "/Admin/Instance/Translation")));
+            }
 
             var footer = new List<IUiComponent>();
             if (canControl)
@@ -275,7 +287,9 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
         private ListRow HistoryRow(ActivityItemV1 item)
         {
             var subline = item.OperationTypeId == OperationType.Job ? (IUiComponent)new Text("jobs.job." + item.Title) : new ValueText(item.Title);
-            var identity = new ListIdentity(new IconTile(Glyph("history", 18), UiTone.Accent), new Text("operation.type." + item.OperationTypeId), subline);
+            var failed = item.OperationStatusTypeId == OperationStatusType.Failed;
+            var note = failed ? new Truncated(HistoryFailure(item)) : null;
+            var identity = new ListIdentity(new IconTile(Glyph("history", 18), UiTone.Accent), new Text("operation.type." + item.OperationTypeId), subline, note);
             var (tone, icon) = item.OperationStatusTypeId switch
             {
                 OperationStatusType.Completed => (UiTone.Success, "check"),
@@ -289,7 +303,21 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
                 [ListPanel.Fact("jobs.when", finished, Glyph("clock", 14))]);
         }
 
-        private static IUiComponent Post(string handler, string? csrf, (string Name, string Value)[] hidden, IUiComponent button) => new PostForm(Address + "?handler=" + handler, csrf, hidden, button);
+        // The text of a failure's error code; a code without text reads as an unknown error, never as the raw exception.
+        private string Failure(string key) => texts.Has("errors." + key) ? texts["errors." + key] : texts["errors.internal_error"];
+
+        // A failed history entry says why: the outcome of a download, the error of anything else, an unknown error when none was kept.
+        private string HistoryFailure(ActivityItemV1 item) =>
+            item.ReasonKey is { } key && LiveEntities.Reason(texts, item.OperationTypeId, key) is { Length: > 0 } reason ? reason : texts["errors.internal_error"];
+
+        // A form posts to the list as it is shown, so its answer returns to the same chip, filter words and page.
+        private IUiComponent Post(string handler, string? csrf, (string Name, string Value)[] hidden, IUiComponent button)
+        {
+            var here = Here;
+            return new PostForm(here + (here.Contains('?') ? "&" : "?") + "handler=" + handler, csrf, hidden, button);
+        }
+
+        private string Here => Link(StateFilter, QueryFilter, PageNumber);
 
         private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);
 
@@ -332,7 +360,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
         public async Task<IActionResult> OnPostPauseAsync([BindRequired] string key, bool isPaused)
         {
             await pause.ExecuteAsync<UpdateResult>(new JobParametersV1(key), new PauseWorkerJobDataV1(isPaused), HttpContext.RequestAborted);
-            return LocalRedirect(Address);
+            return LocalRedirect(Here);
         }
 
         // Every job that is not yet in the wanted state, one by one.
@@ -345,19 +373,19 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
                 await pause.ExecuteAsync<UpdateResult>(new JobParametersV1(job.Key), new PauseWorkerJobDataV1(isPaused), ct);
             }
 
-            return LocalRedirect(Address);
+            return LocalRedirect(Here);
         }
 
         public async Task<IActionResult> OnPostRunAsync([BindRequired] string key)
         {
             await run.ExecuteAsync<UpdateResult>(new JobParametersV1(key), default, HttpContext.RequestAborted);
-            return LocalRedirect(Address);
+            return LocalRedirect(Here);
         }
 
         public async Task<IActionResult> OnPostUseAsync([BindRequired] string key, bool pausesWhileUsed)
         {
             await use.ExecuteAsync<UpdateResult>(new JobParametersV1(key), new WorkerJobUseDataV1(pausesWhileUsed), HttpContext.RequestAborted);
-            return LocalRedirect(Address);
+            return LocalRedirect(Here);
         }
 
         protected override async Task LoadDataAsync()
@@ -365,6 +393,18 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             var ct = HttpContext.RequestAborted;
             _jobs = await read.ExecuteAsync<BaseDataList<WorkerJobV1>>(new ReadWorkerJobsParametersV1(), ct);
             _health = await readHealth.ExecuteAsync<HealthV1>(new ReadHealthParametersV1(), ct);
+            if (_jobs.Any(job => job.Key == "bookTranslations") && texts.Can("instance.settings.read"))
+            {
+                try
+                {
+                    _translation = await readTranslation.ExecuteAsync<BookTranslationProgressV1>(cancellationToken: ct);
+                }
+                catch (global::System.Security.SecurityException)
+                {
+                    // The Translation module is off: the job has nothing to show.
+                }
+            }
+
             if (texts.Can("media.read"))
             {
                 _history = await readHistory.ExecuteAsync<PageResult<ActivityItemV1>>(new ReadActivityParametersV1(ActivityFilterType.History, 1, 10), ct);

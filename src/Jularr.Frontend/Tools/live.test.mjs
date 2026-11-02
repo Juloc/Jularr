@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
-import ts from 'typescript';
+import ts from './transpile.mjs';
 
 const source = readFileSync(new URL('../Modules/Live/Live.ts', import.meta.url), 'utf8');
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
@@ -75,6 +75,16 @@ test('without a percent the bar goes away, and an optional block shows only whil
 
     applyLive(own, {});
     assert.equal(block.hidden, true);
+});
+
+test('a speed line takes its points from the entity and keeps them while the stream has none', () => {
+    const { applyLive } = load();
+    const line = element({ 'data-live-points': 'line', points: '0,10 360,10' });
+    const block = element({ 'data-live': 'downloads:all' }, [line]);
+    applyLive(page(block), { 'downloads:all': { phase: 'downloads', text: { line: '0,63 360,1' } } });
+    assert.equal(line.getAttribute('points'), '0,63 360,1');
+    applyLive(page(block), { 'downloads:all': { phase: 'downloads', text: {} } });
+    assert.equal(line.getAttribute('points'), '0,63 360,1');
 });
 
 test('the element that carries data-live-text itself is patched', () => {

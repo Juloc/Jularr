@@ -19,6 +19,13 @@ const Modes: SkipMode[] = ["Off", "Button", "Automatic"];
 // Automatic skipping applies where playback arrives at a stretch, not where a viewer seeks into the middle of one.
 const ArrivalSeconds = 3;
 
+// A Skip button stays this long after it appears; after that it shows again only while the controls are shown.
+export const SkipShowSeconds = 6;
+
+export function skipShown(offered: boolean, aged: boolean, controlsShown: boolean): boolean {
+    return offered && (!aged || controlsShown);
+}
+
 // The end of the video counts as reached this close to it.
 const EndSeconds = 3;
 

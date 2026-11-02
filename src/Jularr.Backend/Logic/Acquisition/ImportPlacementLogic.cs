@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
@@ -37,13 +38,14 @@ namespace Jularr.Backend.Logic.Acquisition
             return rest.Split('/').Any(segment => segment is "." or "..") ? null : rest;
         }
 
+        // Episodes are a series' units, volumes a light novel's.
         public static IReadOnlyList<ImportPlacementData> Plan(MediaType mediaType, MediaSubtype? subtype, string title, int? year, string? qualityKey, IReadOnlyList<StorageFile> files,
             NamingSet patterns, ReleaseFact? facts, string? author = null, int trackCount = 0, string? platform = null, IReadOnlyList<TargetUnit>? episodes = null,
             IReadOnlyDictionary<string, AudioTags>? tags = null, NamingValues? known = null)
         {
             if (mediaType == MediaType.Book)
             {
-                return subtype == MediaSubtype.Manga ? PlanManga(title, files, patterns, known) : PlanBook(subtype, title, year, author, files, patterns, known);
+                return subtype == MediaSubtype.Manga ? PlanManga(title, files, patterns, known) : PlanBook(subtype, title, year, author, files, patterns, known, episodes ?? []);
             }
 
             if (mediaType == MediaType.Music)
@@ -137,10 +139,30 @@ namespace Jularr.Backend.Logic.Acquisition
             return placements;
         }
 
-        // One file per ebook format, the largest; the author names the folder.
-        private static IReadOnlyList<ImportPlacementData> PlanBook(MediaSubtype? subtype, string title, int? year, string? author, IReadOnlyList<StorageFile> files, NamingSet patterns, NamingValues? known)
+        // One file per ebook format, the largest; the author names the folder. A light novel's pack of numbered volumes places one file per volume and format on its unit instead;
+        // a volume a present file already holds stays as it is, and a pattern without a volume still keeps the volumes apart.
+        private static IReadOnlyList<ImportPlacementData> PlanBook(MediaSubtype? subtype, string title, int? year, string? author, IReadOnlyList<StorageFile> files, NamingSet patterns, NamingValues? known,
+            IReadOnlyList<TargetUnit> volumes)
         {
             var placements = new List<ImportPlacementData>();
+            if (PackVolumes(subtype, files, volumes) is { } pack)
+            {
+                var pattern = patterns.Pattern(MediaType.Book, subtype);
+                if (!pattern.Contains("{Volume", StringComparison.OrdinalIgnoreCase))
+                {
+                    pattern += " {Volume Label:00}";
+                }
+
+                foreach (var volume in pack.Where(item => item.Unit is { HasFile: false }).GroupBy(item => (item.Unit!.Number, Path.GetExtension(item.File.RelativePath).ToLowerInvariant()))
+                    .Select(group => group.MaxBy(item => item.File.SizeBytes)).OrderBy(item => item.Unit!.Number))
+                {
+                    var stem = NamingPattern.Apply(pattern, Values(MediaType.Book, subtype, title, year, volume.File, patterns, known) with { Author = BookReleaseJudge.Authors(author).FirstOrDefault(), Volume = volume.Unit!.Number });
+                    AddGroup(placements, files, volume.File, stem, WorkUnitType.Volume, volume.Unit.Number, null);
+                }
+
+                return placements;
+            }
+
             foreach (var book in files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Ebook)
                 .GroupBy(file => Path.GetExtension(file.RelativePath).ToLowerInvariant())
                 .Select(format => format.MaxBy(file => file.SizeBytes)!))
@@ -154,6 +176,53 @@ namespace Jularr.Backend.Logic.Acquisition
             }
 
             return placements;
+        }
+
+        // The ebooks of a light novel's pack that name no volume of the Work; null when the download is no such pack.
+        public static IReadOnlyList<string>? UnmatchedVolumes(MediaSubtype? subtype, IReadOnlyList<StorageFile> files, IReadOnlyList<TargetUnit> volumes) =>
+            PackVolumes(subtype, files, volumes) is { } pack ? [.. pack.Where(item => item.Unit is null).Select(item => item.File.RelativePath).Order(StringComparer.Ordinal)] : null;
+
+        // A pack names at least two different volumes and its Work has volumes; a range, an unnumbered file or a number the Work does not have is no unit.
+        private static (StorageFile File, TargetUnit? Unit)[]? PackVolumes(MediaSubtype? subtype, IReadOnlyList<StorageFile> files, IReadOnlyList<TargetUnit> volumes)
+        {
+            if (subtype != MediaSubtype.LightNovel || volumes.Count == 0)
+            {
+                return null;
+            }
+
+            var ebooks = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Ebook).ToArray();
+            var named = ebooks.Select(file => (File: file, Name: BookReleaseJudge.ReadName(Path.GetFileNameWithoutExtension(file.RelativePath)))).ToArray();
+            var numbered = NumberedFiles(ebooks);
+
+            // The volume a file names: "v01" style names first, else the number the pack's own file names carry; a range is no single volume.
+            int? NumberOf((StorageFile File, BookReleaseName Name) item) =>
+                item.Name.VolumeStart is { } start ? item.Name.VolumeEnd is null ? start : null : numbered.TryGetValue(item.File.RelativePath, out var number) ? number : null;
+
+            if (named.Select(NumberOf).OfType<int>().Distinct().Count() < 2)
+            {
+                return null;
+            }
+
+            return [.. named.Select(item => (item.File, NumberOf(item) is { } number ? volumes.FirstOrDefault(unit => unit.ParentNumber is null && unit.Number == number) : null))];
+        }
+
+        // Volume numbers of a pack whose names have no "v01": the Japanese "第01巻", or "<title> 01" where most files share the title and differ in the number
+        // (a spin-off or special with another title stays unnumbered, so it never lands on a volume of the main work).
+        private static Dictionary<string, int> NumberedFiles(IReadOnlyList<StorageFile> ebooks)
+        {
+            var kanji = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var file in ebooks)
+            {
+                if (KanjiVolume().Match(Path.GetFileNameWithoutExtension(file.RelativePath)) is { Success: true } match) kanji[file.RelativePath] = int.Parse(match.Groups["number"].Value, CultureInfo.InvariantCulture);
+            }
+
+            if (kanji.Values.Distinct().Count() >= 2) return kanji;
+            var group = ebooks.Select(file => (File: file, Match: TrailingNumber().Match(Path.GetFileNameWithoutExtension(file.RelativePath)))).Where(item => item.Match.Success)
+                .GroupBy(item => item.Match.Groups["title"].Value.Trim(), StringComparer.Ordinal).OrderByDescending(item => item.Count()).FirstOrDefault();
+            var result = new Dictionary<string, int>(StringComparer.Ordinal);
+            if (group is null || group.Select(item => item.Match.Groups["number"].Value).Distinct().Count() < 2) return result;
+            foreach (var item in group) result[item.File.RelativePath] = int.Parse(item.Match.Groups["number"].Value, CultureInfo.InvariantCulture);
+            return result;
         }
 
         // One file per volume, the largest; a single unnumbered file is the whole series. A file holding a range is no single volume.
@@ -289,6 +358,12 @@ namespace Jularr.Backend.Logic.Acquisition
 
         [GeneratedRegex(@"^\s*(?:\d{1,2}[-.])?\d{1,3}(?=[\s._-]|$)")]
         private static partial Regex TrackNumber();
+
+        [GeneratedRegex(@"第\s?(?<number>\d{1,4})\s?巻")]
+        private static partial Regex KanjiVolume();
+
+        [GeneratedRegex(@"^(?<title>.*\D)[\s._-]+(?<number>\d{1,3})$")]
+        private static partial Regex TrailingNumber();
 
         [GeneratedRegex(@"\d+")]
         private static partial Regex Digits();

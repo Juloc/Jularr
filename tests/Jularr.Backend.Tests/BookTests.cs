@@ -118,7 +118,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(ReleaseDecisionType.Eligible, gutenberg.ReleaseDecisionTypeId);
             Assert.AreEqual("EPUB", gutenberg.QualityKey);
             Assert.AreNotEqual(ReleaseDecisionType.Eligible, candidates.Single(candidate => candidate.Title.StartsWith("Seth Grahame", StringComparison.Ordinal)).ReleaseDecisionTypeId);
-            Assert.AreEqual("AuthorMissing", candidates.Single(candidate => candidate.Title.StartsWith("Pride.and.Prejudice.Retold", StringComparison.Ordinal)).ReasonCode);
+            var retold = candidates.Single(candidate => candidate.Title.StartsWith("Pride.and.Prejudice.Retold", StringComparison.Ordinal));
+            Assert.AreEqual(("ExtraTitleWords", "retold"), (retold.ReasonCode, retold.ReasonValue));
+            Assert.AreEqual(BookReleaseKind.Ebook, gutenberg.BookReleaseKindId);
+            Assert.IsTrue(gutenberg.ScorePoints.Any(point => point.Code == "Format" && point.Value == "EPUB" && point.Points == 40));
             Assert.AreEqual("PDF", candidates.Single(candidate => candidate.Title.StartsWith("Jane.Austen", StringComparison.Ordinal)).QualityKey);
 
             // Jularr downloads the catalog book itself and imports it like any job.
@@ -223,6 +226,51 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow(true)]
+        [DataRow(false)]
+        [Timeout(300_000)]
+        public async Task Book_SlowDirectSource_RespectsSearchBudgetAndRetainsOtherResults(bool withIndexer)
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeBookSources();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "OL66554W"));
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            var wantedId = await CreateWantedAsync(host, work.Id);
+            if (!withIndexer)
+            {
+                await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"IsEnabled\" = FALSE WHERE \"AcquisitionConnectionTypeId\" = 1");
+            }
+
+            sources.BlockDirectSearch = true;
+            var pending = host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            HttpResponseMessage response;
+            try { response = await pending.WaitAsync(TimeSpan.FromSeconds(35)); }
+            catch
+            {
+                host.Client.CancelPendingRequests();
+                try { using var ignored = await pending; }
+                catch (OperationCanceledException) { }
+                throw;
+            }
+            using var finished = response;
+            Assert.IsTrue(sources.DirectSearchCancelled, "The direct source must receive the search budget's cancellation.");
+            if (withIndexer)
+            {
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                var candidates = (await response.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!;
+                Assert.IsTrue(candidates.Any(candidate => candidate.ConnectionName == "Indexer"));
+                Assert.IsFalse(candidates.Any(candidate => candidate.ConnectionName == "Project Gutenberg"));
+            }
+            else
+            {
+                Assert.AreEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+                StringAssert.Contains(await response.Content.ReadAsStringAsync(), "source_timeout");
+            }
+        }
+
+        [TestMethod]
         public async Task Book_TheIndexerAndTheDirectSource_AreAskedAtTheSameTime()
         {
             using var storage = new TemporaryDirectory();
@@ -247,7 +295,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Book_ContentThatIsNoEbook_FailsTheReleaseAndStaysOutOfTheLibrary()
+        public async Task Book_ContentThatIsNoEbook_WaitsForManualReviewAndStaysOutOfTheLibrary()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
@@ -257,7 +305,7 @@ namespace Jularr.Backend.Tests
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             var wantedId = await CreateWantedAsync(host, work.Id);
 
-            // The direct source is the preferred one, so its file is the one that is taken and checked.
+            // The direct source is preferred, but invalid EPUB content must not enter the library.
             using var preferred = await host.SendAsync(HttpMethod.Put, Connections + "/3",
                 new SaveAcquisitionConnectionDataV1("Project Gutenberg", AcquisitionConnectionType.Gutenberg, "https://gutendex.example.test", null, true, 5, [], null, null, null));
             Assert.AreEqual(HttpStatusCode.OK, preferred.StatusCode, await preferred.Content.ReadAsStringAsync());
@@ -265,14 +313,17 @@ namespace Jularr.Backend.Tests
             await RunAsync<SearchDueWantedV1>(host);
             Assert.AreEqual(0, sources.SabGrabs);
             await RunAsync<MonitorDownloadsV1>(host);
-            Assert.AreEqual("download_failed", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""));
+
+            // A download with no placeable book now waits for a person instead of failing and deleting its files.
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual("import_nothing_placeable", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"ReasonKey\" IS NULL FROM \"AcquisitionReleases\""));
+            StringAssert.Contains((string)(await host.ScalarAsync("SELECT \"AttentionProposal\"::text FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!, ".epub");
             Assert.IsFalse(Directory.Exists(Path.Combine(storage.Path, "1", "Books", "Jane Austen")));
-            Assert.AreEqual(0, Directory.EnumerateFiles(downloads.Path, "*", SearchOption.AllDirectories).Count(),
-                "A rejected ebook must not leave payloads or .part files.");
-            var operationId = (await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2 LIMIT 1"))!.ToString();
-            Assert.IsFalse(Directory.EnumerateDirectories(downloads.Path, "*", SearchOption.AllDirectories)
-                .Any(directory => Path.GetFileName(directory) is { } name && (name == operationId || name == "j-" + operationId)),
-                "A terminal operation must not leave complete or incomplete staging folders.");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+
+            var kept = Directory.EnumerateFiles(downloads.Path, "*", SearchOption.AllDirectories).Single();
+            CollectionAssert.AreEqual(sources.EpubBytes, File.ReadAllBytes(kept), "The downloaded bytes must remain available for manual review.");
             using var activity = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=Queue");
             Assert.AreEqual(OperationType.Download, (await activity.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single().OperationTypeId);
             Assert.AreEqual(wantedId, (long)(await host.ScalarAsync("SELECT \"WantedItemId\" FROM \"AcquisitionReleases\""))!);
@@ -313,31 +364,35 @@ namespace Jularr.Backend.Tests
                 return (await found.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.First(item => item.ExternalId == "OL66554W");
             }
 
+            // The found book is kept as a catalog Work; nobody asked for it yet.
             var book = await FindAsync();
-            Assert.IsNull(book.WorkId);
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'openlibrary' AND \"Value\" = 'OL66554W'"))!;
+            Assert.AreEqual((workId, MediaStateType.NotRequested), (book.WorkId, book.MediaStateTypeId));
             using var films = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/search", new SearchDiscoverCatalogDataV1(MediaType.Movie, "Pride and Prejudice"));
             Assert.AreEqual(HttpStatusCode.BadRequest, films.StatusCode);
 
-            // The page lists it with its request page, which asks for the language.
+            // The page lists it with its Work's page, which asks for the language.
             using var page = await host.SendAsync(HttpMethod.Get, "/?type=books&q=Pride%20and%20Prejudice");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            StringAssert.Contains(html, "/Discover/books/openlibrary/OL66554W\"");
+            StringAssert.Contains(html, "href=\"/Details/" + workId + "\"");
+            Assert.IsFalse(html.Contains("/Discover/books/", StringComparison.Ordinal));
 
-            // The request page names the book as Open Library does, whatever a link claims.
-            using var item = await host.SendAsync(HttpMethod.Get, "/Discover/books/openlibrary/OL66554W?title=Confirm%20your%20password");
+            // The Work's page brings the book's details on its first open and names it as they do in the profile's language, whatever a link claims.
+            using var item = await host.SendAsync(HttpMethod.Get, "/Details/" + workId + "?title=Confirm%20your%20password");
             var form = await item.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, item.StatusCode, form);
-            StringAssert.Contains(form, "Pride and Prejudice");
+            StringAssert.Contains(form, "Stolz und Vorurteil");
             Assert.IsFalse(form.Contains("Confirm your password", StringComparison.Ordinal));
 
-            // Requesting imports the Work once; the catalog then knows it.
-            using var requested = await host.SendAsync(HttpMethod.Post, "/Discover/books/openlibrary/OL66554W",
+            // Requesting asks for that same Work; the catalog still answers with it.
+            using var requested = await host.SendAsync(HttpMethod.Post, "/Details/" + workId + "?handler=Request",
                 new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(form), ["UiLocaleId"] = "1" });
             Assert.AreEqual(HttpStatusCode.Redirect, requested.StatusCode, await requested.Content.ReadAsStringAsync());
-            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'openlibrary' AND \"Value\" = 'OL66554W'"))!;
             Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"WorkId\" = {workId}"));
-            Assert.AreEqual(workId, (await FindAsync()).WorkId);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'openlibrary' AND \"Value\" = 'OL66554W'"));
+            var asked = await FindAsync();
+            Assert.AreEqual((workId, MediaStateType.Requested), (asked.WorkId, asked.MediaStateTypeId));
 
             // Books trend globally on Open Library; other rankings are not offered.
             using var trending = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Book, DiscoverFeedType.Trending));
@@ -580,6 +635,8 @@ namespace Jularr.Backend.Tests
             public bool WaitForIndexer { get; set; }
 
             public int DirectSearches { get; private set; }
+            public bool BlockDirectSearch { get; set; }
+            public bool DirectSearchCancelled { get; private set; }
 
             // Forgets what the set-up asked, so that only the next search is observed, and makes each source wait for the other from now on.
             public void StartCounting()
@@ -622,6 +679,11 @@ namespace Jularr.Backend.Tests
                     case "gutendex.example.test":
                         Order.Enqueue("direct");
                         DirectSearches++;
+                        if (BlockDirectSearch)
+                        {
+                            try { await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken); }
+                            finally { DirectSearchCancelled = cancellationToken.IsCancellationRequested; }
+                        }
                         if (WaitForIndexer)
                         {
                             // The direct source waits for the indexer's search; it only comes when both are asked at the same time.

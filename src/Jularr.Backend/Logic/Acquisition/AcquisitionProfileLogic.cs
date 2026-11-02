@@ -48,6 +48,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 || input.FormatScores.Any(score => score.FormatId < 1 || score.Score is < -1000000 or > 1000000)) throw new DataValidationException(nameof(input.FormatScores), "invalid_transition");
             if (input.MinimumUpgradeFormatScore is < 1 or > 1000000 || input.MinimumFormatScore is < -1000000 or > 1000000 || input.CutoffFormatScore is < -1000000 or > 1000000)
                 throw new DataValidationException(nameof(input.MinimumFormatScore), "out_of_range");
+            if (input.GoodGroupScore is < 0 or > 1000000) throw new DataValidationException(nameof(input.GoodGroupScore), "out_of_range");
+            if (input.BadGroupScore is < -1000000 or > 0) throw new DataValidationException(nameof(input.BadGroupScore), "out_of_range");
 
             // The languages of the choice are known two-letter codes, each once and in the given order.
             var languages = input.LanguageOrder.Select(LanguageCodes.ToTwoLetter).ToArray();
@@ -65,7 +67,9 @@ namespace Jularr.Backend.Logic.Acquisition
                 CutoffFormatScore = input.CutoffFormatScore,
                 MinimumUpgradeFormatScore = input.MinimumUpgradeFormatScore,
                 LanguageOrder = languageOrder,
-                LanguageFallback = input.LanguageFallback
+                LanguageFallback = input.LanguageFallback,
+                GoodGroupScore = input.GoodGroupScore,
+                BadGroupScore = input.BadGroupScore
             };
             return JsonSerializer.Serialize(definition, AcquisitionSelectionLogic.DefinitionOptions);
         }

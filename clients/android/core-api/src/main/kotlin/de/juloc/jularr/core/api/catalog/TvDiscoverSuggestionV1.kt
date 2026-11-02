@@ -8,5 +8,5 @@ data class TvDiscoverSuggestionV1(
     val title: String,
     val releaseYear: Int?,
     val posterUrl: String?,
-    val workId: Long?,
+    val workId: Long,
 )

@@ -23,9 +23,9 @@ namespace Jularr.E2E.Tests
                     SELECT "Id" INTO pid FROM "Profiles" ORDER BY "Id" LIMIT 1;
                     INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") VALUES ('Tabs', 3, 'C:\tabs', FALSE) RETURNING "Id" INTO mount;
                     INSERT INTO "LibraryRoots" ("Name", "MediaTypeId", "StorageMountId", "RelativePath") VALUES ('Tabs series', 2, mount, 'series') RETURNING "Id" INTO root;
-                    INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (7001, 2, 'Tabbed Show', 2024), (7002, 1, 'Bare Film', 2020);
+                    INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace", "Rating", "Votes") VALUES
+                        (7001, 2, 'Tabbed Show', 2024, 'tmdb_tv', 8.4, 100), (7002, 1, 'Bare Film', 2020, NULL, NULL, NULL);
                     INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (7001, 'Overview', 'A show with two seasons.', TRUE), (7001, 'Genres', 'Drama', TRUE), (7001, 'Poster', '/__test-only__/details-cover.webp', TRUE);
-                    INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear", "Rating", "Votes") VALUES ('tmdb_tv', '777', 2, 'Tabbed Show', 2024, 8.4, 100);
                     INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (7001, 'tmdb_tv', '777');
                     INSERT INTO "WorkEditions" ("WorkId", "LanguageCode") VALUES (7001, 'en') RETURNING "Id" INTO ed;
                     INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId") VALUES (7001, ed) RETURNING "Id" INTO ver;
@@ -97,6 +97,15 @@ namespace Jularr.E2E.Tests
             Assert.IsNotNull(mobileActions);
             Assert.IsNotNull(mobileProgress);
             Assert.IsTrue(mobileProgress.Y >= mobileActions.Y + mobileActions.Height, "Mobile progress must follow the actions.");
+
+            // On a phone the menus of the actions and of the episode toolbar open inside the screen.
+            await page.SetViewportSizeAsync(375, 812);
+            await page.Locator(".media-hero__actions .action-menu__button.button--icon").ClickAsync();
+            await AssertInsideViewportAsync(page, ".media-hero__actions .action-menu[open] .action-menu__panel");
+            await page.GotoAsync("/Details/7001?tab=episodes");
+            await page.Locator(".details-toolbar .select-link-menu__button").Last.ClickAsync();
+            await AssertInsideViewportAsync(page, ".details-toolbar .select-link-menu[open] .select-link-menu__list");
+            await page.GotoAsync("/Details/7001");
             await page.SetViewportSizeAsync(1440, 900);
             await Assertions.Expect(hero.Locator(".media-hero__progress-bar")).ToHaveAttributeAsync("value", new Regex("^(1[0-9]|2[0-9])$"));
             await Assertions.Expect(hero.Locator(".media-hero__title")).ToHaveTextAsync("Tabbed Show");
@@ -133,6 +142,14 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/Details/7002");
             await Assertions.Expect(page.Locator(".media-hero__chips .media-availability-badge--inline")).ToContainTextAsync("Unavailable");
             await Assertions.Expect(page.Locator(".details-tabs .navigation-tabs__link")).ToHaveTextAsync(new[] { new Regex("Overview"), new Regex("Details") });
+        }
+
+        private static async Task AssertInsideViewportAsync(IPage page, string selector)
+        {
+            var box = await page.Locator(selector).BoundingBoxAsync();
+            Assert.IsNotNull(box, selector);
+            var width = await page.EvaluateAsync<double>("window.innerWidth");
+            Assert.IsTrue(box.X >= 0 && box.X + box.Width <= width + .5, selector + " leaves the phone screen: " + box.X + " + " + box.Width + " of " + width);
         }
     }
 }

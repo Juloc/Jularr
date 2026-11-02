@@ -16,6 +16,8 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
+using Jularr.Workers;
+using Microsoft.Extensions.Logging.Abstractions;
 using Jularr.Backend.Data.Enums.Provider;
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Enums.Storage;
@@ -252,6 +254,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" IS NOT NULL AND \"NextSearchAt\" <= now() FROM \"WantedItems\" WHERE \"Id\" = 600"));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
             Assert.IsTrue(File.Exists(other), "A download of no use stays for the client to remove.");
+
+            // The search that follows finds the same release again and does not take it: an import that threw a release out blocks it like a failed download.
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(1, usenet.Grabbed.Count(url => url.EndsWith("/feature", StringComparison.Ordinal)), "A release the import threw out is not grabbed again; the next best one is.");
+            Assert.AreEqual(2, usenet.Grabbed.Count);
         }
 
         // A doubt waits for a person with what the files say and is not read again until the person decides.
@@ -585,6 +592,246 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, usenet.Commands.Count, "A download waiting for a person is not told to pause.");
         }
 
+        // The dock's chosen rows: each is told as on its own; one client's pause leaves the others' downloads alone.
+        [TestMethod]
+        public async Task QueueAction_ChosenDownloadsAndOneClient_PauseResumeAndRemove()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var operation = await GrabbedOperationAsync(host, usenet);
+            async Task<object?> StateAsync() => await host.ScalarAsync($"SELECT \"DownloadStateTypeId\" FROM \"Operations\" WHERE \"Id\" = {operation}");
+
+            using var other = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/queue/pause?downloadClientKindId=Usenet", new PauseActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, other.StatusCode, await other.Content.ReadAsStringAsync());
+            Assert.AreNotEqual((short)3, await StateAsync(), "Another client's pause leaves SABnzbd's download running.");
+            Assert.AreEqual(0, usenet.Commands.Count);
+            using var own = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/queue/pause?downloadClientKindId=Sabnzbd", new PauseActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, own.StatusCode, await own.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)3, await StateAsync());
+
+            using var resumed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/downloads", new ApplyActivityDownloadsDataV1([operation, 999_999], DownloadBulkActionType.Resume));
+            Assert.AreEqual(HttpStatusCode.OK, resumed.StatusCode, await resumed.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)2, await StateAsync(), "A download that is not in the queue is skipped.");
+            CollectionAssert.AreEqual(new[] { "queue:pause:SABnzbd_nzo_1:", "queue:resume:SABnzbd_nzo_1:" }, usenet.Commands);
+
+            using var removed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/downloads", new ApplyActivityDownloadsDataV1([operation], DownloadBulkActionType.Remove));
+            Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            Assert.AreEqual("download_removed", await host.ScalarAsync($"SELECT \"ErrorKey\" FROM \"Operations\" WHERE \"Id\" = {operation}"));
+            Assert.AreEqual((short)5, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""), "Removed without blocking, the release stays allowed.");
+        }
+
+        // SABnzbd hears a priority, a move to the top and its speed limit through its own API; a download added by hand goes to it like a grab.
+        [TestMethod]
+        public async Task QueueAction_SabnzbdPriorityMoveLimitAndAdd_UseItsApi()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var operation = await GrabbedOperationAsync(host, usenet);
+            var sab = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'SAB'"))!;
+
+            using var prioritized = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/downloads/priority", new PrioritizeActivityDownloadsDataV1([operation], DownloadPriorityType.Force));
+            Assert.AreEqual(HttpStatusCode.OK, prioritized.StatusCode, await prioritized.Content.ReadAsStringAsync());
+            using var top = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/downloads", new ApplyActivityDownloadsDataV1([operation], DownloadBulkActionType.MoveToTop));
+            Assert.AreEqual(HttpStatusCode.OK, top.StatusCode, await top.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)4, await host.ScalarAsync($"SELECT \"DownloadPriorityTypeId\" FROM \"Operations\" WHERE \"Id\" = {operation}"));
+
+            // A forced download keeps running when its client is paused.
+            using var paused = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/queue/pause?downloadClientKindId=Sabnzbd", new PauseActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, paused.StatusCode, await paused.Content.ReadAsStringAsync());
+
+            var client = "downloadClientKindId=Sabnzbd&acquisitionConnectionId=" + sab;
+            using var limited = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/clients/speed-limit?" + client, new SetDownloadSpeedLimitDataV1(5_000_000));
+            Assert.AreEqual(HttpStatusCode.OK, limited.StatusCode, await limited.Content.ReadAsStringAsync());
+            using var limit = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/clients/speed-limit?" + client);
+            Assert.AreEqual(4882L * 1024, (await limit.Content.ReadFromJsonAsync<DownloadSpeedLimitV1>())!.MaxBytesPerSecond);
+            using var freed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/clients/speed-limit?" + client, new SetDownloadSpeedLimitDataV1(null));
+            Assert.AreEqual(HttpStatusCode.OK, freed.StatusCode, await freed.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new[] { "queue:priority:SABnzbd_nzo_1:2", "switch::SABnzbd_nzo_1:0", "config:speedlimit:4882K:", "config:speedlimit:0:" }, usenet.Commands);
+
+            // A torrent address is no NZB for SABnzbd; an NZB address goes to it as a grab of the wanted title, without an indexer.
+            var wanted = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"WantedItems\" ORDER BY \"Id\" LIMIT 1"))!;
+            using var refused = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/downloads/add?" + client, new AddActivityDownloadDataV1(wanted, "magnet:?xt=urn:btih:abc&dn=Other"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+            await host.Fixture.RunSqlAsync($"UPDATE \"Operations\" SET \"OperationStatusTypeId\" = 3, \"FinishedAt\" = now(), \"DownloadStateTypeId\" = NULL WHERE \"Id\" = {operation}");
+            using var added = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/downloads/add?" + client, new AddActivityDownloadDataV1(wanted, "https://nzb.example.test/get/Example.Movie.2005.1080p.WEB-DL.nzb"));
+            Assert.AreEqual(HttpStatusCode.OK, added.StatusCode, await added.Content.ReadAsStringAsync());
+            Assert.AreEqual("https://nzb.example.test/get/Example.Movie.2005.1080p.WEB-DL.nzb", usenet.Grabbed[^1]);
+            Assert.AreEqual("Example.Movie.2005.1080p.WEB-DL", await host.ScalarAsync("SELECT \"Title\" FROM \"AcquisitionReleases\" ORDER BY \"Id\" DESC LIMIT 1"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"AcquisitionConnectionId\" IS NULL FROM \"AcquisitionReleases\" ORDER BY \"Id\" DESC LIMIT 1"));
+        }
+
+        // The Downloads page: a tab per switched-on client with its open downloads, one client's queue and history, the category and failed-only filters, and the Direct panel's link.
+        [TestMethod]
+        public async Task DownloadsPage_TabsQueueAndHistory_FollowTheClients()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
+            var sab = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'SAB'"))!;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "Host", "Port", "UseSsl", "MaxConnections") VALUES (901, 'News A', 6, 'news.example.test', 563, TRUE, 20);
+                INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "BaseUrl") VALUES (902, 'Gutenberg', 3, 'https://gutendex.example.test');
+                INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "BaseUrl", "ProtectedApiKey", "IsEnabled") VALUES (903, 'Old qBit', 9, 'https://qbit.example.test', '\x00'::bytea, FALSE);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (801, 1, 'Queue Film'), (802, 3, 'Queue Book');
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (801, 801), (802, 802);
+                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual") VALUES (801, 'Queue Film', TRUE), (802, 'Queue Book', TRUE);
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId")
+                VALUES (1, 801, 'q-1', 'Release 1', 1), (2, 801, 'q-2', 'Release 2', 1), (3, 802, 'q-3', 'Release 3', 1), (4, 801, 'q-4', 'Release 4', 3), (5, 801, 'q-5', 'Release 5', 2),
+                    (6, 801, 'q-6', 'Release 6', 1), (7, 801, 'q-7', 'Release 7', 2);
+                INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId", "SizeBytes", "RemainingBytes", "EtaSeconds",
+                    "DownloadStateTypeId", "AttentionKey", "AttentionUrl", "ErrorKey", "FinishedAt")
+                VALUES
+                    (1, 2, 2, 1, {sab}, 1000, 500, 10, 2, NULL, NULL, NULL, NULL),
+                    (2, 2, 2, 2, 901, 1000, 900, NULL, 3, NULL, NULL, NULL, NULL),
+                    (3, 2, 2, 3, 902, NULL, NULL, NULL, NULL, 'source_manual_link', 'https://books.example.test/dracula', NULL, NULL),
+                    (4, 2, 4, 4, {sab}, NULL, NULL, NULL, NULL, NULL, NULL, 'download_failed', now()),
+                    (5, 2, 3, 5, 901, NULL, NULL, NULL, NULL, NULL, NULL, NULL, now()),
+                    (6, 2, 1, 6, 901, NULL, NULL, NULL, 1, NULL, NULL, NULL, NULL),
+                    (7, 2, 3, 7, {sab}, NULL, NULL, NULL, NULL, NULL, NULL, NULL, now() - interval '1 hour');
+                """);
+
+            using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/clients");
+            Assert.AreEqual(HttpStatusCode.OK, listed.StatusCode, await listed.Content.ReadAsStringAsync());
+            var clients = (await listed.Content.ReadFromJsonAsync<BaseDataList<DownloadClientV1>>())!;
+            CollectionAssert.AreEqual(new[] { DownloadClientKind.Usenet, DownloadClientKind.Sabnzbd, DownloadClientKind.Direct }, clients.Select(client => client.DownloadClientKindId).ToArray(),
+                "The switched-off qBittorrent has no tab.");
+            var usenetTab = clients[0];
+            Assert.AreEqual((null, 901L, 2, 0, 1, 0), (usenetTab.AcquisitionConnectionId, usenetTab.SettingsConnectionId, usenetTab.QueueCount, usenetTab.ActiveCount, usenetTab.PausedCount, usenetTab.WarningCount));
+            var sabTab = clients[1];
+            Assert.AreEqual((sab, 1, 1, 1, 50L, 500L), ((long)sabTab.AcquisitionConnectionId!, sabTab.QueueCount, sabTab.ActiveCount, sabTab.WarningCount, sabTab.BytesPerSecond, sabTab.RemainingBytes));
+            Assert.AreEqual((1, 1), (clients[2].QueueCount, clients[2].WarningCount));
+
+            async Task<long[]> IdsAsync(string query)
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?downloadsOnly=true&" + query);
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                return [.. (await response.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Select(item => item.Id)];
+            }
+
+            CollectionAssert.AreEqual(new long[] { 1, 2, 3, 6 }, await IdsAsync("activityFilterTypeId=All"), "The queue in the order its clients take it, the oldest first.");
+            CollectionAssert.AreEqual(new long[] { 2, 6 }, await IdsAsync("activityFilterTypeId=All&downloadClientKindId=Usenet"));
+            CollectionAssert.AreEqual(new long[] { 1 }, await IdsAsync("activityFilterTypeId=All&downloadClientKindId=Sabnzbd&acquisitionConnectionId=" + sab));
+            CollectionAssert.AreEqual(new long[] { 3 }, await IdsAsync("activityFilterTypeId=All&mediaTypeId=Book"));
+            CollectionAssert.AreEqual(new long[] { 5 }, await IdsAsync("activityFilterTypeId=History&downloadClientKindId=Usenet"));
+            CollectionAssert.AreEqual(new long[] { 4 }, await IdsAsync("activityFilterTypeId=History&failedOnly=true"));
+
+            // Jularr's own Usenet downloader: a priority, a download dragged before another (it takes that one's priority), and its speed limit.
+            using var prioritized = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/downloads/priority", new PrioritizeActivityDownloadsDataV1([2], DownloadPriorityType.High));
+            Assert.AreEqual(HttpStatusCode.OK, prioritized.StatusCode, await prioritized.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new long[] { 2 }, await IdsAsync("activityFilterTypeId=All&downloadPriorityTypeId=High"));
+            using var moved = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/6/move", new MoveActivityDownloadDataV1(2));
+            Assert.AreEqual(HttpStatusCode.OK, moved.StatusCode, await moved.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new long[] { 6, 2 }, await IdsAsync("activityFilterTypeId=All&downloadClientKindId=Usenet"));
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"DownloadPriorityTypeId\" FROM \"Operations\" WHERE \"Id\" = 6"));
+            using var limited = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/clients/speed-limit?downloadClientKindId=Usenet", new SetDownloadSpeedLimitDataV1(5_000_000));
+            Assert.AreEqual(HttpStatusCode.OK, limited.StatusCode, await limited.Content.ReadAsStringAsync());
+            using var limit = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/clients/speed-limit?downloadClientKindId=Usenet");
+            Assert.AreEqual(5_000_000L, (await limit.Content.ReadFromJsonAsync<DownloadSpeedLimitV1>())!.MaxBytesPerSecond);
+            using var servers = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/news-servers");
+            var server = (await servers.Content.ReadFromJsonAsync<BaseDataList<NewsServerV1>>())!.Single();
+            Assert.AreEqual((901L, 20, 0), (server.AcquisitionConnectionId, server.MaxConnections, server.Connections));
+
+            // The history: one entry deleted, then SABnzbd's completed ones cleared; its failed one stays.
+            using var deleted = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/history/delete", new DeleteActivityHistoryDataV1([5]));
+            Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
+            using var cleared = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/history/clear?downloadClientKindId=Sabnzbd&acquisitionConnectionId=" + sab);
+            Assert.AreEqual(HttpStatusCode.OK, cleared.StatusCode, await cleared.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new long[] { 4 }, await IdsAsync("activityFilterTypeId=History"));
+
+            // The page: All and a tab per client, the phase on each row, and the Direct panel's link for the download that needs one.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "href=\"/Admin/Downloads?Client=Usenet\"");
+            StringAssert.Contains(html, "href=\"/Admin/Downloads?Client=Sabnzbd&amp;ConnectionId=" + sab + "\"");
+            StringAssert.Contains(html, "href=\"/Admin/Downloads?Client=Direct\"");
+            Assert.IsFalse(html.Contains("Client=Qbittorrent", StringComparison.Ordinal));
+            StringAssert.Contains(html, "data-phase=\"downloading\"");
+            StringAssert.Contains(html, "data-phase=\"failed\"");
+            using var usenetPage = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads?Client=Usenet");
+            var usenetHtml = await usenetPage.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, usenetPage.StatusCode, usenetHtml);
+            StringAssert.Contains(usenetHtml, "data-move-id=\"6\"");
+            StringAssert.Contains(usenetHtml, "name=\"maxBytesPerSecond\"");
+            StringAssert.Contains(usenetHtml, "data-live=\"downloads:Usenet\"");
+            StringAssert.Contains(usenetHtml, "data-live=\"news-server:901\"");
+            StringAssert.Contains(usenetHtml, "href=\"/Admin/Downloads?Client=Usenet&amp;add=true\"");
+            using var adding = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads?Client=Usenet&add=true&addq=Queue%20Book");
+            var addingHtml = await adding.Content.ReadAsStringAsync();
+            StringAssert.Contains(addingHtml, "name=\"wantedItemId\" value=\"802\"");
+            StringAssert.Contains(addingHtml, "handler=Add");
+            using var direct = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads?Client=Direct");
+            var directHtml = await direct.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, direct.StatusCode, directHtml);
+            StringAssert.Contains(directHtml, "handler=SourceLink&amp;operationId=3");
+            StringAssert.Contains(directHtml, "https://books.example.test/dracula");
+            Assert.IsFalse(directHtml.Contains("Release 1", StringComparison.Ordinal), "Another client's download is not on the Direct tab.");
+            Assert.IsFalse(directHtml.Contains("add=true", StringComparison.Ordinal), "Direct sources take no download by hand.");
+            Assert.IsFalse(directHtml.Contains("maxBytesPerSecond", StringComparison.Ordinal), "Direct sources keep their own pace.");
+        }
+
+        // The pages of the Downloads group: the news servers with what their last pass measured, the external clients, and the speed limit of every client that can be held back.
+        [TestMethod]
+        public async Task DownloaderPages_ServersClientsAndSpeed_ShowTheirOwnKind()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
+            var sab = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'SAB'"))!;
+            await host.Fixture.RunSqlAsync("""INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "Host", "Port", "UseSsl", "MaxConnections") VALUES (901, 'News A', 6, 'news.example.test', 563, TRUE, 20)""");
+
+            // The list service keeps to the kinds it is asked for.
+            using var listed = await host.SendAsync(HttpMethod.Get, Connections + "?acquisitionConnectionTypeIds=6");
+            Assert.AreEqual(HttpStatusCode.OK, listed.StatusCode, await listed.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new long[] { 901 }, (await listed.Content.ReadFromJsonAsync<PageResult<AcquisitionConnectionDetailsV1>>())!.Items.Select(item => item.Id).ToArray());
+
+            // Servers: the news server's card with its live figures and the add button for another; no external client.
+            using var servers = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Servers");
+            var serversHtml = await servers.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, servers.StatusCode, serversHtml);
+            StringAssert.Contains(serversHtml, "News A");
+            StringAssert.Contains(serversHtml, "data-live=\"news-server:901\" data-live-text=\"connections\">0 of 20<");
+            StringAssert.Contains(serversHtml, "Add news server");
+            Assert.IsFalse(serversHtml.Contains("AcquisitionConnectionId=" + sab, StringComparison.Ordinal));
+            Assert.IsFalse(serversHtml.Contains("Add download client", StringComparison.Ordinal));
+
+            // External clients: SABnzbd, not the news server; an older address of a client leads to the page of its kind.
+            using var clients = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Clients");
+            var clientsHtml = await clients.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, clients.StatusCode, clientsHtml);
+            StringAssert.Contains(clientsHtml, "AcquisitionConnectionId=" + sab);
+            Assert.IsFalse(clientsHtml.Contains("News A", StringComparison.Ordinal));
+            using var moved = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads?PageNumber=1&AcquisitionConnectionId=" + sab + "&Pane=files");
+            Assert.AreEqual(HttpStatusCode.Redirect, moved.StatusCode);
+            Assert.AreEqual("/Admin/Downloads/Clients?PageNumber=1&AcquisitionConnectionId=" + sab + "&Pane=files", moved.Headers.Location!.OriginalString);
+            Assert.IsFalse(clientsHtml.Contains("Type=Torrent", StringComparison.Ordinal), "The torrent engine is offered only with its module.");
+            StringAssert.Contains(clientsHtml, "Type=Sabnzbd");
+            using var former = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads?Type=Torrent");
+            Assert.AreEqual(HttpStatusCode.Redirect, former.StatusCode);
+            Assert.AreEqual("/Admin/Downloads/Clients?Type=Torrent", former.Headers.Location!.OriginalString);
+
+            // Speed: a card per client with its live speed and its limit, saved for Jularr's Usenet downloader into its workspace.
+            using var speed = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Speed");
+            var speedHtml = await speed.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, speed.StatusCode, speedHtml);
+            StringAssert.Contains(speedHtml, "Jularr Usenet");
+            StringAssert.Contains(speedHtml, "data-live=\"downloads:Usenet\" data-live-text=\"speed\"");
+            StringAssert.Contains(speedHtml, "handler=Limit&amp;client=Sabnzbd&amp;connectionId=" + sab);
+            Assert.AreEqual(2, System.Text.RegularExpressions.Regex.Matches(speedHtml, "name=\"MaxBytesPerSecond\"").Count);
+            using var limited = await host.SendAsync(HttpMethod.Post, "/Admin/Downloads/Speed?handler=Limit&client=Usenet",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(speedHtml), ["MaxBytesPerSecond"] = "5000000" });
+            Assert.AreEqual(HttpStatusCode.Redirect, limited.StatusCode, await limited.Content.ReadAsStringAsync());
+            Assert.AreEqual(5_000_000L, await host.ScalarAsync("SELECT \"MaxBytesPerSecond\" FROM \"DownloadStorageSettings\" WHERE \"DownloadStorageAreaId\" = 1"));
+            using var freed = await host.SendAsync(HttpMethod.Post, "/Admin/Downloads/Speed?handler=Limit&client=Usenet",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(speedHtml), ["MaxBytesPerSecond"] = "" });
+            Assert.AreEqual(HttpStatusCode.Redirect, freed.StatusCode, await freed.Content.ReadAsStringAsync());
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"MaxBytesPerSecond\" FROM \"DownloadStorageSettings\" WHERE \"DownloadStorageAreaId\" = 1"));
+        }
+
         // A waiting download is read again on request; one that is not waiting has nothing to retry.
         [TestMethod]
         public async Task QueueAction_RetryImport_ReadsAWaitingDownloadAgain()
@@ -875,7 +1122,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("Example Movie", exclusions.Items.Single().Title);
 
             // A request through the same provider identity is refused before anything is imported.
-            using var refused = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/" + (byte)MediaType.Movie + "/4242/requests", new CreateRequestDataV1(1));
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "ReleaseYear", "CatalogNamespace") VALUES (1, 'Example Movie', 2020, 'tmdb_movie');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "Id", 'tmdb_movie', '4242' FROM "Works";
+                """);
+            var catalogWorkId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+            using var refused = await host.SendAsync(HttpMethod.Post, "/api/v1/works/" + catalogWorkId + "/requests", new CreateRequestDataV1(1));
             Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode, await refused.Content.ReadAsStringAsync());
             StringAssert.Contains(await refused.Content.ReadAsStringAsync(), "excluded");
 
@@ -1424,6 +1676,80 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ReleaseGroups_SearchesCollectThem_ARatingScoresOrBlocksTheirReleases()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var wantedId = await CreateWantedMovieAsync(host);
+
+            async Task<WantedReleaseCandidateV1[]> SearchAsync()
+            {
+                using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+                Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+                return (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.ToArray();
+            }
+
+            async Task<T> ReadAsync<T>(string address)
+            {
+                using var read = await host.SendAsync(HttpMethod.Get, address);
+                Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+                return (await read.Content.ReadFromJsonAsync<T>())!;
+            }
+
+            async Task RateAsync(long id, ReleaseGroupRating? rating)
+            {
+                using var rated = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/release-groups/" + id + "/rating", new RateReleaseGroupDataV1(rating));
+                Assert.AreEqual(HttpStatusCode.OK, rated.StatusCode, await rated.Content.ReadAsStringAsync());
+            }
+
+            // Every search counts the group of its results once, for the media type only; nothing is rated yet.
+            var unrated = await SearchAsync();
+            Assert.AreEqual("GRP", unrated.Single(candidate => candidate.Title == Feature).ReleaseGroup);
+            await SearchAsync();
+            var group = (await ReadAsync<PageResult<ReleaseGroupDetailsV1>>("/api/v1/admin/acquisition/release-groups?mediaTypeId=1")).Items.Single();
+            Assert.AreEqual(("GRP", 2, (ReleaseGroupRating?)null), (group.Name, group.SeenCount, group.ReleaseGroupRatingId));
+            Assert.IsNotNull(group.LastSeenAt);
+            Assert.AreEqual(0, (await ReadAsync<PageResult<ReleaseGroupDetailsV1>>("/api/v1/admin/acquisition/release-groups?mediaTypeId=2")).Items.Count);
+
+            // A group typed by hand in another case is the same group; a new one is not seen yet.
+            using (var added = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/acquisition/release-groups", new AddReleaseGroupDataV1(MediaType.Movie, " grp ")))
+            {
+                Assert.AreEqual(group.Id, (await added.Content.ReadFromJsonAsync<SavedReleaseGroupV1>())!.Id);
+            }
+
+            using (var added = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/acquisition/release-groups", new AddReleaseGroupDataV1(MediaType.Movie, "FLUX")))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, added.StatusCode, await added.Content.ReadAsStringAsync());
+            }
+
+            // A good group adds the profile's points to every release of it and names the rule; not rated groups are listed first.
+            await RateAsync(group.Id, ReleaseGroupRating.Good);
+            var listed = (await ReadAsync<PageResult<ReleaseGroupDetailsV1>>("/api/v1/admin/acquisition/release-groups?mediaTypeId=1")).Items;
+            CollectionAssert.AreEqual(new[] { "FLUX", "GRP" }, listed.Select(item => item.Name).ToArray());
+            Assert.AreEqual("GRP", (await ReadAsync<PageResult<ReleaseGroupDetailsV1>>("/api/v1/admin/acquisition/release-groups?mediaTypeId=1&search=gr")).Items.Single().Name);
+            var figures = await ReadAsync<ReleaseGroupFiguresV1>("/api/v1/admin/acquisition/release-groups/figures?mediaTypeId=1");
+            Assert.AreEqual((2, 1, 1, 0), (figures.GroupCount, figures.GoodCount, figures.NotRatedCount, figures.BlockedCount));
+            var good = await SearchAsync();
+            var feature = good.Single(candidate => candidate.Title == Feature);
+            Assert.AreEqual(unrated.Single(candidate => candidate.Title == Feature).Score + 50, feature.Score);
+            Assert.IsTrue(feature.ScorePoints.Any(point => (point.Code, point.Value, point.Points) == ("GroupGood", "GRP", 50)));
+
+            // A blocked group stays visible and selectable by hand, but the automatic search takes none of its releases.
+            await RateAsync(group.Id, ReleaseGroupRating.Blocked);
+            var blocked = await SearchAsync();
+            Assert.IsTrue(blocked.Where(candidate => candidate.ReleaseGroup == "GRP" && candidate.ReleaseDecisionTypeId != ReleaseDecisionType.Rejected)
+                .All(candidate => (candidate.ReleaseDecisionTypeId, candidate.ReasonCode) == (ReleaseDecisionType.ManualReview, "GroupBlocked")));
+            Assert.AreEqual(ReleaseDecisionType.ManualReview, blocked.Single(candidate => candidate.Title == Feature).ReleaseDecisionTypeId);
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(0, usenet.Grabbed.Count);
+
+            using var missing = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/release-groups/999999/rating", new RateReleaseGroupDataV1(ReleaseGroupRating.Bad));
+            Assert.AreEqual(HttpStatusCode.NotFound, missing.StatusCode);
+        }
+
+        [TestMethod]
         public async Task Retry_AfterAClientFault_TakesTheSameReleaseAgain()
         {
             using var storage = new TemporaryDirectory();
@@ -1601,6 +1927,65 @@ namespace Jularr.Backend.Tests
                 AcquisitionSelectionLogic.DefinitionOptions)!;
             CollectionAssert.AreEqual(new[] { "de", "en" }, definition.LanguageOrder);
             Assert.AreEqual(LanguageFallbackType.English, definition.LanguageFallback);
+        }
+
+        [TestMethod]
+        public async Task Profiles_ReleaseGroupScores_DefaultSaveRangeAndEditor()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
+            const string Profiles = "/api/v1/admin/acquisition/profiles/";
+            var movies = (await ReadProfilesAsync(host)).Single(profile => profile.MediaTypeId == MediaType.Movie && profile.IsDefault);
+            Assert.AreEqual((50, -50), (movies.GoodGroupScore, movies.BadGroupScore));
+
+            // The scores are stored in the definition the selection reads.
+            using var saved = await host.SendAsync(HttpMethod.Put, Profiles + movies.Id, new SaveAcquisitionProfileDataV1(movies.Name, MediaType.Movie, true, movies.AllowedQualities,
+                movies.UpgradeAllowed, movies.UpgradeCutoffQuality, null, null, movies.Version, goodGroupScore: 80, badGroupScore: -30));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            movies = (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id);
+            Assert.AreEqual((80, -30), (movies.GoodGroupScore, movies.BadGroupScore));
+            var definition = System.Text.Json.JsonSerializer.Deserialize<AcquisitionProfileDefinition>(
+                (string)(await host.ScalarAsync($"SELECT \"Definition\"::text FROM \"AcquisitionProfiles\" WHERE \"Id\" = {movies.Id}"))!, AcquisitionSelectionLogic.DefinitionOptions)!;
+            Assert.AreEqual((80, -30), (definition.GoodGroupScore, definition.BadGroupScore));
+
+            // A good group earns points and a bad one loses them.
+            foreach (var (good, bad) in new[] { (-1, -50), (50, 1), (1000001, -50) })
+            {
+                using var invalid = await host.SendAsync(HttpMethod.Put, Profiles + movies.Id, new SaveAcquisitionProfileDataV1(movies.Name, MediaType.Movie, true, movies.AllowedQualities,
+                    movies.UpgradeAllowed, movies.UpgradeCutoffQuality, null, null, movies.Version, goodGroupScore: good, badGroupScore: bad));
+                Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode, good + " / " + bad);
+            }
+
+            // The editor shows them in their own section, the upgrade scores once, the advanced parts closed, and round arrows that stop at the ends.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + movies.Id);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "name=\"GoodGroupScore\" type=\"number\" autocomplete=\"off\" value=\"80\"");
+            StringAssert.Contains(html, "name=\"BadGroupScore\" type=\"number\" autocomplete=\"off\" value=\"-30\"");
+            StringAssert.Contains(html, "Rate groups (0, 0 blocked)");
+            StringAssert.Contains(html, "<details class=\"profile-advanced\"><summary>Advanced: quality groups and format scores</summary>");
+            Assert.AreEqual(1, html.Split("name=\"MinimumFormatScore\"").Length - 1);
+            Assert.IsTrue(html.IndexOf("name=\"MinimumUpgradeFormatScore\"", StringComparison.Ordinal) < html.IndexOf("profile-advanced", StringComparison.Ordinal));
+            Assert.AreEqual(1, html.Split("aria-label=\"Move up\" disabled=\"disabled\"").Length - 1);
+            Assert.AreEqual(1, html.Split("aria-label=\"Move down\" disabled=\"disabled\"").Length - 1);
+
+            // The page saves them through the same service; an out of range score is refused.
+            using var posted = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + movies.Id, new FormUrlEncodedContent(
+            [
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaTypeId", "1"), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("Name", movies.Name), new("IsDefault", "True"), new("AllowedQualities", "WEBDL-1080p"), new("GoodGroupScore", "120"), new("BadGroupScore", "-70")
+            ]));
+            Assert.AreEqual(HttpStatusCode.Redirect, posted.StatusCode, await posted.Content.ReadAsStringAsync());
+            movies = (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id);
+            Assert.AreEqual((120, -70), (movies.GoodGroupScore, movies.BadGroupScore));
+            using var refused = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + movies.Id, new FormUrlEncodedContent(
+            [
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaTypeId", "1"), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("Name", movies.Name), new("IsDefault", "True"), new("AllowedQualities", "WEBDL-1080p"), new("GoodGroupScore", "-5")
+            ]));
+            Assert.AreNotEqual(HttpStatusCode.Redirect, refused.StatusCode);
+            Assert.AreEqual(120, (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id).GoodGroupScore);
         }
 
         [TestMethod]
@@ -1816,7 +2201,11 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
             var wantedId = await CreateWantedMovieAsync(host);
 
-            using var connections = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition?AcquisitionConnectionId=2");
+            // A download client opened at the indexers' address leads to the External clients page, which shows it.
+            using var moved = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition?AcquisitionConnectionId=2");
+            Assert.AreEqual(HttpStatusCode.Redirect, moved.StatusCode);
+            Assert.AreEqual("/Admin/Downloads/Clients?AcquisitionConnectionId=2", moved.Headers.Location!.OriginalString);
+            using var connections = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Clients?AcquisitionConnectionId=2");
             var html = await connections.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, connections.StatusCode, html);
             StringAssert.Contains(html, "Path reported by the client");
@@ -1849,7 +2238,7 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
             await host.Fixture.RunSqlAsync("UPDATE \"LibraryRoots\" SET \"MediaTypeId\" = 2");
 
-            // Without a key TMDB is unavailable; the key is stored write-only.
+            // Without a key TheTVDB's series search is unavailable; the keys are stored write-only.
             var search = new SearchMetadataDataV1(MediaType.Series, "Example Show");
             using var unavailable = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/metadata/search", search);
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, unavailable.StatusCode);
@@ -1867,10 +2256,11 @@ namespace Jularr.Backend.Tests
             Assert.IsNull(result.WorkId);
 
             // Import maps identities and the episode catalog; a repeat updates the same Work.
-            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, result.ExternalId));
+            Assert.AreEqual(("tvdb", "81189"), (result.Namespace, result.ExternalId));
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, result.ExternalId, null, result.Namespace));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
-            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, result.ExternalId));
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, result.ExternalId, null, result.Namespace));
             Assert.AreEqual(work.Id, (await again.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\""));
@@ -2039,6 +2429,31 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(false, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"ParentWorkUnitId\" = {seasons[2].Id} AND \"Number\" = 2"));
             Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"ParentWorkUnitId\" = {seasons[2].Id} AND \"Number\" = 1"));
             Assert.AreEqual(false, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"Id\" = {other.Id}"), "A refresh keeps the owner's choice.");
+        }
+
+        [TestMethod]
+        public async Task Indexers_RateLimitedWithRetryAfter_RestForTheWaitTheyAskedFor()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections,
+                new SaveAcquisitionConnectionDataV1("Limited", AcquisitionConnectionType.Newznab, "https://limited.example.test/", FakeUsenet.IndexerKey, true, 20, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var wantedId = await CreateWantedMovieAsync(host);
+
+            // The first search is refused with a Retry-After of two hours: the backoff lasts that long, not five minutes.
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, await host.ScalarAsync("SELECT \"FailureCount\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Limited'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" > now() + interval '110 minutes' FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Limited'"));
+
+            // Automatic searches leave it alone until then.
+            int Asked() { lock (usenet.IndexerHosts) return usenet.IndexerHosts.Count(asked => asked == "limited.example.test"); }
+            var before = Asked();
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(before, Asked());
         }
 
         [TestMethod]
@@ -2411,6 +2826,34 @@ namespace Jularr.Backend.Tests
                 """));
             await RunAsync<SearchDueWantedV1>(host);
             CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/s2e1" }, usenet.Grabbed);
+        }
+
+        [TestMethod]
+        public async Task DailyRefresh_ATitleWhoseIdentityConflicts_IsSkippedAndTheOthersStillRefresh()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet { Results = FakeUsenet.SeriesResults });
+            await host.Fixture.RunSqlAsync("UPDATE \"LibraryRoots\" SET \"MediaTypeId\" = 2");
+            var tmdb = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(FakeUsenet.TmdbToken));
+            await SaveTvdbKeyAsync(host);
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, "1399"));
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+
+            // Another Work of the library holds the series' TheTVDB id, so the Work, refreshed by its TMDB id, cannot be imported again.
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (600, {work.Id});
+                INSERT INTO "Works" ("Id", "CanonicalTitle", "MediaTypeId") VALUES (601, 'Other', 2);
+                INSERT INTO "WantedItems" ("Id", "WorkId", "IsPaused") VALUES (602, 601, TRUE);
+                UPDATE "WorkExternalIdentities" SET "WorkId" = 601 WHERE "WorkId" = {work.Id} AND "Namespace" = 'tvdb';
+                UPDATE "WorkExternalIdentities" SET "UpdatedAt" = now() - interval '2 days' WHERE "WorkId" = {work.Id} AND "Namespace" = 'tmdb_tv';
+                """);
+            await RunAsync<RefreshWantedMetadataV1>(host);
+
+            // It waits for the next day instead of heading the queue every cycle.
+            Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"UpdatedAt\" > now() - interval '1 day' FROM \"WorkExternalIdentities\" WHERE \"WorkId\" = {work.Id} AND \"Namespace\" = 'tmdb_tv'"));
+            Assert.AreEqual(work.Id + ":601", await host.ScalarAsync("SELECT string_agg(\"WorkId\"::text, ':' ORDER BY \"Namespace\") FROM \"WorkExternalIdentities\" WHERE \"Namespace\" IN ('tvdb', 'tmdb_tv') AND \"WorkId\" IN (601, " + work.Id + ")"));
         }
 
         [TestMethod]
@@ -2882,7 +3325,7 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
             var wantedId = await CreateWantedMovieAsync(host);
 
-            // The button on the target's page searches like the schedule and grabs the winner without waiting for the next cycle.
+            // The button on the target's page starts a search run and returns at once; the run searches like the schedule and grabs the winner without waiting for the next cycle.
             var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId))!;
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + workId);
             var html = await page.Content.ReadAsStringAsync();
@@ -2890,9 +3333,15 @@ namespace Jularr.Backend.Tests
             using var searched = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + workId + "?handler=Automatic",
                 new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html) });
             Assert.AreEqual(HttpStatusCode.Redirect, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+            StringAssert.StartsWith(searched.Headers.Location!.OriginalString, "/Admin/Works?searchJob=");
+            Assert.AreEqual(0, usenet.Grabbed.Count);
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                await OperationWorker.RunNextAsync(scope.ServiceProvider, NullLogger.Instance, OperationType.AcquisitionSearch, CancellationToken.None);
+            }
+
             Assert.AreEqual(1, usenet.Grabbed.Count);
-            using var after = await host.SendAsync(HttpMethod.Get, searched.Headers.Location!.OriginalString);
-            StringAssert.Contains(await after.Content.ReadAsStringAsync(), "Downloading: " + Feature);
+            Assert.AreEqual("grabbed", await host.ScalarAsync($"SELECT \"OutcomeKey\" FROM \"AcquisitionSearchTargets\" WHERE \"WantedItemId\" = {wantedId}"));
 
             // While it downloads, the film is not searched again.
             using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search/automatic", new SearchWantedDataV1());
@@ -2912,11 +3361,12 @@ namespace Jularr.Backend.Tests
             using var clients = await host.SendAsync(HttpMethod.Get, Connections + "?acquisitionConnectionRoleId=2");
             var listed = (await clients.Content.ReadFromJsonAsync<PageResult<AcquisitionConnectionDetailsV1>>())!.Items;
             Assert.IsTrue(listed.Count > 0 && listed.All(item => item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd));
-            using var tab = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads");
+            using var tab = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Clients");
             var html = await tab.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
-            StringAssert.Contains(html, "Add download client");
-            StringAssert.Contains(html, "Configure download storage");
+            StringAssert.Contains(html, "Add client");
+            StringAssert.Contains(html, "Type=Qbittorrent");
+            Assert.IsFalse(html.Contains("Configure download storage", StringComparison.Ordinal), "An external client keeps its own folders.");
             using var storagePolicy = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/downloads/1");
             Assert.AreEqual(HttpStatusCode.OK, storagePolicy.StatusCode, await storagePolicy.Content.ReadAsStringAsync());
             var downloadStorage = await storagePolicy.Content.ReadFromJsonAsync<Jularr.Backend.Data.Admin.Storage.V1.DownloadStorageSettingsV1>();
@@ -2927,10 +3377,11 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(html.Contains("Add indexer", StringComparison.Ordinal));
 
             // A news server is entered as server, port and SSL; the fields show their form and explain themselves behind the (i).
-            using var newsForm = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads?Type=Usenet");
+            using var newsForm = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads/Servers?Type=Usenet");
             var page = await newsForm.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, newsForm.StatusCode, page);
-            // The page also carries the cards of the configured clients (with their web address); the new server lives in its dialog.
+            StringAssert.Contains(page, "Configure download storage");
+            // The new server lives in its dialog.
             var dialogStart = page.IndexOf("id=\"connection-editor\"", StringComparison.Ordinal);
             Assert.IsTrue(dialogStart >= 0, "The add dialog is open.");
             var news = page[dialogStart..page.IndexOf("</dialog>", dialogStart, StringComparison.Ordinal)];
@@ -3016,6 +3467,7 @@ namespace Jularr.Backend.Tests
             // What a person told SABnzbd: "queue:delete:id:1".
             public List<string> Commands { get; } = [];
             public bool FailCommands { get; set; }
+            public string SpeedLimit { get; set; } = "";
             public List<string> IndexerHosts { get; } = [];
             public DateTimeOffset? Published { get; set; }
             public string Queue { get; set; } = EmptyQueue;
@@ -3056,10 +3508,11 @@ namespace Jularr.Backend.Tests
                 }
 
                 // The open indexer takes no key, the broken one always fails.
-                if (request.RequestUri!.Host is "indexer.example.test" or "open.example.test" or "broken.example.test" or "books.example.test" or "manual.example.test")
+                if (request.RequestUri!.Host is "indexer.example.test" or "open.example.test" or "broken.example.test" or "books.example.test" or "manual.example.test" or "limited.example.test")
                 {
                     lock (IndexerHosts) IndexerHosts.Add(request.RequestUri.Host);
                     if (request.RequestUri.Host == "broken.example.test") return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+                    if (request.RequestUri.Host == "limited.example.test") return new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Headers = { RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromHours(2)) } };
                     var query = System.Web.HttpUtility.ParseQueryString(request.RequestUri.Query);
                     if (query["apikey"] != (request.RequestUri.Host == "open.example.test" ? null : IndexerKey)) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
                     var found = query["t"] == "caps" ? Capabilities : Results ?? MovieResults;
@@ -3079,6 +3532,14 @@ namespace Jularr.Backend.Tests
                         if (FailCommands) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
                         Commands.Add($"{form["mode"]}:{form["name"]}:{form["value"]}:{form["del_files"]}");
                         return Json("""{"status":true}""");
+                    case "queue" when form["name"] is "priority":
+                    case "switch":
+                    case "config" when form["name"] is "speedlimit":
+                        Commands.Add($"{form["mode"]}:{form["name"]}:{form["value"]}:{form["value2"]}");
+                        if (form["name"] is "speedlimit") SpeedLimit = form["value"] is "0" ? "" : (long.Parse(form["value"]!.TrimEnd('K'), System.Globalization.CultureInfo.InvariantCulture) * 1024).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        return Json(form["mode"] == "config" ? """{"status":true}""" : """{"result":{"priority":0,"position":0}}""");
+                    case "queue" when form["limit"] == "1" && form["nzo_ids"] is null:
+                        return Json("{\"queue\":{\"speedlimit_abs\":\"" + SpeedLimit + "\",\"slots\":[]}}");
                     case "queue":
                         return Json(Queue);
                     case "history":
@@ -3131,9 +3592,13 @@ namespace Jularr.Backend.Tests
                 return path switch
                 {
                     "/v4/login" => Json("""{"data":{"token":"tvdb-test-token"}}"""),
-                    "/v4/series/81189/extended" => Json("""{"data":{"id":81189,"name":"Example Show","remoteIds":[{"sourceName":"IMDb","id":"tt0903747"}]}}"""),
+                    "/v4/series/81189/extended" => Json("""
+                        {"data":{"id":81189,"name":"Beispiel Serie","originalLanguage":"deu","firstAired":"2020-04-01","remoteIds":[{"sourceName":"IMDb","id":"tt0903747"},{"sourceName":"TheMovieDB.com","id":"1399"}],
+                        "translations":{"nameTranslations":[{"name":"Example Show","language":"eng"}]}}}
+                        """),
                     "/v4/search/remoteid/tt0903747" => Json("""{"data":[{"series":{"id":81189}}]}"""),
-                    "/v4/series/81189/episodes/default" => Json($$$"""{"data":{"episodes":[{"id":1,"seasonNumber":0,"number":1,"name":"Pilot extra","aired":"2020-01-01"},{"id":2,"seasonNumber":1,"number":1,"name":"One","aired":"2020-04-01","runtime":42},{"id":3,"seasonNumber":1,"number":2,"name":"Two","aired":"2020-04-08"},{"id":4,"seasonNumber":1,"number":3,"name":"Three","aired":"2020-04-15"},{"id":5,"seasonNumber":2,"number":1,"name":"Four","aired":"2021-04-01"},{"id":6,"seasonNumber":2,"number":2,"name":"Five","aired":"{{{future}}}"}]},"links":{"next":null}}"""),
+                    "/v4/search" => Json("""{"data":[{"tvdb_id":"81189","name":"Beispiel Serie","year":"2020","type":"series","primary_language":"deu","translations":{"deu":"Beispiel Serie","eng":"Example Show"}}]}"""),
+                    "/v4/series/81189/episodes/default" or "/v4/series/81189/episodes/default/eng" => Json($$$"""{"data":{"episodes":[{"id":1,"seasonNumber":0,"number":1,"name":"Pilot extra","aired":"2020-01-01"},{"id":2,"seasonNumber":1,"number":1,"name":"One","aired":"2020-04-01","runtime":42},{"id":3,"seasonNumber":1,"number":2,"name":"Two","aired":"2020-04-08"},{"id":4,"seasonNumber":1,"number":3,"name":"Three","aired":"2020-04-15"},{"id":5,"seasonNumber":2,"number":1,"name":"Four","aired":"2021-04-01"},{"id":6,"seasonNumber":2,"number":2,"name":"Five","aired":"{{{future}}}"}]},"links":{"next":null}}"""),
                     _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                 };
             }

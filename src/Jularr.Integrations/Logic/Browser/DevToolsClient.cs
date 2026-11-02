@@ -57,10 +57,19 @@ namespace Jularr.Integrations.Logic.Browser
             var created = await SendAsync("Target.createTarget", new { url = "about:blank", background = true }, ct);
             using var document = JsonDocument.Parse(created);
             var targetId = document.RootElement.GetProperty("result").GetProperty("targetId").GetString()!;
-            var attached = await SendAsync("Target.attachToTarget", new { targetId, flatten = true }, ct);
-            using var answer = JsonDocument.Parse(attached);
-            var sessionId = answer.RootElement.GetProperty("result").GetProperty("sessionId").GetString()!;
-            return (targetId, sessionId);
+            try
+            {
+                var attached = await SendAsync("Target.attachToTarget", new { targetId, flatten = true }, ct);
+                using var answer = JsonDocument.Parse(attached);
+                var sessionId = answer.RootElement.GetProperty("result").GetProperty("sessionId").GetString()!;
+                return (targetId, sessionId);
+            }
+            catch
+            {
+                using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await ClosePageAsync(targetId, cleanup.Token);
+                throw;
+            }
         }
 
         public async Task ClosePageAsync(string targetId, CancellationToken ct)

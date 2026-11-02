@@ -51,7 +51,8 @@ namespace Jularr.Frontend.Pages.User.Player
                     texts.CanPreviewSeeking() ? "/api/v1/playback/assets/" + asset + "/trickplay" : null,
                     _preferences is { } preferences ? new PlayerPreferences(preferences.Speed, preferences.AutoplayNext,
                         item.WorkUnitTypeId == WorkUnitType.Episode ? EpisodeCountdownSeconds : 0, preferences.DeviceQuality.ToString(), "/api/v1/playback/preferences/speed",
-                        preferences.IntroSkipModeTypeId.ToString(), preferences.OutroSkipModeTypeId.ToString()) : null,
+                        preferences.IntroSkipModeTypeId.ToString(), preferences.OutroSkipModeTypeId.ToString(), preferences.SecondSubtitleLanguage,
+                        texts.CanTranslateSubtitles() ? "/api/v1/playback/assets/" + asset + "/subtitle-translations" : null, preferences.ProfileLanguage) : null,
                     [.. _markers.Select(marker => new PlayerMarker(marker.MediaMarkerKindTypeId.ToString(), marker.StartMs / 1000d, marker.EndMs / 1000d))],
                     [.. _chapters.Select(chapter => new PlayerChapter(chapter.Title, chapter.StartMs / 1000d))]);
                 var player = new UiPlayer(source, assets);
@@ -123,7 +124,7 @@ namespace Jularr.Frontend.Pages.User.Player
             }
             if (track.IsForced) parts.Add(texts["player.subtitles.forced"]);
             var key = track.MediaTrackTypeId == MediaTrackType.Audio ? track.Key[1..] : track.Key;
-            return new PlayerTrack(key, string.Join(" · ", parts.Distinct(StringComparer.OrdinalIgnoreCase)), track.Language, track.IsSelected, track.IsSupported);
+            return new PlayerTrack(key, string.Join(" · ", parts.Distinct(StringComparer.OrdinalIgnoreCase)), track.LanguageCode ?? track.Language, track.IsSelected, track.IsSupported, track.IsStyled, track.IsForced);
         }
     }
 }

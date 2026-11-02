@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json.Serialization;
 
 namespace Jularr.Integrations.Data.Newznab
@@ -109,7 +110,8 @@ namespace Jularr.Integrations.Data.Newznab
         AuthenticationFailed = 2,
         RateLimited = 3,
         ParametersRejected = 4,
-        InvalidResponse = 5
+        InvalidResponse = 5,
+        NotFound = 6
     }
 
     // Messages never contain the API key.
@@ -117,5 +119,6 @@ namespace Jularr.Integrations.Data.Newznab
     {
         public NewznabFailure Failure { get; } = failure;
         public TimeSpan? RetryAfter { get; } = retryAfter;
+        public HttpStatusCode? StatusCode { get; init; }
     }
 }

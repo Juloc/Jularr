@@ -5,6 +5,11 @@ namespace Jularr.Backend.Data.Common
     }
 
     // Authorized file responses with HTTP range support; the response disposes the seekable stream.
+    // Bytes a cast device fetches from another origin: the response allows that.
+    public interface ICrossOriginOutput
+    {
+    }
+
     public interface IFileOutput
     {
         Stream Content { get; }

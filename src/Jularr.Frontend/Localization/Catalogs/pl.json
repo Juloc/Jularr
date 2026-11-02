@@ -1281,12 +1281,12 @@
    "Brak jednoznacznego dopasowania"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted (paused)",
-   "Będzie monitorowane (wstrzymane)"
+   "Will be wanted",
+   "Będzie monitorowane"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted (paused)",
-   "Monitorowanie wstrzymane"
+   "Wanted",
+   "Monitorowane"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",
@@ -2167,10 +2167,6 @@
   "hint.WorkMetadataFields.Query.info": [
    "A title, optionally with its year.",
    "Tytuł, opcjonalnie z rokiem."
-  ],
-  "hint.CollectionFields.IsSmart.info": [
-   "A smart collection fills itself from the filters below.",
-   "Inteligentna kolekcja wypełnia się sama na podstawie poniższych filtrów."
   ],
   "hint.CollectionFields.ReleaseYear.placeholder": [
    "Any year",
@@ -4633,8 +4629,8 @@
    "Rodzaj"
   ],
   "collections.smartToggle": [
-   "Smart filter instead of hand-picked titles",
-   "Filtr inteligentny zamiast ręcznie wybranych tytułów"
+   "Smart filter",
+   "Filtr inteligentny"
   ],
   "collections.manual": [
    "Hand-picked",

@@ -103,6 +103,10 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.OriginalLanguage))]
         public string? OriginalLanguage { get; init; }
+
+        // The subtype the provider's data suggests (Japanese animation as Anime); it names the subtype of a new title only, a refresh never changes one.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? ClassifiedSubtypeId { get; init; }
     }
 
     // A movie's length; a provider that knows none keeps the stored one.
@@ -119,6 +123,26 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkFields), nameof(WorkFields.RuntimeMinutes))]
         public int? RuntimeMinutes { get; }
+    }
+
+    // A rating on a scale of ten and its number of votes; a catalog that gives none now keeps the stored one.
+    internal sealed class WorkRatingData : BaseData
+    {
+        public WorkRatingData(long id, decimal? rating, int? votes)
+        {
+            Id = id;
+            Rating = rating;
+            Votes = votes;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
+        public decimal? Rating { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Votes))]
+        public int? Votes { get; }
     }
 
     // A book's catalog editions, found again by language and format.
@@ -158,6 +182,33 @@ namespace Jularr.Backend.Data.Logic.Media
         // JSON rows of ExternalId, Name, ImageUrl, PersonRoleId, Position, Credit and, for a unit, WorkUnitTypeId, ParentNumber and Number.
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.People))]
         public string People { get; }
+    }
+
+    // People a provider credits, by its ids: JSON rows of ExternalId, Name and ImageUrl and, once looked up, the TmdbId and ImdbId other catalogs know them by.
+    internal sealed class ProviderPeopleData : BaseData
+    {
+        public ProviderPeopleData(string @namespace, string people)
+        {
+            Namespace = @namespace;
+            People = people;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.PersonNamespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.People))]
+        public string People { get; }
+    }
+
+    internal sealed class ProviderPersonIdData : BaseData
+    {
+        public ProviderPersonIdData(string externalId)
+        {
+            ExternalId = externalId;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
+        public string ExternalId { get; }
     }
 
     internal sealed class WorkIdentityCandidateData : BaseData
@@ -264,6 +315,22 @@ namespace Jularr.Backend.Data.Logic.Media
         public string Value { get; }
     }
 
+    // The TheTVDB id a Work holds next to TMDB's id of the same series.
+    internal sealed class SeriesIdentityLinkData : BaseData
+    {
+        public SeriesIdentityLinkData(string tmdbValue, string tvdbValue)
+        {
+            TmdbValue = tmdbValue;
+            TvdbValue = tvdbValue;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
+        public string TmdbValue { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
+        public string TvdbValue { get; }
+    }
+
     // JSON rows of Namespace and Value.
     internal sealed class WorkIdentityLookupData : BaseData
     {
@@ -276,21 +343,29 @@ namespace Jularr.Backend.Data.Logic.Media
         public string Values { get; }
     }
 
-    // Viewer state of a provider title that already is a Work.
-    internal sealed class DiscoverOverlayData : BaseData
+    // The Works a Discover list names.
+    internal sealed class DiscoverWorksData : BaseData
     {
-        public DiscoverOverlayData(string value, long workId, MediaStateType mediaStateTypeId, string? plexUrl, string? posterUrl, string? backdropUrl)
+        public DiscoverWorksData(long[] workIds)
         {
-            Value = value;
+            WorkIds = workIds;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Ids))]
+        public long[] WorkIds { get; }
+    }
+
+    // What a Discover card of a Work the profile may see shows of its library state.
+    internal sealed class DiscoverCardStateData : BaseData
+    {
+        public DiscoverCardStateData(long workId, MediaStateType mediaStateTypeId, string? plexUrl, string? posterUrl, string? backdropUrl)
+        {
             WorkId = workId;
             MediaStateTypeId = mediaStateTypeId;
             PlexUrl = plexUrl;
             PosterUrl = posterUrl;
             BackdropUrl = backdropUrl;
         }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
-        public string Value { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }

@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Playback;
+using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
@@ -94,6 +95,40 @@ namespace Jularr.Backend.Tests
             await ChangeAsync(host, game, ProgressAction.Unwatched, null);
             Assert.AreEqual(90000L, await host.ScalarAsync("SELECT \"PositionMs\" FROM \"MediaProgress\""));
             Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsCompleted\" FROM \"MediaProgress\""));
+        }
+
+        [TestMethod]
+        public async Task Continue_SeveralStartedEpisodes_ListsTheTitleOnceWithTheLastTouched()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            var (show, unit) = await CreateSeriesAsync(host);
+
+            // Three begun episodes with the profile's last touch on the third, which has no file; the second has the newest one with a file.
+            await host.Fixture.RunSqlAsync($"""
+                DO $$
+                DECLARE mount bigint; root bigint; edition bigint; version bigint; asset bigint; episode record;
+                BEGIN
+                    INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") VALUES ('Continue', 3, 'C:\continue', FALSE) RETURNING "Id" INTO mount;
+                    INSERT INTO "LibraryRoots" ("Name", "MediaTypeId", "StorageMountId", "RelativePath") VALUES ('Continue', 2, mount, 'series') RETURNING "Id" INTO root;
+                    INSERT INTO "WorkEditions" ("WorkId", "LanguageCode") VALUES ({show}, 'en') RETURNING "Id" INTO edition;
+                    INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId") VALUES ({show}, edition) RETURNING "Id" INTO version;
+                    FOR episode IN SELECT * FROM (VALUES ({unit["1x1"]}, 3), ({unit["1x2"]}, 2), ({unit["1x3"]}, 1)) AS episodes ("Id", "HoursAgo") LOOP
+                        IF episode."Id" <> {unit["1x3"]} THEN
+                            INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId") VALUES ({show}, version, episode."Id", 1) RETURNING "Id" INTO asset;
+                            INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt")
+                            VALUES (root, 'continue/' || episode."Id" || '.mkv', 1000, now(), asset, now());
+                        END IF;
+                        INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "WorkUnitId", "ProgressPositionTypeId", "PositionMs", "DurationMs", "UpdatedAt")
+                        VALUES ({ProfileSql}, {show}, episode."Id", 1, 500, 1000, now() - episode."HoursAgo" * interval '1 hour');
+                    END LOOP;
+                END $$;
+                """);
+            var secondAsset = (long)(await host.ScalarAsync($"SELECT \"Id\" FROM \"MediaAssets\" WHERE \"WorkUnitId\" = {unit["1x2"]}"))!;
+
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/continue");
+            var shelf = (await response.Content.ReadFromJsonAsync<BaseDataList<ContinueItemV1>>())!;
+            Assert.AreEqual(secondAsset, shelf.Single(item => item.WorkId == show).MediaAssetId);
         }
 
         [TestMethod]

@@ -18,8 +18,12 @@ for commercial use of those assets.
 The ordinary browser dependencies retain their licenses: hls.js 1.7.3
 (Apache-2.0), htmx 4.0.0 (0BSD), Mozilla's pdf.js 6.4.299 (Apache-2.0, with its
 OpenJPEG, JBIG2 and qcms decoders under their BSD-2-Clause, BSD-3-Clause and MIT
-terms, copied beside the build by `Tools/pdf-assets.mjs`) and the optional
-Bergamot files (MPL-2.0).
+terms, copied beside the build by `Tools/pdf-assets.mjs`), the optional
+Bergamot files (MPL-2.0) and JASSUB 2.5.23 (the wrapper MIT; its WebAssembly
+build contains libass (ISC), FreeType (FTL), HarfBuzz (MIT) and FriBidi
+(LGPL-2.1-or-later), shipped as separate unmodified `.wasm` files that the
+player loads only for an ASS/SSA subtitle; about 2.1 MB per variant, 0.9 MB
+compressed, plus a 146 kB default font).
 No new combined binary is made from those engines and Speech. Optional EmulatorJS
 and its separately distributed cores retain their own terms under `/emulator`;
 they are not inputs to the Speech WASM build.

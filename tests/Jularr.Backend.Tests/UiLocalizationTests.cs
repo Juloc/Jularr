@@ -176,6 +176,32 @@ namespace Jularr.Backend.Tests
                 """));
         }
 
+        [TestMethod]
+        public void GermanCatalog_ErrorsGenresAndCatalogFields_FollowTheCurrentEnglish()
+        {
+            var german = Jularr.Frontend.Localization.UiCatalogs.Load().Single(catalog => catalog.Locale == "de").Texts;
+            var sources = ServiceErrorResources.English.Concat(Jularr.Frontend.Localization.UiResources.English)
+                .Where(resource => resource.Key.StartsWith("errors.", StringComparison.Ordinal) || resource.Key.StartsWith("genre.", StringComparison.Ordinal) || resource.Key == "admin.catalog.requestsPerMinute")
+                .ToArray();
+
+            Assert.IsTrue(sources.Any(resource => resource.Key == "errors.health_degraded") && sources.Any(resource => resource.Key == "genre.comedy"));
+            var wrong = sources.Where(resource => !german.TryGetValue(resource.Key, out var text) || text.Item1 != resource.EnglishText || string.IsNullOrWhiteSpace(text.Item2) || text.Item2 == text.Item1 && resource.Key.StartsWith("errors.", StringComparison.Ordinal))
+                .Select(resource => resource.Key).ToArray();
+            Assert.AreEqual(0, wrong.Length, "Missing or outdated German texts: " + string.Join(", ", wrong));
+            Assert.AreEqual("Komödie", german["genre.comedy"].Item2);
+        }
+
+        [TestMethod]
+        public void GermanCatalog_EveryText_FollowsTheCurrentEnglish()
+        {
+            // An entry whose English no longer matches the code is ignored, and the page shows English in the German interface.
+            var german = Jularr.Frontend.Localization.UiCatalogs.Load().Single(catalog => catalog.Locale == "de").Texts;
+            var outdated = Jularr.Frontend.Localization.UiResources.English
+                .Where(resource => german.TryGetValue(resource.Key, out var text) && text.Item1 != resource.EnglishText)
+                .Select(resource => resource.Key).ToArray();
+            Assert.AreEqual(0, outdated.Length, "German texts that follow an older English: " + string.Join(", ", outdated));
+        }
+
         private static Task SynchronizeAsync(Fixture fixture, params UiTextResource[] resources) => SynchronizeAsync(fixture, [], resources);
 
         private static async Task SynchronizeAsync(Fixture fixture, UiTextCatalog[] catalogs, params UiTextResource[] resources)

@@ -49,28 +49,30 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task ExternalWorks_FreshInstallCreatesTheProviderCatalog()
+        public async Task CatalogWorks_FreshInstallKeepsTheProviderCatalogInWorks()
         {
-            var cs = TestPostgres.ResolveConnectionString(nameof(ExternalWorks_FreshInstallCreatesTheProviderCatalog));
+            var cs = TestPostgres.ResolveConnectionString(nameof(CatalogWorks_FreshInstallKeepsTheProviderCatalogInWorks));
             await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual(DBNull.Value, await ScalarAsync(cs, "SELECT to_regclass('\"ExternalWorks\"')::text;"));
             await ExecuteAsync(cs,
                 """
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "OriginalTitle", "ImdbId", "Rating", "TrendingRank")
-                VALUES ('tmdb_movie', '603', 1, 'Matrix', 'The Matrix', 'tt0133093', 8.2, 1);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "OriginalTitle", "Rating", "TrendingRank", "CatalogNamespace") VALUES (603, 1, 'Matrix', 'The Matrix', 8.2, 1, 'tmdb_movie');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (603, 'tmdb_movie', '603');
                 """);
-            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"ExternalWorks\" WHERE \"SearchText\" @@ to_tsquery('simple', 'matrix');"));
-            // One row per provider title, and only catalogs Jularr reads.
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"Works\" WHERE \"SearchText\" @@ to_tsquery('simple', 'matrix');"));
+            // One Work per provider title, and only catalogs Jularr reads.
             await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs,
                 """
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title") VALUES ('tmdb_movie', '603', 1, 'Again');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (604, 1, 'Again');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (604, 'tmdb_movie', '603');
                 """));
             await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs,
                 """
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title") VALUES ('plex', '1', 1, 'Unknown catalog');
+                INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "CatalogNamespace") VALUES (1, 'Unknown catalog', 'plex');
                 """));
             await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
-            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"ExternalWorks\";"));
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"Works\";"));
         }
 
         [TestMethod]

@@ -35,7 +35,7 @@ namespace Jularr.Backend.Service.Core
             var items = await context.ReadExternalFeedAsync(resolved, ct);
             if (items is null && resolved.DiscoverFeedTypeId == DiscoverFeedType.Trending && resolved.Page == 1 && resolved.SourceValue is null)
             {
-                var previous = await context.ReadTrendingExternalWorksAsync(new ExternalWorkListData(resolved.Namespace, resolved.MediaTypeId, resolved.MediaSubtypeId), ct);
+                var previous = await context.ReadTrendingExternalWorksAsync(new ExternalWorkListData(ExternalFeedLogic.CatalogOf(resolved.Namespace), resolved.MediaTypeId, resolved.MediaSubtypeId), ct);
                 if (previous.Count > 0)
                 {
                     items = previous;

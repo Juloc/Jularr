@@ -12,7 +12,7 @@ namespace Jularr.E2E.Tests
 
         [TestMethod]
         [Timeout(900_000)]
-        public async Task SonarrTakeover_ExplicitlyResumedMonitoring_ChoosesReleasesAndEpisodesPlay()
+        public async Task SonarrTakeover_MonitoredSeries_ChoosesReleasesAndEpisodesPlay()
         {
             var ffmpeg = Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG");
             using var folders = new Folders("Series");
@@ -29,6 +29,7 @@ namespace Jularr.E2E.Tests
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
                 ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
                 ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library,
                 ["Media:FfmpegPath"] = ffmpeg ?? "",
                 ["Media:FfprobePath"] = Steps.FfprobeBeside(ffmpeg) ?? ""
@@ -50,19 +51,13 @@ namespace Jularr.E2E.Tests
                 await TakeOverAsync(page, fakes, apply: true);
                 await Assertions.Expect(page.Locator("main table").Last).ToContainTextAsync("Wanted");
 
-                // Inventory takeover stays paused across restart until the Owner explicitly takes over automatic acquisition.
+                // Sonarr monitors the series, so it is wanted as Sonarr wanted it, also after a restart.
                 await page.GotoAsync("about:blank");
                 await jularr.RestartAsync();
                 await page.GotoAsync("/Admin/Wanted");
-                var monitored = Steps.ListRow(page, FakeServices.SeriesTitle);
-                await Assertions.Expect(monitored).ToContainTextAsync("Paused");
-                Assert.AreEqual(0, fakes.Grabbed.Count, "Taking over inventory or restarting must not start downloads.");
-                await Steps.SubmitAsync(page, monitored.Locator("form").Filter(new()
-                {
-                    Has = page.GetByRole(AriaRole.Button, new() { Name = "Resume " + FakeServices.SeriesTitle, Exact = true })
-                }));
+                await Assertions.Expect(Steps.ListRow(page, FakeServices.SeriesTitle)).Not.ToContainTextAsync("Paused");
 
-                // After explicit release, automatic search takes only what the imported profile allows.
+                // The automatic search takes only what the imported profile allows.
                 await WaitForGrabsAsync(fakes, first, second);
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.SeriesTitle);
                 CollectionAssert.AreEquivalent(new[] { fakes.NzbAddress(first).ToString(), fakes.NzbAddress(second).ToString() }, fakes.Grabbed.ToArray());
@@ -99,6 +94,7 @@ namespace Jularr.E2E.Tests
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
                 ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
                 ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library
             });
             await using var session = await BrowserSession.StartAsync(jularr);
@@ -119,6 +115,9 @@ namespace Jularr.E2E.Tests
                 var seriesRow = Steps.ListRow(page, FakeServices.SeriesTitle);
                 await Assertions.Expect(filmRow).ToBeVisibleAsync();
                 await Assertions.Expect(seriesRow).Not.ToContainTextAsync("High");
+
+                // The searches the requests started are over (a search takes its time, as the indexer is paced): a release on offer is found only by the search below.
+                await WaitUntilSearchedAsync(page, filmRow, seriesRow);
 
                 // Priorities are for chosen rows: the dock shows its bulk zone, with how many are chosen, only while rows are chosen.
                 var dock = page.Locator(".action-dock:not(.save-pill)");
@@ -165,6 +164,7 @@ namespace Jularr.E2E.Tests
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
                 ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
                 ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
                 ["Providers:AniList"] = fakes.AniList.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library,
                 ["Media:FfmpegPath"] = ffmpeg ?? "",
@@ -187,7 +187,7 @@ namespace Jularr.E2E.Tests
                 // The user asks for both; the Owner approves them; nobody searches by hand.
                 fakes.Offer(english, german, opening, ending);
                 await Steps.RequestAsync(user, "Bunny", FakeServices.MovieTitle);
-                await Steps.RequestFromCatalogAsync(user, "anime", FakeServices.AnimeTitle, "anilist");
+                await Steps.RequestFromCatalogAsync(user, "anime", FakeServices.AnimeTitle);
                 await ApproveAsync(page, FakeServices.MovieTitle);
                 await ApproveAsync(page, FakeServices.AnimeTitle);
                 await WaitForGrabsAsync(fakes, german, opening, ending);
@@ -237,6 +237,7 @@ namespace Jularr.E2E.Tests
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
                 ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
                 ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
                 ["Providers:OpenLibrary"] = fakes.OpenLibrary.ToString(),
                 ["Providers:Images:covers.openlibrary.org"] = fakes.Images.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library
@@ -255,7 +256,7 @@ namespace Jularr.E2E.Tests
 
                 // The user asks for the novel; once approved, nobody searches by hand.
                 fakes.Offer(pdf);
-                await Steps.RequestFromCatalogAsync(user, "books", FakeServices.BookTitle, "openlibrary");
+                await Steps.RequestFromCatalogAsync(user, "books", FakeServices.BookTitle);
                 await ApproveAsync(page, FakeServices.BookTitle);
                 await WaitForGrabsAsync(fakes, pdf);
 
@@ -309,6 +310,7 @@ namespace Jularr.E2E.Tests
             await form.Locator("[name=Name]").FillAsync(name);
             await form.GetByText("Default for its media type", new() { Exact = true }).ClickAsync();
             await Assertions.Expect(form.GetByRole(AriaRole.Switch, new() { Name = "Default for its media type", Exact = true })).ToBeCheckedAsync();
+            await form.Locator("details.profile-advanced > summary").ClickAsync();
             await form.Locator(".ui-form__row", new() { HasText = name }).Locator("input[name$='.Score']").FillAsync("100");
             await form.Locator("[name=MinimumFormatScore]").FillAsync("100");
             await Steps.SaveAsync(page);
@@ -345,6 +347,24 @@ namespace Jularr.E2E.Tests
         }
 
         // The automatic search runs every two minutes.
+        private static async Task WaitUntilSearchedAsync(IPage page, params ILocator[] rows)
+        {
+            var deadline = DateTime.UtcNow.AddMinutes(2);
+            while (true)
+            {
+                var searched = 0;
+                foreach (var row in rows)
+                {
+                    if (await row.Locator("time[data-local-time]").CountAsync() > 0) searched++;
+                }
+
+                if (searched == rows.Length) return;
+                if (DateTime.UtcNow > deadline) throw new AssertFailedException("The searches of the requests did not finish within two minutes.");
+                await Task.Delay(500);
+                await page.ReloadAsync();
+            }
+        }
+
         private static async Task WaitForGrabsAsync(FakeServices fakes, params FakeRelease[] releases)
         {
             var wanted = releases.Select(release => fakes.NzbAddress(release).ToString()).ToArray();

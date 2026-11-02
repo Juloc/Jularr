@@ -32,7 +32,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
     // One page per title: films and series are managed here, with their seasons, files, searches and history; other types still show their metadata.
     public sealed partial class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, UpdateWorkFranchiseV1 updateFranchise, RefreshWorkMetadataV1 refresh, ReadWorkUnitGroupsV1 readGroups, CreateWorkUnitGroupV1 createGroup,
         DeleteWorkUnitGroupV1 deleteGroup, SearchMetadataV1 search, RematchWorkV1 rematch, ReadWorkManagementV1 readManagement, ReadWantedItemV1 readWanted, UpdateWantedV1 updateWanted, StartWorkMonitoringV1 startMonitoring, UpdateWantedUnitV1 updateUnit,
-        SearchWantedAutomaticallyV1 automatic, ReadWantedReleasesV1 readReleases, MarkWantedReleaseV1 markRelease, ReadActivityEventsV1 readEvents, ReadAcquisitionProfilesV1 profiles, ReadWantedLibrariesV1 libraries,
+        SearchWantedAutomaticallyV1 automatic, QueueWorksSearchV1 queueSearch, ReadWantedReleasesV1 readReleases, MarkWantedReleaseV1 markRelease, ReadActivityEventsV1 readEvents, ReadAcquisitionProfilesV1 profiles, ReadWantedLibrariesV1 libraries,
         ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, DeleteLibraryFilesV1 deleteFiles, DeleteDocumentTranslationV1 deleteTranslation, DeleteWorkV1 deleteWork, UpdateWorkEditionV1 updateEdition, UpdateLibraryFileFactsV1 updateFacts, ReadLibraryRenamesV1 readRenames, ApplyLibraryRenamesV1 applyRenames, FrontendAssets assets,
         IAntiforgery antiforgery, UiText texts) : JularrPage
     {
@@ -187,6 +187,13 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
         public async Task<IActionResult> OnPostAutomaticAsync(int? parentUnitNumber, int? unitNumber, long? wantedItemId, string? language)
         {
+            // Searching a whole title can take minutes (sources, browser): it runs as a search run with progress, like Search all, and the click returns at once.
+            if (parentUnitNumber is null && unitNumber is null && wantedItemId is null && string.IsNullOrEmpty(language))
+            {
+                var queued = await queueSearch.ExecuteAsync<SearchRunQueuedV1>(new WorksBulkParametersV1(), new QueueWorksSearchDataV1([Id]), HttpContext.RequestAborted);
+                return LocalRedirect("/Admin/Works?searchJob=" + queued.OperationId.ToString(CultureInfo.InvariantCulture));
+            }
+
             var result = await automatic.ExecuteAsync<AutomaticSearchResultV1>(new WantedItemParametersV1(await WantedItemIdAsync(wantedItemId)), new SearchWantedDataV1(parentUnitNumber, unitNumber, language), HttpContext.RequestAborted);
             HintText(texts["acquisition.outcome." + result.OutcomeKey] + (result.Title is { } title ? ": " + title : ""));
             return LocalRedirect(Address(Tab));

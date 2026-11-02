@@ -1281,12 +1281,12 @@
    "明確な一致なし"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted (paused)",
-   "監視対象になります（一時停止）"
+   "Will be wanted",
+   "監視対象になります"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted (paused)",
-   "監視を一時停止"
+   "Wanted",
+   "監視中"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",
@@ -2167,10 +2167,6 @@
   "hint.WorkMetadataFields.Query.info": [
    "A title, optionally with its year.",
    "タイトル。必要に応じて公開年も指定できます。"
-  ],
-  "hint.CollectionFields.IsSmart.info": [
-   "A smart collection fills itself from the filters below.",
-   "スマートコレクションは、下のフィルターに従って自動的に内容が埋まります。"
   ],
   "hint.CollectionFields.ReleaseYear.placeholder": [
    "Any year",
@@ -4633,8 +4629,8 @@
    "種類"
   ],
   "collections.smartToggle": [
-   "Smart filter instead of hand-picked titles",
-   "選んだタイトルの代わりにスマートフィルターを使う"
+   "Smart filter",
+   "スマートフィルター"
   ],
   "collections.manual": [
    "Hand-picked",

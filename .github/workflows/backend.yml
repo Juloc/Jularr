@@ -61,7 +61,7 @@ jobs:
             nuget-${{ runner.os }}-
       - uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: '26'
           cache: npm
           cache-dependency-path: src/Jularr.Frontend/package-lock.json
       # The migration tests run the real pg_dump/pg_restore; the runner's own client is older than the test database.
@@ -107,7 +107,7 @@ jobs:
     name: ${{ matrix.kind }} (${{ matrix.shard }})
     needs: smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 18
     strategy:
       fail-fast: true
       matrix:
@@ -157,6 +157,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/dotnet-runtime/.dotnet/shm"
           chmod 700 "$RUNNER_TEMP/dotnet-runtime"
           echo "XDG_RUNTIME_DIR=$RUNNER_TEMP/dotnet-runtime" >> "$GITHUB_ENV"
+          # Downloads reject tmpfs and overlay: use the real runner disk for test workspaces.
+          echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Cache the Playwright browser
         if: matrix.kind == 'e2e'
         uses: actions/cache@v6
@@ -209,6 +211,10 @@ jobs:
       - name: Run the browser shard
         if: matrix.kind == 'e2e'
         run: |
+          # Native download storage refuses RAM and overlay filesystems, so the test folders must lie on the runner's
+          # disk. Some runner images mount /tmp as tmpfs: use the runner's temp directory and log where it lies.
+          export TMPDIR="${RUNNER_TEMP}"
+          findmnt -T "${TMPDIR}" -o TARGET,FSTYPE,SOURCE || true
           dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build \
             --filter "$(python3 scripts/ci-shard-tests.py plan --kind e2e --shard "${SHARD}")" \
             --logger "trx;LogFileName=e2e-shard.trx" --results-directory TestResults/ci/e2e

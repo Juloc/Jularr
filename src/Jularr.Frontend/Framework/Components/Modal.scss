@@ -1,3 +1,6 @@
+// The page behind any modal dialog (a Modal, a filter, a preview, a picker), a drawer (also open without script, where it is not modal) or the request panel stays put.
+html:has(dialog:modal, .drawer[open], .request-drawer) { overflow: hidden; }
+
 // A centred dialog: title row with the X, a scrolling body, and the form's actions as the footer.
 .modal {
     width: min(560px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
@@ -11,7 +14,7 @@
     overflow: hidden;
 
     &[open] { display: flex; flex-direction: column; }
-    &::backdrop { background: var(--scrim); }
+    &::backdrop { background: var(--scrim); backdrop-filter: blur(4px); }
 
     &__head {
         display: flex;

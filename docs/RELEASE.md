@@ -1,6 +1,6 @@
 # Releasing Jularr
 
-A release is a git tag `v<MAJOR>.<MINOR>.<PATCH>` (for example `v0.2.0`) on a commit of `main`. The [Release workflow](../.github/workflows/release.yml) runs only for such a tag; merging a PR publishes nothing.
+A release is a git tag `v<MAJOR>.<MINOR>.<PATCH>` (for example `v0.2.0`) on a commit of `main`. The [Release workflow](../.github/workflows/release.yml) runs only for such a tag; merging a PR publishes nothing. The Android TV app has its own tag and [TV Release workflow](../.github/workflows/tv-release.yml), so a server release never waits for it ([TV app](#tv-app)).
 
 ## Before tagging
 
@@ -17,13 +17,27 @@ A tag with a suffix (`v0.3.0-rc.1`) is a prerelease.
 
 ## What the workflow does
 
-- **guard** fails the run unless the tag is `v<MAJOR>.<MINOR>.<PATCH>[-prerelease]`, the tagged commit is reachable from `origin/main` or `origin/main`, and the newest completed Frontend and Backend Full runs of that exact commit succeeded (a missing or red run is named in the error).
+- **guard** fails the run unless the tag is `v<MAJOR>.<MINOR>.<PATCH>[-prerelease]`, the tagged commit is reachable from `origin/main`, and the newest completed Frontend and Backend Full runs of that exact commit succeeded (a missing or red run is named in the error).
   The owner can release past a red **Backend Full** in writing: the annotated tag message carries the line `Gate override by owner: <reason>`; the run then warns instead of failing, names the reason, and Frontend still has to be green.
-- **TV gating** compares `app-tv`, its shared Android dependencies, root Gradle settings and `design/player` against the last published signed TV APK's tag. A server-only or phone-only change skips both TV tests and TV signing; the last signed TV APK and checksum are reused unchanged as release assets so in-app updates keep working. A new TV version must pass TV tests and signing before publication.
 - **image** builds the tagged commit for `linux/amd64`, passes the version into the build (the Admin System page shows it) and pushes `ghcr.io/juloc/jularr:0.2.0`, `:0.2` and `:latest`. A prerelease gets only its exact version tag, so `latest` and the minor tag never move to it. An already published version is never overwritten. The image carries the OCI labels `source`, `revision` and `version`.
-- **release** creates the GitHub release with generated notes (a prerelease is marked as one), adds either the newly built or the unchanged previous signed TV APK with its verified checksum, and publishes it. Re-run only this job if it failed after the image was pushed.
+- **release** creates the GitHub release with generated notes (a prerelease is marked as one), copies the newest signed TV APK and its checksum unchanged from the published release that carries it, and publishes it. Re-run only this job if it failed after the image was pushed.
 
 Rehearsal: *Actions, Release, Run workflow* with `dry_run` on (the default) runs the guard and builds the image without pushing or creating anything. It may be started from a branch; publishing needs the version tag.
+
+## TV app
+
+The TV app checks only GitHub's latest release and reads its version from the asset name `Jularr-TV-<version>.apk`. Every server release therefore carries the newest signed APK forward, and a TV release swaps a new one into the latest release. Its version is independent of the server and has to be higher than the published one.
+
+```
+git fetch origin && git tag tv-v0.3.0 origin/main && git push origin tv-v0.3.0
+```
+
+- **guard** fails unless the tag is `tv-v<MAJOR>.<MINOR>.<PATCH>` (no prereleases: devices install whatever the latest release carries), the commit is on `origin/main` and the version is higher than the newest published TV APK.
+- **verify** runs the unit tests of `app-tv` and its shared modules and the TV lint on the tagged tree.
+- **sign** builds the release APK with the protected signing secrets, verifies the signature and writes the SHA-256 file.
+- **publish** uploads `Jularr-TV-<version>.apk` and `.sha256` to the latest release, then removes the older TV pair from it. It shares a lock with the Release workflow's **release** job, so a server release published at the same time copies the new APK.
+
+Rehearsal: *Actions, TV Release, Run workflow* with `dry_run` on runs only the tests and lint, also from a branch.
 
 ## Updating a server
 

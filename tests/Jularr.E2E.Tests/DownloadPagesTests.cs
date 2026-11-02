@@ -74,25 +74,29 @@ namespace Jularr.E2E.Tests
                 await page.Locator("dialog#connection-delete").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
                 await Assertions.Expect(Row(page, "Fake indexer")).ToHaveCountAsync(1);
 
-                // The download client has its own page, the same cards and a dialog of its own fields.
-                await page.GotoAsync("/Admin/Acquisition/Downloads");
-                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }).And(page.Locator("[href*='Type=Sabnzbd']")));
+                // An external download client has its own page: a list, the opened client below it and a dialog of its own fields.
+                await page.GotoAsync("/Admin/Downloads/Clients");
+                await page.GetByRole(AriaRole.Button, new() { Name = "Add client", Exact = true }).ClickAsync();
+                await Steps.FollowAsync(page, page.Locator("dialog#downloaders-add").GetByRole(AriaRole.Link, new() { Name = "SABnzbd", Exact = true }));
                 form = page.Locator("dialog#connection-editor form").First;
                 await form.Locator("[name=Name]").FillAsync("Fake SABnzbd");
                 await form.Locator("[name=BaseUrl]").FillAsync(new Uri(fakes.Address, "sabnzbd/").ToString());
                 await form.Locator("[name=ApiKey]").FillAsync(FakeServices.ClientKey);
                 await form.Locator("[name=LocalPath]").FillAsync(fakes.Downloads);
                 await Steps.SubmitAsync(page, form);
-                await Steps.FollowAsync(page, Row(page, "Fake SABnzbd").GetByRole(AriaRole.Button, new() { Name = "Test connection", Exact = true }));
-                await Assertions.Expect(Row(page, "Fake SABnzbd")).ToContainTextAsync("Reachable");
+                await Steps.FollowAsync(page, page.Locator(".downloaders-detail", new() { HasText = "Fake SABnzbd" }).GetByRole(AriaRole.Button, new() { Name = "Test connection", Exact = true }));
+                await Assertions.Expect(page.Locator(".downloaders-detail", new() { HasText = "Fake SABnzbd" })).ToContainTextAsync("Reachable");
                 await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
 
-                // The lists fit a phone.
-                await page.SetViewportSizeAsync(390, 844);
-                foreach (var path in new[] { "/Admin/Acquisition", "/Admin/Acquisition/Downloads" })
+                // The pages fit a phone: nothing in the panels reaches past the viewport.
+                await page.SetViewportSizeAsync(375, 812);
+                foreach (var path in new[] { "/Admin/Acquisition", "/Admin/Downloads", "/Admin/Downloads/Clients", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed" })
                 {
                     await page.GotoAsync(path);
                     Assert.IsTrue(await page.EvaluateAsync<bool>("document.documentElement.scrollWidth <= innerWidth + 1"), "Horizontal page overflow on " + path);
+                    var overflowing = await page.EvaluateAsync<string[]>(
+                        "() => [...document.querySelectorAll('.download-speed, .downloads-figures, .downloaders-detail, .downloads-head')].flatMap(root => [root, ...root.querySelectorAll('*')]).filter(element => element.getBoundingClientRect().right > innerWidth + 1).map(element => element.tagName + '.' + element.getAttribute('class'))");
+                    CollectionAssert.AreEqual(Array.Empty<string>(), overflowing, "Content past the viewport on " + path + ": " + string.Join(", ", overflowing));
                 }
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray(), string.Join(Environment.NewLine, browser.Problems));

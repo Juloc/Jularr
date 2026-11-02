@@ -219,6 +219,9 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(book.Ebook.IsReadable);
             Assert.AreEqual("scan", book.Ebook.Reason);
             Assert.IsTrue(book.Pages.All(page => page.IsHidden && page.Reason == "scan-layer"));
+
+            // The recognizer reads such scans anew where the Ocr module is on: their own layer is only a second opinion, and it finds their pictures.
+            Assert.IsTrue(book.WantsRecognition);
         }
 
         [TestMethod]

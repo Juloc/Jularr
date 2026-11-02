@@ -48,7 +48,11 @@ namespace Jularr.Backend.Logic.Acquisition
                 RuntimeMinutes = target.RuntimeMinutes,
                 ReleaseProfiles = JsonSerializer.Deserialize<ReleaseTerms[]>(target.ReleaseProfiles) ?? [],
                 OriginalLanguage = target.OriginalLanguage,
-                Year = target.ReleaseYear
+                Year = target.ReleaseYear,
+                GroupRatings = new Dictionary<string, ReleaseGroupRating>(JsonSerializer.Deserialize<Dictionary<string, ReleaseGroupRating>>(target.ReleaseGroupRatings) ?? new Dictionary<string, ReleaseGroupRating>(),
+                    StringComparer.OrdinalIgnoreCase),
+                GoodGroupScore = definition.GoodGroupScore,
+                BadGroupScore = definition.BadGroupScore
             };
             if (ReleaseScorer.ValidateProfile(profile) is { Count: > 0 } errors)
             {
@@ -164,7 +168,9 @@ namespace Jularr.Backend.Logic.Acquisition
                 IsPart = existing.IsPart || found.IsPart
             };
 
-        public static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, UnitScope? scope, IEnumerable<ReleaseOffer> offers, string? focusLanguage = null)
+        // An automatic choice rejects what a manual search only marks for a person (a book's size outside its limits).
+        public static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, UnitScope? scope, IEnumerable<ReleaseOffer> offers, string? focusLanguage = null,
+            bool automatic = true)
         {
             var installed = scope is null || scope.UnitNumber is not null ? Installed(profile, target, scope?.Unit.Id) : null;
             // Failed and blocked releases stay visible but are never taken.
@@ -172,22 +178,29 @@ namespace Jularr.Backend.Logic.Acquisition
             return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer => kind switch
             {
                 AcquisitionKind.Book or AcquisitionKind.LightNovel => Candidate(offer, BookReleaseJudge.Judge([target.CanonicalTitle, .. target.EditionTitles], target.Author, offer,
-                    target.OriginalLanguage)),
+                    target.OriginalLanguage, new BookSearch(kind == AcquisitionKind.LightNovel, profile.Sizes, automatic))),
                 AcquisitionKind.Manga => Candidate(offer, MangaReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], scope, offer)),
                 AcquisitionKind.Music => Candidate(offer, MusicReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.Author, offer)),
                 AcquisitionKind.Game => Candidate(offer, GameReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.PlatformIgdbId, target.PlatformAbbreviation, offer)),
                 _ => Candidate(offer, VideoReleaseJudge.Judge(kind, target.CanonicalTitle, target.ReleaseYear, scope?.Unit, scope?.Units ?? UnitSet.Empty, offer))
             })]);
 
-            SelectionCandidate Candidate<TMatch>(ReleaseOffer offer, ReleaseJudgement<TMatch> judgement) =>
-                new(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence, judgement.Coverage)
+            SelectionCandidate Candidate<TMatch>(ReleaseOffer offer, ReleaseJudgement<TMatch> judgement)
+            {
+                // A release of a blocked group is never taken automatically; a manual search only marks it.
+                var blockedGroup = judgement.Parsed is { } parsed && ReleaseScorer.GroupRatings(profile, parsed).Any(rated => rated.Rating == ReleaseGroupRating.Blocked)
+                    ? new SelectionReason(SelectionReasonKind.Profile, "GroupBlocked") : null;
+                return new(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence, judgement.Coverage)
                 {
                     IndexerId = offer.ConnectionId,
                     IndexerFlags = offer.IndexerFlags,
                     IsPart = offer.IsPart,
                     SafetyRejection = blocked.Contains(offer.Identity) ? "Blocked" : judgement.SafetyRejection
                         ?? (EditionLanguageFilter.Rejects(judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? [], target.MonitoredEditionLanguages, target.UnmonitoredEditionLanguages, focusLanguage) ? "EditionNotMonitored" : null),
-                    ContextScore = judgement.ContextScore,
+                    ContextPoints = judgement.Points,
+                    Rejection = judgement.Rejection ?? (automatic ? blockedGroup : null),
+                    Flag = automatic ? judgement.Flag : blockedGroup ?? judgement.Flag,
+                    SizeMark = judgement.SizeMark,
                     Languages = judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? [],
                     InstalledQuality = installed?.Quality,
                     InstalledNeedsReplacement = installed?.NeedsReplacement ?? false,
@@ -196,6 +209,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     InstalledFormatScore = installed?.FormatScore,
                     InstalledLanguages = installed?.Languages
                 };
+            }
         }
 
         // The outcome a target remembers for the next automatic search.

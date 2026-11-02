@@ -35,7 +35,7 @@ Do not replace the original TV screens or add a backend endpoint without owner d
 | Work credits, people and filmography | Actual catalog `/api/v1/works/{id}/credits`, `/api/v1/people/{id}` and person Works; movie/series filters |
 | TV navigation and Back | Stack-aware V1 state machine for Search → Discover → Work → Episode/Player → Back, preserving original focus surfaces |
 | Movie media choices | Work availability; only real playable MediaAssetId entries |
-| Discover movie/series and TMDB details | Server discover scopes/shelves/search, source TMDB details; external IDs never reused as local WorkId |
+| Discover movie/series | Server discover scopes/shelves/search; every card carries a required `workId`, opened on the Work page via `POST /api/v1/works/{id}/open` and requested there via `POST /api/v1/works/{id}/requests` |
 | Video | Server playback sessions, authenticated Media3 Direct/HLS, heartbeat/final progress |
 | Profile PIN selection | `/api/v1/profiles`, `auth/profile/{id}`, PIN endpoint; bearer revalidated |
 | Server sign-out | `DELETE /api/v1/auth/session` then locally clears bearer |
@@ -218,7 +218,7 @@ The latest Android CI and live hardware tests remain separate quality gates.
   and Recommendations) from `/api/v1/home/layout`. The Web Home builds
   Recommendations from existing `/api/v1/discover/shelves` and provider
   `/api/v1/discover/feed` calls for Trending/Top/New/Upcoming by scope.
-  The TV now uses that same source, never guesses a WorkId from a TMDB ID,
+  The TV now uses that same source and opens every card by its `workId`,
   and presents ranked rows using the original TV D-Pad navigation style.
   Non-video Reading/Listening shelves are outside the video TV screen.
   Favorites on Web are backed by the existing Watchlist API, so TV labels
@@ -248,10 +248,14 @@ subtype. Items carry `namespace` and `externalId`, not a TMDB ID.
   Missing pairs are looked up with bounded concurrency and timeouts; an invalid
   cached pair cannot hide a correct provider response.
 - The original Home uses D-Pad focusable catalog and TMDB rows with different
-  stable keys. For catalog items, a verified local WorkId opens local details;
-  otherwise the existing `discover/catalog/entry` API loads true provider
-  details by `mediaTypeId + mediaSubtypeId + namespace + externalId`.
-  A TMDB ID is **never** substituted for a WorkId or catalog external ID.
+  stable keys. Every card, catalog or TMDB, carries a required `workId`
+  (catalog cards also an optional `seasonNumber` for mapped anime seasons).
+  Every card opens the Work page (a catalog card with `seasonNumber` opens on
+  that season). The Work page first calls `POST /api/v1/works/{id}/open` and
+  shows an error when it reports `areDetailsUnavailable`; when the Work is
+  requestable it offers the request action (`POST /api/v1/works/{id}/requests`). Since #1651 the
+  `discover/catalog/entry`, `discover/{type}/{tmdbId}` and `discover/*/requests`
+  endpoints no longer exist and the client no longer uses them.
 - New tests cover Anime catalog scope and subtype, correct focus identity,
   fallback for empty caches, true ranking/media identities and provider failure.
 - Remaining release checks: on-device D-Pad focus/Back, a real external Anime
@@ -268,8 +272,7 @@ subtype. Items carry `namespace` and `externalId`, not a TMDB ID.
 - The Hero advances every 9 seconds only while in the visible viewport,
   and pauses while remote-control focus is on it. It remains the original
   focusable 16:9 TV banner rather than introducing a desktop redesign.
-- Clicking resolves local WorkId to the existing Work-details route; TMDB IDs
-  or catalog namespace/external IDs open their corresponding Discover details.
+- Clicking opens the card's `workId` on the Work page.
   No fake MediaAssetId, WorkId or mandatory Playback permission is assumed.
 - When catalog providers have no valid banner or poster, the existing
   library Hero is retained. The list and navigation never claim a media item

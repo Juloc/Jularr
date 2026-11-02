@@ -3,7 +3,7 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // The administration menu as the Owner uses it: six groups of entries with a find field, one row of sibling pages on every page of an entry, three live figures.
+    // The administration menu as the Owner uses it: seven groups of entries with a find field, one row of sibling pages on every page of an entry, three live figures.
     [TestClass]
     public sealed class AdminMenuTests
     {

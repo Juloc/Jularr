@@ -9,7 +9,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly DateTimeField CreatedAt = new();
         public static readonly BoolField DeletesFiles = new();
         public static readonly BoolField AddsExclusion = new();
-        public static readonly BoolField HasActiveDownload = new();
+        public static readonly LongArrayField ActiveDownloadIds = new() { Minimum = 1, MaximumLength = 500 };
         public static readonly StringField Namespace = new(NpgsqlDbType.Varchar) { AllowBlank = false, MaximumLength = 16 };
         public static readonly StringField Value = new(NpgsqlDbType.Varchar) { AllowBlank = false, MaximumLength = 64 };
     }
