@@ -22,26 +22,27 @@ namespace Jularr.Frontend.Pages.Admin.Works
 
         private static readonly WorkListStatus[] Statuses = [WorkListStatus.Available, WorkListStatus.Missing, WorkListStatus.Downloading, WorkListStatus.Unmonitored];
 
-        private bool Filtered => TypeFilter is not null || MonitoredFilter is not null || StatusFilter is not null || LibraryFilter is not null || ProfileFilter is not null || !string.IsNullOrEmpty(QueryFilter);
+        private bool Filtered => TypeParameter is not null || MonitoredFilter is not null || StatusFilter is not null || LibraryFilter is not null || ProfileFilter is not null || !string.IsNullOrEmpty(QueryFilter);
 
         // The filters of the drawer (the chips and the title field are the list's own controls).
-        private bool DrawerFiltered => TypeFilter is not null || MonitoredFilter is not null || LibraryFilter is not null || ProfileFilter is not null;
+        private bool DrawerFiltered => MonitoredFilter is not null || LibraryFilter is not null || ProfileFilter is not null;
 
         // Titles can be chosen for the mass editor by whoever may change them.
         private bool Selectable => CanManageWanted || CanManageMedia;
 
-        // The address of the list with its filters and order, or of a handler that returns to it; paging, sorting and the chosen chip change one part of it.
-        private string Address(string? handler = null, int? pageNumber = null, WorkSortType? sort = null, bool? descending = null, bool clearFilters = false, WorkListStatus? status = null, bool anyStatus = false, WorksViewType? view = null)
+        // The address of the list with its filters and order, or of a handler that returns to it; paging, sorting, the chosen chip and the chosen types change one part of it.
+        private string Address(string? handler = null, int? pageNumber = null, WorkSortType? sort = null, bool? descending = null, bool clearFilters = false, WorkListStatus? status = null, bool anyStatus = false, WorksViewType? view = null,
+            IReadOnlyList<string>? types = null)
         {
             var values = new List<string>();
             void Add(string name, string? value)
             {
-                if (!string.IsNullOrEmpty(value)) values.Add(name + "=" + Uri.EscapeDataString(value));
+                if (!string.IsNullOrEmpty(value)) values.Add(name + "=" + Uri.EscapeDataString(value).Replace("%2C", ","));
             }
 
             if (!clearFilters)
             {
-                Add("type", TypeFilter is { } type ? ((byte)type).ToString(CultureInfo.InvariantCulture) : null);
+                Add("type", types is null ? TypeParameter : Scopes.Parameter(types));
                 Add("monitored", MonitoredFilter is { } monitored ? (monitored ? "true" : "false") : null);
                 Add("status", (anyStatus ? null : status ?? StatusFilter) is { } chosen ? ((byte)chosen).ToString(CultureInfo.InvariantCulture) : null);
                 Add("library", LibraryFilter?.ToString(CultureInfo.InvariantCulture));
@@ -87,7 +88,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
 
             var inv = CultureInfo.InvariantCulture;
             var keep = new Dictionary<string, string>();
-            if (TypeFilter is { } type) keep["type"] = ((byte)type).ToString(inv);
+            if (TypeParameter is { } type) keep["type"] = type;
             if (MonitoredFilter is { } monitored) keep["monitored"] = monitored ? "true" : "false";
             if (StatusFilter is { } status2) keep["status"] = ((byte)status2).ToString(inv);
             if (LibraryFilter is { } library) keep["library"] = library.ToString(inv);
@@ -120,8 +121,6 @@ namespace Jularr.Frontend.Pages.Admin.Works
             var inv = CultureInfo.InvariantCulture;
             var body = new List<IUiComponent>
             {
-                Field("type", "works.col.type", FilterSelect("type", "works.filter.type", TypeFilter is { } type ? ((byte)type).ToString(inv) : null,
-                    Enum.GetValues<MediaType>().Select(value => (((byte)value).ToString(inv), (IUiComponent)new Text("media.type." + value))))),
                 Field("monitored", "works.col.monitored", FilterSelect("monitored", "works.filter.monitored", MonitoredFilter is { } monitored ? (monitored ? "true" : "false") : null,
                     [("true", new Text("works.filter.monitored.yes")), ("false", new Text("works.filter.monitored.no"))])),
                 Field("library", "works.col.library", FilterSelect("library", "works.filter.library", LibraryFilter?.ToString(inv), _libraries.Select(library => (library.Id.ToString(inv), (IUiComponent)new ValueText(library.Name)))))
@@ -132,6 +131,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
                 body.Add(Field("profile", "works.col.profile", FilterSelect("profile", "works.filter.profile", ProfileFilter?.ToString(inv), _profiles.Select(profile => (profile.Id.ToString(inv), (IUiComponent)new ValueText(profile.Name))))));
             }
 
+            if (TypeParameter is { } types) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "type").Attribute("value", types));
             if (StatusFilter is { } status) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "status").Attribute("value", ((byte)status).ToString(inv)));
             if (Sort != WorkSortType.Title) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "sort").Attribute("value", ((byte)Sort).ToString(inv)));
             if (Descending) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "desc").Attribute("value", "true"));
@@ -142,10 +142,11 @@ namespace Jularr.Frontend.Pages.Admin.Works
             return new Drawer(assets, "works-filter", [new DrawerPane("filter", "works.filter.drawer", "works.filter.drawer", "filter", body, footer, "/Admin/Works")]);
         }
 
-        // The list without the drawer's filters: the chip, the words and the order stay.
+        // The list without the drawer's filters: the types, the chip, the words and the order stay.
         private string AddressWithoutDrawerFilters()
         {
             var values = new List<string>();
+            if (TypeParameter is { } types) values.Add("type=" + types);
             if (StatusFilter is { } status) values.Add("status=" + ((byte)status).ToString(CultureInfo.InvariantCulture));
             if (!string.IsNullOrEmpty(QueryFilter)) values.Add("q=" + Uri.EscapeDataString(QueryFilter));
             if (Sort != WorkSortType.Title) values.Add("sort=" + ((byte)Sort).ToString(CultureInfo.InvariantCulture));

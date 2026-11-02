@@ -146,7 +146,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(14, (await page.Content.ReadFromJsonAsync<PageResult<WorkBulkOutcomeV1>>())!.Items.Count);
             await CancelAsync(host, all.OperationId);
 
-            var filtered = await QueueAsync(host, new QueueWorksSearchDataV1(mediaTypeId: MediaType.Movie, query: "Search target 61"));
+            var filtered = await QueueAsync(host, new QueueWorksSearchDataV1(mediaTypeIds: [MediaType.Movie], query: "Search target 61"));
             Assert.AreEqual(10, filtered.TargetCount);
             await CancelAsync(host, filtered.OperationId);
             var selected = await QueueAsync(host, new QueueWorksSearchDataV1([603, 601, 601]));
@@ -228,7 +228,7 @@ namespace Jularr.Backend.Tests
         public async Task Razor_QueuesFilteredOrSelected_AndServesAnAuthorizedStatusFragment()
         {
             await using var host = await CreateAsync(razor: true);
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works?type=1&q=Search%20target%2061");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works?type=movies&q=Search%20target%2061");
             var html = await page.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "handler=SearchAll");
             var queued = await QueueAsync(host, new QueueWorksSearchDataV1([601, 602]));
