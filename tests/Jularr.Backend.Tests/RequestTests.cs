@@ -393,6 +393,7 @@ namespace Jularr.Backend.Tests
             var detailsHtml = await requestedDetails.Content.ReadAsStringAsync();
             StringAssert.Contains(detailsHtml, "Requested");
             Assert.IsFalse(detailsHtml.Contains("Request this work", StringComparison.Ordinal));
+            StringAssert.Contains(detailsHtml, "breadcrumb__item\"><a href=\"/\">Discover</a>", "A title the library has nothing of yet sits under Discover.");
 
             // The request shows as a live pill in its phase's colour that leads nowhere.
             var pill = Regex.Match(detailsHtml, "<span class=\"live-phase-pill\"[^>]*>").Value;
