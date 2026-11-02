@@ -374,6 +374,26 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ExternalCover_TheTvdbArtwork_IsFetchedAndKeptByJularr()
+        {
+            var images = new FakeImages();
+            await using var host = await CreateHostAsync(images);
+            var address = CoverPaths.External("https://artworks.thetvdb.com/banners/posters/1-1.jpg");
+
+            using var first = await host.SendAsync(HttpMethod.Get, address);
+            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(FakeImages.Png, await first.Content.ReadAsByteArrayAsync());
+            using var second = await host.SendAsync(HttpMethod.Get, address);
+            Assert.AreEqual(HttpStatusCode.OK, second.StatusCode);
+            Assert.AreEqual(1, images.Requests.Count);
+            Assert.AreEqual("artworks.thetvdb.com", images.Requests[0].Host);
+
+            // A host that only ends in the provider's name is not the provider.
+            using var lookalike = await host.SendAsync(HttpMethod.Get, CoverPaths.External("https://notthetvdb.com/x.jpg"));
+            Assert.AreEqual(HttpStatusCode.NotFound, lookalike.StatusCode);
+        }
+
+        [TestMethod]
         public async Task ExternalCover_FetchedOnceKeptByUse_AndTrimmedByTheOwnersDaysAndSize()
         {
             var images = new FakeImages();
@@ -606,6 +626,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("/api/v1/covers/5/unit-9?v=ab", CoverPaths.Url(5, Jularr.Backend.Data.Enums.Media.CoverKind.UnitImage, 9, "ab"));
             Assert.AreEqual("/api/v1/covers/5/poster-500?v=ab12", CoverPaths.Sized("/api/v1/covers/5/poster?v=ab12", 342));
             Assert.AreEqual("/api/v1/covers/external?u=https%3A%2F%2Fimage.tmdb.org%2Fx.jpg&w=500", CoverPaths.Sized("https://image.tmdb.org/x.jpg", 342));
+            Assert.AreEqual("/api/v1/covers/external?u=https%3A%2F%2Fartworks.thetvdb.com%2Fbanners%2Fposters%2F1-1.jpg&w=500", CoverPaths.Sized("https://artworks.thetvdb.com/banners/posters/1-1.jpg", 342));
+            Assert.AreEqual("https://notthetvdb.com/x.jpg", CoverPaths.Sized("https://notthetvdb.com/x.jpg", 342));
             Assert.AreEqual("https://i.ytimg.com/vi/a/hqdefault.jpg", CoverPaths.Sized("https://i.ytimg.com/vi/a/hqdefault.jpg", 480));
             Assert.AreEqual("/api/v1/covers/5/backdrop-1280?v=ab12", CoverPaths.Sized("/api/v1/covers/5/backdrop?v=ab12", 1280));
             Assert.AreEqual("/api/v1/covers/5/unit-9?v=ab12", CoverPaths.Sized("/api/v1/covers/5/unit-9?v=ab12", 400));
