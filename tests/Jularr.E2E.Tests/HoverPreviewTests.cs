@@ -2,7 +2,7 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // The preview of a cover: after a rest of 550 ms of the mouse the card opens a panel over the row with the description or the muted trailer; a touch device
+    // The preview of a cover: after a rest of 2 s of the mouse the card opens a panel over the row with the description or the muted trailer; a touch device
     // starts it by itself when a card lingers, unless the profile switched that off.
     [TestClass]
     public sealed class HoverPreviewTests
@@ -75,7 +75,7 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(0, asked.Count, "a control of the card starts no preview");
                 await Assertions.Expect(panel).ToHaveCountAsync(0);
 
-                // Resting on the cover: nothing before the delay of 550 ms, then the panel with the trailer, as high as the card and 1.84 times as wide.
+                // Resting on the cover: nothing before the delay of 2 s, then the panel with the trailer, as high as the card and 1.84 times as wide.
                 await page.Mouse.MoveAsync(5, 5);
                 await film.Locator(".media-card__art").HoverAsync();
                 await page.WaitForTimeoutAsync(300);
