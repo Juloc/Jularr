@@ -27,9 +27,10 @@ namespace Jularr.E2E.Tests
             await ReadingPathTests.AddBookAsync(page, folders, "Translation Reader");
             await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
 
+            // Benchmarks and model download state now live on the Setup tab.
             // Admin: model availability, benchmark and live status on the same
             // authenticated V1 endpoint used by the management page.
-            var admin = await page.GotoAsync("/Admin/Instance/Translation");
+            var admin = await page.GotoAsync("/Admin/Instance/Translation?tab=setup");
             Assert.AreEqual(200, admin!.Status);
             await Assertions.Expect(page.Locator("form[data-translation-submit=benchmark]")).ToHaveCountAsync(1);
             await page.Locator("form[data-translation-submit=benchmark] button[type=submit]").ClickAsync();
@@ -44,7 +45,7 @@ namespace Jularr.E2E.Tests
             }));
             // Exercise the entrypoint on a normal Admin GET, rather than the form
             // POST's response, and force an immediate refresh on the visible tab.
-            await page.GotoAsync("/Admin/Instance/Translation");
+            await page.GotoAsync("/Admin/Instance/Translation?tab=setup");
             await page.EvaluateAsync("() => document.dispatchEvent(new Event('visibilitychange'))");
             await page.WaitForFunctionAsync("() => document.querySelector('[data-translation-download]')?.textContent?.includes('50%') === true", null,
                 new() { Timeout = 15_000 });
