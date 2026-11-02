@@ -11,12 +11,13 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     // The library list: every filter that is left out lets all titles through.
     public sealed class ReadWorksParametersV1 : BaseParameters
     {
-        public ReadWorksParametersV1(int page = 1, int pageSize = 25, MediaType? mediaTypeId = null, bool? isMonitored = null, WorkListStatus? workListStatusId = null, long? libraryRootId = null,
-            long? acquisitionProfileId = null, string? query = null, WorkSortType workSortTypeId = WorkSortType.Title, bool isDescending = false)
+        public ReadWorksParametersV1(int page = 1, int pageSize = 25, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null, bool? isMonitored = null, WorkListStatus? workListStatusId = null,
+            long? libraryRootId = null, long? acquisitionProfileId = null, string? query = null, WorkSortType workSortTypeId = WorkSortType.Title, bool isDescending = false)
         {
             Page = page;
             PageSize = pageSize;
-            MediaTypeId = mediaTypeId;
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
             IsMonitored = isMonitored;
             WorkListStatusId = workListStatusId;
             LibraryRootId = libraryRootId;
@@ -29,8 +30,12 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         public int Page { get; }
         public int PageSize { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
-        public MediaType? MediaTypeId { get; }
+        // Types list their titles without subtype and subtypes list theirs across types; none lets every title through.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
 
         // Monitored titles have a target that is not paused; the others have none or a paused one.
         [DataField(typeof(WorkListFields), nameof(WorkListFields.IsMonitoredFilter))]

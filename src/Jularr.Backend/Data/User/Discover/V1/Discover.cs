@@ -109,7 +109,8 @@ namespace Jularr.Backend.Data.User.Discover.V1
     // A title found while typing, in the scope it opens in.
     public sealed class DiscoverSuggestionV1 : BaseResponse
     {
-        public DiscoverSuggestionV1(string scopeSlug, string @namespace, string externalId, string title, int? releaseYear, string? posterUrl, long workId)
+        public DiscoverSuggestionV1(string scopeSlug, string @namespace, string externalId, string title, int? releaseYear, string? posterUrl, long workId, MediaStateType? mediaStateTypeId,
+            string? genre, decimal? rating)
         {
             ScopeSlug = scopeSlug;
             Namespace = @namespace;
@@ -118,6 +119,9 @@ namespace Jularr.Backend.Data.User.Discover.V1
             ReleaseYear = releaseYear;
             PosterUrl = posterUrl;
             WorkId = workId;
+            MediaStateTypeId = mediaStateTypeId;
+            Genre = genre;
+            Rating = rating;
         }
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.ScopeSlug))]
@@ -140,6 +144,15 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId), false)]
+        public MediaStateType? MediaStateTypeId { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.Genres), false)]
+        public string? Genre { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
+        public decimal? Rating { get; }
     }
 
     public sealed class SearchDiscoverDataV1 : BaseData
@@ -234,11 +247,12 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
     public sealed class ReadDiscoverCatalogFeedDataV1 : BaseData
     {
-        public ReadDiscoverCatalogFeedDataV1(MediaType mediaTypeId, DiscoverFeedType discoverFeedTypeId, MediaSubtype? mediaSubtypeId = null)
+        public ReadDiscoverCatalogFeedDataV1(MediaType mediaTypeId, DiscoverFeedType discoverFeedTypeId, MediaSubtype? mediaSubtypeId = null, int page = 1)
         {
             MediaTypeId = mediaTypeId;
             DiscoverFeedTypeId = discoverFeedTypeId;
             MediaSubtypeId = mediaSubtypeId;
+            Page = page;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
@@ -249,6 +263,9 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
         public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.Page))]
+        public int Page { get; }
     }
 
     // A film or series of a list as the Work it is.

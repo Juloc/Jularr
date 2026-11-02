@@ -55,6 +55,11 @@ adds none of its own colours, radii, shadows or font sizes. Design follows the o
   pager under itself. The service call takes the same page number and size and returns exactly its rows; never a total, never an extra row.
 - Owner's decision 23 Oct: User lists use infinite scroll. The Library uses `content.Infinite(rows, 48, "p", ".library-grid")` from the same paging model and `InfiniteList.entry.ts`: append bounded server-rendered pages, keep a native Load more link, expose failures with a retry, and restore filters, loaded pages and scroll position on Back. History keeps only pagination state, never HTML. Admin lists retain their dock pager.
   The Library defaults to actual present files (no metadata-only, Plex-only or Wanted-only titles). Optional availability choices union Available files, My requests and Other requests; active requests of all profiles are shared for now, under the existing profile/media visibility rules. Genre, audio/subtitle language, progress and minimum-rating filters combine with media type/year; choices within a multi-select combine with OR, different filters with AND. A separate request-sharing model is deferred.
+- Owner's decision 2 Nov: the catalog of titles is called "Works" (German "Werke") everywhere in the interface: the admin menu group and breadcrumb, the user menu, the Dashboard figure, the jobs area and the Works pages. "Media type(s)" (Film, Series, Book, ...), "media server" and "media files" are other concepts and keep their wording. The type filters (Library, Requests, Discover) name the types in the plural ("Books"); a title's or request's own type reads in the singular ("Book"), as on the cards.
+- Owner's decision 2 Nov: a list's search keeps its words. The search fields of the admin Works list and the Library show their results shortly after typing (`SearchBox(..., live: true)`,
+  [LiveSearch](../src/Jularr.Frontend/Framework/Components/LiveSearch.entry.ts): the page with the query replaces the history entry, the field keeps its focus); on these pages and Discover
+  every chip, type, order, view and reset of the same page takes the words typed last, even before they were sent, and a reset clears filters, never the search. The admin Works list
+  sorts in every view with a choice beside the search and an arrow for the direction; it starts with the titles added last.
 - Owner's decision 2 Nov (Sonarr's library): the admin Media list starts in the posters view on a first visit (the cookie keeps any other choice), shows the figures of the
   list under it (titles, monitored, unmonitored, files, total size, for the types, library, profile and words chosen) and starts the library search (filtered, all) from its dock; a
   search run shows as one quiet line under the toolbar only while it runs or right after it was started.
@@ -83,6 +88,7 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   entries are not shown, and the Jularr logo (linking to the user home) is the way back. No extra back button.
   The user menu has one entry, Administration, that opens the first allowed entry. On a narrow header a breadcrumb part with sub-pages opens them as a menu, the first part stays whole and a long last part (the title) ends in an ellipsis with its full text in a tip.
   The header is one row at every width: the search shrinks to its icon on a phone, the trail scrolls.
+- Owner's decision 2 Nov, tap targets: on a phone (up to 640px) every tap target has a hit area of at least 44x44px while its look may stay smaller, made by the shared mixins of [HitArea.scss](../src/Jularr.Frontend/Framework/Components/HitArea.scss) (overlay or padding, never overlapping a neighbour: where 44px does not fit the largest free size is taken, and a tight group sets `--hit-gap-x`/`--hit-gap-y`).
 - Local section headings are allowed only when they genuinely separate distinct
   content, not when they echo the current breadcrumb. Contextual explanations
   are shown only for meaningful tasks or failure/help states, never as filler.
@@ -109,17 +115,26 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
 - Discover separates media-type scope, browse view and filters. Its All
   landing has a shared Hero/Continue followed by per-enabled-type shelves
   in the approved order; only provider-supported rankings may appear. A ranking
-  opens from its shelf's See all and names itself with a way back. Owner's mockup of 19 Oct
+  opens from its shelf's See all and names itself with a way back. Owner's decision 2 Nov: every ranking loads on while scrolling, its See all
+  grid and its shelf alike, 20 titles (the provider's next page) at a time; a page goes on while it has titles, three pages in a row
+  that add nothing stop the automatic loading (the grid then shows *Load more*), and both say *No more titles.* where the ranking ends. While a page
+  loads, grey skeleton cards stand where it arrives (a row under the grid, three at the end of a shelf); no Next button shows while pages load by themselves,
+  and a failed page offers *Try again*. Owner's mockup of 19 Oct
   ("capsules"): one capsule row (All, then Watch, Read, Hear and Game with their types; several
   types may be chosen, `type=a,b`) with the Customize and Filter drawers at its end, the highlights
   as one carousel that always keeps its place (with nothing to show, the shared landscape and *No highlights yet*): for each chosen type its
   continued titles, then its best by rank (series from Discover's series list), then what the library added last, each title once; the types
   take turns place by place, and a type with fewer titles shows fewer. The device keeps how many per type (1–5, standard 3; no overall
   maximum), whether continued titles count and whether it turns by itself), feed chips, sort and a rows/grid switch. The header owns the **one**
-  global Search; do not add another search field inside Discover. The Filter drawer lists the media types first, then the local availability
+  global Search; do not add another search field inside Discover. Owner's decision 2 Nov, the header search: large in the middle of the header, no key hint
+  or shortcut; from two letters, after a short pause, a popup under the field lists the titles Jularr keeps (no provider is asked) grouped by type, the type
+  with the best match first, in each type the typed title, then titles beginning with it, then other matches, local before trending before popular, two to
+  six per type as the room allows, then All results; each group's heading (its type's icon, name and a See all pill) opens that type's results, titles show a 40×60 cover with the typed words marked and year · first genre · rating under them (what is unknown is left out), and two or more groups stand in two columns where there is room. Enter opens Discover's results: one row per type in the same order, each with See all for that type
+  alone (which pages); the providers are asked once, together, only on Enter, and the kept titles join their rows, so a provider that does not answer never hides what the suggestions showed. On a phone the icon opens the field over the header, the suggestions fill
+  the screen and the back button closes them. The Filter drawer lists the media types first, then the local availability
   (in Jularr, can be requested), then only what the chosen types have: the release year and their rankings; the rankings a chosen
   type lacks leave the panel as the types change. No genre, platform, language, runtime or rating facets exist yet (Discover's
-  catalogs keep no such data). Library and Favorites share the same media-type bar, filter panel (types, release year), order and layout.
+  catalogs keep no such data). Library and Favorites share the same media-type bar, filter panel (types, release year), order and layout. Owner's decision 2 Nov: the admin Media list has the same media-type bar above its toolbar (every type, several at once); its status chips stay in the toolbar and its filter drawer has no type.
   Cards use the shared cover presentation and Backend-supplied state below. User/profile ordering is respected.
   Backend supplies effective capability/order/provider data; do not copy
   old `Jularr.Web` persistence or invent a new module toggle in Frontend.

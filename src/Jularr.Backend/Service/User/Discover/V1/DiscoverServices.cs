@@ -418,10 +418,10 @@ namespace Jularr.Backend.Service.User.Discover.V1
             if (scopes.Length == 0) return new BaseDataList<DiscoverSuggestionV1>([]);
 
             var query = new ExternalWorkSuggestionQueryData([.. scopes.Select((scope, index) => new ExternalWorkShelfData(index, DiscoverScopes.Namespace(scope), scope.MediaTypeId,
-                scope.MediaSubtypeId))], Auth.ProfileId!.Value, terms, ExternalWorkLogic.TitlePrefix(text), ExternalWorkLogic.SuggestionCount);
+                scope.MediaSubtypeId))], Auth.ProfileId!.Value, terms, text.ToLowerInvariant(), ExternalWorkLogic.TitlePrefix(text), ExternalWorkLogic.SuggestionsPerType);
             var rows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.SuggestExternalWorksAsync(query, ct), CancellationToken, mode: SqlAccessMode.ReadOnly);
             return new BaseDataList<DiscoverSuggestionV1>([.. rows.Select(row => new DiscoverSuggestionV1(scopes[row.Shelf].Slug, row.Namespace, row.Value, row.Title, row.ReleaseYear,
-                row.ImageUrl, row.WorkId))]);
+                row.ImageUrl, row.WorkId, row.MediaStateTypeId, row.Genre, row.Rating))]);
         }
     }
 
@@ -482,10 +482,10 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 {
                     var shelf = new ExternalWorkShelfData(0, DiscoverScopes.Namespace(scope), Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId);
                     var rows = await ctx.ReadExternalWorkShelvesAsync(new ExternalWorkShelfQueryData([shelf], Auth.ProfileId!.Value,
-                        DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime)), ct);
+                        DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime), (Data.Page - 1) * ExternalWorkLogic.ShelfSize), ct);
                     return new BaseDataList<DiscoverCatalogItemV1>([.. rows.Select(DiscoverQueries.CatalogItem)]);
                 }
-                var items = await _catalog.ReadCachedFeedInBatchAsync(ctx, Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId, ct);
+                var items = await _catalog.ReadCachedFeedInBatchAsync(ctx, Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId, Data.Page, ct);
                 return items is null ? null : await DiscoverQueries.CatalogItemsInBatchAsync(ctx, items, Auth.ProfileId!.Value, ct);
             }, CancellationToken, mode: SqlAccessMode.ReadOnly);
             if (cached is not null)
@@ -493,7 +493,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 return cached;
             }
 
-            var works = await _catalog.ReadFeedAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId, CancellationToken);
+            var works = await _catalog.ReadFeedAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId, Data.Page, CancellationToken);
             return await DiscoverQueries.CatalogItemsAsync(Context, works, Auth.ProfileId!.Value, CancellationToken);
         }
     }

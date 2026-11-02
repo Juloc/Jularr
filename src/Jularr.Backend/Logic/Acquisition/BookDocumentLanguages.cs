@@ -23,8 +23,7 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 using var zip = new ZipArchive(input, ZipArchiveMode.Read, leaveOpen: true);
                 if (zip.Entries.Count > EpubReader.MaximumEntries) return [];
-                if (zip.GetEntry("mimetype") is not { Length: <= 128 } mime
-                    || EpubReader.ReadText(mime).Trim() != "application/epub+zip")
+                if (!EpubReader.IsMarked(zip))
                     return [];
                 if (zip.GetEntry("META-INF/container.xml") is not { } container || container.Length > MaximumXmlBytes)
                     return [];

@@ -47,7 +47,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         "WorkListEntries" AS listed
                     WHERE
                         EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS tie WHERE tie."WorkId" = listed."Id")
-                        AND (@MediaTypeId::smallint IS NULL OR listed."MediaTypeId" = @MediaTypeId)
+                        AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                            OR listed."MediaSubtypeId" IS NULL AND listed."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                            OR listed."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
                         AND (@Query::text IS NULL OR strpos(lower(listed."CanonicalTitle"), lower(@Query)) > 0)
                         AND (@AcquisitionProfileId::bigint IS NULL OR listed."AcquisitionProfileId" = @AcquisitionProfileId)
                         AND (
@@ -134,7 +136,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 ORDER BY
                     ordered."Position";
                 """;
-            sql.Parameters.Add(new AdminWorkListFilterData(Parameters.MediaTypeId, Parameters.IsMonitored, Parameters.WorkListStatusId, Parameters.LibraryRootId, Parameters.AcquisitionProfileId, Parameters.Query,
+            sql.Parameters.Add(new AdminWorkListFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.IsMonitored, Parameters.WorkListStatusId, Parameters.LibraryRootId, Parameters.AcquisitionProfileId, Parameters.Query,
                 Parameters.WorkSortTypeId, Parameters.IsDescending));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<WorkListItemV1>(sql, CancellationToken);
@@ -160,7 +162,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         "WorkListEntries" AS listed
                     WHERE
                         EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS tie WHERE tie."WorkId" = listed."Id")
-                        AND (@MediaTypeId::smallint IS NULL OR listed."MediaTypeId" = @MediaTypeId)
+                        AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                            OR listed."MediaSubtypeId" IS NULL AND listed."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                            OR listed."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
                         AND (@Query::text IS NULL OR strpos(lower(listed."CanonicalTitle"), lower(@Query)) > 0)
                         AND (@AcquisitionProfileId::bigint IS NULL OR listed."AcquisitionProfileId" = @AcquisitionProfileId)
                         AND (
@@ -184,7 +188,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 FROM
                     listed;
                 """;
-            sql.Parameters.Add(new AdminWorkListFilterData(Parameters.MediaTypeId, null, null, Parameters.LibraryRootId, Parameters.AcquisitionProfileId, Parameters.Query, WorkSortType.Title, false));
+            sql.Parameters.Add(new AdminWorkListFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, null, null, Parameters.LibraryRootId, Parameters.AcquisitionProfileId, Parameters.Query, WorkSortType.Title, false));
             return await Context.ReadSql.ReadRequiredAsync<WorksSummaryV1>(sql, CancellationToken);
         }
     }

@@ -29,7 +29,7 @@ namespace Jularr.Integrations.Logic.AniList
                 : [];
         }
 
-        public async Task<IReadOnlyList<AniListMedia>> ReadRankedAsync(AniListMediaType type, IReadOnlyCollection<string> formats, AniListRanking ranking, CancellationToken ct)
+        public async Task<IReadOnlyList<AniListMedia>> ReadRankedAsync(AniListMediaType type, IReadOnlyCollection<string> formats, AniListRanking ranking, int page, CancellationToken ct)
         {
             var (sort, statuses) = ranking switch
             {
@@ -37,10 +37,10 @@ namespace Jularr.Integrations.Logic.AniList
                 AniListRanking.Score => ("SCORE_DESC", ["RELEASING", "FINISHED", "HIATUS"]),
                 _ => ("START_DATE_DESC", ["RELEASING", "FINISHED"])
             };
-            using var document = await PostAsync("query ($type: MediaType, $formats: [MediaFormat], $sort: [MediaSort], $statuses: [MediaStatus]) { Page(perPage: 20) { "
+            using var document = await PostAsync("query ($page: Int, $type: MediaType, $formats: [MediaFormat], $sort: [MediaSort], $statuses: [MediaStatus]) { Page(page: $page, perPage: 20) { "
                 + "media(type: $type, format_in: $formats, sort: $sort, status_in: $statuses, isAdult: false) { " + Fields + " } } }",
-                new Dictionary<string, object> { ["type"] = Name(type), ["formats"] = formats, ["sort"] = new[] { sort }, ["statuses"] = statuses }, ct);
-            return Child(Child(document.RootElement, "data"), "Page") is { } page && page.TryGetProperty("media", out var media) && media.ValueKind == JsonValueKind.Array
+                new Dictionary<string, object> { ["page"] = page, ["type"] = Name(type), ["formats"] = formats, ["sort"] = new[] { sort }, ["statuses"] = statuses }, ct);
+            return Child(Child(document.RootElement, "data"), "Page") is { } found && found.TryGetProperty("media", out var media) && media.ValueKind == JsonValueKind.Array
                 ? [.. media.EnumerateArray().Select(Read).OfType<AniListMedia>()]
                 : [];
         }

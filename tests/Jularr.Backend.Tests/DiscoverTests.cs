@@ -75,6 +75,33 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Catalog_RankingPages_AskTheProviderForThatPage()
+        {
+            var provider = new FakeAniList();
+            await using var host = await CreateHostAsync(razor: true, anime: provider);
+            foreach (var (page, count) in new[] { (1, 1), (2, 0) })
+            {
+                using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Top, MediaSubtype.Anime, page));
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                Assert.AreEqual(count, (await response.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Count, "Page " + page);
+            }
+            CollectionAssert.AreEqual(new[] { 1, 2 }, provider.Pages, "Each page is the provider's own page, not the first again.");
+
+            // The ranking's grid goes on while its page has titles, however few, and says where it ends; its shelf names its next page.
+            using var first = await host.SendAsync(HttpMethod.Get, "/?type=anime&view=Top&handler=Results");
+            var html = await first.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, html);
+            StringAssert.Contains(html, "data-discover-next=\"true\"");
+            StringAssert.Contains(html, "href=\"/?type=anime&amp;view=Top&amp;p=2\"");
+            using var last = await host.SendAsync(HttpMethod.Get, "/?type=anime&view=Top&p=2&handler=Results");
+            html = await last.Content.ReadAsStringAsync();
+            StringAssert.Contains(html, "class=\"discover-end\"");
+            Assert.IsFalse(html.Contains("data-discover-next", StringComparison.Ordinal));
+            using var shelves = await host.SendAsync(HttpMethod.Get, "/?type=anime&handler=Recommendations");
+            StringAssert.Contains(await shelves.Content.ReadAsStringAsync(), "data-shelf-more=\"/?type=anime&amp;view=Top&amp;p=2\"");
+        }
+
+        [TestMethod]
         public async Task Catalog_OldAnimeTrending_ReadsStoredTitleWithoutProviderRefresh()
         {
             var provider = new FakeAniList();
@@ -436,10 +463,12 @@ namespace Jularr.Backend.Tests
                     (702, 'tmdb_movie', 1, NULL, 'Out Soon', current_date + 30, 'https://img.test/702.jpg', 40, NULL, NULL, NULL, FALSE),
                     (703, 'tmdb_movie', 1, NULL, 'Matrix Adult', '2001-01-01', 'https://img.test/703.jpg', 90, 9.0, 9000, 2, TRUE),
                     (704, 'tmdb_movie', 1, NULL, 'Matrix Unread', NULL, NULL, 99, NULL, NULL, 3, FALSE),
-                    (9021, 'anilist', 2, 1, 'The Matrix Anime', '2021-04-01', 'https://img.test/21.jpg', 5000, 8.0, 5000, 1, FALSE);
+                    (9021, 'anilist', 2, 1, 'The Matrix Anime', '2021-04-01', 'https://img.test/21.jpg', 5000, 8.0, 5000, 1, FALSE),
+                    (9022, 'anilist', 2, 1, 'Matrix', '1990-01-01', 'https://img.test/22.jpg', 1, NULL, NULL, NULL, FALSE);
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES
                     (603, 'tmdb_movie', '603'), (604, 'tmdb_movie', '604'), (700, 'tmdb_movie', '700'), (701, 'tmdb_movie', '701'), (702, 'tmdb_movie', '702'), (703, 'tmdb_movie', '703'),
-                    (704, 'tmdb_movie', '704'), (9021, 'anilist', '21'), (603, 'imdb', 'tt0133093'), (604, 'imdb', 'tt0234215');
+                    (704, 'tmdb_movie', '704'), (9021, 'anilist', '21'), (9022, 'anilist', '22'), (603, 'imdb', 'tt0133093'), (604, 'imdb', 'tt0234215');
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (603, 'Genres', 'Action, Science Fiction', TRUE);
                 """);
 
             // The whole catalogs answer all their shelves at once; series still come from TMDB and are not among them.
@@ -473,14 +502,21 @@ namespace Jularr.Backend.Tests
             using var nextPage = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top, 2));
             Assert.AreEqual(0, (await nextPage.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Count);
 
-            // Typed words suggest the library's title first, then the others; adult and unread titles stay out.
+            // Typed words suggest titles grouped by type: a title beginning with the text before a trending one, the type with the best match first,
+            // then trending; adult and unread titles stay out, a requested title carries its state.
             using var suggested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("matr"));
             Assert.AreEqual(HttpStatusCode.OK, suggested.StatusCode, await suggested.Content.ReadAsStringAsync());
             var suggestions = (await suggested.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.ToArray();
-            Assert.AreEqual("The Matrix|The Matrix Anime|The Matrix Reloaded", string.Join("|", suggestions.Select(item => item.Title)));
-            Assert.AreEqual("movies", suggestions[0].ScopeSlug);
-            CollectionAssert.AreEqual(new long[] { 603, 9021, 604 }, suggestions.Select(item => item.WorkId).ToArray());
-            Assert.AreEqual("anime", suggestions[1].ScopeSlug);
+            Assert.AreEqual("Matrix|The Matrix Anime|The Matrix|The Matrix Reloaded", string.Join("|", suggestions.Select(item => item.Title)));
+            Assert.AreEqual("anime|anime|movies|movies", string.Join("|", suggestions.Select(item => item.ScopeSlug)));
+            Assert.AreEqual(MediaStateType.Requested, suggestions[2].MediaStateTypeId);
+            Assert.AreEqual("Action", suggestions[2].Genre);
+            Assert.AreEqual(8.7m, suggestions[2].Rating);
+            Assert.IsNull(suggestions[3].Genre);
+
+            // The typed title itself comes first in its type.
+            using var exact = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("the matrix"));
+            Assert.AreEqual("The Matrix|The Matrix Reloaded|The Matrix Anime", string.Join("|", (await exact.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.Select(item => item.Title)));
             using var narrowed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("matrix rel", "movies"));
             Assert.AreEqual("The Matrix Reloaded", (await narrowed.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.Single().Title);
 
@@ -691,6 +727,35 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task CardRequest_ClickedOnACatalogCard_RequestsAtOnceAndThenLeadsToTheTitle()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            using var browser = ((TestServer)host.Services.GetRequiredService<IServer>()).CreateClient();
+            browser.DefaultRequestHeaders.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+
+            // The card offers the round request icon: a form of its own with the token, no text on the card itself.
+            using var tab = await browser.GetAsync("/?type=anime&handler=Recommendations");
+            var html = await tab.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
+            var season = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '21'"))!;
+            var action = "/Details/" + season + "?handler=QuickRequest";
+            StringAssert.Matches(html, new System.Text.RegularExpressions.Regex("<form[^>]*action=\"" + System.Text.RegularExpressions.Regex.Escape(action) + "\"[^>]*data-quick-request=\"true\""));
+            StringAssert.Contains(html, "data-live=\"request-work:" + season + "\"");
+            var token = WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
+
+            // A click requests in the profile's language with the default quality and answers without a page.
+            using var requested = await browser.PostAsync(action, new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token }));
+            Assert.AreEqual(HttpStatusCode.NoContent, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"AcquisitionProfileId\" IS NULL AND \"GamePlatformId\" IS NULL"));
+
+            // Requested, the card's icon names the phase live and leads to the title's page, which shows the progress.
+            using var again = await browser.GetAsync("/?type=anime&handler=Recommendations");
+            html = await again.Content.ReadAsStringAsync();
+            Assert.IsFalse(html.Contains(action, StringComparison.Ordinal));
+            StringAssert.Contains(html, "card-request\" href=\"/Details/");
+        }
+
+        [TestMethod]
         public async Task RelatedWork_RequestedFromItsRow_IsTheNormalRequestWithoutLeavingThePage()
         {
             await using var host = await CreateHostAsync(razor: true, anime: new FakeAniList { FindsFirstSeason = true }, tvdb: new FakeTvdb());
@@ -803,8 +868,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
             StringAssert.Contains(await invalid.Content.ReadAsStringAsync(), "class=\"ui-page-error\"");
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(await invalid.Content.ReadAsStringAsync(), "role=\"alert\"").Count);
-            using var search = await host.SendAsync(HttpMethod.Get, "/?q=Matrix");
-            StringAssert.Contains(await search.Content.ReadAsStringAsync(), "The Matrix Show");
+            // A search of several types shows a row per type, the type with the best match first, each with See all for that type alone.
+            using var search = await host.SendAsync(HttpMethod.Get, "/?type=movies,series&q=Matrix");
+            html = await search.Content.ReadAsStringAsync();
+            StringAssert.Contains(html, "The Matrix Show");
+            StringAssert.Contains(html, "href=\"/?type=series&amp;q=Matrix\"");
+            Assert.IsFalse(html.Contains("data-discover-next", StringComparison.Ordinal));
         }
 
         [TestMethod]
@@ -1284,6 +1353,7 @@ namespace Jularr.Backend.Tests
         private sealed class FakeAniList : HttpMessageHandler
         {
             public int Requests { get; private set; }
+            public List<int> Pages { get; } = [];
             public bool IsUnavailable { get; set; }
             public bool FindsFirstSeason { get; init; }
             private const string First = """{"id":20,"type":"ANIME","format":"TV","title":{"romaji":"The Matrix Show"},"synonyms":[],"startDate":{"year":2020},"episodes":12,"relations":{"edges":[{"relationType":"SEQUEL","node":{"id":21,"type":"ANIME"}}]}}""";
@@ -1296,6 +1366,12 @@ namespace Jularr.Backend.Tests
                 using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
                 var variables = body.RootElement.GetProperty("variables");
                 var found = FindsFirstSeason && variables.TryGetProperty("search", out _) ? First : Second;
+                // A ranking has one page.
+                if (variables.TryGetProperty("page", out var page))
+                {
+                    Pages.Add(page.GetInt32());
+                    if (page.GetInt32() > 1) found = "";
+                }
                 var json = variables.TryGetProperty("id", out var id) ? "{\"data\":{\"Media\":" + (id.GetInt32() == 20 ? First : Second) + "}}" : "{\"data\":{\"Page\":{\"media\":[" + found + "]}}}";
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
             }

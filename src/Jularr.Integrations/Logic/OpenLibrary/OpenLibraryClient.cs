@@ -25,9 +25,9 @@ namespace Jularr.Integrations.Logic.OpenLibrary
             return ReadResults(document.RootElement, "docs");
         }
 
-        public async Task<IReadOnlyList<OpenLibraryResult>> ReadTrendingAsync(CancellationToken ct)
+        public async Task<IReadOnlyList<OpenLibraryResult>> ReadTrendingAsync(int page, CancellationToken ct)
         {
-            using var document = await GetAsync("trending/weekly.json?limit=20", ct);
+            using var document = await GetAsync("trending/weekly.json?limit=20&page=" + page.ToString(CultureInfo.InvariantCulture), ct);
             return ReadResults(document.RootElement, "works");
         }
 

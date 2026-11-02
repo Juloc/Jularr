@@ -65,11 +65,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
 
             // The file must be what its name says.
-            var header = new byte[128];
             await using (var check = file.OpenRead())
             {
-                var read = await check.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, CancellationToken);
-                if (!LibraryFileTypes.IsDocumentContent(extension, header.AsSpan(0, read)))
+                if (await LibraryFileTypes.CheckDocumentAsync(extension, check, CancellationToken) is not null)
                 {
                     throw new DataValidationException(nameof(UploadVolumeDataV1.File), "invalid_file_type");
                 }

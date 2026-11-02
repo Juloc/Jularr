@@ -1,4 +1,5 @@
 @use "../../../Framework/Components/MediaCard";
+@use "../../../Framework/Components/CapsuleBar";
 
 // A library search that runs or was just asked for: one quiet line of its state, its progress and its results under the toolbar.
 .works-search-run {
@@ -50,6 +51,16 @@
     --list-columns: minmax(0, 1fr) minmax(138px, 190px) minmax(130px, 190px);
 
     .list-row { min-height: 112px; }
+}
+
+// The order beside the search: what it sorts by and the arrow of its direction, which points down while it descends.
+.works-sort {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    &__direction .ui-icon { transition: transform var(--transition); }
+    &__direction--down .ui-icon { transform: rotate(180deg); }
 }
 
 // The poster view: the shared grid of covers, a little apart from the toolbar.

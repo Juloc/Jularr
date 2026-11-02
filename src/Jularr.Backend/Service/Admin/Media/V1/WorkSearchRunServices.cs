@@ -29,7 +29,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         protected override async Task<IServiceOutput> OnCreate()
         {
             var key = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { Auth.AccountId, Selection = Data })));
-            var run = await Context.QueueWorksSearchAsync(new WorkSearchSelectionData(Data.WorkIds, Data.MediaTypeId, Data.IsMonitored, Data.WorkListStatusId, Data.LibraryRootId,
+            var run = await Context.QueueWorksSearchAsync(new WorkSearchSelectionData(Data.WorkIds, Data.MediaTypeIds, Data.MediaSubtypeIds, Data.IsMonitored, Data.WorkListStatusId, Data.LibraryRootId,
                 Data.AcquisitionProfileId, Data.Query, Auth.AccountId, key), CancellationToken);
             return new SearchRunQueuedV1(run.OperationId, run.TargetCount);
         }

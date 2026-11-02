@@ -38,6 +38,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
         private bool _bulkFailed;
         private WorksViewType _view;
         private SearchRunDetailsV1? _searchRun;
+        private ScopeSelection? _scopes;
         private PageResult<WorkBulkOutcomeV1>? _searchResults;
 
         [BindProperty(SupportsGet = true, Name = "searchJob")]
@@ -54,8 +55,9 @@ namespace Jularr.Frontend.Pages.Admin.Works
         public int ExclusionPage { get; set; } = 1;
 
         // Filters and order live in the address, so a list can be shared, reloaded and paged.
+        // Media types as slugs of the type bar, repeated or separated by commas; none shows all of them.
         [BindProperty(SupportsGet = true, Name = "type")]
-        public MediaType? TypeFilter { get; set; }
+        public string[] Types { get; set; } = [];
 
         [BindProperty(SupportsGet = true, Name = "monitored")]
         public bool? MonitoredFilter { get; set; }
@@ -77,11 +79,21 @@ namespace Jularr.Frontend.Pages.Admin.Works
         [BindProperty(SupportsGet = true, Name = "view")]
         public WorksViewType? ViewChoice { get; set; }
 
+        // The newest titles come first; another order starts in its own first direction.
         [BindProperty(SupportsGet = true, Name = "sort")]
-        public WorkSortType Sort { get; set; }
+        public WorkSortType Sort { get; set; } = WorkSortType.Added;
 
         [BindProperty(SupportsGet = true, Name = "desc")]
-        public bool Descending { get; set; }
+        public bool? Descending { get; set; }
+
+        private bool IsDescending => Descending ?? DescendsFirst(Sort);
+
+        private static bool DescendsFirst(WorkSortType sort) => sort == WorkSortType.Added;
+
+        // Every type is listed here; the bar offers all of them.
+        private ScopeSelection Scopes => _scopes ??= new ScopeSelection(Types, LibraryScopes.All.Where(scope => scope.Slug != "all").ToList());
+
+        private string? TypeParameter => Scopes.Parameter(Scopes.Picked);
 
         private bool CanManageWanted => texts.CanManageWanted();
 
@@ -101,13 +113,16 @@ namespace Jularr.Frontend.Pages.Admin.Works
             page.Asset("Framework/Components/ActionDock.entry.ts");
             page.Asset("Framework/Components/Truncated.entry.ts");
             page.Asset("Framework/Components/MediaCard.entry.ts");
+            page.Asset("Framework/Components/ChoiceSelect.entry.ts");
+            page.Asset("Framework/Components/LiveSearch.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             if (FormError is not null && _bulkFailed) page.Content.Add(new P(ErrorText.Of(FormError)).Class("ui-page-error").Attribute("role", "alert"));
             if (TempData["WorksReport"] is string report) page.Content.Add(Report(report));
 
-            // One row of filter chips with the title field and the view switch, then the titles in the chosen view; the chosen titles belong to one form that the dock's bulk zone and the change drawer post.
+            // The media-type bar, then one row of filter chips with the title field and the view switch, then the titles in the chosen view; the chosen titles belong to one form that the dock's bulk zone and the change drawer post.
             page.NoPageRow();
+            page.Content.Add(new MediaTypeBar(assets, Scopes.ListedSlugs, Scopes.ChosenSlugs, "library.scope.", types => Address(types: types)));
             page.Content.Add(Toolbar());
             if (_searchRun is { } run && (SearchJob is not null || run.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running)) page.Content.Add(SearchPanel(csrf));
             if (_works is { } works)
@@ -240,8 +255,9 @@ namespace Jularr.Frontend.Pages.Admin.Works
             var ct = HttpContext.RequestAborted;
             _view = ResolveView();
             _exclusions = await readExclusions.ExecuteAsync<PageResult<WorkExclusionV1>>(new ReadWorkExclusionsParametersV1(Math.Max(1, ExclusionPage)), ct);
-            _works = await read.ExecuteAsync<PageResult<WorkListItemV1>>(new ReadWorksParametersV1(PageNumber, PageSize, TypeFilter, MonitoredFilter, StatusFilter, LibraryFilter, ProfileFilter, QueryFilter, Sort, Descending), ct);
-            _summary = await readSummary.ExecuteAsync<WorksSummaryV1>(new ReadWorksParametersV1(1, PageSize, TypeFilter, null, null, LibraryFilter, ProfileFilter, QueryFilter), ct);
+            var (types, subtypes) = Scopes.Filter();
+            _works = await read.ExecuteAsync<PageResult<WorkListItemV1>>(new ReadWorksParametersV1(PageNumber, PageSize, types, subtypes, MonitoredFilter, StatusFilter, LibraryFilter, ProfileFilter, QueryFilter, Sort, IsDescending), ct);
+            _summary = await readSummary.ExecuteAsync<WorksSummaryV1>(new ReadWorksParametersV1(1, PageSize, types, subtypes, null, null, LibraryFilter, ProfileFilter, QueryFilter), ct);
             _libraries = await readLibraries.ExecuteAsync<BaseDataList<LibraryOverviewV1>>(new ReadLibraryOverviewParametersV1(), ct);
 
             // Profiles belong to Arr+.

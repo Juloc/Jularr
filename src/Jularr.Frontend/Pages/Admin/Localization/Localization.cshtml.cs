@@ -34,11 +34,12 @@ namespace Jularr.Frontend.Pages.Admin.Localization
         {
             page.Title("admin.localization.title");
             page.Navigation("nav.admin");
-            page.Content.Add(new A(new Text("admin.languages.title")).Attribute("href", "/Admin/Instance/Languages"));
+            page.Asset("Pages/Admin/Localization/Localization.entry.scss");
+            page.Content.Add(new A(new Text("admin.languages.title")).Class("locale-link").Attribute("href", "/Admin/Instance/Languages"));
 
             // Navigate real enabled locales.
-            page.Content.Add(new Nav(_locales.Select(locale => (IUiComponent)new A(new ValueText(locale.Name))
-                .Attribute("href", Address(locale.Id))).ToArray()).Attribute("aria-label", texts["profile.field.uiLocale"]));
+            page.Content.Add(new Nav(_locales.Select(locale => (IUiComponent)new A(new ValueText(locale.Name)).Class("locale-link")
+                .Attribute("href", Address(locale.Id))).ToArray()).Class("locale-nav").Attribute("aria-label", texts["profile.field.uiLocale"]));
 
             // Responsive list and editor.
             page.Content.Add(new Split(split =>

@@ -1,4 +1,5 @@
 @use "./Brand";
+@use "../../Framework/Components/HitArea";
 
 // The mockups' shell: a 252px sidebar (230px, then 67px with icons only on a tablet, a drawer on a phone) and a 78px header on the panel
 // colour, separated by 1px quiet lines, one lavender tint for the current place. The header is one row at every width.
@@ -91,16 +92,17 @@
     .breadcrumb__item--menu .link-menu { display: block; }
 }
 
-// The header search: an outlined pill with its icon; on a phone only the icon until it takes focus.
+// The header search: a large outlined pill in the middle, the trail and the tools taking equal room beside it; on a phone only the icon until it takes focus.
+.app-header__tools { display: flex; flex: 1 1 0; align-items: center; justify-content: flex-end; gap: 12px; }
 .app-search {
+    position: relative;
     display: flex;
-    flex: 0 1 min(26vw, 370px);
+    flex: 0 1 600px;
     align-items: center;
-    min-width: 185px;
-    margin-left: auto;
-    height: 39px;
-    padding: 0 13px;
-    gap: 9px;
+    min-width: 220px;
+    height: 46px;
+    padding: 0 16px;
+    gap: 10px;
     border: 1px solid var(--line);
     border-radius: var(--radius-control);
     background: var(--field);
@@ -113,28 +115,114 @@
     .search-box { flex: 1; max-width: none; }
 
     .search-box__input {
-        min-height: 37px;
+        min-height: 44px;
         padding: 0;
         border: 0;
         border-radius: 0;
         background: transparent;
+        font-size: var(--text-body);
 
         &:focus-visible { outline: none; }
     }
-}
 
-// The slash key focuses the search (Pages/Shared/Shell.entry.ts); the hint is for a keyboard only.
-.app-search__hint {
-    flex: none;
-    padding: 3px 5px;
-    border: 1px solid var(--line);
-    border-radius: 5px;
-    background: var(--surface);
-    font: inherit;
-    font-size: var(--text-small);
-    line-height: 1.2;
+    // Above the base button's display; the phone's open search shows it.
+    .app-header &__close { display: none; }
+
+    // Suggestions grouped by type (Pages/Shared/HeaderSearch.ts) under the middle of the field, never taller than the room below it;
+    // where there is room the groups stand in two columns.
+    &__popup {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 50%;
+        z-index: 30;
+        width: min(820px, calc(100vw - var(--side) - 48px));
+        max-height: calc(100dvh - var(--shell-header-offset) - 12px);
+        overflow-y: auto;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        transform: translateX(-50%);
+    }
+
+    &__results { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 4px 12px; padding: 10px; }
+
+    // One group or none: one column as wide as the field.
+    &__popup:not(:has(.app-search__group + .app-search__group)) { width: 100%; }
+    &__results:not(:has(.app-search__group + .app-search__group)) { grid-template-columns: minmax(0, 1fr); }
+
+    // The group's heading opens all results of its type.
+    &__head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: var(--radius-inner);
+        color: var(--accent-text);
+        text-decoration: none;
+
+        &:hover, &:focus-visible { outline: none; background: var(--accent-soft); }
+    }
+
+    &__more {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        margin-left: auto;
+        padding: 2px 6px 2px 10px;
+        border: 1px solid var(--accent-outline);
+        border-radius: var(--radius-control);
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    &__type { color: var(--text); font-size: var(--text-control); font-weight: 750; }
+
+    &__hit {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 6px 8px;
+        border-radius: var(--radius-inner);
+        color: var(--text);
+        text-decoration: none;
+
+        &:hover, &:focus-visible { outline: none; background: var(--accent-soft); }
+        // Titles beyond the room (HeaderSearch.ts fit).
+        &[hidden] { display: none; }
+    }
+
+    // Also the stand-in of a missing cover, which takes over this class.
+    &__hit &__poster { flex: none; width: 40px; height: 60px; border-radius: 7px; background: var(--accent-soft); object-fit: cover; }
+
+    &__text {
+        display: grid;
+        flex: 1;
+        gap: 3px;
+        min-width: 0;
+
+        strong { overflow: hidden; font-size: 15px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+        mark { background: none; color: var(--accent-text); font-weight: 800; }
+    }
+
+    &__facts { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+    &__fact { display: inline-flex; align-items: center; gap: 3px; }
+    &__fact + &__fact::before { content: "·"; margin-right: 3px; }
+
+    &__known { padding: 1px 8px; border-radius: var(--radius-control); background: var(--accent-soft); color: var(--accent-text); font-weight: 650; }
+
+    &__all {
+        grid-column: 1 / -1;
+        margin: 4px -10px -10px;
+        padding: 12px 18px;
+        border-top: 1px solid var(--line);
+        color: var(--accent-text);
+        font-weight: 650;
+        text-decoration: none;
+
+        &:hover, &:focus-visible { outline: none; background: var(--accent-soft); }
+    }
 }
-@media (pointer: coarse) { .app-search__hint { display: none; } }
 
 // The header's round buttons: 36px on the quiet line, the lavender tint and the soft purple edge on hover.
 .app-header .button--icon { flex: none; color: var(--muted); &:hover:not(:disabled) { background: var(--accent-soft); } }
@@ -433,9 +521,18 @@ html[data-skin="original"] .sidebar-secondary {
         padding: env(safe-area-inset-top) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
     }
     .app-header .app-menu-toggle { display: inline-grid; }
+    .app-header__tools { flex: none; gap: 8px; }
     .app-header .button--icon, .app-notifications { width: 34px; height: 34px; min-height: 34px; }
     .app-avatar { width: 31px; height: 31px; }
-    .breadcrumb { font-size: var(--text-control); }
+    // The header's own taps: 44px high in the 65px bar and as wide as the 8px gaps of the row allow (the buttons come from Button).
+    .app-header { --hit-gap-x: 8px; }
+    // The search's tap is its icon's (the label that opens the field): an overlay on the pill itself would take the tap from the label.
+    .app-notifications, .app-search__icon { @include HitArea.hit-area(8px, 26px); }
+    .app-avatar { @include HitArea.hit-area(8px, 26px, $border: 3px); }
+    // The trail scrolls and so clips what leaves it: it is as high as the tap of its links, and the negative margin keeps the header as it was.
+    .breadcrumb { margin-block: -13px; padding-block: 13px; font-size: var(--text-control); }
+    .breadcrumb__item > a { @include HitArea.hit-area(8px, 26px, $border: 0px); }
+    .breadcrumb__item .link-menu__summary { min-height: 44px; }
     .breadcrumb__item:last-child { flex: 0 1 auto; min-width: 0; }
     .breadcrumb__item:nth-last-child(n + 3) { display: none; }
     .breadcrumb__item:nth-last-child(2)::before { display: none; }
@@ -456,7 +553,6 @@ html[data-skin="original"] .sidebar-secondary {
         color: var(--muted);
 
         &__icon { width: 100%; height: 100%; }
-        &__hint { display: none; }
 
         // Hidden but focusable, so the icon's label can open it.
         .search-box {
@@ -480,8 +576,12 @@ html[data-skin="original"] .sidebar-secondary {
             border-radius: 0;
             background: var(--surface);
 
+            .app-search__close { display: inline-grid; }
             .app-search__icon { width: auto; height: auto; }
             .search-box { flex: 1; width: auto; height: auto; margin: 0; overflow: visible; clip-path: none; }
+
+            // The suggestions fill the screen below it.
+            .app-search__popup { top: 100%; left: 0; width: 100%; height: calc(100dvh - 100%); max-height: none; border-width: 1px 0 0; border-radius: 0; transform: none; }
         }
     }
 }

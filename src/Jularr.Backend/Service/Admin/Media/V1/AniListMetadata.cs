@@ -59,11 +59,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<IReadOnlyList<AniListMedia>> ReadBookRankingAsync(MediaSubtype subtype, AniListRanking ranking, CancellationToken ct)
+        public async Task<IReadOnlyList<AniListMedia>> ReadBookRankingAsync(MediaSubtype subtype, AniListRanking ranking, int page, CancellationToken ct)
         {
             try
             {
-                return await aniList.ReadRankedAsync(AniListMediaType.Manga, AniListMatching.Formats(MediaType.Book, subtype), ranking, ct);
+                return await aniList.ReadRankedAsync(AniListMediaType.Manga, AniListMatching.Formats(MediaType.Book, subtype), ranking, page, ct);
             }
             catch (AniListException exception)
             {
@@ -71,11 +71,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<IReadOnlyList<AniListMedia>> ReadAnimeRankingAsync(AniListRanking ranking, CancellationToken ct)
+        public async Task<IReadOnlyList<AniListMedia>> ReadAnimeRankingAsync(AniListRanking ranking, int page, CancellationToken ct)
         {
             try
             {
-                return await aniList.ReadRankedAsync(AniListMediaType.Anime, AniListMatching.Formats(MediaType.Series, MediaSubtype.Anime), ranking, ct);
+                return await aniList.ReadRankedAsync(AniListMediaType.Anime, AniListMatching.Formats(MediaType.Series, MediaSubtype.Anime), ranking, page, ct);
             }
             catch (AniListException exception)
             {

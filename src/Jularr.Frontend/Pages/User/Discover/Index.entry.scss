@@ -26,6 +26,37 @@
     padding: 24px 0;
 }
 
+// While pages load by themselves the link waits hidden; it shows once they stop or fail, and always without script.
+@media (scripting: enabled) {
+    .discover-paging[data-automatic] [data-discover-next] { display: none; }
+}
+
+// Grey cards where the next page arrives: a row under the grid, three at the end of a shelf.
+.discover-skeletons {
+    margin-top: 18px;
+    &--shelf { display: contents; }
+}
+
+.discover-skeleton {
+    width: 100%;
+    max-width: 150px;
+    animation: discover-skeleton 1.4s ease-in-out infinite;
+    .media-shelf__items & { flex: 0 0 144px; }
+    &::before, &::after { content: ""; display: block; border-radius: 12px; background: var(--surface); }
+    &::before { aspect-ratio: 2 / 3; }
+    &::after { width: 70%; height: 12px; margin-top: 10px; border-radius: 6px; }
+    @media (prefers-reduced-motion: reduce) { animation: none; }
+}
+
+@keyframes discover-skeleton { 50% { opacity: .45; } }
+
+// Where a ranking ends: under its grid, or after the last card of its shelf.
+.discover-end {
+    margin: 0;
+    color: var(--muted);
+    .media-shelf__items > & { flex: 0 0 auto; align-self: center; padding-inline: 16px; white-space: nowrap; }
+}
+
 .capsule-bar__tool.button {
     position: relative;
     flex: none;
@@ -138,56 +169,6 @@ html:not(.discover-scripted) .discover-pick, html:not(.discover-scripted) .disco
 
     .toggle { flex-direction: row-reverse; justify-content: space-between; width: 100%; }
     .toggle__label { font-size: 13px; font-weight: 770; }
-}
-
-// Suggestions under the header search, as wide as the field like the combobox popup.
-.app-header .search-box { position: relative; }
-
-.discover-suggestions {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    left: 0;
-    z-index: 30;
-    overflow: hidden;
-    padding: 4px 0;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-panel);
-    background: var(--surface);
-    box-shadow: var(--shadow);
-}
-
-.discover-suggestion {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 44px;
-    padding: 6px 12px;
-    color: var(--text);
-    text-decoration: none;
-
-    &:hover,
-    &:focus-visible { outline: none; background: var(--surface-hover); }
-
-    &__poster {
-        flex: none;
-        width: 30px;
-        height: 40px;
-        border-radius: 5px;
-        background: var(--accent-soft);
-        object-fit: cover;
-    }
-
-    &__text {
-        display: grid;
-        flex: 1;
-        min-width: 0;
-
-        strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
-        span { color: var(--muted); font-size: 12px; }
-    }
-
-    &__arrow { display: grid; flex: none; color: var(--muted); .ui-icon { transform: rotate(180deg); } }
 }
 
 .discover-feedback {
