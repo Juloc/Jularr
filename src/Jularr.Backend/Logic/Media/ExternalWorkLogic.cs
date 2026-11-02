@@ -924,7 +924,7 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(data);
             changed += await ctx.ExecuteAsyncForAffectedRows(sql, ct);
 
-            // Title, year and date belong to the details once a Work has them, and to the library's Work; the catalog fields are the catalog's.
+            // Title, year and date belong to the details once a Work has them, and to the library's Work; the catalog fields and filter facts are the catalog's.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -950,11 +950,22 @@ namespace Jularr.Backend.Logic.Media
                     "Favourites" = CASE WHEN entry."Favourites" >= 0 THEN entry."Favourites" END,
                     "Season" = CASE WHEN entry."Season" BETWEEN 1 AND 4 AND entry."SeasonYear" BETWEEN 1800 AND 2200 THEN entry."Season" END,
                     "SeasonYear" = CASE WHEN entry."Season" BETWEEN 1 AND 4 AND entry."SeasonYear" BETWEEN 1800 AND 2200 THEN entry."SeasonYear" END,
+                    "CatalogFormatId" = entry."FormatId",
+                    "ReleaseStatusId" = entry."StatusId",
+                    "CatalogSourceId" = entry."SourceId",
+                    "Episodes" = CASE WHEN entry."Episodes" > 0 THEN entry."Episodes" END,
+                    "Chapters" = CASE WHEN entry."Chapters" > 0 THEN entry."Chapters" END,
+                    "Volumes" = CASE WHEN entry."Volumes" > 0 THEN entry."Volumes" END,
+                    "DurationMinutes" = CASE WHEN entry."DurationMinutes" > 0 THEN entry."DurationMinutes" END,
+                    "GenreIds" = coalesce(entry."GenreIds", '{}'),
+                    "TagIds" = coalesce(entry."TagIds", '{}'),
+                    "SiteIds" = coalesce(entry."SiteIds", '{}'),
                     "FetchedAt" = now()
                 FROM
                     jsonb_to_recordset(@Entries::jsonb) AS entry ("Value" text, "Title" text, "OriginalTitle" text, "ReleasedOn" date, "Overview" text, "ImageUrl" text,
                         "BackdropUrl" text, "Popularity" real, "Rating" double precision, "Votes" integer, "ImdbId" text, "IsAdult" boolean, "CountryOfOrigin" text,
-                        "Favourites" integer, "Season" smallint, "SeasonYear" smallint)
+                        "Favourites" integer, "Season" smallint, "SeasonYear" smallint, "FormatId" smallint, "StatusId" smallint, "SourceId" smallint, "Episodes" integer,
+                        "Chapters" integer, "Volumes" integer, "DurationMinutes" integer, "GenreIds" smallint[], "TagIds" integer[], "SiteIds" integer[])
                     JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = @Namespace AND identity."Value" = entry."Value"
                     CROSS JOIN LATERAL (
                         SELECT

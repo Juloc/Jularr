@@ -63,20 +63,30 @@ namespace Jularr.Integrations.Logic.AniList
                 : throw new AniListException(AniListFailure.NotFound, "AniList does not know this title.");
         }
 
-        // Fifty titles after an id, anime and manga alike, with whether more follow; adult titles stay out.
-        public async Task<(IReadOnlyList<AniListCatalogEntry> Entries, bool HasMore)> ReadCatalogPageAsync(int afterId, CancellationToken ct)
+        // The fields of AniList's search filters.
+        private const int CatalogPageSize = 50;
+
+        private const string FactFields = "status source countryOfOrigin season seasonYear episodes chapters volumes duration genres isAdult tags { id } externalLinks { siteId type } ";
+
+        // The titles of the next fifty ids, anime and manga alike, adult ones included, and the id to go on after; AniList pages no deeper than 5000 entries,
+        // so a walk asks for ids, and its newest id says whether more follow.
+        public async Task<(IReadOnlyList<AniListCatalogEntry> Entries, int NextAfterId, bool HasMore)> ReadCatalogPageAsync(int afterId, CancellationToken ct)
         {
-            using var document = await PostAsync("query ($after: Int) { Page(perPage: 50) { pageInfo { hasNextPage } media(id_greater: $after, sort: ID, isAdult: false) { "
-                + "id type format countryOfOrigin season seasonYear title { romaji english native } startDate { year month day } description(asHtml: false) coverImage { large } popularity averageScore favourites } } }",
-                new Dictionary<string, object> { ["after"] = afterId }, ct);
-            if (Child(Child(document.RootElement, "data"), "Page") is not { } page || !page.TryGetProperty("media", out var media) || media.ValueKind != JsonValueKind.Array)
+            var ids = Enumerable.Range(afterId + 1, CatalogPageSize).ToArray();
+            using var document = await PostAsync("query ($ids: [Int]) { Page(perPage: 50) { media(id_in: $ids, sort: ID) { "
+                + "id type format title { romaji english native } startDate { year month day } description(asHtml: false) coverImage { large } popularity averageScore favourites " + FactFields
+                + "} } last: Page(perPage: 1) { media(sort: ID_DESC) { id } } }",
+                new Dictionary<string, object> { ["ids"] = ids }, ct);
+            var data = Child(document.RootElement, "data");
+            if (Child(data, "Page") is not { } page || !page.TryGetProperty("media", out var media) || media.ValueKind != JsonValueKind.Array
+                || Child(data, "last") is not { } last || !last.TryGetProperty("media", out var newest) || newest.ValueKind != JsonValueKind.Array)
             {
                 throw new AniListException(AniListFailure.InvalidResponse, "AniList did not answer with a page.");
             }
 
             var entries = media.EnumerateArray().Select(CatalogEntry).OfType<AniListCatalogEntry>().ToArray();
-            var more = Child(page, "pageInfo") is { } info && info.TryGetProperty("hasNextPage", out var next) && next.ValueKind == JsonValueKind.True;
-            return (entries, more);
+            var lastId = newest.EnumerateArray().Select(item => item.TryGetProperty("id", out var id) && id.TryGetInt32(out var value) ? value : 0).FirstOrDefault();
+            return (entries, ids[^1], ids[^1] < lastId);
         }
 
         private static AniListCatalogEntry? CatalogEntry(JsonElement media)
@@ -96,7 +106,20 @@ namespace Jularr.Integrations.Logic.AniList
             return new AniListCatalogEntry(mediaId, type, Text(media, "format"), Text(title, "english") ?? romaji, Text(title, "english") is null ? Text(title, "native") : romaji,
                 released, year, description, Https(Child(media, "coverImage") is { } image ? Text(image, "large") : null), Count(media, "popularity", int.MaxValue), Count(media, "averageScore", 100),
                 Count(media, "favourites", int.MaxValue), Text(media, "countryOfOrigin") is { Length: 2 } country ? country : null,
-                Text(media, "season") is "WINTER" or "SPRING" or "SUMMER" or "FALL" ? Text(media, "season") : null, Count(media, "seasonYear", 2200));
+                Text(media, "season") is "WINTER" or "SPRING" or "SUMMER" or "FALL" ? Text(media, "season") : null, Count(media, "seasonYear", 2200), Facts(media));
+        }
+
+        private static AniListFacts Facts(JsonElement media)
+        {
+            IEnumerable<JsonElement> Items(string property) => media.TryGetProperty(property, out var list) && list.ValueKind == JsonValueKind.Array ? list.EnumerateArray() : [];
+            int? Id(JsonElement item, string property) => item.ValueKind == JsonValueKind.Object && item.TryGetProperty(property, out var id) && id.TryGetInt32(out var value) && value > 0 ? value : null;
+
+            // Only streaming links name a site to watch or read on.
+            var genres = Items("genres").Where(genre => genre.ValueKind == JsonValueKind.String).Select(genre => genre.GetString()!).Distinct(StringComparer.Ordinal).ToArray();
+            var tags = Items("tags").Select(tag => Id(tag, "id")).OfType<int>().Distinct().ToArray();
+            var sites = Items("externalLinks").Where(link => Text(link, "type") == "STREAMING").Select(link => Id(link, "siteId")).OfType<int>().Distinct().ToArray();
+            return new AniListFacts(Text(media, "status"), Text(media, "source"), Count(media, "episodes", 5000), Count(media, "chapters", 100000), Count(media, "volumes", 500),
+                Count(media, "duration", 1000), genres, tags, sites, media.TryGetProperty("isAdult", out var adult) && adult.ValueKind == JsonValueKind.True);
         }
 
         private static string Name(AniListMediaType type) => type == AniListMediaType.Anime ? "ANIME" : "MANGA";

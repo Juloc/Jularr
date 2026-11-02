@@ -219,6 +219,16 @@ namespace Jularr.Integrations.Data.Tmdb
         public bool IsAdult { get; }
         // A series' link to TheTVDB.
         public int? TvdbId { get; init; }
+        public IReadOnlyList<int> GenreIds { get; init; } = [];
+        // Minutes of the film or of one episode.
+        public int? Runtime { get; init; }
+        public int? Episodes { get; init; }
+        // TMDB's own words, such as Released or Returning Series.
+        public string? Status { get; init; }
+        // ISO 3166-1 alpha-2, the first country of origin.
+        public string? Country { get; init; }
+        // The flat-rate streaming services in the connection's region.
+        public IReadOnlyList<int> ProviderIds { get; init; } = [];
     }
 
     // A language (ISO 639-1), its region (ISO 3166-1) and the texts TMDB has in it.

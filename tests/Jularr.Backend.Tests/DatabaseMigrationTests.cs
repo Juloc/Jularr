@@ -341,9 +341,10 @@ namespace Jularr.Backend.Tests
             await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
 
             // A Work keeps its own fields and takes only the empty catalog fields of its entry; the trending rank is list state.
+            // The later filter facts migration has every film read again.
             Assert.AreEqual(1L, await ScalarAsync(cs, """
                 SELECT count(*) FROM "Works" WHERE "Id" = 501 AND "CanonicalTitle" = 'Kept Film' AND "Overview" = 'Own overview' AND "OriginalTitle" = 'The Matrix'
-                    AND "ImageUrl" = 'https://image.test/603.jpg' AND "Rating" = 8.2 AND "Votes" = 500 AND "CatalogNamespace" = 'tmdb_movie' AND "TrendingRank" IS NULL AND "FetchedAt" IS NOT NULL
+                    AND "ImageUrl" = 'https://image.test/603.jpg' AND "Rating" = 8.2 AND "Votes" = 500 AND "CatalogNamespace" = 'tmdb_movie' AND "TrendingRank" IS NULL AND "FetchedAt" IS NULL
                 """));
             Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 503 AND "CanonicalTitle" = 'Library Remake' AND "CatalogNamespace" = 'tmdb_movie' AND "FetchedAt" IS NULL"""));
             Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Works" WHERE "Id" = 502 AND "CatalogNamespace" IS NULL"""), "A season's entry does not describe its series.");
@@ -352,7 +353,7 @@ namespace Jularr.Backend.Tests
             var reloaded = (long)(await ScalarAsync(cs, """SELECT "WorkId" FROM "WorkExternalIdentities" WHERE "Namespace" = 'tmdb_movie' AND "Value" = '604'"""))!;
             Assert.AreEqual(1L, await ScalarAsync(cs, $"""
                 SELECT count(*) FROM "Works" WHERE "Id" = {reloaded} AND "MediaTypeId" = 1 AND "CanonicalTitle" = 'Matrix Reloaded' AND "OriginalTitle" = 'The Matrix Reloaded' AND "ReleaseYear" = 2003
-                    AND "CatalogNamespace" = 'tmdb_movie' AND "DetailedAt" IS NULL AND "FetchedAt" IS NOT NULL AND "Votes" = 300 AND "TrendingRank" IS NULL
+                    AND "CatalogNamespace" = 'tmdb_movie' AND "DetailedAt" IS NULL AND "FetchedAt" IS NULL AND "Votes" = 300 AND "TrendingRank" IS NULL
                 """));
             Assert.AreEqual("tt0234215", await ScalarAsync(cs, $"""SELECT "Value" FROM "WorkExternalIdentities" WHERE "WorkId" = {reloaded} AND "Namespace" = 'imdb'"""));
             Assert.AreEqual(reloaded, await ScalarAsync(cs, """SELECT "RelatedWorkId" FROM "WorkRelations" WHERE "Id" = 1 AND "SourceKey" = 'manual'"""));

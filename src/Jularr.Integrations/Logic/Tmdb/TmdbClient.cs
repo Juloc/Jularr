@@ -221,7 +221,7 @@ namespace Jularr.Integrations.Logic.Tmdb
             JsonDocument document;
             try
             {
-                document = await ReadAsync(connection, (movie ? "movie/" : "tv/") + id.ToString(CultureInfo.InvariantCulture), [new("append_to_response", "external_ids")], ct);
+                document = await ReadAsync(connection, (movie ? "movie/" : "tv/") + id.ToString(CultureInfo.InvariantCulture), [new("append_to_response", "external_ids,watch/providers")], ct);
             }
             catch (TmdbException exception) when (exception.Failure == TmdbFailure.NotFound)
             {
@@ -238,7 +238,17 @@ namespace Jularr.Integrations.Logic.Tmdb
                     ImagePath(Text(item, "poster_path")), ImagePath(Text(item, "backdrop_path")), Number(item, "popularity"), Number(item, "vote_average"), Int(item, "vote_count"), imdb,
                     item.TryGetProperty("adult", out var adult) && adult.ValueKind == JsonValueKind.True)
                 {
-                    TvdbId = !movie && external.ValueKind == JsonValueKind.Object && Int(external, "tvdb_id") is > 0 and var tvdb ? tvdb : null
+                    TvdbId = !movie && external.ValueKind == JsonValueKind.Object && Int(external, "tvdb_id") is > 0 and var tvdb ? tvdb : null,
+                    GenreIds = [.. Items(item, "genres").Select(genre => Int(genre, "id")).OfType<int>()],
+                    Runtime = movie ? Int(item, "runtime") : Items(item, "episode_run_time").Where(value => value.ValueKind == JsonValueKind.Number).Select(value => value.GetInt32()).FirstOrDefault() is > 0 and var each ? each : null,
+                    Episodes = movie ? null : Int(item, "number_of_episodes"),
+                    Status = Text(item, "status"),
+                    Country = Items(item, "origin_country").Where(value => value.ValueKind == JsonValueKind.String).Select(value => value.GetString()).FirstOrDefault()
+                        ?? Items(item, "production_countries").Select(country => Text(country, "iso_3166_1")).FirstOrDefault(),
+                    ProviderIds = WatchRegion(connection) is { } region && item.TryGetProperty("watch/providers", out var providers) && providers.TryGetProperty("results", out var regions)
+                        && regions.ValueKind == JsonValueKind.Object && regions.TryGetProperty(region, out var available)
+                        ? [.. Items(available, "flatrate").Select(provider => Int(provider, "provider_id")).OfType<int>().Distinct()]
+                        : []
                 };
             }
         }
@@ -353,6 +363,23 @@ namespace Jularr.Integrations.Logic.Tmdb
         private static string? Text(JsonElement element, string name) =>
             element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
                 && value.GetString()?.Trim() is { Length: > 0 } text ? text : null;
+
+        // The region of the connection's language, such as DE of de-DE.
+        public static string? Region(TmdbConnection connection) => connection.Language.Split('-') is [_, { Length: 2 } country] ? country.ToUpperInvariant() : null;
+
+        // Streaming services are listed per country: the connection's own, else the language's usual one, such as DE for de.
+        public static string? WatchRegion(TmdbConnection connection)
+        {
+            if (Region(connection) is { } region) return region;
+            try
+            {
+                return new RegionInfo(CultureInfo.CreateSpecificCulture(connection.Language).Name).TwoLetterISORegionName is { Length: 2 } country ? country : null;
+            }
+            catch (Exception exception) when (exception is CultureNotFoundException or ArgumentException)
+            {
+                return null;
+            }
+        }
 
         private static int? Int(JsonElement element, string name) =>
             element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)
