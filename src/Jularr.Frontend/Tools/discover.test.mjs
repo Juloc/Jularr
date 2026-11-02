@@ -11,19 +11,12 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
 
 // Small event/DOM doubles, not a browser.
 function discover(landing = false) {
-    const inputEvents = {};
     const formEvents = {};
     const documentEvents = {};
-    const popupEvents = {};
-    const input = { value: '', focused: false, setAttribute() {}, focus() { this.focused = true; }, addEventListener: (name, action) => { inputEvents[name] = action; } };
-    const popup = { hidden: false, children: [], replaceChildren(...nodes) { this.children = nodes; }, querySelector: () => null, querySelectorAll: () => [],
-        addEventListener: (name, action) => { popupEvents[name] = action; } };
-    const form = { action: 'https://jularr.test/', querySelector: () => input, append() {}, contains: node => node === input, addEventListener: (name, action) => { formEvents[name] = action; } };
+    const input = { value: '' };
+    const form = { action: 'https://jularr.test/', addEventListener: (name, action) => { formEvents[name] = action; } };
     const requests = [];
-    const suggestions = [];
     const pages = new Map();
-    const timers = new Map();
-    let timerId = 0;
     let active;
     let observed;
     let observerAction;
@@ -33,7 +26,8 @@ function discover(landing = false) {
         const cards = ids.map(id => ({ querySelector: () => ({ getAttribute: () => '/Details/' + id }) }));
         const grid = { querySelectorAll: () => cards.map(card => card.querySelector()), append: card => cards.push(card) };
         const href = next ? 'https://jularr.test/?q=Matrix&p=' + next : null;
-        const paging = { next: next ? { href, getAttribute: () => href } : null, replaceChildren: (...nodes) => { paging.next = nodes[0] ?? null; } };
+        const paging = { dataset: {}, before() {}, next: next ? { href, dataset: { retryLabel: 'Try again' }, getAttribute: () => href } : null,
+            querySelector: () => paging.next?.end ? null : paging.next, replaceChildren: (...nodes) => { paging.next = nodes[0] ?? null; } };
         const end = next ? null : { end: true };
         const feedback = { textContent: '' };
         const slots = {};
@@ -67,7 +61,9 @@ function discover(landing = false) {
             assert.equal(name, '../../../Framework/Components/MediaShelf');
             return { initializeShelves() {} };
         },
-        document: { querySelector: selector => selector.includes('search-box') ? form : active, createElement: () => popup, addEventListener: (name, action) => { documentEvents[name] = action; } },
+        document: { querySelector: selector => selector.includes('search-box') ? form : active, addEventListener: (name, action) => { documentEvents[name] = action; },
+            createElement: () => ({ className: '', children: [], setAttribute() {}, append(node) { this.children.push(node); }, remove() { this.removed = true; } }) },
+        getComputedStyle: () => ({ gridTemplateColumns: '150px 150px 150px' }),
         window: { IntersectionObserver: Observer }, IntersectionObserver: Observer,
         AbortController, URL, Set, Error, Element, location: { href: 'https://jularr.test/' },
         FormData: class { forEach(action) { action(input.value, 'q'); action('movies', 'type'); } },
@@ -76,25 +72,15 @@ function discover(landing = false) {
             return value?.shelves ? selector === '#discover-recommendations' ? value.shelves : null : value;
         } }; } },
         history: { replaceState: (_, __, url) => { address = url.href; } },
-        fetch: (url, options) => new Promise((resolve, reject) => (String(url).includes('handler=Suggestions') ? suggestions : requests).push({ url, options, resolve, reject })),
-        setTimeout: action => { timers.set(++timerId, action); return timerId; },
-        clearTimeout: id => timers.delete(id),
+        fetch: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve, reject })),
         MouseEvent: class {}
     });
 
     return {
-        requests, region, suggestions, popup, input, Element,
-        key(name) { inputEvents.keydown({ key: name, preventDefault() {} }); },
-        async suggest(index, list) {
-            const key = 'suggestion' + index;
-            pages.set(key, list);
-            suggestions[index].resolve({ ok: true, redirected: false, text: async () => key });
-            await settle();
-        },
+        requests, region, Element,
         get active() { return active; }, get address() { return address; }, get observing() { return !!observed; },
+        search(value) { input.value = value; formEvents.submit({ preventDefault() {} }); },
         scroll(target) { documentEvents.scroll({ target }); },
-        type(value) { input.value = value; inputEvents.input(); },
-        flush() { const pending = [...timers.values()]; timers.clear(); pending.forEach(action => action()); },
         intersect() { if (observed) observerAction([{ isIntersecting: true }]); },
         async answer(index, incoming) {
             const key = String(index);
@@ -105,20 +91,16 @@ function discover(landing = false) {
     };
 }
 
-test('live search debounces, cancels and discards obsolete responses without replacing the shell', async () => {
+test('Enter loads the results in place, cancels and discards obsolete responses without replacing the shell', async () => {
     const ui = discover();
-    ui.type('Ma');
-    ui.type('Matrix');
-    assert.equal(ui.requests.length, 0);
-    ui.flush();
+    ui.search('Matrix');
     assert.equal(ui.requests.length, 1);
     assert.equal(ui.requests[0].url.searchParams.get('q'), 'Matrix');
     assert.equal(ui.requests[0].url.searchParams.get('type'), 'movies');
     assert.equal(ui.requests[0].url.searchParams.get('handler'), 'Results');
 
-    ui.type('Arrival');
+    ui.search('Arrival');
     assert.equal(ui.requests[0].options.signal.aborted, true);
-    ui.flush();
     const current = ui.region([3]);
     await ui.answer(1, current);
     await ui.answer(0, ui.region([4]));
@@ -148,11 +130,15 @@ test('viewport paging appends unique cards, retains existing identities and stop
 test('failed later pages retain results and do not hammer the provider with automatic retries', async () => {
     const ui = discover();
     const initial = ui.active;
+    const paging = initial.querySelector('.discover-paging');
+    assert.equal(paging.dataset.automatic, '');
     ui.intersect();
     await ui.answer(0, ui.region([], null, true));
     assert.equal(ui.active, initial);
     assert.equal(ui.active.cards.length, 2);
     assert.equal(ui.active.feedback.textContent, 'Try again');
+    assert.equal(paging.dataset.automatic, undefined);
+    assert.equal(paging.next.textContent, 'Try again');
     assert.equal(ui.observing, false);
     ui.intersect();
     assert.equal(ui.requests.length, 1);
@@ -186,7 +172,9 @@ test('a ranking shelf adds its next page near its end and shows where it ends', 
     const ui = discover();
     const links = [{ getAttribute: () => '/Details/1' }];
     const added = [];
-    const items = { scrollWidth: 2000, clientWidth: 500, scrollLeft: 0, querySelectorAll: () => links, append: node => added.push(node) };
+    const waiting = [];
+    const items = { scrollWidth: 2000, clientWidth: 500, scrollLeft: 0, querySelectorAll: () => links,
+        append: node => (node.className?.includes('discover-skeletons') ? waiting : added).push(node) };
     const shelf = { dataset: { shelfMore: '/?type=movies&view=Trending&p=2' }, querySelectorAll: () => [] };
     const target = { closest: selector => selector === '.media-shelf__items' ? items : null };
     items.closest = () => shelf.dataset.shelfMore ? shelf : null;
@@ -200,7 +188,11 @@ test('a ranking shelf adds its next page near its end and shows where it ends', 
     assert.equal(ui.requests.length, 1);
     assert.equal(ui.requests[0].url.searchParams.get('handler'), 'Results');
     assert.equal(ui.requests[0].url.searchParams.get('p'), '2');
+    assert.equal(waiting.length, 1);
+    assert.equal(waiting[0].children.length, 3);
+    assert.equal(waiting[0].removed, undefined);
     await ui.answer(0, ui.region([1, 2], 3));
+    assert.equal(waiting[0].removed, true);
     assert.equal(added.length, 1);
     assert.equal(shelf.dataset.shelfMore, 'https://jularr.test/?q=Matrix&p=3');
 
@@ -237,7 +229,7 @@ test('recommendation fragments preserve local content and obsolete responses are
     assert.equal(local.slots.shelves, providers.shelves);
 
     const obsolete = discover(true);
-    obsolete.type('Matrix');
+    obsolete.search('Matrix');
     assert.equal(obsolete.requests[0].options.signal.aborted, true);
     await obsolete.answer(0, providers);
     assert.equal(obsolete.active.slots.shelves, undefined);
@@ -246,35 +238,10 @@ test('recommendation fragments preserve local content and obsolete responses are
 
 test('Hero never arrives in an asynchronous recommendations fragment', () => {
     const source = readFileSync(new URL('../Pages/User/Discover/Index.cshtml.cs', import.meta.url), 'utf8');
-    assert.match(source, /await LoadHeroAsync\(selected, /);
+    assert.match(source, /await LoadHeroAsync\(await keptTask\)/);
     assert.doesNotMatch(source, /discover-featured/);
-    assert.match(source, /if \(_hero\.Count > 0\)/);
-});
-
-test('suggestions follow typing, drop obsolete answers and close on Escape', async () => {
-    const ui = discover();
-    ui.type('M');
-    ui.flush();
-    assert.equal(ui.suggestions.length, 0, 'one letter suggests nothing');
-
-    ui.type('Ma');
-    ui.type('Matr');
-    ui.flush();
-    assert.equal(ui.suggestions.length, 1);
-    assert.equal(ui.suggestions[0].url.searchParams.get('handler'), 'Suggestions');
-    assert.equal(ui.suggestions[0].url.searchParams.get('q'), 'Matr');
-    assert.equal(ui.suggestions[0].url.searchParams.get('type'), 'movies');
-
-    const list = { childElementCount: 2 };
-    await ui.suggest(0, list);
-    assert.equal(ui.popup.hidden, false);
-    assert.deepEqual(ui.popup.children, [list]);
-
-    ui.type('Matrix');
-    ui.flush();
-    assert.equal(ui.suggestions[1].options.signal.aborted, false);
-    ui.key('Escape');
-    assert.equal(ui.suggestions[1].options.signal.aborted, true);
-    assert.equal(ui.popup.hidden, true);
-    assert.deepEqual(ui.popup.children, []);
+    // The carousel is part of the page itself and keeps its place without highlights.
+    assert.match(source, /page\.Content\.Add\(new HeroCarousel\(assets, _hero, HeroPreferences, "discover\.hero\.empty"\)\);/);
+    const fragment = source.slice(source.indexOf('private void DefineRecommendations'), source.indexOf('public async Task<IActionResult> OnGetAsync'));
+    assert.doesNotMatch(fragment, /HeroCarousel/);
 });

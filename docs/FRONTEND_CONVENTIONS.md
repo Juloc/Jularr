@@ -168,7 +168,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   plain pills, the selection the lavender tint with its `--accent-edge` outline. `Tabs` adds only the server-selected content pane.
   Keep the row single-line and horizontally scrollable when necessary, with complete labels. The shell follows the mockups: a 252px sidebar (230px, then
   67px with icons only up to 1120px, the selected area tinted), on a phone (up to 640px) an off-canvas drawer over a dimmed page opened from the header's menu
-  button. The admin sidebar has an ADMINISTRATION eyebrow; the header has the trail, the one search with its `/` key hint and shortcut, a light/dark switch,
+  button. The admin sidebar has an ADMINISTRATION eyebrow; the header has the trail, the one search large in the middle (no key hint or shortcut), a light/dark switch,
   the inbox and the avatar (profile initials, linking to the settings). The bottom pill is gone.
 - Owner's decision 21 Oct: the instance settings are five pages below `/Admin/Instance` (Instance, Modules, Media types, Languages, Naming) with one chip row (the Settings entry of [AdminMenu](../src/Jularr.Frontend/Framework/AdminMenu.cs)), sections inside a page instead of more tabs, one save pill for all of it. A switch that is a setting is a form field (`Form.Switch`, shown as a [SettingCard](../src/Jularr.Frontend/Framework/Components/SettingCard.cs)), so toggling reloads nothing and saves with the pill; settings of a module appear only while it is on; a module that needs another shows it and cannot be switched on while that is off, and one that others need names them and stays on.
 - Settings is a page, not a special `SettingsGroup` renderer.
@@ -347,7 +347,8 @@ See [Frontend UX decisions](FRONTEND_UX.md) for design tokens, layout, page iden
   fabricate playback or requests. Series lifecycle, genres, descriptions and language capsules belong in Details, not the cover.
   Grids hold as many covers per row as fit (`media-grid`), no two-row wrapping of card text.
 - A missing poster, backdrop, cover or photo is always `NoCover` (the Jularr mark with a question mark, a silhouette for a person) through `MediaImage.Or`; a page never draws its own initials, numbers or gradient tile, and an image that fails to load is swapped for it by the layout script.
-- Error pages (owner 21 Oct): one `ErrorState` for every status of a browser request, server-rendered at `/Error/{code}`. Clean shows the Jularr mark large in the accent, a bold `404 Not Found`, one line and Home/Back/Retry/Sign in; Original shows its artwork over the whole page with exactly two buttons (Try again, Go to home page) and no other visible text. Failures of the service itself (5xx) and a visitor who is not signed in use the standalone layout; a 5xx page names a reference and the time, never the exception. `/api`, streams, assets and non-HTML clients keep their plain answers.
+- Error pages (owner 21 Oct): one `ErrorState` for every status of a browser request, server-rendered at `/Error/{code}`. Clean shows the Jularr mark large in the accent, a bold `404 Not Found`, one line and Home/Back/Retry/Sign in; Original shows its artwork over the whole page with exactly two buttons (Try again, Go to home page) and no other visible text. Failures of the service itself (5xx) and a visitor who is not signed in use the standalone layout; a 5xx page names a reference and the time, never the exception. A page read whose entity does not exist (the service's not-found) answers with this same page and status, centrally in `JularrPage`, not per page; a fragment (named GET handler) gets the bare 404. `/api`, streams, assets and non-HTML clients keep their plain answers.
+- Sign in (owner 2 Nov): one card in the app's style (panel corners, 12px text, 40px pill fields) with the accent gradient button as a pill. Wrong credentials ("Wrong username or password.") and an empty field are the server's messages in a line kept free under each field, never the browser's bubble; a message never moves the card.
 - Progress is a thin capsule inside the foot of the cover (translucent white track, accent fill); no time text and it never moves
   other content. A page may add one short label over the cover, bottom left (Favorites shows where the profile stands).
 - Availability is green only when all monitored units have local profile-language
@@ -360,16 +361,23 @@ See [Frontend UX decisions](FRONTEND_UX.md) for design tokens, layout, page iden
   cards carry the coarse state of the Work and show a tag only for a held or requested title.
   Backend must supply these facts. Existing list services do not yet expose audio
   completeness: production does not infer it from `MediaStateType` or episode counts.
-- The delayed hover preview (owner's hover-card mockup, 21 Oct): after 550 ms of the mouse resting on a cover, never on one of
+- The card's action (owner's decision, 2 Nov) is one round icon on the cover, shown with the mouse's hover and always on a touch
+  screen (a moving mouse, marked as `data-pointer` on the root, counts even where the browser reports no hover). Request
+  ([CardRequest](../src/Jularr.Frontend/Framework/Components/CardRequest.cs)) asks at once with the profile's language and the
+  default quality (`/Details/{id}?handler=QuickRequest`); the icon then follows the live phase on the accent: plus, a clock
+  while it waits for approval, a pulsing search, the download's percent in a ring, then a white play. While a request runs the
+  icon stays without the hover, the availability tag follows the phase (from one set of tag templates per page), and the icon
+  leads to the title's page, which shows the progress.
+- The delayed hover preview (owner's hover-card mockup, 21 Oct; delay raised to 2 s on 2 Nov): after 2 s of the mouse resting on a cover, never on one of
   its buttons (or of the keyboard focus on it), the card opens a panel over the row, as high as the card and 1.84 times as wide,
   fetched then from `/MediaPreview` (nothing loads before, nothing by hover on touch or devices without hover). The cards of the row
   never change width or position: the card under the panel is only hidden, and the panel shifts sideways to stay inside the row and
-  the viewport. Trailer mode: the title's trailer in a 16:9 frame (the one allowed external embed, the privacy host, one muted, very
-  wide, cropped frame; Jularr's own pause top left, sound top right, a progress line and `0:12 / 2:24` from the player's own
+  the viewport. Trailer mode: the title's trailer in a 16:9 frame (the one allowed external embed, the privacy host, one muted embed
+  as high as the frame and three times as wide, so the provider's corners stay outside; Jularr's own pause top left, sound top right, a progress line and `0:12 / 2:24` from the player's own
   messages, a running line when it reports none) above the linked title, the year, type and runtime, and two lines of description;
   description mode, for a title without a trailer: a larger title, the facts and the longer description. The foot holds the
-  card's action (a pill), its heart and Details. A touch device has no hover: a card that stays in view near the middle for 2 s
-  opens the same panel by itself, one at a time, unless the profile switched `AutoplayPreviews` off (rendered as
+  card's action (a larger pill with its text; a request names its live phase), its heart and Details. A touch device has no hover: a card that stays in view near the middle for 2 s
+  opens the same panel by itself, one at a time, but only a card of a shelf, never of a grid (the panel would cover the neighbouring covers and titles of the two columns of a phone), unless the profile switched `AutoplayPreviews` off (rendered as
   `data-autoplay-previews` on `#app-content`; data saver and offline also keep it off). It closes on leave, Escape, scrolling,
   resizing, a click elsewhere, a hidden document or page navigation, and drops its frame. The cached component
   module owns the delegated handlers once across app-shell visits. List contracts carry no trailer IDs: the page asks one Work at a

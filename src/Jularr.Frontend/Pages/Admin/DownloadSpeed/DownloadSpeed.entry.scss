@@ -27,6 +27,6 @@
     &__now { font-weight: 650; }
 }
 
-@container (max-width: 720px) {
+@media (max-width: 840px) {
     .download-speed__row { grid-template-columns: 1fr; }
 }

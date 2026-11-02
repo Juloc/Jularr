@@ -60,6 +60,36 @@ namespace Jularr.E2E.Tests
 
         [TestMethod]
         [Timeout(300_000)]
+        public async Task PageOfMissingEntity_ShowsThe404Page_AndFragmentsKeepTheirBareStatus()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            await Owner.SetUpAndSignInAsync(page);
+
+            // Every page that reads one entity by its id answers with the same styled page as an unknown address.
+            foreach (var address in new[]
+            {
+                "/Details/99999999", "/Player/99999999", "/Read/99999999", "/Game/99999999", "/People/99999999", "/Franchise/99999999", "/Collections/99999999",
+                "/Admin/Works/99999999", "/Admin/Works/99999999/Markers", "/Admin/Wanted/99999999", "/Admin/Wanted/99999999/Search",
+                "/Admin/Acquisition/Profiles/99999999"
+            })
+            {
+                var response = await page.GotoAsync(address);
+                Assert.AreEqual(404, response!.Status, address);
+                await Assertions.Expect(page.Locator(".error-state__title")).ToHaveTextAsync("404 Not Found");
+                await Assertions.Expect(page.Locator(".ui-page-error")).ToHaveCountAsync(0);
+                await Assertions.Expect(page.Locator(".error-state__actions--clean a", new() { HasText = "Home" })).ToHaveCountAsync(1);
+            }
+
+            // A fragment request gets the bare status, never a page.
+            var fragment = await page.APIRequest.GetAsync("/Read/99999999?handler=Notes", new() { Headers = new Dictionary<string, string> { ["HX-Request"] = "true", ["Accept"] = "text/html" } });
+            Assert.AreEqual(404, fragment.Status);
+            Assert.IsFalse((await fragment.TextAsync()).Contains("error-state", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
+        [Timeout(300_000)]
         public async Task UnhandledException_ShowsThe500Page_WithoutDetails_AndApiKeepsItsAnswer()
         {
             await using var jularr = await JularrInstance.StartAsync();

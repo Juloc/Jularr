@@ -1,3 +1,5 @@
+@use "../../../Framework/Components/HitArea";
+
 // The Downloads page of the owner's mockup (variant B): the client tabs with the icon buttons in one row, the figures, the queue and history panels and the client's own panels.
 
 .downloads-head {
@@ -7,6 +9,10 @@
     margin-bottom: 12px;
 
     h1 { margin: 0; }
+}
+
+@media (max-width: 640px) {
+    .downloads-head { flex-wrap: wrap; }
 }
 
 // The clients as pill tabs inside one white capsule, each with its count in a small bubble.
@@ -23,6 +29,9 @@
     }
 
     .navigation-tabs__link { gap: 8px; padding: 7px 16px; }
+
+    // The capsule is the room the pills' 44px taps need above and below them (NavigationTabs).
+    @media (max-width: 640px) { .navigation-tabs { padding-block: 7px; } }
     .navigation-tabs__count { padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); opacity: 1; }
     .navigation-tabs__link--active .navigation-tabs__count { border-color: transparent; }
 }
@@ -86,7 +95,7 @@
     &__value--large { font-size: 30px; }
 }
 
-@container (max-width: 720px) {
+@media (max-width: 840px) {
     .downloads-figures, .downloads-figures--three { grid-template-columns: 1fr 1fr; }
 }
 
@@ -124,8 +133,8 @@
     .downloads-panel { margin-bottom: 0; }
 }
 
-@container (max-width: 720px) {
-    .downloads-pair { grid-template-columns: 1fr; }
+@media (max-width: 840px) {
+    .downloads-pair, .downloads-facts { grid-template-columns: 1fr; }
 }
 
 // The tables of the mockup: a plain head in the muted colour, every value on the left, rows close together under a thin line.
@@ -282,6 +291,8 @@
     text-decoration: none;
 
     &--on { border-color: var(--accent-edge); background: var(--accent-soft); color: var(--accent-text); }
+
+    @include HitArea.phone-hit-area(8px, 18px);
 }
 
 .downloads-source-link { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }

@@ -224,7 +224,7 @@
         gap: .5rem;
         margin-top: 0;
 
-        .button:not(.button--primary, .button--soft, .live-phase-button) {
+        .button:not(.button--primary, .button--soft) {
             border-color: color-mix(in srgb, var(--artwork-foreground) 22%, transparent);
             background: var(--hero-glass);
             color: var(--artwork-foreground);
@@ -232,12 +232,6 @@
                 background: color-mix(in srgb, var(--artwork-foreground) 24%, transparent);
                 color: var(--artwork-foreground);
             }
-        }
-        .live-phase-button {
-            border-color: transparent;
-            background: color-mix(in srgb, var(--artwork-foreground) 95%, transparent);
-            color: var(--accent-text);
-            &:hover:not(:disabled) { background: var(--artwork-foreground); color: var(--accent-text); }
         }
         .button--icon {
             width: var(--control-height);
@@ -325,6 +319,12 @@
             align-items: stretch;
         }
         &--poster &__progress { max-width: none; margin-left: 0; }
+
+        // The menus of the actions open across the whole row instead of past the screen's edge.
+        &--poster &__actions {
+            .action-menu, .select-link-menu { position: static; }
+            .action-menu__panel, .select-link-menu__list { inset-inline: 0; min-width: 0; max-width: none; }
+        }
     }
 }
 

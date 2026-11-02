@@ -48,7 +48,7 @@ namespace Jularr.Frontend.Pages.Shared
             secondary.AddRange(AdminMenu.UserLinks(texts).Select(area => new ShellLink(area.Entry.LabelKey, area.Href, area.Entry.Icon)));
             var adminMode = menu.Count > 0 && adminPath;
 
-            // The menu button of the phone, then the trail, the one global search, the theme switch, the inbox and the avatar.
+            // The menu button of the phone, then the trail, the one global search in the middle, and the inbox, the theme switch and the avatar.
             var header = new List<IUiComponent>
             {
                 new Button(new Icon("menu", assets)).IconOnly(texts["nav.menu"]).Attribute("class", "button button--icon app-menu-toggle")
@@ -58,30 +58,33 @@ namespace Jularr.Frontend.Pages.Shared
             };
             if (texts.CanReadMedia())
             {
+                // Suggestions open under it while typing (Pages/Shared/HeaderSearch.ts); on a phone it covers the header and the back button closes it.
                 var search = new SearchBox("/", "search.global", searchQuery, searchType is null ? null : new Dictionary<string, string> { ["type"] = searchType });
-                header.Add(new Div(new Label(new Icon("search", assets)).Class("app-search__icon").Attribute("for", SearchBox.InputId("search.global")).Attribute("aria-hidden", "true"), search,
-                    new Kbd(new ValueText("/")).Class("app-search__hint").Attribute("aria-hidden", "true")).Class("app-search"));
+                header.Add(new Div(new Button(new Icon("chevron-left", assets)).IconOnly(texts["common.back"]).Attribute("class", "button button--icon app-search__close").Attribute("data-search-close", ""),
+                    new Label(new Icon("search", assets)).Class("app-search__icon").Attribute("for", SearchBox.InputId("search.global")).Attribute("aria-hidden", "true"), search).Class("app-search"));
             }
 
             // Inbox with its unread count.
+            var tools = new List<IUiComponent>();
             if (texts.CanNotify())
             {
                 var unread = texts.UnreadNotifications;
-                header.Add(new A([new Icon("bell", assets), .. unread > 0 ? new IUiComponent[] { new Span(new ValueText(unread > 99 ? "99+" : unread.ToString(CultureInfo.CurrentCulture))).Class("app-notifications__count") } : []])
+                tools.Add(new A([new Icon("bell", assets), .. unread > 0 ? new IUiComponent[] { new Span(new ValueText(unread > 99 ? "99+" : unread.ToString(CultureInfo.CurrentCulture))).Class("app-notifications__count") } : []])
                     .Class("app-notifications" + (currentPath.StartsWith("/Notifications", StringComparison.OrdinalIgnoreCase) ? " is-active" : ""))
                     .Attribute("href", "/Notifications")
                     .Attribute("aria-label", unread > 0 ? string.Format(CultureInfo.CurrentCulture, texts["notifications.unread"], unread) : texts["notifications.title"]));
             }
 
             // Light or dark with one click (Modules/Appearance/theme.entry.ts); the icon shows what a click switches to.
-            header.Add(new Button(new Span(new Icon("theme-dark", assets)).Class("theme-toggle__moon"), new Span(new Icon("theme-light", assets)).Class("theme-toggle__sun"))
+            tools.Add(new Button(new Span(new Icon("theme-dark", assets)).Class("theme-toggle__moon"), new Span(new Icon("theme-light", assets)).Class("theme-toggle__sun"))
                 .IconOnly(texts["nav.theme"]).Attribute("class", "button button--icon theme-toggle").Attribute("data-toggle-mode", "true"));
             if (texts.IsAuthenticated)
             {
-                header.Add(new A(texts.ProfileName is { Length: > 0 } name ? new Span(new ValueText(Initials(name))) : new Icon("user", assets, 16))
+                tools.Add(new A(texts.ProfileName is { Length: > 0 } name ? new Span(new ValueText(Initials(name))) : new Icon("user", assets, 16))
                     .Class("app-avatar").Attribute("href", "/Settings").Attribute("aria-label", texts["nav.profile"]));
             }
 
+            header.Add(new Div([.. tools]).Class("app-header__tools"));
             new Header([.. header]).Class("app-header").WriteTo(writer, encoder, texts);
             // The phone's menu is a drawer over a dimmed page; a tap on the dimmed part closes it.
             new Div().Class("app-sidebar-overlay").Attribute("data-sidebar-overlay", "true").WriteTo(writer, encoder, texts);
@@ -181,7 +184,8 @@ namespace Jularr.Frontend.Pages.Shared
                 Add(parent.IsKey ? new Text(parent.Text) : new ValueText(parent.Text), parent.Href, entry is null ? null : PageItems(entry, null));
             }
 
-            Add(parents is { Count: > 0 } && currentLabel is not null ? new ValueText(currentLabel) : new Text(pageTitleKey), null);
+            // The last part is a Truncated: a narrow header cuts a long title with an ellipsis (CSS) and keeps the whole title in its tip.
+            Add(new Truncated(title), null);
             return new Nav(new Ol([.. trail]).Class("breadcrumb")).Class("app-header-location").Attribute("aria-label", texts["nav.breadcrumb"]);
         }
 
@@ -213,8 +217,6 @@ namespace Jularr.Frontend.Pages.Shared
         private sealed class Ol(params IUiComponent[] children) : HtmlElement("ol", children);
 
         private sealed class Label(params IUiComponent[] children) : HtmlElement("label", children);
-
-        private sealed class Kbd(params IUiComponent[] children) : HtmlElement("kbd", children);
     }
 
     public sealed record ShellLink(string Key, string Href, string Icon);

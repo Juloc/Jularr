@@ -9,6 +9,9 @@
         cursor: pointer;
         list-style: none;
 
+        // The tap of a disclosure on a phone.
+        @media (max-width: 640px) { min-height: 44px; }
+
         &::-webkit-details-marker { display: none; }
 
         &::after {
@@ -33,6 +36,8 @@
         gap: 2px;
         min-width: 200px;
         max-width: 80vw;
+        overflow-y: auto;
+        overscroll-behavior: contain;
         padding: 6px;
         border: 1px solid var(--border);
         border-radius: var(--radius-panel);

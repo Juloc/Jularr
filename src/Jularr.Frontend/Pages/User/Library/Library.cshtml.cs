@@ -85,6 +85,7 @@ namespace Jularr.Frontend.Pages.User.Library
             page.Asset("Framework/Components/ChoiceSelect.entry.ts");
             page.Asset("Framework/Components/LayoutToggle.entry.ts");
             page.Asset("Framework/Components/InfiniteList.entry.ts");
+            page.Asset("Framework/Components/LiveSearch.entry.ts");
 
             // The media-type bar with the filter at its end, then search, order and layout, then the titles.
             var narrowed = new List<IUiComponent> { new Icon("filter", assets) };
@@ -100,7 +101,7 @@ namespace Jularr.Frontend.Pages.User.Library
             var searchKeep = new Dictionary<string, string>(keep);
             searchKeep.Remove("q");
             if (Sort != LibrarySortType.RecentlyAdded) searchKeep["sort"] = Sort.ToString();
-            page.Content.Add(new Div(new SearchBox("/Library", "library.search", Query, searchKeep),
+            page.Content.Add(new Div(new SearchBox("/Library", "library.search", Query, searchKeep, live: true),
                 new Div(new ChoiceSelect("/Library", "sort", "library.sort", sorts, keep), new LayoutToggle(assets)).Class("library-toolbar__settings")).Class("library-toolbar"));
 
             if (items.Items.Count == 0)

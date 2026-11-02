@@ -1,4 +1,5 @@
 import { attachCardPreview } from './CardPreview';
+import { visit } from '../../Modules/Navigation/PageSwap';
 
 let initialized = false;
 let shownTip: HTMLElement | undefined;
@@ -55,6 +56,26 @@ function observeCards(): void {
     if (!observer) return;
     for (const card of Array.from(nearCards)) if (!card.isConnected) { nearCards.delete(card); observer.unobserve(card); }
     document.querySelectorAll<HTMLElement>('.media-card[data-preview-src]').forEach(card => observer?.observe(card));
+}
+
+// Which tag a phase of the request shows; a phase that ended otherwise leaves the tag as it is.
+const tagOfPhase: Record<string, string> = {
+    open: 'requested', approved: 'requested', searching: 'searching', downloading: 'downloading', importing: 'downloading', completed: 'available'
+};
+
+function followPhase(button: HTMLElement): void {
+    const state = tagOfPhase[button.dataset.phase ?? ''];
+    const surface = button.closest<HTMLElement>('.media-card__surface');
+    const art = surface?.querySelector<HTMLElement>('.media-card__art');
+    if (!state || !surface || !art) return;
+    const current = surface.querySelector<HTMLElement>('.media-availability-badge');
+    if (current?.classList.contains(`media-availability-badge--${state}`)) return;
+    const tag = document.querySelector<HTMLTemplateElement>('template[data-availability-badges]')?.content
+        .querySelector<HTMLElement>(`.media-availability-badge--${state}`)?.cloneNode(true) as HTMLElement | undefined;
+    if (!tag) return;
+    tag.setAttribute('href', art.getAttribute('href') ?? '#');
+    if (current) current.replaceWith(tag);
+    else art.after(tag);
 }
 
 export function initializeCards(): void {
@@ -116,6 +137,44 @@ export function initializeCards(): void {
         if (!card) return;
         delete card.dataset.open;
         if (document.activeElement instanceof HTMLElement && card.contains(document.activeElement)) document.activeElement.blur();
+    });
+
+    // The tag top left follows the live phase of the card's request, from the page's templates.
+    new MutationObserver(records => {
+        for (const record of records) {
+            if (record.target instanceof HTMLElement && record.target.matches('.card-request')) followPhase(record.target);
+        }
+    }).observe(document.body, { attributes: true, attributeFilter: ['data-phase'], subtree: true });
+
+    // Whether a mouse moves the pointer: the card actions then wait for its hover, also where the browser reports a touch screen.
+    document.addEventListener('pointermove', event => {
+        const pointer = event.pointerType === 'mouse' ? 'mouse' : 'touch';
+        if (document.documentElement.dataset.pointer !== pointer) document.documentElement.dataset.pointer = pointer;
+    }, { passive: true });
+
+    // The round request icon requests at once; the live phase of the request then takes over the icon, a refusal says so.
+    document.addEventListener('submit', event => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement) || !form.hasAttribute('data-quick-request')) return;
+        event.preventDefault();
+        const button = form.querySelector<HTMLButtonElement>('button');
+        if (!button || button.getAttribute('aria-busy') === 'true') return;
+
+        // Once requested, the icon leads to the title's page, which shows the progress.
+        if (button.dataset.phase && form.dataset.details) {
+            void visit(form.dataset.details);
+            return;
+        }
+
+        button.setAttribute('aria-busy', 'true');
+        button.dataset.phase = 'open';
+        fetch(form.action, { method: 'POST', body: new FormData(form), credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+            .then(response => { if (!response.ok) throw new Error(String(response.status)); })
+            .finally(() => button.removeAttribute('aria-busy'))
+            .catch(() => {
+                delete button.dataset.phase;
+                document.dispatchEvent(new CustomEvent('jularr:hint', { detail: { text: form.dataset.failed ?? '', failed: true } }));
+            });
     });
 
     // Complete text of clipped lines.

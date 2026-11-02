@@ -147,6 +147,12 @@ export async function visit(address: string): Promise<void> {
     await htmx.ajax("GET", address, { target: "#" + Content, select: "#" + Content, swap: "outerHTML", push: "true" });
 }
 
+// The same page with another query (a search typed into it): it replaces this history entry and stays at the same position.
+export async function replaceWith(address: string): Promise<void> {
+    stayHere();
+    await htmx.ajax("GET", address, { target: "#" + Content, select: "#" + Content, swap: "outerHTML", replace: "true" });
+}
+
 // The current page again from the server, in place and at the same position (after saving or discarding).
 let refreshing = false;
 

@@ -16,8 +16,8 @@ namespace Jularr.Integrations.Logic.Media
         public const int MaximumBytes = 20 * 1024 * 1024;
         private const int MaximumRedirects = 4;
 
-        // The hosts of the image servers behind the metadata providers; the Internet Archive serves Open Library's and the Cover Art Archive's covers.
-        private static readonly string[] ProviderHosts = ["tmdb.org", "coverartarchive.org", "openlibrary.org", "archive.org", "anilist.co", "anili.st", "igdb.com"];
+        // The hosts of the image servers behind the metadata providers; the Internet Archive serves Open Library's and the Cover Art Archive's covers; TheTVDB's images come from artworks.thetvdb.com.
+        private static readonly string[] ProviderHosts = ["tmdb.org", "coverartarchive.org", "openlibrary.org", "archive.org", "anilist.co", "anili.st", "igdb.com", "thetvdb.com"];
 
         public async Task<(byte[] Bytes, string ContentType)> DownloadAsync(string url, CancellationToken ct)
         {

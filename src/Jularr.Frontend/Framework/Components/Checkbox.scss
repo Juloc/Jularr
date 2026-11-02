@@ -1,3 +1,5 @@
+@use "HitArea";
+
 // Checkboxes and radios in the one look: a 18px rounded box (round for a radio) on the stronger line; checked, it fills with the accent and
 // shows a white tick (or dot). Contexts that hide their input and draw their own state (segments, pills, switches) keep doing so.
 :where(input[type="checkbox"]:not([role="switch"]), input[type="radio"]) {
@@ -48,6 +50,11 @@
 
 :where(input[type="radio"]):checked::before { transform: scale(1); }
 
+// On a phone a box that stands alone (a row's select box) takes a tap of up to 44x44px around it; one inside a label is tapped through the label.
+@media (max-width: 640px) {
+    :where(input[type="checkbox"]:not([role="switch"]), input[type="radio"]):not(label *) { @include HitArea.hit-area(26px, 26px); }
+}
+
 .ui-checkbox {
     display: flex;
     align-items: center;
@@ -59,4 +66,6 @@
     overflow-wrap: anywhere;
 
     &:has(input:disabled) { cursor: default; }
+
+    @include HitArea.phone-hit-area(8px, 20px, $border: 0px);
 }

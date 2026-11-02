@@ -87,7 +87,7 @@ namespace Jularr.Frontend.Pages.Admin.Translation
                     var retry = models.DownloadModel == model && models.DownloadMachine == machine.Address && models.DownloadState is "interrupted" or "failed";
                     parts.Add(new PostForm(Home + "?handler=Pull&model=" + Uri.EscapeDataString(model) + "&machine=" + place.ToString(CultureInfo.InvariantCulture), csrf, [],
                         new Button(new ValueText(texts[retry ? "translation.local.retry" : "translation.local.pull"] + " · " + model + " · "
-                            + Math.Round(size / 1e9, 1).ToString("0.0", CultureInfo.InvariantCulture) + " GB · " + machine.Address)).Submit()).Attribute("data-translation-submit", "pull"));
+                            + Math.Round(size / 1e9, 1).ToString("0.0", CultureInfo.InvariantCulture) + " GB")).Submit()).Attribute("data-translation-submit", "pull"));
                 }
                 page.Content.Add(new Div([.. parts]).Class("feature-card").Attribute("data-translation-machine", machine.Address));
             }

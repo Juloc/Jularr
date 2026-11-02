@@ -32,6 +32,7 @@ namespace Jularr.Backend.Data.Fields.Operation
         public static readonly BoolField IsWaiting = new();
         public static readonly BoolField CanImportManually = new();
         public static readonly StringArrayField UnmatchedFiles = new() { ItemMaximumLength = 2048, Required = false };
+        public static readonly StringArrayField UnmatchedFileReasons = new() { ItemMaximumLength = 64, Required = false };
         public static readonly EnumField ActivityFilterTypeId = new(typeof(ActivityFilterType));
         public static readonly EnumField DownloadClientKindId = new(typeof(DownloadClientKind)) { Required = false };
         public static readonly EnumField DownloadBulkActionTypeId = new(typeof(DownloadBulkActionType));

@@ -1,3 +1,5 @@
+@use "HitArea";
+
 // The admin list kit: rows on a grid inside one panel. The grid belongs to the page (--list-columns, -medium, -narrow); the panel answers to its own
 // width: the less important columns leave first (hide 1, then hide 2), and on a phone every row is a card with its name and state on one line.
 .list {
@@ -125,6 +127,9 @@
         text-decoration: none;
 
         &:hover { color: var(--accent-text); }
+
+        // The title is one line that ends in an ellipsis, so its own padding carries the tap: 44px high on a phone, over the line under it.
+        @include HitArea.phone-hit-pad(30px);
     }
 
     &__note { min-width: 0; color: var(--danger); font-size: var(--text-small); }

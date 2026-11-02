@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -54,6 +55,16 @@ namespace Jularr.Frontend.Framework
 
             var logger = HttpContext.RequestServices.GetRequiredService<ILogger<JularrPage>>();
             var error = ServiceError.Describe(executed.Exception, HttpContext, logger);
+
+            // A page whose entity does not exist is the styled 404 page: the empty status is re-executed as /Error/404 by the host. The request of a
+            // fragment (a named GET handler) answers the bare status instead and never receives a page.
+            if (error.StatusCode == StatusCodes.Status404NotFound && HttpMethods.IsGet(Request.Method))
+            {
+                if (context.HandlerMethod?.Name is not null && HttpContext.Features.Get<IStatusCodePagesFeature>() is { } statusPages) statusPages.Enabled = false;
+                executed.Result = new StatusCodeResult(StatusCodes.Status404NotFound);
+                executed.ExceptionHandled = true;
+                return;
+            }
 
             // Otherwise the shared handler answers.
             try

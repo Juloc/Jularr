@@ -16,6 +16,19 @@ namespace Jularr.Frontend.Framework
             ["games"] = "Game"
         };
 
+        // The icon of each slug, as Details shows its type.
+        public static IReadOnlyDictionary<string, string> Icons { get; } = new Dictionary<string, string>
+        {
+            ["movies"] = "film",
+            ["series"] = "tv",
+            ["anime"] = "anime",
+            ["books"] = "book",
+            ["manga"] = "book",
+            ["lightnovels"] = "book",
+            ["music"] = "music",
+            ["games"] = "gamepad"
+        };
+
         public static IReadOnlyList<MediaArea> All { get; } =
         [
             new("discover.area.watch", "play", ["movies", "series", "anime"]),

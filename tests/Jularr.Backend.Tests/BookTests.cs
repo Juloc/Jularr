@@ -325,7 +325,12 @@ namespace Jularr.Backend.Tests
             var kept = Directory.EnumerateFiles(downloads.Path, "*", SearchOption.AllDirectories).Single();
             CollectionAssert.AreEqual(sources.EpubBytes, File.ReadAllBytes(kept), "The downloaded bytes must remain available for manual review.");
             using var activity = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=Queue");
-            Assert.AreEqual(OperationType.Download, (await activity.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single().OperationTypeId);
+            var waiting = (await activity.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single();
+            Assert.AreEqual(OperationType.Download, waiting.OperationTypeId);
+
+            // The waiting download names the file with the check it failed.
+            CollectionAssert.AreEqual(new[] { Path.GetFileName(kept) }, waiting.UnmatchedFiles!.Select(Path.GetFileName).ToArray());
+            CollectionAssert.AreEqual(new[] { "content_epub" }, waiting.UnmatchedFileReasons);
             Assert.AreEqual(wantedId, (long)(await host.ScalarAsync("SELECT \"WantedItemId\" FROM \"AcquisitionReleases\""))!);
         }
 
@@ -347,6 +352,71 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(LibraryFileTypes.IsDocumentContent(".pdf", "%PDF-1.7"u8));
             Assert.IsFalse(LibraryFileTypes.IsDocumentContent(".epub", "PK\u0003\u0004 something else entirely here..........................."u8));
             Assert.IsFalse(LibraryFileTypes.IsDocumentContent(".pdf", "<html>"u8));
+        }
+
+        [TestMethod]
+        public async Task Book_ContentCheck_TakesTolerantEpubsAndNamesTheFailedCheck()
+        {
+            static Task<string?> CheckAsync(string extension, byte[] bytes) => LibraryFileTypes.CheckDocumentAsync(extension, new MemoryStream(bytes), CancellationToken.None);
+            static byte[] Zip(params (string Name, string Content, System.IO.Compression.CompressionLevel Level)[] entries)
+            {
+                using var stream = new MemoryStream();
+                using (var archive = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+                {
+                    foreach (var (name, content, level) in entries)
+                    {
+                        using var writer = new StreamWriter(archive.CreateEntry(name, level).Open());
+                        writer.Write(content);
+                    }
+                }
+
+                return stream.ToArray();
+            }
+
+            const string Container = "<container/>";
+            var stored = System.IO.Compression.CompressionLevel.NoCompression;
+            var packed = System.IO.Compression.CompressionLevel.Optimal;
+
+            // The mimetype entry anywhere in the ZIP, stored or deflated, or without it a container, is an EPUB.
+            Assert.IsNull(await CheckAsync(".epub", ReadingTests.BuildEpub("x")));
+            Assert.IsNull(await CheckAsync(".epub", Zip(("META-INF/container.xml", Container, packed), ("mimetype", "application/epub+zip", stored))));
+            Assert.IsNull(await CheckAsync(".EPUB", Zip(("OEBPS/a.xhtml", "<p/>", packed), ("mimetype", "application/epub+zip\n", packed))));
+            Assert.IsNull(await CheckAsync(".epub", Zip(("META-INF/container.xml", Container, packed))));
+
+            // A mimetype that says something else, a ZIP without either, HTML and a cut-off archive are not.
+            Assert.AreEqual("content_epub", await CheckAsync(".epub", Zip(("META-INF/container.xml", Container, packed), ("mimetype", "application/zip", stored))));
+            Assert.AreEqual("content_epub", await CheckAsync(".epub", Zip(("readme.txt", "x", packed))));
+            Assert.AreEqual("content_epub", await CheckAsync(".epub", Encoding.UTF8.GetBytes("<html>not a book</html>")));
+            Assert.AreEqual("content_epub", await CheckAsync(".epub", Zip(("readme.txt", "x", packed), ("mimetype", "application/epub+zip", stored))[..40]));
+
+            // A directory claiming more entries than an EPUB may hold is not read.
+            var many = Zip(("META-INF/container.xml", Container, packed));
+            BitConverter.GetBytes((ushort)60000).CopyTo(many, many.Length - 12);
+            Assert.AreEqual("content_epub", await CheckAsync(".epub", many));
+
+            // An EPUB without its mimetype entry is taken, and the reader opens it.
+            using var unmarked = new MemoryStream();
+            unmarked.Write(ReadingTests.BuildEpub("Unmarked"));
+            using (var archive = new System.IO.Compression.ZipArchive(unmarked, System.IO.Compression.ZipArchiveMode.Update, leaveOpen: true))
+            {
+                archive.GetEntry("mimetype")!.Delete();
+            }
+
+            Assert.IsNull(await CheckAsync(".epub", unmarked.ToArray()));
+            unmarked.Position = 0;
+            using (var archive = new System.IO.Compression.ZipArchive(unmarked, System.IO.Compression.ZipArchiveMode.Read))
+            {
+                Assert.AreEqual("Unmarked", Jularr.Backend.Logic.Reading.EpubReader.Read(archive).Title);
+            }
+
+            // MOBI: BOOKMOBI is taken; an old PalmDOC is named, since the reader cannot open it; PDF and comics keep their signatures.
+            byte[] Mobi(string kind) => [.. new byte[60], .. Encoding.ASCII.GetBytes(kind), .. new byte[60]];
+            Assert.IsNull(await CheckAsync(".mobi", Mobi("BOOKMOBI")));
+            Assert.AreEqual("content_palmdoc", await CheckAsync(".mobi", Mobi("TEXtREAd")));
+            Assert.AreEqual("content_azw3", await CheckAsync(".azw3", Mobi("TEXtREAd")));
+            Assert.AreEqual("content_mobi", await CheckAsync(".mobi", Mobi("XXXXXXXX")));
+            Assert.AreEqual("content_pdf", await CheckAsync(".pdf", Encoding.ASCII.GetBytes("<html>")));
+            Assert.AreEqual("content_cbz", await CheckAsync(".cbz", Encoding.ASCII.GetBytes("Rar!\u001A\u0007\0")));
         }
 
         [TestMethod]

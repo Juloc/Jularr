@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Encodings.Web;
+using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Library.V1;
@@ -19,6 +20,7 @@ namespace Jularr.Frontend.Framework
         private string? _actionKey;
         private string? _actionHref;
         private IUiComponent? _action;
+        private IUiComponent? _request;
         private long? _positionMs;
         private long? _durationMs;
         private decimal? _progression;
@@ -83,6 +85,13 @@ namespace Jularr.Frontend.Framework
         {
             _actionKey = key;
             _actionHref = target;
+            return this;
+        }
+
+        // The request as a round icon that requests at once with the defaults and follows the live phase; a title already requested passes its phase.
+        public MediaCard Request(long workId, string? antiforgeryToken, AcquisitionRequestStatusType? phase = null)
+        {
+            _request = new CardRequest(assets, workId, antiforgeryToken, phase);
             return this;
         }
 
@@ -160,13 +169,13 @@ namespace Jularr.Frontend.Framework
             if (_label is not null) cover.Add(new Div(_label).Class("media-card__label"));
 
             // Only a supplied action, never an invented one.
-            var action = _action;
+            var action = _action ?? _request;
             if (action is null && _actionKey is not null && _actionHref is not null)
             {
-                var icon = _actionKey is "request.create" or "media.request" or "discover.action.request" ? "requests"
+                var icon = _actionKey is "request.create" or "media.request" or "discover.action.request" ? "plus"
                     : _actionHref.StartsWith("/Read/", StringComparison.Ordinal) ? "reading" : "player-play";
-                action = new A(new Icon(icon, assets, 16), new Span(new Text(_actionKey)).Class("media-card__primary-label"))
-                    .Class("button button--primary button--compact media-card__primary").Attribute("href", _actionHref);
+                action = new A(new Icon(icon, assets, 18), new Span(new Text(_actionKey)).Class("media-card__primary-label")).Class("button button--primary button--icon media-card__primary")
+                    .Attribute("href", _actionHref).Attribute("aria-label", texts[_actionKey]).Attribute("title", texts[_actionKey]);
             }
 
             if (action is not null) cover.Add(new Div(action).Class("media-card__actions"));

@@ -218,7 +218,7 @@
   "activity.views": ["Download views","Download-Ansichten"],
   "activity.files.noJobs": ["No torrent downloads on this page.","Auf dieser Seite gibt es keine Torrent-Downloads."],
   "activity.files": ["Files","Dateien"],
-  "activity.unmatched": ["Files without a volume","Dateien ohne Band"],
+  "activity.unmatched": ["Files left in the download","Im Download gebliebene Dateien"],
   "activity.files.view": ["View torrent files","Torrent-Dateien anzeigen"],
   "activity.files.empty": ["No torrent files were reported.","Keine Torrent-Dateien gefunden."],
   "activity.files.unavailable": ["The torrent client's file list is currently unavailable.","Die Dateiliste des Torrent-Clients ist derzeit nicht verfügbar."],
@@ -3331,8 +3331,8 @@
    "News-Server hinzufügen"
   ],
   "nav.group.media": [
-   "Media",
-   "Medien"
+   "Works",
+   "Werke"
   ],
   "nav.group.acquisition": [
    "Arr+",
@@ -3519,8 +3519,8 @@
    "Werk"
   ],
   "admin.works.description": [
-   "Canonical media and monitoring",
-   "Kanonische Medien und Überwachung"
+   "Canonical works and monitoring",
+   "Kanonische Werke und Überwachung"
   ],
   "admin.works.title": [
    "Works",
@@ -3569,6 +3569,10 @@
   "request.create": [
    "Request this work",
    "Dieses Werk anfragen"
+  ],
+  "request.quick.failed": [
+   "The request could not be made.",
+   "Die Anfrage konnte nicht gestellt werden."
   ],
   "request.approve": [
    "Approve",
@@ -3775,8 +3779,8 @@
    "Diese Sammlung löschen? Die Titel selbst bleiben erhalten."
   ],
   "collections.addMedia": [
-   "Add media",
-   "Medien hinzufügen"
+   "Add works",
+   "Werke hinzufügen"
   ],
   "collections.find": [
    "Find in the library",
@@ -3839,8 +3843,8 @@
    "Staffeln / Struktur"
   ],
   "details.title": [
-   "Media details",
-   "Mediendetails"
+   "Work details",
+   "Werkdetails"
   ],
   "details.unavailable": [
    "Details can't be loaded right now",
@@ -4010,6 +4014,10 @@
    "No more titles.",
    "Keine weiteren Titel."
   ],
+  "discover.retry": [
+   "Try again",
+   "Erneut versuchen"
+  ],
   "discover.noResults": [
    "Nothing matches this search.",
    "Nichts passt zu dieser Suche."
@@ -4166,21 +4174,9 @@
    "Highlights per type",
    "Highlights pro Medientyp"
   ],
-  "discover.hero.perType.1": [
-   "1 title",
-   "1 Titel"
-  ],
-  "discover.hero.perType.2": [
-   "2 titles",
-   "2 Titel"
-  ],
-  "discover.hero.perType.3": [
-   "3 titles",
-   "3 Titel"
-  ],
-  "discover.hero.max": [
-   "Maximum highlights",
-   "Maximale Highlights"
+  "discover.hero.empty": [
+   "No highlights yet",
+   "Noch keine Highlights"
   ],
   "discover.hero.continue": [
    "Include continue",
@@ -4469,6 +4465,10 @@
   "search.global": [
    "Search movies and series",
    "Filme und Serien suchen"
+  ],
+  "search.all": [
+   "All results for “{0}”",
+   "Alle Ergebnisse für „{0}“"
   ],
   "library.scope.all": [
    "All",
@@ -8160,6 +8160,10 @@
    "Please sign in to continue.",
    "Bitte melde dich an, um fortzufahren."
   ],
+  "errors.invalid_credentials": [
+   "Wrong username or password.",
+   "Benutzername oder Passwort falsch."
+  ],
   "errors.permission_denied": [
    "You do not have permission to perform this action.",
    "Dir fehlt die Berechtigung für diese Aktion."
@@ -11323,8 +11327,8 @@
    "Usenet"
   ],
   "jobs.worker.Media": [
-   "Media",
-   "Medien"
+   "Works",
+   "Werke"
   ],
   "jobs.worker.Storage": [
    "Storage",
@@ -13072,8 +13076,8 @@
    "Systemstatus"
   ],
   "dashboard.kpi.media": [
-   "Media",
-   "Medien"
+   "Works",
+   "Werke"
   ],
   "dashboard.kpi.downloads": [
    "Downloads",
@@ -13398,6 +13402,18 @@
   "works.search": [
    "Search titles",
    "Titel suchen"
+  ],
+  "works.sort": [
+   "Sort by",
+   "Sortieren nach"
+  ],
+  "works.sort.ascending": [
+   "Ascending, turn to descending",
+   "Aufsteigend, auf absteigend umschalten"
+  ],
+  "works.sort.descending": [
+   "Descending, turn to ascending",
+   "Absteigend, auf aufsteigend umschalten"
   ],
   "works.filter.drawer": [
    "Filters",
@@ -14964,13 +14980,28 @@
    "Alle möglichen Dateinamen für den Import sind belegt. Die vorhandenen Dateien der Bibliothek wurden nicht überschrieben."
   ],
   "acquisition.outcome.import_nothing_placeable": [
-   "Nothing in the download could be placed: no file is a readable book or names a volume. The files stay for you to assign",
-   "Im Download ließ sich nichts einsortieren: Keine Datei ist ein lesbares Buch oder nennt einen Band. Die Dateien bleiben zum Zuordnen"
+   "Nothing in the download could be placed; each file says why. The files stay for you to assign",
+   "Im Download ließ sich nichts einsortieren; jede Datei sagt, warum. Die Dateien bleiben zum Zuordnen"
   ],
   "acquisition.outcome.import_unmatched_files": [
-   "The matching volumes were imported; some files name no volume of the title and stayed in the download",
-   "Die passenden Bände wurden importiert; einige Dateien nennen keinen Band des Titels und blieben im Download"
+   "The matching volumes and chapters were imported; the other files stayed in the download, each with why",
+   "Die passenden Bände und Kapitel wurden importiert; die übrigen Dateien blieben im Download, jede mit ihrem Grund"
   ],
+  "acquisition.file.extension": ["This format is not taken for this kind of title","Dieses Format wird für diese Art Titel nicht angenommen"],
+  "acquisition.file.content_epub": ["Not a valid EPUB: no mimetype entry with application/epub+zip and no META-INF/container.xml","Kein gültiges EPUB: weder ein Eintrag mimetype mit application/epub+zip noch META-INF/container.xml"],
+  "acquisition.file.content_pdf": ["Not a valid PDF: the file does not begin with %PDF-","Kein gültiges PDF: Die Datei beginnt nicht mit %PDF-"],
+  "acquisition.file.content_mobi": ["Not a valid MOBI: the header names neither BOOKMOBI nor TEXtREAd","Kein gültiges MOBI: Der Dateikopf nennt weder BOOKMOBI noch TEXtREAd"],
+  "acquisition.file.content_azw3": ["Not a valid AZW3: the header does not name BOOKMOBI","Kein gültiges AZW3: Der Dateikopf nennt nicht BOOKMOBI"],
+  "acquisition.file.content_palmdoc": ["An old PalmDOC MOBI: the reader cannot open it yet","Ein altes PalmDOC-MOBI: Der Reader kann es noch nicht öffnen"],
+  "acquisition.file.content_cbz": ["Not a valid CBZ: the file is no ZIP archive","Kein gültiges CBZ: Die Datei ist kein ZIP-Archiv"],
+  "acquisition.file.content_cbr": ["Not a valid CBR: the file is no RAR archive","Kein gültiges CBR: Die Datei ist kein RAR-Archiv"],
+  "acquisition.file.content_cb7": ["Not a valid CB7: the file is no 7-Zip archive","Kein gültiges CB7: Die Datei ist kein 7-Zip-Archiv"],
+  "acquisition.file.no_volume": ["The name carries no volume or chapter number","Der Name nennt keine Band- oder Kapitelnummer"],
+  "acquisition.file.unknown_unit": ["The number is no volume or chapter of the title","Die Nummer ist kein Band und kein Kapitel des Titels"],
+  "acquisition.file.ambiguous": ["The number could mean more than one volume or chapter","Die Nummer kann mehr als einen Band oder ein Kapitel meinen"],
+  "acquisition.file.not_storable": ["The library name made for it cannot be stored","Der dafür gebildete Name lässt sich in der Bibliothek nicht speichern"],
+  "acquisition.file.present": ["The library already holds this volume","Die Bibliothek hat diesen Band schon"],
+  "acquisition.file.unknown": ["No reason was recorded for this file","Für diese Datei wurde kein Grund festgehalten"],
   "acquisition.outcome.import_storage_full": [
    "Library space is insufficient or could not be checked",
    "Der Platz der Bibliothek reicht nicht aus oder konnte nicht geprüft werden"
@@ -15232,7 +15263,7 @@
    "Lokale Übersetzungsmodelle"
   ],
   "translation.local.description": [
-   "Optional TranslateGemma on a separately installed private Ollama server. Its models are not included in the Jularr image.",
+   "The server translates books with TranslateGemma on an Ollama computer of yours. Ollama and the models are not part of Jularr.",
    "Der Server übersetzt Bücher mit TranslateGemma auf einem Ollama-Rechner von dir. Ollama und die Modelle gehören nicht zu Jularr."
   ],
   "translation.local.back": [
@@ -15240,7 +15271,7 @@
    "Zurück zu den Instanzeinstellungen"
   ],
   "translation.local.configure": [
-   "Configure LocalTranslation__Endpoint with a private Ollama address, such as http://ollama:11434.",
+   "No Ollama computer is entered yet. Add its address under Setup, for example http://ollama:11434.",
    "Es ist noch kein Ollama-Rechner eingetragen. Trag seine Adresse unter „Einrichtung“ ein, zum Beispiel http://ollama:11434."
   ],
   "translation.local.offline": [
@@ -15333,11 +15364,15 @@
   ],
   "translation.progress.sections": [
    "sections",
-   "Abschnitte"
+   "Abschnitten"
   ],
   "translation.progress.of": [
    "of",
    "von"
+  ],
+  "translation.progress.unitsHint": [
+   "Progress counts sections, the parts of a book. The pace counts paragraphs, the text units the translation works through one by one.",
+   "Der Fortschritt zählt Abschnitte, die Teile eines Buchs. Das Tempo zählt Absätze, die Texteinheiten, die die Übersetzung nacheinander abarbeitet."
   ],
   "translation.progress.stalled": [
    "No progress for",
@@ -15348,11 +15383,11 @@
    "Tempo"
   ],
   "translation.progress.blocks": [
-   "blocks per minute",
-   "Blöcke pro Minute"
+   "paragraphs per minute",
+   "Absätze pro Minute"
   ],
   "translation.progress.remaining": [
-   "Time left",
+   "Time left (rough)",
    "Restzeit"
   ],
   "translation.progress.unknown": [
@@ -15376,7 +15411,7 @@
    "Übersetzungs-Seite öffnen"
   ],
   "translation.local.capacity": [
-   "Model downloads need the free space of the Ollama model volume, which Jularr cannot inspect from another container: check it and type it into the field below. Keep at least 2 GB free after downloading. Free space now:",
+   "Free space for models on the Ollama computer. Jularr cannot measure it there, so you type it in below; downloads are offered up to that, keeping 2 GB spare. Free space now:",
    "Freier Platz für Modelle auf dem Ollama-Rechner. Jularr kann ihn dort nicht messen, deshalb trägst du ihn unten ein; Downloads werden bis dahin angeboten, mit 2 GB Reserve. Frei zurzeit:"
   ],
   "translation.local.freeBytes": [

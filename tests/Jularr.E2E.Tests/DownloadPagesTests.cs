@@ -88,12 +88,15 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".downloaders-detail", new() { HasText = "Fake SABnzbd" })).ToContainTextAsync("Reachable");
                 await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
 
-                // The lists fit a phone.
-                await page.SetViewportSizeAsync(390, 844);
-                foreach (var path in new[] { "/Admin/Acquisition", "/Admin/Downloads/Clients", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed" })
+                // The pages fit a phone: nothing in the panels reaches past the viewport.
+                await page.SetViewportSizeAsync(375, 812);
+                foreach (var path in new[] { "/Admin/Acquisition", "/Admin/Downloads", "/Admin/Downloads/Clients", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed" })
                 {
                     await page.GotoAsync(path);
                     Assert.IsTrue(await page.EvaluateAsync<bool>("document.documentElement.scrollWidth <= innerWidth + 1"), "Horizontal page overflow on " + path);
+                    var overflowing = await page.EvaluateAsync<string[]>(
+                        "() => [...document.querySelectorAll('.download-speed, .downloads-figures, .downloaders-detail, .downloads-head')].flatMap(root => [root, ...root.querySelectorAll('*')]).filter(element => element.getBoundingClientRect().right > innerWidth + 1).map(element => element.tagName + '.' + element.getAttribute('class'))");
+                    CollectionAssert.AreEqual(Array.Empty<string>(), overflowing, "Content past the viewport on " + path + ": " + string.Join(", ", overflowing));
                 }
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray(), string.Join(Environment.NewLine, browser.Problems));

@@ -293,6 +293,8 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
         private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);
 
+        private string FileReason(string? reason) => reason is not null && texts.Has("acquisition.file." + reason) ? texts["acquisition.file." + reason] : texts["acquisition.file.unknown"];
+
         // One entry from the right: how far it is, what it is, and everything a person can do with it; the drawer of the entry its address names stands open.
         private IUiComponent DrawerOf(ActivityItemV1 item, string? csrf)
         {
@@ -315,7 +317,9 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             var body = new List<IUiComponent> { Drawer.State("table.status", state), Drawer.Facts([.. facts]) };
             if (item.UnmatchedFiles is { Length: > 0 } unmatched)
             {
-                body.Add(Drawer.Block("activity.unmatched", new Div([.. unmatched.Select(path => new Div(new Truncated(path[(path.LastIndexOf('/') + 1)..])).Class("activity-file-row"))])));
+                // Each file with why it was not placed.
+                body.Add(Drawer.Block("activity.unmatched", new Div([.. unmatched.Select((path, index) => new Div(new Truncated(path[(path.LastIndexOf('/') + 1)..]),
+                    new Span(new ValueText(FileReason(item.UnmatchedFileReasons?.ElementAtOrDefault(index)))).Class("list-value list-value--dim")).Class("activity-file-row activity-file-row--reason"))])));
             }
 
             if (item.OperationTypeId == OperationType.Download && !(item.OperationStatusTypeId == OperationStatusType.Failed))
