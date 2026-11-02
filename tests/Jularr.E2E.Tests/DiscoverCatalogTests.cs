@@ -45,15 +45,6 @@ namespace Jularr.E2E.Tests
             await search.PressAsync("Escape");
             await Assertions.Expect(popup).ToBeHiddenAsync();
 
-            // A ranking's grid opens in its own order and sorts by what the whole catalog holds.
-            await page.GotoAsync("/?type=movies&view=Top");
-            var grid = page.Locator("#discover-results .media-grid .media-card");
-            await Assertions.Expect(grid.First).Not.ToContainTextAsync("Reloaded");
-            await page.Locator("select[name=sort]").SelectOptionAsync("released");
-            await Assertions.Expect(page).ToHaveURLAsync(new Regex("view=Top&sort=released"));
-            await Assertions.Expect(grid.First).ToContainTextAsync("The Matrix Reloaded");
-            await Evidence.SaveAsync(page, "discover-grid-sort");
-
             // On a phone the icon opens the field over the header, the suggestions fill the screen and the back button closes them.
             await page.SetViewportSizeAsync(390, 844);
             await page.Locator(".app-search__icon").ClickAsync();
@@ -66,6 +57,16 @@ namespace Jularr.E2E.Tests
             await page.Locator("[data-search-close]").ClickAsync();
             await Assertions.Expect(popup).ToBeHiddenAsync();
             await Assertions.Expect(page.Locator("[data-search-close]")).ToBeHiddenAsync();
+
+            // A ranking's grid opens in its own order and sorts by what the whole catalog holds.
+            await page.SetViewportSizeAsync(1280, 900);
+            await page.GotoAsync("/?type=movies&view=Top");
+            var grid = page.Locator("#discover-results .media-grid .media-card");
+            await Assertions.Expect(grid.First).Not.ToContainTextAsync("Reloaded");
+            await page.Locator("select[name=sort]").SelectOptionAsync("released");
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("view=Top&sort=released"));
+            await Assertions.Expect(grid.First).ToContainTextAsync("The Matrix Reloaded");
+            await Evidence.SaveAsync(page, "discover-grid-sort");
         }
 
         [TestMethod]

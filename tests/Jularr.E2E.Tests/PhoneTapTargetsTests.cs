@@ -31,6 +31,7 @@ namespace Jularr.E2E.Tests
         [
             ("/", ".app-header .app-avatar", 40, 44, "header icons sit 8px apart"),
             ("/", ".app-header .app-notifications", 42, 44, "header icons sit 8px apart"),
+            ("/", ".app-header .app-search__icon", 42, 44, "header icons sit 8px apart"),
             ("/", ".app-header .app-menu-toggle", 42, 44, "header icons sit 8px apart"),
             ("/", ".app-header .theme-toggle", 42, 44, "header icons sit 8px apart"),
             ("/Calendar", "a.calendar__date", 44, 44, ""),
