@@ -24,27 +24,28 @@ namespace Jularr.Frontend.Pages.Admin.Works
 
         private bool Filtered => FilteredBesidesQuery || !string.IsNullOrEmpty(QueryFilter);
 
-        private bool FilteredBesidesQuery => TypeFilter is not null || MonitoredFilter is not null || StatusFilter is not null || LibraryFilter is not null || ProfileFilter is not null;
+        private bool FilteredBesidesQuery => TypeParameter is not null || MonitoredFilter is not null || StatusFilter is not null || LibraryFilter is not null || ProfileFilter is not null;
 
         // The filters of the drawer (the chips and the title field are the list's own controls).
-        private bool DrawerFiltered => TypeFilter is not null || MonitoredFilter is not null || LibraryFilter is not null || ProfileFilter is not null;
+        private bool DrawerFiltered => MonitoredFilter is not null || LibraryFilter is not null || ProfileFilter is not null;
 
         // Titles can be chosen for the mass editor by whoever may change them.
         private bool Selectable => CanManageWanted || CanManageMedia;
 
-        // The address of the list with its filters and order, or of a handler that returns to it; paging, sorting and the chosen chip change one part of it.
+        // The address of the list with its filters and order, or of a handler that returns to it; paging, sorting, the chosen chip and the chosen types change one part of it.
         // Clearing the filters keeps the search words unless they are the only filter left.
-        private string Address(string? handler = null, int? pageNumber = null, WorkSortType? sort = null, bool? descending = null, bool clearFilters = false, WorkListStatus? status = null, bool anyStatus = false, WorksViewType? view = null)
+        private string Address(string? handler = null, int? pageNumber = null, WorkSortType? sort = null, bool? descending = null, bool clearFilters = false, WorkListStatus? status = null, bool anyStatus = false, WorksViewType? view = null,
+            IReadOnlyList<string>? types = null)
         {
             var values = new List<string>();
             void Add(string name, string? value)
             {
-                if (!string.IsNullOrEmpty(value)) values.Add(name + "=" + Uri.EscapeDataString(value));
+                if (!string.IsNullOrEmpty(value)) values.Add(name + "=" + Uri.EscapeDataString(value).Replace("%2C", ","));
             }
 
             if (!clearFilters)
             {
-                Add("type", TypeFilter is { } type ? ((byte)type).ToString(CultureInfo.InvariantCulture) : null);
+                Add("type", types is null ? TypeParameter : Scopes.Parameter(types));
                 Add("monitored", MonitoredFilter is { } monitored ? (monitored ? "true" : "false") : null);
                 Add("status", (anyStatus ? null : status ?? StatusFilter) is { } chosen ? ((byte)chosen).ToString(CultureInfo.InvariantCulture) : null);
                 Add("library", LibraryFilter?.ToString(CultureInfo.InvariantCulture));
@@ -103,7 +104,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             // The search keeps the filters and the order, the order keeps the filters and the search.
             var inv = CultureInfo.InvariantCulture;
             var filtered = new Dictionary<string, string>();
-            if (TypeFilter is { } type) filtered["type"] = ((byte)type).ToString(inv);
+            if (TypeParameter is { } type) filtered["type"] = type;
             if (MonitoredFilter is { } monitored) filtered["monitored"] = monitored ? "true" : "false";
             if (StatusFilter is { } status2) filtered["status"] = ((byte)status2).ToString(inv);
             if (LibraryFilter is { } library) filtered["library"] = library.ToString(inv);
@@ -150,8 +151,6 @@ namespace Jularr.Frontend.Pages.Admin.Works
             var inv = CultureInfo.InvariantCulture;
             var body = new List<IUiComponent>
             {
-                Field("type", "works.col.type", FilterSelect("type", "works.filter.type", TypeFilter is { } type ? ((byte)type).ToString(inv) : null,
-                    Enum.GetValues<MediaType>().Select(value => (((byte)value).ToString(inv), (IUiComponent)new Text("media.type." + value))))),
                 Field("monitored", "works.col.monitored", FilterSelect("monitored", "works.filter.monitored", MonitoredFilter is { } monitored ? (monitored ? "true" : "false") : null,
                     [("true", new Text("works.filter.monitored.yes")), ("false", new Text("works.filter.monitored.no"))])),
                 Field("library", "works.col.library", FilterSelect("library", "works.filter.library", LibraryFilter?.ToString(inv), _libraries.Select(library => (library.Id.ToString(inv), (IUiComponent)new ValueText(library.Name)))))
@@ -163,6 +162,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             }
 
             var kept = new Dictionary<string, string>();
+            if (TypeParameter is { } types) kept["type"] = types;
             if (StatusFilter is { } status) kept["status"] = ((byte)status).ToString(inv);
             KeepOrder(kept);
             if (!string.IsNullOrEmpty(QueryFilter)) kept["q"] = QueryFilter;
@@ -173,14 +173,15 @@ namespace Jularr.Frontend.Pages.Admin.Works
             return new Drawer(assets, "works-filter", [new DrawerPane("filter", "works.filter.drawer", "works.filter.drawer", "filter", body, footer, "/Admin/Works")]);
         }
 
-        // The list without the drawer's filters: the chip, the words and the order stay.
+        // The list without the drawer's filters: the types, the chip, the words and the order stay.
         private string AddressWithoutDrawerFilters()
         {
             var values = new Dictionary<string, string>();
+            if (TypeParameter is { } types) values["type"] = types;
             if (StatusFilter is { } status) values["status"] = ((byte)status).ToString(CultureInfo.InvariantCulture);
             if (!string.IsNullOrEmpty(QueryFilter)) values["q"] = QueryFilter;
             KeepOrder(values);
-            return "/Admin/Works" + (values.Count == 0 ? "" : "?" + string.Join('&', values.Select(value => value.Key + "=" + Uri.EscapeDataString(value.Value))));
+            return "/Admin/Works" + (values.Count == 0 ? "" : "?" + string.Join('&', values.Select(value => value.Key + "=" + Uri.EscapeDataString(value.Value).Replace("%2C", ","))));
         }
 
         private static IUiComponent Field(string name, string titleKey, IUiComponent control) =>

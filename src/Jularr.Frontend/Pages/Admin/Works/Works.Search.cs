@@ -14,7 +14,8 @@ namespace Jularr.Frontend.Pages.Admin.Works
         public Task<IActionResult> OnPostSearchAllAsync(bool all = false)
         {
             _bulkFailed = true;
-            return QueueSearchAsync(all ? new QueueWorksSearchDataV1() : new QueueWorksSearchDataV1(null, TypeFilter, MonitoredFilter, StatusFilter, LibraryFilter, ProfileFilter, QueryFilter));
+            var (types, subtypes) = Scopes.Filter();
+            return QueueSearchAsync(all ? new QueueWorksSearchDataV1() : new QueueWorksSearchDataV1(null, types, subtypes, MonitoredFilter, StatusFilter, LibraryFilter, ProfileFilter, QueryFilter));
         }
 
         private async Task<IActionResult> QueueSearchAsync(QueueWorksSearchDataV1 selection)

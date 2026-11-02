@@ -136,7 +136,7 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   the screen and the back button closes them. The Filter drawer lists the media types first, then the local availability
   (in Jularr, can be requested), then only what the chosen types have: the release year and their rankings; the rankings a chosen
   type lacks leave the panel as the types change. No genre, platform, language, runtime or rating facets exist yet (Discover's
-  catalogs keep no such data). Library and Favorites share the same media-type bar, filter panel (types, release year), order and layout.
+  catalogs keep no such data). Library and Favorites share the same media-type bar, filter panel (types, release year), order and layout. Owner's decision 2 Nov: the admin Media list has the same media-type bar above its toolbar (every type, several at once); its status chips stay in the toolbar and its filter drawer has no type.
   Cards use the shared cover presentation and Backend-supplied state below. User/profile ordering is respected.
   Backend supplies effective capability/order/provider data; do not copy
   old `Jularr.Web` persistence or invent a new module toggle in Frontend.

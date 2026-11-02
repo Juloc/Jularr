@@ -53,7 +53,9 @@ namespace Jularr.Backend.Logic.Acquisition
                         CROSS JOIN "WorkListEntries" AS listed
                         JOIN "WantedItems" AS wanted ON wanted."WorkId" = listed."Id" AND NOT wanted."IsPaused"
                     WHERE (@WorkIds::bigint[] IS NULL OR listed."Id" = ANY(@WorkIds))
-                        AND (@MediaTypeId::smallint IS NULL OR listed."MediaTypeId" = @MediaTypeId)
+                        AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                            OR listed."MediaSubtypeId" IS NULL AND listed."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                            OR listed."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
                         AND (@IsMonitored::boolean IS NULL OR listed."IsMonitored" = @IsMonitored)
                         AND (@WorkListStatusId::smallint IS NULL OR listed."WorkListStatusId" = @WorkListStatusId)
                         AND (@Query::text IS NULL OR strpos(lower(listed."CanonicalTitle"), lower(@Query)) > 0)
