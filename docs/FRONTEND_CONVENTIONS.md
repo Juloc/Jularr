@@ -361,15 +361,22 @@ See [Frontend UX decisions](FRONTEND_UX.md) for design tokens, layout, page iden
   cards carry the coarse state of the Work and show a tag only for a held or requested title.
   Backend must supply these facts. Existing list services do not yet expose audio
   completeness: production does not infer it from `MediaStateType` or episode counts.
-- The delayed hover preview (owner's hover-card mockup, 21 Oct): after 550 ms of the mouse resting on a cover, never on one of
+- The card's action (owner's decision, 2 Nov) is one round icon on the cover, shown with the mouse's hover and always on a touch
+  screen (a moving mouse, marked as `data-pointer` on the root, counts even where the browser reports no hover). Request
+  ([CardRequest](../src/Jularr.Frontend/Framework/Components/CardRequest.cs)) asks at once with the profile's language and the
+  default quality (`/Details/{id}?handler=QuickRequest`); the icon then follows the live phase on the accent: plus, a clock
+  while it waits for approval, a pulsing search, the download's percent in a ring, then a white play. While a request runs the
+  icon stays without the hover, the availability tag follows the phase (from one set of tag templates per page), and the icon
+  leads to the title's page, which shows the progress.
+- The delayed hover preview (owner's hover-card mockup, 21 Oct; delay raised to 2 s on 2 Nov): after 2 s of the mouse resting on a cover, never on one of
   its buttons (or of the keyboard focus on it), the card opens a panel over the row, as high as the card and 1.84 times as wide,
   fetched then from `/MediaPreview` (nothing loads before, nothing by hover on touch or devices without hover). The cards of the row
   never change width or position: the card under the panel is only hidden, and the panel shifts sideways to stay inside the row and
-  the viewport. Trailer mode: the title's trailer in a 16:9 frame (the one allowed external embed, the privacy host, one muted, very
-  wide, cropped frame; Jularr's own pause top left, sound top right, a progress line and `0:12 / 2:24` from the player's own
+  the viewport. Trailer mode: the title's trailer in a 16:9 frame (the one allowed external embed, the privacy host, one muted embed
+  as high as the frame and three times as wide, so the provider's corners stay outside; Jularr's own pause top left, sound top right, a progress line and `0:12 / 2:24` from the player's own
   messages, a running line when it reports none) above the linked title, the year, type and runtime, and two lines of description;
   description mode, for a title without a trailer: a larger title, the facts and the longer description. The foot holds the
-  card's action (a pill), its heart and Details. A touch device has no hover: a card that stays in view near the middle for 2 s
+  card's action (a larger pill with its text; a request names its live phase), its heart and Details. A touch device has no hover: a card that stays in view near the middle for 2 s
   opens the same panel by itself, one at a time, but only a card of a shelf, never of a grid (the panel would cover the neighbouring covers and titles of the two columns of a phone), unless the profile switched `AutoplayPreviews` off (rendered as
   `data-autoplay-previews` on `#app-content`; data saver and offline also keep it off). It closes on leave, Escape, scrolling,
   resizing, a click elsewhere, a hidden document or page navigation, and drops its frame. The cached component

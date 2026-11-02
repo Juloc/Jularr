@@ -833,6 +833,35 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task CardRequest_ClickedOnACatalogCard_RequestsAtOnceAndThenLeadsToTheTitle()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            using var browser = ((TestServer)host.Services.GetRequiredService<IServer>()).CreateClient();
+            browser.DefaultRequestHeaders.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+
+            // The card offers the round request icon: a form of its own with the token, no text on the card itself.
+            using var tab = await browser.GetAsync("/?type=anime&handler=Recommendations");
+            var html = await tab.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
+            var season = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '21'"))!;
+            var action = "/Details/" + season + "?handler=QuickRequest";
+            StringAssert.Matches(html, new System.Text.RegularExpressions.Regex("<form[^>]*action=\"" + System.Text.RegularExpressions.Regex.Escape(action) + "\"[^>]*data-quick-request=\"true\""));
+            StringAssert.Contains(html, "data-live=\"request-work:" + season + "\"");
+            var token = WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
+
+            // A click requests in the profile's language with the default quality and answers without a page.
+            using var requested = await browser.PostAsync(action, new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token }));
+            Assert.AreEqual(HttpStatusCode.NoContent, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"AcquisitionProfileId\" IS NULL AND \"GamePlatformId\" IS NULL"));
+
+            // Requested, the card's icon names the phase live and leads to the title's page, which shows the progress.
+            using var again = await browser.GetAsync("/?type=anime&handler=Recommendations");
+            html = await again.Content.ReadAsStringAsync();
+            Assert.IsFalse(html.Contains(action, StringComparison.Ordinal));
+            StringAssert.Contains(html, "card-request\" href=\"/Details/");
+        }
+
+        [TestMethod]
         public async Task RelatedWork_RequestedFromItsRow_IsTheNormalRequestWithoutLeavingThePage()
         {
             await using var host = await CreateHostAsync(razor: true, anime: new FakeAniList { FindsFirstSeason = true }, tvdb: new FakeTvdb());

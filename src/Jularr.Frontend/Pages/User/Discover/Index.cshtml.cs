@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Home.V1;
@@ -56,6 +57,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IReadOnlyList<DiscoverItemV1>? _results;
         private IReadOnlyList<(DiscoverScopeV1 Scope, DiscoverCatalogItemV1 Item)>? _catalog;
         private IReadOnlyList<ContinueItemV1> _continue = [];
+        private string? _csrf;
         private IReadOnlyList<HeroSlide> _hero = [];
         private IReadOnlyList<LibraryItemV1> _recent = [];
         private readonly Dictionary<long, WorkAvailabilityStateV1> _availabilityByWork = [];
@@ -139,6 +141,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             page.Asset("Pages/User/Discover/Index.entry.ts");
             page.Asset("Pages/User/Discover/Controls.entry.ts");
             page.Asset("Framework/Components/Drawer.entry.ts");
+            page.Asset("Framework/Components/LiveProgress.entry.ts");
             page.Asset("Framework/Components/ChoiceSelect.entry.ts");
 
             // One server-rendered result region.
@@ -216,6 +219,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             page.Content.Add(new HeroCarousel(assets, _hero, HeroPreferences, "discover.hero.empty"));
 
             page.Content.Add(Toolbar());
+            if (texts.CanRequest()) page.Content.Add(MediaAvailability.RequestTemplates(assets));
 
             // Watching, listening and reading continue on their own shelves, in the profile's order.
             var continuing = _continue.Where(item => MediaTypeChosen(item.MediaTypeId, item.MediaSubtypeId)).ToList();
@@ -836,6 +840,9 @@ namespace Jularr.Frontend.Pages.User.Discover
             (Availability != "local" || isLocal) && (Availability != "request" || canBeRequested)
             && (Year != "2020" || releaseYear >= 2020) && (Year != "old" || releaseYear < 2020);
 
+        // The token of the quick request on the cards, taken once per request.
+        private string Csrf => _csrf ??= antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "";
+
         // A Work belongs to the scope of its subtype, else of its type: series without anime, books without manga and light novels.
         private bool MediaTypeChosen(MediaType type, MediaSubtype? subtype) => IsAll || Chosen.Any(scope => InScope(scope, type, subtype));
 
@@ -847,7 +854,9 @@ namespace Jularr.Frontend.Pages.User.Discover
             var card = MediaCard.For(assets, item, DetailsHref(item));
             if (_availabilityByWork.TryGetValue(item.WorkId, out var state))
                 card.Availability(new MediaAvailability(assets, state.AvailabilityStateId, state.AvailableUnits, state.MonitoredUnits));
-            if (actionKey is not null && actionHref is not null) card.Action(ShortKey(actionKey)!, actionHref);
+            if (actionKey == "media.request") card.Request(item.WorkId, Csrf);
+            else if (item.MediaStateTypeId == MediaStateType.Requested && texts.CanRequest()) card.Request(item.WorkId, null, AcquisitionRequestStatusType.Open);
+            else if (actionKey is not null && actionHref is not null) card.Action(ShortKey(actionKey)!, actionHref);
             return card.Bookmark(new MediaBookmark(assets, item.WorkId));
         }
 
@@ -861,7 +870,8 @@ namespace Jularr.Frontend.Pages.User.Discover
                 .HoverPreview(MediaPreviewAddress.Work(item.WorkId)).State(item.MediaStateTypeId);
             if (_availabilityByWork.TryGetValue(item.WorkId, out var availability))
                 card.Availability(new MediaAvailability(assets, availability.AvailabilityStateId, availability.AvailableUnits, availability.MonitoredUnits));
-            if (item.MediaStateTypeId == MediaStateType.NotRequested && texts.CanRequest()) card.Action("discover.action.request", href);
+            if (item.MediaStateTypeId == MediaStateType.NotRequested && texts.CanRequest()) card.Request(item.WorkId, Csrf);
+            else if (item.MediaStateTypeId == MediaStateType.Requested && texts.CanRequest()) card.Request(item.WorkId, null, AcquisitionRequestStatusType.Open);
             return card.Bookmark(new MediaBookmark(assets, item.WorkId));
         }
 

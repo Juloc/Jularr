@@ -18,6 +18,11 @@ namespace Jularr.Frontend.Framework
         public IUiComponent Badge(string? href = null, string? previewId = null, bool expanded = false, MediaAvailabilityBadgeStyle style = MediaAvailabilityBadgeStyle.Overlay)
             => new AvailabilityBadge(this, href, previewId, expanded, style);
 
+        // The tags a card's request can reach, once per page: the card swaps its tag for one of them as the live phase of its request moves on.
+        public static IUiComponent RequestTemplates(FrontendAssets assets) => new Template(
+            [.. new[] { MediaAvailabilityState.Requested, MediaAvailabilityState.Searching, MediaAvailabilityState.Downloading, MediaAvailabilityState.Available }
+                .Select(state => new MediaAvailability(assets, state).Badge("#"))]).Attribute("data-availability-badges", "true");
+
         internal string GetLabel(UiText texts)
         {
             var label = texts["media.availability." + State];
@@ -99,6 +104,7 @@ namespace Jularr.Frontend.Framework
         }
 
         private sealed class Svg(params IUiComponent[] content) : HtmlElement("svg", content);
+        private sealed class Template(params IUiComponent[] content) : HtmlElement("template", content);
         private sealed class Circle : HtmlElement
         {
             public Circle() : base("circle")
