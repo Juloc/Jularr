@@ -62,6 +62,12 @@ namespace Jularr.Backend.Data.Common
         public string Code { get; } = code;
     }
 
+    // A sign-in whose credentials do not open an account; the field names where the form shows it.
+    public sealed class InvalidCredentialsException(string field) : UnauthorizedAccessException("The credentials are unavailable.")
+    {
+        public string Field { get; } = field;
+    }
+
     public readonly record struct NoData;
 
     public sealed class UpdateResult : BaseResponse

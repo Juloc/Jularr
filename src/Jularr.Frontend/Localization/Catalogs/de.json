@@ -8120,6 +8120,10 @@
    "Please sign in to continue.",
    "Bitte melde dich an, um fortzufahren."
   ],
+  "errors.invalid_credentials": [
+   "Wrong username or password.",
+   "Benutzername oder Passwort falsch."
+  ],
   "errors.permission_denied": [
    "You do not have permission to perform this action.",
    "Dir fehlt die Berechtigung für diese Aktion."

@@ -107,7 +107,7 @@ namespace Jularr.Backend.Logic.Account
             if (account is null || verification == PasswordVerificationResult.Failed
                 || !account.IsEnabled || account.RequiresSecondFactor)
             {
-                throw new UnauthorizedAccessException("The credentials are unavailable.");
+                throw new InvalidCredentialsException("Password");
             }
 
             if (verification == PasswordVerificationResult.SuccessRehashNeeded)

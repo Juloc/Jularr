@@ -22,6 +22,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.speech_discovery_failed", "The voice sources could not be refreshed. The saved catalog and activated packages are unchanged. Try again in a minute."),
             new("errors.validation.speech_license_confirmation", "Review and confirm this model's conditions before downloading and activating it."),
             new("errors.authentication_required", "Please sign in to continue."),
+            new("errors.invalid_credentials", "Wrong username or password."),
             new("errors.permission_denied", "You do not have permission to perform this action."),
             new("errors.not_found", "The requested resource was not found."),
             new("errors.invalid_antiforgery_token", "Please reload the page and try again."),
