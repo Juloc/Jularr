@@ -333,8 +333,17 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateAsync(razor: true);
             await SeedAsync(host);
 
+            // A first visit shows the posters, with the figures of the list under it and the library search in the dock
+            using var first = await host.SendAsync(HttpMethod.Get, "/Admin/Works");
+            var posters = await first.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, posters);
+            foreach (var expected in new[] { "works-posters", "works-footer", "handler=SearchAll" })
+            {
+                StringAssert.Contains(posters, expected);
+            }
+
             // The list, its filters and the mass editor
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works?view=Table");
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
             var html = await page.Content.ReadAsStringAsync();
             foreach (var expected in new[] { "data-work-table=\"works\"", "name=\"type\"", "name=\"library\"", "name=\"profile\"", "id=\"works-bulk\"", "data-dock-select-all", "view-switch", ">Alpha<", ">Zeta<", "href=\"/Admin/Works/901\"" })

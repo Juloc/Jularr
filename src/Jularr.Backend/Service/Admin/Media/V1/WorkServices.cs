@@ -155,7 +155,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             sql.Statement =
                 """
                 WITH listed AS (
-                    SELECT listed."WorkListStatusId", listed."IsMonitored"
+                    SELECT listed."WorkListStatusId", listed."IsMonitored", listed."FileCount", listed."SizeBytes"
                     FROM
                         "WorkListEntries" AS listed
                     WHERE
@@ -178,7 +178,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     count(*) FILTER (WHERE listed."WorkListStatusId" = 2)::integer AS "MissingCount",
                     count(*) FILTER (WHERE listed."WorkListStatusId" = 3)::integer AS "DownloadingCount",
                     count(*) FILTER (WHERE listed."WorkListStatusId" = 4)::integer AS "UnmonitoredCount",
-                    count(*) FILTER (WHERE listed."IsMonitored")::integer AS "MonitoredCount"
+                    count(*) FILTER (WHERE listed."IsMonitored")::integer AS "MonitoredCount",
+                    coalesce(sum(listed."FileCount"), 0)::integer AS "FileCount",
+                    coalesce(sum(listed."SizeBytes"), 0)::bigint AS "SizeBytes"
                 FROM
                     listed;
                 """;
