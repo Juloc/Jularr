@@ -830,8 +830,9 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IUiComponent CatalogCard(DiscoverScopeV1 scope, DiscoverCatalogItemV1 item)
         {
             var href = CatalogHref(item);
-            // A Narō web novel says so beside the published light novels.
-            var label = item.Namespace == WebNovelSource ? "discover.webNovel" : MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId);
+            // A Narō web novel says so beside the published light novels; a catalog that names the format shows it instead of the type.
+            var label = item.Namespace == WebNovelSource ? "discover.webNovel"
+                : item.CatalogFormatId is { } format ? "discover.format." + format : MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId);
             var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, label, item.Rating)
                 .HoverPreview(MediaPreviewAddress.Work(item.WorkId)).State(item.MediaStateTypeId);
             if (_availabilityByWork.TryGetValue(item.WorkId, out var availability))

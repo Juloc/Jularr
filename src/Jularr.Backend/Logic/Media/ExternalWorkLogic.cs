@@ -83,10 +83,13 @@ namespace Jularr.Backend.Logic.Media
                         nullif(entry."Rating", 0) AS "Rating",
                         CASE WHEN @IsTrending THEN entry."Rank"::integer END AS "TrendingRank",
                         entry."TmdbValue",
-                        entry."ImdbValue"
+                        entry."ImdbValue",
+                        nullif(entry."CatalogFormatId", 0)::smallint AS "CatalogFormatId"
                     FROM
-                        unnest(@Values, @Titles, @OriginalTitles, @ReleaseYears, @Overviews, @Creators, @ImageUrls, @BackdropUrls, @Ratings, @TmdbValues, @ImdbValues) WITH ORDINALITY
-                            AS entry ("Value", "Title", "OriginalTitle", "ReleaseYear", "Overview", "Creator", "ImageUrl", "BackdropUrl", "Rating", "TmdbValue", "ImdbValue", "Rank")
+                        unnest(@Values, @Titles, @OriginalTitles, @ReleaseYears, @Overviews, @Creators, @ImageUrls, @BackdropUrls, @Ratings, @TmdbValues, @ImdbValues,
+                            @CatalogFormatIds) WITH ORDINALITY
+                            AS entry ("Value", "Title", "OriginalTitle", "ReleaseYear", "Overview", "Creator", "ImageUrl", "BackdropUrl", "Rating", "TmdbValue", "ImdbValue",
+                                "CatalogFormatId", "Rank")
                     ORDER BY
                         entry."Value",
                         entry."Rank"
@@ -146,7 +149,8 @@ namespace Jularr.Backend.Logic.Media
                         "ImageUrl" = coalesce(item."ImageUrl", work."ImageUrl"),
                         "BackdropUrl" = coalesce(item."BackdropUrl", work."BackdropUrl"),
                         "Rating" = coalesce(item."Rating", work."Rating"),
-                        "TrendingRank" = coalesce(item."TrendingRank", work."TrendingRank")
+                        "TrendingRank" = coalesce(item."TrendingRank", work."TrendingRank"),
+                        "CatalogFormatId" = coalesce(item."CatalogFormatId", work."CatalogFormatId")
                     FROM
                         resolved
                         JOIN item ON item."Value" = resolved."Value"
@@ -166,6 +170,7 @@ namespace Jularr.Backend.Logic.Media
                         item."BackdropUrl",
                         item."Rating",
                         item."TrendingRank",
+                        item."CatalogFormatId",
                         nextval(pg_get_serial_sequence('"Works"', 'Id')) AS "WorkId"
                     FROM
                         item
@@ -176,7 +181,7 @@ namespace Jularr.Backend.Logic.Media
                 ), created AS (
                     INSERT INTO
                         "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "OriginalTitle", "ReleaseYear", "Overview", "Creator", "ImageUrl", "BackdropUrl", "Rating",
-                            "TrendingRank", "CatalogNamespace")
+                            "TrendingRank", "CatalogNamespace", "CatalogFormatId")
                     SELECT
                         fresh."WorkId",
                         @MediaTypeId,
@@ -190,7 +195,8 @@ namespace Jularr.Backend.Logic.Media
                         fresh."BackdropUrl",
                         fresh."Rating",
                         fresh."TrendingRank",
-                        @Namespace
+                        @Namespace,
+                        fresh."CatalogFormatId"
                     FROM
                         fresh
                 ), identified AS (
@@ -371,7 +377,8 @@ namespace Jularr.Backend.Logic.Media
                     work."Rating",
                     work."Id" AS "WorkId",
                     known."MediaStateTypeId",
-                    known."PlexUrl"
+                    known."PlexUrl",
+                    work."CatalogFormatId"
                 FROM
                     jsonb_to_recordset(@Shelves::jsonb) AS shelf ("Shelf" integer, "Namespace" text, "MediaTypeId" smallint, "MediaSubtypeId" smallint, "Feed" smallint, "Sort" smallint)
                     CROSS JOIN LATERAL unnest(CASE
