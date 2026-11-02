@@ -124,6 +124,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             var unmatched = unplaced.Any(file => file.NamesNoUnit);
             IReadOnlyList<ImportFileProposal> leftOut = [.. unplaced.Where(file => file.Reason != UnplacedFile.Present).OrderBy(file => file.Path, StringComparer.Ordinal)
                 .Select(file => new ImportFileProposal(file.Path, null, null, null, null, file.Reason))];
+
+            // What a person need not import by hand: what this import places and what the library already holds.
+            string[] settled = [.. placements.Select(placement => placement.SourcePath), .. unplaced.Where(file => file.Reason == UnplacedFile.Present).Select(file => file.Path)];
             if (placements.Count == 0)
             {
                 // A pack whose volumes the library already holds is done, or waits with its files of no volume.
@@ -131,7 +134,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 {
                     if (unmatched)
                     {
-                        await AttentionAsync(context, download.OperationId, UnmatchedFilesKey, null, ct, ImportProposal.Write(sourceRef, leftOut));
+                        await AttentionAsync(context, download.OperationId, UnmatchedFilesKey, null, ct, ImportProposal.Write(sourceRef, leftOut, settled));
                         return;
                     }
 
@@ -165,7 +168,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         var languageIssue = BookDocumentLanguages.StrictEpubAttentionReason(acquisitionProfile, BookDocumentLanguages.ReadEpub(book));
                         if (languageIssue is not null)
                         {
-                            await AttentionAsync(context, download.OperationId, languageIssue, null, ct);
+                            // The book keeps where it is, so a person who knows its language can import it by hand.
+                            await AttentionAsync(context, download.OperationId, languageIssue, null, ct, ImportProposal.Write(sourceRef, []));
                             return;
                         }
                     }
@@ -189,7 +193,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             // What matched is in the library; the download keeps waiting with the files that name no unit.
             if (unmatched)
             {
-                await AttentionAsync(context, download.OperationId, UnmatchedFilesKey, null, ct, ImportProposal.Write(sourceRef, leftOut));
+                await AttentionAsync(context, download.OperationId, UnmatchedFilesKey, null, ct, ImportProposal.Write(sourceRef, leftOut, settled));
                 return;
             }
 

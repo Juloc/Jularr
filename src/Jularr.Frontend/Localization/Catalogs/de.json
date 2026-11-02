@@ -8217,16 +8217,16 @@
    "Manueller Import"
   ],
   "manualImport.search": [
-   "Film or series",
-   "Film oder Serie"
+   "Work",
+   "Werk"
   ],
   "manualImport.find": [
    "Search",
    "Suchen"
   ],
   "manualImport.noMatch": [
-   "No film or series of the library matches.",
-   "Kein Film und keine Serie der Bibliothek passt."
+   "No work of the library matches.",
+   "Kein Werk der Bibliothek passt."
   ],
   "manualImport.choose": [
    "Import to this",
@@ -8241,8 +8241,8 @@
    "Dateien anzeigen"
   ],
   "manualImport.noFiles": [
-   "The folder holds no video files.",
-   "Der Ordner enthält keine Videodateien."
+   "The folder holds no files of this media type.",
+   "Der Ordner enthält keine Dateien dieses Medientyps."
   ],
   "manualImport.mode": [
    "Transfer",
@@ -8273,8 +8273,8 @@
    "Importierte Dateien: {0}"
   ],
   "manualImport.list.works": [
-   "Films and series",
-   "Filme und Serien"
+   "Works",
+   "Werke"
   ],
   "manualImport.list.target": [
    "Import target",
@@ -8293,8 +8293,8 @@
    "Datei"
   ],
   "manualImport.col.series": [
-   "Film or series",
-   "Film oder Serie"
+   "Work",
+   "Werk"
   ],
   "manualImport.col.episode": [
    "Episode",
@@ -8423,6 +8423,38 @@
   "manualImport.importRest": [
    "Import the rest",
    "Rest importieren"
+  ],
+  "manualImport.col.volume": [
+   "Volume",
+   "Band"
+  ],
+  "manualImport.volume": [
+   "Volume",
+   "Band"
+  ],
+  "manualImport.chapter": [
+   "Chapter",
+   "Kapitel"
+  ],
+  "manualImport.volumeLabel": [
+   "Vol. {0}",
+   "Bd. {0}"
+  ],
+  "manualImport.chapterLabel": [
+   "Ch. {0}",
+   "Kap. {0}"
+  ],
+  "manualImport.wholeWork": [
+   "Whole work",
+   "Ganzes Werk"
+  ],
+  "manualImport.bookLanguage": [
+   "Language",
+   "Sprache"
+  ],
+  "manualImport.qualityFromFormat": [
+   "From the file format",
+   "Aus dem Dateiformat"
   ],
   "activity.importManually": [
    "Import by hand",

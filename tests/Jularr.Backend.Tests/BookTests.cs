@@ -332,6 +332,24 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { Path.GetFileName(kept) }, waiting.UnmatchedFiles!.Select(Path.GetFileName).ToArray());
             CollectionAssert.AreEqual(new[] { "content_epub" }, waiting.UnmatchedFileReasons);
             Assert.AreEqual(wantedId, (long)(await host.ScalarAsync("SELECT \"WantedItemId\" FROM \"AcquisitionReleases\""))!);
+
+            // By hand the file can be assigned, and says why the import left it out.
+            Assert.IsTrue(waiting.CanImportManually);
+            using var read = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{waiting.Id}/manual-import/files");
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            var proposed = (await read.Content.ReadFromJsonAsync<ManualImportDownloadV1>())!.Files.Single();
+            Assert.AreEqual((Path.GetFileName(kept), "content_epub", "EPUB"), (Path.GetFileName(proposed.Path), proposed.UnplacedReason, proposed.QualityKey));
+
+            // Rejected instead: Jularr's own download folder is cleared, the release blocked with why, and the book is searched again at once.
+            var signal = host.Services.GetRequiredService<Service.Core.AcquisitionSearchSignal>();
+            signal.TakeRequest();
+            using var rejected = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{waiting.Id}/remove", new RemoveActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, rejected.StatusCode, await rejected.Content.ReadAsStringAsync());
+            Assert.IsFalse(File.Exists(kept), "The rejected download's file is deleted.");
+            Assert.AreEqual(((short)4, "download_removed"), ((short)(await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""))!,
+                (string)(await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""))!));
+            Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"NextSearchAt\" <= now() FROM \"WantedItems\" WHERE \"Id\" = {wantedId}"));
+            Assert.IsTrue(signal.TakeRequest());
         }
 
         [TestMethod]
