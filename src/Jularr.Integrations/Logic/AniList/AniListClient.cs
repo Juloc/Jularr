@@ -29,17 +29,26 @@ namespace Jularr.Integrations.Logic.AniList
                 : [];
         }
 
-        public async Task<IReadOnlyList<AniListMedia>> ReadRankedAsync(AniListMediaType type, IReadOnlyCollection<string> formats, AniListRanking ranking, int page, CancellationToken ct)
+        // A ranked list page by page; adult titles stay out and AniList ignores a narrowing left empty.
+        public async Task<IReadOnlyList<AniListMedia>> ReadRankedAsync(AniListMediaType type, IReadOnlyCollection<string> formats, AniListListQuery query, int page, CancellationToken ct)
         {
-            var (sort, statuses) = ranking switch
+            var sort = query.Sort switch
             {
-                AniListRanking.Trending => ("TRENDING_DESC", new[] { "RELEASING", "FINISHED", "NOT_YET_RELEASED", "HIATUS" }),
-                AniListRanking.Score => ("SCORE_DESC", ["RELEASING", "FINISHED", "HIATUS"]),
-                _ => ("START_DATE_DESC", ["RELEASING", "FINISHED"])
+                AniListSort.Trending => "TRENDING_DESC",
+                AniListSort.Popularity => "POPULARITY_DESC",
+                AniListSort.Score => "SCORE_DESC",
+                AniListSort.Favourites => "FAVOURITES_DESC",
+                AniListSort.Added => "ID_DESC",
+                AniListSort.StartDate => "START_DATE_DESC",
+                _ => "TITLE_ROMAJI"
             };
-            using var document = await PostAsync("query ($page: Int, $type: MediaType, $formats: [MediaFormat], $sort: [MediaSort], $statuses: [MediaStatus]) { Page(page: $page, perPage: 20) { "
-                + "media(type: $type, format_in: $formats, sort: $sort, status_in: $statuses, isAdult: false) { " + Fields + " } } }",
-                new Dictionary<string, object> { ["page"] = page, ["type"] = Name(type), ["formats"] = formats, ["sort"] = new[] { sort }, ["statuses"] = statuses }, ct);
+            var variables = new Dictionary<string, object> { ["page"] = page, ["type"] = Name(type), ["formats"] = formats, ["sort"] = new[] { sort } };
+            if (query.Season is { } season) variables["season"] = season;
+            if (query.SeasonYear is { } year) variables["seasonYear"] = year;
+            if (query.Country is { } country) variables["country"] = country;
+            using var document = await PostAsync("query ($page: Int, $type: MediaType, $formats: [MediaFormat], $sort: [MediaSort], $season: MediaSeason, $seasonYear: Int, $country: CountryCode) { "
+                + "Page(page: $page, perPage: 20) { media(type: $type, format_in: $formats, sort: $sort, season: $season, seasonYear: $seasonYear, countryOfOrigin: $country, isAdult: false) { "
+                + Fields + " } } }", variables, ct);
             return Child(Child(document.RootElement, "data"), "Page") is { } found && found.TryGetProperty("media", out var media) && media.ValueKind == JsonValueKind.Array
                 ? [.. media.EnumerateArray().Select(Read).OfType<AniListMedia>()]
                 : [];
@@ -58,7 +67,7 @@ namespace Jularr.Integrations.Logic.AniList
         public async Task<(IReadOnlyList<AniListCatalogEntry> Entries, bool HasMore)> ReadCatalogPageAsync(int afterId, CancellationToken ct)
         {
             using var document = await PostAsync("query ($after: Int) { Page(perPage: 50) { pageInfo { hasNextPage } media(id_greater: $after, sort: ID, isAdult: false) { "
-                + "id type format title { romaji english native } startDate { year month day } description(asHtml: false) coverImage { large } popularity averageScore } } }",
+                + "id type format countryOfOrigin season seasonYear title { romaji english native } startDate { year month day } description(asHtml: false) coverImage { large } popularity averageScore favourites } } }",
                 new Dictionary<string, object> { ["after"] = afterId }, ct);
             if (Child(Child(document.RootElement, "data"), "Page") is not { } page || !page.TryGetProperty("media", out var media) || media.ValueKind != JsonValueKind.Array)
             {
@@ -85,7 +94,9 @@ namespace Jularr.Integrations.Logic.AniList
                 ? new DateOnly(y, m, d) : null;
             var description = Text(media, "description") is { } text ? Markup().Replace(text, " ").Trim() : null;
             return new AniListCatalogEntry(mediaId, type, Text(media, "format"), Text(title, "english") ?? romaji, Text(title, "english") is null ? Text(title, "native") : romaji,
-                released, year, description, Https(Child(media, "coverImage") is { } image ? Text(image, "large") : null), Count(media, "popularity", int.MaxValue), Count(media, "averageScore", 100));
+                released, year, description, Https(Child(media, "coverImage") is { } image ? Text(image, "large") : null), Count(media, "popularity", int.MaxValue), Count(media, "averageScore", 100),
+                Count(media, "favourites", int.MaxValue), Text(media, "countryOfOrigin") is { Length: 2 } country ? country : null,
+                Text(media, "season") is "WINTER" or "SPRING" or "SUMMER" or "FALL" ? Text(media, "season") : null, Count(media, "seasonYear", 2200));
         }
 
         private static string Name(AniListMediaType type) => type == AniListMediaType.Anime ? "ANIME" : "MANGA";

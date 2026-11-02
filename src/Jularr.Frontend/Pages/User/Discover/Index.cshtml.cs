@@ -37,6 +37,20 @@ namespace Jularr.Frontend.Pages.User.Discover
         // The most highlights of one type a device can choose to show.
         private const int HeroPerType = 5;
 
+        // The lists by their address, in the order of the feed chips; AniList's lists first.
+        private static readonly (DiscoverFeedType Feed, string Slug)[] FeedSlugs =
+        [
+            (DiscoverFeedType.Trending, "trending"), (DiscoverFeedType.Season, "season"), (DiscoverFeedType.NextSeason, "next-season"), (DiscoverFeedType.Popular, "popular"),
+            (DiscoverFeedType.Manhwa, "manhwa"), (DiscoverFeedType.Top100, "top100"), (DiscoverFeedType.Top, "top"), (DiscoverFeedType.New, "new"), (DiscoverFeedType.Upcoming, "upcoming")
+        ];
+
+        // The orders of a ranking by their address.
+        private static readonly (DiscoverSort Sort, string Slug)[] SortSlugs =
+        [
+            (DiscoverSort.Trending, "trending"), (DiscoverSort.Popularity, "popularity"), (DiscoverSort.Score, "score"), (DiscoverSort.Favourites, "favourites"),
+            (DiscoverSort.Added, "added"), (DiscoverSort.Released, "released"), (DiscoverSort.Title, "title")
+        ];
+
         // Narō's catalog name: its titles are web novels, not published light novels.
         private const string WebNovelSource = "syosetu";
 
@@ -69,10 +83,11 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         // Unknown or empty values mean no choice, as for a reset form.
         [BindProperty(SupportsGet = true, Name = "feed")]
-        public string? Feed { get => _feed; set => _feed = Known(value, "trending", "new", "top", "upcoming", "continue"); }
+        public string? Feed { get => _feed; set => _feed = Known(value, [.. FeedSlugs.Select(feed => feed.Slug), "continue"]); }
 
+        // Another order than the ranking's own; only a ranking's grid has one.
         [BindProperty(SupportsGet = true, Name = "sort")]
-        public string? Sort { get => _sort; set => _sort = Known(value, "newest", "az"); }
+        public string? Sort { get => _sort; set => _sort = Known(value, [.. SortSlugs.Select(sort => sort.Slug)]); }
 
         [BindProperty(SupportsGet = true, Name = "availability")]
         public string? Availability { get => _availability; set => _availability = Known(value, "local", "request"); }
@@ -106,14 +121,13 @@ namespace Jularr.Frontend.Pages.User.Discover
         // Set when exactly one scope is chosen: rankings, catalog search and the back link need a single one.
         private DiscoverScopeV1? Selected => !IsAll && Chosen.Count == 1 ? Chosen[0] : null;
 
-        private DiscoverFeedType? FeedType => Feed switch
-        {
-            "trending" => DiscoverFeedType.Trending,
-            "top" => DiscoverFeedType.Top,
-            "new" => DiscoverFeedType.New,
-            "upcoming" => DiscoverFeedType.Upcoming,
-            _ => null
-        };
+        private DiscoverFeedType? FeedType => FeedSlugs.Where(feed => feed.Slug == Feed).Select(feed => (DiscoverFeedType?)feed.Feed).FirstOrDefault();
+
+        // The order the open ranking is read in, when its scope offers it and it is not the ranking's own.
+        private DiscoverSort? ChosenSort => Selected is { } scope && View is { } view && SortSlugs.Where(sort => sort.Slug == Sort).Select(sort => (DiscoverSort?)sort.Sort).FirstOrDefault() is { } chosen
+            && scope.Sorts.Contains(chosen) && chosen != OwnSort(scope, view) ? chosen : null;
+
+        private static DiscoverSort? OwnSort(DiscoverScopeV1 scope, DiscoverFeedType feed) => Array.IndexOf(scope.Feeds, feed) is >= 0 and var index ? scope.FeedSorts[index] : null;
 
         private bool ContinueOnly => Feed == "continue";
 
@@ -152,8 +166,13 @@ namespace Jularr.Frontend.Pages.User.Discover
             page.Content.Add(TypeBar());
             if (selected is not null && View is { } view && !searching)
             {
-                page.Content.Add(new Div(new A(new Text("common.back")).Class("button").Attribute("href", Address(Current with { View = null, Page = 1 })),
-                    new H2(new Text("discover.feed." + view))).Class("discover-view-heading"));
+                var heading = new List<IUiComponent>
+                {
+                    new A(new Text("common.back")).Class("button").Attribute("href", Address(Current with { View = null, Sort = null, Page = 1 })),
+                    new H2(new Text("discover.feed." + view))
+                };
+                if (selected.Sorts.Length > 0) heading.Add(SortSelect(selected, view));
+                page.Content.Add(new Div([.. heading]).Class("discover-view-heading"));
             }
 
             if (_providerUnavailable && (_results is not null || _catalog is not null))
@@ -259,22 +278,25 @@ namespace Jularr.Frontend.Pages.User.Discover
             return new MediaTypeBar(assets, [.. Listed.Select(scope => scope.Slug)], [.. Chosen.Select(scope => scope.Slug)], "discover.type.", types => Address(Current with { Types = types, View = null, Page = 1 }), tools);
         }
 
-        // Feed lists, how they are ordered and whether the shelves wrap into a grid.
+        // Feed lists and whether the shelves wrap into a grid; each shelf keeps its list's order.
         private IUiComponent Toolbar()
         {
             var feedTabs = FeedOptions(Chosen).Select(option => new NavigationTab(option.LabelKey, Address(Current with { Feed = option.Slug, Page = 1 }), Feed == option.Slug)).ToList();
+            return new Div(new NavigationTabs(feedTabs, "discover.feeds", "chips"),
+                new Div(new Button(new Icon("grid", assets, 18), new Icon("list", assets, 18)).IconOnly(texts["discover.view.toggle"]).Class("button button--icon discover-toolbar__layout")
+                    .Attribute("data-discover-layout", "")).Class("discover-toolbar__settings")).Class("discover-toolbar");
+        }
 
-            // The sort keeps every other choice of the address as hidden fields.
-            var keep = new Dictionary<string, string>();
-            if (TypeParameter(Current.Types) is { } types) keep["type"] = types;
-            if (Feed is not null) keep["feed"] = Feed;
+        // The orders a ranking's scope offers; its own order is the empty choice, so its address stays short. Every other choice stays as a hidden field.
+        private ChoiceSelect SortSelect(DiscoverScopeV1 scope, DiscoverFeedType view)
+        {
+            var own = OwnSort(scope, view);
+            var shown = ChosenSort ?? own;
+            var keep = new Dictionary<string, string> { ["type"] = scope.Slug, ["view"] = view.ToString() };
             if (Availability is not null) keep["availability"] = Availability;
             if (Year is not null) keep["year"] = Year;
-            return new Div(new NavigationTabs(feedTabs, "discover.feeds", "chips"),
-                new Div(new ChoiceSelect("/", "sort", "discover.sort", [new("discover.sort.ranking", "", Sort is null), new("discover.sort.newest", "newest", Sort == "newest"),
-                    new("discover.sort.az", "az", Sort == "az")], keep),
-                    new Button(new Icon("grid", assets, 18), new Icon("list", assets, 18)).IconOnly(texts["discover.view.toggle"]).Class("button button--icon discover-toolbar__layout")
-                        .Attribute("data-discover-layout", "")).Class("discover-toolbar__settings")).Class("discover-toolbar");
+            return new ChoiceSelect("/", "sort", "discover.sort", [.. SortSlugs.Where(sort => scope.Sorts.Contains(sort.Sort))
+                .Select(sort => new ChoiceOption("discover.sort." + sort.Sort, sort.Sort == own ? "" : sort.Slug, sort.Sort == shown))], keep);
         }
 
         // The lists of the feed chips and of the filter: all, then each one a chosen type has, then Continue when something continues.
@@ -282,7 +304,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var options = new List<(string? Slug, string LabelKey)> { (null, "discover.all") };
             var supported = scopes.SelectMany(scope => scope.Feeds).ToHashSet();
-            foreach (var (feed, slug) in new[] { (DiscoverFeedType.Trending, "trending"), (DiscoverFeedType.New, "new"), (DiscoverFeedType.Top, "top"), (DiscoverFeedType.Upcoming, "upcoming") })
+            foreach (var (feed, slug) in FeedSlugs)
             {
                 if (supported.Contains(feed)) options.Add((slug, "discover.feed." + feed));
             }
@@ -295,13 +317,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private string? FeedScopes(string? feedSlug) => feedSlug is null or "continue" ? null
             : string.Join(',', Listed.Where(scope => scope.Feeds.Any(feed => FeedSlug(feed) == feedSlug)).Select(scope => scope.Slug));
 
-        private static string FeedSlug(DiscoverFeedType feed) => feed switch
-        {
-            DiscoverFeedType.Trending => "trending",
-            DiscoverFeedType.Top => "top",
-            DiscoverFeedType.New => "new",
-            _ => "upcoming"
-        };
+        private static string FeedSlug(DiscoverFeedType feed) => FeedSlugs.First(entry => entry.Feed == feed).Slug;
 
         // Types per area, availability, release year and feed; one GET form, so the address holds the choice.
         private DrawerPane FilterPane()
@@ -341,7 +357,6 @@ namespace Jularr.Frontend.Pages.User.Discover
                     FeedScopes(option.Slug)))]));
             }
 
-            if (Sort is not null) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "sort").Attribute("value", Sort));
             if (!string.IsNullOrWhiteSpace(Query)) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "q").Attribute("value", Query.Trim()));
 
             return new DrawerPane("filter", "discover.tab.filter", "discover.filter.title", "filter", body,
@@ -547,13 +562,13 @@ namespace Jularr.Frontend.Pages.User.Discover
                 if (selected is { IsCatalog: true } && View is { } catalogView && selected.Feeds.Contains(catalogView))
                 {
                     _catalog = [.. (await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new ReadDiscoverCatalogFeedDataV1(selected.MediaTypeId, catalogView, selected.MediaSubtypeId,
-                        PageNumber), HttpContext.RequestAborted)).Select(item => (selected, item))];
+                        PageNumber, ChosenSort), HttpContext.RequestAborted)).Select(item => (selected, item))];
                     return;
                 }
 
                 if (selected is not null && View is { } view && selected.Feeds.Contains(view))
                 {
-                    _results = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(selected.MediaTypeId, view, PageNumber), HttpContext.RequestAborted);
+                    _results = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(selected.MediaTypeId, view, PageNumber, ChosenSort), HttpContext.RequestAborted);
                     return;
                 }
             }
@@ -917,28 +932,12 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
         }
 
-        // The availability and year choices narrow what is listed; the sort orders each list.
-        private IEnumerable<DiscoverItemV1> Filtered(IEnumerable<DiscoverItemV1> items)
-        {
-            var narrowed = items.Where(item => Fits(item.MediaStateTypeId == MediaStateType.Available, item.MediaStateTypeId == MediaStateType.NotRequested, item.ReleaseYear));
-            return Sort switch
-            {
-                "newest" => narrowed.OrderByDescending(item => item.ReleaseYear),
-                "az" => narrowed.OrderBy(item => item.Title, StringComparer.CurrentCultureIgnoreCase),
-                _ => narrowed
-            };
-        }
+        // The availability and year choices narrow what is listed; the provider or the catalog orders it.
+        private IEnumerable<DiscoverItemV1> Filtered(IEnumerable<DiscoverItemV1> items) =>
+            items.Where(item => Fits(item.MediaStateTypeId == MediaStateType.Available, item.MediaStateTypeId == MediaStateType.NotRequested, item.ReleaseYear));
 
-        private IEnumerable<(DiscoverScopeV1 Scope, DiscoverCatalogItemV1 Item)> Filtered(IEnumerable<(DiscoverScopeV1 Scope, DiscoverCatalogItemV1 Item)> items)
-        {
-            var narrowed = items.Where(entry => Fits(entry.Item.MediaStateTypeId == MediaStateType.Available, entry.Item.MediaStateTypeId == MediaStateType.NotRequested, entry.Item.ReleaseYear));
-            return Sort switch
-            {
-                "newest" => narrowed.OrderByDescending(entry => entry.Item.ReleaseYear),
-                "az" => narrowed.OrderBy(entry => entry.Item.Title, StringComparer.CurrentCultureIgnoreCase),
-                _ => narrowed
-            };
-        }
+        private IEnumerable<(DiscoverScopeV1 Scope, DiscoverCatalogItemV1 Item)> Filtered(IEnumerable<(DiscoverScopeV1 Scope, DiscoverCatalogItemV1 Item)> items) =>
+            items.Where(entry => Fits(entry.Item.MediaStateTypeId == MediaStateType.Available, entry.Item.MediaStateTypeId == MediaStateType.NotRequested, entry.Item.ReleaseYear));
 
         private bool Fits(bool isLocal, bool canBeRequested, int? releaseYear) =>
             (Availability != "local" || isLocal) && (Availability != "request" || canBeRequested)
@@ -1018,7 +1017,8 @@ namespace Jularr.Frontend.Pages.User.Discover
         // Everything the address holds; links change one part and keep the rest.
         private sealed record State(IReadOnlyList<string> Types, string? Feed, string? Sort, string? Availability, string? Year, string? Query, DiscoverFeedType? View, int Page);
 
-        private State Current => new(IsAll ? [] : [.. Chosen.Select(scope => scope.Slug)], Feed, Sort, Availability, Year, Query?.Trim(), View, PageNumber);
+        private State Current => new(IsAll ? [] : [.. Chosen.Select(scope => scope.Slug)], Feed, ChosenSort is { } sort ? SortSlugs.First(entry => entry.Sort == sort).Slug : null, Availability, Year,
+            Query?.Trim(), View, PageNumber);
 
         private static string? Known(string? value, params string[] allowed) => allowed.Contains(value) ? value : null;
 
@@ -1032,7 +1032,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             var searching = !string.IsNullOrWhiteSpace(state.Query);
             if (state.Feed is not null && !searching && state.View is null) values.Add("feed=" + Uri.EscapeDataString(state.Feed));
             if (state.View is not null && !searching) values.Add("view=" + state.View);
-            if (state.Sort is not null) values.Add("sort=" + Uri.EscapeDataString(state.Sort));
+            if (state.Sort is not null && state.View is not null && !searching) values.Add("sort=" + Uri.EscapeDataString(state.Sort));
             if (state.Availability is not null) values.Add("availability=" + Uri.EscapeDataString(state.Availability));
             if (state.Year is not null) values.Add("year=" + Uri.EscapeDataString(state.Year));
             if (searching) values.Add("q=" + Uri.EscapeDataString(state.Query!));

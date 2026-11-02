@@ -371,7 +371,7 @@ namespace Jularr.Backend.Tests
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeMangaSources());
-            foreach (var feed in new[] { DiscoverFeedType.Trending, DiscoverFeedType.Top, DiscoverFeedType.New })
+            foreach (var feed in new[] { DiscoverFeedType.Trending, DiscoverFeedType.Popular, DiscoverFeedType.Manhwa, DiscoverFeedType.Top100 })
             {
                 using var ranked = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Book, feed, MediaSubtype.Manga));
                 Assert.AreEqual(HttpStatusCode.OK, ranked.StatusCode, await ranked.Content.ReadAsStringAsync());

@@ -116,13 +116,18 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   grid and its shelf alike, 20 titles (the provider's next page) at a time; a page goes on while it has titles, three pages in a row
   that add nothing stop the automatic loading (the grid then shows *Load more*), and both say *No more titles.* where the ranking ends. While a page
   loads, grey skeleton cards stand where it arrives (a row under the grid, three at the end of a shelf); no Next button shows while pages load by themselves,
-  and a failed page offers *Try again*. Owner's mockup of 19 Oct
+  and a failed page offers *Try again*.
+  Owner's decision 2 Nov: anime, manga and light novels have AniList's lists (anime: Trending, Popular this season, Upcoming next season,
+  All time popular, Top 100; manga and light novels: Trending, All time popular, Popular manhwa (manga only, Korea), Top 100); films,
+  series and books keep theirs. Only a ranking's grid has a sort: AniList's orders (trending, popularity, average score, favorites, date
+  added, release date, title) for those types, for other types only what Jularr's whole catalog holds (popularity, score, release date,
+  title), none otherwise; a ranking opens in its own order (trending, score for Top 100, else popularity) and shelves keep it. Owner's mockup of 19 Oct
   ("capsules"): one capsule row (All, then Watch, Read, Hear and Game with their types; several
   types may be chosen, `type=a,b`) with the Customize and Filter drawers at its end, the highlights
   as one carousel that always keeps its place (with nothing to show, the shared landscape and *No highlights yet*): for each chosen type its
   continued titles, then its best by rank (series from Discover's series list), then what the library added last, each title once; the types
   take turns place by place, and a type with fewer titles shows fewer. The device keeps how many per type (1–5, standard 3; no overall
-  maximum), whether continued titles count and whether it turns by itself), feed chips, sort and a rows/grid switch. The header owns the **one**
+  maximum), whether continued titles count and whether it turns by itself), feed chips and a rows/grid switch. The header owns the **one**
   global Search; do not add another search field inside Discover. Owner's decision 2 Nov, the header search: large in the middle of the header, no key hint
   or shortcut; from two letters, after a short pause, a popup under the field lists the titles Jularr keeps (no provider is asked) grouped by type, the type
   with the best match first, in each type the typed title, then titles beginning with it, then other matches, local before trending before popular, two to

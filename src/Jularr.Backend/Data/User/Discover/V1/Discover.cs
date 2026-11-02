@@ -10,11 +10,13 @@ namespace Jularr.Backend.Data.User.Discover.V1
     {
     }
 
-    // One Discover scope: its address, the type it lists, whether a catalog other than TMDB serves it and its feeds.
+    // One Discover scope: its address, the type it lists, whether a catalog other than TMDB serves it, its feeds and the orders its lists can take.
     public sealed class DiscoverScopeV1 : BaseResponse
     {
-        public DiscoverScopeV1(string slug, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isCatalog, DiscoverFeedType[] feeds)
+        public DiscoverScopeV1(string slug, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isCatalog, DiscoverFeedType[] feeds, DiscoverSort[] feedSorts, DiscoverSort[] sorts)
         {
+            FeedSorts = feedSorts;
+            Sorts = sorts;
             Slug = slug;
             MediaTypeId = mediaTypeId;
             MediaSubtypeId = mediaSubtypeId;
@@ -36,12 +38,20 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.DiscoverFeedTypeIds))]
         public DiscoverFeedType[] Feeds { get; }
+
+        // Each feed's own order, in the order of the feeds.
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.DiscoverSortIds))]
+        public DiscoverSort[] FeedSorts { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.DiscoverSortIds))]
+        public DiscoverSort[] Sorts { get; }
     }
 
     public sealed class ReadDiscoverFeedDataV1 : BaseData
     {
-        public ReadDiscoverFeedDataV1(MediaType mediaTypeId, DiscoverFeedType discoverFeedTypeId, int page = 1)
+        public ReadDiscoverFeedDataV1(MediaType mediaTypeId, DiscoverFeedType discoverFeedTypeId, int page = 1, DiscoverSort? discoverSortId = null)
         {
+            DiscoverSortId = discoverSortId;
             MediaTypeId = mediaTypeId;
             DiscoverFeedTypeId = discoverFeedTypeId;
             Page = page;
@@ -55,6 +65,10 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.Page))]
         public int Page { get; }
+
+        // None keeps the list's own order.
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.DiscoverSortId), false)]
+        public DiscoverSort? DiscoverSortId { get; }
     }
 
     // The shelves of one scope, or of every listed scope without one.
@@ -247,8 +261,9 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
     public sealed class ReadDiscoverCatalogFeedDataV1 : BaseData
     {
-        public ReadDiscoverCatalogFeedDataV1(MediaType mediaTypeId, DiscoverFeedType discoverFeedTypeId, MediaSubtype? mediaSubtypeId = null, int page = 1)
+        public ReadDiscoverCatalogFeedDataV1(MediaType mediaTypeId, DiscoverFeedType discoverFeedTypeId, MediaSubtype? mediaSubtypeId = null, int page = 1, DiscoverSort? discoverSortId = null)
         {
+            DiscoverSortId = discoverSortId;
             MediaTypeId = mediaTypeId;
             DiscoverFeedTypeId = discoverFeedTypeId;
             MediaSubtypeId = mediaSubtypeId;
@@ -266,6 +281,10 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.Page))]
         public int Page { get; }
+
+        // None keeps the list's own order.
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.DiscoverSortId), false)]
+        public DiscoverSort? DiscoverSortId { get; }
     }
 
     // A film or series of a list as the Work it is.

@@ -263,8 +263,10 @@ namespace Jularr.Backend.Data.Logic.Media
     // One Discover shelf of a whole catalog, or a scope to search without a list: Shelf numbers it within the request.
     internal sealed class ExternalWorkShelfData
     {
-        public ExternalWorkShelfData(int shelf, string @namespace, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, DiscoverFeedType? feed = null)
+        public ExternalWorkShelfData(int shelf, string @namespace, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, DiscoverFeedType? feed = null, DiscoverSort? sort = null)
         {
+            // 0 keeps the list's own order.
+            Sort = (short)(sort ?? 0);
             Shelf = shelf;
             Namespace = @namespace;
             MediaTypeId = (short)mediaTypeId;
@@ -278,6 +280,7 @@ namespace Jularr.Backend.Data.Logic.Media
         public short MediaTypeId { get; }
         public short MediaSubtypeId { get; }
         public short Feed { get; }
+        public short Sort { get; }
     }
 
     // Shelves read in one statement; a browse page goes on at its offset.
@@ -307,8 +310,12 @@ namespace Jularr.Backend.Data.Logic.Media
     // How a whole catalog ranks its lists; set by ExternalWorkLogic.
     internal sealed class ExternalWorkRankingData : BaseData
     {
-        public ExternalWorkRankingData(int limit, int topVotes, DateOnly newSince, DateOnly upcomingUntil)
+        public ExternalWorkRankingData(int limit, int topVotes, DateOnly newSince, DateOnly upcomingUntil, (short Season, short Year) season, (short Season, short Year) nextSeason)
         {
+            Season = season.Season;
+            SeasonYear = season.Year;
+            NextSeason = nextSeason.Season;
+            NextSeasonYear = nextSeason.Year;
             Limit = limit;
             TopVotes = topVotes;
             NewSince = newSince;
@@ -326,6 +333,18 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Day))]
         public DateOnly UpcomingUntil { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Season))]
+        public int Season { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.SeasonYear))]
+        public int SeasonYear { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Season))]
+        public int NextSeason { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.SeasonYear))]
+        public int NextSeasonYear { get; }
     }
 
     // A catalog title on a shelf or among the suggestions, with the profile's Work when it already is one.

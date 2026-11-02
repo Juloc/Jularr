@@ -17,6 +17,9 @@
     gap: 16px;
 
     h2 { margin: 0; font-size: 22px; font-weight: 750; }
+
+    // The sort of the ranking sits at the end of its heading.
+    .choice-select { margin-left: auto; }
 }
 
 .discover-paging {

@@ -323,7 +323,8 @@ namespace Jularr.Backend.Logic.Media
         }
 
         // Discover's lists of a whole catalog: trending in its order, top by rating among titles enough people rated,
-        // new as the most popular of the last weeks and upcoming as the most popular of the coming months.
+        // new as the most popular of the last weeks and upcoming as the most popular of the coming months;
+        // AniList's season lists, all-time popular and Korea's manga by popularity, its top 100 like top.
         public const int ShelfSize = 20;
         public const int TopVotes = 300;
         public const int NewWithinDays = 60;
@@ -351,7 +352,9 @@ namespace Jularr.Backend.Logic.Media
         // Every shelf in one statement, each in its own order; the Shelf number keeps them apart.
         public static async Task<IReadOnlyList<ExternalWorkShelfItemData>> ReadExternalWorkShelvesAsync(this LogicContext ctx, ExternalWorkShelfQueryData data, CancellationToken ct)
         {
-            // Feed numbers as DiscoverFeedType: 1 trending, 2 top, 3 new, 4 upcoming; only the shelf's own list is read, in the order of its index.
+            // Feed numbers as DiscoverFeedType: 1 trending, 2 top, 3 new, 4 upcoming, 5 this season, 6 next season, 7 popular, 8 manhwa, 9 top 100;
+            // only the shelf's own list is read, in the order of its index. A chosen order (DiscoverSort) narrows the same way and sorts what it finds;
+            // trending then reads the whole catalog, trending titles first.
             var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 """
@@ -370,30 +373,65 @@ namespace Jularr.Backend.Logic.Media
                     known."MediaStateTypeId",
                     known."PlexUrl"
                 FROM
-                    jsonb_to_recordset(@Shelves::jsonb) AS shelf ("Shelf" integer, "Namespace" text, "MediaTypeId" smallint, "MediaSubtypeId" smallint, "Feed" smallint)
-                    CROSS JOIN LATERAL unnest(CASE shelf."Feed"
-                        WHEN 1 THEN ARRAY(
+                    jsonb_to_recordset(@Shelves::jsonb) AS shelf ("Shelf" integer, "Namespace" text, "MediaTypeId" smallint, "MediaSubtypeId" smallint, "Feed" smallint, "Sort" smallint)
+                    CROSS JOIN LATERAL unnest(CASE
+                        WHEN shelf."Sort" > 0 THEN ARRAY(
+                            SELECT work."Id" FROM "Works" AS work
+                                JOIN "WorkExternalIdentities" AS listed ON listed."WorkId" = work."Id" AND listed."Namespace" = work."CatalogNamespace"
+                            WHERE work."CatalogNamespace" = shelf."Namespace" AND work."MediaTypeId" = shelf."MediaTypeId" AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
+                                AND NOT work."IsAdult" AND work."ImageUrl" IS NOT NULL
+                                AND (shelf."Feed" NOT IN (2, 9) OR work."Votes" >= @TopVotes)
+                                AND (shelf."Feed" <> 3 OR work."ReleasedOn" BETWEEN @NewSince AND @Today)
+                                AND (shelf."Feed" <> 4 OR work."ReleasedOn" > @Today AND work."ReleasedOn" <= @UpcomingUntil)
+                                AND (shelf."Feed" <> 5 OR work."SeasonYear" = @SeasonYear AND work."Season" = @Season)
+                                AND (shelf."Feed" <> 6 OR work."SeasonYear" = @NextSeasonYear AND work."Season" = @NextSeason)
+                                AND (shelf."Feed" <> 8 OR work."CountryOfOrigin" = 'KR')
+                            ORDER BY
+                                CASE WHEN shelf."Sort" = 1 THEN coalesce(work."TrendingRank", 2147483647) END,
+                                CASE WHEN shelf."Sort" IN (1, 2) THEN work."Popularity" END DESC NULLS LAST,
+                                CASE WHEN shelf."Sort" = 3 THEN work."Rating" END DESC NULLS LAST,
+                                CASE WHEN shelf."Sort" = 4 THEN work."Favourites" END DESC NULLS LAST,
+                                CASE WHEN shelf."Sort" = 5 AND listed."Value" ~ '^[0-9]{1,9}$' THEN listed."Value"::integer END DESC NULLS LAST,
+                                CASE WHEN shelf."Sort" = 6 THEN work."ReleasedOn" END DESC NULLS LAST,
+                                CASE WHEN shelf."Sort" = 7 THEN lower(work."CanonicalTitle") END,
+                                work."Id"
+                            LIMIT @Limit OFFSET @Offset)
+                        WHEN shelf."Feed" = 1 THEN ARRAY(
                             SELECT work."Id" FROM "Works" AS work
                             WHERE work."CatalogNamespace" = shelf."Namespace" AND work."MediaTypeId" = shelf."MediaTypeId" AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
                                 AND NOT work."IsAdult" AND work."ImageUrl" IS NOT NULL AND work."TrendingRank" IS NOT NULL
                             ORDER BY work."TrendingRank", work."Id"
                             LIMIT @Limit OFFSET @Offset)
-                        WHEN 2 THEN ARRAY(
+                        WHEN shelf."Feed" IN (2, 9) THEN ARRAY(
                             SELECT work."Id" FROM "Works" AS work
                             WHERE work."CatalogNamespace" = shelf."Namespace" AND work."MediaTypeId" = shelf."MediaTypeId" AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
                                 AND NOT work."IsAdult" AND work."ImageUrl" IS NOT NULL AND work."Votes" >= @TopVotes
                             ORDER BY work."Rating" DESC NULLS LAST, work."Votes" DESC, work."Id"
                             LIMIT @Limit OFFSET @Offset)
-                        WHEN 3 THEN ARRAY(
+                        WHEN shelf."Feed" = 3 THEN ARRAY(
                             SELECT work."Id" FROM "Works" AS work
                             WHERE work."CatalogNamespace" = shelf."Namespace" AND work."MediaTypeId" = shelf."MediaTypeId" AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
                                 AND NOT work."IsAdult" AND work."ImageUrl" IS NOT NULL AND work."ReleasedOn" BETWEEN @NewSince AND @Today
                             ORDER BY work."Popularity" DESC NULLS LAST, work."Id"
                             LIMIT @Limit OFFSET @Offset)
-                        WHEN 4 THEN ARRAY(
+                        WHEN shelf."Feed" = 4 THEN ARRAY(
                             SELECT work."Id" FROM "Works" AS work
                             WHERE work."CatalogNamespace" = shelf."Namespace" AND work."MediaTypeId" = shelf."MediaTypeId" AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
                                 AND NOT work."IsAdult" AND work."ImageUrl" IS NOT NULL AND work."ReleasedOn" > @Today AND work."ReleasedOn" <= @UpcomingUntil
+                            ORDER BY work."Popularity" DESC NULLS LAST, work."Id"
+                            LIMIT @Limit OFFSET @Offset)
+                        WHEN shelf."Feed" IN (5, 6) THEN ARRAY(
+                            SELECT work."Id" FROM "Works" AS work
+                            WHERE work."CatalogNamespace" = shelf."Namespace" AND work."MediaTypeId" = shelf."MediaTypeId" AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
+                                AND NOT work."IsAdult" AND work."ImageUrl" IS NOT NULL
+                                AND work."SeasonYear" = CASE shelf."Feed" WHEN 5 THEN @SeasonYear ELSE @NextSeasonYear END
+                                AND work."Season" = CASE shelf."Feed" WHEN 5 THEN @Season ELSE @NextSeason END
+                            ORDER BY work."Popularity" DESC NULLS LAST, work."Id"
+                            LIMIT @Limit OFFSET @Offset)
+                        WHEN shelf."Feed" IN (7, 8) THEN ARRAY(
+                            SELECT work."Id" FROM "Works" AS work
+                            WHERE work."CatalogNamespace" = shelf."Namespace" AND work."MediaTypeId" = shelf."MediaTypeId" AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
+                                AND NOT work."IsAdult" AND work."ImageUrl" IS NOT NULL AND (shelf."Feed" = 7 OR work."CountryOfOrigin" = 'KR')
                             ORDER BY work."Popularity" DESC NULLS LAST, work."Id"
                             LIMIT @Limit OFFSET @Offset)
                     END) WITH ORDINALITY AS picked ("Id", "Place")
@@ -455,7 +493,8 @@ namespace Jularr.Backend.Logic.Media
                     picked."Place";
                 """;
             sql.Parameters.Add(data);
-            sql.Parameters.Add(new ExternalWorkRankingData(ShelfSize, TopVotes, data.Today.AddDays(-NewWithinDays), data.Today.AddDays(UpcomingWithinDays)));
+            sql.Parameters.Add(new ExternalWorkRankingData(ShelfSize, TopVotes, data.Today.AddDays(-NewWithinDays), data.Today.AddDays(UpcomingWithinDays), DiscoverScopes.Season(data.Today, 0),
+                DiscoverScopes.Season(data.Today, 1)));
             return await ctx.ReadSql.ReadListAsync<ExternalWorkShelfItemData>(sql, ct);
         }
 
@@ -935,10 +974,15 @@ namespace Jularr.Backend.Logic.Media
                     "Rating" = CASE WHEN entry."Rating" BETWEEN 0 AND 10 THEN round(entry."Rating"::numeric, 2) END,
                     "Votes" = CASE WHEN entry."Votes" >= 0 THEN entry."Votes" END,
                     "IsAdult" = entry."IsAdult",
+                    "CountryOfOrigin" = CASE WHEN entry."CountryOfOrigin" ~ '^[A-Z]{2}$' THEN entry."CountryOfOrigin" END,
+                    "Favourites" = CASE WHEN entry."Favourites" >= 0 THEN entry."Favourites" END,
+                    "Season" = CASE WHEN entry."Season" BETWEEN 1 AND 4 AND entry."SeasonYear" BETWEEN 1800 AND 2200 THEN entry."Season" END,
+                    "SeasonYear" = CASE WHEN entry."Season" BETWEEN 1 AND 4 AND entry."SeasonYear" BETWEEN 1800 AND 2200 THEN entry."SeasonYear" END,
                     "FetchedAt" = now()
                 FROM
                     jsonb_to_recordset(@Entries::jsonb) AS entry ("Value" text, "Title" text, "OriginalTitle" text, "ReleasedOn" date, "Overview" text, "ImageUrl" text,
-                        "BackdropUrl" text, "Popularity" real, "Rating" double precision, "Votes" integer, "ImdbId" text, "IsAdult" boolean)
+                        "BackdropUrl" text, "Popularity" real, "Rating" double precision, "Votes" integer, "ImdbId" text, "IsAdult" boolean, "CountryOfOrigin" text,
+                        "Favourites" integer, "Season" smallint, "SeasonYear" smallint)
                     JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = @Namespace AND identity."Value" = entry."Value"
                     CROSS JOIN LATERAL (
                         SELECT

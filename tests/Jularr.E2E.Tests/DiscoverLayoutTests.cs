@@ -58,9 +58,8 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("availability=request"));
                 await Assertions.Expect(page.Locator("button[data-drawer-pane=filter] .capsule-bar__badge")).ToHaveTextAsync("1");
 
-                // The sort reorders every list; the layout toggle wraps the shelves and is remembered on the device.
-                await page.Locator("select.choice-select__control").SelectOptionAsync("az");
-                await Assertions.Expect(page).ToHaveURLAsync(new Regex("sort=az"));
+                // Shelves keep their lists' order, only a ranking's grid sorts; the layout toggle wraps the shelves and is remembered on the device.
+                await Assertions.Expect(page.Locator("select[name=sort]")).ToHaveCountAsync(0);
                 await page.Locator("[data-discover-layout]").ClickAsync();
                 await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-discover-layout", "grid");
 
