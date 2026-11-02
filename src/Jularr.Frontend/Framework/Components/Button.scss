@@ -1,3 +1,5 @@
+@use "HitArea";
+
 // The mockups' button: a 37px pill on the quiet line, 11px/740; hover moves the line to the soft purple and the text to the accent text,
 // press shrinks it a hair. Primary is the solid accent, soft the lavender tint, warn the amber one.
 .button {
@@ -62,4 +64,8 @@
     &--danger { color: var(--danger); }
 
     &:disabled { opacity: .4; cursor: default; }
+
+    // On a phone every button takes a tap over at least 44x44px, as far as its neighbours leave room (HitArea): 6px apart is the usual gap of a toolbar,
+    // a group that sits closer or wider sets --hit-gap-x (the header 8px, the dock's zones 6px, the capsule's tools 3px).
+    @include HitArea.phone-hit-area(6px);
 }

@@ -181,14 +181,51 @@ namespace Jularr.Backend.Tests
             // One volume, also in two formats, is still placed as the book it always was.
             Assert.IsNull(Plan("Novel - Group Volume 01.epub").Single().UnitNumber);
             Assert.IsTrue(Plan("Novel v01.epub", "Novel v01.pdf").All(placement => placement.UnitNumber is null));
-            Assert.IsNull(ImportPlacementLogic.UnmatchedVolumes(MediaSubtype.LightNovel, Files("Novel v01.epub"), volumes));
+            Assert.HasCount(0, Unplaced(MediaSubtype.LightNovel, "Novel", volumes, [], Files("Novel v01.epub")));
 
-            // A pack: a group name between title and volume is no obstacle; a present volume, a range and a number the Work lacks are not placed.
+            // A pack: a group name between title and volume is no obstacle; a present volume, a range and a number the Work lacks are not placed, each with why.
             string[] pack = ["Novel - Group Volume 01.epub", "Novel - Group Volume 02.epub", "Novel - Group Volume 03.epub", "Novel - Group Volume 01-02.epub", "Novel - Group Volume 09.epub", "Novel - Extras.epub"];
             CollectionAssert.AreEqual(new decimal?[] { 1, 2 }, Plan(pack).Select(placement => placement.UnitNumber).ToArray());
             Assert.IsTrue(Plan(pack).All(placement => placement.WorkUnitTypeId == WorkUnitType.Volume && placement.TargetStem == "Novel/Novel v0" + placement.UnitNumber));
-            CollectionAssert.AreEqual(new[] { "Pack/Novel - Extras.epub", "Pack/Novel - Group Volume 01-02.epub", "Pack/Novel - Group Volume 09.epub" },
-                ImportPlacementLogic.UnmatchedVolumes(MediaSubtype.LightNovel, Files(pack), volumes)!.ToArray());
+            CollectionAssert.AreEqual(new[] { "Novel - Extras.epub: no_volume", "Novel - Group Volume 01-02.epub: ambiguous", "Novel - Group Volume 03.epub: present", "Novel - Group Volume 09.epub: unknown_unit" },
+                Unplaced(MediaSubtype.LightNovel, "Novel", volumes, [], Files(pack)));
+        }
+
+        // The files the planner left out, each as "name: reason", in name order.
+        private static string[] Unplaced(MediaSubtype subtype, string title, TargetUnit[] volumes, TargetUnit[] chapters, Jularr.Integrations.Data.Storage.StorageFile[] files)
+        {
+            var unplaced = new List<UnplacedFile>();
+            ImportPlacementLogic.Plan(MediaType.Book, subtype, title, null, null, files, NamingPatternTests.DefaultSet, null, episodes: volumes, unplaced: unplaced, chapters: chapters);
+            return [.. unplaced.Select(file => Path.GetFileName(file.Path) + ": " + file.Reason).Order(StringComparer.Ordinal)];
+        }
+
+        [TestMethod]
+        public void Manga_NumberedAndChapterFiles_LandOnTheirUnitsAndAreNeverGuessed()
+        {
+            TargetUnit[] volumes = [new(1, null, 1, false), new(2, null, 2, false), new(3, null, 3, false)];
+            TargetUnit[] chapters = [new(12, 2, 12, false), new(13, 2, 13, false)];
+            static Jularr.Integrations.Data.Storage.StorageFile[] Files(params string[] names) => [.. names.Select(name => new Jularr.Integrations.Data.Storage.StorageFile("Pack/" + name, 1000, DateTime.UtcNow))];
+            IReadOnlyList<ImportPlacementData> Plan(TargetUnit[] chapterUnits, params string[] names) => ImportPlacementLogic.Plan(MediaType.Book, MediaSubtype.Manga, "Example Manga", null, null, Files(names),
+                NamingPatternTests.DefaultSet, null, episodes: volumes, chapters: chapterUnits);
+
+            // "Title 01", "Title - 01" and "Title #01" name volumes the Work has, tags after them aside; so does one such file alone.
+            var numbered = Plan([], "Example Manga 01 (Digital) (Group).cbz", "Example Manga - 02.cbz", "Example Manga #03.cbz");
+            CollectionAssert.AreEqual(new decimal?[] { 1, 2, 3 }, numbered.Select(placement => placement.UnitNumber).Order().ToArray());
+            Assert.IsTrue(numbered.All(placement => placement.WorkUnitTypeId == WorkUnitType.Volume));
+            Assert.AreEqual(2m, Plan([], "Example Manga 02.cbz").Single().UnitNumber);
+            CollectionAssert.AreEqual(new[] { "Example Manga 07.cbz: unknown_unit", "Example Manga 09.cbz: unknown_unit" }, Unplaced(MediaSubtype.Manga, "Example Manga", volumes, [], Files("Example Manga 07.cbz", "Example Manga 09.cbz")));
+
+            // A title that ends in a number is no volume: one such file is still the whole series.
+            Assert.IsNull(ImportPlacementLogic.Plan(MediaType.Book, MediaSubtype.Manga, "Mob Psycho 100", null, null, Files("Mob Psycho 100.cbz"), NamingPatternTests.DefaultSet, null, episodes: volumes).Single().UnitNumber);
+
+            // Chapter files land on the Work's chapters with their volume; a bare number that is also a chapter, a range, a part chapter or a chapter the Work lacks is never guessed.
+            string[] pack = ["Example Manga Chapter 12.cbz", "Example Manga Ch. 13.cbz", "Example Manga c014.cbz", "Example Manga c012-013.cbz", "Example Manga Ch. 12.5.cbz", "Example Manga 12.cbz",
+                "Example Manga v01-03.cbz", "Example Manga v01 (c001-007).cbz", "Example Manga Extras.cbz", "cover.jpg"];
+            var placed = Plan(chapters, pack);
+            CollectionAssert.AreEqual(new[] { "Chapter 12 in 2", "Chapter 13 in 2", "Volume 1 in " }, placed.Select(placement => placement.WorkUnitTypeId + " " + placement.UnitNumber + " in " + placement.ParentUnitNumber).Order(StringComparer.Ordinal).ToArray());
+            Assert.IsTrue(placed.Single(placement => placement.UnitNumber == 12).TargetStem.EndsWith(" v02 c012", StringComparison.Ordinal), placed[0].TargetStem);
+            CollectionAssert.AreEqual(new[] { "Example Manga 12.cbz: ambiguous", "Example Manga Ch. 12.5.cbz: ambiguous", "Example Manga Extras.cbz: no_volume", "Example Manga c012-013.cbz: ambiguous",
+                "Example Manga c014.cbz: unknown_unit", "Example Manga v01-03.cbz: ambiguous", "cover.jpg: extension" }, Unplaced(MediaSubtype.Manga, "Example Manga", volumes, chapters, Files(pack)));
         }
 
         [TestMethod]
@@ -203,15 +240,15 @@ namespace Jularr.Backend.Tests
             string[] trailing = ["無職転生 ～異世界行ったら本気だす～ 01.epub", "無職転生 ～異世界行ったら本気だす～ 02.epub", "無職転生 ～異世界行ったら本気だす～ 03.epub",
                 "無職転生 ～蛇足編～ 01.epub", "無職転生 ～蛇足編～ 02.epub", "無職転生 ～異世界行ったら本気だす～ スペシャルブック.epub"];
             CollectionAssert.AreEqual(new decimal?[] { 1, 2 }, Plan(trailing).Select(placement => placement.UnitNumber).ToArray());
-            CollectionAssert.AreEquivalent(new[] { "Pack/無職転生 ～蛇足編～ 01.epub", "Pack/無職転生 ～蛇足編～ 02.epub", "Pack/無職転生 ～異世界行ったら本気だす～ スペシャルブック.epub" },
-                ImportPlacementLogic.UnmatchedVolumes(MediaSubtype.LightNovel, Files(trailing), volumes)!.ToArray());
+            CollectionAssert.AreEquivalent(new[] { "無職転生 ～蛇足編～ 01.epub: no_volume", "無職転生 ～蛇足編～ 02.epub: no_volume", "無職転生 ～異世界行ったら本気だす～ 03.epub: present",
+                "無職転生 ～異世界行ったら本気だす～ スペシャルブック.epub: no_volume" }, Unplaced(MediaSubtype.LightNovel, "Novel", volumes, [], Files(trailing)));
 
             // "第01巻": the Japanese volume marker.
             CollectionAssert.AreEqual(new decimal?[] { 1, 2 }, Plan("小説 第01巻.epub", "小説 第02巻.epub", "小説 第03巻.epub").Select(placement => placement.UnitNumber).ToArray());
 
             // One numbered file is still one book, and two files that differ in no number are no pack.
             Assert.IsNull(Plan("無職転生 01.epub").Single().UnitNumber);
-            Assert.IsNull(ImportPlacementLogic.UnmatchedVolumes(MediaSubtype.LightNovel, Files("Alpha story.epub", "Beta story.epub"), volumes));
+            Assert.HasCount(0, Unplaced(MediaSubtype.LightNovel, "Novel", volumes, [], Files("Alpha story.epub", "Beta story.epub")));
         }
 
         [TestMethod]
@@ -311,6 +348,7 @@ namespace Jularr.Backend.Tests
                 var waiting = (await queue.Content.ReadFromJsonAsync<PageResult<Data.Admin.Activity.V1.ActivityItemV1>>())!.Items.Single(item => item.Id == operationId);
                 CollectionAssert.AreEqual(new[] { "Mushoku Tensei - Baka-Tsuki Side Stories.epub", "Mushoku Tensei - Baka-Tsuki Volume 27.epub" },
                     waiting.UnmatchedFiles!.Select(Path.GetFileName).ToArray());
+                CollectionAssert.AreEqual(new[] { "no_volume", "unknown_unit" }, waiting.UnmatchedFileReasons);
                 Assert.IsFalse(waiting.CanImportManually);
             }
 

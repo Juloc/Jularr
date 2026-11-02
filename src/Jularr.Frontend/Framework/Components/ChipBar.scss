@@ -1,3 +1,5 @@
+@use "HitArea";
+
 // A capsule of filter chips grouped by area; the container decides how much of each group shows.
 .chip-bar {
     container: chip-bar / inline-size;
@@ -47,6 +49,8 @@
         min-height: 36px;
         padding: 0 14px;
         border-radius: var(--radius-control);
+
+        @include HitArea.phone-hit-area(6px, 8px);
     }
 
     &__pill {

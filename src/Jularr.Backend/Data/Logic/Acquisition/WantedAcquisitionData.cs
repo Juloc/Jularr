@@ -22,6 +22,22 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public long WantedItemId { get; }
     }
 
+    // The volumes or the chapters of a wanted book.
+    internal sealed class WantedUnitTypeParameters : BaseData
+    {
+        public WantedUnitTypeParameters(long wantedItemId, WorkUnitType workUnitTypeId)
+        {
+            WantedItemId = wantedItemId;
+            WorkUnitTypeId = workUnitTypeId;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitTypeId))]
+        public WorkUnitType WorkUnitTypeId { get; }
+    }
+
     internal sealed class WantedTargetData : BaseData
     {
         public WantedTargetData(long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, string[] titles, long? acquisitionProfileId,

@@ -138,7 +138,7 @@ namespace Jularr.Backend.Data.User.Media.V1
     public sealed class WorkDetailsV1 : BaseResponse
     {
         public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
-            string? plexUrl, string[] platforms, long? franchiseId, string? franchiseName, bool isRequestable, AcquisitionRequestStatusType? requestStatusTypeId,
+            string? plexUrl, string[] platforms, long? franchiseId, string? franchiseName, bool isRequestable, long? requestId, AcquisitionRequestStatusType? requestStatusTypeId,
             int? runtimeMinutes, string? genres, string? trailerKey, string? studio, MediaAvailabilityState availabilityStateId, int availableUnits, int monitoredUnits, ProgressStateType progressStateId,
             int progressPercent, decimal? rating, string? ratingSource, string? originalTitle, DateOnly? releasedOn, string? originalLanguage, decimal? franchisePosition = null)
         {
@@ -157,6 +157,7 @@ namespace Jularr.Backend.Data.User.Media.V1
             Genres = genres;
             TrailerKey = trailerKey;
             Studio = studio;
+            RequestId = requestId;
             RequestStatusTypeId = requestStatusTypeId;
             IsRequestable = isRequestable;
             FranchiseId = franchiseId;
@@ -225,7 +226,10 @@ namespace Jularr.Backend.Data.User.Media.V1
         [DataField(typeof(WorkFields), nameof(WorkFields.IsRequestable))]
         public bool IsRequestable { get; }
 
-        // The profile's latest request for the Work.
+        // The profile's latest request for the Work and its status.
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.Id), false)]
+        public long? RequestId { get; }
+
         [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.AcquisitionRequestStatusTypeId), false)]
         public AcquisitionRequestStatusType? RequestStatusTypeId { get; }
 
