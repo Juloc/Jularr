@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
@@ -441,8 +442,10 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             await LoadListedAsync();
             var found = await suggest.ExecuteAsync<BaseDataList<DiscoverSuggestionV1>>(new SuggestDiscoverDataV1(Query, Selected?.Slug), HttpContext.RequestAborted);
-            var groups = found.Where(item => Chosen.Any(scope => scope.Slug == item.ScopeSlug)).GroupBy(item => item.ScopeSlug)
-                .Select(group => new Div([new Span(new Text("discover.type." + group.Key)).Class("app-search__type"), .. group.Select(Suggestion)]).Class("app-search__group"));
+            var groups = found.Where(item => Chosen.Any(scope => scope.Slug == item.ScopeSlug)).GroupBy(item => item.ScopeSlug).Select(group => new Div([
+                new Div(new Icon(MediaAreas.Icons.GetValueOrDefault(group.Key, "search"), assets, 16), new Span(new Text("discover.type." + group.Key)).Class("app-search__type"),
+                    new A(new Text("common.seeAll")).Attribute("href", Address(Current with { Types = [group.Key], Page = 1 }))).Class("app-search__head"),
+                .. group.Select(Suggestion)]).Class("app-search__group"));
             var all = new A(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["search.all"], Query.Trim()))).Class("app-search__all").Attribute("href", Address(Current with { Page = 1 }));
             return Partial("_UiComponent", new Div([.. groups, all]).Class("app-search__results").Attribute("aria-label", texts["discover.suggestions"]));
         }
@@ -450,13 +453,39 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IUiComponent Suggestion(DiscoverSuggestionV1 item)
         {
             IUiComponent poster = item.PosterUrl is { } url
-                ? new Img().Class("app-search__poster").Attribute("data-no-cover", "poster").Attribute("src", CoverPaths.Sized(url, 96)).Attribute("alt", "").Attribute("loading", "lazy")
+                ? new Img().Class("app-search__poster").Attribute("data-no-cover", "poster").Attribute("src", CoverPaths.Sized(url, 120)).Attribute("alt", "").Attribute("loading", "lazy")
                 : new NoCover(assets, NoCoverKind.Poster, "app-search__poster");
             var facts = new List<IUiComponent>();
             if (item.ReleaseYear is { } year) facts.Add(new ValueText(year.ToString(CultureInfo.InvariantCulture)));
             if (item.MediaStateTypeId == MediaStateType.Available) facts.Add(new Span(new Text("discover.known")).Class("app-search__known"));
-            return new A(poster, new Span(new Strong(new ValueText(item.Title)), new Span([.. facts])).Class("app-search__text"))
+            return new A(poster, new Span(new Strong([.. Highlighted(item.Title)]), new Span([.. facts])).Class("app-search__text"))
                 .Class("app-search__hit").Attribute("href", "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture));
+        }
+
+        // The typed words marked in a title, each where it begins a word of the title, else where it first appears.
+        private IEnumerable<IUiComponent> Highlighted(string title)
+        {
+            var marks = new List<(int Start, int End)>();
+            foreach (var word in Regex.Matches(Query!, @"[\p{L}\p{N}]+").Select(match => match.Value))
+            {
+                var first = title.IndexOf(word, StringComparison.CurrentCultureIgnoreCase);
+                var at = first;
+                while (at > 0 && char.IsLetterOrDigit(title[at - 1])) at = title.IndexOf(word, at + 1, StringComparison.CurrentCultureIgnoreCase);
+                var start = at >= 0 ? at : first;
+                if (start >= 0) marks.Add((start, Math.Min(start + word.Length, title.Length)));
+            }
+
+            var written = 0;
+            foreach (var (start, end) in marks.OrderBy(mark => mark.Start))
+            {
+                if (end <= written) continue;
+                var from = Math.Max(start, written);
+                if (from > written) yield return new ValueText(title[written..from]);
+                yield return new Mark(new ValueText(title[from..end]));
+                written = end;
+            }
+
+            if (written < title.Length) yield return new ValueText(title[written..]);
         }
 
         public async Task<IActionResult> OnGetRecommendationsAsync()

@@ -125,60 +125,79 @@
     // Above the base button's display; the phone's open search shows it.
     .app-header &__close { display: none; }
 
-    // Suggestions grouped by type (Pages/Shared/HeaderSearch.ts), as wide as the field and never taller than the room below it.
+    // Suggestions grouped by type (Pages/Shared/HeaderSearch.ts) under the middle of the field, never taller than the room below it;
+    // where there is room the groups stand in two columns.
     &__popup {
         position: absolute;
-        top: calc(100% + 6px);
-        right: 0;
-        left: 0;
+        top: calc(100% + 8px);
+        left: 50%;
         z-index: 30;
+        width: min(820px, calc(100vw - var(--side) - 48px));
         max-height: calc(100dvh - var(--shell-header-offset) - 12px);
         overflow-y: auto;
-        padding: 4px 0;
         border: 1px solid var(--border);
         border-radius: var(--radius-panel);
         background: var(--surface);
         box-shadow: var(--shadow);
+        transform: translateX(-50%);
     }
 
-    &__type { display: block; padding: 10px 14px 4px; font-size: var(--text-small); font-weight: 700; }
+    &__results { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 4px 12px; padding: 10px; }
+
+    // One group or none: one column as wide as the field.
+    &__popup:not(:has(.app-search__group + .app-search__group)) { width: 100%; }
+    &__results:not(:has(.app-search__group + .app-search__group)) { grid-template-columns: minmax(0, 1fr); }
+
+    &__head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        color: var(--accent-text);
+
+        a { margin-left: auto; color: var(--muted); font-size: var(--text-small); text-decoration: none; &:hover, &:focus-visible { color: var(--accent-text); } }
+    }
+
+    &__type { color: var(--text); font-size: var(--text-control); font-weight: 750; }
 
     &__hit {
         display: flex;
         align-items: center;
-        gap: 10px;
-        min-height: 48px;
-        padding: 5px 14px;
+        gap: 12px;
+        padding: 6px 8px;
+        border-radius: var(--radius-inner);
         color: var(--text);
         text-decoration: none;
 
-        &:hover, &:focus-visible { outline: none; background: var(--surface-hover); }
+        &:hover, &:focus-visible { outline: none; background: var(--accent-soft); }
     }
 
     // Also the stand-in of a missing cover, which takes over this class.
-    &__hit &__poster { flex: none; width: 28px; height: 40px; border-radius: 5px; background: var(--accent-soft); object-fit: cover; }
+    &__hit &__poster { flex: none; width: 40px; height: 60px; border-radius: 7px; background: var(--accent-soft); object-fit: cover; }
 
     &__text {
         display: grid;
         flex: 1;
+        gap: 3px;
         min-width: 0;
 
-        strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
-        span { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+        strong { overflow: hidden; font-size: 15px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+        mark { background: none; color: var(--accent-text); font-weight: 800; }
+        span { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
     }
 
-    &__known { padding: 0 7px; border-radius: var(--radius-control); background: var(--accent-soft); color: var(--accent-text); }
+    &__known { padding: 1px 8px; border-radius: var(--radius-control); background: var(--accent-soft); color: var(--accent-text); font-weight: 650; }
 
     &__all {
-        display: block;
-        margin-top: 4px;
-        padding: 11px 14px 7px;
+        grid-column: 1 / -1;
+        margin: 4px -10px -10px;
+        padding: 12px 18px;
         border-top: 1px solid var(--line);
         color: var(--accent-text);
         font-weight: 650;
         text-decoration: none;
 
-        &:hover, &:focus-visible { outline: none; background: var(--surface-hover); }
+        &:hover, &:focus-visible { outline: none; background: var(--accent-soft); }
     }
 }
 
@@ -530,7 +549,7 @@ html[data-skin="original"] .sidebar-secondary {
             .search-box { flex: 1; width: auto; height: auto; margin: 0; overflow: visible; clip-path: none; }
 
             // The suggestions fill the screen below it.
-            .app-search__popup { top: 100%; height: calc(100dvh - 100%); max-height: none; border-width: 1px 0 0; border-radius: 0; }
+            .app-search__popup { top: 100%; left: 0; width: 100%; height: calc(100dvh - 100%); max-height: none; border-width: 1px 0 0; border-radius: 0; transform: none; }
         }
     }
 }
