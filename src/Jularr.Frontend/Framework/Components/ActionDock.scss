@@ -2,7 +2,8 @@
 .action-dock {
     max-width: calc(100% - 16px);
 
-    &__zone { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    // The buttons of a zone sit 6px apart, which is as far as their phone taps reach (HitArea).
+    &__zone { --hit-gap-x: 6px; display: flex; align-items: center; gap: 6px; min-width: 0; }
 
     // A PostForm around an action is only a wrapper.
     form { display: inline-flex; margin: 0; }

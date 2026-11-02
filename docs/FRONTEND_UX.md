@@ -85,6 +85,7 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   entries are not shown, and the Jularr logo (linking to the user home) is the way back. No extra back button.
   The user menu has one entry, Administration, that opens the first allowed entry. On a narrow header a breadcrumb part with sub-pages opens them as a menu, the first part stays whole and a long last part (the title) ends in an ellipsis with its full text in a tip.
   The header is one row at every width: the search shrinks to its icon on a phone, the trail scrolls.
+- Owner's decision 2 Nov, tap targets: on a phone (up to 640px) every tap target has a hit area of at least 44x44px while its look may stay smaller, made by the shared mixins of [HitArea.scss](../src/Jularr.Frontend/Framework/Components/HitArea.scss) (overlay or padding, never overlapping a neighbour: where 44px does not fit the largest free size is taken, and a tight group sets `--hit-gap-x`/`--hit-gap-y`).
 - Local section headings are allowed only when they genuinely separate distinct
   content, not when they echo the current breadcrumb. Contextual explanations
   are shown only for meaningful tasks or failure/help states, never as filler.

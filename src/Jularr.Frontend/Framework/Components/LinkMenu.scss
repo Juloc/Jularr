@@ -9,6 +9,9 @@
         cursor: pointer;
         list-style: none;
 
+        // The tap of a disclosure on a phone.
+        @media (max-width: 640px) { min-height: 44px; }
+
         &::-webkit-details-marker { display: none; }
 
         &::after {
