@@ -1,8 +1,11 @@
 import { blockBox, capitals, letterSpacing, lineBoxes, splitText, spreads, startSize } from './SmartPageFit';
+import { readerLifetime } from './Lifetime';
+import { blockSet, browserTranslator, pagesAhead, recall, serverIsSlow, type BlockSet } from './Translation/translation';
+import { createTranslationWorker } from './Translation/worker';
 
 // Smart Pages: a scanned page in its own layout, its text erased from the scan and set anew into the original's lines in the look measured for each run,
 // or its translation in the look of the main text of each sentence. The server prepares the pages as reading units from 100000 on; the server's TranslateGemma
-// translates them like any section, the page in view first.
+// translates them like any section, the page in view first; Mozilla steps in as in the Reader.
 export interface SmartPages {
     has(page: number): boolean;
     page(page: number): Promise<HTMLElement | undefined>;
@@ -38,6 +41,48 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
         return element;
     }
 
+    // A page's blocks and what the server and the browser translated of them. What this browser translated earlier shows at once; the server's text replaces it.
+    interface Page { element: HTMLElement; blocks: HTMLElement[]; set: BlockSet }
+    const prepared = new Map<number, Promise<Page | undefined>>();
+    function prepare(number: number): Promise<Page | undefined> {
+        let page = prepared.get(number);
+        if (!page) {
+            page = element(number).then(async element => {
+                if (!element) return undefined;
+                const blocks = Array.from(element.querySelectorAll<HTMLElement>('[data-b]'));
+                // A block holding others (a lead-in in its own look and its sentence) is translated through them.
+                const set = blockSet(`${url}${units.get(number)}/local-translations/`, target, blocks.map(block => block.querySelector('[data-b]') ? '' : block.textContent?.trim() ?? ''));
+                if (await recall(set)) set.result.forEach((text, index) => { if (set.bridge[index]) show(blocks[index], text, true); });
+                return { element, blocks, set };
+            });
+            prepared.set(number, page);
+        }
+        return page;
+    }
+
+    // The emergency, once the server failed or cannot keep up and the Mozilla module is on: Mozilla translates the page in view and the three after it,
+    // the page in view first, and the window moves along with the reader. Its results stay in this browser.
+    const browser = translates && reader.dataset.browserTranslation === 'true' ? browserTranslator(reader, source, createTranslationWorker) : undefined;
+    let emergency = false;
+    const signal = readerLifetime();
+    async function ahead(number: number): Promise<boolean> {
+        let first: Promise<boolean> | undefined;
+        for (const next of pagesAhead(number, page => units.has(page))) {
+            const page = await prepare(next);
+            if (!page) continue;
+            const filled = browser!.fill(target, page.set, page.set.list.map((_, index) => index), () => !signal.aborted, indices => {
+                for (const index of indices) show(page.blocks[index], page.set.result[index], true);
+                fit(page.element);
+            }).catch(() => false);
+            first ??= filled;
+        }
+        return first ?? true;
+    }
+    function stepIn(number: number): Promise<boolean> {
+        emergency = true;
+        return ahead(number);
+    }
+
     // The page in view: only its blocks are translated, one after another. What the server's job translated meanwhile comes from the cache; while the
     // model is busy with other work, the page waits for it.
     let current = 0;
@@ -47,25 +92,27 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
         if (!translates || running.has(number)) return;
         running.add(number);
         try {
-            const element = await built.get(number);
-            if (!element) return;
+            const page = await prepare(number);
+            if (!page) return;
+            const { element, blocks, set } = page;
+            const texts = set.list;
             const address = `${url}${units.get(number)}/local-translations/${encodeURIComponent(target)}/${encodeURIComponent(model!)}`;
-            const blocks = Array.from(element.querySelectorAll<HTMLElement>('[data-b]'));
-            // A block holding others (a lead-in in its own look and its sentence) is translated through them.
-            const texts = blocks.map(block => block.querySelector('[data-b]') ? '' : block.textContent?.trim() ?? '');
             const wanted = texts.filter(Boolean).length;
+            const server = (index: number) => !!set.result[index].trim() && !set.bridge[index];
+            const durations: number[] = [];
             while (current === number) {
                 const cached = await fetch(`${address}?sourceLanguage=${encodeURIComponent(source)}`, { credentials: 'same-origin' });
                 if (cached.ok) {
                     const saved = JSON.parse((await cached.json() as { blocks: string }).blocks) as (string | null)[];
                     if (Array.isArray(saved) && saved.length === blocks.length) saved.forEach((text, index) => {
-                        if (typeof text === 'string' && text.trim() && !blocks[index].dataset.translated) show(blocks[index], text);
+                        if (typeof text === 'string' && text.trim() && !server(index)) put(page, index, text);
                     });
                 }
                 fit(element);
-                const index = blocks.findIndex((block, at) => texts[at] && !block.dataset.translated);
+                const index = blocks.findIndex((_, at) => texts[at] && !server(at));
                 if (index < 0) { say(undefined); return; }
-                say(`${reader.dataset.translatingLabel ?? ''} ${Math.round(blocks.filter(block => block.dataset.translated).length * 100 / Math.max(1, wanted))} %`);
+                say(`${reader.dataset.translatingLabel ?? ''} ${Math.round(texts.filter((_, at) => server(at)).length * 100 / Math.max(1, wanted))} %`);
+                const started = Date.now();
                 const response = await fetch(`${address}/blocks/${index}`, {
                     method: 'POST', credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json', RequestVerificationToken: reader.dataset.antiforgery! },
@@ -74,13 +121,24 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
                 if (response.status === 503 && (await response.text()).includes('translation_local_busy')) { await pause(4000); continue; }
                 if (!response.ok) throw new Error('The block was not translated.');
                 const { text } = await response.json() as { text: string };
-                show(blocks[index], text?.trim() ? text : texts[index]);
+                put(page, index, text?.trim() ? text : texts[index]);
+                durations.push(Date.now() - started);
+                if (browser && !emergency && serverIsSlow(durations)) void stepIn(number);
             }
         } catch {
-            if (current === number) say(reader.dataset.translationFailedLabel);
+            if (current !== number) return;
+            const rescued = !!browser && await stepIn(number);
+            if (current === number) say(rescued ? undefined : reader.dataset.translationFailedLabel);
         } finally {
             running.delete(number);
         }
+    }
+
+    // The server's text for a block, in place of the original or of Mozilla's.
+    function put(page: Page, index: number, text: string): void {
+        page.set.result[index] = text;
+        page.set.bridge[index] = false;
+        show(page.blocks[index], text);
     }
 
     function say(text: string | undefined): void {
@@ -90,14 +148,14 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
     }
 
     // The translation takes the look of the block's main text; text flowing around a picture is shared out over its boxes by their share of the original.
-    function show(block: HTMLElement, text: string): void {
+    function show(block: HTMLElement, text: string, browser = false): void {
         const parts = Array.from(block.querySelectorAll<HTMLElement>(':scope > [data-part]'));
         if (parts.length === 0) replace(block, text);
         else {
             // Shared out by the original's letters until the page is laid out; then it flows box by box (fit).
             splitText(text, parts.map(part => part.textContent?.length ?? 0)).forEach((piece, index) => replace(parts[index], piece));
         }
-        block.dataset.translated = 'true';
+        block.dataset.translated = browser ? 'browser' : 'true';
     }
 
     function replace(box: HTMLElement, text: string): void {
@@ -136,7 +194,7 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
             if (label) series.set(label, [...series.get(label) ?? [], ...rows]);
             const text = block.textContent ?? '';
             if (rows.length === 1 && (block.dataset.label !== undefined && spreads(text) || block.dataset.running !== undefined && capitals(text)))
-                spread.push({ row: rows[0], translated: !!block.querySelector('[data-translated]') || block.dataset.translated === 'true' });
+                spread.push({ row: rows[0], translated: !!block.querySelector('[data-translated]') || block.dataset.translated !== undefined });
         }
         for (const group of series.values()) {
             const size = Math.min(...group.map(row => parseFloat(row.style.fontSize)));
@@ -258,18 +316,24 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
         }
     }));
 
+    function element(number: number): Promise<HTMLElement | undefined> {
+        let element = built.get(number);
+        if (!element) {
+            element = build(number).catch(() => undefined);
+            built.set(number, element);
+        }
+        return element;
+    }
+
     return {
         has: number => units.has(number),
         page(number) {
-            let element = built.get(number);
-            if (!element) {
-                element = build(number).catch(() => undefined);
-                built.set(number, element);
-            }
+            const shown = element(number);
             if (current !== number) say(undefined);
             current = number;
+            if (emergency) void ahead(number);
             void translate(number);
-            return element;
+            return shown;
         },
         fit
     };

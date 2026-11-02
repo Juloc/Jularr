@@ -3,7 +3,7 @@ import { initializeCards } from '../../../Framework/Components/MediaCard';
 import { initializeHero } from '../../../Framework/Components/HeroCarousel';
 import { inserted, onPage } from '../../../Modules/Navigation/PageSwap';
 
-// The header search of this page loads results here instead of swapping the page; set up once per visit.
+// Enter in the header search loads this page's results here instead of swapping the page; set up once per visit.
 let searching: HTMLFormElement | undefined;
 let more: ((next: HTMLAnchorElement) => void) | undefined;
 
@@ -92,61 +92,18 @@ function setup(): void {
     initializeHero();
 
     const searchForm = document.querySelector<HTMLFormElement>('.app-header .search-box');
-    const searchInput = searchForm?.querySelector<HTMLInputElement>('input[type="search"]');
     let results = document.querySelector<HTMLElement>('#discover-results');
     searching = undefined;
     more = undefined;
 
-    if (searchForm && searchInput && results) {
+    if (searchForm && results) {
         searching = searchForm;
         let request: AbortController | undefined;
         let generation = 0;
-        let timer: ReturnType<typeof setTimeout> | undefined;
         let loading = false;
         let empty = 0;
         let observer: IntersectionObserver | undefined;
         let recommendationRequest: AbortController | undefined;
-        let suggesting: AbortController | undefined;
-        let suggestTimer: ReturnType<typeof setTimeout> | undefined;
-
-        // Titles Discover keeps, suggested under the field while typing.
-        const suggestions = document.createElement('div');
-        suggestions.className = 'discover-suggestions';
-        suggestions.id = 'discover-suggestions';
-        suggestions.hidden = true;
-        searchForm.append(suggestions);
-        searchInput.setAttribute('aria-controls', suggestions.id);
-
-        function closeSuggestions(): void {
-            suggesting?.abort();
-            clearTimeout(suggestTimer);
-            suggestions.hidden = true;
-            suggestions.replaceChildren();
-        }
-
-        async function suggest(): Promise<void> {
-            suggesting?.abort();
-            if (searchInput!.value.trim().length < 2) {
-                closeSuggestions();
-                return;
-            }
-
-            suggesting = new AbortController();
-            const signal = suggesting.signal;
-            try {
-                const endpoint = searchAddress();
-                endpoint.searchParams.set('handler', 'Suggestions');
-                const response = await fetch(endpoint, { signal, headers: { Accept: 'text/html' } });
-                if (!response.ok || response.redirected) return;
-                const list = new DOMParser().parseFromString(await response.text(), 'text/html').querySelector<HTMLElement>('.discover-suggestions__list');
-                if (signal.aborted || !list) return;
-                suggestions.replaceChildren(list);
-                suggestions.hidden = list.childElementCount === 0;
-                inserted(list);
-            } catch {
-                // Suggestions are optional; the results below still load.
-            }
-        }
 
         // Provider shelves never block local HTML.
         async function recommendations(): Promise<void> {
@@ -285,49 +242,8 @@ function setup(): void {
             return address;
         }
 
-        // Cancel at the next keystroke.
-        searchInput.addEventListener('input', () => {
-            request?.abort();
-            recommendationRequest?.abort();
-            clearTimeout(suggestTimer);
-            suggestTimer = setTimeout(() => void suggest(), 150);
-            ++generation;
-            loading = false;
-            observer?.disconnect();
-            clearTimeout(timer);
-            timer = setTimeout(() => void load(searchAddress(), false), 300);
-        });
-
-        // Arrow keys walk the suggestions, Escape closes them; a click keeps the focus in the field until it opens the title.
-        searchInput.addEventListener('keydown', event => {
-            if (event.key === 'ArrowDown' && !suggestions.hidden) {
-                event.preventDefault();
-                suggestions.querySelector<HTMLAnchorElement>('a')?.focus();
-            } else if (event.key === 'Escape') {
-                closeSuggestions();
-            }
-        });
-        suggestions.addEventListener('keydown', event => {
-            const links = Array.from(suggestions.querySelectorAll<HTMLAnchorElement>('a'));
-            const index = links.indexOf(document.activeElement as HTMLAnchorElement);
-            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                event.preventDefault();
-                const next = index + (event.key === 'ArrowDown' ? 1 : -1);
-                (next < 0 ? searchInput : links[Math.min(next, links.length - 1)]).focus();
-            } else if (event.key === 'Escape') {
-                closeSuggestions();
-                searchInput.focus();
-            }
-        });
-        suggestions.addEventListener('pointerdown', event => event.preventDefault());
-        searchForm.addEventListener('focusout', event => {
-            if (!searchForm.contains(event.relatedTarget as Node | null)) closeSuggestions();
-        });
-
         searchForm.addEventListener('submit', event => {
             event.preventDefault();
-            closeSuggestions();
-            clearTimeout(timer);
             void load(searchAddress(), false);
         });
 
