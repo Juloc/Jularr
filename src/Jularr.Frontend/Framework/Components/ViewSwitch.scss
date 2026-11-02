@@ -1,3 +1,5 @@
+@use "HitArea";
+
 // The switch between the views of a list: a small capsule of icon links, the chosen one in the soft accent with its outline.
 .view-switch {
     display: inline-flex;
@@ -21,5 +23,8 @@
 
         &:hover { background: var(--surface); color: var(--accent-text); }
         &--active, &--active:hover { border-color: var(--accent-outline); background: var(--accent-soft); color: var(--accent-text); }
+
+        // The links sit 2px apart: their taps are 34px wide, 44px high.
+        @include HitArea.phone-hit-area(2px);
     }
 }

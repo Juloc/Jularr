@@ -335,7 +335,7 @@ namespace Jularr.Backend.Logic.Media
         public const int TopVotes = 300;
         public const int NewWithinDays = 60;
         public const int UpcomingWithinDays = 180;
-        public const int SuggestionCount = 6;
+        public const int SuggestionsPerType = 6;
 
         // On the full tier a catalog read whole once answers Discover itself; only its full sync reads a catalog whole, and that runs only for a catalog with a full list.
         public static async Task<IReadOnlySet<string>> ReadWholeExternalWorkCatalogsAsync(this LogicContext ctx, CancellationToken ct)
@@ -516,8 +516,9 @@ namespace Jularr.Backend.Logic.Media
         public static string TitlePrefix(string query) =>
             query.Trim().ToLowerInvariant().Replace("\\", "\\\\", StringComparison.Ordinal).Replace("%", "\\%", StringComparison.Ordinal).Replace("_", "\\_", StringComparison.Ordinal) + "%";
 
-        // Suggestions while typing: titles in the profile's library first, then trending ones, titles that begin with the text,
-        // and the most popular; each catalog ranks its own titles, a title two catalogs know shows once.
+        // Suggestions while typing, grouped by type: each type ranks its titles by how well the title matches (the typed title, then one that begins with it,
+        // then any other), then titles in the library, trending and the most popular; the type with the best match comes first, a title two catalogs know shows once.
+        // Each names its first genre where details gave one.
         public static async Task<IReadOnlyList<ExternalWorkShelfItemData>> SuggestExternalWorksAsync(this LogicContext ctx, ExternalWorkSuggestionQueryData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -527,14 +528,28 @@ namespace Jularr.Backend.Logic.Media
                     SELECT
                         scope."Shelf",
                         work."Id",
+                        match."Relevance",
                         row_number() OVER (
-                            PARTITION BY work."CatalogNamespace"
-                            ORDER BY work."TrendingRank" IS NULL, lower(work."CanonicalTitle") LIKE @TitlePrefix DESC, work."Popularity" DESC NULLS LAST, work."Id"
+                            PARTITION BY scope."Shelf"
+                            ORDER BY
+                                match."Relevance",
+                                EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS library WHERE library."WorkId" = work."Id") DESC,
+                                work."TrendingRank" NULLS LAST,
+                                work."Popularity" DESC NULLS LAST,
+                                work."Id"
                         ) AS "Place"
                     FROM
                         "Works" AS work
                         JOIN jsonb_to_recordset(@Shelves::jsonb) AS scope ("Shelf" integer, "Namespace" text, "MediaTypeId" smallint, "MediaSubtypeId" smallint)
                             ON scope."Namespace" = work."CatalogNamespace" AND scope."MediaTypeId" = work."MediaTypeId" AND scope."MediaSubtypeId" = coalesce(work."MediaSubtypeId", 0)
+                        CROSS JOIN LATERAL (
+                            SELECT
+                                CASE
+                                    WHEN lower(work."CanonicalTitle") = @Title THEN 0
+                                    WHEN lower(work."CanonicalTitle") LIKE @TitlePrefix THEN 1
+                                    ELSE 2
+                                END AS "Relevance"
+                        ) AS match
                     WHERE
                         work."SearchText" @@ to_tsquery('simple', @SearchTerms)
                         AND NOT work."IsAdult"
@@ -554,6 +569,7 @@ namespace Jularr.Backend.Logic.Media
                     found."WorkId",
                     found."MediaStateTypeId",
                     found."PlexUrl",
+                    found."Genre",
                     found."CatalogFormatId"
                 FROM
                     (
@@ -561,6 +577,7 @@ namespace Jularr.Backend.Logic.Media
                         SELECT DISTINCT ON (coalesce(imdb."Value", work."Id"::text))
                             candidate."Shelf",
                             candidate."Place",
+                            candidate."Relevance",
                             known."IsInLibrary",
                             work."CatalogNamespace" AS "Namespace",
                             identity."Value",
@@ -574,6 +591,18 @@ namespace Jularr.Backend.Logic.Media
                             work."Id" AS "WorkId",
                             known."MediaStateTypeId",
                             known."PlexUrl",
+                            (
+                                SELECT
+                                    nullif(btrim(split_part(fact."Value", ',', 1)), '')
+                                FROM
+                                    "WorkMetadataFacts" AS fact
+                                WHERE
+                                    fact."WorkId" = work."Id"
+                                    AND fact."FactKey" = 'Genres'
+                                ORDER BY
+                                    fact."IsManual" DESC
+                                LIMIT 1
+                            ) AS "Genre",
                             work."CatalogFormatId"
                         FROM
                             candidate
@@ -624,10 +653,9 @@ namespace Jularr.Backend.Logic.Media
                             candidate."Place"
                     ) AS found
                 ORDER BY
-                    found."IsInLibrary" IS NOT TRUE,
-                    found."Place",
-                    found."Shelf"
-                LIMIT @Limit;
+                    min(found."Relevance") OVER (PARTITION BY found."Shelf"),
+                    found."Shelf",
+                    found."Place";
                 """;
             sql.Parameters.Add(data);
             return await ctx.ReadSql.ReadListAsync<ExternalWorkShelfItemData>(sql, ct);

@@ -18,8 +18,8 @@ namespace Jularr.Backend.Logic.Acquisition
         Discard = 3
     }
 
-    // A file of a finished download, where its name says it belongs and where the grab wanted it.
-    internal sealed record ImportFileProposal(string Path, int? Season, int? Episode, int? WantedSeason, int? WantedEpisode);
+    // A file of a finished download, where its name says it belongs and where the grab wanted it; a file the import left out keeps why (UnplacedFile).
+    internal sealed record ImportFileProposal(string Path, int? Season, int? Episode, int? WantedSeason, int? WantedEpisode, string? Reason = null);
 
     internal sealed record ImportVerdict(ImportVerdictKind Kind, string? ReasonKey = null, IReadOnlyList<ImportFileProposal>? Proposal = null)
     {

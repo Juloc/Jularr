@@ -1,7 +1,7 @@
 # Media list import
 
 A one-time import of many titles at once for the Owner and Media Managers (permission
-`media.manual.update`, modules Library and Requests): page `/Admin/Import` in the Media
+`media.manual.update`, modules Library and Requests): page `/Admin/Import` in the Works
 menu. No profile access, no collections; it is not the file import of a library and not a
 recurring import list. Nothing is placed on disk; the only download is what the normal
 search of a monitored title starts.

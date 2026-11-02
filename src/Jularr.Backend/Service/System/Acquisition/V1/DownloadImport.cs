@@ -45,20 +45,21 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            var (root, patterns, target, units) = await context.ExecuteBatchAsync(async (ctx, token) =>
+            var (root, patterns, target, units, chapterUnits) = await context.ExecuteBatchAsync(async (ctx, token) =>
                 (await ctx.ReadImportRootAsync(download.WantedItemId, token), await ctx.ReadNamingPatternsAsync(token), await ctx.ReadWantedTargetAsync(download.WantedItemId, token),
                     download.MediaTypeId == MediaType.Series ? await ctx.ReadUnitStatesAsync(download.WantedItemId, token)
-                    : download.MediaSubtypeId == MediaSubtype.LightNovel ? await ctx.ReadVolumeStatesAsync(download.WantedItemId, token) : []), ct);
+                    : download.MediaSubtypeId is MediaSubtype.LightNovel or MediaSubtype.Manga ? await ctx.ReadBookUnitStatesAsync(download.WantedItemId, WorkUnitType.Volume, token) : [],
+                    download.MediaSubtypeId == MediaSubtype.Manga ? await ctx.ReadBookUnitStatesAsync(download.WantedItemId, WorkUnitType.Chapter, token) : []), ct);
             if (root is null)
             {
                 await AttentionAsync(context, download.OperationId, "import_no_library", null, ct);
                 return;
             }
 
-            // Episodes of a series, volumes of a light novel; the files of a volume pack that name no volume stay in the download for a person.
+            // Episodes of a series, volumes of a light novel or manga, a manga's chapters with their volume.
             IReadOnlyList<TargetUnit> known = download.MediaTypeId == MediaType.Series ? EpisodeNumbering.Episodes(units)
                 : [.. units.Select(unit => new TargetUnit(unit.WorkUnitId, null, unit.Number, unit.HasMedia, title: unit.Title))];
-            var unmatched = download.MediaTypeId == MediaType.Book ? ImportPlacementLogic.UnmatchedVolumes(download.MediaSubtypeId, files, known) : null;
+            IReadOnlyList<TargetUnit> chapters = [.. chapterUnits.Select(unit => new TargetUnit(unit.WorkUnitId, unit.ParentNumber, unit.Number, unit.HasMedia, title: unit.Title))];
 
             var parsedFacts = ReleaseFacts.Of(download.Title, download.MediaTypeId == MediaType.Movie);
             var facts = new ReleaseFact(TextLimit.Cut(download.Title, 500)!, parsedFacts?.ReleaseGroup, download.QualityKey ?? parsedFacts?.QualityKey,
@@ -79,10 +80,10 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            // Music follows its tags; ebooks and comics must be what their names say.
+            // Music follows its tags; ebooks and comics must be what their names say, and one that is not is left out with the check it failed.
             Dictionary<string, AudioTags>? tags = download.MediaTypeId == MediaType.Music ? new(StringComparer.Ordinal) : null;
-            var placements = new List<ImportPlacementData>();
-            var planned = 0;
+            var unplaced = new List<UnplacedFile>();
+            IReadOnlyList<ImportPlacementData> placements;
             try
             {
                 if (tags is not null)
@@ -94,16 +95,24 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     }
                 }
 
-                foreach (var placement in ImportPlacementLogic.Plan(download.MediaTypeId, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey,
-                    files, patterns, facts, download.Author, download.TrackCount, download.PlatformName, known, tags, ImportPlacementLogic.KnownValues(target)))
+                var candidates = new List<StorageFile>();
+                foreach (var file in files)
                 {
-                    planned++;
-                    if (!placement.IsMedia || LibraryFileTypes.GetAssetType(placement.SourcePath) is not (MediaAssetType.Ebook or MediaAssetType.Comic)
-                        || await IsDocumentAsync(source, StoragePath.Combine(sourceDirectory, placement.SourcePath), placement.Extension, ct))
+                    if (download.MediaTypeId == MediaType.Book && LibraryFileTypes.GetAssetType(file.RelativePath) is MediaAssetType.Ebook or MediaAssetType.Comic)
                     {
-                        placements.Add(placement);
+                        await using var document = await source.OpenReadAsync(StoragePath.Combine(sourceDirectory, file.RelativePath), ct);
+                        if (await LibraryFileTypes.CheckDocumentAsync(Path.GetExtension(file.RelativePath), document, ct) is { } failed)
+                        {
+                            unplaced.Add(new UnplacedFile(file.RelativePath, failed));
+                            continue;
+                        }
                     }
+
+                    candidates.Add(file);
                 }
+
+                placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey,
+                    candidates, patterns, facts, download.Author, download.TrackCount, download.PlatformName, known, tags, ImportPlacementLogic.KnownValues(target), unplaced, chapters);
             }
             catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
             {
@@ -111,27 +120,32 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
+            // Files of a book that name no unit of the Work wait for a person, with what else was left out and why.
+            var unmatched = unplaced.Any(file => file.NamesNoUnit);
+            IReadOnlyList<ImportFileProposal> leftOut = [.. unplaced.Where(file => file.Reason != UnplacedFile.Present).OrderBy(file => file.Path, StringComparer.Ordinal)
+                .Select(file => new ImportFileProposal(file.Path, null, null, null, null, file.Reason))];
             if (placements.Count == 0)
             {
-                // A volume pack whose volumes the library already holds is done; one with files of no volume waits for a person.
-                if (unmatched is { Count: > 0 })
+                // A pack whose volumes the library already holds is done, or waits with its files of no volume.
+                if (unplaced.Any(file => file.Reason == UnplacedFile.Present) && unplaced.All(file => file.Reason == UnplacedFile.Present || file.NamesNoUnit))
                 {
-                    await AttentionAsync(context, download.OperationId, UnmatchedFilesKey, null, ct, UnmatchedProposal(sourceRef, unmatched));
-                }
-                else if (unmatched is not null && planned == 0)
-                {
+                    if (unmatched)
+                    {
+                        await AttentionAsync(context, download.OperationId, UnmatchedFilesKey, null, ct, ImportProposal.Write(sourceRef, leftOut));
+                        return;
+                    }
+
                     await context.ExecuteBatchAsync(async (ctx, token) =>
                     {
                         await ctx.CompleteDownloadAsync(new DownloadOperationParameters(download.OperationId), token);
                         return true;
                     }, ct);
-                }
-                else
-                {
-                    // Nothing could be placed (no readable book, no known layout): the files stay for a person, where a failed download would be cleaned up.
-                    await AttentionAsync(context, download.OperationId, NothingPlaceableKey, null, ct, UnmatchedProposal(sourceRef, [.. files.Select(file => file.RelativePath)]));
+                    return;
                 }
 
+                // Nothing could be placed: every file stays for a person with why, where a failed download would be cleaned up.
+                var everyFile = allSourceFiles ?? await ListAsync(source, sourceDirectory, files, ct);
+                await AttentionAsync(context, download.OperationId, NothingPlaceableKey, null, ct, ImportProposal.Write(sourceRef, ImportPlacementLogic.Unplaced(everyFile, files, unplaced)));
                 return;
             }
 
@@ -165,17 +179,17 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             var commit = await CommitAsync(context, new ImportCommitRequest(root, download.WorkId, download.GamePlatformId, placements, source, sourceDirectory, files,
                 path => download.MediaTypeId == MediaType.Game ? new ReleaseFact(TextLimit.Cut(Path.GetFileName(path), 500)!, facts.ReleaseGroup, facts.QualityKey, facts.Edition, facts.Revision) : facts,
-                ImportTransferMode.Link, download.OperationId, null, download.MediaTypeId, acquisitionProfile, FinishesDownload: unmatched is not { Count: > 0 }), ct);
+                ImportTransferMode.Link, download.OperationId, null, download.MediaTypeId, acquisitionProfile, FinishesDownload: !unmatched), ct);
             if (commit.FailureKey is { } failure)
             {
                 await AttentionAsync(context, download.OperationId, failure, null, ct);
                 return;
             }
 
-            // What matched is in the library; the download keeps waiting with the files that name no volume.
-            if (unmatched is { Count: > 0 })
+            // What matched is in the library; the download keeps waiting with the files that name no unit.
+            if (unmatched)
             {
-                await AttentionAsync(context, download.OperationId, UnmatchedFilesKey, null, ct, UnmatchedProposal(sourceRef, unmatched));
+                await AttentionAsync(context, download.OperationId, UnmatchedFilesKey, null, ct, ImportProposal.Write(sourceRef, leftOut));
                 return;
             }
 
@@ -540,17 +554,25 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             return null;
         }
 
-        private static async Task<bool> IsDocumentAsync(StorageFiles source, string path, string extension, CancellationToken ct)
+        // Every file of the download, also those of a format the import does not take; the import's own files when the folder cannot be read again.
+        private static async Task<IReadOnlyList<StorageFile>> ListAsync(StorageFiles source, string directory, IReadOnlyList<StorageFile> files, CancellationToken ct)
         {
-            var header = new byte[128];
-            await using var stream = await source.OpenReadAsync(path, ct);
-            var read = await stream.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, ct);
-            return LibraryFileTypes.IsDocumentContent(extension, header.AsSpan(0, read));
-        }
+            var state = new StorageScanState();
+            var found = new List<StorageFile>();
+            try
+            {
+                await foreach (var file in source.EnumerateFilesAsync(directory, null, state, ct))
+                {
+                    found.Add(file);
+                }
+            }
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+            {
+                return files;
+            }
 
-        // Where the download's files lie and the ones a person must look at.
-        private static string UnmatchedProposal(ImportSourceRef source, IReadOnlyList<string> files) =>
-            ImportProposal.Write(source, [.. files.Select(path => new ImportFileProposal(path, null, null, null, null))]);
+            return state.IsComplete ? found : files;
+        }
 
         public Task AttentionAsync(LogicContext context, long operationId, string attentionKey, string? attentionUrl, CancellationToken ct, string? attentionProposal = null) =>
             context.ExecuteBatchAsync(async (ctx, token) =>

@@ -19,7 +19,7 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Admin");
 
                 // Four figures, and only the services that are set up: here the database alone.
-                foreach (var figure in new[] { "System status", "Media", "Downloads", "Open requests" })
+                foreach (var figure in new[] { "System status", "Works", "Downloads", "Open requests" })
                 {
                     await Assertions.Expect(page.Locator(".kpi-tile", new() { HasText = figure })).ToHaveCountAsync(1);
                 }

@@ -3,7 +3,9 @@ using System.Text.Encodings.Web;
 namespace Jularr.Frontend.Framework
 {
     // A GET search; the target page reads the query from the address. With a list selector it also narrows that list as the person types (ListFilter), and an icon makes it a field of a page's toolbar.
-    public sealed class SearchBox(string action, string labelKey, string? value, IReadOnlyDictionary<string, string>? keep = null, string? listFilter = null, IUiComponent? icon = null, bool scripted = false) : IUiComponent
+    // A live search shows the page with the query shortly after typing (LiveSearch, which the page loads).
+    public sealed class SearchBox(string action, string labelKey, string? value, IReadOnlyDictionary<string, string>? keep = null, string? listFilter = null, IUiComponent? icon = null, bool scripted = false,
+        bool live = false) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -25,6 +27,7 @@ namespace Jularr.Frontend.Framework
 
             // A field that a script handles itself (the menu's find field) is no in-place navigation.
             if (scripted) form.Attribute("data-navigation", "full");
+            if (live) form.Attribute("data-search-live", "");
             form.WriteTo(writer, encoder, texts);
         }
 

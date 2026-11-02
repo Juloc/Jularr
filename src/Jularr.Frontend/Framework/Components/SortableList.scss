@@ -1,3 +1,5 @@
+@use "HitArea";
+
 // A list put in order: each row a tile with its handle, position, icon tile, title and state line, switch and menu. A row held by its handle
 // lifts off the list and follows the pointer (--drag-offset, set by the script) while the others make room.
 .sortable {
@@ -60,6 +62,8 @@
         transition: background-color var(--transition), color var(--transition);
 
         &:hover { background: var(--accent-soft); color: var(--accent-text); }
+
+        @include HitArea.phone-hit-area($border: 0px);
     }
 
     &__handle { cursor: grab; touch-action: none; }

@@ -1,3 +1,5 @@
+@use "HitArea";
+
 // A switch that is a button: the track shows the state and the click changes it.
 .work-switch {
     display: inline-flex;
@@ -11,6 +13,9 @@
     font-weight: 600;
     cursor: pointer;
 }
+
+// The switch is a few pixels high: on a phone its tap reaches up and down into the free space of its row (the static dot is no control).
+.work-switch:not(.work-switch--static) { @include HitArea.phone-hit-area(8px, 20px, $border: 0px); }
 
 .work-switch__track {
     position: relative;

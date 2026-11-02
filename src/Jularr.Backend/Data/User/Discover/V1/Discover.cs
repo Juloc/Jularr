@@ -123,7 +123,8 @@ namespace Jularr.Backend.Data.User.Discover.V1
     // A title found while typing, in the scope it opens in.
     public sealed class DiscoverSuggestionV1 : BaseResponse
     {
-        public DiscoverSuggestionV1(string scopeSlug, string @namespace, string externalId, string title, int? releaseYear, string? posterUrl, long workId)
+        public DiscoverSuggestionV1(string scopeSlug, string @namespace, string externalId, string title, int? releaseYear, string? posterUrl, long workId, MediaStateType? mediaStateTypeId,
+            string? genre, decimal? rating)
         {
             ScopeSlug = scopeSlug;
             Namespace = @namespace;
@@ -132,6 +133,9 @@ namespace Jularr.Backend.Data.User.Discover.V1
             ReleaseYear = releaseYear;
             PosterUrl = posterUrl;
             WorkId = workId;
+            MediaStateTypeId = mediaStateTypeId;
+            Genre = genre;
+            Rating = rating;
         }
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.ScopeSlug))]
@@ -154,6 +158,15 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId), false)]
+        public MediaStateType? MediaStateTypeId { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.Genres), false)]
+        public string? Genre { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
+        public decimal? Rating { get; }
     }
 
     public sealed class SearchDiscoverDataV1 : BaseData
