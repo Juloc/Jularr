@@ -76,11 +76,16 @@ namespace Jularr.Frontend.Pages.Admin.Works
         [BindProperty(SupportsGet = true, Name = "view")]
         public WorksViewType? ViewChoice { get; set; }
 
+        // The newest titles come first; another order starts in its own first direction.
         [BindProperty(SupportsGet = true, Name = "sort")]
-        public WorkSortType Sort { get; set; }
+        public WorkSortType Sort { get; set; } = WorkSortType.Added;
 
         [BindProperty(SupportsGet = true, Name = "desc")]
-        public bool Descending { get; set; }
+        public bool? Descending { get; set; }
+
+        private bool IsDescending => Descending ?? DescendsFirst(Sort);
+
+        private static bool DescendsFirst(WorkSortType sort) => sort == WorkSortType.Added;
 
         private bool CanManageWanted => texts.CanManageWanted();
 
@@ -100,6 +105,8 @@ namespace Jularr.Frontend.Pages.Admin.Works
             page.Asset("Framework/Components/ActionDock.entry.ts");
             page.Asset("Framework/Components/Truncated.entry.ts");
             page.Asset("Framework/Components/MediaCard.entry.ts");
+            page.Asset("Framework/Components/ChoiceSelect.entry.ts");
+            page.Asset("Framework/Components/LiveSearch.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             if (FormError is not null && _bulkFailed) page.Content.Add(new P(ErrorText.Of(FormError)).Class("ui-page-error").Attribute("role", "alert"));
@@ -239,7 +246,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             var ct = HttpContext.RequestAborted;
             _view = ResolveView();
             _exclusions = await readExclusions.ExecuteAsync<PageResult<WorkExclusionV1>>(new ReadWorkExclusionsParametersV1(Math.Max(1, ExclusionPage)), ct);
-            _works = await read.ExecuteAsync<PageResult<WorkListItemV1>>(new ReadWorksParametersV1(PageNumber, PageSize, TypeFilter, MonitoredFilter, StatusFilter, LibraryFilter, ProfileFilter, QueryFilter, Sort, Descending), ct);
+            _works = await read.ExecuteAsync<PageResult<WorkListItemV1>>(new ReadWorksParametersV1(PageNumber, PageSize, TypeFilter, MonitoredFilter, StatusFilter, LibraryFilter, ProfileFilter, QueryFilter, Sort, IsDescending), ct);
             _summary = await readSummary.ExecuteAsync<WorksSummaryV1>(new ReadWorksParametersV1(1, PageSize, TypeFilter, null, null, LibraryFilter, ProfileFilter, QueryFilter), ct);
             _libraries = await readLibraries.ExecuteAsync<BaseDataList<LibraryOverviewV1>>(new ReadLibraryOverviewParametersV1(), ct);
 

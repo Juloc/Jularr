@@ -13359,6 +13359,18 @@
    "Search titles",
    "Titel suchen"
   ],
+  "works.sort": [
+   "Sort by",
+   "Sortieren nach"
+  ],
+  "works.sort.ascending": [
+   "Ascending, turn to descending",
+   "Aufsteigend, auf absteigend umschalten"
+  ],
+  "works.sort.descending": [
+   "Descending, turn to ascending",
+   "Absteigend, auf aufsteigend umschalten"
+  ],
   "works.filter.drawer": [
    "Filters",
    "Filter"
