@@ -190,7 +190,7 @@ namespace Jularr.Backend.Service.User.Library.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Started, unfinished items with a file that can be played now. Set-based over the profile's started Works alone: its view and the assets are never read for the catalog, and no per-item lookup runs.
+            // Started, unfinished items with a file that can be played now, one per title: the unit the profile touched last. Set-based over the profile's started Works alone: its view and the assets are never read for the catalog, and no per-item lookup runs.
             var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 """
@@ -241,7 +241,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                         candidate."WorkUnitId",
                         candidate."Id"
                 ), playableStarted AS MATERIALIZED (
-                    SELECT
+                    SELECT DISTINCT ON (progress."WorkId")
                         progress."Id",
                         progress."WorkId",
                         progress."PositionMs",
@@ -256,6 +256,10 @@ namespace Jularr.Backend.Service.User.Library.V1
                     FROM
                         started AS progress
                         JOIN playable AS asset ON asset."WorkId" = progress."WorkId" AND coalesce(asset."WorkUnitId", 0) = coalesce(progress."WorkUnitId", 0)
+                    ORDER BY
+                        progress."WorkId",
+                        progress."UpdatedAt" DESC,
+                        progress."Id" DESC
                 )
                 SELECT
                     progress."WorkId",
