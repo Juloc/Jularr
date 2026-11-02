@@ -393,6 +393,7 @@ namespace Jularr.Backend.Tests
             var detailsHtml = await requestedDetails.Content.ReadAsStringAsync();
             StringAssert.Contains(detailsHtml, "Requested");
             Assert.IsFalse(detailsHtml.Contains("Request this work", StringComparison.Ordinal));
+            StringAssert.Contains(detailsHtml, "breadcrumb__item\"><a href=\"/\">Discover</a>", "A title the library has nothing of yet sits under Discover.");
 
             // Disabled does not erase data.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Requests'");

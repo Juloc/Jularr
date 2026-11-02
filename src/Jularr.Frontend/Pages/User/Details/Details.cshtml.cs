@@ -79,7 +79,15 @@ namespace Jularr.Frontend.Pages.User.Details
         protected override void Define(Page page)
         {
             page.Title("details.title", _work?.CanonicalTitle);
-            page.Parent("nav.library", "/Library");
+            // A title the library has nothing of yet was found through Discover.
+            if (_work?.AvailabilityStateId is MediaAvailabilityState.Missing or MediaAvailabilityState.Requested or MediaAvailabilityState.Searching or MediaAvailabilityState.Downloading or MediaAvailabilityState.Paused)
+            {
+                page.Parent("discover.title", "/");
+            }
+            else
+            {
+                page.Parent("nav.library", "/Library");
+            }
             page.Navigation("nav.home");
             page.Asset("Pages/User/Details/Details.entry.scss");
             page.Asset("Framework/Components/Truncated.entry.ts");
