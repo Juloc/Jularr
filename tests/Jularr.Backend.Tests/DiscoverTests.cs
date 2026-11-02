@@ -564,10 +564,12 @@ namespace Jularr.Backend.Tests
                     (702, 'tmdb_movie', 1, NULL, 'Out Soon', current_date + 30, 'https://img.test/702.jpg', 40, NULL, NULL, NULL, FALSE),
                     (703, 'tmdb_movie', 1, NULL, 'Matrix Adult', '2001-01-01', 'https://img.test/703.jpg', 90, 9.0, 9000, 2, TRUE),
                     (704, 'tmdb_movie', 1, NULL, 'Matrix Unread', NULL, NULL, 99, NULL, NULL, 3, FALSE),
-                    (9021, 'anilist', 2, 1, 'The Matrix Anime', '2021-04-01', 'https://img.test/21.jpg', 5000, 8.0, 5000, 1, FALSE);
+                    (9021, 'anilist', 2, 1, 'The Matrix Anime', '2021-04-01', 'https://img.test/21.jpg', 5000, 8.0, 5000, 1, FALSE),
+                    (9022, 'anilist', 2, 1, 'Matrix', '1990-01-01', 'https://img.test/22.jpg', 1, NULL, NULL, NULL, FALSE);
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES
                     (603, 'tmdb_movie', '603'), (604, 'tmdb_movie', '604'), (700, 'tmdb_movie', '700'), (701, 'tmdb_movie', '701'), (702, 'tmdb_movie', '702'), (703, 'tmdb_movie', '703'),
-                    (704, 'tmdb_movie', '704'), (9021, 'anilist', '21'), (603, 'imdb', 'tt0133093'), (604, 'imdb', 'tt0234215');
+                    (704, 'tmdb_movie', '704'), (9021, 'anilist', '21'), (9022, 'anilist', '22'), (603, 'imdb', 'tt0133093'), (604, 'imdb', 'tt0234215');
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (603, 'Genres', 'Action, Science Fiction', TRUE);
                 """);
 
             // The whole catalogs answer all their shelves at once; series still come from TMDB and are not among them.
@@ -613,14 +615,21 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { DiscoverSort.Popularity, DiscoverSort.Score, DiscoverSort.Released, DiscoverSort.Title }, listed.Single(scope => scope.Slug == "movies").Sorts);
             Assert.AreEqual(0, listed.Single(scope => scope.Slug == "series").Sorts.Length);
 
-            // Typed words suggest the library's title first, then the others; adult and unread titles stay out.
+            // Typed words suggest titles grouped by type: a title beginning with the text before a trending one, the type with the best match first,
+            // then trending; adult and unread titles stay out, a requested title carries its state.
             using var suggested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("matr"));
             Assert.AreEqual(HttpStatusCode.OK, suggested.StatusCode, await suggested.Content.ReadAsStringAsync());
             var suggestions = (await suggested.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.ToArray();
-            Assert.AreEqual("The Matrix|The Matrix Anime|The Matrix Reloaded", string.Join("|", suggestions.Select(item => item.Title)));
-            Assert.AreEqual("movies", suggestions[0].ScopeSlug);
-            CollectionAssert.AreEqual(new long[] { 603, 9021, 604 }, suggestions.Select(item => item.WorkId).ToArray());
-            Assert.AreEqual("anime", suggestions[1].ScopeSlug);
+            Assert.AreEqual("Matrix|The Matrix Anime|The Matrix|The Matrix Reloaded", string.Join("|", suggestions.Select(item => item.Title)));
+            Assert.AreEqual("anime|anime|movies|movies", string.Join("|", suggestions.Select(item => item.ScopeSlug)));
+            Assert.AreEqual(MediaStateType.Requested, suggestions[2].MediaStateTypeId);
+            Assert.AreEqual("Action", suggestions[2].Genre);
+            Assert.AreEqual(8.7m, suggestions[2].Rating);
+            Assert.IsNull(suggestions[3].Genre);
+
+            // The typed title itself comes first in its type.
+            using var exact = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("the matrix"));
+            Assert.AreEqual("The Matrix|The Matrix Reloaded|The Matrix Anime", string.Join("|", (await exact.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.Select(item => item.Title)));
             using var narrowed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("matrix rel", "movies"));
             Assert.AreEqual("The Matrix Reloaded", (await narrowed.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.Single().Title);
 
@@ -974,8 +983,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
             StringAssert.Contains(await invalid.Content.ReadAsStringAsync(), "class=\"ui-page-error\"");
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(await invalid.Content.ReadAsStringAsync(), "role=\"alert\"").Count);
-            using var search = await host.SendAsync(HttpMethod.Get, "/?q=Matrix");
-            StringAssert.Contains(await search.Content.ReadAsStringAsync(), "The Matrix Show");
+            // A search of several types shows a row per type, the type with the best match first, each with See all for that type alone.
+            using var search = await host.SendAsync(HttpMethod.Get, "/?type=movies,series&q=Matrix");
+            html = await search.Content.ReadAsStringAsync();
+            StringAssert.Contains(html, "The Matrix Show");
+            StringAssert.Contains(html, "href=\"/?type=series&amp;q=Matrix\"");
+            Assert.IsFalse(html.Contains("data-discover-next", StringComparison.Ordinal));
         }
 
         [TestMethod]

@@ -4,6 +4,7 @@ import { paperPageCount } from './PaperMeasure';
 import { initializeBookPages } from './BookPages';
 import { readerLifetime } from './Lifetime';
 import { pageAt, pageFraction } from './ProgressMath';
+import { windowOf } from './Translation/translation';
 
 // Canonical CSS columns own pagination; decorative faces never own progress.
 export function initializePaperPages(reader: HTMLElement, content: HTMLElement, settings: ReaderSettings, changed: () => void, painted: () => void = () => {}) {
@@ -201,5 +202,14 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
         if (settings.mode === 'scroll') return content.scrollHeight > content.clientHeight ? Math.min(1, Math.max(0, content.scrollTop / (content.scrollHeight - content.clientHeight))) : 0;
         return pageFraction(spread * columns, pages, spread + 1 >= Math.ceil(pages / columns));
     };
-    return { layout, reveal, turn, current, seek, share, end: () => spread + 1 >= Math.ceil(pages / columns) };
+    // Mozilla's emergency window: the blocks of the page (or spread) in view and the three pages after it, flat or as a book (both lay out the same
+    // columns); a scrolled text counts its screen as a page, so the screen in view and three screens below it.
+    const ahead = (): HTMLElement[] => {
+        const bounds = content.getBoundingClientRect(), all = blocks();
+        const paged = settings.mode === 'paged', rtl = settings.direction === 'rtl';
+        const extents = all.map(block => Array.from(block.getClientRects(), (box): [number, number] => !paged ? [box.top - bounds.top, box.bottom - bounds.top]
+            : rtl ? [bounds.right - box.right, bounds.right - box.left] : [box.left - bounds.left, box.right - bounds.left]));
+        return windowOf(extents, paged ? step : content.clientHeight, paged ? step / columns : content.clientHeight).map(index => all[index]);
+    };
+    return { layout, reveal, turn, current, seek, share, ahead, end: () => spread + 1 >= Math.ceil(pages / columns) };
 }
