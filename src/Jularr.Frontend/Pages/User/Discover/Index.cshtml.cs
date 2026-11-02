@@ -133,6 +133,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             page.Asset("Framework/Components/Drawer.entry.ts");
             page.Asset("Framework/Components/LiveProgress.entry.ts");
             page.Asset("Framework/Components/ChoiceSelect.entry.ts");
+            page.Asset("Framework/Components/LiveSearch.entry.ts");
 
             // One server-rendered result region.
             var body = new Page();
@@ -337,7 +338,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             return new DrawerPane("filter", "discover.tab.filter", "discover.filter.title", "filter", body,
             [
-                new A(new Text("discover.reset")).Class("button").Attribute("href", "/"),
+                new A(new Text("discover.reset")).Class("button").Attribute("href", Address(new State([], null, null, null, null, Query?.Trim(), null, 1))),
                 new Button(new Icon("check", assets, 16), new Text("discover.applyClose")).Primary().Submit()
             ], "/");
         }

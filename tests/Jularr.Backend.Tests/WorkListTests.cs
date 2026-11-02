@@ -343,7 +343,18 @@ namespace Jularr.Backend.Tests
             }
 
             Assert.IsFalse(html.Contains("style=\"", StringComparison.Ordinal));
-            var csrf = WebUtility.HtmlDecode(Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
+
+            // The newest titles come first; the order is a choice of every view, and the search stays when the filters go
+            Assert.IsTrue(html.IndexOf(">Zeta<", StringComparison.Ordinal) < html.IndexOf(">Alpha<", StringComparison.Ordinal));
+            StringAssert.Contains(html, "<option value=\"3\" selected=\"selected\">");
+            StringAssert.Contains(html, "data-search-live");
+            using var titles = await host.SendAsync(HttpMethod.Get, "/Admin/Works?sort=0");
+            var byTitle = await titles.Content.ReadAsStringAsync();
+            Assert.IsTrue(byTitle.IndexOf(">Alpha<", StringComparison.Ordinal) < byTitle.IndexOf(">Zeta<", StringComparison.Ordinal));
+            using var none = await host.SendAsync(HttpMethod.Get, "/Admin/Works?type=2&q=Alpha");
+            StringAssert.Contains(await none.Content.ReadAsStringAsync(), "href=\"/Admin/Works?q=Alpha\"");
+
+            var csrf =WebUtility.HtmlDecode(Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
 
             // A filter leads to the titles that fit
             using var films = await host.SendAsync(HttpMethod.Get, "/Admin/Works?type=1&monitored=false");
