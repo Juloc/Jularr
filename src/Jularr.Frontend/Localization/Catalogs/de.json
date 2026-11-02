@@ -9916,6 +9916,110 @@
    "Tunnel stopped",
    "Tunnel gestoppt"
   ],
+  "admin.ai.title": [
+   "AI",
+   "KI"
+  ],
+  "admin.ai.line": [
+   "The ChatGPT account of this server",
+   "Das ChatGPT-Konto dieses Servers"
+  ],
+  "admin.ai.connected": [
+   "Connected",
+   "Verbunden"
+  ],
+  "admin.ai.pending": [
+   "Waiting for sign-in",
+   "Wartet auf Anmeldung"
+  ],
+  "admin.ai.notInstalled": [
+   "Not installed",
+   "Nicht installiert"
+  ],
+  "admin.ai.notConnected": [
+   "Not connected",
+   "Nicht verbunden"
+  ],
+  "admin.ai.notInstalledNote": [
+   "This installation has no Codex CLI.",
+   "In dieser Installation ist keine Codex-CLI enthalten."
+  ],
+  "admin.ai.version": [
+   "Version",
+   "Version"
+  ],
+  "admin.ai.signIn": [
+   "Sign-in",
+   "Anmeldung"
+  ],
+  "admin.ai.signIn.chatgpt": [
+   "ChatGPT account",
+   "ChatGPT-Konto"
+  ],
+  "admin.ai.signIn.apiKey": [
+   "API key",
+   "API-Schlüssel"
+  ],
+  "admin.ai.signIn.other": [
+   "Other",
+   "Andere"
+  ],
+  "admin.ai.openLink": [
+   "Open sign-in page",
+   "Anmeldeseite öffnen"
+  ],
+  "admin.ai.enterCode": [
+   "Enter this one-time code",
+   "Diesen Einmalcode eingeben"
+  ],
+  "admin.ai.connect": [
+   "Connect",
+   "Verbinden"
+  ],
+  "admin.ai.cancel": [
+   "Cancel login",
+   "Anmeldung abbrechen"
+  ],
+  "admin.ai.disconnect": [
+   "Disconnect",
+   "Trennen"
+  ],
+  "admin.ai.disconnectTitle": [
+   "Disconnect Codex?",
+   "Codex trennen?"
+  ],
+  "admin.ai.loginStarted": [
+   "Login started",
+   "Anmeldung gestartet"
+  ],
+  "admin.ai.cancelDone": [
+   "Login cancelled",
+   "Anmeldung abgebrochen"
+  ],
+  "admin.ai.disconnectDone": [
+   "Codex disconnected",
+   "Codex getrennt"
+  ],
+  "errors.codex_not_installed": [
+   "The Codex CLI is not available in this installation.",
+   "Die Codex-CLI ist in dieser Installation nicht verfügbar."
+  ],
+  "errors.codex_login_busy": [
+   "A Codex login is already waiting. Finish or cancel it first.",
+   "Eine Codex-Anmeldung wartet schon. Beende oder brich sie zuerst ab."
+  ],
+  "errors.codex_login_failed": [
+   "The Codex login could not be started. Try again in a minute.",
+   "Die Codex-Anmeldung konnte nicht gestartet werden. Versuche es in einer Minute erneut."
+  ],
+  "errors.codex_login_expired": [
+   "The Codex login was not finished in time. Connect again.",
+   "Die Codex-Anmeldung wurde nicht rechtzeitig beendet. Verbinde erneut."
+  ],
+  "errors.codex_logout_failed": [
+   "Codex could not remove its sign-in. Try again.",
+   "Codex konnte die Anmeldung nicht entfernen. Versuche es erneut."
+  ],
   "errors.vpn_unavailable": [
    "The VPN tunnel is not connected. Nothing bound to it is sent without it.",
    "Der VPN-Tunnel ist nicht verbunden. Was an ihn gebunden ist, wird ohne ihn nicht gesendet."
