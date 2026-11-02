@@ -358,9 +358,10 @@ namespace Jularr.Backend.Data.Logic.Media
     // What a Discover card of a Work the profile may see shows of its library state.
     internal sealed class DiscoverCardStateData : BaseData
     {
-        public DiscoverCardStateData(long workId, MediaStateType mediaStateTypeId, string? plexUrl, string? posterUrl, string? backdropUrl)
+        public DiscoverCardStateData(long workId, MediaStateType mediaStateTypeId, string? plexUrl, string? posterUrl, string? backdropUrl, CatalogFormat? catalogFormatId)
         {
             WorkId = workId;
+            CatalogFormatId = catalogFormatId;
             MediaStateTypeId = mediaStateTypeId;
             PlexUrl = plexUrl;
             PosterUrl = posterUrl;
@@ -382,6 +383,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
         public string? BackdropUrl { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CatalogFormatId))]
+        public CatalogFormat? CatalogFormatId { get; }
     }
 
     internal sealed class LibraryFilterData : BaseData

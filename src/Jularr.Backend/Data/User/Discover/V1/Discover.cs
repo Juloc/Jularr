@@ -212,11 +212,12 @@ namespace Jularr.Backend.Data.User.Discover.V1
     public sealed class DiscoverCatalogItemV1 : BaseResponse
     {
         public DiscoverCatalogItemV1(string @namespace, string externalId, string title, int? releaseYear, string? author, long workId, string? posterUrl, decimal? rating, MediaStateType mediaStateTypeId,
-            int? seasonNumber = null)
+            int? seasonNumber = null, CatalogFormat? catalogFormatId = null)
         {
             PosterUrl = posterUrl;
             Rating = rating;
             MediaStateTypeId = mediaStateTypeId;
+            CatalogFormatId = catalogFormatId;
             Namespace = @namespace;
             ExternalId = externalId;
             Title = title;
@@ -257,6 +258,10 @@ namespace Jularr.Backend.Data.User.Discover.V1
         // The season of the series an anime entry is.
         [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.SeasonNumber), false)]
         public int? SeasonNumber { get; }
+
+        // The catalog's format (TV, film, OVA, manga, one-shot, light novel …), when it names one.
+        [DataField(typeof(WorkFields), nameof(WorkFields.CatalogFormatId))]
+        public CatalogFormat? CatalogFormatId { get; }
     }
 
     public sealed class ReadDiscoverCatalogFeedDataV1 : BaseData

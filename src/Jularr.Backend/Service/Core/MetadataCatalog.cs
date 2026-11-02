@@ -272,10 +272,11 @@ namespace Jularr.Backend.Service.Core
                 }
                 try
                 {
-                    IReadOnlyList<MetadataSearchResultV1> results = list is null ? [.. (await books.ReadTrendingAsync(feed.Page, ct)).Select(Book)]
-                        : feed.MediaTypeId == MediaType.Series ? [.. (await aniList.ReadAnimeRankingAsync(list, feed.Page, ct)).Select(AniListAnime)]
-                        : [.. (await aniList.ReadBookRankingAsync(feed.MediaSubtypeId!.Value, list, feed.Page, ct)).Select(AniListBook)];
-                    return [.. results.Select(ExternalWork)];
+                    // AniList names each title's format.
+                    IReadOnlyList<ExternalWorkData> results = list is null ? [.. (await books.ReadTrendingAsync(feed.Page, ct)).Select(book => ExternalWork(Book(book)))]
+                        : feed.MediaTypeId == MediaType.Series ? [.. (await aniList.ReadAnimeRankingAsync(list, feed.Page, ct)).Select(media => ExternalWork(AniListAnime(media), media.Format))]
+                        : [.. (await aniList.ReadBookRankingAsync(feed.MediaSubtypeId!.Value, list, feed.Page, ct)).Select(media => ExternalWork(AniListBook(media), media.Format))];
+                    return results;
                 }
                 catch (ServiceUnavailableException)
                 {
@@ -357,8 +358,11 @@ namespace Jularr.Backend.Service.Core
                 work.Overview, work.Creator, work.ImageUrl, work.BackdropUrl, work.FetchedAt, work.Rating, saved[work.Value].WorkId, saved[work.Value].SeasonNumber))];
         }
 
-        private static ExternalWorkData ExternalWork(MetadataSearchResultV1 result) => new(result.Namespace, result.ExternalId, result.Title, result.OriginalTitle, result.ReleaseYear,
-            result.Overview, result.Author, result.PosterUrl, null, null);
+        private static ExternalWorkData ExternalWork(MetadataSearchResultV1 result, string? aniListFormat = null) => new(result.Namespace, result.ExternalId, result.Title,
+            result.OriginalTitle, result.ReleaseYear, result.Overview, result.Author, result.PosterUrl, null, null)
+        {
+            CatalogFormatId = CatalogFactValues.Value(CatalogFactValues.AniListFormats, aniListFormat)
+        };
 
         private static MetadataSearchResultV1 Book(OpenLibraryResult result) => new(BookMetadata.Namespace, result.WorkId, TextLimit.Cut(result.Title, 500)!, null,
             result.Year is >= 1800 and <= 2200 ? result.Year : null, null, null, TextLimit.Cut(string.Join(", ", result.Authors), 4000), OpenLibraryClient.CoverUrl(result.CoverId));

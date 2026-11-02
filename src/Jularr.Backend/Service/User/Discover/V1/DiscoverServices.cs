@@ -591,7 +591,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             @namespace is "tmdb_movie" or "tmdb_tv" && int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
 
         public static DiscoverCatalogItemV1 CatalogItem(ExternalWorkShelfItemData work) => new(work.Namespace, work.Value, work.Title, work.ReleaseYear, work.Creator, work.WorkId, work.ImageUrl, work.Rating,
-            work.MediaStateTypeId ?? MediaStateType.NotRequested);
+            work.MediaStateTypeId ?? MediaStateType.NotRequested, catalogFormatId: work.CatalogFormatId);
 
         // Films and series are discovered through TMDB's lists, series as TheTVDB's; anime series and the other types through their catalogs.
         public static Task RequireCatalogTypeAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, long profileId, CancellationToken ct) =>
@@ -687,7 +687,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             {
                 var state = states.GetValueOrDefault(ids[index]);
                 return new DiscoverCatalogItemV1(work.Namespace, work.Value, work.Title, work.ReleaseYear, work.Creator, ids[index], state?.PosterUrl ?? work.ImageUrl, work.Rating,
-                    state?.MediaStateTypeId ?? MediaStateType.NotRequested, work.SeasonNumber);
+                    state?.MediaStateTypeId ?? MediaStateType.NotRequested, work.SeasonNumber, state?.CatalogFormatId ?? work.CatalogFormatId);
             })]);
         }
 
@@ -742,7 +742,8 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         ORDER BY
                             fact."IsManual" DESC
                         LIMIT 1
-                    ) AS "BackdropUrl"
+                    ) AS "BackdropUrl",
+                    (SELECT work."CatalogFormatId" FROM "Works" AS work WHERE work."Id" = visible."WorkId") AS "CatalogFormatId"
                 FROM
                     (
                         SELECT
