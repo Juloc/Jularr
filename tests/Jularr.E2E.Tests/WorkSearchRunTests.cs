@@ -22,7 +22,7 @@ namespace Jularr.E2E.Tests
                 INSERT INTO "WantedItems" ("Id", "WorkId", "IsPaused", "NextSearchAt")
                 SELECT id, id, id = 665, now() + interval '3 days' FROM generate_series(601, 665) AS id;
                 """);
-            await page.GotoAsync("/Admin/Works?type=1&q=Search%20target%2061");
+            await page.GotoAsync("/Admin/Works?type=movies&q=Search%20target%2061");
             await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Search filtered", Exact = true }));
             await Assertions.Expect(page.Locator("[data-search-progress]")).ToContainTextAsync("0 of 10 targets checked");
             await page.ReloadAsync();
@@ -46,7 +46,7 @@ namespace Jularr.E2E.Tests
 
             await page.SetViewportSizeAsync(1280, 900);
             await SetQueuePausedAsync(page, false);
-            await page.GotoAsync("/Admin/Works?type=1&q=Search%20target%2061");
+            await page.GotoAsync("/Admin/Works?type=movies&q=Search%20target%2061");
             await page.Locator("input[name=workIds]").Nth(0).CheckAsync();
             await page.Locator("input[name=workIds]").Nth(1).CheckAsync();
             await Steps.FollowAsync(page, page.Locator("button[form=works-bulk][value=search]"));

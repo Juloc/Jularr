@@ -231,7 +231,9 @@ namespace Jularr.Frontend.Pages.Setup.Instance
                 var taken = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var type in Enum.GetValues<MediaType>())
                 {
-                    if ((await readWorks.ExecuteAsync<PageResult<WorkListItemV1>>(new ReadWorksParametersV1(1, 1, type), ct)).Items.Count > 0) taken.Add(type.ToString());
+                    // The type with its subtypes, as the titles of that type are stored.
+                    var subtypes = Enum.GetValues<MediaSubtype>().Where(subtype => MediaSubtypes.Fits(type, subtype)).ToArray();
+                    if ((await readWorks.ExecuteAsync<PageResult<WorkListItemV1>>(new ReadWorksParametersV1(1, 1, [type], subtypes), ct)).Items.Count > 0) taken.Add(type.ToString());
                 }
 
                 _taken = taken.Count > 0 ? taken : null;

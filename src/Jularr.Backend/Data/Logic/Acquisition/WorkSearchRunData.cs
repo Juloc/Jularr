@@ -27,10 +27,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class WorkSearchSelectionData : BaseData
     {
-        public WorkSearchSelectionData(long[]? workIds, MediaType? mediaTypeId, bool? isMonitored, WorkListStatus? workListStatusId, long? libraryRootId, long? acquisitionProfileId, string? query, long? accountId, string selectionKey)
+        public WorkSearchSelectionData(long[]? workIds, MediaType[] mediaTypeIds, MediaSubtype[] mediaSubtypeIds, bool? isMonitored, WorkListStatus? workListStatusId, long? libraryRootId, long? acquisitionProfileId, string? query, long? accountId, string selectionKey)
         {
             WorkIds = workIds;
-            MediaTypeId = mediaTypeId;
+            MediaTypeIds = mediaTypeIds;
+            MediaSubtypeIds = mediaSubtypeIds;
             IsMonitored = isMonitored;
             WorkListStatusId = workListStatusId;
             LibraryRootId = libraryRootId;
@@ -43,8 +44,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(SearchRunFields), nameof(SearchRunFields.WorkIds))]
         public long[]? WorkIds { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
-        public MediaType? MediaTypeId { get; }
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
 
         [DataField(typeof(WorkListFields), nameof(WorkListFields.IsMonitoredFilter))]
         public bool? IsMonitored { get; }

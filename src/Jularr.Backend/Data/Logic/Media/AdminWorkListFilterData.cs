@@ -9,10 +9,11 @@ namespace Jularr.Backend.Data.Logic.Media
     // The filters and the order of the library list, without its paging.
     internal sealed class AdminWorkListFilterData : BaseData
     {
-        public AdminWorkListFilterData(MediaType? mediaTypeId, bool? isMonitored, WorkListStatus? workListStatusId, long? libraryRootId, long? acquisitionProfileId, string? query, WorkSortType workSortTypeId,
+        public AdminWorkListFilterData(MediaType[] mediaTypeIds, MediaSubtype[] mediaSubtypeIds, bool? isMonitored, WorkListStatus? workListStatusId, long? libraryRootId, long? acquisitionProfileId, string? query, WorkSortType workSortTypeId,
             bool isDescending)
         {
-            MediaTypeId = mediaTypeId;
+            MediaTypeIds = mediaTypeIds;
+            MediaSubtypeIds = mediaSubtypeIds;
             IsMonitored = isMonitored;
             WorkListStatusId = workListStatusId;
             LibraryRootId = libraryRootId;
@@ -22,8 +23,11 @@ namespace Jularr.Backend.Data.Logic.Media
             IsDescending = isDescending;
         }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
-        public MediaType? MediaTypeId { get; }
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
 
         [DataField(typeof(WorkListFields), nameof(WorkListFields.IsMonitoredFilter))]
         public bool? IsMonitored { get; }
