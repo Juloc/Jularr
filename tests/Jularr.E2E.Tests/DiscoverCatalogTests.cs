@@ -8,7 +8,7 @@ namespace Jularr.E2E.Tests
     {
         [TestMethod]
         [Timeout(300_000)]
-        public async Task WholeCatalog_FillsTheShelvesAndSuggestsWhileTyping()
+        public async Task WholeCatalog_FillsTheShelvesAndSuggestsByTypeWhileTyping()
         {
             await using var jularr = await JularrInstance.StartAsync();
             await using var browser = await BrowserSession.StartAsync(jularr);
@@ -28,16 +28,34 @@ namespace Jularr.E2E.Tests
             var trending = page.Locator(".media-shelf", new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Trending", Exact = true }) });
             await Assertions.Expect(trending.GetByText("The Matrix Reloaded")).ToBeVisibleAsync();
 
-            // Typed words suggest the kept titles under the field; Escape closes them.
+            // On any page, typed words suggest the kept titles under the field, grouped by type, then all results; Escape closes them.
+            await page.GotoAsync("/Library");
             var search = page.Locator(".app-header .search-box input[type=search]");
             await search.FillAsync("matr");
-            var suggestions = page.Locator(".discover-suggestion");
+            var popup = page.Locator(".app-search__popup");
+            var suggestions = popup.Locator(".app-search__hit");
             await Assertions.Expect(suggestions).ToHaveCountAsync(2);
+            await Assertions.Expect(popup.Locator(".app-search__type")).ToHaveTextAsync(["Movies"]);
             await Assertions.Expect(suggestions.First).ToContainTextAsync("The Matrix");
             await Assertions.Expect(suggestions.First).ToHaveAttributeAsync("href", "/Details/9603");
+            await Assertions.Expect(popup.Locator(".app-search__all")).ToHaveAttributeAsync("href", "/?q=matr");
+            await Assertions.Expect(page.Locator(".app-header kbd")).ToHaveCountAsync(0);
             await Evidence.SaveAsync(page, "discover-suggestions");
             await search.PressAsync("Escape");
-            await Assertions.Expect(page.Locator(".discover-suggestions")).ToBeHiddenAsync();
+            await Assertions.Expect(popup).ToBeHiddenAsync();
+
+            // On a phone the icon opens the field over the header, the suggestions fill the screen and the back button closes them.
+            await page.SetViewportSizeAsync(390, 844);
+            await page.Locator(".app-search__icon").ClickAsync();
+            await search.FillAsync("matr");
+            await Assertions.Expect(suggestions).ToHaveCountAsync(2);
+            var box = (await popup.BoundingBoxAsync())!;
+            Assert.AreEqual(390, box.Width, 1);
+            Assert.IsTrue(box.Y + box.Height >= 843, "the suggestions reach the bottom of the screen");
+            await Evidence.SaveAsync(page, "discover-suggestions-phone");
+            await page.Locator("[data-search-close]").ClickAsync();
+            await Assertions.Expect(popup).ToBeHiddenAsync();
+            await Assertions.Expect(page.Locator("[data-search-close]")).ToBeHiddenAsync();
         }
     }
 }

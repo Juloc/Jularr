@@ -380,6 +380,11 @@ namespace Jularr.Frontend.Pages.User.Reader
                         .Attribute("data-language-url", "/api/v1/reading/assets/" + asset + "/language")
                         .Attribute("data-translating-label", texts["reader.translating"])
                         .Attribute("data-translation-failed-label", texts["reader.translationFailed"]);
+                    // The Mozilla emergency of the Reader, for Smart Pages too.
+                    if (texts.CanTranslateInBrowser())
+                    {
+                        frame.Attribute("data-browser-translation", "true").Attribute("data-route-url", "/api/v1/translation/routes/");
+                    }
                 }
             }
 
