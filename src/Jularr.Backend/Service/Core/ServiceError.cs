@@ -73,6 +73,7 @@ namespace Jularr.Backend.Service.Core
         public static ServiceError FromException(Exception exception) => exception switch
         {
             DataValidationException validation => new(StatusCodes.Status400BadRequest, "invalid_data", validation.Field, validation.Code),
+            InvalidCredentialsException credentials => new(StatusCodes.Status401Unauthorized, "invalid_credentials", credentials.Field),
             UnauthorizedAccessException => new(StatusCodes.Status401Unauthorized, "authentication_required"),
             SecurityException => new(StatusCodes.Status403Forbidden, "permission_denied"),
             KeyNotFoundException => new(StatusCodes.Status404NotFound, "not_found"),
