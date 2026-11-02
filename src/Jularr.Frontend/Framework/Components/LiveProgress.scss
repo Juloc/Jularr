@@ -163,63 +163,56 @@
     }
 }
 
-// The request of a title: a pill in the phase's colour, its icon in a filled circle; while it downloads the circle becomes a ring with the percent.
+// The request of a title: an accent pill with a white icon per phase (clock, pulsing search, download, play); while it downloads the icon becomes a ring with the percent.
 .live-phase-pill {
     position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
     min-height: var(--control-height);
-    padding: 0 14px 0 5px;
+    padding: 0 14px 0 9px;
     border-radius: var(--radius-control);
-    background: var(--accent-soft);
-    color: var(--accent-text);
+    background: var(--accent);
+    color: var(--accent-contrast);
     font-size: var(--text-control);
     font-weight: var(--weight-control);
     white-space: nowrap;
-    transition: background-color var(--transition), color var(--transition);
-
-    &[data-phase="searching"], &[data-phase="downloading"], &[data-phase="importing"] { background: var(--info-soft); color: var(--info); }
-    &[data-phase="completed"] { background: var(--success-soft); color: var(--success); }
-    &[data-phase="rejected"], &[data-phase="failed"], &[data-phase="cancelled"] { background: var(--danger-soft); color: var(--danger); }
 
     &__icons {
         display: inline-grid;
         flex: none;
         place-items: center;
-        width: 27px;
-        height: 27px;
-        border-radius: 50%;
-        background: currentColor;
-        > span { grid-area: 1 / 1; display: none; color: var(--surface); }
-        .ui-icon { width: 14px; height: 14px; }
+        width: 22px;
+        height: 22px;
+        > span { grid-area: 1 / 1; display: none; }
+        .ui-icon { width: 15px; height: 15px; }
     }
-    &:is([data-phase="open"], [data-phase="approved"]) .live-phase-pill__clock { display: inline-flex; }
-    &[data-phase="searching"] .live-phase-pill__search { display: inline-flex; animation: live-phase-pulse 1.3s ease-in-out infinite; }
+    &[data-phase="open"] .live-phase-pill__clock { display: inline-flex; }
+    &:is([data-phase="approved"], [data-phase="searching"]) .live-phase-pill__search { display: inline-flex; animation: live-phase-pulse 1.3s ease-in-out infinite; }
     &:is([data-phase="downloading"], [data-phase="importing"]) .live-phase-pill__download { display: inline-flex; }
-    &[data-phase="completed"] .live-phase-pill__check { display: inline-flex; }
+    &[data-phase="completed"] .live-phase-pill__play { display: inline-flex; }
     &:is([data-phase="rejected"], [data-phase="failed"], [data-phase="cancelled"]) .live-phase-pill__alert { display: inline-flex; }
 
-    // The download's percent: an arc in the phase's colour around the number, in place of the circle.
+    // The download's percent: a white arc around the number, in place of the icon.
     &__ring {
         position: absolute;
         top: 50%;
-        left: 5px;
+        left: 9px;
         display: grid;
         place-items: center;
-        width: 27px;
-        height: 27px;
-        margin-top: -13.5px;
+        width: 22px;
+        height: 22px;
+        margin-top: -11px;
         counter-reset: percent var(--live-percent, 0);
-        font-size: var(--text-small);
+        font-size: 9px;
         line-height: 1;
         &::before {
             content: "";
             position: absolute;
             inset: 0;
             border-radius: 50%;
-            background: conic-gradient(currentColor calc(var(--live-percent, 0) * 1%), color-mix(in srgb, currentColor 22%, transparent) 0);
-            mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+            background: conic-gradient(currentColor calc(var(--live-percent, 0) * 1%), color-mix(in srgb, currentColor 30%, transparent) 0);
+            mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
             transition: background .4s ease;
         }
         &::after { content: counter(percent); position: relative; }

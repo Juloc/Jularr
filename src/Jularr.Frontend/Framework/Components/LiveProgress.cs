@@ -160,12 +160,12 @@ namespace Jularr.Frontend.Framework
         }
     }
 
-    // A request's phase as a pill coloured by the phase: an icon per phase, and while it downloads the percent in a ring. Only shows, leads nowhere.
+    // A request's phase as an accent pill: an icon per phase, and while it downloads the percent in a ring. Only shows, leads nowhere.
     public sealed class LivePhasePill(FrontendAssets assets, string key, AcquisitionRequestStatusType status) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
-            var icons = new[] { "clock", "search", "download", "check", "alert" }.Select(name => (IUiComponent)new Span(new Icon(name, assets, 16)).Class("live-phase-pill__" + name));
+            var icons = new[] { "clock", "search", "download", "play", "alert" }.Select(name => (IUiComponent)new Span(new Icon(name, assets, 16)).Class("live-phase-pill__" + name));
             new Span(new Span([.. icons]).Class("live-phase-pill__icons"),
                     new Span().Class("live-phase-pill__ring").Attribute("data-live-value", "percent").Attribute("hidden", "hidden").Attribute("aria-hidden", "true"),
                     new Span(new ValueText(LiveFacts.Phase(texts, status, null))).Attribute("data-live-text", "phase"))
