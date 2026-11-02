@@ -188,7 +188,7 @@ function initializeText(reader: HTMLElement, address: URL): void {
     if (Number.isFinite(fraction)) void document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(() => { paging!.seek(Math.min(1, Math.max(0, fraction))); placed(); })));
 
     // Existing translation and annotation services remain the only data owners.
-    const translate = reader.dataset.translationUrl ? translator(reader, content, createTranslationWorker) : undefined;
+    const translate = reader.dataset.localTranslationUrl ? translator(reader, content, createTranslationWorker) : undefined;
     const localModel = reader.dataset.localModel;
     const provider = reader.querySelector<HTMLElement>('[data-translation-provider]');
     const showProvider = () => {

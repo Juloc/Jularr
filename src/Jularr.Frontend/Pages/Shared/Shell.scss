@@ -58,6 +58,7 @@
 
         & + &::before {
             content: "";
+            flex: none;
             width: 6px;
             height: 6px;
             margin: 0 12px 0 8px;
@@ -80,9 +81,10 @@
 .breadcrumb__item .link-menu__summary { min-height: 40px; color: var(--muted); font-weight: 400; }
 .breadcrumb__item .link-menu__list { left: 12px; max-height: calc(100dvh - var(--shell-header-offset) - 24px - env(safe-area-inset-bottom)); }
 
-// Narrow header: only the last two parts, closer together so that both usually fit; a longer title still scrolls into view at the end.
+// Narrow header: only the last two parts, closer together so that both usually fit; the first stays whole and a longer title (the last part) ends in an ellipsis.
 @container crumbs (max-width: 460px) {
     .breadcrumb__item + .breadcrumb__item::before { margin: 0 8px 0 6px; }
+    .breadcrumb__item:last-child { flex: 0 1 auto; min-width: 0; }
     .breadcrumb__item:nth-last-child(n + 3) { display: none; }
     .breadcrumb__item:nth-last-child(2)::before { display: none; }
     .breadcrumb__item--menu > .breadcrumb__link { display: none; }
@@ -434,6 +436,7 @@ html[data-skin="original"] .sidebar-secondary {
     .app-header .button--icon, .app-notifications { width: 34px; height: 34px; min-height: 34px; }
     .app-avatar { width: 31px; height: 31px; }
     .breadcrumb { font-size: var(--text-control); }
+    .breadcrumb__item:last-child { flex: 0 1 auto; min-width: 0; }
     .breadcrumb__item:nth-last-child(n + 3) { display: none; }
     .breadcrumb__item:nth-last-child(2)::before { display: none; }
     .breadcrumb__item--menu > .breadcrumb__link { display: none; }
