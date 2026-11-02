@@ -39,6 +39,9 @@ $interval: 9s;
                 transform: rotate(-23deg);
             }
         }
+
+        // Nothing highlighted: the shared landscape keeps the place.
+        &--empty .hero-carousel__art { background: url("../../Modules/Appearance/Original/hero-fuji.webp") 70% 40% / cover no-repeat; }
     }
 
     &__art {

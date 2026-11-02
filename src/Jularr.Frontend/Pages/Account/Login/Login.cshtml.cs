@@ -49,7 +49,10 @@ namespace Jularr.Frontend.Pages.Account.Login
             {
                 form.Text(x => x.Username, "account.field.userName", "username", new FieldHelp("account.login.userPlaceholder", ""));
                 form.Password(x => x.Password, "account.field.password", "current-password", new FieldHelp("", "", forgot, new PasswordReveal(assets)));
-                form.Submit(Styled(new Button(new Text("account.login.submit")), "auth-submit"));
+                // The server checks empty fields, so its message stands in the field's line instead of the browser's bubble.
+                var submit = Styled(new Button(new Text("account.login.submit")), "auth-submit");
+                submit.Attribute("formnovalidate", "formnovalidate");
+                form.Submit(submit);
             }, action, token, new LoginDataV1(_email, ""), FormError));
 
             // An administrator resets passwords: Jularr sends no email.
@@ -90,7 +93,7 @@ namespace Jularr.Frontend.Pages.Account.Login
                     .Class("auth-request"));
             }
 
-            page.Content.Add(new Section([.. card]).Class("login-card"));
+            page.Content.Add(new Section([.. card]).Class("login-card login-card--signin"));
             page.Content.Add(new AppearanceDock(assets));
         }
 

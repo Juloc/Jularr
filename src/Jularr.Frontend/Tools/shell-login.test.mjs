@@ -49,8 +49,12 @@ test("Sign in, request access and approval pending are the owner's login mockup:
         assert.doesNotMatch(source, /new Appearance\(/);
     }
     assert.match(styles, /width: min\(100%, 423px\)/);
-    assert.match(styles, /padding: 29px 30px 26px/);
-    assert.match(styles, /border-radius: 24px/);
+    // The card has the app's panel corners and the button is a pill; a field's error has its own line, so the card never moves.
+    assert.match(styles, /\.login-card \{[^}]*border-radius: var\(--radius-panel\)/);
+    assert.match(styles, /\.auth-submit \{[^}]*border-radius: var\(--radius-control\)/);
+    assert.match(styles, /\.login-card--signin \{[^]*\.ui-field \{ position: relative; padding-bottom: 24px; \}/);
+    assert.match(login, /"login-card login-card--signin"/);
+    assert.match(login, /Attribute\("formnovalidate", "formnovalidate"\)/);
     assert.match(dock, /data-cycle-skin/);
     assert.match(dock, /data-cycle-mode/);
     // Providers appear only where the instance offers the sign-in; Trakt is not one.

@@ -691,6 +691,35 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task CardRequest_ClickedOnACatalogCard_RequestsAtOnceAndThenLeadsToTheTitle()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            using var browser = ((TestServer)host.Services.GetRequiredService<IServer>()).CreateClient();
+            browser.DefaultRequestHeaders.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+
+            // The card offers the round request icon: a form of its own with the token, no text on the card itself.
+            using var tab = await browser.GetAsync("/?type=anime&handler=Recommendations");
+            var html = await tab.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
+            var season = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '21'"))!;
+            var action = "/Details/" + season + "?handler=QuickRequest";
+            StringAssert.Matches(html, new System.Text.RegularExpressions.Regex("<form[^>]*action=\"" + System.Text.RegularExpressions.Regex.Escape(action) + "\"[^>]*data-quick-request=\"true\""));
+            StringAssert.Contains(html, "data-live=\"request-work:" + season + "\"");
+            var token = WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
+
+            // A click requests in the profile's language with the default quality and answers without a page.
+            using var requested = await browser.PostAsync(action, new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token }));
+            Assert.AreEqual(HttpStatusCode.NoContent, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"AcquisitionProfileId\" IS NULL AND \"GamePlatformId\" IS NULL"));
+
+            // Requested, the card's icon names the phase live and leads to the title's page, which shows the progress.
+            using var again = await browser.GetAsync("/?type=anime&handler=Recommendations");
+            html = await again.Content.ReadAsStringAsync();
+            Assert.IsFalse(html.Contains(action, StringComparison.Ordinal));
+            StringAssert.Contains(html, "card-request\" href=\"/Details/");
+        }
+
+        [TestMethod]
         public async Task RelatedWork_RequestedFromItsRow_IsTheNormalRequestWithoutLeavingThePage()
         {
             await using var host = await CreateHostAsync(razor: true, anime: new FakeAniList { FindsFirstSeason = true }, tvdb: new FakeTvdb());
@@ -1196,6 +1225,47 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, asked);
             StringAssert.Contains(await PageAsync(host, "/"), "class=\"hero-carousel__title\">The Matrix Show<");
             Assert.AreEqual(caching ? 1 : 2, Trending());
+        }
+
+        [TestMethod]
+        public async Task Razor_Discover_KeepsEachTypeApart_AndTheHighlightsKeepTheirPlace()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            var mount = await LibraryTests.CreateMountAsync(host);
+            var root = await LibraryTests.CreateRootAsync(host, mount, "Library", MediaType.Movie);
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES
+                    (9810, 2, NULL, 'Plain Series'), (9820, 2, 1, 'Anime Series'), (9830, 1, 1, 'Anime Film'), (9840, 3, NULL, 'Plain Book'), (9850, 3, 2, 'Manga Volume');
+                INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works" WHERE "Id" BETWEEN 9810 AND 9850;
+                INSERT INTO "WorkEditions" ("WorkId") SELECT "Id" FROM "Works" WHERE "Id" BETWEEN 9810 AND 9850;
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "WorkId", "WorkId", "Id" FROM "WorkEditions" WHERE "WorkId" BETWEEN 9810 AND 9850;
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT "Id", "Id", "Id", 1 FROM "Works" WHERE "Id" BETWEEN 9810 AND 9850;
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
+                SELECT {root}, "Id" || '.mkv', 100, now(), now(), "Id" FROM "MediaAssets" WHERE "Id" BETWEEN 9810 AND 9850;
+                INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "ProgressPositionTypeId", "PositionMs", "DurationMs") VALUES (101, 9810, 1, 250, 1000), (101, 9820, 1, 250, 1000), (101, 9830, 1, 250, 1000);
+                """);
+
+            // Series leave anime out, in the shelves to continue and of the library and in the highlights; anime films and series are anime.
+            var series = await PageAsync(host, "/?type=series");
+            StringAssert.Contains(series, "Plain Series");
+            StringAssert.Contains(series, "data-hero-continue");
+            Assert.IsFalse(series.Contains("Anime Series", StringComparison.Ordinal) || series.Contains("Anime Film", StringComparison.Ordinal), series);
+            var anime = await PageAsync(host, "/?type=anime");
+            StringAssert.Contains(anime, "Anime Series");
+            StringAssert.Contains(anime, "Anime Film");
+            StringAssert.Contains(anime, "data-hero-group=\"anime\"");
+            Assert.IsFalse(anime.Contains("Plain Series", StringComparison.Ordinal), anime);
+
+            // Books leave manga out, added lately as anywhere else.
+            var books = await PageAsync(host, "/?type=books");
+            StringAssert.Contains(books, "Plain Book");
+            Assert.IsFalse(books.Contains("Manga Volume", StringComparison.Ordinal), books);
+            StringAssert.Contains(await PageAsync(host, "/?type=manga"), "Manga Volume");
+
+            // A type without highlights keeps the place of the carousel with its empty text.
+            var empty = await PageAsync(host, "/?type=movies&feed=continue");
+            StringAssert.Contains(empty, "class=\"hero-carousel__slide hero-carousel__slide--empty\" data-hero-empty=\"\"><");
+            Assert.IsFalse(empty.Contains("data-hero-slide", StringComparison.Ordinal), empty);
         }
 
         private static async Task<string> PageAsync(Host host, string path)
