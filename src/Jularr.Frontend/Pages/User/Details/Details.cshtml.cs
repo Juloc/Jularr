@@ -31,7 +31,7 @@ namespace Jularr.Frontend.Pages.User.Details
         ReadUiLocalesV1 locales, ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
         RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits,
         ReadWorkRecommendationsV1 readRecommendations, ReadWorkRelationsV1 readRelations, AdminServices.CreateWorkRelationV1 createRelation, AdminServices.DeleteWorkRelationV1 deleteRelation, SuggestDiscoverV1 suggest,
-        UpdateWorkProgressV1 updateProgress, ReadWorkAniListV1 readAniList, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
+        UpdateWorkProgressV1 updateProgress, ReadWorkAniListV1 readAniList, WithdrawRequestV1 withdraw, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         private WorkAniListV1? _aniList;
         private IReadOnlyList<DiscoverItemV1> _recommendations = [];
@@ -225,7 +225,21 @@ namespace Jularr.Frontend.Pages.User.Details
         {
             _requestInput = new CreateRequestDataV1(uiLocaleId, gamePlatformId, acquisitionProfileId);
             await request.ExecuteAsync<CreateRequestResultV1>(new CreateRequestParametersV1(Id), _requestInput, HttpContext.RequestAborted);
-            return RedirectToPage("/User/Requests/Requests");
+            return RedirectToPage("/User/Details/Details", new { id = Id });
+        }
+
+        // The request taken back from its button: only the profile's own, until it is imported.
+        public async Task<IActionResult> OnPostWithdrawAsync([BindRequired] long requestId)
+        {
+            await withdraw.ExecuteAsync<UpdateResult>(new RequestParametersV1(requestId), default, HttpContext.RequestAborted);
+            return RedirectToPage("/User/Details/Details", new { id = Id });
+        }
+
+        // A request that finished while the page was open plays or reads what came, as the page's own primary action would.
+        public async Task<IActionResult> OnGetPlayAsync()
+        {
+            var items = await readAvailability.ExecuteAsync<PageResult<WorkAvailabilityV1>>(new ReadWorkAvailabilityParametersV1(Id, page: 1, pageSize: 48), HttpContext.RequestAborted);
+            return Pick(items.Items) is { } item ? LocalRedirect(PlayHref(item)) : RedirectToPage("/User/Details/Details", new { id = Id });
         }
 
         // What the page reads about the title: the reads that do not wait for the Work itself run together with it, so the page costs its slowest read rather than their sum.
