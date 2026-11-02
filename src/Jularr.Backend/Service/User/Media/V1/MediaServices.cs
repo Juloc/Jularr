@@ -429,13 +429,24 @@ namespace Jularr.Backend.Service.User.Media.V1
                     {{WorkCardProjection.Columns}},
                     entry."WorkId" IS NOT NULL AS "IsWatchlisted"
                 FROM
-                    "ProfileWorks" AS visible
-                    JOIN "Works" AS work ON work."Id" = visible."WorkId"
+                    "Works" AS work
+                    JOIN LATERAL (
+                        SELECT
+                            profileWork."Title",
+                            profileWork."MediaSubtypeId",
+                            profileWork."IsHidden"
+                        FROM
+                            "ProfileWorks" AS profileWork
+                        WHERE
+                            profileWork."ProfileId" = @ProfileId
+                            AND profileWork."WorkId" = work."Id"
+                        -- Keep the profile view parameterized by the selected Work, not built for every Work.
+                        OFFSET 0
+                    ) AS visible ON TRUE
                     {{WorkCardProjection.Joins}}
-                    LEFT JOIN "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = visible."ProfileId"
+                    LEFT JOIN "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = @ProfileId
                 WHERE
-                    visible."ProfileId" = @ProfileId
-                    AND NOT visible."IsHidden"
+                    NOT visible."IsHidden"
                     AND EXISTS (
                         SELECT
                             1
