@@ -187,6 +187,8 @@
         text-decoration: none;
 
         &:hover, &:focus-visible { outline: none; background: var(--accent-soft); }
+        // Titles beyond the room (HeaderSearch.ts fit).
+        &[hidden] { display: none; }
     }
 
     // Also the stand-in of a missing cover, which takes over this class.
