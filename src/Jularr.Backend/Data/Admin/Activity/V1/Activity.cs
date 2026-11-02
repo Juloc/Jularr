@@ -77,9 +77,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         public ActivityItemV1(long id, OperationType operationTypeId, OperationStatusType operationStatusTypeId, string title, long? workId, string? workTitle, int? progressPercent,
             string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false, string? indexerName = null, long? bytesPerSecond = null, bool canBrowseFiles = false, long? sabnzbdConnectionId = null,
             long? acquisitionConnectionId = null, DownloadClientKind? downloadClientKindId = null, MediaType? mediaTypeId = null, bool canRetry = false,
-            DownloadPriorityType downloadPriorityTypeId = DownloadPriorityType.Normal, string[]? unmatchedFiles = null)
+            DownloadPriorityType downloadPriorityTypeId = DownloadPriorityType.Normal, string[]? unmatchedFiles = null, string[]? unmatchedFileReasons = null)
         {
             UnmatchedFiles = unmatchedFiles;
+            UnmatchedFileReasons = unmatchedFileReasons;
             DownloadPriorityTypeId = downloadPriorityTypeId;
             CanRetry = canRetry;
             AcquisitionConnectionId = acquisitionConnectionId;
@@ -192,9 +193,13 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         [DataField(typeof(OperationFields), nameof(OperationFields.CanImportManually))]
         public bool CanImportManually { get; }
 
-        // The files of a volume pack that name no volume; they stayed in the download.
+        // The files of a waiting book download that were not placed; they stayed in the download.
         [DataField(typeof(OperationFields), nameof(OperationFields.UnmatchedFiles))]
         public string[]? UnmatchedFiles { get; }
+
+        // Why each of them was not placed, in the same order (a text key below acquisition.file.; unknown when none was recorded).
+        [DataField(typeof(OperationFields), nameof(OperationFields.UnmatchedFileReasons))]
+        public string[]? UnmatchedFileReasons { get; }
 
         // The client that carries the download out, and the media type of its title.
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
