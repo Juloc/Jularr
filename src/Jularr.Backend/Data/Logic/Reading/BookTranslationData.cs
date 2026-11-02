@@ -20,6 +20,79 @@ namespace Jularr.Backend.Data.Logic.Reading
         public string Digest { get; }
     }
 
+    // The model the job worked with last and its version, for the progress: a section counts as finished only from that model in that version.
+    // Both are none before the job's first round since the start.
+    internal sealed class BookTranslationCurrentModelData : BaseData
+    {
+        public BookTranslationCurrentModelData(string? model, string? digest)
+        {
+            Model = model;
+            Digest = digest;
+        }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.OptionalName))]
+        public string? Model { get; }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.OptionalName))]
+        public string? Digest { get; }
+    }
+
+    // One section of a book in one language, whose block choices and cached translations are read together.
+    internal sealed class ReadingTranslationSectionData : BaseData
+    {
+        public ReadingTranslationSectionData(long documentId, int sectionIndex, string language, string[] paths)
+        {
+            DocumentId = documentId;
+            SectionIndex = sectionIndex;
+            Language = language;
+            Paths = paths;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex))]
+        public int SectionIndex { get; }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Language))]
+        public string Language { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Paths))]
+        public string[] Paths { get; }
+    }
+
+    // A block whose translation comes from another model than the default, for every reader of the book.
+    internal sealed class ReadingTranslationChoiceData : BaseData
+    {
+        public ReadingTranslationChoiceData(int blockIndex, string model)
+        {
+            BlockIndex = blockIndex;
+            Model = model;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.BlockIndex))]
+        public int BlockIndex { get; }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Name))]
+        public string Model { get; }
+    }
+
+    // One model's cached translation of a section.
+    internal sealed class ReadingTranslationCacheData : BaseData
+    {
+        public ReadingTranslationCacheData(string path, string cache)
+        {
+            Path = path;
+            Cache = cache;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Path))]
+        public string Path { get; }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Cache))]
+        public string Cache { get; }
+    }
+
     // A cached section of a book still to translate into one language: its text and the blocks translated so far, if any.
     internal sealed class BookTranslationUnitData : BaseData
     {

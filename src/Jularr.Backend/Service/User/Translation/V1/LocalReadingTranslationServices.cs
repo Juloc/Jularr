@@ -14,7 +14,6 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Reading;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.User.Reading.V1;
-using Jularr.Integrations.Logic.Translation;
 using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.User.Translation.V1
@@ -23,28 +22,46 @@ namespace Jularr.Backend.Service.User.Translation.V1
     internal static class LocalReadingPaths
     {
         public const int Algorithm = 4;
-        public static string Cache(int section, string language, string model) =>
-            ":localtranslation/v4/" + model + "/" + language + "/" + section.ToString("D5", global::System.Globalization.CultureInfo.InvariantCulture);
+
+        // Ollama's caches keep the key they had before model ids named their provider ("translategemma:12b"), so nothing is translated again;
+        // every other provider's key is its whole model id.
+        public static string ModelKey(string modelId) =>
+            modelId.StartsWith(OllamaTranslationProvider.ProviderKey + ":", StringComparison.Ordinal) ? modelId[(OllamaTranslationProvider.ProviderKey.Length + 1)..] : modelId;
+
+        public static string Cache(int section, string language, string modelId) =>
+            ":localtranslation/v4/" + ModelKey(modelId) + "/" + language + "/" + section.ToString("D5", global::System.Globalization.CultureInfo.InvariantCulture);
 
         public static string SourceHash(string html, string sourceLanguage) =>
             Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(html + "\n" + sourceLanguage)));
 
-        public static LocalTranslationCache? Parse(string json, string html, string sourceLanguage, string digest, int count)
+        // The section's cache for this source in this version (digest) of the model. A cache of another version becomes an empty one that keeps
+        // the earlier texts as Stale until this version has replaced them; without a digest the cache is read as stored, whichever version wrote it.
+        public static LocalTranslationCache? Parse(string json, string html, string sourceLanguage, string? digest, int count)
         {
             try
             {
                 var value = JsonSerializer.Deserialize<LocalTranslationCache>(json);
-                return value is { AlgorithmVersion: Algorithm } && value.SourceLanguage == sourceLanguage
-                    && value.SourceHash == SourceHash(html, sourceLanguage) && value.ModelDigest == digest
-                    && value.Texts is { Length: var length } && length == count
-                    && value.Texts.All(text => text is null || text.Length <= 20_000) ? value : null;
+                if (value is not { AlgorithmVersion: Algorithm } || value.SourceLanguage != sourceLanguage || value.SourceHash != SourceHash(html, sourceLanguage)
+                    || !Bounded(value.Texts, count)) return null;
+                if (value.Stale is { } stale && !Bounded(stale.Texts, count)) value = value with { Stale = null };
+                if (digest is null || value.ModelDigest == digest) return value;
+
+                string?[] earlier = [.. value.Texts.Select((text, index) => text ?? value.Stale?.Texts[index])];
+                return new LocalTranslationCache(Algorithm, sourceLanguage, value.SourceHash, digest, new string?[count],
+                    earlier.Any(text => text is not null) ? new LocalStaleTranslation(value.ModelDigest, earlier) : null);
             }
             catch (JsonException) { return null; }
         }
 
+        private static bool Bounded(string?[]? texts, int count) => texts is { Length: var length } && length == count && texts.All(text => text is null || text.Length <= 20_000);
+
+        // What a reader sees of one block: this version's text, else the earlier version's, marked stale.
+        public static (string? Text, bool IsStale) Visible(LocalTranslationCache cache, int index) =>
+            cache.Texts[index] is { } text ? (text, false) : cache.Stale?.Texts[index] is { } earlier ? (earlier, true) : (null, false);
+
         // Adds translated blocks to a section's cache under the document's row lock, so the Reader and the background job never
         // lose each other's blocks; a block already translated stays. Never called while a model runs.
-        public static async Task<string[]> StoreAsync(LogicContext ctx, long documentId, string path, string html, string sourceLanguage,
+        public static async Task<string?[]> StoreAsync(LogicContext ctx, long documentId, string path, string html, string sourceLanguage,
             string digest, int count, IReadOnlyDictionary<int, string> blocks, CancellationToken ct)
         {
             var lockSql = new SqlStatement();
@@ -57,19 +74,11 @@ namespace Jularr.Backend.Service.User.Translation.V1
             lockSql.Parameters.Add(new ReadingDocumentIdData(documentId));
             await ctx.ReadRequiredAsync<ReadingDocumentIdData>(lockSql, ct);
 
-            var query = new SqlStatement();
-            query.Statement =
-                """
-                SELECT convert_from(resource."Bytes", 'UTF8') AS "Blocks"
-                FROM "ReadingResources" AS resource
-                WHERE resource."ReadingDocumentId" = @DocumentId AND resource."Path" = @Path;
-                """;
-            query.Parameters.Add(new ReadingTranslationPathData(documentId, path));
-            var existing = await ctx.ReadOptionalAsync<ReadingTranslationV1>(query, ct);
-            var current = existing is null ? null : Parse(existing.Blocks, html, sourceLanguage, digest, count);
-            var texts = current?.Texts ?? new string[count];
-            // A section without text still gets its cache, or the job would pick it again and again.
-            var changed = current is null && count == 0;
+            var existing = await ctx.ReadOptionalAsync<ReadingTranslationCacheData>(Read(documentId, path), ct);
+            var current = existing is null ? null : Parse(existing.Cache, html, sourceLanguage, digest, count);
+            var texts = current?.Texts ?? new string?[count];
+            // A section without text still gets its cache in this version, or the job would pick it again and again.
+            var changed = count == 0 && (existing is null || Parse(existing.Cache, html, sourceLanguage, null, 0)?.ModelDigest != digest);
             foreach (var (index, value) in blocks)
             {
                 if (!string.IsNullOrWhiteSpace(texts[index])) continue;
@@ -78,32 +87,54 @@ namespace Jularr.Backend.Service.User.Translation.V1
             }
             if (changed)
             {
-                var replacement = new LocalTranslationCache(Algorithm, sourceLanguage, SourceHash(html, sourceLanguage), digest, texts);
+                // The earlier version's texts go once this version has every block.
+                var stale = texts.All(text => text is not null) ? null : current?.Stale;
+                var replacement = new LocalTranslationCache(Algorithm, sourceLanguage, SourceHash(html, sourceLanguage), digest, texts, stale);
                 await ctx.SaveReadingResourceAsync(new ReadingResourceData(documentId, path, "application/json", Encoding.UTF8.GetBytes(JsonSerializer.Serialize(replacement))), ct);
             }
             return texts;
         }
+
+        // One section's cache as stored.
+        public static SqlStatement Read(long documentId, string path)
+        {
+            var query = new SqlStatement();
+            query.Statement =
+                """
+                SELECT resource."Path", convert_from(resource."Bytes", 'UTF8') AS "Cache"
+                FROM "ReadingResources" AS resource
+                WHERE resource."ReadingDocumentId" = @DocumentId AND resource."Path" = @Path;
+                """;
+            query.Parameters.Add(new ReadingTranslationPathData(documentId, path));
+            return query;
+        }
     }
 
-    internal sealed record LocalTranslationCache(int AlgorithmVersion, string SourceLanguage, string SourceHash, string ModelDigest, string[] Texts);
+    // Texts holds one entry per block of the section (null: not yet translated in this version); Stale the texts of an earlier version of the
+    // model, shown until this version has replaced them.
+    internal sealed record LocalTranslationCache(int AlgorithmVersion, string SourceLanguage, string SourceHash, string ModelDigest, string?[] Texts,
+        LocalStaleTranslation? Stale = null);
+
+    internal sealed record LocalStaleTranslation(string ModelDigest, string?[] Texts);
 
     [ServiceEndpoint("GET", "/api/v1/translation/local/availability")]
     public sealed class ReadLocalTranslationAvailabilityV1 : UserService<LocalTranslationAvailabilityParametersV1>
     {
-        private readonly LocalTranslationMachines _machines;
-        internal ReadLocalTranslationAvailabilityV1(LocalTranslationMachines machines)
+        private readonly TranslationProviders _providers;
+        internal ReadLocalTranslationAvailabilityV1(TranslationProviders providers)
         {
-            _machines = machines;
+            _providers = providers;
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<LocalTranslationAvailabilityV1>()];
         protected override ModuleRequirement GetInstanceModules(LocalTranslationAvailabilityParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
         protected override ServicePermission GetPermission(LocalTranslationAvailabilityParametersV1 parameters, Type resultType) => new("profile.media.read");
-        // The model of the machine that translates now; asking each machine is metadata work and never delays opening the Reader for long.
+        // The model id that translates now (the Owner's default, else the largest installed TranslateGemma); asking each machine is metadata work
+        // and never delays opening the Reader for long.
         protected override async Task<IServiceOutput> OnRead()
         {
-            var saved = await LocalTranslationMachines.SavedAsync(Context, CancellationToken);
-            return new LocalTranslationAvailabilityV1((await _machines.ChooseAsync(saved, CancellationToken))?.Model);
+            var setup = await TranslationProviders.SetupAsync(Context, CancellationToken);
+            return new LocalTranslationAvailabilityV1((await _providers.ChooseAsync(setup, CancellationToken))?.ModelId);
         }
     }
 
@@ -113,38 +144,59 @@ namespace Jularr.Backend.Service.User.Translation.V1
     public sealed class ReadLocalReadingTranslationV1 : UserService<LocalReadingTranslationParametersV1>
     {
         private readonly ReadReadingSectionV1 _sections;
-        private readonly OllamaLocalModels _models;
-        private readonly LocalTranslationMachines _machines;
+        private readonly TranslationProviders _providers;
 
-        internal ReadLocalReadingTranslationV1(ReadReadingSectionV1 sections, OllamaLocalModels models, LocalTranslationMachines machines)
+        internal ReadLocalReadingTranslationV1(ReadReadingSectionV1 sections, TranslationProviders providers)
         {
             _sections = sections;
-            _models = models;
-            _machines = machines;
+            _providers = providers;
         }
 
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ReadingTranslationV1>()];
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<LocalReadingTranslationV1>()];
         protected override ModuleRequirement GetInstanceModules(LocalReadingTranslationParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
         protected override ServicePermission GetPermission(LocalReadingTranslationParametersV1 parameters, Type resultType) => new("profile.media.read");
 
+        // The model's texts in its current version (an earlier version's stand in, marked stale), with the blocks someone chose another model for
+        // replaced by that model's text; each block says which model its text is from.
         protected override async Task<IServiceOutput> OnRead()
         {
-            if (!OllamaLocalModels.Supported(Parameters.Model)) throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
+            if (_providers.Find(Parameters.Model) is null) throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
             var section = await _sections.ExecuteAsync<ReadingSectionV1>(new ReadingSectionParametersV1(Parameters.DocumentId, Parameters.SectionIndex), CancellationToken);
-            var saved = await LocalTranslationMachines.SavedAsync(Context, CancellationToken);
-            var server = (await _machines.ChooseAsync(saved, CancellationToken, Parameters.Model))?.Server ?? throw new ServiceUnavailableException("translation_local_unavailable");
+            var setup = await TranslationProviders.SetupAsync(Context, CancellationToken);
+            var machine = await _providers.ChooseAsync(setup, CancellationToken, Parameters.Model) ?? throw new ServiceUnavailableException("translation_local_unavailable");
             string digest;
-            try { digest = await _models.DigestAsync(server, Parameters.Model, CancellationToken); }
+            try { digest = await machine.Provider.DigestAsync(machine, CancellationToken); }
             catch (Exception exception) when (exception is HttpRequestException or InvalidDataException or JsonException or TaskCanceledException)
             { throw new ServiceUnavailableException("translation_local_unavailable", exception); }
 
+            // The blocks shown in another model's translation, for every reader of the book.
+            var choiceSql = new SqlStatement();
+            choiceSql.Statement =
+                """
+                SELECT
+                    choice."BlockIndex",
+                    choice."Model"
+                FROM "ReadingTranslationChoices" AS choice
+                WHERE choice."ReadingDocumentId" = @DocumentId
+                    AND choice."SectionIndex" = @SectionIndex
+                    AND choice."Language" = @Language;
+                """;
+            choiceSql.Parameters.Add(new ReadingTranslationSectionData(Parameters.DocumentId, Parameters.SectionIndex, Parameters.Language, []));
+            var choices = (await Context.ReadSql.ReadListAsync<ReadingTranslationChoiceData>(choiceSql, CancellationToken))
+                .Where(choice => choice.BlockIndex < section.Blocks && choice.Model != Parameters.Model && _providers.Find(choice.Model) is not null).ToArray();
+
+            // The section's cache of every model involved, in one read.
+            var paths = choices.Select(choice => choice.Model).Prepend(Parameters.Model).Distinct(StringComparer.Ordinal)
+                .ToDictionary(model => model, model => LocalReadingPaths.Cache(Parameters.SectionIndex, Parameters.Language, model), StringComparer.Ordinal);
             var query = new SqlStatement();
             query.Statement =
                 """
-                SELECT convert_from(resource."Bytes", 'UTF8') AS "Blocks"
+                SELECT
+                    resource."Path",
+                    convert_from(resource."Bytes", 'UTF8') AS "Cache"
                 FROM "ReadingResources" AS resource
                 WHERE resource."ReadingDocumentId" = @DocumentId
-                    AND resource."Path" = @Path
+                    AND resource."Path" = ANY(@Paths)
                     AND EXISTS (
                         SELECT 1 FROM "ReadingDocuments" AS document
                         JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
@@ -153,11 +205,35 @@ namespace Jularr.Backend.Service.User.Translation.V1
                         WHERE document."Id" = resource."ReadingDocumentId"
                     );
                 """;
-            query.Parameters.Add(new ReadingTranslationPathData(Parameters.DocumentId, LocalReadingPaths.Cache(Parameters.SectionIndex, Parameters.Language, Parameters.Model)));
+            query.Parameters.Add(new ReadingTranslationSectionData(Parameters.DocumentId, Parameters.SectionIndex, Parameters.Language, [.. paths.Values]));
             query.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
-            var stored = await Context.ReadSql.ReadOptionalAsync<ReadingTranslationV1>(query, CancellationToken);
-            var parsed = stored is null ? null : LocalReadingPaths.Parse(stored.Blocks, section.Html, Parameters.SourceLanguage, digest, section.Blocks);
-            return new ReadingTranslationV1(JsonSerializer.Serialize(parsed?.Texts ?? []));
+            var caches = (await Context.ReadSql.ReadListAsync<ReadingTranslationCacheData>(query, CancellationToken)).ToDictionary(row => row.Path, row => row.Cache, StringComparer.Ordinal);
+
+            var texts = new string?[section.Blocks];
+            var models = new string?[section.Blocks];
+            var stale = new bool[section.Blocks];
+            if (caches.TryGetValue(paths[Parameters.Model], out var own)
+                && LocalReadingPaths.Parse(own, section.Html, Parameters.SourceLanguage, digest, section.Blocks) is { } current)
+            {
+                for (var index = 0; index < section.Blocks; index++)
+                {
+                    if (LocalReadingPaths.Visible(current, index) is ({ } text, var isStale))
+                        (texts[index], models[index], stale[index]) = (text, Parameters.Model, isStale);
+                }
+            }
+
+            // A chosen model's text in whichever version wrote it; a block it has no text for keeps the default's.
+            foreach (var group in choices.GroupBy(choice => choice.Model, StringComparer.Ordinal))
+            {
+                if (!caches.TryGetValue(paths[group.Key], out var json)
+                    || LocalReadingPaths.Parse(json, section.Html, Parameters.SourceLanguage, null, section.Blocks) is not { } chosen) continue;
+                foreach (var choice in group)
+                {
+                    if (LocalReadingPaths.Visible(chosen, choice.BlockIndex) is ({ } text, var isStale))
+                        (texts[choice.BlockIndex], models[choice.BlockIndex], stale[choice.BlockIndex]) = (text, group.Key, isStale);
+                }
+            }
+            return models.All(model => model is null) ? new LocalReadingTranslationV1("[]", [], []) : new LocalReadingTranslationV1(JsonSerializer.Serialize(texts), models, stale);
         }
     }
 
@@ -165,16 +241,13 @@ namespace Jularr.Backend.Service.User.Translation.V1
     public sealed class GenerateLocalReadingBlockV1 : UserService<LocalReadingBlockParametersV1, LocalReadingBlockDataV1>
     {
         private readonly ReadReadingSectionV1 _sections;
-        private readonly OllamaLocalModels _models;
-        private readonly LocalTranslationMachines _machines;
+        private readonly TranslationProviders _providers;
         private readonly LocalTranslationGate _gate;
 
-        internal GenerateLocalReadingBlockV1(ReadReadingSectionV1 sections, OllamaLocalModels models,
-            LocalTranslationMachines machines, LocalTranslationGate gate)
+        internal GenerateLocalReadingBlockV1(ReadReadingSectionV1 sections, TranslationProviders providers, LocalTranslationGate gate)
         {
             _sections = sections;
-            _models = models;
-            _machines = machines;
+            _providers = providers;
             _gate = gate;
         }
 
@@ -185,8 +258,8 @@ namespace Jularr.Backend.Service.User.Translation.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            if (!OllamaLocalModels.Supported(Parameters.Model)) throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
-            var saved = await Context.ExecuteBatchAsync(LocalTranslationMachines.SavedAsync, CancellationToken);
+            if (_providers.Find(Parameters.Model) is null) throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
+            var setup = await Context.ExecuteBatchAsync(TranslationProviders.SetupAsync, CancellationToken);
             var section = await _sections.ExecuteAsync<ReadingSectionV1>(new ReadingSectionParametersV1(Parameters.DocumentId, Parameters.SectionIndex), CancellationToken);
             var html = new HtmlParser().ParseDocument(section.Html);
             var nodes = html.QuerySelectorAll("[data-b]").ToArray();
@@ -208,31 +281,24 @@ namespace Jularr.Backend.Service.User.Translation.V1
                 // A machine that fails rests, and the block goes to the next one in the order at once; none left means unavailable.
                 while (true)
                 {
-                    var server = (await _machines.ChooseAsync(saved, CancellationToken, Parameters.Model))?.Server ?? throw new ServiceUnavailableException("translation_local_unavailable");
+                    var machine = await _providers.ChooseAsync(setup, CancellationToken, Parameters.Model) ?? throw new ServiceUnavailableException("translation_local_unavailable");
                     try
                     {
-                        var digest = await _models.DigestAsync(server, Parameters.Model, CancellationToken);
+                        var digest = await machine.Provider.DigestAsync(machine, CancellationToken);
                         var path = LocalReadingPaths.Cache(Parameters.SectionIndex, Parameters.Language, Parameters.Model);
-                        var query = new SqlStatement();
-                        query.Statement =
-                            """
-                            SELECT convert_from(resource."Bytes", 'UTF8') AS "Blocks"
-                            FROM "ReadingResources" AS resource
-                            WHERE resource."ReadingDocumentId" = @DocumentId AND resource."Path" = @Path;
-                            """;
-                        query.Parameters.Add(new ReadingTranslationPathData(Parameters.DocumentId, path));
 
-                        // A short authorized read batch; no open SQL transaction while the model runs.
+                        // A short authorized read batch; no open SQL transaction while the model runs. Only this version's text counts: an
+                        // earlier version's stays visible in the section read until it is replaced.
                         var previous = await Context.ExecuteBatchAsync(async (ctx, ct) =>
                         {
-                            var row = await ctx.ReadOptionalAsync<ReadingTranslationV1>(query, ct);
-                            return row is null ? null : LocalReadingPaths.Parse(row.Blocks, section.Html, Data.SourceLanguage, digest, nodes.Length);
+                            var row = await ctx.ReadOptionalAsync<ReadingTranslationCacheData>(LocalReadingPaths.Read(Parameters.DocumentId, path), ct);
+                            return row is null ? null : LocalReadingPaths.Parse(row.Cache, section.Html, Data.SourceLanguage, digest, nodes.Length);
                         }, CancellationToken);
-                        if (!string.IsNullOrWhiteSpace(previous?.Texts[Parameters.BlockIndex]))
-                            return new LocalReadingBlockV1(previous.Texts[Parameters.BlockIndex]);
+                        if (previous?.Texts[Parameters.BlockIndex] is { } done && !string.IsNullOrWhiteSpace(done))
+                            return new LocalReadingBlockV1(done);
 
                         var context = ReadingHtml.TranslationContext(nodes, Parameters.BlockIndex);
-                        var value = await _models.TranslateBlockAsync(server, Parameters.Model, Data.SourceLanguage, Parameters.Language, source, context, CancellationToken)
+                        var value = await machine.Provider.TranslateBlockAsync(machine, Data.SourceLanguage, Parameters.Language, source, context, CancellationToken)
                             ?? throw new ServiceUnavailableException("translation_local_unverified");
 
                         // Serialize competing writes across instances on the canonical ReadingDocument.
@@ -241,13 +307,13 @@ namespace Jularr.Backend.Service.User.Translation.V1
                         {
                             var texts = await LocalReadingPaths.StoreAsync(ctx, Parameters.DocumentId, path, section.Html, Data.SourceLanguage, digest, nodes.Length,
                                 new Dictionary<int, string> { [Parameters.BlockIndex] = value }, ct);
-                            return (IServiceOutput)new LocalReadingBlockV1(texts[Parameters.BlockIndex]);
+                            return (IServiceOutput)new LocalReadingBlockV1(texts[Parameters.BlockIndex] ?? value);
                         }, CancellationToken);
                     }
                     catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException
                         || exception is TaskCanceledException && !CancellationToken.IsCancellationRequested)
                     {
-                        _machines.Fail(server);
+                        machine.Provider.Fail(machine);
                     }
                 }
             }

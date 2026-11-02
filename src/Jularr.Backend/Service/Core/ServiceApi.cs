@@ -278,6 +278,9 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<LocalTranslationGate>();
             services.TryAddSingleton<BookTranslationProgress>();
             services.TryAddSingleton<LocalTranslationMachines>();
+            // Every server translation provider registers here; model ids name it as "<Key>:<model>".
+            services.AddSingleton<ITranslationProvider, OllamaTranslationProvider>();
+            services.TryAddSingleton<TranslationProviders>();
             services.TryAddSingleton<LocalTranslationDownloads>();
             services.AddHostedService(provider => provider.GetRequiredService<LocalTranslationDownloads>());
             services.AddHttpClient<OllamaLocalModels>(http => http.Timeout = TimeSpan.FromMinutes(65))
