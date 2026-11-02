@@ -106,7 +106,8 @@ namespace Jularr.Frontend.Pages.User.Details
             // The profile's request shows its phase live; once it is complete the play action says enough.
             if (work.RequestStatusTypeId is { } requested && texts.CanRequest() && !(requested == AcquisitionRequestStatusType.Completed && playable is not null))
             {
-                actions.Add(new LivePhasePill(assets, LiveKeys.RequestOfWork(work.Id), requested));
+                var reads = kind is WorkKind.Book or WorkKind.Manga or WorkKind.LightNovel;
+                actions.Add(new LivePhasePill(assets, LiveKeys.RequestOfWork(work.Id), requested, reads ? "details.read" : "details.play", reads ? "reading" : "play"));
                 page.Asset("Framework/Components/LiveProgress.entry.ts");
             }
 

@@ -160,15 +160,17 @@ namespace Jularr.Frontend.Framework
         }
     }
 
-    // A request's phase as an accent pill: an icon per phase, and while it downloads the percent in a ring. Only shows, leads nowhere.
-    public sealed class LivePhasePill(FrontendAssets assets, string key, AcquisitionRequestStatusType status) : IUiComponent
+    // A request's phase as an accent pill: an icon and a word per phase, the download's percent only in a ring, and once done the title's own action
+    // (play or read). Only shows, leads nowhere; the stream switches the phase, the styles show its icon and word.
+    public sealed class LivePhasePill(FrontendAssets assets, string key, AcquisitionRequestStatusType status, string doneKey, string doneIcon) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
-            var icons = new[] { "clock", "search", "download", "play", "alert" }.Select(name => (IUiComponent)new Span(new Icon(name, assets, 16)).Class("live-phase-pill__" + name));
-            new Span(new Span([.. icons]).Class("live-phase-pill__icons"),
-                    new Span().Class("live-phase-pill__ring").Attribute("data-live-value", "percent").Attribute("hidden", "hidden").Attribute("aria-hidden", "true"),
-                    new Span(new ValueText(LiveFacts.Phase(texts, status, null))).Attribute("data-live-text", "phase"))
+            var icons = new[] { "clock", "search", "download", "alert" }.Select(name => (IUiComponent)new Span(new Icon(name, assets, 16)).Class("live-phase-pill__" + name));
+            var words = Enum.GetValues<AcquisitionRequestStatusType>().Select(phase => (IUiComponent)new Span(new ValueText(phase == AcquisitionRequestStatusType.Completed ? texts[doneKey] : texts["request.state." + phase]))
+                .Class("live-phase-pill__word").Attribute("data-word", LiveFacts.Marker(phase)));
+            new Span(new Span([.. icons, new Span(new Icon(doneIcon, assets, 16)).Class("live-phase-pill__done")]).Class("live-phase-pill__icons"),
+                    new Span().Class("live-phase-pill__ring").Attribute("data-live-value", "percent").Attribute("hidden", "hidden").Attribute("aria-hidden", "true"), new Span([.. words]))
                 .Class("live-phase-pill").Attribute("role", "status").Attribute("data-live", key).Attribute("data-phase", LiveFacts.Marker(status)).WriteTo(writer, encoder, texts);
         }
     }
