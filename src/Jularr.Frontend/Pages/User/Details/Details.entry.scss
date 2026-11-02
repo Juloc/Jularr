@@ -167,7 +167,7 @@
     &:hover { color: var(--accent-text); }
 }
 
-.relation-dialog { display: grid; gap: 16px; }
+.relation-dialog { display: grid; gap: 16px; padding-bottom: 18px; }
 
 // The summary and the facts side by side; stacked on narrower screens.
 .details-facts-block { display: grid; gap: 16px; }
