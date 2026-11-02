@@ -42,6 +42,24 @@ namespace Jularr.E2E.Tests
                 }
             }
 
+            // The progress dots look small but take a tap 12px above and below their centre (a 24px high hit area), without overlapping their neighbours.
+            var dots = page.Locator(".hero-carousel__segment");
+            Assert.IsTrue(await dots.CountAsync() >= 2, "The carousel needs at least two dots.");
+            var misses = await dots.EvaluateAllAsync<string[]>("""
+                dots => dots.flatMap((dot, position) => {
+                    const box = dot.getBoundingClientRect();
+                    const x = box.left + box.width / 2;
+                    const y = box.top + box.height / 2;
+                    const problems = [];
+                    if (box.height > 6.5) problems.push('dot ' + position + ' looks ' + box.height + 'px high');
+                    for (const [dx, dy] of [[0, -11.5], [0, 11.5], [-2, -11.5], [2, 11.5]]) {
+                        if (document.elementFromPoint(x + dx, y + dy)?.closest('.hero-carousel__segment') !== dot) problems.push('dot ' + position + ' misses a tap at ' + dx + ',' + dy);
+                    }
+                    return problems;
+                })
+                """);
+            Assert.AreEqual(0, misses.Length, string.Join("; ", misses));
+
             // The relation dialog's search button lies inside the dialog box, with room below it.
             await page.GotoAsync("/Details/8001?tab=related");
             await page.GetByRole(AriaRole.Button, new() { Name = "Add relation" }).ClickAsync();

@@ -1,6 +1,6 @@
 import { readerLifetime } from "../Lifetime";
 
-// Reader translation: a section's blocks in another language, from the shared cache or translated here and then shared.
+// Reader translation: a section's blocks in another language from the server's TranslateGemma; Mozilla in the browser steps in only as an emergency, and its results stay in this browser.
 // A language is its code as Mozilla's models name it, such as "de" or "ja".
 export type Language = string;
 
@@ -163,12 +163,9 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         reader.dataset.translated = "true";
     }
 
-    async function cached(target: Language): Promise<string[] | undefined> {
-        const response = await fetch(reader.dataset.translationUrl! + target, { credentials: "same-origin" });
-        if (!response.ok) return undefined;
-        const blocksJson = (await response.json() as { blocks: string }).blocks;
-        const parsed = JSON.parse(blocksJson) as string[];
-        return parsed.length === blocks.length ? parsed : undefined;
+    // Where the browser keeps its own translation of this section.
+    function browserKey(target: Language, list: string[]): string {
+        return reader.dataset.localTranslationUrl + target + "#" + fingerprint(list);
     }
 
     async function engine(target: Language): Promise<Worker> {
@@ -230,7 +227,7 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         show(result);
 
         // What the browser translated earlier stands in for the blocks the server has not done yet; the server's text replaces it as soon as it arrives.
-        const key = reader.dataset.translationUrl + target + "#" + fingerprint(list);
+        const key = browserKey(target, list);
         const bridge: boolean[] = list.map(() => false);
         const earlier = await cacheRead(key, list.length);
         if (earlier) {
@@ -273,13 +270,14 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
 
     // Mozilla translates the blocks that still have no text; they stay marked as the browser's, so the server's text replaces them later.
     async function browserFill(target: Language, generation: number, list: string[], result: string[], bridge: boolean[], key: string): Promise<boolean> {
+        const missing = list.map((text, i) => text.trim() && !result[i].trim() ? i : -1).filter(i => i >= 0);
+        if (missing.length === 0) return true;
         let active: Worker;
         try {
             active = await engine(target);
         } catch {
             return false;
         }
-        const missing = list.map((text, i) => text.trim() && !result[i].trim() ? i : -1).filter(i => i >= 0);
         for (let start = 0; start < missing.length && current === target && revision === generation; start += Batch) {
             const part = missing.slice(start, start + Batch);
             const out = await run(active, part.map(i => list[i]), start);
@@ -295,32 +293,24 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
 
     // The Reader page picks the server's TranslateGemma. The Mozilla path below runs only as an emergency: when the Mozilla module is on
     // (data-browser-translation) and the server could not translate, see the fallback in choose().
-    // Translated batch by batch so the page fills in while it works; the finished section is shared.
+    // Mozilla's result is this browser's own: the server's translation cache is neither read nor written.
     async function translate(target: Language, generation: number) {
         if (reader.dataset.translationEngine === "gemma") return translateLocal(target, generation);
-        const shared = await cached(target);
-        if (revision !== generation) return;
-        if (shared) { show(shared); return; }
 
-        say(reader.dataset.translatingLabel + " 0 %");
-        const active = await engine(target);
         const list = texts();
         const result: string[] = list.map(() => "");
-        for (let start = 0; start < list.length && current === target && revision === generation; start += Batch) {
-            const part = await run(active, list.slice(start, start + Batch), start);
-            if (revision !== generation) return;
-            part.forEach((text, offset) => { result[start + offset] = text; });
+        const bridge: boolean[] = list.map(() => false);
+        const key = browserKey(target, list);
+        const earlier = await cacheRead(key, list.length);
+        if (current !== target || revision !== generation) return;
+        if (earlier) {
+            earlier.forEach((text, i) => { if (text.trim()) { result[i] = text; bridge[i] = true; } });
             show(result);
-            say(`${reader.dataset.translatingLabel} ${Math.min(100, Math.round((start + Batch) * 100 / list.length))} %`);
         }
 
-        if (current !== target || revision !== generation) return;
-        say(undefined);
-        await fetch(reader.dataset.translationUrl! + target, {
-            method: "PUT", credentials: "same-origin",
-            headers: { "Content-Type": "application/json", RequestVerificationToken: reader.dataset.antiforgery! },
-            body: JSON.stringify({ blocks: JSON.stringify(result) })
-        });
+        say(reader.dataset.translatingLabel + " 0 %");
+        if (!await browserFill(target, generation, list, result, bridge, key)) throw new Error("The browser has no models for this language.");
+        if (current === target && revision === generation) say(undefined);
     }
 
     return async function choose(target: Language | "") {
@@ -347,7 +337,6 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
                     const provider = reader.querySelector<HTMLElement>('[data-translation-provider]');
                     if (provider) provider.textContent =
                         (reader.dataset.providerLocalLabel ?? 'TranslateGemma') + ' · ' + reader.dataset.localModel;
-                    reader.querySelector<HTMLButtonElement>('[data-local-quality-toggle]')?.setAttribute('aria-pressed', 'true');
                     await translateLocal(target, generation);
                     if (current === target && generation === revision) reader.dataset.translationState = 'ready';
                     return;

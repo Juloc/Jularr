@@ -277,21 +277,18 @@ namespace Jularr.Frontend.Pages.User.Reader
             {
                 // The server's TranslateGemma translates; what its job prepared shows at once, the rest of the page in view it translates first.
                 // A book in another language opens in the profile's, unless the profile chose another for it.
-                // TODO(#1726): Mozilla's translation in the browser returns only as an emergency module, off by default.
                 view.Attribute("data-translation-engine", "gemma")
                     .Attribute("data-local-model", _localTranslationModel ?? "")
                     .Attribute("data-language", document.Language ?? document.OriginalLanguage ?? "")
                     .Attribute("data-reading-language", Chosen(document))
                     .Attribute("data-language-url", "/api/v1/reading/assets/" + asset + "/language")
                     .Attribute("data-local-translation-url", "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/" + index.ToString(CultureInfo.InvariantCulture) + "/local-translations/")
-                    .Attribute("data-translation-url", "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/"
-                        + index.ToString(CultureInfo.InvariantCulture) + "/translations/")
                     .Attribute("data-translating-label", texts["reader.translating"])
                     .Attribute("data-language-saving-label", texts["reader.language.saving"])
                     .Attribute("data-translation-failed-label", texts["reader.translationFailed"])
                     .Attribute("data-provider-original-label", texts["reader.translation.provider.original"])
                     .Attribute("data-provider-local-label", texts["reader.translation.provider.local"]);
-                // The Mozilla module is an emergency only: with it on, a page the server cannot translate falls back to the browser.
+                // The Mozilla module is an emergency only: with it on, a page the server cannot translate (or translates too slowly) falls back to the browser, which keeps its results in this browser.
                 if (texts.CanTranslateInBrowser())
                 {
                     view.Attribute("data-browser-translation", "true")
