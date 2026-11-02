@@ -238,13 +238,15 @@ html:has(.drawer[open]) .hero-carousel__segment--current span { animation-play-s
     .hero-carousel__poster { top: 16px; right: 54px; height: 118px; transform: rotate(5deg); }
     .hero-carousel__art::after { background: linear-gradient(0deg, rgb(10 10 22 / 96%) 0%, rgb(13 11 28 / 87%) 39%, rgb(18 16 28 / 30%) 72%, rgb(16 16 32 / 9%) 100%); }
     .hero-carousel__backdrop .media-image { object-position: 55% 50%; }
-    .hero-carousel__arrow.button { top: 44%; width: 31px; min-height: 31px; }
+    // The arrows share the bottom row with the pause button and the dots, so they never sit over the title; every control keeps a 36px hit area.
+    .hero-carousel__arrow.button { top: auto; bottom: 11px; width: 36px; min-height: 36px; transform: none; }
+    .hero-carousel__arrow.button:active:not(:disabled) { transform: scale(.96); }
     .hero-carousel__arrow--previous.button { inset-inline-start: 10px; }
     .hero-carousel__arrow--next.button { inset-inline-end: 10px; }
-    .hero-carousel__controls { bottom: 11px; gap: 9px; max-width: calc(100% - 60px); }
+    .hero-carousel__controls { bottom: 11px; gap: 9px; max-width: calc(100% - 112px); }
     .hero-carousel__segments { gap: 5px; overflow: hidden; }
     .hero-carousel__segment { flex-basis: 5px; width: 5px; height: 5px; }
     .hero-carousel__segment--current { flex-basis: 28px; width: 28px; }
     .hero-carousel__counter { display: none; }
-    .hero-carousel__pause.button { flex-basis: 28px; width: 28px; min-height: 28px; }
+    .hero-carousel__pause.button { flex-basis: 36px; width: 36px; min-height: 36px; }
 }

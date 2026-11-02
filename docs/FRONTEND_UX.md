@@ -45,7 +45,7 @@ adds none of its own colours, radii, shadows or font sizes. Design follows the o
 - Owner's decision 21 Oct: admin list pages keep their page actions and bulk actions in the one floating
   [ActionDock](../src/Jularr.Frontend/Framework/Components/ActionDock.cs), never in a page head, toolbar or at the end of the list. It is the save pill's
   floating pill (centred, well above the bottom edge, above the floating bar on a phone, always in view) with two optional zones as slots: actions (icon and short
-  label; a phone keeps the icons) and bulk (shown instead of the actions while rows marked `data-dock-select` are chosen, with their count); the pager of the page's list joins it by itself
+  label; a phone keeps the icons, so two actions never share one) and bulk (shown instead of the actions while rows marked `data-dock-select` are chosen, with their count); the pager of the page's list joins it by itself
   (see Paging). **No infinite scroll on admin pages**: lists are paged, 25 rows by default. With a visible save pill the dock stacks above it.
 - **Paging: set `.Paged()` on the list.** `Table`, `ListPanel` (`.Paged(pageSize: 25, key: "pageNumber", primary: false)`) and any other component (`content.Paged(rows, pageSize, key)`, e.g. a grid of cards)
   take paging as an option; the page never builds a dock, a pager or an address for it. The rule is the same everywhere (see [Paging.cs](../src/Jularr.Frontend/Framework/Components/Paging.cs)):

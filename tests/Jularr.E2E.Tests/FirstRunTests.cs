@@ -63,6 +63,16 @@ namespace Jularr.E2E.Tests
                 // The calendar shows its month, switches to the week and the day in place, and opens its filter as a dialog.
                 await page.GotoAsync("/Calendar");
                 await Assertions.Expect(page.Locator(".calendar__grid")).ToBeVisibleAsync();
+
+                // On a phone the status menu opens inside the screen.
+                await page.SetViewportSizeAsync(375, 812);
+                await page.GotoAsync("/Calendar");
+                await page.Locator(".calendar__toolbar .select-link-menu__button").ClickAsync();
+                var statusList = await page.Locator(".calendar__toolbar .select-link-menu[open] .select-link-menu__list").BoundingBoxAsync();
+                Assert.IsNotNull(statusList);
+                Assert.IsTrue(statusList.X >= 0 && statusList.X + statusList.Width <= 375.5, "The status menu leaves the phone screen: " + statusList.X + " + " + statusList.Width);
+                await page.SetViewportSizeAsync(1280, 720);
+                await page.GotoAsync("/Calendar");
                 await page.GetByRole(AriaRole.Link, new() { Name = "Week", Exact = true }).ClickAsync();
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("view=week"));
                 await Assertions.Expect(page.Locator(".calendar__week")).ToBeVisibleAsync();

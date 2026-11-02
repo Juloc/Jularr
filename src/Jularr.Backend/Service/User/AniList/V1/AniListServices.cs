@@ -283,38 +283,8 @@ namespace Jularr.Backend.Service.User.AniList.V1
                 """
                 SELECT
                     entry."MediaId",
-                    coalesce(
-                        (
-                            SELECT
-                                min(covered."WorkId")
-                            FROM
-                                "AniListEntryUnits" AS covered
-                                JOIN "ProfileWorks" AS visible ON visible."ProfileId" = covered."ProfileId" AND visible."WorkId" = covered."WorkId"
-                            WHERE
-                                covered."ProfileId" = entry."ProfileId"
-                                AND covered."MediaId" = entry."MediaId"
-                        ),
-                        (
-                            SELECT
-                                min(identity."WorkId")
-                            FROM
-                                "WorkExternalIdentities" AS identity
-                                JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = identity."WorkId"
-                            WHERE
-                                identity."Namespace" = 'anilist'
-                                AND identity."Value" = entry."MediaId"::text
-                        )
-                    ) AS "WorkId",
-                    EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            "AniListEntryUnits" AS covered
-                            JOIN "ProfileWorks" AS visible ON visible."ProfileId" = covered."ProfileId" AND visible."WorkId" = covered."WorkId"
-                        WHERE
-                            covered."ProfileId" = entry."ProfileId"
-                            AND covered."MediaId" = entry."MediaId"
-                    ) AS "IsInLibrary",
+                    coalesce(covered."WorkId", linked."WorkId") AS "WorkId",
+                    covered."WorkId" IS NOT NULL AS "IsInLibrary",
                     entry."Title",
                     entry."CoverUrl",
                     entry."IsManga",
@@ -322,15 +292,71 @@ namespace Jularr.Backend.Service.User.AniList.V1
                     entry."Progress",
                     entry."TotalCount" AS "Total"
                 FROM
-                    "AniListEntries" AS entry
-                WHERE
-                    entry."ProfileId" = @ProfileId
-                    AND entry."Status" = @Status
+                    (
+                        SELECT
+                            page."ProfileId",
+                            page."MediaId",
+                            page."Title",
+                            page."CoverUrl",
+                            page."IsManga",
+                            page."Status",
+                            page."Progress",
+                            page."TotalCount",
+                            page."RemoteUpdatedAt"
+                        FROM
+                            "AniListEntries" AS page
+                        WHERE
+                            page."ProfileId" = @ProfileId
+                            AND page."Status" = @Status
+                        ORDER BY
+                            page."RemoteUpdatedAt" DESC,
+                            page."MediaId"
+                        LIMIT @PageSize
+                        OFFSET @Offset
+                    ) AS entry
+                    -- The profile's view of the Works is checked for the few Works found, never built for every Work (OFFSET 0 keeps it parameterized).
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            min(unit."WorkId") AS "WorkId"
+                        FROM
+                            "AniListEntryUnits" AS unit
+                        WHERE
+                            unit."ProfileId" = entry."ProfileId"
+                            AND unit."MediaId" = entry."MediaId"
+                            AND EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "ProfileWorks" AS visible
+                                WHERE
+                                    visible."ProfileId" = unit."ProfileId"
+                                    AND visible."WorkId" = unit."WorkId"
+                                OFFSET 0
+                            )
+                    ) AS covered
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            min(identity."WorkId") AS "WorkId"
+                        FROM
+                            "WorkExternalIdentities" AS identity
+                        WHERE
+                            covered."WorkId" IS NULL
+                            AND identity."Namespace" = 'anilist'
+                            AND identity."Value" = entry."MediaId"::text
+                            AND EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "ProfileWorks" AS visible
+                                WHERE
+                                    visible."ProfileId" = entry."ProfileId"
+                                    AND visible."WorkId" = identity."WorkId"
+                                OFFSET 0
+                            )
+                    ) AS linked ON TRUE
                 ORDER BY
                     entry."RemoteUpdatedAt" DESC,
-                    entry."MediaId"
-                LIMIT @PageSize
-                OFFSET @Offset;
+                    entry."MediaId";
                 """;
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Parameters.Add(new AniListStatusData(Parameters.Status));
