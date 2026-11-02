@@ -989,6 +989,14 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "The Matrix Show");
             StringAssert.Contains(html, "href=\"/?type=series&amp;q=Matrix\"");
             Assert.IsFalse(html.Contains("data-discover-next", StringComparison.Ordinal));
+            StringAssert.Contains(html, "id=\"search-search-global\" value=\"Matrix\"");
+
+            // The header search shows only its own text: another page's filter stays in that page's field.
+            using var filtered = await host.SendAsync(HttpMethod.Get, "/Library?q=Matrix");
+            html = await filtered.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, filtered.StatusCode, html);
+            StringAssert.Contains(html, "id=\"search-search-global\" value=\"\"");
+            StringAssert.Contains(html, "value=\"Matrix\"");
         }
 
         [TestMethod]
