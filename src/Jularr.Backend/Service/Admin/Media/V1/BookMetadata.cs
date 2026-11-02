@@ -39,6 +39,19 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
+        public async Task<IReadOnlyList<OpenLibraryResult>> SearchFilteredAsync(IReadOnlyList<string> subjects, int? yearFrom, int? yearTo, string? language, bool newest, int page,
+            CancellationToken ct)
+        {
+            try
+            {
+                return await openLibrary.SearchFilteredAsync(subjects, yearFrom, yearTo, language, newest, page, ct);
+            }
+            catch (OpenLibraryException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
         public async Task<IReadOnlyList<OpenLibraryResult>> SearchAsync(string query, int? year, CancellationToken ct)
         {
             try

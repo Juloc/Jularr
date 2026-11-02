@@ -120,10 +120,17 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   continued titles, then its best by rank (series from Discover's series list), then what the library added last, each title once; the types
   take turns place by place, and a type with fewer titles shows fewer. The device keeps how many per type (1–5, standard 3; no overall
   maximum), whether continued titles count and whether it turns by itself), feed chips and a rows/grid switch. The header owns the **one**
-  global Search; do not add another search field inside Discover. The Filter drawer lists the media types first, then the local availability
-  (in Jularr, can be requested), then only what the chosen types have: the release year and their rankings; the rankings a chosen
-  type lacks leave the panel as the types change. No genre, platform, language, runtime or rating facets exist yet (Discover's
-  catalogs keep no such data). Library and Favorites share the same media-type bar, filter panel (types, release year), order and layout.
+  global Search; do not add another search field inside Discover. Owner's decision 2 Nov: under the media-type bar a filter row as AniList's
+  search has it: Genres, Year, Season (anime) and Format at hand, More opens the Filter drawer with the others the chosen type's catalog can
+  answer (status, country with Manhwa/Manhua, source, AniList's tags by category, streaming or reading sites, ranges of years, episodes,
+  chapters, volumes and minutes, language for books, adult titles as a switch for every profile; `DiscoverFilterOptionsV1` names them per
+  type). Several types share only genre and year. A popup applies its choices when it closes, a select at once; on a phone the row swipes
+  sideways and a popup is a sheet. Any filter (not the type alone) replaces the feed chips and shelves with one grid of the chosen types'
+  titles under the highlights, popularity first, with the orders the type offers, loading on while scrolling; with Jularr holding the whole
+  catalog (`LocalDiscovery`: AniList, TMDB's films) the grid is read locally, otherwise from the provider (AniList, TMDB's discover lists,
+  Open Library). The Filter drawer lists the media types first, then the local availability, the filters above, then only the rankings the
+  chosen types have; the rankings a chosen type lacks leave the panel as the types change. Library and Favorites share the same media-type bar,
+  filter panel (types, release year), order and layout.
   Cards use the shared cover presentation and Backend-supplied state below. User/profile ordering is respected.
   Backend supplies effective capability/order/provider data; do not copy
   old `Jularr.Web` persistence or invent a new module toggle in Frontend.

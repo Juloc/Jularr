@@ -87,6 +87,61 @@ namespace Jularr.Integrations.Logic.Tmdb
                 : [];
         }
 
+        // A discover list narrowed by Discover's filters; a rating order counts only titles with enough votes.
+        public async Task<IReadOnlyList<TmdbSearchResult>> DiscoverAsync(TmdbConnection connection, TmdbMediaKind kind, TmdbDiscoverQuery query, int page, CancellationToken ct)
+        {
+            var movie = kind == TmdbMediaKind.Movie;
+            var dateField = movie ? "primary_release_date" : "first_air_date";
+            var parameters = new List<KeyValuePair<string, string>>
+            {
+                new("page", Math.Clamp(page, 1, 500).ToString(CultureInfo.InvariantCulture)),
+                new("include_adult", query.IncludesAdult ? "true" : "false"),
+                new("sort_by", query.Sort switch
+                {
+                    TmdbDiscoverSort.Rating => "vote_average.desc",
+                    TmdbDiscoverSort.Released => dateField + ".desc",
+                    TmdbDiscoverSort.Title => movie ? "title.asc" : "name.asc",
+                    _ => "popularity.desc"
+                })
+            };
+            if (query.Sort == TmdbDiscoverSort.Rating) parameters.Add(new("vote_count.gte", "300"));
+            if (query.Sort == TmdbDiscoverSort.Released && query.YearTo is null)
+            {
+                parameters.Add(new(dateField + ".lte", DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+            }
+            if (query.GenreIds.Count > 0) parameters.Add(new("with_genres", string.Join(',', query.GenreIds)));
+            if (query.YearFrom is { } from) parameters.Add(new(dateField + ".gte", from.ToString(CultureInfo.InvariantCulture) + "-01-01"));
+            if (query.YearTo is { } to) parameters.Add(new(dateField + ".lte", to.ToString(CultureInfo.InvariantCulture) + "-12-31"));
+            if (query.RuntimeFrom is { } shortest) parameters.Add(new("with_runtime.gte", shortest.ToString(CultureInfo.InvariantCulture)));
+            if (query.RuntimeTo is { } longest) parameters.Add(new("with_runtime.lte", longest.ToString(CultureInfo.InvariantCulture)));
+            if (query.Country is { Length: 2 } country) parameters.Add(new("with_origin_country", country));
+            if (query.ProviderIds.Count > 0 && query.Region is { Length: 2 } region)
+            {
+                parameters.Add(new("with_watch_providers", string.Join('|', query.ProviderIds)));
+                parameters.Add(new("watch_region", region));
+                parameters.Add(new("with_watch_monetization_types", "flatrate"));
+            }
+
+            if (!movie && query.SeriesStatuses.Count > 0) parameters.Add(new("with_status", string.Join('|', query.SeriesStatuses)));
+            using var document = await ReadAsync(connection, "discover/" + (movie ? "movie" : "tv"), parameters, ct);
+            return document.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array
+                ? results.EnumerateArray().Select(item => ParseResult(kind, item)).OfType<TmdbSearchResult>().ToArray()
+                : [];
+        }
+
+        // The flat-rate services TMDB lists for a region, most watched first.
+        public async Task<IReadOnlyList<TmdbProvider>> ReadProvidersAsync(TmdbConnection connection, TmdbMediaKind kind, string region, CancellationToken ct)
+        {
+            using var document = await ReadAsync(connection, "watch/providers/" + (kind == TmdbMediaKind.Movie ? "movie" : "tv"), [new("watch_region", region)], ct);
+            return [.. Items(document.RootElement, "results")
+                .Select(item => (Id: Int(item, "provider_id"), Name: Text(item, "provider_name"),
+                    Priority: item.TryGetProperty("display_priorities", out var priorities) && priorities.ValueKind == JsonValueKind.Object && priorities.TryGetProperty(region, out var place)
+                        && place.TryGetInt32(out var rank) ? rank : int.MaxValue))
+                .Where(item => item.Id is > 0 && item.Name is not null)
+                .OrderBy(item => item.Priority)
+                .Select(item => new TmdbProvider(item.Id!.Value, item.Name!))];
+        }
+
         public async Task<IReadOnlyList<TmdbSearchResult>> ReadRecommendationsAsync(TmdbConnection connection, TmdbMediaKind kind, int id, CancellationToken ct)
         {
             using var document = await ReadAsync(connection, (kind == TmdbMediaKind.Movie ? "movie/" : "tv/") + id.ToString(CultureInfo.InvariantCulture) + "/recommendations", [], ct);

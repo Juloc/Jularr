@@ -358,6 +358,7 @@ namespace Jularr.Backend.Logic.Media
         // Every shelf in one statement, each in its own order; the Shelf number keeps them apart.
         public static async Task<IReadOnlyList<ExternalWorkShelfItemData>> ReadExternalWorkShelvesAsync(this LogicContext ctx, ExternalWorkShelfQueryData data, CancellationToken ct)
         {
+            // A shelf without a type (0) reads every type of its subtype, as anime's filter does with films and series.
             // Feed numbers as DiscoverFeedType: 1 trending, 2 top, 3 new, 4 upcoming, 5 this season, 6 next season, 7 popular, 8 manhwa, 9 top 100;
             // only the shelf's own list is read, in the order of its index. A chosen order (DiscoverSort) narrows the same way and sorts what it finds;
             // trending then reads the whole catalog, trending titles first.
@@ -380,13 +381,33 @@ namespace Jularr.Backend.Logic.Media
                     known."PlexUrl",
                     work."CatalogFormatId"
                 FROM
-                    jsonb_to_recordset(@Shelves::jsonb) AS shelf ("Shelf" integer, "Namespace" text, "MediaTypeId" smallint, "MediaSubtypeId" smallint, "Feed" smallint, "Sort" smallint)
+                    jsonb_to_recordset(@Shelves::jsonb) AS shelf ("Shelf" integer, "Namespace" text, "MediaTypeId" smallint, "MediaSubtypeId" smallint, "Feed" smallint, "Sort" smallint,
+                        "Genres" smallint[], "Tags" integer[], "Formats" smallint[], "Statuses" smallint[], "Sources" smallint[], "Sites" integer[], "Country" text, "Season" smallint,
+                        "YearFrom" integer, "YearTo" integer, "EpisodesFrom" integer, "EpisodesTo" integer, "ChaptersFrom" integer, "ChaptersTo" integer, "VolumesFrom" integer,
+                        "VolumesTo" integer, "DurationFrom" integer, "DurationTo" integer, "Adult" boolean)
                     CROSS JOIN LATERAL unnest(CASE
                         WHEN shelf."Sort" > 0 THEN ARRAY(
                             SELECT work."Id" FROM "Works" AS work
                                 JOIN "WorkExternalIdentities" AS listed ON listed."WorkId" = work."Id" AND listed."Namespace" = work."CatalogNamespace"
-                            WHERE work."CatalogNamespace" = shelf."Namespace" AND work."MediaTypeId" = shelf."MediaTypeId" AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
-                                AND NOT work."IsAdult" AND work."ImageUrl" IS NOT NULL
+                            WHERE work."CatalogNamespace" = shelf."Namespace" AND (shelf."MediaTypeId" = 0 OR work."MediaTypeId" = shelf."MediaTypeId")
+                                AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
+                                AND (shelf."Adult" IS TRUE OR NOT work."IsAdult") AND work."ImageUrl" IS NOT NULL
+                                -- Discover's filters: genres and tags all, the lists any one; a season counts its own year.
+                                AND (shelf."Genres" IS NULL OR work."GenreIds" @> shelf."Genres")
+                                AND (shelf."Tags" IS NULL OR work."TagIds" @> shelf."Tags")
+                                AND (shelf."Sites" IS NULL OR work."SiteIds" && shelf."Sites")
+                                AND (shelf."Formats" IS NULL OR work."CatalogFormatId" = ANY(shelf."Formats"))
+                                AND (shelf."Statuses" IS NULL OR work."ReleaseStatusId" = ANY(shelf."Statuses"))
+                                AND (shelf."Sources" IS NULL OR work."CatalogSourceId" = ANY(shelf."Sources"))
+                                AND (shelf."Country" IS NULL OR work."CountryOfOrigin" = shelf."Country")
+                                AND (shelf."Season" IS NULL OR work."Season" = shelf."Season")
+                                AND (shelf."YearFrom" IS NULL OR CASE WHEN shelf."Season" IS NULL THEN work."ReleaseYear" ELSE work."SeasonYear" END >= shelf."YearFrom")
+                                AND (shelf."YearTo" IS NULL OR CASE WHEN shelf."Season" IS NULL THEN work."ReleaseYear" ELSE work."SeasonYear" END <= shelf."YearTo")
+                                AND (shelf."EpisodesFrom" IS NULL OR work."Episodes" >= shelf."EpisodesFrom") AND (shelf."EpisodesTo" IS NULL OR work."Episodes" <= shelf."EpisodesTo")
+                                AND (shelf."ChaptersFrom" IS NULL OR work."Chapters" >= shelf."ChaptersFrom") AND (shelf."ChaptersTo" IS NULL OR work."Chapters" <= shelf."ChaptersTo")
+                                AND (shelf."VolumesFrom" IS NULL OR work."Volumes" >= shelf."VolumesFrom") AND (shelf."VolumesTo" IS NULL OR work."Volumes" <= shelf."VolumesTo")
+                                AND (shelf."DurationFrom" IS NULL OR work."DurationMinutes" >= shelf."DurationFrom")
+                                AND (shelf."DurationTo" IS NULL OR work."DurationMinutes" <= shelf."DurationTo")
                                 AND (shelf."Feed" NOT IN (2, 9) OR work."Votes" >= @TopVotes)
                                 AND (shelf."Feed" <> 3 OR work."ReleasedOn" BETWEEN @NewSince AND @Today)
                                 AND (shelf."Feed" <> 4 OR work."ReleasedOn" > @Today AND work."ReleasedOn" <= @UpcomingUntil)
@@ -553,7 +574,8 @@ namespace Jularr.Backend.Logic.Media
                     found."Rating",
                     found."WorkId",
                     found."MediaStateTypeId",
-                    found."PlexUrl"
+                    found."PlexUrl",
+                    found."CatalogFormatId"
                 FROM
                     (
                         -- A title two catalogs know as one film (its IMDb id) shows once.
@@ -572,7 +594,8 @@ namespace Jularr.Backend.Logic.Media
                             work."Rating",
                             work."Id" AS "WorkId",
                             known."MediaStateTypeId",
-                            known."PlexUrl"
+                            known."PlexUrl",
+                            work."CatalogFormatId"
                         FROM
                             candidate
                             JOIN "Works" AS work ON work."Id" = candidate."Id"

@@ -81,4 +81,24 @@ namespace Jularr.Backend.Data.Enums.Media
         Talk = 32,
         Politics = 33
     }
+
+    // The filters Discover offers a scope, as its catalog can answer them.
+    public enum DiscoverFilter : byte
+    {
+        Genre = 1,
+        Year = 2,
+        Season = 3,
+        Format = 4,
+        Status = 5,
+        Country = 6,
+        Source = 7,
+        Tag = 8,
+        Site = 9,
+        Episodes = 10,
+        Chapters = 11,
+        Volumes = 12,
+        Duration = 13,
+        Language = 14,
+        Adult = 15
+    }
 }
