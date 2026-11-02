@@ -106,7 +106,9 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   in the approved order; only provider-supported rankings may appear. A ranking
   opens from its shelf's See all and names itself with a way back. Owner's decision 2 Nov: every ranking loads on while scrolling, its See all
   grid and its shelf alike, 20 titles (the provider's next page) at a time; a page goes on while it has titles, three pages in a row
-  that add nothing stop the automatic loading (the grid keeps its Next), and both say *No more titles.* where the ranking ends.
+  that add nothing stop the automatic loading (the grid then shows *Load more*), and both say *No more titles.* where the ranking ends. While a page
+  loads, grey skeleton cards stand where it arrives (a row under the grid, three at the end of a shelf); no Next button shows while pages load by themselves,
+  and a failed page offers *Try again*.
   Owner's decision 2 Nov: anime, manga and light novels have AniList's lists (anime: Trending, Popular this season, Upcoming next season,
   All time popular, Top 100; manga and light novels: Trending, All time popular, Popular manhwa (manga only, Korea), Top 100); films,
   series and books keep theirs. Only a ranking's grid has a sort: AniList's orders (trending, popularity, average score, favorites, date

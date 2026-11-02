@@ -21,6 +21,19 @@ document.addEventListener('click', event => {
 // Pages that add nothing new in a row before automatic loading stops; a provider may repeat a page, a filter may empty several.
 const emptyPages = 3;
 
+// Grey cards stand where the next page arrives: a row under the grid, three at the end of a shelf.
+function skeletons(count: number, className: string): HTMLElement {
+    const holder = document.createElement('div');
+    holder.className = className;
+    holder.setAttribute('aria-hidden', 'true');
+    for (let index = 0; index < count; index++) {
+        const card = document.createElement('div');
+        card.className = 'discover-skeleton';
+        holder.append(card);
+    }
+    return holder;
+}
+
 // A ranking's shelf adds its next page within a screen of its end, and says when it ends.
 const extending = new Set<HTMLElement>();
 
@@ -35,6 +48,8 @@ async function extend(shelf: HTMLElement, items: HTMLElement): Promise<void> {
     extending.add(shelf);
     let appended = 0;
     let following = shelf.dataset.shelfMore;
+    const waiting = skeletons(3, 'discover-skeletons discover-skeletons--shelf');
+    items.append(waiting);
     try {
         const endpoint = new URL(following!, location.href);
         endpoint.searchParams.set('handler', 'Results');
@@ -60,6 +75,7 @@ async function extend(shelf: HTMLElement, items: HTMLElement): Promise<void> {
     } catch {
         // A failed page is asked again at the next scroll and counts as one that added nothing.
     } finally {
+        waiting.remove();
         const empty = appended > 0 ? 0 : Number(shelf.dataset.shelfEmpty ?? 0) + 1;
         shelf.dataset.shelfEmpty = String(empty);
         if (following && empty < emptyPages) shelf.dataset.shelfMore = following;
@@ -168,6 +184,13 @@ function setup(): void {
             loading = true;
             results!.setAttribute('aria-busy', 'true');
             observer?.disconnect();
+            let waiting: HTMLElement | undefined;
+            if (append) {
+                const grid = results!.querySelector<HTMLElement>('.media-grid');
+                const columns = grid ? getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length : 0;
+                waiting = skeletons(columns || 6, 'media-grid discover-skeletons');
+                results!.querySelector('.discover-paging')?.before(waiting);
+            }
 
             try {
                 const endpoint = new URL(address);
@@ -213,13 +236,16 @@ function setup(): void {
                 // Repeated or emptied pages in a row require deliberate navigation.
                 empty = append && appended === 0 ? empty + 1 : 0;
                 if (empty < emptyPages) observeNext();
+                else manual(false);
                 if (!append) void recommendations();
             } catch (error) {
                 if (signal.aborted || current !== generation) return;
                 const feedback = results!.querySelector<HTMLElement>('.discover-feedback');
                 if (feedback) feedback.textContent = results!.dataset.loadError ?? '';
-                // No automatic retry loop.
+                // No automatic retry loop: the link shows itself as the retry.
+                manual(true);
             } finally {
+                waiting?.remove();
                 if (current === generation) {
                     loading = false;
                     results!.removeAttribute('aria-busy');
@@ -227,15 +253,28 @@ function setup(): void {
             }
         }
 
-        // Fill tall viewports progressively.
+        // Fill tall viewports progressively; the link stays hidden while pages load by themselves.
         function observeNext(): void {
             observer?.disconnect();
-            const next = results!.querySelector<HTMLAnchorElement>('[data-discover-next]');
-            if (!next || !('IntersectionObserver' in window)) return;
+            const paging = results!.querySelector<HTMLElement>('.discover-paging');
+            const next = paging?.querySelector<HTMLAnchorElement>('[data-discover-next]');
+            if (!paging || !next || !('IntersectionObserver' in window)) {
+                manual(false);
+                return;
+            }
+            paging.dataset.automatic = '';
             observer = new IntersectionObserver(entries => {
                 if (entries.some(entry => entry.isIntersecting) && !loading) void load(new URL(next.href), true);
             }, { rootMargin: '600px' });
-            observer.observe(next);
+            observer.observe(paging);
+        }
+
+        // Shows the link once pages stop loading by themselves; after a failure it reads as a retry.
+        function manual(failed: boolean): void {
+            const paging = results!.querySelector<HTMLElement>('.discover-paging');
+            if (paging) delete paging.dataset.automatic;
+            const next = paging?.querySelector<HTMLAnchorElement>('[data-discover-next]');
+            if (failed && next?.dataset.retryLabel) next.textContent = next.dataset.retryLabel;
         }
 
         function searchAddress(): URL {
