@@ -67,7 +67,7 @@ test('repeated entry initialization registers one delegated click and keyboard h
     const view = mounted();
     view.initialize();
     view.initialize();
-    assert.deepEqual(view.registrations, ['click', 'keydown', 'mouseover', 'focusin', 'mouseout', 'focusout', 'scroll']);
+    assert.deepEqual(view.registrations, ['click', 'keydown', 'pointermove', 'submit', 'mouseover', 'focusin', 'mouseout', 'focusout', 'scroll']);
     assert.equal(view.events.has('pointerover'), false);
 });
 
