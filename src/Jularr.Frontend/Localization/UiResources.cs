@@ -2852,7 +2852,6 @@ namespace Jularr.Frontend.Localization
             new("works.status.Missing", "Missing"),
             new("works.status.Downloading", "Downloading"),
             new("works.status.Unmonitored", "Unmonitored"),
-            new("works.filter.type", "All types"),
             new("works.filter.monitored", "Any monitoring"),
             new("works.filter.monitored.yes", "Monitored"),
             new("works.filter.monitored.no", "Not monitored"),

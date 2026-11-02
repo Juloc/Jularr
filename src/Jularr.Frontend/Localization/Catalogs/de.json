@@ -9144,10 +9144,6 @@
    "Unmonitored",
    "Nicht überwacht"
   ],
-  "works.filter.type": [
-   "All types",
-   "Alle Typen"
-  ],
   "works.filter.monitored": [
    "Any monitoring",
    "Jede Überwachung"
