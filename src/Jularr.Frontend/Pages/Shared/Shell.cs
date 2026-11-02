@@ -184,7 +184,8 @@ namespace Jularr.Frontend.Pages.Shared
                 Add(parent.IsKey ? new Text(parent.Text) : new ValueText(parent.Text), parent.Href, entry is null ? null : PageItems(entry, null));
             }
 
-            Add(parents is { Count: > 0 } && currentLabel is not null ? new ValueText(currentLabel) : new Text(pageTitleKey), null);
+            // The last part is a Truncated: a narrow header cuts a long title with an ellipsis (CSS) and keeps the whole title in its tip.
+            Add(new Truncated(title), null);
             return new Nav(new Ol([.. trail]).Class("breadcrumb")).Class("app-header-location").Attribute("aria-label", texts["nav.breadcrumb"]);
         }
 

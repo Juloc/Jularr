@@ -4126,21 +4126,9 @@
    "Highlights per type",
    "Highlights pro Medientyp"
   ],
-  "discover.hero.perType.1": [
-   "1 title",
-   "1 Titel"
-  ],
-  "discover.hero.perType.2": [
-   "2 titles",
-   "2 Titel"
-  ],
-  "discover.hero.perType.3": [
-   "3 titles",
-   "3 Titel"
-  ],
-  "discover.hero.max": [
-   "Maximum highlights",
-   "Maximale Highlights"
+  "discover.hero.empty": [
+   "No highlights yet",
+   "Noch keine Highlights"
   ],
   "discover.hero.continue": [
    "Include continue",
@@ -8123,6 +8111,10 @@
   "errors.authentication_required": [
    "Please sign in to continue.",
    "Bitte melde dich an, um fortzufahren."
+  ],
+  "errors.invalid_credentials": [
+   "Wrong username or password.",
+   "Benutzername oder Passwort falsch."
   ],
   "errors.permission_denied": [
    "You do not have permission to perform this action.",
@@ -15303,6 +15295,10 @@
    "of",
    "von"
   ],
+  "translation.progress.unitsHint": [
+   "Progress counts sections, the parts of a book. The pace counts paragraphs, the text units the translation works through one by one.",
+   "Der Fortschritt zählt Abschnitte, die Teile eines Buchs. Das Tempo zählt Absätze, die Texteinheiten, die die Übersetzung nacheinander abarbeitet."
+  ],
   "translation.progress.stalled": [
    "No progress for",
    "Ohne Fortschritt seit"
@@ -15312,8 +15308,8 @@
    "Tempo"
   ],
   "translation.progress.blocks": [
-   "blocks per minute",
-   "Blöcke pro Minute"
+   "paragraphs per minute",
+   "Absätze pro Minute"
   ],
   "translation.progress.remaining": [
    "Time left (rough)",

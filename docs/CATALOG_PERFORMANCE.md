@@ -163,3 +163,18 @@ Searching films does not use the kept catalog today: Discover's result search as
 The run shared one four-core Docker VM with other test runs, so the P95 shows that noise; with a 200 ms provider round trip the search of films and series took 450 ms against 189 ms without, one round trip instead of two. The Discover, Request, SeriesCatalog, ExternalFeed and Library availability tests are the contract for unchanged results. Other statements still join the two views by Work id; they are fast as long as a small outer side drives them, and each needs its own plan before it is changed. The 1,500,000 column was not measured before the change.
 
 Reproduce with `$env:JULARR_TEST_CATALOG_SCALE = '500000'` and `dotnet test tests/Jularr.Backend.Tests --filter 'Name=SearchAndRequests_CatalogScale_ReportLatency' --logger 'console;verbosity=detailed'`.
+
+## Library rename plan (`/Admin/Library/Rename`, a Work's Files tab), 2 November 2026
+
+On the instance (about 1.2 million Works) the plan took 5.8 s. `ReadLibraryRenamesV1` and `ApplyLibraryRenamesV1` read every library file (`LibraryRenameLogic.ReadLibraryRenameFilesAsync`) and plan the whole library in C#, since the whole plan decides which names are taken and its fingerprint guards the apply; both stay so. Reproduced in a scratch database with 1.2 million Works, 1.26 million catalog episodes of 15,000 detailed series, and 45,333 files (4,000 films, 30,000 episodes of 1,000 series, a subtitle beside every third file).
+
+Causes:
+- SQL: the absolute numbers of each file's covered episodes were a correlated subquery joined to the CTE of numbered episodes, which PostgreSQL materializes without an index, so every episode file scanned all numbered episodes of the catalog (182–265 ms per file, more than 300 s for the statement). The CTE now numbers only Works with an asset (the numbering is per Work, so the numbers are the same) and the numbers of each asset are gathered once in a grouped CTE joined by hash. With the statement's estimated cost JIT compiled about 440 functions (2–6 s); it now disables JIT (`SqlStatement.DisableJit`).
+- C#: each subtitle compared its name with the stem of every media file of its library (30,000 × 10,000 in the series library, 63 s). The stems before each dot of the subtitle's name are now looked up; the owner is still the longest, the first of equal length. A game library counts its present files per folder once instead of once per ROM.
+
+| Scratch reproduction, shared four-core VM | before | after |
+| --- | ---: | ---: |
+| `ReadLibraryRenameFilesAsync` statement | > 300 s (aborted) | 3.1–3.4 s |
+| `LibraryRenameLogic.Plan` for 45,333 files | 150–430 s | 2.0–3.5 s |
+
+The VM's load average stood between 8 and 90 during the runs, so the figures show the order, not the instance's time. The plan and fingerprint of the 45,333 files and the statement's rows for a subset with specials and double episodes were identical before and after. Tests `LibraryTests.RenameFiles_AbsoluteNumbers_CountTheTitlesRegularEpisodesOnly`, `LibraryTests.Rename_Plan_SubtitlesFollowTheLongestStemAndGameFoldersIgnoreCase`, `LibraryTests.Rename_*`, `AllMediaNamingTests`.
