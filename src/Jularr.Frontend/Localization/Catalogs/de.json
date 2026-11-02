@@ -4422,6 +4422,10 @@
    "Search movies and series",
    "Filme und Serien suchen"
   ],
+  "search.all": [
+   "All results for “{0}”",
+   "Alle Ergebnisse für „{0}“"
+  ],
   "library.scope.all": [
    "All",
    "Alle"
