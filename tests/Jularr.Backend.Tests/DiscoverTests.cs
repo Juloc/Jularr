@@ -7,6 +7,7 @@ using Jularr.Backend.Data.Admin.Provider.V1;
 using AdminMedia = Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Library.V1;
@@ -42,7 +43,7 @@ namespace Jularr.Backend.Tests
         {
             var provider = new FakeAniList();
             await using var host = await CreateHostAsync(anime: provider);
-            foreach (var ranking in new[] { DiscoverFeedType.Top, DiscoverFeedType.New })
+            foreach (var ranking in new[] { DiscoverFeedType.Top100, DiscoverFeedType.Season })
             {
                 using var first = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, ranking, MediaSubtype.Anime));
                 Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
@@ -58,7 +59,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES ({workId}, 'Poster', '/api/v1/covers/works/{workId}/poster?v=1', TRUE);
                 INSERT INTO "WantedItems" ("WorkId") VALUES ({workId});
                 """);
-            foreach (var ranking in new[] { DiscoverFeedType.Top, DiscoverFeedType.New })
+            foreach (var ranking in new[] { DiscoverFeedType.Top100, DiscoverFeedType.Season })
             {
                 using var cached = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, ranking, MediaSubtype.Anime));
                 Assert.AreEqual(HttpStatusCode.OK, cached.StatusCode, await cached.Content.ReadAsStringAsync());
@@ -69,9 +70,109 @@ namespace Jularr.Backend.Tests
             }
             Assert.AreEqual(requests, provider.Requests, "Warm rankings must not ask the unavailable provider.");
             await host.Fixture.RunSqlAsync("INSERT INTO \"ProfileMediaRules\" (\"ProfileId\", \"MediaSubtypeId\", \"IsBlocked\") VALUES (101, 1, TRUE)");
-            using var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Top, MediaSubtype.Anime));
+            using var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Top100, MediaSubtype.Anime));
             Assert.AreEqual(HttpStatusCode.NotFound, blocked.StatusCode, await blocked.Content.ReadAsStringAsync());
             Assert.AreEqual(requests, provider.Requests);
+        }
+
+        [TestMethod]
+        public async Task Catalog_AniListLists_AskForTheirSeasonCountryAndOrder_AndTheGridOffersEveryOrder()
+        {
+            var provider = new FakeAniList();
+            await using var host = await CreateHostAsync(razor: true, anime: provider);
+            var (season, year) = DiscoverScopes.Season(DateOnly.FromDateTime(DateTime.UtcNow), 1);
+            foreach (var (type, subtype, feed, sort, expected) in new (MediaType, MediaSubtype, DiscoverFeedType, DiscoverSort?, string)[]
+            {
+                (MediaType.Series, MediaSubtype.Anime, DiscoverFeedType.NextSeason, null, $"\"sort\":[\"POPULARITY_DESC\"],\"season\":\"{DiscoverScopes.SeasonName(season)}\",\"seasonYear\":{year}"),
+                (MediaType.Series, MediaSubtype.Anime, DiscoverFeedType.Popular, DiscoverSort.Favourites, "\"sort\":[\"FAVOURITES_DESC\"]}"),
+                (MediaType.Book, MediaSubtype.Manga, DiscoverFeedType.Manhwa, DiscoverSort.Added, "\"sort\":[\"ID_DESC\"],\"country\":\"KR\""),
+                (MediaType.Book, MediaSubtype.LightNovel, DiscoverFeedType.Top100, DiscoverSort.Score, "\"sort\":[\"SCORE_DESC\"]}")
+            })
+            {
+                using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(type, feed, subtype, 1, sort));
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                StringAssert.Contains(provider.Variables[^1], expected, feed.ToString());
+            }
+
+            // Manga has no seasons, the top 100 ends after five pages without asking, and an order the type lacks is refused.
+            using var seasonal = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Book, DiscoverFeedType.Season, MediaSubtype.Manga));
+            Assert.AreEqual(HttpStatusCode.BadRequest, seasonal.StatusCode);
+            var asked = provider.Requests;
+            using var beyond = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Top100, MediaSubtype.Anime, 6));
+            Assert.AreEqual(0, (await beyond.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Count);
+            Assert.AreEqual(asked, provider.Requests);
+            using var films = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top, 1, DiscoverSort.Title));
+            Assert.AreEqual(HttpStatusCode.BadRequest, films.StatusCode, "Without its whole catalog TMDB's list keeps its own order.");
+
+            // The grid of a list offers AniList's orders, its own as the empty choice; the shelves have none.
+            using var grid = await host.SendAsync(HttpMethod.Get, "/?type=anime&view=Popular&sort=score&handler=Results");
+            var html = await grid.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, grid.StatusCode, html);
+            StringAssert.Contains(html, "<option value=\"score\" selected=\"selected\">");
+            StringAssert.Contains(html, "<option value=\"\">");
+            StringAssert.Contains(html, "<option value=\"favourites\">");
+            StringAssert.Contains(html, "href=\"/?type=anime&amp;view=Popular&amp;sort=score&amp;p=2\"");
+            StringAssert.Contains(provider.Variables[^1], "SCORE_DESC");
+            using var own = await host.SendAsync(HttpMethod.Get, "/?type=anime&view=Popular&sort=popularity");
+            Assert.AreEqual("/?type=anime&view=Popular", own.Headers.Location?.OriginalString, "The list's own order needs no address of its own.");
+            using var shelves = await host.SendAsync(HttpMethod.Get, "/?type=anime&sort=score");
+            Assert.AreEqual("/?type=anime", shelves.Headers.Location?.OriginalString);
+            using var landing = await host.SendAsync(HttpMethod.Get, "/?type=anime&handler=Recommendations");
+            html = await landing.Content.ReadAsStringAsync();
+            Assert.IsFalse(html.Contains("name=\"sort\"", StringComparison.Ordinal));
+            StringAssert.Contains(html, "/?type=anime&amp;view=NextSeason");
+        }
+
+        [TestMethod]
+        public async Task Catalog_ReadWholeAniList_AnswersItsListsAndEveryOrderLocally()
+        {
+            var provider = new FakeAniList();
+            await using var host = await CreateHostAsync(anime: provider);
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var (season, year) = DiscoverScopes.Season(today, 0);
+            var (next, nextYear) = DiscoverScopes.Season(today, 1);
+            await host.Fixture.RunSqlAsync($"""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
+                UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'anilist';
+                INSERT INTO "Works" ("Id", "CatalogNamespace", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleasedOn", "ImageUrl", "Popularity", "Rating", "Votes", "Favourites",
+                    "Season", "SeasonYear", "CountryOfOrigin") VALUES
+                    (9101, 'anilist', 2, 1, 'Bravo', '2026-10-01', 'https://img.test/101.jpg', 100, 7.0, 400, 5, {season}, {year}, 'JP'),
+                    (9102, 'anilist', 2, 1, 'Alpha', '2027-01-10', 'https://img.test/102.jpg', 50, 9.0, 1000, 50, {next}, {nextYear}, 'JP'),
+                    (9103, 'anilist', 2, 1, 'Charlie', '2010-04-01', 'https://img.test/103.jpg', 300, 8.0, 5000, 1, NULL, NULL, 'JP'),
+                    (9201, 'anilist', 3, 2, 'Solo', '2018-03-04', 'https://img.test/201.jpg', 10, 8.5, 500, 3, NULL, NULL, 'KR'),
+                    (9202, 'anilist', 3, 2, 'One', '1997-07-22', 'https://img.test/202.jpg', 900, 8.8, 9000, 90, NULL, NULL, 'JP');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES
+                    (9101, 'anilist', '101'), (9102, 'anilist', '102'), (9103, 'anilist', '103'), (9201, 'anilist', '201'), (9202, 'anilist', '202');
+                """);
+
+            // The whole catalog answers AniList's shelves itself.
+            using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/shelves", new ReadDiscoverShelvesDataV1());
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            var shelves = (await read.Content.ReadFromJsonAsync<BaseDataList<DiscoverShelfV1>>())!.ToArray();
+            string Shelf(string scope, DiscoverFeedType feed) => string.Join(",", shelves.Single(shelf => shelf.ScopeSlug == scope && shelf.DiscoverFeedTypeId == feed).CatalogItems.Select(item => item.ExternalId));
+            Assert.AreEqual("101", Shelf("anime", DiscoverFeedType.Season));
+            Assert.AreEqual("102", Shelf("anime", DiscoverFeedType.NextSeason));
+            Assert.AreEqual("103,101,102", Shelf("anime", DiscoverFeedType.Popular));
+            Assert.AreEqual("102,103,101", Shelf("anime", DiscoverFeedType.Top100));
+            Assert.AreEqual("202,201", Shelf("manga", DiscoverFeedType.Popular));
+            Assert.AreEqual("201", Shelf("manga", DiscoverFeedType.Manhwa));
+
+            // Every order narrows like the list and sorts what it finds.
+            foreach (var (feed, sort, expected) in new (DiscoverFeedType, DiscoverSort, string)[]
+            {
+                (DiscoverFeedType.Popular, DiscoverSort.Favourites, "102,101,103"),
+                (DiscoverFeedType.Popular, DiscoverSort.Added, "103,102,101"),
+                (DiscoverFeedType.Popular, DiscoverSort.Released, "102,101,103"),
+                (DiscoverFeedType.Popular, DiscoverSort.Title, "102,101,103"),
+                (DiscoverFeedType.Trending, DiscoverSort.Score, "102,103,101"),
+                (DiscoverFeedType.Season, DiscoverSort.Title, "101")
+            })
+            {
+                using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, feed, MediaSubtype.Anime, 1, sort));
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                Assert.AreEqual(expected, string.Join(",", (await response.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Select(item => item.ExternalId)), $"{feed} by {sort}");
+            }
+            Assert.AreEqual(0, provider.Requests, "A whole catalog never asks AniList.");
         }
 
         [TestMethod]
@@ -81,24 +182,24 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(razor: true, anime: provider);
             foreach (var (page, count) in new[] { (1, 1), (2, 0) })
             {
-                using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Top, MediaSubtype.Anime, page));
+                using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Top100, MediaSubtype.Anime, page));
                 Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
                 Assert.AreEqual(count, (await response.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Count, "Page " + page);
             }
             CollectionAssert.AreEqual(new[] { 1, 2 }, provider.Pages, "Each page is the provider's own page, not the first again.");
 
             // The ranking's grid goes on while its page has titles, however few, and says where it ends; its shelf names its next page.
-            using var first = await host.SendAsync(HttpMethod.Get, "/?type=anime&view=Top&handler=Results");
+            using var first = await host.SendAsync(HttpMethod.Get, "/?type=anime&view=Top100&handler=Results");
             var html = await first.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, html);
             StringAssert.Contains(html, "data-discover-next=\"true\"");
-            StringAssert.Contains(html, "href=\"/?type=anime&amp;view=Top&amp;p=2\"");
-            using var last = await host.SendAsync(HttpMethod.Get, "/?type=anime&view=Top&p=2&handler=Results");
+            StringAssert.Contains(html, "href=\"/?type=anime&amp;view=Top100&amp;p=2\"");
+            using var last = await host.SendAsync(HttpMethod.Get, "/?type=anime&view=Top100&p=2&handler=Results");
             html = await last.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "class=\"discover-end\"");
             Assert.IsFalse(html.Contains("data-discover-next", StringComparison.Ordinal));
             using var shelves = await host.SendAsync(HttpMethod.Get, "/?type=anime&handler=Recommendations");
-            StringAssert.Contains(await shelves.Content.ReadAsStringAsync(), "data-shelf-more=\"/?type=anime&amp;view=Top&amp;p=2\"");
+            StringAssert.Contains(await shelves.Content.ReadAsStringAsync(), "data-shelf-more=\"/?type=anime&amp;view=Top100&amp;p=2\"");
         }
 
         [TestMethod]
@@ -500,6 +601,18 @@ namespace Jularr.Backend.Tests
             using var nextPage = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top, 2));
             Assert.AreEqual(0, (await nextPage.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Count);
 
+            // A whole catalog sorts its lists by what it holds; trending in another order reads the whole catalog.
+            using var released = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top, 1, DiscoverSort.Released));
+            CollectionAssert.AreEqual(new long[] { 604, 603 }, (await released.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Select(item => item.WorkId).ToArray());
+            using var popular = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending, 1, DiscoverSort.Popularity));
+            CollectionAssert.AreEqual(new long[] { 603, 604, 701, 702, 700 }, (await popular.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Select(item => item.WorkId).ToArray());
+            using var favourites = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top, 1, DiscoverSort.Favourites));
+            Assert.AreEqual(HttpStatusCode.BadRequest, favourites.StatusCode, "TMDB keeps no favourites.");
+            using var scopes = await host.SendAsync(HttpMethod.Get, "/api/v1/discover/scopes");
+            var listed = (await scopes.Content.ReadFromJsonAsync<BaseDataList<DiscoverScopeV1>>())!;
+            CollectionAssert.AreEqual(new[] { DiscoverSort.Popularity, DiscoverSort.Score, DiscoverSort.Released, DiscoverSort.Title }, listed.Single(scope => scope.Slug == "movies").Sorts);
+            Assert.AreEqual(0, listed.Single(scope => scope.Slug == "series").Sorts.Length);
+
             // Typed words suggest the library's title first, then the others; adult and unread titles stay out.
             using var suggested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("matr"));
             Assert.AreEqual(HttpStatusCode.OK, suggested.StatusCode, await suggested.Content.ReadAsStringAsync());
@@ -683,7 +796,9 @@ namespace Jularr.Backend.Tests
             using var scopes = await host.SendAsync(HttpMethod.Get, "/api/v1/discover/scopes");
             var anime = (await scopes.Content.ReadFromJsonAsync<BaseDataList<DiscoverScopeV1>>())!.Single(scope => scope.Slug == "anime");
             Assert.AreEqual((MediaType.Series, (MediaSubtype?)MediaSubtype.Anime, true), (anime.MediaTypeId, anime.MediaSubtypeId, anime.IsCatalog));
-            CollectionAssert.AreEqual(new[] { DiscoverFeedType.Trending, DiscoverFeedType.Top, DiscoverFeedType.New }, anime.Feeds);
+            CollectionAssert.AreEqual(new[] { DiscoverFeedType.Trending, DiscoverFeedType.Season, DiscoverFeedType.NextSeason, DiscoverFeedType.Popular, DiscoverFeedType.Top100 }, anime.Feeds);
+            CollectionAssert.AreEqual(new[] { DiscoverSort.Trending, DiscoverSort.Popularity, DiscoverSort.Popularity, DiscoverSort.Popularity, DiscoverSort.Score }, anime.FeedSorts);
+            Assert.AreEqual(7, anime.Sorts.Length, "AniList orders its lists every way.");
 
             // The anime tab ranks AniList seasons; a season no series holds yet is a catalog Work of its own and opens its page and preview.
             using var tab = await host.SendAsync(HttpMethod.Get, "/?type=anime&handler=Recommendations");
@@ -1271,6 +1386,7 @@ namespace Jularr.Backend.Tests
         {
             public int Requests { get; private set; }
             public List<int> Pages { get; } = [];
+            public List<string> Variables { get; } = [];
             public bool IsUnavailable { get; set; }
             public bool FindsFirstSeason { get; init; }
             private const string First = """{"id":20,"type":"ANIME","format":"TV","title":{"romaji":"The Matrix Show"},"synonyms":[],"startDate":{"year":2020},"episodes":12,"relations":{"edges":[{"relationType":"SEQUEL","node":{"id":21,"type":"ANIME"}}]}}""";
@@ -1282,6 +1398,7 @@ namespace Jularr.Backend.Tests
                 if (IsUnavailable) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
                 using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
                 var variables = body.RootElement.GetProperty("variables");
+                Variables.Add(variables.GetRawText());
                 var found = FindsFirstSeason && variables.TryGetProperty("search", out _) ? First : Second;
                 // A ranking has one page.
                 if (variables.TryGetProperty("page", out var page))

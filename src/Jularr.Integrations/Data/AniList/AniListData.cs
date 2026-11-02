@@ -21,20 +21,47 @@ namespace Jularr.Integrations.Data.AniList
         public AniListFailure Failure { get; }
     }
 
-    // How AniList ranks a list; the newest only counts titles already out.
-    internal enum AniListRanking : byte
+    // AniList's orders of a list, as its search offers them.
+    internal enum AniListSort : byte
     {
         Trending,
+        Popularity,
         Score,
-        Newest
+        Favourites,
+        Added,
+        StartDate,
+        Title
+    }
+
+    // One ranked list: its order and what narrows it; a season needs its year.
+    internal sealed class AniListListQuery
+    {
+        public AniListListQuery(AniListSort sort, string? season = null, int? seasonYear = null, string? country = null)
+        {
+            Sort = sort;
+            Season = season;
+            SeasonYear = seasonYear;
+            Country = country;
+        }
+
+        public AniListSort Sort { get; }
+        // WINTER, SPRING, SUMMER or FALL.
+        public string? Season { get; }
+        public int? SeasonYear { get; }
+        // Two letters, KR for Korea.
+        public string? Country { get; }
     }
 
     // A title as the provider catalog keeps it: one entry of a page that walks AniList by id.
     internal sealed class AniListCatalogEntry
     {
         public AniListCatalogEntry(int id, string type, string? format, string title, string? originalTitle, DateOnly? releasedOn, int? year, string? description, string? coverUrl,
-            int? popularity, int? averageScore)
+            int? popularity, int? averageScore, int? favourites, string? country, string? season, int? seasonYear)
         {
+            Favourites = favourites;
+            Country = country;
+            Season = season;
+            SeasonYear = seasonYear;
             Id = id;
             Type = type;
             Format = format;
@@ -62,6 +89,13 @@ namespace Jularr.Integrations.Data.AniList
         public int? Popularity { get; }
         // On a scale of a hundred.
         public int? AverageScore { get; }
+        // How many AniList users made it a favourite.
+        public int? Favourites { get; }
+        // Two letters, KR for Korea.
+        public string? Country { get; }
+        // The anime season it began in, with its year.
+        public string? Season { get; }
+        public int? SeasonYear { get; }
     }
 
     internal enum AniListMediaType : byte

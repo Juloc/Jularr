@@ -106,11 +106,16 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   in the approved order; only provider-supported rankings may appear. A ranking
   opens from its shelf's See all and names itself with a way back. Owner's decision 2 Nov: every ranking loads on while scrolling, its See all
   grid and its shelf alike, 20 titles (the provider's next page) at a time; a page goes on while it has titles, three pages in a row
-  that add nothing stop the automatic loading (the grid keeps its Next), and both say *No more titles.* where the ranking ends. Owner's mockup of 19 Oct
+  that add nothing stop the automatic loading (the grid keeps its Next), and both say *No more titles.* where the ranking ends.
+  Owner's decision 2 Nov: anime, manga and light novels have AniList's lists (anime: Trending, Popular this season, Upcoming next season,
+  All time popular, Top 100; manga and light novels: Trending, All time popular, Popular manhwa (manga only, Korea), Top 100); films,
+  series and books keep theirs. Only a ranking's grid has a sort: AniList's orders (trending, popularity, average score, favorites, date
+  added, release date, title) for those types, for other types only what Jularr's whole catalog holds (popularity, score, release date,
+  title), none otherwise; a ranking opens in its own order (trending, score for Top 100, else popularity) and shelves keep it. Owner's mockup of 19 Oct
   ("capsules"): one capsule row (All, then Watch, Read, Hear and Game with their types; several
   types may be chosen, `type=a,b`) with the Customize and Filter drawers at its end, the highlights
   as one carousel (continued titles first, then each type's best by rank, series from Discover's series list; the device keeps how many
-  and whether it turns by itself), feed chips, sort and a rows/grid switch. The header owns the **one**
+  and whether it turns by itself), feed chips and a rows/grid switch. The header owns the **one**
   global Search; do not add another search field inside Discover. The Filter drawer lists the media types first, then the local availability
   (in Jularr, can be requested), then only what the chosen types have: the release year and their rankings; the rankings a chosen
   type lacks leave the panel as the types change. No genre, platform, language, runtime or rating facets exist yet (Discover's

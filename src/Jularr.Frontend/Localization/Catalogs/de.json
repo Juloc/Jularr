@@ -3974,6 +3974,26 @@
    "Upcoming",
    "Demnächst"
   ],
+  "discover.feed.Season": [
+   "Popular this season",
+   "Beliebt diese Saison"
+  ],
+  "discover.feed.NextSeason": [
+   "Upcoming next season",
+   "Nächste Saison"
+  ],
+  "discover.feed.Popular": [
+   "All time popular",
+   "Allzeit beliebt"
+  ],
+  "discover.feed.Manhwa": [
+   "Popular manhwa",
+   "Beliebte Manhwa"
+  ],
+  "discover.feed.Top100": [
+   "Top 100",
+   "Top 100"
+  ],
   "discover.providerUnavailable": [
    "Discovery is unavailable right now; your library still works.",
    "Entdecken ist gerade nicht verfügbar; deine Bibliothek funktioniert weiterhin."
@@ -4114,17 +4134,33 @@
    "Sort",
    "Sortierung"
   ],
-  "discover.sort.ranking": [
-   "Ranking",
-   "Rangfolge"
+  "discover.sort.Trending": [
+   "Trending",
+   "Trend"
   ],
-  "discover.sort.newest": [
-   "Newest",
-   "Neueste"
+  "discover.sort.Popularity": [
+   "Popularity",
+   "Beliebtheit"
   ],
-  "discover.sort.az": [
-   "Title A–Z",
-   "Titel A–Z"
+  "discover.sort.Score": [
+   "Average score",
+   "Bewertung"
+  ],
+  "discover.sort.Favourites": [
+   "Favorites",
+   "Favoriten"
+  ],
+  "discover.sort.Added": [
+   "Date added",
+   "Neu hinzugefügt"
+  ],
+  "discover.sort.Released": [
+   "Release date",
+   "Erscheinungsdatum"
+  ],
+  "discover.sort.Title": [
+   "Title",
+   "Titel"
   ],
   "discover.hero.perType": [
    "Highlights per type",

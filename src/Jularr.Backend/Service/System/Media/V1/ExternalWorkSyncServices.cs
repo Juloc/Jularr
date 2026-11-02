@@ -155,7 +155,11 @@ namespace Jularr.Backend.Service.System.Media.V1
                     // AniList shows no vote count; how many people list a title stands for it.
                     Votes = item.entry.Popularity,
                     ImdbId = (string?)null,
-                    IsAdult = false
+                    IsAdult = false,
+                    CountryOfOrigin = item.entry.Country,
+                    item.entry.Favourites,
+                    Season = DiscoverScopes.SeasonNumber(item.entry.Season),
+                    item.entry.SeasonYear
                 }));
                 changed += await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 {

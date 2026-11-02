@@ -107,6 +107,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(8.4m, await host.ScalarAsync(Catalog("anilist", "1", "\"Rating\"")));
             Assert.AreEqual("Frieren", await host.ScalarAsync(Catalog("anilist", "1", "\"CanonicalTitle\"")));
             Assert.AreEqual("2023-09-29", await host.ScalarAsync(Catalog("anilist", "1", "\"ReleasedOn\"::text")));
+            Assert.AreEqual("JP:40000:4:2023", await host.ScalarAsync(Catalog("anilist", "1", "\"CountryOfOrigin\" || ':' || \"Favourites\" || ':' || \"Season\" || ':' || \"SeasonYear\"")),
+                "Discover's season, manhwa and favourite lists read what the pass keeps.");
+            Assert.AreEqual("KR", await host.ScalarAsync(Catalog("anilist", "5", "\"CountryOfOrigin\"")));
             Assert.AreEqual("3:3", await host.ScalarAsync(Catalog("anilist", "3", "\"MediaTypeId\" || ':' || \"MediaSubtypeId\"")));
             Assert.AreEqual("3:2", await host.ScalarAsync(Catalog("anilist", "5", "\"MediaTypeId\" || ':' || \"MediaSubtypeId\"")));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '2'"), "A music video is no Discover title.");
@@ -285,7 +288,7 @@ namespace Jularr.Backend.Tests
         private sealed class FakeAniListCatalog : HttpMessageHandler
         {
             public List<int> Pages { get; } = [];
-            private const string Frieren = """{"id":1,"type":"ANIME","format":"TV","title":{"romaji":"Sousou no Frieren","english":"Frieren","native":"葬送のフリーレン"},"startDate":{"year":2023,"month":9,"day":29},"coverImage":{"large":"https://img.anili.st/1.jpg"},"popularity":500000,"averageScore":84}""";
+            private const string Frieren = """{"id":1,"type":"ANIME","format":"TV","title":{"romaji":"Sousou no Frieren","english":"Frieren","native":"葬送のフリーレン"},"startDate":{"year":2023,"month":9,"day":29},"coverImage":{"large":"https://img.anili.st/1.jpg"},"popularity":500000,"averageScore":84,"favourites":40000,"countryOfOrigin":"JP","season":"FALL","seasonYear":2023}""";
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
@@ -294,7 +297,7 @@ namespace Jularr.Backend.Tests
                 Pages.Add(after);
                 var json = after == 0
                     ? """{"data":{"Page":{"pageInfo":{"hasNextPage":true},"media":[""" + Frieren + "," + """{"id":2,"type":"ANIME","format":"MUSIC","title":{"romaji":"Song"},"startDate":{"year":2020}},{"id":3,"type":"MANGA","format":"NOVEL","title":{"romaji":"Novel"},"startDate":{"year":2019}}]}}}"""
-                    : """{"data":{"Page":{"pageInfo":{"hasNextPage":false},"media":[{"id":5,"type":"MANGA","format":"MANGA","title":{"romaji":"Manga"},"averageScore":0}]}}}""";
+                    : """{"data":{"Page":{"pageInfo":{"hasNextPage":false},"media":[{"id":5,"type":"MANGA","format":"MANGA","title":{"romaji":"Manga"},"averageScore":0,"countryOfOrigin":"KR"}]}}}""";
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
             }
         }

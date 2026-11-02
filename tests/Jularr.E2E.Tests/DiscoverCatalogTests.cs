@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
@@ -38,6 +39,15 @@ namespace Jularr.E2E.Tests
             await Evidence.SaveAsync(page, "discover-suggestions");
             await search.PressAsync("Escape");
             await Assertions.Expect(page.Locator(".discover-suggestions")).ToBeHiddenAsync();
+
+            // A ranking's grid opens in its own order and sorts by what the whole catalog holds.
+            await page.GotoAsync("/?type=movies&view=Top");
+            var grid = page.Locator("#discover-results .media-grid .media-card");
+            await Assertions.Expect(grid.First).Not.ToContainTextAsync("Reloaded");
+            await page.Locator("select[name=sort]").SelectOptionAsync("released");
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("view=Top&sort=released"));
+            await Assertions.Expect(grid.First).ToContainTextAsync("The Matrix Reloaded");
+            await Evidence.SaveAsync(page, "discover-grid-sort");
         }
 
         [TestMethod]
