@@ -61,8 +61,19 @@ namespace Jularr.E2E.Tests
                 await Steps.SubmitAsync(visitor, form);
                 await Assertions.Expect(visitor.Locator("main [role=status]")).ToContainTextAsync("waiting for an administrator to approve it");
                 await Assertions.Expect(visitor.Locator("main [role=status]")).ToContainTextAsync(Username);
+                await visitor.GotoAsync("/Account/Login");
+                var cardHeight = await CardHeightAsync(visitor);
                 await SignInAsync(visitor);
                 Assert.IsTrue(new Uri(visitor.Url).AbsolutePath.StartsWith("/Account/Login", StringComparison.Ordinal), "A pending account signed in.");
+
+                // The refusal stands in the password's own line and the card keeps its height; an empty field is told the same way, not by the browser.
+                await Assertions.Expect(visitor.Locator(".ui-field:has([name=Password]) > .field-error")).ToHaveTextAsync("Wrong username or password.");
+                Assert.AreEqual(cardHeight, await CardHeightAsync(visitor));
+                await visitor.Locator("[name=Password]").FillAsync(Password);
+                await visitor.Locator("[name=Username]").FillAsync("");
+                await visitor.Locator("form button[type=submit]").First.ClickAsync();
+                await Assertions.Expect(visitor.Locator(".ui-field:has([name=Username]) > .field-error")).ToBeVisibleAsync();
+                Assert.AreEqual(cardHeight, await CardHeightAsync(visitor));
 
                 await page.GotoAsync("/Admin/Accounts");
                 await Steps.FollowAsync(page, page.Locator("tr", new() { HasText = Username }).GetByRole(AriaRole.Link, new() { Name = "Edit" }));
@@ -73,10 +84,10 @@ namespace Jularr.E2E.Tests
                 // Enabled, the same credentials work; administration stays closed.
                 await SignInAsync(visitor);
                 Assert.IsFalse(new Uri(visitor.Url).AbsolutePath.StartsWith("/Account/Login", StringComparison.Ordinal), "The enabled account could not sign in.");
-                // Only the refused confirmation (400) and the pending sign-in (401) answered with errors.
+                // Only the refused confirmation (400), the empty sign-in field (400) and the pending sign-in (401) answered with errors.
                 CollectionAssert.AreEqual(Array.Empty<string>(), viewer.Problems.Where(problem =>
                     !(problem.Contains("/Account/Register", StringComparison.Ordinal) && problem.Contains("400", StringComparison.Ordinal))
-                    && !(problem.Contains("/Account/Login", StringComparison.Ordinal) && problem.Contains("401", StringComparison.Ordinal))).ToArray(),
+                    && !(problem.Contains("/Account/Login", StringComparison.Ordinal) && (problem.Contains("400", StringComparison.Ordinal) || problem.Contains("401", StringComparison.Ordinal)))).ToArray(),
                     string.Join(Environment.NewLine, viewer.Problems));
                 var admin = await visitor.GotoAsync("/Admin/Accounts");
                 Assert.AreEqual(403, admin!.Status);
@@ -117,5 +128,7 @@ namespace Jularr.E2E.Tests
             await page.Locator("form button[type=submit]").First.ClickAsync();
             await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
         }
+
+        private static Task<double> CardHeightAsync(IPage page) => page.Locator(".login-card").EvaluateAsync<double>("card => card.getBoundingClientRect().height");
     }
 }

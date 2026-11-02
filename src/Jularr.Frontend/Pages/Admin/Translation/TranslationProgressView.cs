@@ -13,13 +13,15 @@ namespace Jularr.Frontend.Pages.Admin.Translation
         public static IUiComponent Full(BookTranslationProgressV1 progress, UiText texts)
         {
             var parts = new List<IUiComponent>(Summary(progress, texts));
+            if (progress.Languages.Sum(language => (long)language.Total - language.Done) > 0)
+                parts.Add(new P(new Text("translation.progress.unitsHint")).Class("translation-progress__pace"));
             var works = Works(progress.Books);
             if (works.Count > 0)
             {
                 parts.Add(new H3(new Text("translation.progress.books")));
                 parts.AddRange(works.Take(OpenWorks).Select(work => Work(work, texts)));
                 if (works.Count > OpenWorks)
-                    parts.Add(new Details(new Summary(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["translation.progress.moreBooks"], works.Count - OpenWorks))),
+                    parts.Add(new Details(new Summary(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["translation.progress.moreBooks"], (works.Count - OpenWorks).ToString("N0", CultureInfo.CurrentCulture)))),
                         new Div([.. works.Skip(OpenWorks).Select(work => Work(work, texts))])).Class("translation-progress__more"));
             }
 
@@ -45,7 +47,7 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             if (open > 0)
             {
                 var left = progress.SecondsRemaining is { } seconds ? Duration(seconds) : texts["translation.progress.unknown"];
-                parts.Add(new P(new ValueText(texts["translation.progress.pace"] + ": " + progress.BlocksPerMinute.ToString("0.0", CultureInfo.CurrentCulture) + " "
+                parts.Add(new P(new ValueText(texts["translation.progress.pace"] + ": " + progress.BlocksPerMinute.ToString("N1", CultureInfo.CurrentCulture) + " "
                     + texts["translation.progress.blocks"] + " · " + texts["translation.progress.remaining"] + ": " + left)).Class("translation-progress__pace"));
             }
 
@@ -78,7 +80,7 @@ namespace Jularr.Frontend.Pages.Admin.Translation
                 return Meter(only.Volume is { } volume ? only.Title + " · " + texts["translation.progress.volume"] + " " + volume : only.Title, only.Done, only.Total, texts);
             }
 
-            var header = string.Format(CultureInfo.CurrentCulture, texts["translation.progress.volumesDone"], work.FinishedVolumes, work.Volumes.Count);
+            var header = string.Format(CultureInfo.CurrentCulture, texts["translation.progress.volumesDone"], work.FinishedVolumes.ToString("N0", CultureInfo.CurrentCulture), work.Volumes.Count.ToString("N0", CultureInfo.CurrentCulture));
             return new Details(
                 new Summary(Meter(work.Title + " · " + header, work.Done, work.Total, texts)),
                 new Div([.. work.Volumes.Select(book => Meter(book.Volume is { } volume ? texts["translation.progress.volume"] + " " + volume : book.Title, book.Done, book.Total, texts))]))
@@ -95,8 +97,8 @@ namespace Jularr.Frontend.Pages.Admin.Translation
         {
             var percent = total <= 0 ? 0 : (int)Math.Floor(done * 100.0 / total);
             return new Div(
-                new P(new ValueText(label + ": " + percent.ToString(CultureInfo.CurrentCulture) + " % · " + done.ToString(CultureInfo.CurrentCulture) + " " + texts["translation.progress.of"] + " "
-                    + total.ToString(CultureInfo.CurrentCulture) + " " + texts["translation.progress.sections"])),
+                new P(new ValueText(label + ": " + percent.ToString(CultureInfo.CurrentCulture) + " % · " + done.ToString("N0", CultureInfo.CurrentCulture) + " " + texts["translation.progress.of"] + " "
+                    + total.ToString("N0", CultureInfo.CurrentCulture) + " " + texts["translation.progress.sections"])),
                 new Progress().Attribute("max", "100").Attribute("value", percent.ToString(CultureInfo.InvariantCulture)).TextAttribute("aria-label", "translation.progress.title"))
                 .Class("translation-progress__row");
         }
