@@ -191,6 +191,17 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("Komödie", german["genre.comedy"].Item2);
         }
 
+        [TestMethod]
+        public void GermanCatalog_EveryText_FollowsTheCurrentEnglish()
+        {
+            // An entry whose English no longer matches the code is ignored, and the page shows English in the German interface.
+            var german = Jularr.Frontend.Localization.UiCatalogs.Load().Single(catalog => catalog.Locale == "de").Texts;
+            var outdated = Jularr.Frontend.Localization.UiResources.English
+                .Where(resource => german.TryGetValue(resource.Key, out var text) && text.Item1 != resource.EnglishText)
+                .Select(resource => resource.Key).ToArray();
+            Assert.AreEqual(0, outdated.Length, "German texts that follow an older English: " + string.Join(", ", outdated));
+        }
+
         private static Task SynchronizeAsync(Fixture fixture, params UiTextResource[] resources) => SynchronizeAsync(fixture, [], resources);
 
         private static async Task SynchronizeAsync(Fixture fixture, UiTextCatalog[] catalogs, params UiTextResource[] resources)

@@ -3,14 +3,12 @@
 
 export interface HeroPreferences {
     perType: number;
-    // 0 shows every highlight the preferences allow.
-    max: number;
     withContinue: boolean;
     auto: boolean;
     paused: boolean;
 }
 
-export const heroDefaults: HeroPreferences = { perType: 2, max: 19, withContinue: true, auto: true, paused: false };
+export const heroDefaults: HeroPreferences = { perType: 3, withContinue: true, auto: true, paused: false };
 export const heroPreferencesChanged = 'jularr:hero-preferences';
 
 export function readHeroPreferences(key: string): HeroPreferences {
@@ -20,8 +18,7 @@ export function readHeroPreferences(key: string): HeroPreferences {
         const whole = (value: unknown, minimum: number, maximum: number, fallback: number) =>
             typeof value === 'number' && Number.isInteger(value) && value >= minimum && value <= maximum ? value : fallback;
         return {
-            perType: whole(stored.perType, 1, 3, heroDefaults.perType),
-            max: whole(stored.max, 0, 100, heroDefaults.max),
+            perType: whole(stored.perType, 1, 5, heroDefaults.perType),
             withContinue: typeof stored.withContinue === 'boolean' ? stored.withContinue : heroDefaults.withContinue,
             auto: typeof stored.auto === 'boolean' ? stored.auto : heroDefaults.auto,
             paused: typeof stored.paused === 'boolean' ? stored.paused : heroDefaults.paused
@@ -38,6 +35,21 @@ export function writeHeroPreferences(key: string, preferences: HeroPreferences):
         // Preferences are optional; the carousel keeps working for this visit.
     }
     document.dispatchEvent(new CustomEvent(heroPreferencesChanged, { detail: key }));
+}
+
+// The positions of the slides shown: the first places of each type, continued titles only while the device wants them, one place after the other across the types.
+export function heroOrder(slides: { group: string; isContinue: boolean }[], preferences: HeroPreferences): number[] {
+    const groups: string[] = [];
+    const places = new Map<string, number>();
+    const chosen: { position: number; place: number; group: number }[] = [];
+    slides.forEach((slide, position) => {
+        if (!groups.includes(slide.group)) groups.push(slide.group);
+        if (slide.isContinue && !preferences.withContinue) return;
+        const place = places.get(slide.group) ?? 0;
+        places.set(slide.group, place + 1);
+        if (place < preferences.perType) chosen.push({ position, place, group: groups.indexOf(slide.group) });
+    });
+    return chosen.sort((first, second) => first.place - second.place || first.group - second.group).map(entry => entry.position);
 }
 
 const carousels = new Map<HTMLElement, () => void>();
@@ -69,15 +81,14 @@ function setup(hero: HTMLElement): () => void {
     const segments = hero.querySelector<HTMLElement>('.hero-carousel__segments')!;
     const counter = hero.querySelector<HTMLElement>('.hero-carousel__counter')!;
     const pause = hero.querySelector<HTMLButtonElement>('[data-hero-pause]')!;
+    const empty = hero.querySelector<HTMLElement>('[data-hero-empty]')!;
     const arrows = Array.from(hero.querySelectorAll<HTMLButtonElement>('[data-hero-step]'));
     let enabled: HTMLElement[] = slides;
     let index = 0;
     let touchStart: number | undefined;
 
-    // Continued titles first, then each type's titles by rank, up to the maximum.
     function choose(preferences: HeroPreferences): HTMLElement[] {
-        const chosen = slides.filter(slide => slide.hasAttribute('data-hero-continue') ? preferences.withContinue : Number(slide.dataset.heroPass) < preferences.perType);
-        return preferences.max > 0 ? chosen.slice(0, preferences.max) : chosen;
+        return heroOrder(slides.map(slide => ({ group: slide.dataset.heroGroup ?? '', isContinue: slide.hasAttribute('data-hero-continue') })), preferences).map(position => slides[position]);
     }
 
     function show(next: number): void {
@@ -102,12 +113,17 @@ function setup(hero: HTMLElement): () => void {
         const preferences = readHeroPreferences(key);
         const current = enabled[index];
         enabled = choose(preferences);
-        hero.hidden = enabled.length === 0;
+        empty.hidden = enabled.length > 0;
         hero.toggleAttribute('data-paused', preferences.paused || !preferences.auto);
         const stopped = preferences.paused || !preferences.auto;
         pause.setAttribute('aria-pressed', String(stopped));
         pause.setAttribute('aria-label', (stopped ? hero.dataset.heroResumeLabel : hero.dataset.heroPauseLabel) ?? '');
-        if (enabled.length === 0) return;
+        if (enabled.length === 0) {
+            slides.forEach(slide => { slide.hidden = true; });
+            controls.hidden = true;
+            arrows.forEach(arrow => { arrow.hidden = true; });
+            return;
+        }
 
         segments.replaceChildren(...enabled.map((_, position) => {
             const segment = document.createElement('button');

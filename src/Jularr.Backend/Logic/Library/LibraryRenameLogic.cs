@@ -14,7 +14,8 @@ namespace Jularr.Backend.Logic.Library
         public static Task<IReadOnlyList<LibraryRenameFileData>> ReadLibraryRenameFilesAsync(this LogicContext ctx, CancellationToken ct)
         {
             // Every known path counts as taken; a library being scanned keeps its names.
-            var sql = new SqlStatement();
+            // Only Works with an asset are numbered, and each asset's numbers are gathered once.
+            var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 """
                 WITH numbered_episodes AS (
@@ -22,6 +23,14 @@ namespace Jularr.Backend.Logic.Library
                     FROM "WorkUnits" AS episode
                     JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
                     WHERE episode."WorkUnitTypeId" = 2 AND season."Number" > 0
+                        AND episode."WorkId" IN (SELECT asset."WorkId" FROM "MediaAssets" AS asset)
+                ),
+                covered_absolutes AS (
+                    SELECT coverage."MediaAssetId", jsonb_agg(numbered."AbsoluteNumber" ORDER BY covered."Number")::text AS "AbsoluteNumbers"
+                    FROM "MediaAssetUnitCoverage" AS coverage
+                    JOIN "WorkUnits" AS covered ON covered."Id" = coverage."WorkUnitId"
+                    JOIN numbered_episodes AS numbered ON numbered."Id" = covered."Id"
+                    GROUP BY coverage."MediaAssetId"
                 )
                 SELECT
                     file."Id",
@@ -45,11 +54,7 @@ namespace Jularr.Backend.Logic.Library
                     ) AS "Author",
                     unit."WorkUnitTypeId",
                     numbering."AbsoluteNumber",
-                    coalesce((SELECT jsonb_agg(numbered."AbsoluteNumber" ORDER BY covered."Number")::text
-                        FROM "MediaAssetUnitCoverage" AS coverage
-                        JOIN "WorkUnits" AS covered ON covered."Id" = coverage."WorkUnitId"
-                        JOIN numbered_episodes AS numbered ON numbered."Id" = covered."Id"
-                        WHERE coverage."MediaAssetId" = asset."Id"), '[]') AS "AbsoluteNumbers",
+                    coalesce(absolutes."AbsoluteNumbers", '[]') AS "AbsoluteNumbers",
                     coalesce((SELECT jsonb_agg(covered."Number" ORDER BY covered."Number")::text
                         FROM "MediaAssetUnitCoverage" AS coverage
                         JOIN "WorkUnits" AS covered ON covered."Id" = coverage."WorkUnitId"
@@ -116,6 +121,7 @@ namespace Jularr.Backend.Logic.Library
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                     LEFT JOIN numbered_episodes AS numbering ON numbering."Id" = unit."Id"
+                    LEFT JOIN covered_absolutes AS absolutes ON absolutes."MediaAssetId" = asset."Id"
                 WHERE
                     NOT EXISTS (
                         SELECT
@@ -144,18 +150,23 @@ namespace Jularr.Backend.Logic.Library
                 var present = root.Where(file => file.MissingSince is null).ToArray();
                 var media = present.Where(file => file.MediaAssetId is not null && !LibraryFileTypes.IsSubtitle(file.RelativePath)).ToArray();
 
-                // Subtitles follow the media file whose name they extend the most.
+                // Subtitles follow the media file whose name they extend the most; the stems before each dot of its name are looked up.
+                var stems = media.Select((item, index) => (Item: item, Index: index)).ToLookup(entry => Stem(entry.Item.RelativePath), StringComparer.Ordinal);
                 var subtitles = present.Where(file => LibraryFileTypes.IsSubtitle(file.RelativePath))
-                    .Select(file => (File: file, Owner: media.Where(item => file.RelativePath.StartsWith(Stem(item.RelativePath) + ".", StringComparison.Ordinal))
-                        .MaxBy(item => item.RelativePath.Length)))
+                    .Select(file => (File: file, Owner: Enumerable.Range(0, file.RelativePath.Length).Where(end => file.RelativePath[end] == '.')
+                        .SelectMany(end => stems[file.RelativePath[..end]]).OrderBy(entry => entry.Index).Select(entry => entry.Item).MaxBy(item => item.RelativePath.Length)))
                     .Where(subtitle => subtitle.Owner is not null)
                     .ToLookup(subtitle => subtitle.Owner!.Id, subtitle => subtitle.File);
+
+                // Present files per folder, subfolders included, counted once for game libraries.
+                var games = media.Any(file => file.MediaTypeId == MediaType.Game);
+                var bundled = games && present.Any(item => Path.GetExtension(item.RelativePath).ToLowerInvariant() is ".cue" or ".m3u" or ".m3u8");
+                var folders = games ? present.SelectMany(item => Folders(item.RelativePath)).CountBy(folder => folder, StringComparer.OrdinalIgnoreCase).ToDictionary(StringComparer.OrdinalIgnoreCase) : new Dictionary<string, int>();
                 foreach (var file in media)
                 {
                     // A bundled game's relative paths can be referenced by a CUE or playlist.
                     // Leave such releases intact; a lone ROM has no internal references to invalidate.
-                    if (file.MediaTypeId == MediaType.Game && (present.Any(item => Path.GetExtension(item.RelativePath).ToLowerInvariant() is ".cue" or ".m3u" or ".m3u8")
-                        || present.Count(item => item.RelativePath.StartsWith(Folder(file.RelativePath), StringComparison.OrdinalIgnoreCase)) != 1)) continue;
+                    if (file.MediaTypeId == MediaType.Game && (bundled || folders[Folder(file.RelativePath)] != 1)) continue;
                     var current = Stem(file.RelativePath);
                     if (Target(file, patterns) is not { } target || IsNamed(current, target))
                     {
@@ -312,6 +323,10 @@ namespace Jularr.Backend.Logic.Library
             || current.StartsWith(target, StringComparison.OrdinalIgnoreCase) && Counter().IsMatch(current[target.Length..]);
 
         private static string Folder(string relativePath) => relativePath.LastIndexOf('/') is var slash and >= 0 ? relativePath[..(slash + 1)] : "";
+
+        // The library root and every folder above a file.
+        private static IEnumerable<string> Folders(string relativePath) =>
+            Enumerable.Range(0, relativePath.Length).Where(index => relativePath[index] == '/').Select(index => relativePath[..(index + 1)]).Prepend("");
 
         private static string Stem(string relativePath) => relativePath[..^Path.GetExtension(relativePath).Length];
 

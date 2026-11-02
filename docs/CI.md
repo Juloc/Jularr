@@ -62,7 +62,9 @@ Which shard failed: the job name says `backend (3/4)` or `e2e (2/4)`; the red li
 prefixed `[lane1]` / `[lane2]` for the two test processes of a backend shard; browser evidence
 is in the `e2e-evidence-*` artifact. Timings of a run: `gh run view <id> --json jobs --jq '.jobs[] | [.name,.startedAt,.completedAt] | @tsv'`.
 
-Run one shard locally (needs the test PostgreSQL, see `.agent/project.yaml`):
+Run one shard locally (needs the test PostgreSQL, see `.agent/project.yaml`). Download storage rejects tmpfs and overlay folders, so where
+`/tmp` is one of them, `export TMPDIR` to a folder on the real disk first, as CI does with `RUNNER_TEMP`; otherwise the download-storage tests fail with
+`download_storage_mount_required` or `storage_unavailable`:
 
 ```
 dotnet build tests/Jularr.Backend.Tests -c Release

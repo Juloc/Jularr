@@ -28,6 +28,12 @@
     [hidden] { display: none; }
 }
 
+// Phone card: the status beside the name takes at most half the row and its reason wraps, so the name keeps its room.
+@container list (max-width: 690px) {
+    .activity-queue .list-row { grid-template-columns: minmax(0, 1fr) fit-content(48%); }
+    .activity-queue .live-progress.activity-status .live-progress__facts { white-space: normal; overflow-wrap: anywhere; }
+}
+
 .live-progress.activity-status--drawer { grid-template-columns: minmax(0, 1fr); justify-items: stretch; .live-progress__bar, .live-progress__facts { grid-column: 1; } .state-chip { justify-self: start; } }
 
 .activity-transfer {

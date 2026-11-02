@@ -654,6 +654,14 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(invalidHtml, "role=\"alert\"");
             Assert.IsFalse(invalidHtml.Contains("wrong-password", StringComparison.Ordinal));
 
+            // Wrong credentials and an empty field are told at their field; the browser's own check stays off.
+            StringAssert.Contains(html, "formnovalidate=\"formnovalidate\"");
+            StringAssert.Matches(invalidHtml, new Regex("name=\"Password\"[^>]*aria-invalid=\"true\""));
+            StringAssert.Contains(invalidHtml, "Wrong username or password.");
+            using var emptyLogin = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(invalidHtml, ("Username", ""), ("Password", "test-password-123")));
+            Assert.AreEqual(HttpStatusCode.BadRequest, emptyLogin.StatusCode);
+            StringAssert.Matches(await emptyLogin.Content.ReadAsStringAsync(), new Regex("name=\"Username\"[^>]*aria-invalid=\"true\""));
+
             using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login?ReturnUrl=https://foreign.example.test", Form(invalidHtml, ("Username", "a@example.test"), ("Password", "test-password-123")));
             Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
             Assert.AreEqual("/", signedIn.Headers.Location!.OriginalString);

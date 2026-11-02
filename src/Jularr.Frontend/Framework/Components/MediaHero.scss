@@ -325,6 +325,12 @@
             align-items: stretch;
         }
         &--poster &__progress { max-width: none; margin-left: 0; }
+
+        // The menus of the actions open across the whole row instead of past the screen's edge.
+        &--poster &__actions {
+            .action-menu, .select-link-menu { position: static; }
+            .action-menu__panel, .select-link-menu__list { inset-inline: 0; min-width: 0; max-width: none; }
+        }
     }
 }
 
