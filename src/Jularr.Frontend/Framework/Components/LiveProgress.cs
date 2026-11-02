@@ -160,17 +160,25 @@ namespace Jularr.Frontend.Framework
         }
     }
 
-    // A request's phase as an accent pill: an icon and a word per phase, the download's percent only in a ring, and once done the title's own action
-    // (play or read). Only shows, leads nowhere; the stream switches the phase, the styles show its icon and word.
-    public sealed class LivePhasePill(FrontendAssets assets, string key, AcquisitionRequestStatusType status, string doneKey, string doneIcon) : IUiComponent
+    // A request's phase as an accent pill: an icon and a word per phase, the download's percent only in a ring. While it runs, a pointer over it offers
+    // to withdraw it (the dialog with the given id confirms); once done it is the title's own action (play or read). The stream switches the phase,
+    // the styles show its icon, word and action.
+    public sealed class LivePhasePill(FrontendAssets assets, string key, AcquisitionRequestStatusType status, string? withdrawDialog, string doneKey, string doneIcon, string doneHref) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
             var icons = new[] { "clock", "search", "download", "alert" }.Select(name => (IUiComponent)new Span(new Icon(name, assets, 16)).Class("live-phase-pill__" + name));
-            var words = Enum.GetValues<AcquisitionRequestStatusType>().Select(phase => (IUiComponent)new Span(new ValueText(phase == AcquisitionRequestStatusType.Completed ? texts[doneKey] : texts["request.state." + phase]))
-                .Class("live-phase-pill__word").Attribute("data-word", LiveFacts.Marker(phase)));
-            new Span(new Span([.. icons, new Span(new Icon(doneIcon, assets, 16)).Class("live-phase-pill__done")]).Class("live-phase-pill__icons"),
-                    new Span().Class("live-phase-pill__ring").Attribute("data-live-value", "percent").Attribute("hidden", "hidden").Attribute("aria-hidden", "true"), new Span([.. words]))
+            var words = Enum.GetValues<AcquisitionRequestStatusType>().Where(phase => phase != AcquisitionRequestStatusType.Completed)
+                .Select(phase => (IUiComponent)new Span(new Text("request.state." + phase)).Class("live-phase-pill__word").Attribute("data-word", LiveFacts.Marker(phase)));
+            IUiComponent[] state = [new Span([.. icons]).Class("live-phase-pill__icons"),
+                new Span().Class("live-phase-pill__ring").Attribute("data-live-value", "percent").Attribute("hidden", "hidden").Attribute("aria-hidden", "true"), new Span([.. words])];
+
+            // Withdrawing runs only while the request does; a finished or refused one only shows.
+            var face = withdrawDialog is null
+                ? new Span(state)
+                : Modal.Opener(new Button([.. state, new Span(new Icon("close", assets, 16), new Span(new Text("requests.withdraw.submit"))).Class("live-phase-pill__undo")])
+                    .TextAttribute("title", "requests.withdraw"), withdrawDialog);
+            new Span(face.Class("button button--primary live-phase-pill__face"), new A(new Icon(doneIcon, assets, 16), new Span(new Text(doneKey))).Class("button button--primary live-phase-pill__done").Attribute("href", doneHref))
                 .Class("live-phase-pill").Attribute("role", "status").Attribute("data-live", key).Attribute("data-phase", LiveFacts.Marker(status)).WriteTo(writer, encoder, texts);
         }
     }

@@ -400,6 +400,17 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(pill, "data-phase=\"approved\"");
             Assert.IsFalse(Regex.IsMatch(detailsHtml, "<a [^>]*data-live=\"request-work:"), "The pill is not a link.");
 
+            // Nothing to play yet leads back to the title; a pointer over the running request withdraws it after the dialog, and the title can be requested again.
+            using var play = await browser.GetAsync("/Details/" + requestedWork + "?handler=Play");
+            Assert.AreEqual("/Details/" + requestedWork, play.Headers.Location?.OriginalString);
+            StringAssert.Contains(detailsHtml, "data-dialog-open=\"request-withdraw\"");
+            token = WebUtility.HtmlDecode(Regex.Match(detailsHtml, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
+            using var withdrawn = await browser.PostAsync("/Details/" + requestedWork + "?handler=Withdraw&requestId=" + id, new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token }));
+            Assert.AreEqual(HttpStatusCode.Redirect, withdrawn.StatusCode, await withdrawn.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)9, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\" WHERE \"Id\" = " + id));
+            using var afterWithdraw = await host.SendAsync(HttpMethod.Get, "/Details/" + requestedWork);
+            Assert.IsFalse((await afterWithdraw.Content.ReadAsStringAsync()).Contains("live-phase-pill", StringComparison.Ordinal));
+
             // Disabled does not erase data.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Requests'");
             using var denied = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted");

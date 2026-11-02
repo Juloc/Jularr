@@ -163,20 +163,19 @@
     }
 }
 
-// The request of a title: an accent pill with a white icon and a word per phase (clock, pulsing search, download, play or read); while it downloads the icon becomes a ring with the percent.
+// The request of a title, on the primary button: a white icon and a word per phase (clock, pulsing search, download); while it downloads the icon
+// becomes a ring with the percent. A pointer over a running request turns it into Withdraw; once done the title's own action (play or read) replaces it.
 .live-phase-pill {
-    position: relative;
     display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    min-height: var(--control-height);
-    padding: 0 14px 0 9px;
-    border-radius: var(--radius-control);
-    background: var(--accent);
-    color: var(--accent-contrast);
-    font-size: var(--text-control);
-    font-weight: var(--weight-control);
-    white-space: nowrap;
+
+    // Nested, so the button's own display and padding give way.
+    .live-phase-pill__face { position: relative; padding-left: 9px; }
+    .live-phase-pill__done { display: none; }
+    &[data-phase="completed"] {
+        .live-phase-pill__face { display: none; }
+        .live-phase-pill__done { display: inline-flex; }
+    }
+    &:is([data-phase="rejected"], [data-phase="failed"], [data-phase="cancelled"]) .live-phase-pill__face { pointer-events: none; }
 
     &__icons {
         display: inline-grid;
@@ -190,12 +189,11 @@
     &[data-phase="open"] .live-phase-pill__clock { display: inline-flex; }
     &:is([data-phase="approved"], [data-phase="searching"]) .live-phase-pill__search { display: inline-flex; animation: live-phase-pulse 1.3s ease-in-out infinite; }
     &:is([data-phase="downloading"], [data-phase="importing"]) .live-phase-pill__download { display: inline-flex; }
-    &[data-phase="completed"] .live-phase-pill__done { display: inline-flex; }
+    &:is([data-phase="rejected"], [data-phase="failed"], [data-phase="cancelled"]) .live-phase-pill__alert { display: inline-flex; }
     &__word { display: none; }
-    @each $phase in open, approved, searching, downloading, importing, completed, rejected, failed, cancelled {
+    @each $phase in open, approved, searching, downloading, importing, rejected, failed, cancelled {
         &[data-phase="#{$phase}"] [data-word="#{$phase}"] { display: inline; }
     }
-    &:is([data-phase="rejected"], [data-phase="failed"], [data-phase="cancelled"]) .live-phase-pill__alert { display: inline-flex; }
 
     // The download's percent: a white arc around the number, in place of the icon.
     &__ring {
@@ -224,6 +222,13 @@
     }
     &:not([data-phase="downloading"]) .live-phase-pill__ring { display: none; }
     &:has(.live-phase-pill__ring:not([hidden])) .live-phase-pill__icons { visibility: hidden; }
+
+    // Withdraw in place of the phase while a pointer rests on it.
+    &__undo { display: none; align-items: center; gap: 7px; }
+    button.live-phase-pill__face:is(:hover, :focus-visible) {
+        > :not(.live-phase-pill__undo) { display: none; }
+        .live-phase-pill__undo { display: inline-flex; }
+    }
 }
 
 @keyframes live-phase-pulse { 50% { opacity: .45; } }

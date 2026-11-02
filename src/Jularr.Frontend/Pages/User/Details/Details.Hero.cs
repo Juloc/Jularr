@@ -103,11 +103,21 @@ namespace Jularr.Frontend.Pages.User.Details
                 actions.Add(new A(new Icon("link", assets, 16), new Span(new Text("media.openInPlex"))).Class("button button--primary").Attribute("href", plex));
             }
 
-            // The profile's request shows its phase live; once it is complete the play action says enough.
-            if (work.RequestStatusTypeId is { } requested && texts.CanRequest() && !(requested == AcquisitionRequestStatusType.Completed && playable is not null))
+            // The profile's request shows its phase live and can be withdrawn while it runs; once complete it plays or reads, and a withdrawn one is gone.
+            if (work.RequestStatusTypeId is { } requested && work.RequestId is { } requestId && texts.CanRequest() && requested != AcquisitionRequestStatusType.Cancelled
+                && !(requested == AcquisitionRequestStatusType.Completed && playable is not null))
             {
                 var reads = kind is WorkKind.Book or WorkKind.Manga or WorkKind.LightNovel;
-                actions.Add(new LivePhasePill(assets, LiveKeys.RequestOfWork(work.Id), requested, reads ? "details.read" : "details.play", reads ? "reading" : "play"));
+                var running = requested is >= AcquisitionRequestStatusType.Open and <= AcquisitionRequestStatusType.Importing;
+                var id = work.Id.ToString(CultureInfo.InvariantCulture);
+                actions.Add(new LivePhasePill(assets, LiveKeys.RequestOfWork(work.Id), requested, running ? WithdrawDialogId : null, reads ? "details.read" : "details.play", reads ? "reading" : "play",
+                    "/Details/" + id + "?handler=Play"));
+                if (running)
+                {
+                    actions.Add(Modal.Confirm(assets, WithdrawDialogId, "requests.withdraw.confirm", "requests.withdraw.submit",
+                        "/Details/" + id + "?handler=Withdraw&requestId=" + requestId.ToString(CultureInfo.InvariantCulture), _csrf, new RequestParametersV1(requestId)));
+                }
+
                 page.Asset("Framework/Components/LiveProgress.entry.ts");
             }
 
@@ -245,6 +255,8 @@ namespace Jularr.Frontend.Pages.User.Details
 
             return string.Format(CultureInfo.CurrentCulture, texts["details.percent"], work.ProgressPercent);
         }
+
+        private const string WithdrawDialogId = "request-withdraw";
 
         private sealed class Small(params IUiComponent[] children) : HtmlElement("small", children);
 
