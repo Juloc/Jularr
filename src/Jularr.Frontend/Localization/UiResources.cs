@@ -1523,6 +1523,7 @@ namespace Jularr.Frontend.Localization
             new("requests.title", "My requests"),
             new("request.language", "Requested language"),
             new("request.create", "Request this work"),
+            new("request.quick.failed", "The request could not be made."),
             new("request.approve", "Approve"),
             new("request.reject", "Reject"),
             new("request.empty", "No requests on this page."),

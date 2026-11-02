@@ -123,5 +123,14 @@ export function installLive(): void {
     installed = true;
     document.addEventListener("visibilitychange", syncLive);
     document.addEventListener("htmx:after:swap", () => queueMicrotask(syncLive));
+
+    // Elements a script adds later (the cards of a fragment) take the latest values as well.
+    let adding: ReturnType<typeof setTimeout> | undefined;
+    new MutationObserver(records => {
+        const live = (node: Node) => node instanceof Element && (node.hasAttribute("data-live") || node.querySelector("[data-live]") !== null);
+        if (!records.some(record => Array.from(record.addedNodes).some(live))) return;
+        clearTimeout(adding);
+        adding = setTimeout(syncLive, 100);
+    }).observe(document.body, { childList: true, subtree: true });
     addEventListener("pagehide", close);
 }
