@@ -3570,6 +3570,10 @@
    "Request this work",
    "Dieses Werk anfragen"
   ],
+  "request.quick.failed": [
+   "The request could not be made.",
+   "Die Anfrage konnte nicht gestellt werden."
+  ],
   "request.approve": [
    "Approve",
    "Freigeben"
@@ -4417,6 +4421,10 @@
   "search.global": [
    "Search movies and series",
    "Filme und Serien suchen"
+  ],
+  "search.all": [
+   "All results for “{0}”",
+   "Alle Ergebnisse für „{0}“"
   ],
   "library.scope.all": [
    "All",
@@ -13346,6 +13354,18 @@
   "works.search": [
    "Search titles",
    "Titel suchen"
+  ],
+  "works.sort": [
+   "Sort by",
+   "Sortieren nach"
+  ],
+  "works.sort.ascending": [
+   "Ascending, turn to descending",
+   "Aufsteigend, auf absteigend umschalten"
+  ],
+  "works.sort.descending": [
+   "Descending, turn to ascending",
+   "Absteigend, auf aufsteigend umschalten"
   ],
   "works.filter.drawer": [
    "Filters",

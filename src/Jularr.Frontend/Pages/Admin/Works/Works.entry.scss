@@ -31,6 +31,16 @@
     .list-row { min-height: 112px; }
 }
 
+// The order beside the search: what it sorts by and the arrow of its direction, which points down while it descends.
+.works-sort {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    &__direction .ui-icon { transition: transform var(--transition); }
+    &__direction--down .ui-icon { transform: rotate(180deg); }
+}
+
 // The poster view: the shared grid of covers, a little apart from the toolbar.
 .works-posters { padding-top: 6px; }
 
