@@ -169,7 +169,8 @@
     display: inline-flex;
 
     // Nested, so the button's own display and padding give way.
-    .live-phase-pill__face { position: relative; padding-left: 9px; }
+    // The phase and Withdraw share one cell, so the button keeps the width of the longer one when the pointer comes.
+    .live-phase-pill__face { display: inline-grid; justify-items: center; padding-left: 9px; > * { grid-area: 1 / 1; } }
     .live-phase-pill__done { display: none; }
     &[data-phase="completed"] {
         .live-phase-pill__face { display: none; }
@@ -177,6 +178,7 @@
     }
     &:is([data-phase="rejected"], [data-phase="failed"], [data-phase="cancelled"]) .live-phase-pill__face { pointer-events: none; }
 
+    &__state { position: relative; display: inline-flex; align-items: center; gap: 7px; }
     &__icons {
         display: inline-grid;
         flex: none;
@@ -199,7 +201,7 @@
     &__ring {
         position: absolute;
         top: 50%;
-        left: 9px;
+        left: 0;
         display: grid;
         place-items: center;
         width: 22px;
@@ -224,10 +226,10 @@
     &:has(.live-phase-pill__ring:not([hidden])) .live-phase-pill__icons { visibility: hidden; }
 
     // Withdraw in place of the phase while a pointer rests on it.
-    &__undo { display: none; align-items: center; gap: 7px; }
+    &__undo { display: inline-flex; align-items: center; gap: 7px; visibility: hidden; }
     button.live-phase-pill__face:is(:hover, :focus-visible) {
-        > :not(.live-phase-pill__undo) { display: none; }
-        .live-phase-pill__undo { display: inline-flex; }
+        .live-phase-pill__state { visibility: hidden; }
+        .live-phase-pill__undo { visibility: visible; }
     }
 }
 
