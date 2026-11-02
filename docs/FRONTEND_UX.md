@@ -109,7 +109,12 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   types may be chosen, `type=a,b`) with the Customize and Filter drawers at its end, the highlights
   as one carousel (continued titles first, then each type's best by rank, series from Discover's series list; the device keeps how many
   and whether it turns by itself), feed chips, sort and a rows/grid switch. The header owns the **one**
-  global Search; do not add another search field inside Discover. The Filter drawer lists the media types first, then the local availability
+  global Search; do not add another search field inside Discover. Owner's decision 2 Nov, the header search: large in the middle of the header, no key hint
+  or shortcut; from two letters, after a short pause, a popup under the field lists the titles Jularr keeps (no provider is asked) grouped by type, the type
+  with the best match first, in each type the typed title, then titles beginning with it, then other matches, local before trending before popular, two to
+  six per type as the room allows, then All results. Enter opens Discover's results: one row per type in the same order, each with See all for that type
+  alone (which pages); the providers are asked once, together, only on Enter. On a phone the icon opens the field over the header, the suggestions fill
+  the screen and the back button closes them. The Filter drawer lists the media types first, then the local availability
   (in Jularr, can be requested), then only what the chosen types have: the release year and their rankings; the rankings a chosen
   type lacks leave the panel as the types change. No genre, platform, language, runtime or rating facets exist yet (Discover's
   catalogs keep no such data). Library and Favorites share the same media-type bar, filter panel (types, release year), order and layout.

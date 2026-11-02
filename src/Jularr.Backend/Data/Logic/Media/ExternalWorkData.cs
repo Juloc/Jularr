@@ -393,11 +393,12 @@ namespace Jularr.Backend.Data.Logic.Media
     // A typed search over the scopes of kept catalogs: Shelf numbers each scope.
     internal sealed class ExternalWorkSuggestionQueryData : BaseData
     {
-        public ExternalWorkSuggestionQueryData(IReadOnlyList<ExternalWorkShelfData> scopes, long profileId, string searchTerms, string titlePrefix, int limit)
+        public ExternalWorkSuggestionQueryData(IReadOnlyList<ExternalWorkShelfData> scopes, long profileId, string searchTerms, string title, string titlePrefix, int limit)
         {
             Shelves = JsonSerializer.Serialize(scopes);
             ProfileId = profileId;
             SearchTerms = searchTerms;
+            Title = title;
             TitlePrefix = titlePrefix;
             Limit = limit;
         }
@@ -410,6 +411,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.SearchTerms))]
         public string SearchTerms { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.SearchTerms))]
+        public string Title { get; }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.SearchTerms))]
         public string TitlePrefix { get; }

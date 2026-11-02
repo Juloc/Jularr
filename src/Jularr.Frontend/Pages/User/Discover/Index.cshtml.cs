@@ -28,6 +28,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private static readonly TimeSpan ShelfLimit = TimeSpan.FromSeconds(8);
         private static readonly TimeSpan HeroLimit = TimeSpan.FromSeconds(2.5);
         private static readonly TimeSpan SlowShelf = TimeSpan.FromMilliseconds(700);
+        private const int SearchRowSize = 20;
 
         private const string HeroPreferences = "discover-hero";
 
@@ -44,6 +45,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private readonly Dictionary<long, WorkAvailabilityStateV1> _availabilityByWork = [];
         private IReadOnlyList<HomeShelfV1> _layout = [.. Enum.GetValues<HomeShelfType>().Select(type => new HomeShelfV1(type, false))];
         private bool _providerUnavailable;
+        private bool _searchIncomplete;
         private string _providerNotice = "discover.providerUnavailable";
         private IReadOnlyList<DiscoverScopeV1>? _scopes;
         private string? _feed;
@@ -148,6 +150,16 @@ namespace Jularr.Frontend.Pages.User.Discover
             if (_providerUnavailable && (_results is not null || _catalog is not null))
             {
                 page.Content.Add(new P(new Text(_providerNotice)).Attribute("role", "status"));
+            }
+
+            // A search of several types shows each type as its own row.
+            if (searching && selected is null)
+            {
+                if (_searchIncomplete) page.Content.Add(new P(new Text("discover.providerUnavailable")).Attribute("role", "status"));
+                var rows = SearchRows();
+                if (rows.Count == 0) page.Content.Add(new P(new Text("discover.noResults")).Attribute("role", "status"));
+                page.Content.AddRange(rows);
+                return;
             }
 
             // Every result is a Work and opens its page.
@@ -421,29 +433,30 @@ namespace Jularr.Frontend.Pages.User.Discover
             return Partial("_UiComponent", Definition.Content[0]);
         }
 
-        // Titles Discover keeps, while typing; each opens its Work.
+        // Titles Discover keeps, while typing in the header search: grouped by type in the service's order, each opening its Work, then all results.
         public async Task<IActionResult> OnGetSuggestionsAsync()
         {
             if (!texts.CanReadMedia()) return Forbid();
-            if (string.IsNullOrWhiteSpace(Query)) return Partial("_UiComponent", new Div().Class("discover-suggestions__list"));
+            if (string.IsNullOrWhiteSpace(Query)) return Partial("_UiComponent", new Div().Class("app-search__results"));
 
             await LoadListedAsync();
             var found = await suggest.ExecuteAsync<BaseDataList<DiscoverSuggestionV1>>(new SuggestDiscoverDataV1(Query, Selected?.Slug), HttpContext.RequestAborted);
-            return Partial("_UiComponent", new Div([.. found.Where(item => Chosen.Any(scope => scope.Slug == item.ScopeSlug)).Select(Suggestion)]).Class("discover-suggestions__list")
-                .Attribute("aria-label", texts["discover.suggestions"]));
+            var groups = found.Where(item => Chosen.Any(scope => scope.Slug == item.ScopeSlug)).GroupBy(item => item.ScopeSlug)
+                .Select(group => new Div([new Span(new Text("discover.type." + group.Key)).Class("app-search__type"), .. group.Select(Suggestion)]).Class("app-search__group"));
+            var all = new A(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["search.all"], Query.Trim()))).Class("app-search__all").Attribute("href", Address(Current with { Page = 1 }));
+            return Partial("_UiComponent", new Div([.. groups, all]).Class("app-search__results").Attribute("aria-label", texts["discover.suggestions"]));
         }
 
         private IUiComponent Suggestion(DiscoverSuggestionV1 item)
         {
-            var scope = Listed.First(scope => scope.Slug == item.ScopeSlug);
-            var href = "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture);
-            var meta = texts["discover.type." + scope.Slug] + (item.ReleaseYear is { } year ? " · " + year.ToString(CultureInfo.InvariantCulture) : "");
             IUiComponent poster = item.PosterUrl is { } url
-                ? new Img().Class("discover-suggestion__poster").Attribute("data-no-cover", "poster").Attribute("src", CoverPaths.Sized(url, 96)).Attribute("alt", "").Attribute("loading", "lazy")
-                : new NoCover(assets, NoCoverKind.Poster, "discover-suggestion__poster");
-            return new A(poster, new Span(new Strong(new ValueText(item.Title)), new Span(new ValueText(meta))).Class("discover-suggestion__text"),
-                new Span(new Icon("chevron-left", assets, 16)).Class("discover-suggestion__arrow"))
-                .Class("discover-suggestion").Attribute("href", href);
+                ? new Img().Class("app-search__poster").Attribute("data-no-cover", "poster").Attribute("src", CoverPaths.Sized(url, 96)).Attribute("alt", "").Attribute("loading", "lazy")
+                : new NoCover(assets, NoCoverKind.Poster, "app-search__poster");
+            var facts = new List<IUiComponent>();
+            if (item.ReleaseYear is { } year) facts.Add(new ValueText(year.ToString(CultureInfo.InvariantCulture)));
+            if (item.MediaStateTypeId == MediaStateType.Available) facts.Add(new Span(new Text("discover.known")).Class("app-search__known"));
+            return new A(poster, new Span(new Strong(new ValueText(item.Title)), new Span([.. facts])).Class("app-search__text"))
+                .Class("app-search__hit").Attribute("href", "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture));
         }
 
         public async Task<IActionResult> OnGetRecommendationsAsync()
@@ -551,7 +564,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
         }
 
-        // One scope searches its own catalog or TMDB; several search each catalog chosen and TMDB's answers for their types.
+        // One scope searches its own catalog or TMDB and pages; several ask each chosen catalog and TMDB for films and series together, once,
+        // and a provider that fails leaves the other rows.
         private async Task SearchAsync(DiscoverScopeV1? selected)
         {
             if (selected is { IsCatalog: true })
@@ -561,26 +575,65 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return;
             }
 
-            if (selected is not null || IsAll)
+            if (selected is not null)
             {
-                _results = await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query!, selected?.MediaTypeId, PageNumber), HttpContext.RequestAborted);
+                _results = await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query!, selected.MediaTypeId, PageNumber), HttpContext.RequestAborted);
                 return;
             }
 
-            var found = new List<(DiscoverScopeV1 Scope, DiscoverCatalogItemV1 Item)>();
-            foreach (var scope in Chosen.Where(scope => scope.IsCatalog))
-            {
-                found.AddRange((await catalogSearch.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new SearchDiscoverCatalogDataV1(scope.MediaTypeId, Query!, scope.MediaSubtypeId),
-                    HttpContext.RequestAborted)).Select(item => (scope, item)));
-            }
+            using var gate = new SemaphoreSlim(ShelfConcurrency);
+            var catalogs = Chosen.Where(scope => scope.IsCatalog).Select(scope => SearchLimitedAsync(gate, async token =>
+                (await catalogSearch.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new SearchDiscoverCatalogDataV1(scope.MediaTypeId, Query!, scope.MediaSubtypeId), token))
+                    .Select(item => (scope, item)).ToList())).ToList();
+            var provider = Chosen.Any(scope => !scope.IsCatalog)
+                ? SearchLimitedAsync(gate, token => search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query!), token))
+                : Task.FromResult<BaseDataList<DiscoverItemV1>?>(new BaseDataList<DiscoverItemV1>([]));
+            await Task.WhenAll(catalogs.Cast<Task>().Append(provider));
 
-            if (Chosen.Any(scope => !scope.IsCatalog))
-            {
-                _results = [.. (await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query!, null, PageNumber), HttpContext.RequestAborted))
-                    .Where(item => Chosen.Any(scope => !scope.IsCatalog && scope.MediaTypeId == item.MediaTypeId))];
-            }
+            _catalog = [.. catalogs.SelectMany(task => task.Result ?? [])];
+            _results = provider.Result is { } found ? [.. found] : [];
+            _searchIncomplete = provider.Result is null || catalogs.Any(task => task.Result is null);
+        }
 
-            _catalog = found.Count > 0 || _results is null ? found : null;
+        // One provider's search within the shared limits; null when it failed or answered too late.
+        private async Task<TResult?> SearchLimitedAsync<TResult>(SemaphoreSlim gate, Func<CancellationToken, Task<TResult>> read) where TResult : class
+        {
+            var requestAborted = HttpContext.RequestAborted;
+            await gate.WaitAsync(requestAborted);
+            try
+            {
+                using var limit = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
+                limit.CancelAfter(ShelfLimit);
+                return await read(limit.Token);
+            }
+            catch (Exception exception) when (exception is ServiceUnavailableException || exception is OperationCanceledException && !requestAborted.IsCancellationRequested)
+            {
+                log.LogWarning("Discover search answered nothing: {Reason}", exception.Message);
+                return null;
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        // Each chosen type's results as one row, the best match first and local titles before others that match as well (a chosen sort replaces this);
+        // the type with the best match leads, then the order of the media-type bar. See all searches that type alone.
+        private List<MediaShelf> SearchRows()
+        {
+            var text = Query!.Trim();
+            int Relevance(string title) => title.Equals(text, StringComparison.CurrentCultureIgnoreCase) ? 0 : title.StartsWith(text, StringComparison.CurrentCultureIgnoreCase) ? 1 : 2;
+
+            var rows = Chosen.Select((scope, order) =>
+            {
+                var hits = scope.IsCatalog
+                    ? Filtered((_catalog ?? []).Where(entry => entry.Scope == scope)).Select(entry => (entry.Item.Title, Local: entry.Item.MediaStateTypeId == MediaStateType.Available, Card: CatalogCard(scope, entry.Item)))
+                    : Filtered((_results ?? []).Where(item => item.MediaTypeId == scope.MediaTypeId)).Select(item => (item.Title, Local: item.MediaStateTypeId == MediaStateType.Available, Card: Card(item)));
+                var ordered = (Sort is null ? hits.OrderBy(hit => Relevance(hit.Title)).ThenBy(hit => !hit.Local) : hits).Take(SearchRowSize).ToList();
+                return (Scope: scope, Order: order, Hits: ordered);
+            }).Where(row => row.Hits.Count > 0).OrderBy(row => row.Hits.Min(hit => Relevance(hit.Title))).ThenBy(row => row.Order);
+
+            return [.. rows.Select(row => new MediaShelf(assets, "discover.type." + row.Scope.Slug, Address(Current with { Types = [row.Scope.Slug], Page = 1 }), [.. row.Hits.Select(hit => hit.Card)]))];
         }
 
         private async Task LoadListedAsync() =>

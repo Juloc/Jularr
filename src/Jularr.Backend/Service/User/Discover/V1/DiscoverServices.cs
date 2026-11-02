@@ -418,10 +418,10 @@ namespace Jularr.Backend.Service.User.Discover.V1
             if (scopes.Length == 0) return new BaseDataList<DiscoverSuggestionV1>([]);
 
             var query = new ExternalWorkSuggestionQueryData([.. scopes.Select((scope, index) => new ExternalWorkShelfData(index, DiscoverScopes.Namespace(scope), scope.MediaTypeId,
-                scope.MediaSubtypeId))], Auth.ProfileId!.Value, terms, ExternalWorkLogic.TitlePrefix(text), ExternalWorkLogic.SuggestionCount);
+                scope.MediaSubtypeId))], Auth.ProfileId!.Value, terms, text.ToLowerInvariant(), ExternalWorkLogic.TitlePrefix(text), ExternalWorkLogic.SuggestionsPerType);
             var rows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.SuggestExternalWorksAsync(query, ct), CancellationToken, mode: SqlAccessMode.ReadOnly);
             return new BaseDataList<DiscoverSuggestionV1>([.. rows.Select(row => new DiscoverSuggestionV1(scopes[row.Shelf].Slug, row.Namespace, row.Value, row.Title, row.ReleaseYear,
-                row.ImageUrl, row.WorkId))]);
+                row.ImageUrl, row.WorkId, row.MediaStateTypeId))]);
         }
     }
 

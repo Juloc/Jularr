@@ -1809,6 +1809,7 @@ namespace Jularr.Frontend.Localization
             new("media.watch", "Watch"),
             new("media.details", "Details"),
             new("search.global", "Search movies and series"),
+            new("search.all", "All results for “{0}”"),
             new("library.scope.all", "All"),
             new("library.scope.movies", "Movies"),
             new("library.scope.series", "Series"),
