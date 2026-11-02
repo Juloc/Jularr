@@ -9,6 +9,10 @@
     h1 { margin: 0; }
 }
 
+@media (max-width: 640px) {
+    .downloads-head { flex-wrap: wrap; }
+}
+
 // The clients as pill tabs inside one white capsule, each with its count in a small bubble.
 .downloads-tabs {
     margin-bottom: 16px;
@@ -86,7 +90,7 @@
     &__value--large { font-size: 30px; }
 }
 
-@container (max-width: 720px) {
+@media (max-width: 840px) {
     .downloads-figures, .downloads-figures--three { grid-template-columns: 1fr 1fr; }
 }
 
@@ -124,8 +128,8 @@
     .downloads-panel { margin-bottom: 0; }
 }
 
-@container (max-width: 720px) {
-    .downloads-pair { grid-template-columns: 1fr; }
+@media (max-width: 840px) {
+    .downloads-pair, .downloads-facts { grid-template-columns: 1fr; }
 }
 
 // The tables of the mockup: a plain head in the muted colour, every value on the left, rows close together under a thin line.
