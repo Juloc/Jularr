@@ -32,6 +32,7 @@
 // The popup's button shows its label above and the chosen values inside, like the selects beside it.
 .discover-filter__button {
     display: grid;
+    align-content: center;
     padding: 0 14px;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-field);

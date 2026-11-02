@@ -157,9 +157,9 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         .Select(provider => new DiscoverOptionV1(provider.Id, provider.Name, null, false))]);
                 }
             }
-            catch (Exception exception) when (exception is ServiceUnavailableException || exception is OperationCanceledException && !CancellationToken.IsCancellationRequested)
+            catch (Exception exception) when (exception is ServiceUnavailableException or KeyNotFoundException || exception is OperationCanceledException && !CancellationToken.IsCancellationRequested)
             {
-                // The other filters stay useful.
+                // The other filters stay useful without the provider's names.
             }
 
             return DiscoverFilterScopes.Options(scope, tags, sites)!;

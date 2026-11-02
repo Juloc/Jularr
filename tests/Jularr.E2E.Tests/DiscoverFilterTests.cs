@@ -71,6 +71,15 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(cards).ToHaveCountAsync(1);
             await Assertions.Expect(cards.First).ToContainTextAsync("Robot 7");
 
+            // On a phone the row swipes sideways and a popup is a sheet from the bottom.
+            await page.SetViewportSizeAsync(390, 844);
+            await row.Locator(".discover-filter__button").First.ClickAsync();
+            var sheet = await popup.BoundingBoxAsync();
+            Assert.IsTrue(sheet is not null && sheet.X == 0 && Math.Abs(sheet.Y + sheet.Height - 844) < 2, $"{sheet?.X} {sheet?.Y} {sheet?.Height}");
+            await Evidence.SaveAsync(page, "discover-filter-phone");
+            await page.Keyboard.PressAsync("Escape");
+            await page.SetViewportSizeAsync(1280, 900);
+
             // Clearing keeps the type and brings the shelves back.
             await row.Locator(".discover-filter__clear").ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/\?type=anime$"));

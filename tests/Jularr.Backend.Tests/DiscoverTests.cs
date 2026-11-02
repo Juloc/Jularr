@@ -84,9 +84,9 @@ namespace Jularr.Backend.Tests
             foreach (var (type, subtype, feed, sort, expected) in new (MediaType, MediaSubtype, DiscoverFeedType, DiscoverSort?, string)[]
             {
                 (MediaType.Series, MediaSubtype.Anime, DiscoverFeedType.NextSeason, null, $"\"sort\":[\"POPULARITY_DESC\"],\"season\":\"{DiscoverScopes.SeasonName(season)}\",\"seasonYear\":{year}"),
-                (MediaType.Series, MediaSubtype.Anime, DiscoverFeedType.Popular, DiscoverSort.Favourites, "\"sort\":[\"FAVOURITES_DESC\"]}"),
+                (MediaType.Series, MediaSubtype.Anime, DiscoverFeedType.Popular, DiscoverSort.Favourites, "\"sort\":[\"FAVOURITES_DESC\"],\"adult\":false}"),
                 (MediaType.Book, MediaSubtype.Manga, DiscoverFeedType.Manhwa, DiscoverSort.Added, "\"sort\":[\"ID_DESC\"],\"country\":\"KR\""),
-                (MediaType.Book, MediaSubtype.LightNovel, DiscoverFeedType.Top100, DiscoverSort.Score, "\"sort\":[\"SCORE_DESC\"]}")
+                (MediaType.Book, MediaSubtype.LightNovel, DiscoverFeedType.Top100, DiscoverSort.Score, "\"sort\":[\"SCORE_DESC\"],\"adult\":false}")
             })
             {
                 using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(type, feed, subtype, 1, sort));

@@ -188,7 +188,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             var parts = new List<IUiComponent>();
             if (Offers(DiscoverFilter.Genre))
             {
-                parts.Add(PopupFilter("genre", "discover.filter.genres", [.. offered.GenreIds.Select(genre => new ChoicePick(genre.ToString(), Genres.Contains(genre), "discover.genre." + genre))],
+                // AniList's adult genre shows only with adult titles.
+                parts.Add(PopupFilter("genre", "discover.filter.genres", [.. offered.GenreIds.Where(genre => genre != Genre.Hentai || IncludesAdult).Select(genre => new ChoicePick(genre.ToString(), Genres.Contains(genre), "discover.genre." + genre))],
                     Genres.Select(genre => texts["discover.genre." + genre])));
             }
 
@@ -211,8 +212,8 @@ namespace Jularr.Frontend.Pages.User.Discover
                     Formats.Select(format => texts["discover.format." + format])));
             }
 
-            // More counts what it holds; clearing keeps only the types.
-            var more = FilterCount - (Genres.Length > 0 ? 1 : 0) - (Year is not null || YearFrom is not null || YearTo is not null ? 1 : 0) - (Season is not null ? 1 : 0) - (Formats.Length > 0 ? 1 : 0);
+            // More counts what it holds (the availability too); clearing keeps only the types.
+            var more = (Availability is not null ? 1 : 0) + FilterCount - (Genres.Length > 0 ? 1 : 0) - (Year is not null || YearFrom is not null || YearTo is not null ? 1 : 0) - (Season is not null ? 1 : 0) - (Formats.Length > 0 ? 1 : 0);
             var moreLabel = new List<IUiComponent> { new Icon("sliders", assets, 16), new Span(new Text("discover.filter.more")) };
             if (more > 0) moreLabel.Add(new Span(new ValueText(more.ToString(CultureInfo.CurrentCulture))).Class("capsule-bar__badge"));
             parts.Add(Drawer.Opener(new Button([.. moreLabel]).Class("button discover-filter__more"), "discover-panel", "filter"));

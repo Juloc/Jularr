@@ -254,12 +254,17 @@ namespace Jularr.Frontend.Pages.User.Discover
             var narrowed = (Availability is not null ? 1 : 0) + FilterCount;
             var filter = new List<IUiComponent> { new Icon("filter", assets, 16) };
             if (narrowed > 0) filter.Add(new Span(new ValueText(narrowed.ToString(CultureInfo.CurrentCulture))).Class("capsule-bar__badge"));
+            // The filter row's More opens the filter when the row is there.
             var tools = new List<IUiComponent>
             {
-                Drawer.Opener(new Button(new Icon("sliders", assets, 16)).IconOnly(texts["discover.view.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "view"),
-                Drawer.Opener(new Button([.. filter]).IconOnly(texts["discover.filter.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "filter"),
-                new Drawer(assets, "discover-panel", [FilterPane(), ViewPane()])
+                Drawer.Opener(new Button(new Icon("sliders", assets, 16)).IconOnly(texts["discover.view.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "view")
             };
+            if (Offered is null || !string.IsNullOrWhiteSpace(Query))
+            {
+                tools.Add(Drawer.Opener(new Button([.. filter]).IconOnly(texts["discover.filter.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "filter"));
+            }
+
+            tools.Add(new Drawer(assets, "discover-panel", [FilterPane(), ViewPane()]));
             return new MediaTypeBar(assets, [.. Listed.Select(scope => scope.Slug)], [.. Chosen.Select(scope => scope.Slug)], "discover.type.", types => Address(Current with { Types = types, View = null, Sort = null, Filters = false, Page = 1 }), tools);
         }
 
