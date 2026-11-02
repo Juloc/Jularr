@@ -162,7 +162,11 @@ function initializeText(reader: HTMLElement, address: URL): void {
     highlights(reader, content, section);
     if (reader.dataset.query) findings(content, reader.dataset.query);
     initializeFigures(reader, content);
-    paging = initializePaperPages(reader, content, settings, () => report(false), () => bar?.refresh());
+    let translation: ReturnType<typeof translator> | undefined;
+    let moving = 0;
+    // A page turn or a scroll moves Mozilla's emergency window along, once per frame.
+    const moved = () => { cancelAnimationFrame(moving); moving = requestAnimationFrame(() => translation?.moved()); };
+    paging = initializePaperPages(reader, content, settings, () => report(false), () => { bar?.refresh(); moved(); });
     bar = initializeProgressBar(reader, { seek: share => paging!.seek(share), share: () => paging!.share() });
     paging.layout();
     marks = initializeBookmarks(reader, () => ({
@@ -188,7 +192,8 @@ function initializeText(reader: HTMLElement, address: URL): void {
     if (Number.isFinite(fraction)) void document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(() => { paging!.seek(Math.min(1, Math.max(0, fraction))); placed(); })));
 
     // Existing translation and annotation services remain the only data owners.
-    const translate = reader.dataset.localTranslationUrl ? translator(reader, content, createTranslationWorker) : undefined;
+    translation = reader.dataset.localTranslationUrl ? translator(reader, content, createTranslationWorker, () => paging!.ahead()) : undefined;
+    const translate = translation?.choose;
     const localModel = reader.dataset.localModel;
     const provider = reader.querySelector<HTMLElement>('[data-translation-provider]');
     const showProvider = () => {
