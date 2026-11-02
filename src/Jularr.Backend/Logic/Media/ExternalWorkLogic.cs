@@ -553,7 +553,8 @@ namespace Jularr.Backend.Logic.Media
                     found."Rating",
                     found."WorkId",
                     found."MediaStateTypeId",
-                    found."PlexUrl"
+                    found."PlexUrl",
+                    found."CatalogFormatId"
                 FROM
                     (
                         -- A title two catalogs know as one film (its IMDb id) shows once.
@@ -572,7 +573,8 @@ namespace Jularr.Backend.Logic.Media
                             work."Rating",
                             work."Id" AS "WorkId",
                             known."MediaStateTypeId",
-                            known."PlexUrl"
+                            known."PlexUrl",
+                            work."CatalogFormatId"
                         FROM
                             candidate
                             JOIN "Works" AS work ON work."Id" = candidate."Id"
