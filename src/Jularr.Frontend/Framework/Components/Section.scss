@@ -8,6 +8,9 @@
 
     h2 { margin: 0 0 12px; }
 
+    // Buttons placed straight in the card touch one another: their taps cannot grow beyond their boxes.
+    > .button { --hit-gap-x: 0px; --hit-gap-y: 0px; }
+
     // The heading with an action at its end.
     &__head {
         display: flex;

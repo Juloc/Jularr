@@ -70,3 +70,12 @@
     > :first-child { min-width: 0; flex: 1; }
     > .list-value { white-space: nowrap; flex: none; }
 }
+
+// A file left in the download, with why under its name.
+.activity-file-row--reason {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+
+    > .list-value { white-space: normal; }
+}
