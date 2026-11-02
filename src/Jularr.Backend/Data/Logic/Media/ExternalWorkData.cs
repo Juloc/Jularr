@@ -349,6 +349,17 @@ namespace Jularr.Backend.Data.Logic.Media
             PlexUrl = plexUrl;
         }
 
+        // A suggestion also names its first genre.
+        public ExternalWorkShelfItemData(int shelf, string @namespace, string value, string title, int? releaseYear, string? overview, string? creator, string? imageUrl,
+            string? backdropUrl, decimal? rating, long workId, MediaStateType? mediaStateTypeId, string? plexUrl, string? genre)
+            : this(shelf, @namespace, value, title, releaseYear, overview, creator, imageUrl, backdropUrl, rating, workId, mediaStateTypeId, plexUrl)
+        {
+            Genre = genre;
+        }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.Genres), false)]
+        public string? Genre { get; }
+
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Shelf))]
         public int Shelf { get; }
 

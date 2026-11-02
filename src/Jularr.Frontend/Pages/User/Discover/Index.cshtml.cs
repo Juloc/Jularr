@@ -443,8 +443,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             await LoadListedAsync();
             var found = await suggest.ExecuteAsync<BaseDataList<DiscoverSuggestionV1>>(new SuggestDiscoverDataV1(Query, Selected?.Slug), HttpContext.RequestAborted);
             var groups = found.Where(item => Chosen.Any(scope => scope.Slug == item.ScopeSlug)).GroupBy(item => item.ScopeSlug).Select(group => new Div([
-                new Div(new Icon(MediaAreas.Icons.GetValueOrDefault(group.Key, "search"), assets, 16), new Span(new Text("discover.type." + group.Key)).Class("app-search__type"),
-                    new A(new Text("common.seeAll")).Attribute("href", Address(Current with { Types = [group.Key], Page = 1 }))).Class("app-search__head"),
+                new Div(new Icon(MediaAreas.Icons.GetValueOrDefault(group.Key, "search"), assets, 16), new Span(new Text("discover.type." + group.Key)).Class("app-search__type")).Class("app-search__head"),
                 .. group.Select(Suggestion)]).Class("app-search__group"));
             var all = new A(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["search.all"], Query.Trim()))).Class("app-search__all").Attribute("href", Address(Current with { Page = 1 }));
             return Partial("_UiComponent", new Div([.. groups, all]).Class("app-search__results").Attribute("aria-label", texts["discover.suggestions"]));
@@ -455,10 +454,13 @@ namespace Jularr.Frontend.Pages.User.Discover
             IUiComponent poster = item.PosterUrl is { } url
                 ? new Img().Class("app-search__poster").Attribute("data-no-cover", "poster").Attribute("src", CoverPaths.Sized(url, 120)).Attribute("alt", "").Attribute("loading", "lazy")
                 : new NoCover(assets, NoCoverKind.Poster, "app-search__poster");
+            // Year · genre · rating as on the cards; whatever is unknown is left out.
             var facts = new List<IUiComponent>();
-            if (item.ReleaseYear is { } year) facts.Add(new ValueText(year.ToString(CultureInfo.InvariantCulture)));
+            if (item.ReleaseYear is { } year) facts.Add(new Span(new ValueText(year.ToString(CultureInfo.InvariantCulture))).Class("app-search__fact"));
+            if (item.Genre is { } genre) facts.Add(new Span(new ValueText(genre)).Class("app-search__fact"));
+            if (item.Rating is { } rating) facts.Add(new Span(new Icon("star", assets, 11), new ValueText(rating.ToString("0.0", CultureInfo.CurrentCulture))).Class("app-search__fact"));
             if (item.MediaStateTypeId == MediaStateType.Available) facts.Add(new Span(new Text("discover.known")).Class("app-search__known"));
-            return new A(poster, new Span(new Strong([.. Highlighted(item.Title)]), new Span([.. facts])).Class("app-search__text"))
+            return new A(poster, new Span(new Strong([.. Highlighted(item.Title)]), new Span([.. facts]).Class("app-search__facts")).Class("app-search__text"))
                 .Class("app-search__hit").Attribute("href", "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture));
         }
 

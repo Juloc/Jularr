@@ -154,8 +154,6 @@
         gap: 8px;
         padding: 6px 8px;
         color: var(--accent-text);
-
-        a { margin-left: auto; color: var(--muted); font-size: var(--text-small); text-decoration: none; &:hover, &:focus-visible { color: var(--accent-text); } }
     }
 
     &__type { color: var(--text); font-size: var(--text-control); font-weight: 750; }
@@ -183,8 +181,11 @@
 
         strong { overflow: hidden; font-size: 15px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
         mark { background: none; color: var(--accent-text); font-weight: 800; }
-        span { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
     }
+
+    &__facts { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+    &__fact { display: inline-flex; align-items: center; gap: 3px; }
+    &__fact + &__fact::before { content: "·"; margin-right: 3px; }
 
     &__known { padding: 1px 8px; border-radius: var(--radius-control); background: var(--accent-soft); color: var(--accent-text); font-weight: 650; }
 

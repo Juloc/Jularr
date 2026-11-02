@@ -472,6 +472,7 @@ namespace Jularr.Backend.Logic.Media
 
         // Suggestions while typing, grouped by type: each type ranks its titles by how well the title matches (the typed title, then one that begins with it,
         // then any other), then titles in the library, trending and the most popular; the type with the best match comes first, a title two catalogs know shows once.
+        // Each names its first genre where details gave one.
         public static async Task<IReadOnlyList<ExternalWorkShelfItemData>> SuggestExternalWorksAsync(this LogicContext ctx, ExternalWorkSuggestionQueryData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -521,7 +522,8 @@ namespace Jularr.Backend.Logic.Media
                     found."Rating",
                     found."WorkId",
                     found."MediaStateTypeId",
-                    found."PlexUrl"
+                    found."PlexUrl",
+                    found."Genre"
                 FROM
                     (
                         -- A title two catalogs know as one film (its IMDb id) shows once.
@@ -541,7 +543,19 @@ namespace Jularr.Backend.Logic.Media
                             work."Rating",
                             work."Id" AS "WorkId",
                             known."MediaStateTypeId",
-                            known."PlexUrl"
+                            known."PlexUrl",
+                            (
+                                SELECT
+                                    nullif(btrim(split_part(fact."Value", ',', 1)), '')
+                                FROM
+                                    "WorkMetadataFacts" AS fact
+                                WHERE
+                                    fact."WorkId" = work."Id"
+                                    AND fact."FactKey" = 'Genres'
+                                ORDER BY
+                                    fact."IsManual" DESC
+                                LIMIT 1
+                            ) AS "Genre"
                         FROM
                             candidate
                             JOIN "Works" AS work ON work."Id" = candidate."Id"

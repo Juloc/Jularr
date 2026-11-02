@@ -441,6 +441,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES
                     (603, 'tmdb_movie', '603'), (604, 'tmdb_movie', '604'), (700, 'tmdb_movie', '700'), (701, 'tmdb_movie', '701'), (702, 'tmdb_movie', '702'), (703, 'tmdb_movie', '703'),
                     (704, 'tmdb_movie', '704'), (9021, 'anilist', '21'), (9022, 'anilist', '22'), (603, 'imdb', 'tt0133093'), (604, 'imdb', 'tt0234215');
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (603, 'Genres', 'Action, Science Fiction', TRUE);
                 """);
 
             // The whole catalogs answer all their shelves at once; series still come from TMDB and are not among them.
@@ -482,6 +483,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("Matrix|The Matrix Anime|The Matrix|The Matrix Reloaded", string.Join("|", suggestions.Select(item => item.Title)));
             Assert.AreEqual("anime|anime|movies|movies", string.Join("|", suggestions.Select(item => item.ScopeSlug)));
             Assert.AreEqual(MediaStateType.Requested, suggestions[2].MediaStateTypeId);
+            Assert.AreEqual("Action", suggestions[2].Genre);
+            Assert.AreEqual(8.7m, suggestions[2].Rating);
+            Assert.IsNull(suggestions[3].Genre);
 
             // The typed title itself comes first in its type.
             using var exact = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("the matrix"));
