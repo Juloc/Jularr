@@ -57,7 +57,7 @@ namespace Jularr.E2E.Tests
                 // The user menu has one link per administration area, each opening its first page at once; there an entry does the same.
                 await page.Locator(".sidebar-secondary .nav-link", new() { HasText = "System" }).ClickAsync();
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/System$"));
-                await page.Locator(".app-sidebar--admin .menu-entry", new() { HasText = "Media" }).ClickAsync();
+                await page.Locator(".app-sidebar--admin .menu-entry", new() { HasText = "Works" }).First.ClickAsync();
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/Works$"));
 
                 // The calendar shows its month, switches to the week and the day in place, and opens its filter as a dialog.
