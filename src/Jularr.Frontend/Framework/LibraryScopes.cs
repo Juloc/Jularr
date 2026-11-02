@@ -24,15 +24,19 @@ namespace Jularr.Frontend.Framework
 
     public sealed record LibraryScope(string Slug, MediaType? Type, MediaSubtype? Subtype);
 
-    // The media types of an address (`type=a,b` or repeated) against the types the profile lists: which are chosen, whether that is all of them,
-    // and the type and subtype filters a list read takes. Without the profile's media (not read yet) every slug of the address counts as chosen.
-    public sealed class ScopeSelection(IEnumerable<string> requested, IReadOnlyList<ProfileMediaV1>? media)
+    // The media types of an address (`type=a,b` or repeated) against the types listed (the profile's, or every type in the administration): which are chosen,
+    // whether that is all of them, and the type and subtype filters a list read takes. Before the listed types are known every slug of the address counts as chosen.
+    public sealed class ScopeSelection(IEnumerable<string> requested, IReadOnlyList<LibraryScope>? listed)
     {
+        public ScopeSelection(IEnumerable<string> requested, IReadOnlyList<ProfileMediaV1>? media) : this(requested, media is null ? null : LibraryScopes.Listed(media).Where(scope => scope.Slug != "all").ToList())
+        {
+        }
+
         // The slugs of the address, whatever the profile lists.
         public IReadOnlyList<string> Picked { get; } = [.. requested.SelectMany(type => type.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Where(slug => slug != "all" && LibraryScopes.All.Any(scope => scope.Slug == slug)).Distinct()];
 
-        public IReadOnlyList<LibraryScope> Listed { get; } = media is null ? [] : [.. LibraryScopes.Listed(media).Where(scope => scope.Slug != "all")];
+        public IReadOnlyList<LibraryScope> Listed { get; } = listed ?? [];
 
         // The listed types asked for, or every listed type.
         public IReadOnlyList<LibraryScope> Chosen => Listed.Where(scope => Picked.Contains(scope.Slug)).ToList() is { Count: > 0 } picked ? picked : Listed;
@@ -49,7 +53,7 @@ namespace Jularr.Frontend.Framework
 
         // The address value of some types: none for all of them (once the profile's types are known).
         public string? Parameter(IReadOnlyList<string> types) =>
-            types.Count == 0 || media is not null && Listed.All(scope => types.Contains(scope.Slug)) ? null : string.Join(',', types);
+            types.Count == 0 || listed is not null && Listed.All(scope => types.Contains(scope.Slug)) ? null : string.Join(',', types);
     }
 
     // The release years a personal list can be narrowed to: since 2020 or before.

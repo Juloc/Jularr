@@ -526,7 +526,8 @@ html[data-skin="original"] .sidebar-secondary {
     .app-avatar { width: 31px; height: 31px; }
     // The header's own taps: 44px high in the 65px bar and as wide as the 8px gaps of the row allow (the buttons come from Button).
     .app-header { --hit-gap-x: 8px; }
-    .app-notifications, .app-search { @include HitArea.hit-area(8px, 26px); }
+    // The search's tap is its icon's (the label that opens the field): an overlay on the pill itself would take the tap from the label.
+    .app-notifications, .app-search__icon { @include HitArea.hit-area(8px, 26px); }
     .app-avatar { @include HitArea.hit-area(8px, 26px, $border: 3px); }
     // The trail scrolls and so clips what leaves it: it is as high as the tap of its links, and the negative margin keeps the header as it was.
     .breadcrumb { margin-block: -13px; padding-block: 13px; font-size: var(--text-control); }
