@@ -100,15 +100,19 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   and available discovery capabilities. A disabled/hidden type must disappear
   from the media-type bar, its browse views, Hero candidates and shelves.
   `All` contains only eligible types and cannot silently include disabled
-  provider results. Books, Light Novels and Manga remain distinct.
+  provider results. Books, Light Novels and Manga remain distinct. Owner's decision 2 Nov: every type stands strictly apart, in the type
+  filter, the Continue shelves, Recently added and the highlights: series without anime, books without manga and light novels, and a Work
+  belongs to the type of its subtype (an anime film is anime).
 - Discover separates media-type scope, browse view and filters. Its All
   landing has a shared Hero/Continue followed by per-enabled-type shelves
   in the approved order; only provider-supported rankings may appear. A ranking
   opens from its shelf's See all and names itself with a way back. Owner's mockup of 19 Oct
   ("capsules"): one capsule row (All, then Watch, Read, Hear and Game with their types; several
   types may be chosen, `type=a,b`) with the Customize and Filter drawers at its end, the highlights
-  as one carousel (continued titles first, then each type's best by rank, series from Discover's series list; the device keeps how many
-  and whether it turns by itself), feed chips, sort and a rows/grid switch. The header owns the **one**
+  as one carousel that always keeps its place (with nothing to show, the shared landscape and *No highlights yet*): for each chosen type its
+  continued titles, then its best by rank (series from Discover's series list), then what the library added last, each title once; the types
+  take turns place by place, and a type with fewer titles shows fewer. The device keeps how many per type (1–5, standard 3; no overall
+  maximum), whether continued titles count and whether it turns by itself), feed chips, sort and a rows/grid switch. The header owns the **one**
   global Search; do not add another search field inside Discover. The Filter drawer lists the media types first, then the local availability
   (in Jularr, can be requested), then only what the chosen types have: the release year and their rankings; the rankings a chosen
   type lacks leave the panel as the types change. No genre, platform, language, runtime or rating facets exist yet (Discover's

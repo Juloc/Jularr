@@ -4126,21 +4126,9 @@
    "Highlights per type",
    "Highlights pro Medientyp"
   ],
-  "discover.hero.perType.1": [
-   "1 title",
-   "1 Titel"
-  ],
-  "discover.hero.perType.2": [
-   "2 titles",
-   "2 Titel"
-  ],
-  "discover.hero.perType.3": [
-   "3 titles",
-   "3 Titel"
-  ],
-  "discover.hero.max": [
-   "Maximum highlights",
-   "Maximale Highlights"
+  "discover.hero.empty": [
+   "No highlights yet",
+   "Noch keine Highlights"
   ],
   "discover.hero.continue": [
    "Include continue",
