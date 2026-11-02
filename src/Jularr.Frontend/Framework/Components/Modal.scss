@@ -11,7 +11,7 @@
     overflow: hidden;
 
     &[open] { display: flex; flex-direction: column; }
-    &::backdrop { background: var(--scrim); }
+    &::backdrop { background: var(--scrim); backdrop-filter: blur(4px); }
 
     &__head {
         display: flex;
