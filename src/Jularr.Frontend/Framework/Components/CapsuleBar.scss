@@ -141,14 +141,14 @@
     .capsule-group__master span { display: none; }
 }
 
-// Narrow: all and one icon per area; single types are chosen in the filter.
+// Narrow: all and one icon per area; single types are chosen in the filter. A single-choice bar has no filter, so it keeps its types and scrolls.
 @container capsule-bar (max-width: 929px) {
-    .capsule-bar__row { gap: 5px; padding: 6px 5px; }
-    .capsule-bar__areas { flex: 1 1 auto; justify-content: space-between; gap: 3px; overflow: visible; }
-    .capsule-bar__all { flex: 0 0 44px; min-width: 44px; min-height: 38px; padding: 0; svg { display: none; } }
-    .capsule-group { flex: 0 0 38px; justify-content: center; width: 38px; min-height: 38px; padding: 2px; }
-    .capsule-group__divider, .capsule-group__item { display: none; }
-    .capsule-group__master {
+    .capsule-bar:not(.capsule-bar--single) .capsule-bar__row { gap: 5px; padding: 6px 5px; }
+    .capsule-bar:not(.capsule-bar--single) .capsule-bar__areas { flex: 1 1 auto; justify-content: space-between; gap: 3px; overflow: visible; }
+    .capsule-bar:not(.capsule-bar--single) .capsule-bar__all { flex: 0 0 44px; min-width: 44px; min-height: 38px; padding: 0; svg { display: none; } }
+    .capsule-bar:not(.capsule-bar--single) .capsule-group { flex: 0 0 38px; justify-content: center; width: 38px; min-height: 38px; padding: 2px; }
+    .capsule-bar:not(.capsule-bar--single) .capsule-group__divider, .capsule-bar:not(.capsule-bar--single) .capsule-group__item { display: none; }
+    .capsule-bar:not(.capsule-bar--single) .capsule-group__master {
         width: 32px;
         min-height: 32px;
         padding: 0;
@@ -157,5 +157,5 @@
         &--included { background: var(--accent-soft); }
         &--partial::after { content: ""; position: absolute; right: 2px; bottom: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--capsule-fill); }
     }
-    .capsule-bar__tools { gap: 3px; }
+    .capsule-bar:not(.capsule-bar--single) .capsule-bar__tools { gap: 3px; }
 }

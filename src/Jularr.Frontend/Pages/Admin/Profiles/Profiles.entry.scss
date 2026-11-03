@@ -3,13 +3,13 @@
 // The list kit's grid of the quality rule panes, at three widths.
 .profiles-list {
     --list-columns: minmax(220px, 2.6fr) minmax(112px, 1fr) minmax(120px, 1.1fr) minmax(95px, .8fr) minmax(80px, .7fr) minmax(60px, .5fr);
-    --list-columns-medium: minmax(200px, 2.2fr) minmax(112px, 1fr) minmax(120px, 1.1fr) minmax(60px, .5fr);
+    --list-columns-medium: minmax(200px, 2.2fr) minmax(112px, 1fr) minmax(95px, .8fr) minmax(80px, .7fr) minmax(60px, .5fr);
     --list-columns-narrow: minmax(180px, 2fr) minmax(112px, 1fr) minmax(60px, .5fr);
 }
 
 .formats-list {
     --list-columns: minmax(220px, 2.6fr) minmax(112px, 1fr) minmax(95px, .8fr) minmax(95px, .8fr) minmax(80px, .7fr) minmax(60px, .5fr);
-    --list-columns-medium: minmax(200px, 2.2fr) minmax(112px, 1fr) minmax(95px, .8fr) minmax(60px, .5fr);
+    --list-columns-medium: minmax(200px, 2.2fr) minmax(112px, 1fr) minmax(95px, .8fr) minmax(80px, .7fr) minmax(60px, .5fr);
     --list-columns-narrow: minmax(180px, 2fr) minmax(112px, 1fr) minmax(60px, .5fr);
 }
 

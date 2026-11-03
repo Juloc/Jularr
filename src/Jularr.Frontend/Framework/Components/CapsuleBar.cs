@@ -47,7 +47,7 @@ namespace Jularr.Frontend.Framework
 
             var bar = new List<IUiComponent> { new Nav([.. capsules]).Class("capsule-bar__areas").Attribute("aria-label", texts[ariaLabelKey]) };
             if (tools is { Count: > 0 }) bar.Add(new Div([.. tools]).Class("capsule-bar__tools"));
-            new Div(new Div([.. bar]).Class("capsule-bar__row")).Class("capsule-bar").WriteTo(writer, encoder, texts);
+            new Div(new Div([.. bar]).Class("capsule-bar__row")).Class(hasAll ? "capsule-bar" : "capsule-bar capsule-bar--single").WriteTo(writer, encoder, texts);
         }
     }
 }
