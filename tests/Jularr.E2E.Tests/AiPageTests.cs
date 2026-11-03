@@ -7,11 +7,25 @@ namespace Jularr.E2E.Tests
     public sealed class AiPageTests
     {
         // A stand-in for the CLI: it signs in once the test creates `approve`.
-        private const string Cli = """
+        internal const string Cli = """
             #!/bin/sh
             case "$1" in
               --version) echo "codex-cli 0.166.0" ;;
               logout) rm -f "$CODEX_HOME/auth" ;;
+              exec)
+                prompt=$(cat)
+                while [ $# -gt 0 ]; do
+                  case "$1" in
+                    -o) out="$2"; shift ;;
+                    -m) model="$2"; shift ;;
+                  esac
+                  shift
+                done
+                case "$prompt" in
+                  *'[[1]]'*) printf '%s\n' "$prompt" | awk -v m="$model" '/^\[\[[0-9]+\]\]$/ { print; getline; print "Codex " m ": " $0; print "" }' > "$out" ;;
+                  *) printf 'Codex %s: %s' "$model" "$(printf '%s' "$prompt" | tail -n 1)" > "$out" ;;
+                esac
+                printf '{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":50}}\n' ;;
               app-server)
                 while IFS= read -r line; do
                   id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')

@@ -285,6 +285,47 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Retranslate_ASectionWithCodex_ShowsToEveryReader_WhileOllamaStaysTheDefault()
+        {
+            using var storage = new TemporaryDirectory();
+            using var codex = new CodexTranslationTests.Folder();
+            codex.SignIn();
+            var ollama = new FakeOllama();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
+                settings: new Dictionary<string, string> { ["LocalTranslation:Endpoint"] = "http://ollama:11434", ["Ai:CodexPath"] = codex.Executable, ["Ai:CodexHome"] = codex.Home },
+                services: services => services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => ollama));
+            var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var document = await ReadingTests.OpenAsync(host, first);
+            await PrepareGermanReadersAsync(host);
+            await using var scope = host.Services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<CodexConnection>().ReadCatalogAsync(default);
+            var url = "/api/v1/reading/documents/" + document.DocumentId + "/sections/0/local-translations/de/codex:gpt-test/retranslate";
+
+            using var done = await host.SendAsync(HttpMethod.Post, url, new LocalReadingBlockDataV1("en"));
+            Assert.AreEqual(HttpStatusCode.OK, done.StatusCode, await done.Content.ReadAsStringAsync());
+            var result = (await done.Content.ReadFromJsonAsync<LocalReadingRetranslationV1>(JsonSerializerOptions.Web))!;
+            Assert.IsTrue(result.Translated > 0 && result.Kept == 0, result.Translated + "/" + result.Kept);
+            Assert.AreEqual(1, File.ReadAllLines(Path.Combine(codex.Home, "asked")).Length, "the chapter in one request");
+            Assert.AreEqual((long)result.Translated, await host.ScalarAsync("SELECT count(*) FROM \"ReadingTranslationChoices\" WHERE \"ReadingDocumentId\" = " + document.DocumentId + " AND \"Model\" = 'codex:gpt-test'"));
+
+            // Ollama is still the default, and the Reader shows the Codex text for the blocks chosen, each marked with its model.
+            var shown = await ReadSectionAsync(host, document.DocumentId, 0);
+            Assert.IsTrue(shown.Models.Count(model => model == "codex:gpt-test") == result.Translated, string.Join(",", shown.Models));
+            StringAssert.Contains(shown.Blocks, "Translated by gpt-test:");
+
+            // Again: the new texts replace the earlier ones, and nothing is added twice.
+            using var again = await host.SendAsync(HttpMethod.Post, url, new LocalReadingBlockDataV1("en"));
+            Assert.AreEqual(HttpStatusCode.OK, again.StatusCode);
+            Assert.AreEqual((long)result.Translated, await host.ScalarAsync("SELECT count(*) FROM \"ReadingTranslationChoices\" WHERE \"ReadingDocumentId\" = " + document.DocumentId));
+
+            // A model nobody offers, or a plan limit, changes nothing.
+            using var unknown = await host.SendAsync(HttpMethod.Post, url.Replace("codex:gpt-test", "codex:made-up"), new LocalReadingBlockDataV1("en"));
+            Assert.AreNotEqual(HttpStatusCode.OK, unknown.StatusCode);
+            using var limited = await host.SendAsync(HttpMethod.Post, url.Replace("gpt-test", "broken"), new LocalReadingBlockDataV1("en"));
+            Assert.AreNotEqual(HttpStatusCode.OK, limited.StatusCode);
+        }
+
+        [TestMethod]
         public async Task Job_ABookInAnUnknownLanguage_IsSkippedEvenWhenItIsBeingRead()
         {
             using var storage = new TemporaryDirectory();

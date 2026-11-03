@@ -277,3 +277,13 @@
         }
     }
 }
+
+// The Owner's re-translation with Codex: its Stop button waits hidden until a run starts, and the title sits apart from the language choices.
+.reader__codex {
+    display: grid;
+    gap: 8px;
+    margin-top: 8px;
+
+    .reader__panel-title { margin: 0; color: var(--muted); font-weight: 650; }
+    [hidden] { display: none; }
+}

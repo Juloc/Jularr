@@ -128,4 +128,23 @@ namespace Jularr.Backend.Data.Logic.Reading
         [DataField(typeof(TranslationFields), nameof(TranslationFields.Cache))]
         public string? Cache { get; }
     }
+
+    // The blocks of a section (a JSON array of their indexes) that show one model's translation to every reader.
+    internal sealed class ReadingTranslationChoiceWriteData(long documentId, int sectionIndex, string language, string model, string blocks) : BaseData
+    {
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; } = documentId;
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex))]
+        public int SectionIndex { get; } = sectionIndex;
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Language))]
+        public string Language { get; } = language;
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Name))]
+        public string Model { get; } = model;
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Blocks))]
+        public string Blocks { get; } = blocks;
+    }
 }
