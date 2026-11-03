@@ -5393,6 +5393,10 @@
    "Nothing found",
    "Nichts gefunden"
   ],
+  "acquisition.outcome.feed_release": [
+   "A new release in an indexer feed",
+   "Neues Release im Indexer-Feed"
+  ],
   "acquisition.outcome.indexers_unavailable": [
    "Indexers unavailable",
    "Indexer nicht verfügbar"
@@ -11841,6 +11845,10 @@
    "Wanted search",
    "Suche nach Gesuchtem"
   ],
+  "jobs.job.feedSync": [
+   "Indexer feeds",
+   "Indexer-Feeds"
+  ],
   "jobs.job.providerSync": [
    "Provider sync",
    "Anbieter-Abgleich"
@@ -12445,6 +12453,10 @@
   "jobs.about.wantedSearch": [
    "Looks for new releases of monitored titles, seasons and single episodes.",
    "Sucht neue Releases für überwachte Titel, Staffeln und einzelne Folgen."
+  ],
+  "jobs.about.feedSync": [
+   "Every 15 minutes: reads the newest releases of each indexer. A new release about a monitored title makes that title searched at once.",
+   "Alle 15 Minuten: liest die neuesten Releases jedes Indexers. Ein neues Release zu einem überwachten Titel lässt diesen Titel sofort suchen."
   ],
   "jobs.about.providerSync": [
    "Reads the connected media servers and shares their progress. It saves resources while Jularr is used.",

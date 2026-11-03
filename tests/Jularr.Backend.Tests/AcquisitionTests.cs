@@ -3658,6 +3658,218 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(await limited.Content.ReadAsStringAsync(), "acquisition_query_limit_reached");
         }
 
+        // The feed (RSS) of an indexer only triggers: a new release about a wanted title makes it due, the search and its selection do the rest.
+        [TestMethod]
+        public async Task Feed_NewReleaseOfAWantedMovie_MakesItDue_AndAReleaseSeenBeforeIsNotReprocessedAfterARestart()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var wantedId = await CreateWantedMovieAsync(host);
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = now() + interval '7 days'");
+            async Task<bool> IsDueAsync() => (bool)(await host.ScalarAsync("SELECT \"NextSearchAt\" <= now() FROM \"WantedItems\" WHERE \"Id\" = " + wantedId))!;
+
+            // The first read of an indexer only learns what is there: its releases are seen, nothing is searched.
+            usenet.Results = FeedOf(("Example.Movie.2020.1080p.WEB-DL.H264-OLD", "old"));
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.IsFalse(await IsDueAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"FeedReleases\""));
+            Assert.AreEqual(1, await host.ScalarAsync("SELECT \"QueryCount\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Indexer'"));
+
+            // A new release of another title leaves the target alone; one of its own makes it due, with the reason.
+            usenet.Results = FeedOf(("Example.Movie.2020.1080p.WEB-DL.H264-OLD", "old"), ("Unrelated.Film.2021.1080p.WEB-DL.H264-GRP", "other"));
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.IsFalse(await IsDueAsync());
+            usenet.Results = FeedOf(("Example.Movie.2020.1080p.WEB-DL.H264-OLD", "old"), ("Unrelated.Film.2021.1080p.WEB-DL.H264-GRP", "other"), (Feature, "feature"));
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.IsTrue(await IsDueAsync());
+            Assert.AreEqual("feed_release", await host.ScalarAsync("SELECT \"LastOutcomeKey\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId));
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"FeedReleases\""));
+
+            // A restart does not reprocess what was seen: the same feed leaves the target as it is.
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = now() + interval '7 days', \"LastOutcomeKey\" = NULL");
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.IsFalse(await IsDueAsync());
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"FeedReleases\""));
+
+            // Seen releases leave after 14 days; the feed is not searched for them again.
+            await host.Fixture.RunSqlAsync("UPDATE \"FeedReleases\" SET \"SeenAt\" = now() - interval '15 days' WHERE \"ReleaseKey\" = 'old'");
+            usenet.Results = FeedOf(("Unrelated.Film.2021.1080p.WEB-DL.H264-GRP", "other"), (Feature, "feature"));
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"FeedReleases\" WHERE \"ReleaseKey\" = 'old'"));
+
+            // The search takes the release the feed pointed to.
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = now()");
+            usenet.Results = null;
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(1, usenet.Grabbed.Count);
+        }
+
+        // A feed read counts as a request: limits and backoff apply, manual-only indexers and indexers of other media are left out.
+        [TestMethod]
+        public async Task Feed_ReadsLikeAnAutomaticSearch_ManualOnlyAndOtherMediaAreLeftOut_FailureBacksOff_AndTheLimitHolds()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"IsEnabled\" = FALSE WHERE \"Name\" = 'Indexer'");
+            foreach (var data in new[]
+            {
+                new SaveAcquisitionConnectionDataV1("Broken", AcquisitionConnectionType.Newznab, "https://broken.example.test/", FakeUsenet.IndexerKey, true, 20, [], null, null, null),
+                new SaveAcquisitionConnectionDataV1("Books", AcquisitionConnectionType.Newznab, "https://books.example.test/", FakeUsenet.IndexerKey, true, 20, [7020], null, null, null,
+                    mediaTypeIds: [(int)MediaType.Book]),
+                new SaveAcquisitionConnectionDataV1("Manual", AcquisitionConnectionType.Newznab, "https://manual.example.test/", FakeUsenet.IndexerKey, true, 20, [], null, null, null,
+                    searchesAutomatically: false),
+                new SaveAcquisitionConnectionDataV1("Open", AcquisitionConnectionType.Newznab, "https://open.example.test/", null, true, 20, [], null, null, null, queryLimit: 1)
+            })
+            {
+                using var created = await host.SendAsync(HttpMethod.Post, Connections, data);
+                Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            }
+
+            int Asked(string name)
+            {
+                lock (usenet.IndexerHosts) return usenet.IndexerHosts.Count(asked => asked == name + ".example.test");
+            }
+
+            async Task<object?> ColumnAsync(string name, string column) =>
+                await host.ScalarAsync($"SELECT \"{column}\" FROM \"AcquisitionConnections\" WHERE \"Name\" = '{name}'");
+
+            usenet.Results = FeedOf((Feature, "feature"));
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.AreEqual(0, Asked("manual"));
+            Assert.AreEqual(0, Asked("books"));
+            Assert.AreEqual(1, Asked("open"));
+            Assert.AreEqual(1, Asked("broken"));
+
+            // The failing indexer backs off and is not asked again; the one at its daily limit is not either.
+            Assert.AreEqual(1, await ColumnAsync("Broken", "FailureCount"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" > now() + interval '50 seconds' FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Broken'"));
+            Assert.AreEqual(1, await ColumnAsync("Open", "QueryCount"));
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.AreEqual(1, Asked("broken"));
+            Assert.AreEqual(1, Asked("open"));
+            Assert.AreEqual(0, await ColumnAsync("Books", "QueryCount"));
+        }
+
+        // A target is searched after a week when the indexers have feeds, and as before when none has one.
+        [TestMethod]
+        public async Task Search_NothingFound_WaitsAWeekWithAFeed_AndTheEarlierRhythmWithout()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet { Results = "<rss><channel></channel></rss>" };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var wantedId = await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" BETWEEN now() + interval '6 days 23 hours' AND now() + interval '7 days 1 hour' FROM \"WantedItems\" WHERE \"Id\" = " + wantedId));
+
+            // Without an indexer that has a feed (manual-only) the earlier rhythm stays, so the title is not left without a search.
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"SearchesAutomatically\" = TRUE, \"MediaTypeIds\" = '{3}' WHERE \"Name\" = 'Indexer'");
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = NULL");
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" IS NULL OR \"NextSearchAt\" < now() + interval '1 day' FROM \"WantedItems\" WHERE \"Id\" = " + wantedId));
+        }
+
+        [TestMethod]
+        public void Backoff_MoviesAndSeriesWithAFeedWaitAWeek_BooksOneSearchADaySpreadOverTheDay_OthersKeepTheEarlierRhythm()
+        {
+            var feed = Indexer(1, AcquisitionConnectionType.Newznab, []);
+            var manualOnly = Indexer(2, AcquisitionConnectionType.Newznab, [], searchesAutomatically: false);
+            var books = Indexer(3, AcquisitionConnectionType.Newznab, [(int)MediaType.Book]);
+            Assert.AreEqual(TimeSpan.FromDays(7), SearchDueWantedV1.Backoff(MediaType.Movie, 10, 0, [feed]));
+            Assert.AreEqual(TimeSpan.FromDays(7), SearchDueWantedV1.Backoff(MediaType.Series, 10, 5, [manualOnly, feed]));
+
+            // No feed: movies and series are not left without a search.
+            Assert.AreEqual(TimeSpan.FromHours(6), SearchDueWantedV1.Backoff(MediaType.Series, 10, 0, [manualOnly, books]));
+            Assert.AreEqual(TimeSpan.FromHours(12), SearchDueWantedV1.Backoff(MediaType.Movie, 10, 1, []));
+            Assert.AreEqual(TimeSpan.FromHours(24), SearchDueWantedV1.Backoff(MediaType.Movie, 10, 4, [books]));
+
+            // Books and manga: a day and a fixed offset from the target's number, never less than a day, never more than two.
+            var one = SearchDueWantedV1.Backoff(MediaType.Book, 1, 0, [feed]);
+            var other = SearchDueWantedV1.Backoff(MediaType.Book, 700, 9, [feed]);
+            Assert.AreEqual(TimeSpan.FromHours(24) + TimeSpan.FromMinutes(1), one);
+            Assert.AreEqual(TimeSpan.FromHours(24) + TimeSpan.FromMinutes(700), other);
+            Assert.IsTrue(Enumerable.Range(1, 5000).All(id => SearchDueWantedV1.Backoff(MediaType.Book, id, 0, []) is { } wait && wait >= TimeSpan.FromHours(24) && wait < TimeSpan.FromHours(48)));
+        }
+
+        // When a missing episode or movie has had its release day and the feed found nothing, one search runs; the day's end counts, as releases come out during the day.
+        [TestMethod]
+        public async Task ReleaseDay_NextSearchOfAMissingEpisodeOrMovie_IsTheEndOfItsDay()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Series, "Show"));
+            var series = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+            using var movie = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Movie, "Film", 2030));
+            var film = (await movie.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number") VALUES ({series}, 1, 1);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "ReleasedOn", "IsMonitored")
+                SELECT {series}, season."Id", 2, episode."Number", current_date + episode."Number", episode."Number" <> 5
+                FROM "WorkUnits" AS season CROSS JOIN generate_series(1, 5) AS episode ("Number") WHERE season."WorkId" = {series} AND season."WorkUnitTypeId" = 1;
+                UPDATE "Works" SET "ReleasedOn" = current_date + 40 WHERE "Id" = {film};
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (710, {series}), (711, {film});
+                """);
+
+            async Task<DateTime?> NextAsync(long wantedId, DateTime now)
+            {
+                await using var sql = new SqlContext(host.Fixture.Database);
+                await sql.BeginAsync(SqlAccessMode.ReadOnly);
+                return await new LogicContext(sql).ReadNextReleaseDayAsync(new WantedReleaseDayData(wantedId, now), default);
+            }
+
+            // The episode that airs tomorrow is searched the day after tomorrow at 06:00 UTC; the unmonitored one never counts, and the movie waits for its own day.
+            var tomorrow = DateTime.UtcNow.Date.AddDays(1);
+            Assert.AreEqual(tomorrow.AddHours(30), await NextAsync(710, DateTime.UtcNow));
+            Assert.AreEqual(DateTime.UtcNow.Date.AddDays(40).AddHours(30), await NextAsync(711, DateTime.UtcNow));
+
+            // Once that moment has passed the next episode's day follows; with no later day there is none.
+            Assert.AreEqual(tomorrow.AddDays(1).AddHours(30), await NextAsync(710, tomorrow.AddHours(31)));
+            Assert.IsNull(await NextAsync(710, DateTime.UtcNow.Date.AddDays(10)));
+        }
+
+        [TestMethod]
+        public void FeedMatcher_MapsReleasesToTargetsByProviderIdsThenByTitle()
+        {
+            FeedTargetData Target(long id, MediaType type, string title, params string[] identities) => new(id, type, title, [], identities);
+            var show = Target(1, MediaType.Series, "Example Show", "tvdb:81189", "imdb:tt0903747");
+            var otherShow = Target(2, MediaType.Series, "Another Show", "tvdb:555");
+            var anime = new FeedTargetData(3, MediaType.Series, "Hello, I am a Witch", ["Majo to Watashi"], []);
+            var film = Target(4, MediaType.Movie, "Example Movie", "tmdb_movie:603", "imdb:tt0133093");
+            var untouched = Target(5, MediaType.Movie, "Unrelated Film");
+            IReadOnlyList<FeedTargetData> targets = [show, otherShow, anime, film, untouched];
+            long[] Ids(FeedEntry entry) => [.. FeedMatcher.Match(entry, targets).Select(target => target.WantedItemId)];
+
+            // The ids the indexer names decide, with or without "tt" and leading zeros; a different id is no match even when the title fits.
+            CollectionAssert.AreEqual(new long[] { 1 }, Ids(new FeedEntry("Some.Other.Name.S01E01.1080p.WEB-DL.H264-GRP", 5040, "81189", null, null)));
+            CollectionAssert.AreEqual(new long[] { 1 }, Ids(new FeedEntry("Some.Other.Name.S01E01.1080p.WEB-DL.H264-GRP", 5040, null, null, "0903747")));
+            CollectionAssert.AreEqual(Array.Empty<long>(), Ids(new FeedEntry("Example.Show.S01E01.1080p.WEB-DL.H264-GRP", 5040, "999", null, null)));
+            CollectionAssert.AreEqual(new long[] { 4 }, Ids(new FeedEntry("Whatever.1999.1080p.BluRay.x264-GRP", 2040, null, "603", null)));
+
+            // Without ids the series title of the parsed release name decides; the type comes from the category, or from the name without one.
+            CollectionAssert.AreEqual(new long[] { 1 }, Ids(new FeedEntry("Example.Show.S02E05.1080p.WEB-DL.H264-GRP", 5030, null, null, null)));
+            CollectionAssert.AreEqual(new long[] { 1 }, Ids(new FeedEntry("Example.Show.S02E05.1080p.WEB-DL.H264-GRP", null, null, null, null)));
+            CollectionAssert.AreEqual(new long[] { 4 }, Ids(new FeedEntry("Example.Movie.1999.1080p.BluRay.x264-GRP", null, null, null, null)));
+            CollectionAssert.AreEqual(Array.Empty<long>(), Ids(new FeedEntry("Example.Movie.1999.1080p.BluRay.x264-GRP", 5000, null, null, null)));
+
+            // Anime names: a group in front, the number behind the title, a known second title.
+            CollectionAssert.AreEqual(new long[] { 3 }, Ids(new FeedEntry("[SubGroup] Hello, I am a Witch - 02 [1080p]", null, null, null, null)));
+            CollectionAssert.AreEqual(new long[] { 3 }, Ids(new FeedEntry("[SubGroup] Majo to Watashi - 02 [1080p]", 5070, null, null, null)));
+            CollectionAssert.AreEqual(Array.Empty<long>(), Ids(new FeedEntry("[SubGroup] Something Else Entirely - 02 [1080p]", 5070, null, null, null)));
+        }
+
+        private static string FeedOf(params (string Title, string Guid)[] releases) =>
+            "<rss xmlns:newznab=\"http://www.newznab.com/DTD/2010/feeds/attributes/\"><channel>"
+            + string.Concat(releases.Select(release => $"<item><title>{release.Title}</title><guid>{release.Guid}</guid><pubDate>Mon, 05 Oct 2026 10:00:00 +0000</pubDate><enclosure url=\"/getnzb/{release.Guid}\" length=\"2000000000\" /></item>"))
+            + "</channel></rss>";
+
+        private static AcquisitionConnectionData Indexer(long id, AcquisitionConnectionType type, int[] mediaTypeIds, bool searchesAutomatically = true) =>
+            new(id, "Indexer " + id, type, "https://indexer.example.test", null, true, 10, [], null, null, null, null, 1, null, null, null, mediaTypeIds, searchesAutomatically, null, null, 0, 0, null, null, null, null);
+
         private static async Task<IReadOnlyList<WantedReleaseV1>> ReadReleasesAsync(Host host, long wantedId)
         {
             using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/" + wantedId + "/releases");

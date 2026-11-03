@@ -67,6 +67,10 @@ namespace Jularr.Integrations.Logic.Newznab
             return ParseItems(connection.BaseUrl, document);
         }
 
+        // The newest releases of the categories, with their ids (extended attributes); no search term. One page, newest first.
+        public Task<IReadOnlyList<NewznabItem>> ReadRecentAsync(NewznabConnection connection, IReadOnlyList<int> categories, int limit, int offset, CancellationToken ct) =>
+            SearchAsync(connection, new NewznabQuery(NewznabSearchMode.Search, null, [new("extended", "1")], categories, limit, offset), ct);
+
         internal static string Function(NewznabSearchMode mode) => mode switch
         {
             NewznabSearchMode.TvSearch => "tvsearch",
@@ -151,7 +155,11 @@ namespace Jularr.Integrations.Logic.Newznab
                 {
                     IndexerFlags = attributes.TryGetValue("indexerflags", out var flags)
                         ? flags.Split([',', '|'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.OrdinalIgnoreCase).Take(32).ToArray()
-                        : []
+                        : [],
+                    Category = attributes.TryGetValue("category", out var category) ? PositiveInt(category) : null,
+                    TvdbId = Id(attributes, "tvdbid"),
+                    TmdbId = Id(attributes, "tmdbid"),
+                    ImdbId = Id(attributes, "imdbid") ?? Id(attributes, "imdb")
                 });
             }
 
@@ -287,6 +295,10 @@ namespace Jularr.Integrations.Logic.Newznab
         private static XElement? Child(XElement? element, string name) => element?.Elements().FirstOrDefault(child => child.Name.LocalName == name);
 
         private static string? Text(XElement item, string name) => Child(item, name)?.Value.Trim() is { Length: > 0 } value ? value : null;
+
+        // An id of 0 means the indexer does not know it.
+        private static string? Id(Dictionary<string, string> attributes, string name) =>
+            attributes.TryGetValue(name, out var value) && value.Trim() is { Length: > 0 } id && id.Trim('0') is { Length: > 0 } ? id : null;
 
         private static long? Long(string? value) => long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) ? result : null;
 

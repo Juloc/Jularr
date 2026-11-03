@@ -75,7 +75,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     (await ctx.ReadWantedTargetAsync(item.WantedItemId, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct)), CancellationToken);
                 if (target.Definition is null)
                 {
-                    await RecordAsync(target.WantedItemId, "profile_missing", now.AddDays(1));
+                    await RecordAsync(target.WantedItemId, "profile_missing", now.AddDays(1), now);
                     continue;
                 }
 
@@ -95,18 +95,18 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 {
                     // Indexer problems retry soon; empty results back off, an upgrade is looked for at its own interval.
                     await RecordAsync(target.WantedItemId, result.OutcomeKey, result.IndexersUnavailable ? now.AddMinutes(30)
-                        : target.HasMedia ? now + UpgradePolicy.SearchInterval : now + Backoff(target.SearchCount));
+                        : target.HasMedia ? now + UpgradePolicy.SearchInterval : now + Backoff(target.MediaTypeId, target.WantedItemId, target.SearchCount, indexers), now);
                     continue;
                 }
 
-                await RecordAsync(target.WantedItemId, result.OutcomeKey, now + Backoff(target.SearchCount));
+                await RecordAsync(target.WantedItemId, result.OutcomeKey, now + Backoff(target.MediaTypeId, target.WantedItemId, target.SearchCount, indexers), now);
                 try
                 {
                     await _acquisition.GrabAsync(Context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, CancellationToken, automatic: true);
                 }
                 catch (ServiceUnavailableException exception)
                 {
-                    await RecordAsync(target.WantedItemId, exception.Code, now.AddMinutes(30));
+                    await RecordAsync(target.WantedItemId, exception.Code, now.AddMinutes(30), now);
                 }
             }
 
@@ -143,7 +143,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     }
                     catch (ServiceUnavailableException exception)
                     {
-                        await RecordAsync(target.WantedItemId, exception.Code, now.AddMinutes(30));
+                        await RecordAsync(target.WantedItemId, exception.Code, now.AddMinutes(30), now);
                         return;
                     }
 
@@ -153,23 +153,40 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
 
             // Grabs continue soon; empty results back off.
-            var nextSearch = grabbed > 0 ? now.AddMinutes(15) : unavailable ? now.AddMinutes(30) : now + Backoff(target.SearchCount);
-            await RecordAsync(target.WantedItemId, grabbed > 0 ? "grabbed" : outcome ?? "no_candidates", nextSearch);
+            var nextSearch = grabbed > 0 ? now.AddMinutes(15) : unavailable ? now.AddMinutes(30) : now + Backoff(target.MediaTypeId, target.WantedItemId, target.SearchCount, indexers);
+            await RecordAsync(target.WantedItemId, grabbed > 0 ? "grabbed" : outcome ?? "no_candidates", nextSearch, now);
         }
 
-        private Task RecordAsync(long wantedItemId, string outcomeKey, DateTime nextSearchAt) =>
+        // The next search is never later than the end of the release day of a missing episode or movie, when the feed found nothing by then.
+        private Task RecordAsync(long wantedItemId, string outcomeKey, DateTime nextSearchAt, DateTime now) =>
             Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
-                await ctx.RecordWantedSearchAsync(new WantedSearchOutcomeData(wantedItemId, outcomeKey, nextSearchAt), ct);
+                var releaseDay = await ctx.ReadNextReleaseDayAsync(new WantedReleaseDayData(wantedItemId, now), ct);
+                await ctx.RecordWantedSearchAsync(new WantedSearchOutcomeData(wantedItemId, outcomeKey, releaseDay is { } day && day < nextSearchAt ? day : nextSearchAt), ct);
                 return true;
             }, CancellationToken);
 
-        private static TimeSpan Backoff(int searchCount) => searchCount switch
+        // The wait after a search that found nothing. Movies and series are caught by the indexers' feeds (every 15 minutes), so one search a week finds what the feed missed;
+        // without a feed they keep the earlier rhythm. Books and manga have no feed: one search a day, spread over the day by the target's number.
+        internal static TimeSpan Backoff(MediaType mediaType, long wantedItemId, int searchCount, IReadOnlyList<AcquisitionConnectionData> indexers)
         {
-            0 => TimeSpan.FromHours(6),
-            1 => TimeSpan.FromHours(12),
-            _ => TimeSpan.FromHours(24)
-        };
+            if (mediaType is MediaType.Movie or MediaType.Series && indexers.Any(indexer => AcquisitionConnectionLogic.HasFeed(indexer, mediaType)))
+            {
+                return TimeSpan.FromDays(7);
+            }
+
+            if (mediaType == MediaType.Book)
+            {
+                return TimeSpan.FromHours(24) + TimeSpan.FromMinutes(wantedItemId % 1440);
+            }
+
+            return searchCount switch
+            {
+                0 => TimeSpan.FromHours(6),
+                1 => TimeSpan.FromHours(12),
+                _ => TimeSpan.FromHours(24)
+            };
+        }
     }
 
     public sealed class RefreshWantedMetadataV1 : SystemService<AcquisitionCycleParametersV1, NoData>

@@ -278,6 +278,27 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task FeedReleases_UpgradeKeepsTheIndexersAndAddsAnEmptyTable_ThatLeavesWithItsIndexer()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(FeedReleases_UpgradeKeepsTheIndexersAndAddsAnEmptyTable_ThatLeavesWithItsIndexer));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 40).ToArray()).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs, """INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "BaseUrl") VALUES (7, 'Indexer', 1, 'https://indexer.example.test')""");
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            // The indexer stays; its seen releases are kept once per release and leave with it.
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "AcquisitionConnections" WHERE "Id" = 7"""));
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "FeedReleases" """));
+            await ExecuteAsync(cs, """INSERT INTO "FeedReleases" ("AcquisitionConnectionId", "ReleaseKey") VALUES (7, 'guid-1')""");
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """INSERT INTO "FeedReleases" ("AcquisitionConnectionId", "ReleaseKey") VALUES (7, 'guid-1')"""));
+            await ExecuteAsync(cs, """DELETE FROM "AcquisitionConnections" WHERE "Id" = 7""");
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "FeedReleases" """));
+            Assert.AreEqual(40, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0040_feed_releases'"""));
+        }
+
+        [TestMethod]
         public async Task LibraryTieIndexes_UpgradeKeepsTiesAndIndexesTheirMarkedRows()
         {
             using var folder = new LibraryTests.TemporaryDirectory();

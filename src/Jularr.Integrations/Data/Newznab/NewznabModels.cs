@@ -102,6 +102,12 @@ namespace Jularr.Integrations.Data.Newznab
         public long? SizeBytes { get; }
         public DateTimeOffset? PublishedAt { get; }
         public IReadOnlyList<string> IndexerFlags { get; init; } = [];
+
+        // The ids and the category an indexer names with its extended attributes, as it writes them (an IMDb id without or with "tt").
+        public int? Category { get; init; }
+        public string? TvdbId { get; init; }
+        public string? TmdbId { get; init; }
+        public string? ImdbId { get; init; }
     }
 
     internal enum NewznabFailure : byte

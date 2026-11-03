@@ -34,6 +34,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             ["backupQueue"] = ("shield", UiTone.Success),
             ["downloads"] = ("download", UiTone.Info),
             ["wantedSearch"] = ("search", UiTone.Info),
+            ["feedSync"] = ("sync", UiTone.Info),
             ["providerSync"] = ("sync", UiTone.Warning),
             ["providerSyncPlex"] = ("providers", UiTone.Warning),
             ["providerSyncJellyfin"] = ("providers", UiTone.Warning),
