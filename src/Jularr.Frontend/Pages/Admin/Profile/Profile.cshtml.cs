@@ -76,7 +76,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 fields.Section("profile.section.general", section =>
                 {
                     section.Text(item => item.Name, "profile.name");
-                    section.Toggle(item => item.IsDefault, ScopeSubtype == MediaSubtype.Anime ? "profile.isDefault.Anime" + Scope : "profile.isDefault");
+                    section.Toggle(item => item.IsDefault, ScopeSubtype == MediaSubtype.Anime ? Scope == MediaType.Movie ? "profile.isDefault.AnimeMovie" : "profile.isDefault.AnimeSeries" : "profile.isDefault");
                 });
                 fields.Section("profile.section.qualities", section =>
                 {
