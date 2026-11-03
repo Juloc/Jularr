@@ -6,6 +6,8 @@ namespace Jularr.Backend.Data.Fields.Media
     public static class WorkMetadataFields
     {
         public static readonly StringField Query = new() { MaximumLength = 200, AllowBlank = false, Trim = true, Format = StringFormat.SingleLine };
+        public static readonly BoolField Monitor = new();
+        public static readonly BoolField SearchNow = new();
         public static readonly IntField TmdbId = new() { Minimum = 1 };
         public static readonly IntField TvdbId = new() { Minimum = 1 };
         public static readonly IntField AniListId = new() { Minimum = 1 };

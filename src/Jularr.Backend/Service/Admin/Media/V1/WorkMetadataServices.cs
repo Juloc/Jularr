@@ -5,8 +5,10 @@ using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Core;
 
@@ -37,10 +39,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     public sealed class ImportMetadataWorkV1 : AdminService<CreateWorkParametersV1, ImportMetadataWorkDataV1>
     {
         private readonly MetadataCatalog _catalog;
+        private readonly AcquisitionSearchSignal _searchSignal;
+        private bool _searchNow;
 
-        internal ImportMetadataWorkV1(MetadataCatalog catalog)
+        internal ImportMetadataWorkV1(MetadataCatalog catalog, AcquisitionSearchSignal searchSignal)
         {
             _catalog = catalog;
+            _searchSignal = searchSignal;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -51,7 +56,23 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             var workId = await _catalog.ImportAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
+            if (Data.Monitor && Data.MediaTypeId != MediaType.Game)
+            {
+                // A new target is searched at once or waits a day for the feed and the scheduled searches; a title that is already monitored keeps its schedule.
+                _searchNow = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    var added = await ctx.EnsureWantedItemAsync(new WantedTakeoverData(workId, null, null, false), ct);
+                    if (added && !Data.SearchNow) await ctx.DeferFirstWantedSearchAsync(workId, ct);
+                    return added && Data.SearchNow;
+                }, CancellationToken);
+            }
+
             return await Context.ExecuteBatchAsync((ctx, ct) => WorkMetadataQueries.ReadWorkAsync(ctx, workId, ct), CancellationToken);
+        }
+
+        protected override void OnCommitted()
+        {
+            if (_searchNow) _searchSignal.RequestSearch();
         }
     }
 
