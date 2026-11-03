@@ -6508,10 +6508,6 @@
    "Play",
    "Spielen"
   ],
-  "calendar.areaState": [
-   "{0}: {1} of {2} selected",
-   "{0}: {1} von {2} gewählt"
-  ],
   "calendar.customize": [
    "Customize view",
    "Ansicht gestalten"
@@ -8164,6 +8160,10 @@
   "admin.works.import": [
    "Add",
    "Hinzufügen"
+  ],
+  "admin.works.searchNow": [
+   "Search now",
+   "Jetzt suchen"
   ],
   "admin.work.refreshMetadata": [
    "Update from the provider",
@@ -10246,12 +10246,12 @@
    "Tokens pro Tag"
   ],
   "admin.ai.limitHint": [
-   "0 means unlimited. Jularr stops Codex work when a limit is reached.",
-   "0 heißt unbegrenzt. Jularr hält Codex-Arbeit an, wenn ein Limit erreicht ist."
+   "0 means unlimited. Jularr stops Codex translation when a limit is reached; the count since start begins again when Jularr restarts.",
+   "0 heißt unbegrenzt. Jularr hält die Codex-Übersetzung an, wenn ein Limit erreicht ist; der Zähler seit dem Start beginnt nach einem Neustart von Jularr neu."
   ],
   "admin.ai.runTokens": [
-   "Tokens per run",
-   "Tokens pro Lauf"
+   "Tokens since start",
+   "Tokens seit dem Start"
   ],
   "admin.ai.warnPercent": [
    "Warn at (% of the daily limit)",
@@ -10264,6 +10264,22 @@
   "admin.ai.settingsSaved": [
    "Settings saved",
    "Einstellungen gespeichert"
+  ],
+  "admin.ai.usedToday": [
+   "Tokens today",
+   "Tokens heute"
+  ],
+  "admin.ai.usedSinceStart": [
+   "Tokens since start",
+   "Tokens seit dem Start"
+  ],
+  "admin.ai.limitReached": [
+   "Limit reached",
+   "Limit erreicht"
+  ],
+  "admin.ai.limitNear": [
+   "Limit nearly reached",
+   "Limit fast erreicht"
   ],
   "errors.codex_not_installed": [
    "The Codex CLI is not available in this installation.",

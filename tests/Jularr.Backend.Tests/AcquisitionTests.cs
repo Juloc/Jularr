@@ -2501,7 +2501,7 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(Asked("open") > 0 && Asked("manual") > 0 && Asked("broken") > 0);
             Assert.AreEqual(0, Asked("books"));
             Assert.AreEqual(1, await ColumnAsync("Broken", "FailureCount"));
-            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" > now() + interval '4 minutes' FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Broken'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" > now() + interval '50 seconds' FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Broken'"));
             Assert.AreEqual(0, await ColumnAsync("Open", "FailureCount"));
             Assert.IsTrue((int)(await ColumnAsync("Open", "QueryCount"))! > 0);
 

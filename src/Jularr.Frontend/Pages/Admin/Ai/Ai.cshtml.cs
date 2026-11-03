@@ -33,7 +33,7 @@ namespace Jularr.Frontend.Pages.Admin.Ai
             var cards = new List<IUiComponent> { Card(_connection, csrf) };
             if (_connection.Phase == CodexPhase.Connected && _catalog is not null && _settings is not null)
             {
-                if (_catalog.Windows.Length > 0) cards.Add(UsageCard(_catalog));
+                if (_catalog.Windows.Length > 0 || _catalog.UsedToday > 0 || _catalog.UsedSinceStart > 0) cards.Add(UsageCard(_catalog, _settings));
                 cards.Add(SettingsCard(_catalog, _settings, csrf));
             }
 
@@ -93,7 +93,7 @@ namespace Jularr.Frontend.Pages.Admin.Ai
         }
 
         // The ChatGPT plan's windows as bars with the time they start over.
-        private IUiComponent UsageCard(CodexCatalogV1 catalog)
+        private IUiComponent UsageCard(CodexCatalogV1 catalog, CodexSettingsV1 settings)
         {
             var windows = catalog.Windows.Select(window =>
             {
@@ -108,8 +108,19 @@ namespace Jularr.Frontend.Pages.Admin.Ai
                 return (IUiComponent)new Div([.. parts]).Class("codex-window");
             });
             var plan = catalog.Plan is { Length: > 0 } name ? char.ToUpperInvariant(name[0]) + name[1..] : texts["admin.ai.usageLine"];
-            return new FeatureCard(new IconTile(new Icon("pulse", assets, 18), UiTone.Accent), texts["admin.ai.usage"], plan, null, [new Div([.. windows]).Class("codex-windows")], [], null, "codex-usage").Wide();
+            // Jularr's own count against the Owner's limits; a limit of 0 shows the count alone.
+            var counts = new List<(string, IUiComponent)>
+            {
+                ("admin.ai.usedToday", new ValueText(Count(catalog.UsedToday, settings.DailyTokens))),
+                ("admin.ai.usedSinceStart", new ValueText(Count(catalog.UsedSinceStart, settings.RunTokens)))
+            };
+            var warn = settings.DailyTokens > 0 && catalog.UsedToday * 100 >= settings.DailyTokens * settings.WarnPercent;
+            var state = warn ? new StateChip(new Text(catalog.UsedToday >= settings.DailyTokens ? "admin.ai.limitReached" : "admin.ai.limitNear"), UiTone.Warning) : null;
+            return new FeatureCard(new IconTile(new Icon("pulse", assets, 18), UiTone.Accent), texts["admin.ai.usage"], plan, state, [new Div([.. windows]).Class("codex-windows"), new FactList(counts)], [], null, "codex-usage").Wide();
         }
+
+        private static string Count(long used, long limit) =>
+            used.ToString("N0", CultureInfo.CurrentCulture) + (limit > 0 ? " / " + limit.ToString("N0", CultureInfo.CurrentCulture) : "");
 
         // The Owner's choices: they apply to everything Codex translates.
         private IUiComponent SettingsCard(CodexCatalogV1 catalog, CodexSettingsV1 saved, string? csrf)

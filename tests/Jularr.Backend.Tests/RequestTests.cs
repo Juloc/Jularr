@@ -88,7 +88,9 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new long[] { 301, 302, 303, 304 }, await ReadAsync("?requestSortTypeId=Oldest"));
             CollectionAssert.AreEqual(new long[] { 304, 301, 302, 303 }, await ReadAsync("?requestSortTypeId=Status"));
             CollectionAssert.AreEqual(new long[] { 303, 302, 304 }, (await ReadAsync("?requestSortTypeId=Title")).Where(id => id != 301).ToArray());
-            CollectionAssert.AreEqual(new long[] { 302 }, await ReadAsync("?mediaTypeId=Book"));
+            CollectionAssert.AreEqual(new long[] { 302 }, await ReadAsync("?mediaTypeIds=Book"));
+            CollectionAssert.AreEqual(new long[] { 304, 303, 301 }, await ReadAsync("?mediaTypeIds=Movie"));
+            CollectionAssert.AreEqual(new long[] { 304, 303, 302, 301 }, await ReadAsync("?mediaTypeIds=Movie&mediaTypeIds=Book"));
 
             // Only requests that are not imported yet can be withdrawn.
             using var all = await host.SendAsync(HttpMethod.Get, "/api/v1/requests");
@@ -159,12 +161,16 @@ namespace Jularr.Backend.Tests
             var html = await browser.GetStringAsync("/Requests");
             StringAssert.Contains(html, "&lt;Work&gt;");
             StringAssert.Contains(html, "requests-bar");
+            StringAssert.Contains(html, "capsule-bar");
             StringAssert.Contains(html, "live-progress--compact");
             StringAssert.Contains(html, "request=301");
             Assert.IsFalse(html.Contains("request-drawer__foot", StringComparison.Ordinal));
             var movies = await browser.GetStringAsync("/Requests?type=movies&state=Active");
             StringAssert.Contains(movies, "&lt;Work&gt;");
             Assert.IsFalse(movies.Contains(">Book<", StringComparison.Ordinal));
+            var both = await browser.GetStringAsync("/Requests?type=movies,books&state=All");
+            StringAssert.Contains(both, "&lt;Work&gt;");
+            StringAssert.Contains(both, "Book");
             var available = await browser.GetStringAsync("/Requests?state=Available");
             Assert.IsFalse(available.Contains("&lt;Work&gt;", StringComparison.Ordinal));
             StringAssert.Contains(available, "Book");
@@ -281,6 +287,49 @@ namespace Jularr.Backend.Tests
             using var deleted = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/requests/rules/" + family + "?version=1");
             Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AccountRequestRules\""));
+        }
+
+        [TestMethod]
+        public async Task AdminRequests_FilterByType_NarrowsListAndCounts()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "Accounts" SET "AccountRoleTypeId" = 3 WHERE "Id" = 41;
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt") VALUES
+                    (301, 10, 101, 41, 1, 1, NULL, NULL), (302, 20, 101, 41, 1, 1, NULL, NULL), (303, 20, 202, 42, 1, 2, 41, now());
+                """);
+            await SignInAsync(host);
+
+            async Task<long[]> ReadAsync(string query)
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/requests" + query);
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                return [.. (await response.Content.ReadFromJsonAsync<PageResult<AdminRequest>>())!.Items.Select(item => item.Id).Order()];
+            }
+
+            async Task<int> OpenCountAsync(string query)
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/requests/summary" + query);
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                return (await response.Content.ReadFromJsonAsync<RequestsSummaryV1>())!.OpenCount;
+            }
+
+            // No type lists everything; a type or several narrow the list and the tab counts alike.
+            CollectionAssert.AreEqual(new long[] { 301, 302, 303 }, await ReadAsync(""));
+            CollectionAssert.AreEqual(new long[] { 302, 303 }, await ReadAsync("?mediaTypeIds=Book"));
+            CollectionAssert.AreEqual(new long[] { 301 }, await ReadAsync("?mediaTypeIds=Movie"));
+            CollectionAssert.AreEqual(new long[] { 301, 302, 303 }, await ReadAsync("?mediaTypeIds=Movie&mediaTypeIds=Book"));
+            CollectionAssert.AreEqual(new long[] { 303 }, await ReadAsync("?mediaTypeIds=Book&requestTabTypeId=Approved"));
+            Assert.AreEqual(2, await OpenCountAsync(""));
+            Assert.AreEqual(1, await OpenCountAsync("?mediaTypeIds=Book"));
+
+            // The page has the media-type bar and keeps the chosen types of the address.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Requests?type=books");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "capsule-bar");
+            StringAssert.Contains(html, "type=books");
+            Assert.IsFalse(html.Contains("&lt;Work&gt;", StringComparison.Ordinal));
         }
 
         [TestMethod]

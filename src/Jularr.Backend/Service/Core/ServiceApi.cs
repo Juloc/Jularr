@@ -282,6 +282,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<LocalTranslationMachines>();
             // Every server translation provider registers here; model ids name it as "<Key>:<model>".
             services.AddSingleton<ITranslationProvider, OllamaTranslationProvider>();
+            services.AddSingleton<ITranslationProvider, CodexTranslationProvider>();
             services.TryAddSingleton<TranslationProviders>();
             services.TryAddSingleton<LocalTranslationDownloads>();
             services.AddHostedService(provider => provider.GetRequiredService<LocalTranslationDownloads>());

@@ -180,9 +180,9 @@ namespace Jularr.Frontend.Pages.Admin.Works
             return Page();
         }
 
-        public async Task<IActionResult> OnPostImportAsync([BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? @namespace, string? externalId)
+        public async Task<IActionResult> OnPostImportAsync([BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? @namespace, string? externalId, bool monitor, bool searchNow)
         {
-            var work = await import.ExecuteAsync<WorkDetailsV1>(new ImportMetadataWorkDataV1(mediaTypeId, externalId ?? "", mediaSubtypeId, @namespace), HttpContext.RequestAborted);
+            var work = await import.ExecuteAsync<WorkDetailsV1>(new ImportMetadataWorkDataV1(mediaTypeId, externalId ?? "", mediaSubtypeId, @namespace, monitor, searchNow), HttpContext.RequestAborted);
             return RedirectToPage("/Admin/Work/Work", new { id = work.Id });
         }
 

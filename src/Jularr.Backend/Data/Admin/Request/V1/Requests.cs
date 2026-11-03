@@ -10,11 +10,13 @@ namespace Jularr.Backend.Data.Admin.Request.V1
 {
     public sealed class ReadRequestsParametersV1 : BaseParameters
     {
-        public ReadRequestsParametersV1(int page = 1, int pageSize = 25, RequestTabType requestTabTypeId = RequestTabType.All)
+        public ReadRequestsParametersV1(int page = 1, int pageSize = 25, RequestTabType requestTabTypeId = RequestTabType.All, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null)
         {
             Page = page;
             PageSize = pageSize;
             RequestTabTypeId = requestTabTypeId;
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
         }
 
         public int Page { get; }
@@ -22,10 +24,28 @@ namespace Jularr.Backend.Data.Admin.Request.V1
 
         [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.RequestTabTypeId))]
         public RequestTabType RequestTabTypeId { get; }
+
+        // A type lists its Works without subtype, a subtype lists that subtype across types; none lists everything.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
     }
 
     public sealed class ReadRequestsSummaryParametersV1 : BaseParameters
     {
+        public ReadRequestsSummaryParametersV1(MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null)
+        {
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
     }
 
     // The numbers of the request list's filter chips and figures: how many requests each tab holds.
@@ -89,8 +109,9 @@ namespace Jularr.Backend.Data.Admin.Request.V1
     public sealed class RequestDetailsV1 : BaseResponse
     {
         public RequestDetailsV1(long id, long workId, string canonicalTitle, MediaType mediaTypeId, string requesterName, string requestedLanguage,
-            AcquisitionRequestStatusType acquisitionRequestStatusTypeId, long version, DateTime createdAt)
+            AcquisitionRequestStatusType acquisitionRequestStatusTypeId, long version, DateTime createdAt, MediaSubtype? mediaSubtypeId = null)
         {
+            MediaSubtypeId = mediaSubtypeId;
             Id = id;
             WorkId = workId;
             CanonicalTitle = canonicalTitle;
@@ -113,6 +134,9 @@ namespace Jularr.Backend.Data.Admin.Request.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId), false)]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName))]
         public string RequesterName { get; }

@@ -17,12 +17,20 @@ namespace Jularr.Frontend.Pages.Admin.Requests
     {
         private PageResult<RequestDetailsV1>? _requests;
         private RequestsSummaryV1? _summary;
+        private ScopeSelection? _scopes;
 
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
 
         [BindProperty(SupportsGet = true)]
         public RequestTabType Tab { get; set; }
+
+        // Media types as slugs of the type bar, repeated or separated by commas; none shows all of them.
+        [BindProperty(SupportsGet = true, Name = "type")]
+        public string[] Types { get; set; } = [];
+
+        // Every type is listed here; the bar offers all of them.
+        private ScopeSelection Scopes => _scopes ??= new ScopeSelection(Types, LibraryScopes.All.Where(scope => scope.Slug != "all").ToList());
 
         protected override void Define(Page page)
         {
@@ -36,6 +44,7 @@ namespace Jularr.Frontend.Pages.Admin.Requests
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             page.NoPageRow();
+            page.Content.Add(new MediaTypeBar(assets, Scopes.ListedSlugs, Scopes.ChosenSlugs, "library.scope.", types => Address(types: types)));
             page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request, [.. Enum.GetValues<RequestTabType>().Select(tab => new NavigationTab("request.tab." + tab, Address(tab: tab), tab == Tab, Count: CountOf(tab), Icon: Glyph(TabIcon(tab), 14)))], ariaLabelKey: "request.tabs")));
             if (_requests is { } requests)
             {
@@ -122,7 +131,7 @@ namespace Jularr.Frontend.Pages.Admin.Requests
         private ListRow Row(RequestDetailsV1 item, string? csrf)
         {
             var home = "/Admin/Works/" + item.WorkId.ToString(CultureInfo.InvariantCulture);
-            var identity = new ListIdentity(TypeTile(item), new A(new Truncated(item.CanonicalTitle)).Class("list-identity__title").Attribute("href", home), new Text("media.type." + item.MediaTypeId));
+            var identity = new ListIdentity(TypeTile(item), new A(new Truncated(item.CanonicalTitle)).Class("list-identity__title").Attribute("href", home), new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)));
             var requested = new Span(new LocalTime(item.CreatedAt)).Class("list-value");
             var row = new ListRow([identity, Status(item), new Span(new Truncated(item.RequesterName)).Class("list-value list-value--fill"), new Span(new Truncated(item.RequestedLanguage)).Class("list-value list-value--fill"), requested, RowActions(item, csrf)],
                 [ListPanel.Fact("table.requester", new ValueText(item.RequesterName)), ListPanel.Fact("table.requestedAt", requested, Glyph("clock", 14))]);
@@ -151,7 +160,7 @@ namespace Jularr.Frontend.Pages.Admin.Requests
             var body = new List<IUiComponent>
             {
                 Drawer.State("table.status", Status(item, drawer: true)),
-                Drawer.Facts(("table.type", new Text("media.type." + item.MediaTypeId)), ("table.requester", new ValueText(item.RequesterName)),
+                Drawer.Facts(("table.type", new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId))), ("table.requester", new ValueText(item.RequesterName)),
                     ("request.language", new ValueText(item.RequestedLanguage)), ("table.requestedAt", new LocalTime(item.CreatedAt)))
             };
 
@@ -186,10 +195,12 @@ namespace Jularr.Frontend.Pages.Admin.Requests
         protected override async Task LoadDataAsync()
         {
             var ct = HttpContext.RequestAborted;
-            _requests = await read.ExecuteAsync<PageResult<RequestDetailsV1>>(new ReadRequestsParametersV1(PageNumber, requestTabTypeId: Tab), ct);
-            _summary = await readSummary.ExecuteAsync<RequestsSummaryV1>(new ReadRequestsSummaryParametersV1(), ct);
+            var (types, subtypes) = Scopes.Filter();
+            _requests = await read.ExecuteAsync<PageResult<RequestDetailsV1>>(new ReadRequestsParametersV1(PageNumber, requestTabTypeId: Tab, mediaTypeIds: types, mediaSubtypeIds: subtypes), ct);
+            _summary = await readSummary.ExecuteAsync<RequestsSummaryV1>(new ReadRequestsSummaryParametersV1(types, subtypes), ct);
         }
 
-        private static string Address(int pageNumber = 1, RequestTabType tab = RequestTabType.All) => "/Admin/Requests?PageNumber=" + pageNumber + "&Tab=" + tab;
+        private string Address(int pageNumber = 1, RequestTabType? tab = null, IReadOnlyList<string>? types = null) =>
+            "/Admin/Requests?PageNumber=" + pageNumber + "&Tab=" + (tab ?? Tab) + (Scopes.Parameter(types ?? Scopes.Picked) is { } chosen ? "&type=" + Uri.EscapeDataString(chosen).Replace("%2C", ",") : "");
     }
 }

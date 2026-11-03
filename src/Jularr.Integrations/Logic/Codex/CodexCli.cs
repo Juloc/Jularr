@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jularr.Integrations.Data.Codex;
 using Jularr.Integrations.Data.Common;
@@ -10,6 +12,7 @@ namespace Jularr.Integrations.Logic.Codex
     internal sealed partial class CodexCli
     {
         private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(15);
+        private static readonly TimeSpan ExecTimeout = TimeSpan.FromMinutes(4);
 
         public string? ExecutablePath { get; set; }
         public string HomePath { get; set; } = "";
@@ -54,6 +57,90 @@ namespace Jularr.Integrations.Logic.Codex
         {
             if (!IsAvailable) throw new ProviderUnavailableException();
             return await CodexAppServer.ReadCatalogAsync(Prepare(["app-server"]), ct);
+        }
+
+        // One prompt, one answer, nothing else: no tools, no files (read-only sandbox, an empty working folder), no stored session, the user's own config and rules ignored.
+        // The sign-in is the one under CODEX_HOME. A failure of any kind (exit code, empty answer, timeout) is an InvalidDataException; the caller decides about fallbacks.
+        public async Task<CodexAnswer> ExecAsync(string model, string? effort, string prompt, CancellationToken ct)
+        {
+            if (!IsAvailable) throw new ProviderUnavailableException();
+            var work = Path.Combine(HomePath, "work");
+            Directory.CreateDirectory(work);
+            var output = Path.Combine(work, Guid.NewGuid().ToString("N") + ".txt");
+            List<string> arguments = ["exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "--ignore-rules", "-s", "read-only", "--color", "never", "--json", "-C", work, "-m", model];
+            if (effort is not null) arguments.AddRange(["-c", "model_reasoning_effort=\"" + effort + "\""]);
+            arguments.AddRange(["-o", output, "-"]);
+
+            var start = Prepare([.. arguments]);
+            start.StandardInputEncoding = new UTF8Encoding(false);
+            start.StandardOutputEncoding = Encoding.UTF8;
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(ExecTimeout);
+            try
+            {
+                using var process = Process.Start(start) ?? throw new Win32Exception();
+                try
+                {
+                    await process.StandardInput.WriteAsync(prompt.AsMemory(), timeout.Token);
+                    process.StandardInput.Close();
+                    var lines = process.StandardOutput.ReadToEndAsync(timeout.Token);
+                    // Diagnostics on stderr may name the account; they are read away and dropped.
+                    var errors = process.StandardError.ReadToEndAsync(timeout.Token);
+                    await process.WaitForExitAsync(timeout.Token);
+                    var events = await lines;
+                    await errors;
+                    if (process.ExitCode != 0 || !File.Exists(output)) throw new InvalidDataException("Codex did not answer.");
+                    var text = (await File.ReadAllTextAsync(output, timeout.Token)).Trim();
+                    if (text.Length == 0) throw new InvalidDataException("Codex answered with nothing.");
+                    return new CodexAnswer(text, TokensOf(events));
+                }
+                catch
+                {
+                    if (!process.HasExited) process.Kill(entireProcessTree: true);
+                    throw;
+                }
+            }
+            catch (Win32Exception)
+            {
+                throw new ProviderUnavailableException();
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new InvalidDataException("Codex took too long.");
+            }
+            finally
+            {
+                try
+                {
+                    File.Delete(output);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        // The usage of the turn that ended (`turn.completed`): input plus output tokens; 0 when the events do not carry it.
+        internal static long TokensOf(string events)
+        {
+            long tokens = 0;
+            foreach (var line in events.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                try
+                {
+                    using var document = JsonDocument.Parse(line);
+                    var root = document.RootElement;
+                    if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("type", out var type) || type.GetString() != "turn.completed"
+                        || !root.TryGetProperty("usage", out var usage) || usage.ValueKind != JsonValueKind.Object) continue;
+                    foreach (var name in new[] { "input_tokens", "output_tokens" })
+                        if (usage.TryGetProperty(name, out var count) && count.ValueKind == JsonValueKind.Number && count.TryGetInt64(out var value) && value > 0) tokens += value;
+                }
+                catch (JsonException)
+                {
+                }
+            }
+
+            return tokens;
         }
 
         private ProcessStartInfo Prepare(string[] arguments)

@@ -1,4 +1,6 @@
-// The one row above the list: status tabs, then media type, order and layout.
+@use "../../../Framework/Components/CapsuleBar";
+
+// The row above the media-type bar: status tabs, then order and layout.
 .requests-bar {
     display: flex;
     align-items: center;

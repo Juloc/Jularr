@@ -26,6 +26,14 @@ namespace Jularr.Frontend.Pages.Admin.Naming
         private (MediaType Type, MediaSubtype? Subtype)? _failedPattern;
         private UpdateNamingSettingsDataV1? _settingsInput;
         private MediaType? _failedSettings;
+        private ScopeSelection? _scopes;
+
+        // Media types as slugs of the type bar, repeated or separated by commas; none shows all of them.
+        [BindProperty(SupportsGet = true, Name = "type")]
+        public string[] Types { get; set; } = [];
+
+        // Every type is listed here; the bar offers all of them.
+        private ScopeSelection Scopes => _scopes ??= new ScopeSelection(Types, LibraryScopes.All.Where(scope => scope.Slug != "all").ToList());
 
         protected override void Define(Page page)
         {
@@ -40,11 +48,15 @@ namespace Jularr.Frontend.Pages.Admin.Naming
 
             var multiStyles = Enum.GetValues<MultiEpisodeStyle>().Select(mode => new SelectOption(((byte)mode).ToString(CultureInfo.InvariantCulture), texts["library.naming.multi." + mode]));
 
+            // The media-type bar narrows the panels; a panel stays while one of its patterns is chosen.
+            page.Content.Add(new MediaTypeBar(assets, Scopes.ListedSlugs, Scopes.ChosenSlugs, "library.scope.", types => Scopes.Parameter(types) is { } chosen ? Address + "?type=" + Uri.EscapeDataString(chosen).Replace("%2C", ",") : Address));
+            var chosenSlugs = Scopes.ChosenSlugs;
+
             // One panel per media type: its folders and file name (and its subtypes' own), then how values become names.
-            foreach (var type in _patterns.Select(pattern => pattern.MediaTypeId).Distinct())
+            foreach (var type in _patterns.Where(pattern => chosenSlugs.Contains(LibraryScopes.Slug(pattern.MediaTypeId, pattern.MediaSubtypeId))).Select(pattern => pattern.MediaTypeId).Distinct())
             {
                 var items = new List<IUiComponent>();
-                foreach (var pattern in _patterns.Where(pattern => pattern.MediaTypeId == type).OrderBy(pattern => pattern.MediaSubtypeId))
+                foreach (var pattern in _patterns.Where(pattern => pattern.MediaTypeId == type && chosenSlugs.Contains(LibraryScopes.Slug(pattern.MediaTypeId, pattern.MediaSubtypeId))).OrderBy(pattern => pattern.MediaSubtypeId))
                 {
                     var failed = _failedPattern == (pattern.MediaTypeId, pattern.MediaSubtypeId);
                     if (pattern.MediaSubtypeId is { } subtype) items.Add(new H3(new Text("library.naming." + type + "." + subtype)));
