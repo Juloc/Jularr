@@ -6,14 +6,23 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 {
     public sealed class ReadIdentityReviewsParametersV1 : BaseParameters
     {
-        public ReadIdentityReviewsParametersV1(int page = 1, int pageSize = 25)
+        public ReadIdentityReviewsParametersV1(int page = 1, int pageSize = 25, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null)
         {
             Page = page;
             PageSize = pageSize;
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
         }
 
         public int Page { get; }
         public int PageSize { get; }
+
+        // A type lists its Works without subtype, a subtype lists that subtype across types; none lists everything.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
     }
 
     // A Work whose AniList match waits for a person, with its candidates.
