@@ -12,7 +12,6 @@ namespace Jularr.Backend.Data.Fields.Translation
         public static readonly StringField Url = new() { MaximumLength = 200, AllowBlank = false };
         public static readonly StringField Precision = new() { MaximumLength = 32, Required = false };
         public static readonly StringField Name = new() { MaximumLength = 80, AllowBlank = false, Trim = true };
-        public static readonly StringArrayField Models = new() { ItemMaximumLength = 80 };
         // A model or its digest where none may be known yet.
         public static readonly StringField OptionalName = new() { MaximumLength = 80, Required = false, Trim = true };
         // A title and a count of sections as the progress view reads them.

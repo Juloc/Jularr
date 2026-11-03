@@ -102,19 +102,19 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Models_AnAdminOnlyProvider_IsOfferedAndUsableOnlyForAdministrators()
+        public async Task Models_AnAdminOnlyProvider_IsOfferedAndUsableOnlyWithTheRight()
         {
             using var storage = new TemporaryDirectory();
             var ollama = new FakeOllama();
             await using var host = await CreateHostAsync(storage.Path, ollama, services => services.AddSingleton<ITranslationProvider, AdminOnlyProvider>());
             var document = await PrepareAsync(host, storage.Path);
 
-            // The Owner sees every model a machine has, the admin-only provider's too, and may translate with it.
+            // The Owner (who holds instance.settings.update) sees every model a machine has, the admin-only provider's too, and may translate with it.
             CollectionAssert.AreEqual(new[] { Small, Large, AdminOnlyProvider.Id }, await ModelsAsync(host));
             using (var chosen = await ChooseAsync(host, document, 0, AdminOnlyProvider.Id, 1, 0))
                 Assert.AreEqual(HttpStatusCode.OK, chosen.StatusCode, await chosen.Content.ReadAsStringAsync());
 
-            // An ordinary account is neither offered nor allowed it.
+            // An account without that right is neither offered nor allowed it.
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 2 WHERE \"Id\" = 41");
             CollectionAssert.AreEqual(new[] { Small, Large }, await ModelsAsync(host));
             using (var refused = await ChooseAsync(host, document, 0, AdminOnlyProvider.Id, 2, null))
@@ -137,6 +137,35 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Translation'");
             using (var off = await ChooseAsync(host, document, 0, Large, 1, 0))
                 Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task Models_ConnectedCodex_OffersTheOwnersModelForWholePassages_OnlyWithTheRight()
+        {
+            using var storage = new TemporaryDirectory();
+            using var codex = new CodexTranslationTests.Folder();
+            codex.SignIn();
+            var ollama = new FakeOllama();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
+                settings: new Dictionary<string, string> { ["LocalTranslation:Endpoint"] = "http://ollama:11434", ["Ai:CodexPath"] = codex.Executable, ["Ai:CodexHome"] = codex.Home },
+                services: services => services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => ollama));
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+
+            // The account's first model, else the one the Owner chose on the AI page; Codex re-translates chapters in whole passages, Ollama block by block.
+            CollectionAssert.AreEqual(new[] { Small + " False", Large + " False", "codex:gpt-test True" }, await ModelInfosAsync(host));
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"CodexModel\" = 'gpt-ok' WHERE \"Id\" = 1");
+            CollectionAssert.Contains(await ModelInfosAsync(host), "codex:gpt-ok True");
+
+            // A Media Manager lacks instance.settings.update: Codex is not offered.
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
+            CollectionAssert.AreEqual(new[] { Small + " False", Large + " False" }, await ModelInfosAsync(host));
+        }
+
+        private static async Task<string[]> ModelInfosAsync(Host host)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/translation/local/models");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return [.. (await response.Content.ReadFromJsonAsync<ReaderTranslationModelsV1>(JsonSerializerOptions.Web))!.Models.Select(model => model.Id + " " + model.Passages)];
         }
 
         private static Task<Host> CreateHostAsync(string storage, FakeOllama ollama, Action<IServiceCollection>? more = null) =>
@@ -184,7 +213,7 @@ namespace Jularr.Backend.Tests
         {
             using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/translation/local/models");
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
-            return (await response.Content.ReadFromJsonAsync<ReaderTranslationModelsV1>(JsonSerializerOptions.Web))!.Models;
+            return [.. (await response.Content.ReadFromJsonAsync<ReaderTranslationModelsV1>(JsonSerializerOptions.Web))!.Models.Select(model => model.Id)];
         }
 
         private static async Task<bool> TranslateAsync(AsyncServiceScope scope) =>

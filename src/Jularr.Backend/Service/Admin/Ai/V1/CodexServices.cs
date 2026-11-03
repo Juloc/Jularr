@@ -134,30 +134,6 @@ namespace Jularr.Backend.Service.Admin.Ai.V1
             Task.FromResult<IServiceOutput>(new CodexActivityV1(_connection.Requests(), [.. _connection.History().Select(day => new CodexDayV1(day.Day, day.Tokens))], _connection.PlanLimitedUntil));
     }
 
-    // What the Reader offers the Owner: the Codex model to re-translate with (the one chosen on the AI page, else the account's first), only while Codex is connected.
-    [ServiceEndpoint("GET", "/api/v1/admin/ai/codex/retranslation")]
-    public sealed class ReadCodexRetranslationV1 : AdminService<CodexConnectionParametersV1>
-    {
-        private readonly CodexConnection _connection;
-
-        internal ReadCodexRetranslationV1(CodexConnection connection)
-        {
-            _connection = connection;
-        }
-
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<CodexRetranslationV1>()];
-        protected override ModuleRequirement GetInstanceModules(CodexConnectionParametersV1 parameters) => ModuleRequirement.None;
-        protected override ServicePermission GetPermission(CodexConnectionParametersV1 parameters, Type resultType) => new("instance.settings.update");
-
-        protected override async Task<IServiceOutput> OnRead()
-        {
-            if (!await _connection.IsConnectedAsync(CancellationToken)) return new CodexRetranslationV1(null);
-            await _connection.ReadCatalogAsync(CancellationToken);
-            var model = (await CodexSettings.ReadAsync(Context, CancellationToken)).Model ?? _connection.KnownModels.FirstOrDefault();
-            return new CodexRetranslationV1(model is not null && _connection.KnownModels.Contains(model, StringComparer.Ordinal) ? "codex:" + model : null);
-        }
-    }
-
     [ServiceEndpoint("GET", "/api/v1/admin/ai/codex/settings")]
     public sealed class ReadCodexSettingsV1 : AdminService<CodexConnectionParametersV1>
     {

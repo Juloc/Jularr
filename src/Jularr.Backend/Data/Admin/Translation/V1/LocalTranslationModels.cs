@@ -27,7 +27,8 @@ namespace Jularr.Backend.Data.Admin.Translation.V1
     // What every server translation starts from: the Ollama machines in the Owner's order (empty means the configured endpoint alone) and the
     // Owner's default model as a provider-qualified id (none keeps the largest installed TranslateGemma).
     // The Owner's Codex effort, fallback model and token limits (0 is unlimited) travel with it: Codex translates only within them.
-    public sealed class TranslationSetupV1(string[] machines, string? model, string? codexEffort, string? codexFallbackModel, long codexDailyTokens, long codexRunTokens) : BaseResponse
+    public sealed class TranslationSetupV1(string[] machines, string? model, string? codexEffort, string? codexFallbackModel, long codexDailyTokens, long codexRunTokens,
+        string? codexModel = null) : BaseResponse
     {
         public TranslationSetupV1(string[] machines, string? model) : this(machines, model, null, null, 0, 0)
         {
@@ -50,6 +51,10 @@ namespace Jularr.Backend.Data.Admin.Translation.V1
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.CodexTokens))]
         public long CodexRunTokens { get; } = codexRunTokens;
+
+        // The Codex model the Owner chose on the AI page (none: the account's first); the one the Reader offers.
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.CodexModel))]
+        public string? CodexModel { get; } = codexModel;
     }
 
     // The Owner's default model, a provider-qualified id such as "ollama:translategemma:12b"; none keeps the largest installed TranslateGemma.

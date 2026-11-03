@@ -76,11 +76,17 @@ namespace Jularr.Backend.Data.User.Translation.V1
     {
     }
 
-    // The provider-qualified model ids the caller may re-translate with now; an admin-only provider's models only for an administrator.
-    public sealed class ReaderTranslationModelsV1(string[] models) : BaseResponse
+    // The models the caller may re-translate with now; an admin-only provider's models only with the admin-only right.
+    public sealed class ReaderTranslationModelsV1(ReaderTranslationModelV1[] models) : BaseResponse
     {
-        [DataField(typeof(TranslationFields), nameof(TranslationFields.Models))]
-        public string[] Models { get; } = models;
+        public ReaderTranslationModelV1[] Models { get; } = models;
+    }
+
+    // A provider-qualified model id; Passages when the Reader re-translates a chapter with it in whole-passage requests (Codex) rather than block by block.
+    public sealed class ReaderTranslationModelV1(string id, bool passages)
+    {
+        public string Id { get; } = id;
+        public bool Passages { get; } = passages;
     }
 
     public sealed class LocalReadingSectionModelParametersV1(long documentId, int sectionIndex, string language, string model) : BaseParameters

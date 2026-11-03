@@ -1,5 +1,6 @@
 using System.Net.Http;
 using Jularr.Backend.Data.Admin.Translation.V1;
+using Jularr.Backend.Data.User.Translation.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Logic.Translation;
 
@@ -59,7 +60,7 @@ namespace Jularr.Backend.Service.Core
             {
                 Statement = """
                     SELECT "TranslationMachines" AS "Machines", "TranslationModel" AS "Model", "CodexEffort" AS "CodexEffort", "CodexFallbackModel" AS "CodexFallbackModel",
-                        "CodexDailyTokens" AS "CodexDailyTokens", "CodexRunTokens" AS "CodexRunTokens" FROM "InstanceSettings" WHERE "Id" = 1;
+                        "CodexDailyTokens" AS "CodexDailyTokens", "CodexRunTokens" AS "CodexRunTokens", "CodexModel" AS "CodexModel" FROM "InstanceSettings" WHERE "Id" = 1;
                     """
             }, ct) ?? new TranslationSetupV1([], null);
 
@@ -87,21 +88,31 @@ namespace Jularr.Backend.Service.Core
             return null;
         }
 
-        // Whether the caller may choose this model in the Reader: any profile a model of an ordinary provider and the Owner's default model,
-        // only an administrator the other models of an admin-only provider.
-        public bool MayChoose(string id, TranslationSetupV1 setup, bool isAdmin) =>
-            Find(id) is var (provider, _) && (!provider.IsAdminOnly || isAdmin || string.Equals(id, setup.Model, StringComparison.Ordinal));
+        // The right that admits an admin-only provider's models, the one the Owner's re-translation by whole passages needs too.
+        public const string AdminOnlyRight = "instance.settings.update";
 
-        // The model ids the caller may choose now, in the providers' order; an admin-only provider is not even asked for anyone else.
-        public async Task<string[]> AvailableAsync(TranslationSetupV1 setup, bool isAdmin, CancellationToken ct)
+        // Whether the verified caller holds that right.
+        public static bool MayUseAdminOnly(ServiceCaller caller) =>
+            ServiceGate.GetPermissions(caller.AccountId, caller.ProfileId, caller.ProfileOwnerAccountId, caller.AccountRoleTypeId, caller.IsDevice).Contains(AdminOnlyRight, StringComparer.Ordinal);
+
+        // Whether the caller may choose this model in the Reader: any profile a model of an ordinary provider and the Owner's default model,
+        // only a holder of the admin-only right the other models of an admin-only provider.
+        public bool MayChoose(string id, TranslationSetupV1 setup, ServiceCaller caller) =>
+            Find(id) is var (provider, _) && (!provider.IsAdminOnly || string.Equals(id, setup.Model, StringComparison.Ordinal) || MayUseAdminOnly(caller));
+
+        // The models the caller may choose now, in the providers' order; an admin-only provider is not even asked for anyone else. Passages: the
+        // provider translates a chapter in whole-passage requests (RetranslateLocalReadingSectionV1, the admin-only right), not block by block.
+        public async Task<ReaderTranslationModelV1[]> AvailableAsync(TranslationSetupV1 setup, ServiceCaller caller, CancellationToken ct)
         {
-            var models = new List<string>();
+            var admin = MayUseAdminOnly(caller);
+            var models = new List<ReaderTranslationModelV1>();
             foreach (var provider in _providers)
             {
-                if (provider.IsAdminOnly && !isAdmin) continue;
-                models.AddRange((await provider.AvailableAsync(setup, ct)).Select(model => Id(provider.Key, model)));
+                if (provider.IsAdminOnly && !admin) continue;
+                var passages = admin && provider is IBatchTranslationProvider;
+                models.AddRange((await provider.AvailableAsync(setup, ct)).Select(model => new ReaderTranslationModelV1(Id(provider.Key, model), passages)));
             }
-            return [.. models.Distinct(StringComparer.Ordinal)];
+            return [.. models.DistinctBy(model => model.Id, StringComparer.Ordinal)];
         }
     }
 

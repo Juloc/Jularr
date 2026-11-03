@@ -41,11 +41,17 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        // The Owner's ChatGPT account: only administrators choose its models in the Reader.
+        // The Owner's ChatGPT account: only the admin-only right chooses its model in the Reader.
         public bool IsAdminOnly => true;
 
-        public async Task<IReadOnlyList<string>> AvailableAsync(TranslationSetupV1 setup, CancellationToken ct) =>
-            connection.PlanLimitedUntil is not null || connection.LimitReached(setup.CodexDailyTokens, setup.CodexRunTokens) || !await connection.IsConnectedAsync(ct) ? [] : Models;
+        // The model chosen on the AI page, else the account's first, while Codex is connected and within its limits.
+        public async Task<IReadOnlyList<string>> AvailableAsync(TranslationSetupV1 setup, CancellationToken ct)
+        {
+            if (connection.PlanLimitedUntil is not null || connection.LimitReached(setup.CodexDailyTokens, setup.CodexRunTokens) || !await connection.IsConnectedAsync(ct)) return [];
+            if (connection.KnownModels.Length == 0) await connection.ReadCatalogAsync(ct);
+            var model = setup.CodexModel ?? connection.KnownModels.FirstOrDefault();
+            return model is not null && connection.KnownModels.Contains(model, StringComparer.Ordinal) ? [model] : [];
+        }
 
         public async Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct)
         {

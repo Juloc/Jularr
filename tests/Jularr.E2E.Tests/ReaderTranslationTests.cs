@@ -180,7 +180,7 @@ namespace Jularr.E2E.Tests
             var box = await page.Locator("[data-panel=language]").BoundingBoxAsync();
             Assert.IsNotNull(box);
             Assert.IsTrue(box.X >= 0 && box.X + box.Width <= 390, "The language panel fits the phone: " + box.X + " + " + box.Width);
-            foreach (var button in await area.Locator("button").AllAsync())
+            foreach (var button in await area.Locator("button:visible").AllAsync())
             {
                 var size = await button.BoundingBoxAsync();
                 Assert.IsTrue(size is { Height: >= 32 } && size.X + size.Width <= 390, "A re-translation button fits the phone.");

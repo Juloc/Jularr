@@ -6,7 +6,6 @@ using System.Text.Json;
 using AngleSharp.Html.Parser;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
-using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Profile;
@@ -141,7 +140,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
         }
     }
 
-    // The models the Reader offers for a re-translation: those a machine translates with now, an admin-only provider's only for an administrator.
+    // The models the Reader offers for a re-translation: those a machine translates with now, an admin-only provider's only with the admin-only right.
     [ServiceEndpoint("GET", "/api/v1/translation/local/models")]
     public sealed class ReadReaderTranslationModelsV1 : UserService<ReaderTranslationModelsParametersV1>
     {
@@ -159,7 +158,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             var setup = await TranslationProviders.SetupAsync(Context, CancellationToken);
-            return new ReaderTranslationModelsV1(await _providers.AvailableAsync(setup, Auth.AccountRoleTypeId != AccountRoleType.User, CancellationToken));
+            return new ReaderTranslationModelsV1(await _providers.AvailableAsync(setup, Auth, CancellationToken));
         }
     }
 
@@ -185,8 +184,8 @@ namespace Jularr.Backend.Service.User.Translation.V1
             if (_providers.Find(Parameters.Model) is null) throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
             if (Data.Scope == ReadingTranslationScope.Block && Data.BlockIndex is null) throw new DataValidationException(nameof(Data.BlockIndex), "required");
             var setup = await TranslationProviders.SetupAsync(Context, CancellationToken);
-            if (!_providers.MayChoose(Parameters.Model, setup, Auth.AccountRoleTypeId != AccountRoleType.User))
-                throw new SecurityException("Only an administrator may choose this model.");
+            if (!_providers.MayChoose(Parameters.Model, setup, Auth))
+                throw new SecurityException("Only the admin-only right may choose this model.");
 
             var data = new ReadingTranslationScopeWriteData(Parameters.DocumentId, Data.Scope == ReadingTranslationScope.Book ? null : Parameters.SectionIndex,
                 Data.Scope == ReadingTranslationScope.Block ? Data.BlockIndex : null, Parameters.Language, Parameters.Model);
@@ -317,8 +316,8 @@ namespace Jularr.Backend.Service.User.Translation.V1
         {
             if (_providers.Find(Parameters.Model) is null) throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
             var setup = await Context.ExecuteBatchAsync(TranslationProviders.SetupAsync, CancellationToken);
-            if (!_providers.MayChoose(Parameters.Model, setup, Auth.AccountRoleTypeId != AccountRoleType.User))
-                throw new SecurityException("Only an administrator may translate with this model.");
+            if (!_providers.MayChoose(Parameters.Model, setup, Auth))
+                throw new SecurityException("Only the admin-only right may translate with this model.");
             var section = await _sections.ExecuteAsync<ReadingSectionV1>(new ReadingSectionParametersV1(Parameters.DocumentId, Parameters.SectionIndex), CancellationToken);
             var html = new HtmlParser().ParseDocument(section.Html);
             var nodes = html.QuerySelectorAll("[data-b]").ToArray();
