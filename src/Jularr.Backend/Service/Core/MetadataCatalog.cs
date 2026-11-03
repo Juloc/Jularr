@@ -229,6 +229,31 @@ namespace Jularr.Backend.Service.Core
             TextLimit.Cut(AniListMetadata.Title(result), 500)!, TextLimit.Cut(result.RomajiTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null,
             TextLimit.Cut(result.Description, 4000), null, null, result.CoverUrl);
 
+        // AniList's titles of a filter page become Works by their own type (anime films as films), in AniList's order.
+        public async Task<IReadOnlyList<ExternalWorkData>> ReadFilteredAniListAsync(LogicContext context, MediaSubtype subtype, IReadOnlyCollection<string> formats, AniListListQuery list,
+            int page, CancellationToken ct)
+        {
+            var anime = subtype == MediaSubtype.Anime;
+            var found = await aniList.ReadFilteredAsync(anime ? AniListMediaType.Anime : AniListMediaType.Manga, formats, list, page, ct);
+            var kept = new Dictionary<string, ExternalWorkData>(StringComparer.Ordinal);
+            foreach (var group in found.GroupBy(media => AniListMatching.CatalogType(anime ? "ANIME" : "MANGA", media.Format)).Where(group => group.Key is not null))
+            {
+                var works = group.Select(media => ExternalWork(anime ? AniListAnime(media) : AniListBook(media), media.Format)).ToArray();
+                foreach (var work in await KeepWorksAsync(context, new ExternalWorkListData(AniListMetadata.Namespace, group.Key!.Value.Type, group.Key.Value.Subtype), works, ct))
+                {
+                    kept[work.Value] = work;
+                }
+            }
+
+            return [.. found.Select(media => kept.GetValueOrDefault(media.Id.ToString(CultureInfo.InvariantCulture))).OfType<ExternalWorkData>()];
+        }
+
+        // Open Library's books of a filter page as Works.
+        public async Task<IReadOnlyList<ExternalWorkData>> ReadFilteredBooksAsync(LogicContext context, IReadOnlyList<string> subjects, int? yearFrom, int? yearTo, string? language,
+            bool newest, int page, CancellationToken ct) =>
+            await KeepWorksAsync(context, new ExternalWorkListData(BookMetadata.Namespace, MediaType.Book, null),
+                [.. (await books.SearchFilteredAsync(subjects, yearFrom, yearTo, language, newest, page, ct)).Select(book => ExternalWork(Book(book)))], ct);
+
         // Ranked catalog lists: Open Library trends books, AniList ranks manga, light novels and anime, page by page. A kept list already names its Works;
         // a list in another than its own order is never kept.
         public async Task<IReadOnlyList<ExternalWorkData>?> ReadCachedFeedInBatchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, int page,

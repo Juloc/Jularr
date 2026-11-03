@@ -87,7 +87,7 @@ namespace Jularr.E2E.Tests
 
             try
             {
-                // The media types come first, then the local availability, then the release year and the rankings the chosen types have.
+                // The media types come first, then the local availability, then the type's filters (the year range) and the rankings the chosen types have.
                 await page.GotoAsync("/?type=movies");
                 await page.Locator("button[data-drawer-pane=filter]").ClickAsync();
                 var drawer = page.Locator("#discover-panel");
@@ -95,7 +95,7 @@ namespace Jularr.E2E.Tests
                 async Task<float> TopAsync(ILocator element) => (await element.BoundingBoxAsync())!.Y;
                 var types = await TopAsync(drawer.Locator(".drawer__section").First);
                 var availability = await TopAsync(drawer.Locator(".choice-group").Filter(new() { Has = page.Locator("input[name=availability]") }));
-                var year = await TopAsync(drawer.Locator(".choice-group").Filter(new() { Has = page.Locator("input[name=year]") }));
+                var year = await TopAsync(drawer.Locator(".discover-range").Filter(new() { Has = page.Locator("input[name=yearFrom]") }));
                 var rankings = drawer.Locator(".choice-group").Filter(new() { Has = page.Locator("input[name=feed]") });
                 Assert.IsTrue(types < availability && availability < year && year < await TopAsync(rankings), $"{types} {availability} {year}");
                 await Assertions.Expect(rankings.GetByText("Upcoming", new() { Exact = true })).ToBeVisibleAsync();

@@ -29,7 +29,7 @@ namespace Jularr.Integrations.Logic.AniList
                 : [];
         }
 
-        // A ranked list page by page; adult titles stay out and AniList ignores a narrowing left empty.
+        // A ranked list page by page; adult titles stay out unless asked for, and AniList ignores a narrowing left empty.
         public async Task<IReadOnlyList<AniListMedia>> ReadRankedAsync(AniListMediaType type, IReadOnlyCollection<string> formats, AniListListQuery query, int page, CancellationToken ct)
         {
             var sort = query.Sort switch
@@ -46,12 +46,48 @@ namespace Jularr.Integrations.Logic.AniList
             if (query.Season is { } season) variables["season"] = season;
             if (query.SeasonYear is { } year) variables["seasonYear"] = year;
             if (query.Country is { } country) variables["country"] = country;
-            using var document = await PostAsync("query ($page: Int, $type: MediaType, $formats: [MediaFormat], $sort: [MediaSort], $season: MediaSeason, $seasonYear: Int, $country: CountryCode) { "
-                + "Page(page: $page, perPage: 20) { media(type: $type, format_in: $formats, sort: $sort, season: $season, seasonYear: $seasonYear, countryOfOrigin: $country, isAdult: false) { "
+            if (!query.IncludesAdult) variables["adult"] = false;
+            if (query.Genres.Count > 0) variables["genres"] = query.Genres;
+            if (query.Tags.Count > 0) variables["tags"] = query.Tags;
+            if (query.Statuses.Count > 0) variables["statuses"] = query.Statuses;
+            if (query.Sources.Count > 0) variables["sources"] = query.Sources;
+            if (query.SiteIds.Count > 0) variables["sites"] = query.SiteIds;
+
+            // AniList compares dates (yyyymmdd) and counts without their ends.
+            if (query.YearFrom is { } from) variables["startAfter"] = from * 10000;
+            if (query.YearTo is { } to) variables["startBefore"] = (to + 1) * 10000;
+            foreach (var (name, range) in new[] { ("episodes", query.Episodes), ("chapters", query.Chapters), ("volumes", query.Volumes), ("duration", query.Duration) })
+            {
+                if (range.Minimum is { } minimum) variables[name + "Above"] = minimum - 1;
+                if (range.Maximum is { } maximum) variables[name + "Below"] = maximum + 1;
+            }
+
+            using var document = await PostAsync("query ($page: Int, $type: MediaType, $formats: [MediaFormat], $sort: [MediaSort], $season: MediaSeason, $seasonYear: Int, $country: CountryCode, "
+                + "$adult: Boolean, $genres: [String], $tags: [String], $statuses: [MediaStatus], $sources: [MediaSource], $sites: [Int], $startAfter: FuzzyDateInt, $startBefore: FuzzyDateInt, "
+                + "$episodesAbove: Int, $episodesBelow: Int, $chaptersAbove: Int, $chaptersBelow: Int, $volumesAbove: Int, $volumesBelow: Int, $durationAbove: Int, $durationBelow: Int) { "
+                + "Page(page: $page, perPage: 20) { media(type: $type, format_in: $formats, sort: $sort, season: $season, seasonYear: $seasonYear, countryOfOrigin: $country, isAdult: $adult, "
+                + "genre_in: $genres, tag_in: $tags, status_in: $statuses, source_in: $sources, licensedById_in: $sites, startDate_greater: $startAfter, startDate_lesser: $startBefore, "
+                + "episodes_greater: $episodesAbove, episodes_lesser: $episodesBelow, chapters_greater: $chaptersAbove, chapters_lesser: $chaptersBelow, volumes_greater: $volumesAbove, "
+                + "volumes_lesser: $volumesBelow, duration_greater: $durationAbove, duration_lesser: $durationBelow) { "
                 + Fields + " } } }", variables, ct);
             return Child(Child(document.RootElement, "data"), "Page") is { } found && found.TryGetProperty("media", out var media) && media.ValueKind == JsonValueKind.Array
                 ? [.. media.EnumerateArray().Select(Read).OfType<AniListMedia>()]
                 : [];
+        }
+
+        // The names Discover's filter offers: AniList's tags and its streaming (anime) and reading (manga) sites.
+        public async Task<AniListFilterOptions> ReadFilterOptionsAsync(CancellationToken ct)
+        {
+            using var document = await PostAsync("{ MediaTagCollection { id name category isAdult } anime: ExternalLinkSourceCollection(type: STREAMING, mediaType: ANIME) { id site } "
+                + "manga: ExternalLinkSourceCollection(type: STREAMING, mediaType: MANGA) { id site } }", new Dictionary<string, object>(), ct);
+            var data = Child(document.RootElement, "data");
+            IEnumerable<JsonElement> Items(string name) => data is { } root && root.TryGetProperty(name, out var list) && list.ValueKind == JsonValueKind.Array ? list.EnumerateArray() : [];
+            int? Id(JsonElement item) => item.TryGetProperty("id", out var id) && id.TryGetInt32(out var value) && value > 0 ? value : null;
+            AniListOption[] Sites(string name) => [.. Items(name).Select(site => Id(site) is { } id && Text(site, "site") is { } label ? new AniListOption(id, label, null, false) : null).OfType<AniListOption>()];
+            return new AniListFilterOptions(
+                [.. Items("MediaTagCollection").Select(tag => Id(tag) is { } id && Text(tag, "name") is { } name
+                    ? new AniListOption(id, name, Text(tag, "category"), tag.TryGetProperty("isAdult", out var adult) && adult.ValueKind == JsonValueKind.True) : null).OfType<AniListOption>()],
+                Sites("anime"), Sites("manga"));
         }
 
         public async Task<AniListMedia> ReadAsync(AniListMediaType type, int id, CancellationToken ct)

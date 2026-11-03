@@ -281,10 +281,32 @@ namespace Jularr.Backend.Data.Logic.Media
 
         public int Shelf { get; }
         public string Namespace { get; }
-        public short MediaTypeId { get; }
+        // 0 reads every type of the subtype.
+        public short MediaTypeId { get; init; }
         public short MediaSubtypeId { get; }
         public short Feed { get; }
         public short Sort { get; }
+
+        // Discover's filters on a sorted shelf; null narrows nothing.
+        public short[]? Genres { get; init; }
+        public int[]? Tags { get; init; }
+        public short[]? Formats { get; init; }
+        public short[]? Statuses { get; init; }
+        public short[]? Sources { get; init; }
+        public int[]? Sites { get; init; }
+        public string? Country { get; init; }
+        public short? Season { get; init; }
+        public int? YearFrom { get; init; }
+        public int? YearTo { get; init; }
+        public int? EpisodesFrom { get; init; }
+        public int? EpisodesTo { get; init; }
+        public int? ChaptersFrom { get; init; }
+        public int? ChaptersTo { get; init; }
+        public int? VolumesFrom { get; init; }
+        public int? VolumesTo { get; init; }
+        public int? DurationFrom { get; init; }
+        public int? DurationTo { get; init; }
+        public bool Adult { get; init; }
     }
 
     // Shelves read in one statement; a browse page goes on at its offset.

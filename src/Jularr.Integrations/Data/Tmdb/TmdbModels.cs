@@ -149,6 +149,39 @@ namespace Jularr.Integrations.Data.Tmdb
         Upcoming = 4
     }
 
+    // TMDB's orders of a discover list.
+    internal enum TmdbDiscoverSort : byte
+    {
+        Popularity = 1,
+        Rating = 2,
+        Released = 3,
+        Title = 4
+    }
+
+    // What a discover list is narrowed by; an empty choice narrows nothing. Genres must all match, the services and statuses any one.
+    internal sealed class TmdbDiscoverQuery
+    {
+        public TmdbDiscoverSort Sort { get; init; } = TmdbDiscoverSort.Popularity;
+        public IReadOnlyList<int> GenreIds { get; init; } = [];
+        // Years of the first release, both included.
+        public int? YearFrom { get; init; }
+        public int? YearTo { get; init; }
+        // Minutes, both included.
+        public int? RuntimeFrom { get; init; }
+        public int? RuntimeTo { get; init; }
+        // ISO 3166-1 alpha-2.
+        public string? Country { get; init; }
+        // Flat-rate services in the region.
+        public IReadOnlyList<int> ProviderIds { get; init; } = [];
+        public string? Region { get; init; }
+        // Series only: 0 returning, 1 planned, 2 in production, 3 ended, 4 canceled, 5 pilot.
+        public IReadOnlyList<int> SeriesStatuses { get; init; } = [];
+        public bool IncludesAdult { get; init; }
+    }
+
+    // A streaming service TMDB lists for a region.
+    internal sealed record TmdbProvider(int Id, string Name);
+
     internal enum TmdbFailure : byte
     {
         Unavailable = 1,

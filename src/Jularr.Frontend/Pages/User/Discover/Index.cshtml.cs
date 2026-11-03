@@ -21,9 +21,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Jularr.Frontend.Pages.User.Discover
 {
-    public sealed class IndexModel(ReadDiscoverScopesV1 readScopes, ReadDiscoverShelvesV1 readShelves, SuggestDiscoverV1 suggest, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search,
+    public sealed partial class IndexModel(ReadDiscoverScopesV1 readScopes, ReadDiscoverShelvesV1 readShelves, SuggestDiscoverV1 suggest, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search,
         SearchDiscoverCatalogV1 catalogSearch, ReadDiscoverCatalogFeedV1 catalogFeeds, ReadContinueV1 continuation, ReadLibraryV1 library, ReadHomeLayoutV1 readLayout, UiText texts, FrontendAssets assets,
-        IAntiforgery antiforgery, ILogger<IndexModel> log, ReadWorkAvailabilityStatesV1 readAvailability) : JularrPage
+        IAntiforgery antiforgery, ILogger<IndexModel> log, ReadWorkAvailabilityStatesV1 readAvailability, ReadDiscoverFilteredV1 filtered, ReadDiscoverFilterOptionsV1 filterOptions)
+        : JularrPage
     {
         // Shelves of providers are asked together, a few at a time, and none holds the page longer than this; slower ones are logged.
         private const int ShelfConcurrency = 6;
@@ -72,7 +73,6 @@ namespace Jularr.Frontend.Pages.User.Discover
         private string? _feed;
         private string? _sort;
         private string? _availability;
-        private string? _year;
 
         // One or more scope slugs, as a comma list or repeated; none or every listed one means all.
         [BindProperty(SupportsGet = true, Name = "type")]
@@ -91,9 +91,6 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         [BindProperty(SupportsGet = true, Name = "availability")]
         public string? Availability { get => _availability; set => _availability = Known(value, "local", "request"); }
-
-        [BindProperty(SupportsGet = true, Name = "year")]
-        public string? Year { get => _year; set => _year = Known(value, "2020", "old"); }
 
         [BindProperty(SupportsGet = true, Name = "q")]
         public string? Query { get; set; }
@@ -144,6 +141,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             page.Asset("Pages/User/Discover/Index.entry.scss");
             page.Asset("Pages/User/Discover/Index.entry.ts");
             page.Asset("Pages/User/Discover/Controls.entry.ts");
+            page.Asset("Pages/User/Discover/FilterRow.entry.ts");
+            page.Asset("Pages/User/Discover/FilterRow.entry.scss");
             page.Asset("Framework/Components/Drawer.entry.ts");
             page.Asset("Framework/Components/LiveProgress.entry.ts");
             page.Asset("Framework/Components/ChoiceSelect.entry.ts");
@@ -162,8 +161,9 @@ namespace Jularr.Frontend.Pages.User.Discover
             var selected = Selected;
             var searching = !string.IsNullOrWhiteSpace(Query);
 
-            // One row of media types; a ranking opened from its shelf names itself and leads back.
+            // One row of media types and the filters under it; a ranking opened from its shelf names itself and leads back.
             page.Content.Add(TypeBar());
+            if (FilterRow() is { } filters) page.Content.Add(filters);
             if (selected is not null && View is { } view && !searching)
             {
                 var heading = new List<IUiComponent>
@@ -190,14 +190,20 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return;
             }
 
-            // Every result is a Work and opens its page.
+            // Every result is a Work and opens its page; filtered titles keep the highlights above them.
             if (_catalog is not null || _results is not null)
             {
+                if (Filtering && !searching && PageNumber == 1)
+                {
+                    page.Content.Add(new HeroCarousel(assets, _hero, HeroPreferences, "discover.hero.empty"));
+                    if (FilterHeading() is { } heading) page.Content.Add(heading);
+                }
+
                 var cards = new List<IUiComponent>();
                 cards.AddRange(Filtered(_results ?? []).Select(Card));
                 cards.AddRange(Filtered(_catalog ?? []).Select(entry => CatalogCard(entry.Scope, entry.Item)));
                 // A ranking pages on while its provider answers, a page the filter empties included, and says where it ends; a search pages while its page is full.
-                var browsing = View is not null && !searching;
+                var browsing = (View is not null || Filtering) && !searching;
                 if (cards.Count == 0 && (PageNumber == 1 || !browsing))
                 {
                     page.Content.Add(new P(new Text(searching ? "discover.noResults" : "discover.empty")).Attribute("role", "status"));
@@ -266,16 +272,21 @@ namespace Jularr.Frontend.Pages.User.Discover
         // The shared media-type bar; the tools open the filter and the highlight settings.
         private IUiComponent TypeBar()
         {
-            var narrowed = (Availability is not null ? 1 : 0) + (Year is not null ? 1 : 0);
+            var narrowed = (Availability is not null ? 1 : 0) + FilterCount;
             var filter = new List<IUiComponent> { new Icon("filter", assets, 16) };
             if (narrowed > 0) filter.Add(new Span(new ValueText(narrowed.ToString(CultureInfo.CurrentCulture))).Class("capsule-bar__badge"));
+            // The filter row's More opens the filter when the row is there.
             var tools = new List<IUiComponent>
             {
-                Drawer.Opener(new Button(new Icon("sliders", assets, 16)).IconOnly(texts["discover.view.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "view"),
-                Drawer.Opener(new Button([.. filter]).IconOnly(texts["discover.filter.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "filter"),
-                new Drawer(assets, "discover-panel", [FilterPane(), ViewPane()])
+                Drawer.Opener(new Button(new Icon("sliders", assets, 16)).IconOnly(texts["discover.view.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "view")
             };
-            return new MediaTypeBar(assets, [.. Listed.Select(scope => scope.Slug)], [.. Chosen.Select(scope => scope.Slug)], "discover.type.", types => Address(Current with { Types = types, View = null, Page = 1 }), tools);
+            if (Offered is null || !string.IsNullOrWhiteSpace(Query))
+            {
+                tools.Add(Drawer.Opener(new Button([.. filter]).IconOnly(texts["discover.filter.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "filter"));
+            }
+
+            tools.Add(new Drawer(assets, "discover-panel", [FilterPane(), ViewPane()]));
+            return new MediaTypeBar(assets, [.. Listed.Select(scope => scope.Slug)], [.. Chosen.Select(scope => scope.Slug)], "discover.type.", types => Address(Current with { Types = types, View = null, Sort = null, Filters = false, Page = 1 }), tools);
         }
 
         // Feed lists and whether the shelves wrap into a grid; each shelf keeps its list's order.
@@ -294,7 +305,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             var shown = ChosenSort ?? own;
             var keep = new Dictionary<string, string> { ["type"] = scope.Slug, ["view"] = view.ToString() };
             if (Availability is not null) keep["availability"] = Availability;
-            if (Year is not null) keep["year"] = Year;
+            KeepFilters(keep);
             return new ChoiceSelect("/", "sort", "discover.sort", [.. SortSlugs.Where(sort => scope.Sorts.Contains(sort.Sort))
                 .Select(sort => new ChoiceOption("discover.sort." + sort.Sort, sort.Sort == own ? "" : sort.Slug, sort.Sort == shown))], keep);
         }
@@ -340,16 +351,15 @@ namespace Jularr.Frontend.Pages.User.Discover
                             .Attribute("data-pick-label", texts["discover.pickAll"]).Attribute("data-clear-label", texts["discover.clearAll"])])));
             }
 
-            // The media types come first, then the local availability, then only the filters the chosen types have data for:
-            // the release year, and the rankings of the types (those a chosen type lacks leave the list as the types change).
+            // The media types come first, then the local availability and the filters the chosen types have data for (the row's own travel along hidden),
+            // then the rankings of the types (those a chosen type lacks leave the list as the types change).
             var body = new List<IUiComponent>
             {
                 new Div([.. chooser]).Class("drawer__section"),
                 new ChoiceGroup(assets, "discover.filter.availability", "availability", [new("", Availability is null, "discover.all"), new("local", Availability == "local", "discover.known"),
-                    new("request", Availability == "request", "discover.availability.request")]),
-                new ChoiceGroup(assets, "discover.filter.year", "year", [new("", Year is null, "discover.all"), new("2020", Year == "2020", "discover.year.since2020"),
-                    new("old", Year == "old", "discover.year.before2020")])
+                    new("request", Availability == "request", "discover.availability.request")])
             };
+            body.AddRange(MoreFilters());
             var feedOptions = FeedOptions(Chosen);
             if (feedOptions.Count > 1)
             {
@@ -361,7 +371,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             return new DrawerPane("filter", "discover.tab.filter", "discover.filter.title", "filter", body,
             [
-                new A(new Text("discover.reset")).Class("button").Attribute("href", Address(new State([], null, null, null, null, Query?.Trim(), null, 1))),
+                new A(new Text("discover.reset")).Class("button").Attribute("href", Address(new State([], null, null, null, false, Query?.Trim(), null, 1))),
                 new Button(new Icon("check", assets, 16), new Text("discover.applyClose")).Primary().Submit()
             ], "/");
         }
@@ -549,6 +559,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             await LoadListedAsync();
+            await LoadFilterOptionsAsync();
 
             var selected = Selected;
             try
@@ -559,14 +570,20 @@ namespace Jularr.Frontend.Pages.User.Discover
                     return;
                 }
 
-                if (selected is { IsCatalog: true } && View is { } catalogView && selected.Feeds.Contains(catalogView))
+                // Filtered titles replace the shelves; the first page keeps the highlights, read below.
+                if (Filtering)
+                {
+                    await LoadFilteredAsync();
+                    if (PageNumber > 1) return;
+                }
+                else if (selected is { IsCatalog: true } && View is { } catalogView && selected.Feeds.Contains(catalogView))
                 {
                     _catalog = [.. (await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new ReadDiscoverCatalogFeedDataV1(selected.MediaTypeId, catalogView, selected.MediaSubtypeId,
                         PageNumber, ChosenSort), HttpContext.RequestAborted)).Select(item => (selected, item))];
                     return;
                 }
 
-                if (selected is not null && View is { } view && selected.Feeds.Contains(view))
+                if (!Filtering && selected is not null && View is { } view && selected.Feeds.Contains(view))
                 {
                     _results = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(selected.MediaTypeId, view, PageNumber, ChosenSort), HttpContext.RequestAborted);
                     return;
@@ -589,7 +606,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             // The highlights continue and fill up from the same reads as the shelves, also while those shelves are hidden.
-            var hero = View is null && string.IsNullOrWhiteSpace(Query);
+            var hero = (View is null || Filtering) && string.IsNullOrWhiteSpace(Query);
             var shown = _layout.Where(shelf => !shelf.IsHidden).Select(shelf => shelf.HomeShelfTypeId).ToHashSet();
             var continueTask = ReadWhenAsync((texts.CanPlay() || texts.CanRead()) && (hero || shown.Overlaps([HomeShelfType.ContinueWatching, HomeShelfType.ContinueListening, HomeShelfType.ContinueReading])),
                 () => continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted));
@@ -940,8 +957,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             items.Where(entry => Fits(entry.Item.MediaStateTypeId == MediaStateType.Available, entry.Item.MediaStateTypeId == MediaStateType.NotRequested, entry.Item.ReleaseYear));
 
         private bool Fits(bool isLocal, bool canBeRequested, int? releaseYear) =>
-            (Availability != "local" || isLocal) && (Availability != "request" || canBeRequested)
-            && (Year != "2020" || releaseYear >= 2020) && (Year != "old" || releaseYear < 2020);
+            (Availability != "local" || isLocal) && (Availability != "request" || canBeRequested);
 
         // The token of the quick request on the cards, taken once per request.
         private string Csrf => _csrf ??= antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "";
@@ -1016,10 +1032,11 @@ namespace Jularr.Frontend.Pages.User.Discover
         private static string DetailsHref(DiscoverItemV1 item) => "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture);
 
         // Everything the address holds; links change one part and keep the rest.
-        private sealed record State(IReadOnlyList<string> Types, string? Feed, string? Sort, string? Availability, string? Year, string? Query, DiscoverFeedType? View, int Page);
+        // Filters keeps the chosen filters; another media type starts without them.
+        private sealed record State(IReadOnlyList<string> Types, string? Feed, string? Sort, string? Availability, bool Filters, string? Query, DiscoverFeedType? View, int Page);
 
-        private State Current => new(IsAll ? [] : [.. Chosen.Select(scope => scope.Slug)], Feed, ChosenSort is { } sort ? SortSlugs.First(entry => entry.Sort == sort).Slug : null, Availability, Year,
-            Query?.Trim(), View, PageNumber);
+        private State Current => new(IsAll ? [] : [.. Chosen.Select(scope => scope.Slug)], Feed,
+            (ChosenSort ?? FilterSort) is { } sort ? SortSlugs.First(entry => entry.Sort == sort).Slug : null, Availability, true, Query?.Trim(), View, PageNumber);
 
         private static string? Known(string? value, params string[] allowed) => allowed.Contains(value) ? value : null;
 
@@ -1033,9 +1050,9 @@ namespace Jularr.Frontend.Pages.User.Discover
             var searching = !string.IsNullOrWhiteSpace(state.Query);
             if (state.Feed is not null && !searching && state.View is null) values.Add("feed=" + Uri.EscapeDataString(state.Feed));
             if (state.View is not null && !searching) values.Add("view=" + state.View);
-            if (state.Sort is not null && state.View is not null && !searching) values.Add("sort=" + Uri.EscapeDataString(state.Sort));
+            if (state.Sort is not null && (state.View is not null || state.Filters && Filtering) && !searching) values.Add("sort=" + Uri.EscapeDataString(state.Sort));
             if (state.Availability is not null) values.Add("availability=" + Uri.EscapeDataString(state.Availability));
-            if (state.Year is not null) values.Add("year=" + Uri.EscapeDataString(state.Year));
+            if (state.Filters) values.AddRange(FilterValues());
             if (searching) values.Add("q=" + Uri.EscapeDataString(state.Query!));
             if (state.Page > 1) values.Add("p=" + state.Page.ToString(CultureInfo.InvariantCulture));
             return values.Count == 0 ? "/" : "/?" + string.Join('&', values);

@@ -124,6 +124,37 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
+        // A discover list narrowed by Discover's filters.
+        public async Task<IReadOnlyList<TmdbSearchResult>> DiscoverAsync(TmdbConnection connection, MediaType mediaType, TmdbDiscoverQuery query, int page, CancellationToken ct)
+        {
+            try
+            {
+                return await _tmdb.DiscoverAsync(connection, Kind(mediaType), query, page, ct);
+            }
+            catch (TmdbException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
+        // The streaming services of the language's country, kept a day.
+        public async Task<IReadOnlyList<TmdbProvider>> ReadProvidersAsync(TmdbConnection connection, MediaType mediaType, CancellationToken ct)
+        {
+            if (TmdbClient.WatchRegion(connection) is not { } region) return [];
+            var key = "metadata.providers." + mediaType + "." + region;
+            if (_cache.TryGetValue(key, out IReadOnlyList<TmdbProvider>? cached)) return cached!;
+            try
+            {
+                var providers = await _tmdb.ReadProvidersAsync(connection, Kind(mediaType), region, ct);
+                _cache.Set(key, providers, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1), Size = Math.Max(1, providers.Count) });
+                return providers;
+            }
+            catch (TmdbException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
         // Positive and negative identity lookups share one cache across scans.
         public async Task<int?> FindExternalAsync(TmdbConnection connection, MediaType mediaType, string @namespace, string externalId, CancellationToken ct)
         {

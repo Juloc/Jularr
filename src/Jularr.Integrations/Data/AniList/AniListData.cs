@@ -33,6 +33,14 @@ namespace Jularr.Integrations.Data.AniList
         Title
     }
 
+    // One name of the filter's lists: a tag (with its category) or a site.
+    internal sealed record AniListOption(int Id, string Name, string? Category, bool IsAdult);
+
+    internal sealed record AniListFilterOptions(IReadOnlyList<AniListOption> Tags, IReadOnlyList<AniListOption> AnimeSites, IReadOnlyList<AniListOption> MangaSites);
+
+    // A count from and up to, both included; either end may be open.
+    internal readonly record struct AniListRange(int? Minimum, int? Maximum);
+
     // One ranked list: its order and what narrows it; a season needs its year.
     internal sealed class AniListListQuery
     {
@@ -50,6 +58,22 @@ namespace Jularr.Integrations.Data.AniList
         public int? SeasonYear { get; }
         // Two letters, KR for Korea.
         public string? Country { get; }
+
+        // What Discover's filters narrow it by; an empty choice narrows nothing. Genres and tags must all match, the others any one.
+        public IReadOnlyList<string> Genres { get; init; } = [];
+        public IReadOnlyList<string> Tags { get; init; } = [];
+        public IReadOnlyList<string> Statuses { get; init; } = [];
+        public IReadOnlyList<string> Sources { get; init; } = [];
+        public IReadOnlyList<int> SiteIds { get; init; } = [];
+        // Years the title began in, both included.
+        public int? YearFrom { get; init; }
+        public int? YearTo { get; init; }
+        public AniListRange Episodes { get; init; }
+        public AniListRange Chapters { get; init; }
+        public AniListRange Volumes { get; init; }
+        // Minutes of one episode.
+        public AniListRange Duration { get; init; }
+        public bool IncludesAdult { get; init; }
     }
 
     // A title as the provider catalog keeps it: one entry of a page that walks AniList by id.

@@ -71,6 +71,36 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
+        // AniList's tags and sites for Discover's filter, kept a day.
+        public async Task<AniListFilterOptions> ReadFilterOptionsAsync(CancellationToken ct)
+        {
+            const string key = "anilist.filterOptions";
+            if (cache.TryGetValue(key, out AniListFilterOptions? cached)) return cached!;
+            try
+            {
+                var options = await aniList.ReadFilterOptionsAsync(ct);
+                cache.Set(key, options, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1), Size = Math.Max(1, options.Tags.Count) });
+                return options;
+            }
+            catch (AniListException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
+        // A ranked list of any of the type's formats, as Discover's filter narrows it.
+        public async Task<IReadOnlyList<AniListMedia>> ReadFilteredAsync(AniListMediaType type, IReadOnlyCollection<string> formats, AniListListQuery list, int page, CancellationToken ct)
+        {
+            try
+            {
+                return await aniList.ReadRankedAsync(type, formats, list, page, ct);
+            }
+            catch (AniListException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
         public async Task<IReadOnlyList<AniListMedia>> ReadAnimeRankingAsync(AniListListQuery list, int page, CancellationToken ct)
         {
             try

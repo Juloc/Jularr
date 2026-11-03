@@ -136,10 +136,17 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   with the best match first, in each type the typed title, then titles beginning with it, then other matches, local before trending before popular, two to
   six per type as the room allows, then All results; each group's heading (its type's icon, name and a See all pill) opens that type's results, titles show a 40×60 cover with the typed words marked and year · first genre · rating under them (what is unknown is left out), and two or more groups stand in two columns where there is room. Enter opens Discover's results: one row per type in the same order, each with See all for that type
   alone (which pages); the providers are asked once, together, only on Enter, and the kept titles join their rows, so a provider that does not answer never hides what the suggestions showed. On a phone the icon opens the field over the header, the suggestions fill
-  the screen and the back button closes them. The Filter drawer lists the media types first, then the local availability
-  (in Jularr, can be requested), then only what the chosen types have: the release year and their rankings; the rankings a chosen
-  type lacks leave the panel as the types change. No genre, platform, language, runtime or rating facets exist yet (Discover's
-  catalogs keep no such data). Library and Favorites share the same media-type bar, filter panel (types, release year), order and layout. Owner's decision 2 Nov: the admin Media list has the same media-type bar above its toolbar (every type, several at once); its status chips stay in the toolbar and its filter drawer has no type.
+  the screen and the back button closes them. Owner's decision 2 Nov: under the media-type bar a filter row as AniList's
+  search has it: Genres, Year, Season (anime) and Format at hand, More opens the Filter drawer with the others the chosen type's catalog can
+  answer (status, country with Manhwa/Manhua, source, AniList's tags by category, streaming or reading sites, ranges of years, episodes,
+  chapters, volumes and minutes, language for books, adult titles as a switch for every profile; `DiscoverFilterOptionsV1` names them per
+  type). Several types share only genre and year. A popup applies its choices when it closes, a select at once; on a phone the row swipes
+  sideways and a popup is a sheet. Any filter (not the type alone) replaces the feed chips and shelves with one grid of the chosen types'
+  titles under the highlights, popularity first, with the orders the type offers, loading on while scrolling; with Jularr holding the whole
+  catalog (`LocalDiscovery`: AniList, TMDB's films) the grid is read locally, otherwise from the provider (AniList, TMDB's discover lists,
+  Open Library). The Filter drawer lists the media types first, then the local availability, the filters above, then only the rankings the
+  chosen types have; the rankings a chosen type lacks leave the panel as the types change. Library and Favorites share the same media-type bar,
+  filter panel (types, release year), order and layout. Owner's decision 2 Nov: the admin Media list has the same media-type bar above its toolbar (every type, several at once); its status chips stay in the toolbar and its filter drawer has no type.
   Cards use the shared cover presentation and Backend-supplied state below. User/profile ordering is respected.
   Backend supplies effective capability/order/provider data; do not copy
   old `Jularr.Web` persistence or invent a new module toggle in Frontend.
