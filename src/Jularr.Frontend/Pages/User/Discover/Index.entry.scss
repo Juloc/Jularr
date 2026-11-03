@@ -128,7 +128,7 @@
     .discover-results .media-shelf__heading { margin: 27px 0 14px; h2 { font-size: 18px; } }
 }
 
-html:not(.discover-scripted) [data-discover-layout] { display: none; }
+@media (scripting: none) { [data-discover-layout] { display: none; } }
 
 html[data-discover-layout="grid"] {
     .discover-toolbar__layout .ui-icon { &:first-child { display: none; } &:last-child { display: block; } }
@@ -142,7 +142,7 @@ html[data-discover-layout="grid"] {
     .discover-results .media-shelf__controls { display: none; }
 }
 
-html:not(.discover-scripted) .discover-pick, html:not(.discover-scripted) .discover-all { display: none; }
+@media (scripting: none) { .discover-pick, .discover-all { display: none; } }
 
 // All media types and the choice of a whole area, as on a phone's chooser.
 .discover-all.button {

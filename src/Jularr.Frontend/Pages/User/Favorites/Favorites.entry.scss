@@ -2,8 +2,8 @@
 @use "../../../Framework/Components/CapsuleBar";
 @use "../../../Framework/Components/ChoiceGroup";
 
-// Controls that need script show once it has run.
-html:not(.favorites-ready) {
+// Controls that need script show only with it.
+@media (scripting: none) {
     [data-favorites-bulk-toggle], .favorites-chip, .favorites-heart__manage, .favorites-entry__select { display: none; }
 }
 
@@ -142,7 +142,7 @@ html:not(.favorites-ready) {
 }
 
 // What to select, how the titles are ordered and laid out.
-html.favorites-ready .favorites-heart__toggle { display: none; }
+@media (scripting: enabled) { .favorites-heart__toggle { display: none; } }
 
 .favorites-notice {
     margin: 0 0 12px;

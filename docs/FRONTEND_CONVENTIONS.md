@@ -27,6 +27,10 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   its DOM setup with `onPage(import.meta.url, setup)`: it runs once per document load
   and again for each new page the script belongs to; document-level listeners are
   installed once at module level. HTML a script inserts goes through `inserted(element)`.
+- Pages hold still while they load (layout shift below 0.01, [LayoutShiftTests](../tests/Jularr.E2E.Tests/LayoutShiftTests.cs)).
+  What only works with script, or only without it, shows or hides through `@media (scripting: enabled)` / `(scripting: none)`,
+  which holds before the first paint, never through a class a script sets later. A control a script reveals keeps its room
+  (a shelf's heading is as high as its arrows), and a native control a script replaces is as high as its replacement.
 - Frontend owns UI appearance, interaction, presentation-only state.
   Backend owns permissions, identities, validation, business decisions,
   transaction boundaries, persistence, paging data and API contracts.
