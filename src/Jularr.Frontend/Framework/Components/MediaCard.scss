@@ -202,11 +202,11 @@
         }
     }
 
-    // The box of a chosen card sits top left on a white disc, as the bookmark does on the right.
+    // The box of a chosen card sits top left on a white disc, centred as high as the bookmark on the right; its phone tap of 44px stays inside the cover.
     &__select {
         position: absolute;
-        top: 6px;
-        left: 6px;
+        top: 8px;
+        left: 8px;
         z-index: 4;
         display: grid;
         width: 28px;
