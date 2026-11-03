@@ -37,7 +37,7 @@ namespace Jularr.Frontend.Modules.Live
             var says = operation.ReasonKey is not null && (operation.IsWaiting || running || operation.OperationStatusTypeId == OperationStatusType.Failed);
             var phase = operation.IsWaiting ? "waiting" : (running && operation.DownloadStateTypeId is { } state ? state.ToString() : operation.OperationStatusTypeId.ToString()).ToLowerInvariant();
             var progress = says ? null : operation.ProgressPercent;
-            return new LiveEntity(phase, null, progress, Texts(("status", OperationStatus(texts, operation.IsWaiting, operation.OperationStatusTypeId, says || !running ? null : operation.DownloadStateTypeId)),
+            return new LiveEntity(phase, null, progress, Texts(("status", OperationStatus(texts, operation.IsWaiting, operation.OperationStatusTypeId, says ? null : operation.DownloadStateTypeId)),
                 ("reason", says ? Reason(texts, operation.OperationTypeId, operation.ReasonKey) : null),
                 ("speed", says ? null : OperationSpeed(texts, operation.OperationStatusTypeId, operation.DownloadStateTypeId, operation.BytesPerSecond)),
                 ("detail", says ? null : OperationDetail(progress, operation.SizeBytes, operation.RemainingBytes, operation.EtaSeconds)),
@@ -113,8 +113,9 @@ namespace Jularr.Frontend.Modules.Live
         public static string Percent(int? percent) => percent is { } value ? value.ToString(CultureInfo.CurrentCulture) + "%" : "";
 
         // The queue's Status column as the page first renders it: waiting, else what the client does with a running download, else the job's status.
+        // A finished or failed download keeps the client's last state; it does not count, so page and stream say the same.
         public static string OperationStatus(UiText texts, bool isWaiting, OperationStatusType status, DownloadStateType? state = null) =>
-            isWaiting ? texts["activity.waiting"] : state is { } known ? texts["activity.state." + known] : texts["operation.status." + status];
+            isWaiting ? texts["activity.waiting"] : status is OperationStatusType.Queued or OperationStatusType.Running && state is { } known ? texts["activity.state." + known] : texts["operation.status." + status];
 
         // Downloads report acquisition outcomes; scans and backups report service errors.
         public static string Reason(UiText texts, OperationType type, string? key)
