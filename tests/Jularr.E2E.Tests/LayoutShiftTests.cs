@@ -47,8 +47,23 @@ namespace Jularr.E2E.Tests
                 """);
             await jularr.SeedLibraryFilesAsync();
 
-            // Shelves, choice selects, layout toggles and drawer buttons, the save pill's forms on cards and in lists.
-            string[] paths = ["/", "/Library", "/Favorites", "/Notifications", "/Admin/Providers", "/Admin/Catalog", "/Admin/Downloads", "/Account/Sessions"];
+            // The queue: a running, a waiting and a paused download, one that needs help and one that failed in the client's last state.
+            await jularr.RunSqlAsync("""
+                DO $$
+                DECLARE wanted bigint; release bigint;
+                BEGIN
+                    FOR i IN 1..5 LOOP
+                        INSERT INTO "WantedItems" ("WorkId") VALUES (9700 + i) RETURNING "Id" INTO wanted;
+                        INSERT INTO "AcquisitionReleases" ("WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId") VALUES (wanted, 'queue-' || i, 'Film.' || i || '.1080p.WEB-DL.H264-JLR', 1) RETURNING "Id" INTO release;
+                        INSERT INTO "Operations" ("OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "DownloadStateTypeId", "ProgressPercent", "SizeBytes", "RemainingBytes", "EtaSeconds", "AttentionKey", "ErrorKey", "StartedAt", "FinishedAt")
+                        VALUES (2, CASE i WHEN 2 THEN 1 WHEN 5 THEN 4 ELSE 2 END, release, CASE i WHEN 2 THEN 1 WHEN 3 THEN 3 WHEN 4 THEN 4 ELSE 2 END, CASE WHEN i = 2 THEN NULL ELSE 40 END,
+                            7400000000, 4400000000, 720, CASE WHEN i = 4 THEN 'import_wrong_title' END, CASE WHEN i = 5 THEN 'usenet_incomplete' END, now(), CASE WHEN i = 5 THEN now() END);
+                    END LOOP;
+                END $$;
+                """);
+
+            // Shelves, choice selects, layout toggles and drawer buttons, the save pill's forms on cards and in lists, the queue's live rows.
+            string[] paths = ["/", "/Library", "/Favorites", "/Notifications", "/Admin/Providers", "/Admin/Catalog", "/Admin/Downloads", "/Admin/Activity", "/Account/Sessions"];
             var shifts = new List<string>();
             try
             {
@@ -77,7 +92,21 @@ namespace Jularr.E2E.Tests
                     if (scrolled.GetProperty("score").GetDouble() >= 0.01) shifts.Add($"{width}px /Library scrolled: {scrolled.GetProperty("score").GetDouble():0.0000} ({scrolled.GetProperty("sources").GetString()})");
                 }
 
+                // The queue's rows say from the start what the stream says, and a download that starts keeps its row's height.
+                var queue = await (await page.GotoAsync("/Admin/Activity"))!.TextAsync();
+                var label = queue[queue.IndexOf("state-chip__live", queue.IndexOf("Film.5.1080p", StringComparison.Ordinal), StringComparison.Ordinal)..];
+                label = label[(label.IndexOf('>') + 1)..label.IndexOf('<')];
+                Assert.AreEqual("Failed", label, "The failed download's state as the page first renders it.");
+                await jularr.RunSqlAsync("""
+                    UPDATE "Operations" SET "OperationStatusTypeId" = 2, "DownloadStateTypeId" = 2, "ProgressPercent" = 1
+                    WHERE "AcquisitionReleaseId" = (SELECT "Id" FROM "AcquisitionReleases" WHERE "ReleaseIdentity" = 'queue-2');
+                    """);
+                await Assertions.Expect(Steps.ListRow(page, "Film.2.1080p").Locator(".state-chip")).ToHaveTextAsync("Downloading");
+                var live = await page.EvaluateAsync<JsonElement>(Measure);
+                if (live.GetProperty("score").GetDouble() >= 0.01) shifts.Add($"/Admin/Activity live: {live.GetProperty("score").GetDouble():0.0000} ({live.GetProperty("sources").GetString()})");
+
                 // The device's choice of rows comes back with the page itself: it arrives as rows and holds still; an unknown skin is the default.
+                await page.GotoAsync("/Library");
                 await page.Locator("[data-layout-toggle]").ClickAsync();
                 await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-list-layout", "list");
                 await browser.Context.AddCookiesAsync([new() { Name = "jularr-ui-skin", Value = "neon", Url = jularr.Address.ToString() }]);
