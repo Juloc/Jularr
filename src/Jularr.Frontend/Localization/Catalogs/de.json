@@ -10499,6 +10499,42 @@
    "Limit nearly reached",
    "Limit fast erreicht"
   ],
+  "admin.ai.history": [
+   "Tokens per day",
+   "Tokens pro Tag"
+  ],
+  "admin.ai.planLimited": [
+   "Plan limit reached",
+   "Tarif-Limit erreicht"
+  ],
+  "admin.ai.planLimitedNote": [
+   "The ChatGPT plan is used up; Codex translation rests until",
+   "Der ChatGPT-Tarif ist aufgebraucht; die Codex-Übersetzung ruht bis"
+  ],
+  "admin.ai.activity": [
+   "Activity",
+   "Aktivität"
+  ],
+  "admin.ai.activityLine": [
+   "What Codex is doing and did last",
+   "Was Codex gerade tut und zuletzt getan hat"
+  ],
+  "admin.ai.requestRunning": [
+   "Running",
+   "Läuft"
+  ],
+  "admin.ai.requestDone": [
+   "Done",
+   "Fertig"
+  ],
+  "admin.ai.requestFailed": [
+   "Failed",
+   "Fehlgeschlagen"
+  ],
+  "admin.ai.requestPlanLimit": [
+   "Plan limit",
+   "Tarif-Limit"
+  ],
   "errors.codex_not_installed": [
    "The Codex CLI is not available in this installation.",
    "Die Codex-CLI ist in dieser Installation nicht verfügbar."

@@ -44,6 +44,8 @@ namespace Jularr.E2E.Tests
             var home = Path.Combine(folder, "home");
             Directory.CreateDirectory(home);
             var executable = Path.Combine(folder, "codex");
+            // Two earlier days of Codex use, as Jularr keeps them next to the sign-in.
+            File.WriteAllText(Path.Combine(home, "jularr-usage.json"), "{\"Day\":\"2000-01-01\",\"Tokens\":5,\"History\":{\"2026-11-01\":1200,\"2026-11-02\":3400}}");
             File.WriteAllText(executable, Cli.Replace("\r\n", "\n"));
             File.SetUnixFileMode(executable, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             try
@@ -72,6 +74,9 @@ namespace Jularr.E2E.Tests
                 // Connected: the plan usage and the Owner's choices follow, and a saved choice is still there after a reload.
                 await Assertions.Expect(page.Locator("#codex-usage")).ToContainTextAsync("42 %");
                 await Assertions.Expect(page.Locator("#codex-usage")).ToContainTextAsync("Weekly window");
+                await Assertions.Expect(page.Locator("#codex-usage")).ToContainTextAsync("Tokens per day");
+                await Assertions.Expect(page.Locator("#codex-usage")).ToContainTextAsync("11-02");
+                await Assertions.Expect(page.Locator("#codex-usage")).ToContainTextAsync("3,400");
                 var settings = page.Locator("#codex-settings");
                 await settings.Locator("select[name=Model]").SelectOptionAsync("gpt-two");
                 await settings.Locator("select[name=Effort]").SelectOptionAsync("high");

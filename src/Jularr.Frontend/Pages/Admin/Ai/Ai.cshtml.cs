@@ -10,7 +10,7 @@ namespace Jularr.Frontend.Pages.Admin.Ai
 {
     // The instance's one Codex connection as a card: its state, and Connect with the address and code while a login waits, Cancel, Disconnect. Once connected, the plan's usage
     // and the Owner's choices (model, effort, fallback, token limits) follow as cards.
-    public sealed class AiModel(ReadCodexConnectionV1 read, StartCodexLoginV1 start, CancelCodexLoginV1 cancel, LogoutCodexV1 logout, ReadCodexCatalogV1 readCatalog, ReadCodexSettingsV1 readSettings,
+    public sealed class AiModel(ReadCodexConnectionV1 read, StartCodexLoginV1 start, CancelCodexLoginV1 cancel, LogoutCodexV1 logout, ReadCodexCatalogV1 readCatalog, ReadCodexSettingsV1 readSettings, ReadCodexActivityV1 readActivity,
         SaveCodexSettingsV1 saveSettings, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string Address = "/Admin/Ai";
@@ -18,6 +18,7 @@ namespace Jularr.Frontend.Pages.Admin.Ai
         private CodexConnectionV1? _connection;
         private CodexCatalogV1? _catalog;
         private CodexSettingsV1? _settings;
+        private CodexActivityV1? _activity;
         private CodexSettingsDataV1? _entered;
 
         protected override void Define(Page page)
@@ -31,9 +32,10 @@ namespace Jularr.Frontend.Pages.Admin.Ai
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             var cards = new List<IUiComponent> { Card(_connection, csrf) };
-            if (_connection.Phase == CodexPhase.Connected && _catalog is not null && _settings is not null)
+            if (_connection.Phase == CodexPhase.Connected && _catalog is not null && _settings is not null && _activity is not null)
             {
-                if (_catalog.Windows.Length > 0 || _catalog.UsedToday > 0 || _catalog.UsedSinceStart > 0) cards.Add(UsageCard(_catalog, _settings));
+                if (_catalog.Windows.Length > 0 || _catalog.UsedToday > 0 || _catalog.UsedSinceStart > 0 || _activity.PlanLimitedUntil is not null) cards.Add(UsageCard(_catalog, _settings, _activity));
+                if (_activity.Requests.Length > 0) cards.Add(ActivityCard(_activity));
                 cards.Add(SettingsCard(_catalog, _settings, csrf));
             }
 
@@ -93,7 +95,7 @@ namespace Jularr.Frontend.Pages.Admin.Ai
         }
 
         // The ChatGPT plan's windows as bars with the time they start over.
-        private IUiComponent UsageCard(CodexCatalogV1 catalog, CodexSettingsV1 settings)
+        private IUiComponent UsageCard(CodexCatalogV1 catalog, CodexSettingsV1 settings, CodexActivityV1 activity)
         {
             var windows = catalog.Windows.Select(window =>
             {
@@ -115,8 +117,53 @@ namespace Jularr.Frontend.Pages.Admin.Ai
                 ("admin.ai.usedSinceStart", new ValueText(Count(catalog.UsedSinceStart, settings.RunTokens)))
             };
             var warn = settings.DailyTokens > 0 && catalog.UsedToday * 100 >= settings.DailyTokens * settings.WarnPercent;
-            var state = warn ? new StateChip(new Text(catalog.UsedToday >= settings.DailyTokens ? "admin.ai.limitReached" : "admin.ai.limitNear"), UiTone.Warning) : null;
-            return new FeatureCard(new IconTile(new Icon("pulse", assets, 18), UiTone.Accent), texts["admin.ai.usage"], plan, state, [new Div([.. windows]).Class("codex-windows"), new FactList(counts)], [], null, "codex-usage").Wide();
+            var body = new List<IUiComponent> { new Div([.. windows]).Class("codex-windows"), new FactList(counts) };
+            StateChip? state = warn ? new StateChip(new Text(catalog.UsedToday >= settings.DailyTokens ? "admin.ai.limitReached" : "admin.ai.limitNear"), UiTone.Warning) : null;
+            if (activity.PlanLimitedUntil is { } until)
+            {
+                state = new StateChip(new Text("admin.ai.planLimited"), UiTone.Danger);
+                body.Insert(0, new P(new Text("admin.ai.planLimitedNote"), new ValueText(" "), new LocalTime(until.UtcDateTime)).Class("feature-card__note").Attribute("role", "status"));
+            }
+
+            // The tokens per day of the last two weeks, each bar against the busiest day.
+            var days = activity.Days.TakeLast(14).ToArray();
+            if (days.Length > 0)
+            {
+                var peak = Math.Max(1, days.Max(day => day.Tokens));
+                body.Add(new Div(new P(new Text("admin.ai.history")).Class("codex-history__title"), new Div([.. days.Select(day => (IUiComponent)new Div(
+                    new Span(new ValueText(day.Day[5..])).Class("codex-history__day"),
+                    new Progress().Attribute("max", "100").Attribute("value", Math.Max(2, day.Tokens * 100 / peak).ToString(CultureInfo.InvariantCulture)).TextAttribute("aria-label", "admin.ai.history"),
+                    new Span(new ValueText(day.Tokens.ToString("N0", CultureInfo.CurrentCulture))).Class("codex-history__tokens")).Class("codex-history__row"))]).Class("codex-history__rows")).Class("codex-history"));
+            }
+
+            return new FeatureCard(new IconTile(new Icon("pulse", assets, 18), UiTone.Accent), texts["admin.ai.usage"], plan, state, body, [], null, "codex-usage").Wide();
+        }
+
+        // The running requests and the last ones, newest first; the page asks again while one runs.
+        private IUiComponent ActivityCard(CodexActivityV1 activity)
+        {
+            var running = activity.Requests.Any(request => request.State == 0);
+            var rows = activity.Requests.Select(request =>
+            {
+                var (key, tone) = request.State switch
+                {
+                    0 => ("admin.ai.requestRunning", UiTone.Accent),
+                    1 => ("admin.ai.requestDone", UiTone.Success),
+                    3 => ("admin.ai.requestPlanLimit", UiTone.Danger),
+                    _ => ("admin.ai.requestFailed", UiTone.Warning)
+                };
+                return (IUiComponent)new Li(
+                    new Span(new LocalTime(request.Started.UtcDateTime, "time")).Class("codex-request__time"),
+                    new Span(new ValueText(request.What)).Class("codex-request__what"),
+                    new Span(new ValueText(request.Model)).Class("codex-request__model"),
+                    new Span(new ValueText(request.Tokens > 0 ? request.Tokens.ToString("N0", CultureInfo.CurrentCulture) + " · " : "")
+                        , new ValueText(request.Seconds.ToString("0.#", CultureInfo.CurrentCulture) + " s")).Class("codex-request__cost"),
+                    new StateChip(new Text(key), tone, null, request.State == 0)).Class("codex-request");
+            });
+            var card = new FeatureCard(new IconTile(new Icon("activity", assets, 18), UiTone.Accent), texts["admin.ai.activity"], texts["admin.ai.activityLine"], null,
+                [new Ul([.. rows]).Class("codex-requests")], [], null, "codex-activity").Wide();
+            if (running) card.Attribute("data-codex-busy", "");
+            return card;
         }
 
         private static string Count(long used, long limit) =>
@@ -170,6 +217,16 @@ namespace Jularr.Frontend.Pages.Admin.Ai
             return Content(writer.ToString(), "text/html");
         }
 
+        // Only the activity card, for the page to ask again while a request runs.
+        public async Task<IActionResult> OnGetActivityAsync()
+        {
+            await LoadDataAsync();
+            using var writer = new StringWriter(CultureInfo.InvariantCulture);
+            if (_activity is { Requests.Length: > 0 }) ActivityCard(_activity).WriteTo(writer, global::System.Text.Encodings.Web.HtmlEncoder.Default, texts);
+            Response.Headers.CacheControl = "no-store";
+            return Content(writer.ToString(), "text/html");
+        }
+
         public async Task<IActionResult> OnPostLoginAsync()
         {
             await start.ExecuteAsync<CodexConnectionV1>(new CodexConnectionParametersV1(), new NoData(), HttpContext.RequestAborted);
@@ -209,6 +266,7 @@ namespace Jularr.Frontend.Pages.Admin.Ai
             if (_connection.Phase != CodexPhase.Connected) return;
             _catalog = await readCatalog.ExecuteAsync<CodexCatalogV1>(new CodexConnectionParametersV1(), HttpContext.RequestAborted);
             _settings = await readSettings.ExecuteAsync<CodexSettingsV1>(new CodexConnectionParametersV1(), HttpContext.RequestAborted);
+            _activity = await readActivity.ExecuteAsync<CodexActivityV1>(new CodexConnectionParametersV1(), HttpContext.RequestAborted);
         }
     }
 }
