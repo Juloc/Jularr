@@ -98,6 +98,21 @@
     &[data-state="failed"] { .search-chip__state, .search-chip__result { color: var(--warning); } }
 }
 
+.search-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+// The controls keep their width whatever is chosen, so nothing moves when a filter changes its text.
+.search-filter {
+    flex: none;
+    width: 156px;
+    min-height: var(--control-height-compact);
+    padding: 0 12px;
+    font-size: var(--text-control);
+    font-weight: var(--weight-control);
+}
+
+.search-filters [data-filters-clear] { margin-inline-start: auto; }
+.search-row[hidden] { display: none !important; }
+
 .search-panel__empty { margin: 0; padding: 22px 0; color: var(--muted); text-align: center; }
 
 .search-host { min-width: 0; }
@@ -173,6 +188,9 @@
     }
 
     .search-scope .ui-field { width: calc(50% - 6px); }
+    .search-filters { display: grid; grid-template-columns: 1fr 1fr; }
+    .search-filter { width: 100%; }
+    .search-filters [data-filters-clear] { grid-column: 1 / -1; margin-inline-start: 0; }
     .search-scope .ui-form__actions { flex: 1 1 100%; margin-inline-start: 0; }
     .search-scope .ui-form__actions .button { width: 100%; }
     .search-table tbody + tbody { margin-top: 9px; }

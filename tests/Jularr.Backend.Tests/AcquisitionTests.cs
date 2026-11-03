@@ -2591,6 +2591,7 @@ namespace Jularr.Backend.Tests
             var fromIndexer = await SearchAsync(indexer);
             Assert.AreEqual((0, true), (Asked("open"), Asked("indexer") > 0));
             Assert.IsTrue(fromIndexer.All(candidate => candidate.ConnectionName == "Indexer"));
+            Assert.IsTrue(fromIndexer.All(candidate => candidate.ReleaseProtocolId == ReleaseProtocol.Usenet), "The candidates name how they are fetched, for the filter.");
             var fromOpen = await SearchAsync(open);
             Assert.IsTrue(fromOpen.All(candidate => candidate.ConnectionName == "Open"));
             var books = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Books'"))!;
