@@ -284,6 +284,49 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AdminRequests_FilterByType_NarrowsListAndCounts()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "Accounts" SET "AccountRoleTypeId" = 3 WHERE "Id" = 41;
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt") VALUES
+                    (301, 10, 101, 41, 1, 1, NULL, NULL), (302, 20, 101, 41, 1, 1, NULL, NULL), (303, 20, 202, 42, 1, 2, 41, now());
+                """);
+            await SignInAsync(host);
+
+            async Task<long[]> ReadAsync(string query)
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/requests" + query);
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                return [.. (await response.Content.ReadFromJsonAsync<PageResult<AdminRequest>>())!.Items.Select(item => item.Id).Order()];
+            }
+
+            async Task<int> OpenCountAsync(string query)
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/requests/summary" + query);
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                return (await response.Content.ReadFromJsonAsync<RequestsSummaryV1>())!.OpenCount;
+            }
+
+            // No type lists everything; a type or several narrow the list and the tab counts alike.
+            CollectionAssert.AreEqual(new long[] { 301, 302, 303 }, await ReadAsync(""));
+            CollectionAssert.AreEqual(new long[] { 302, 303 }, await ReadAsync("?mediaTypeIds=Book"));
+            CollectionAssert.AreEqual(new long[] { 301 }, await ReadAsync("?mediaTypeIds=Movie"));
+            CollectionAssert.AreEqual(new long[] { 301, 302, 303 }, await ReadAsync("?mediaTypeIds=Movie&mediaTypeIds=Book"));
+            CollectionAssert.AreEqual(new long[] { 303 }, await ReadAsync("?mediaTypeIds=Book&requestTabTypeId=Approved"));
+            Assert.AreEqual(2, await OpenCountAsync(""));
+            Assert.AreEqual(1, await OpenCountAsync("?mediaTypeIds=Book"));
+
+            // The page has the media-type bar and keeps the chosen types of the address.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Requests?type=books");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "capsule-bar");
+            StringAssert.Contains(html, "type=books");
+            Assert.IsFalse(html.Contains("&lt;Work&gt;", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
         public async Task Approval_TargetFailureRollsBack_AndTargetsAreShared()
         {
             // A manager's request waits for moderation.

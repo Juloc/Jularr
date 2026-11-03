@@ -8,13 +8,36 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 {
     internal sealed class AcquisitionRequestFilterData : BaseData
     {
-        public AcquisitionRequestFilterData(RequestTabType requestTabTypeId)
+        public AcquisitionRequestFilterData(RequestTabType requestTabTypeId, MediaType[] mediaTypeIds, MediaSubtype[] mediaSubtypeIds)
         {
             RequestTabTypeId = requestTabTypeId;
+            MediaTypeIds = mediaTypeIds;
+            MediaSubtypeIds = mediaSubtypeIds;
         }
 
         [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.RequestTabTypeId))]
         public RequestTabType RequestTabTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
+    }
+
+    internal sealed class AcquisitionRequestTypeFilterData : BaseData
+    {
+        public AcquisitionRequestTypeFilterData(MediaType[] mediaTypeIds, MediaSubtype[] mediaSubtypeIds)
+        {
+            MediaTypeIds = mediaTypeIds;
+            MediaSubtypeIds = mediaSubtypeIds;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
     }
 
     internal sealed class ProfileRequestFilterData : BaseData
