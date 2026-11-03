@@ -84,9 +84,9 @@ namespace Jularr.Backend.Tests
             foreach (var (type, subtype, feed, sort, expected) in new (MediaType, MediaSubtype, DiscoverFeedType, DiscoverSort?, string)[]
             {
                 (MediaType.Series, MediaSubtype.Anime, DiscoverFeedType.NextSeason, null, $"\"sort\":[\"POPULARITY_DESC\"],\"season\":\"{DiscoverScopes.SeasonName(season)}\",\"seasonYear\":{year}"),
-                (MediaType.Series, MediaSubtype.Anime, DiscoverFeedType.Popular, DiscoverSort.Favourites, "\"sort\":[\"FAVOURITES_DESC\"]}"),
+                (MediaType.Series, MediaSubtype.Anime, DiscoverFeedType.Popular, DiscoverSort.Favourites, "\"sort\":[\"FAVOURITES_DESC\"],\"adult\":false}"),
                 (MediaType.Book, MediaSubtype.Manga, DiscoverFeedType.Manhwa, DiscoverSort.Added, "\"sort\":[\"ID_DESC\"],\"country\":\"KR\""),
-                (MediaType.Book, MediaSubtype.LightNovel, DiscoverFeedType.Top100, DiscoverSort.Score, "\"sort\":[\"SCORE_DESC\"]}")
+                (MediaType.Book, MediaSubtype.LightNovel, DiscoverFeedType.Top100, DiscoverSort.Score, "\"sort\":[\"SCORE_DESC\"],\"adult\":false}")
             })
             {
                 using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(type, feed, subtype, 1, sort));
@@ -989,6 +989,14 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "The Matrix Show");
             StringAssert.Contains(html, "href=\"/?type=series&amp;q=Matrix\"");
             Assert.IsFalse(html.Contains("data-discover-next", StringComparison.Ordinal));
+            StringAssert.Contains(html, "id=\"search-search-global\" value=\"Matrix\"");
+
+            // The header search shows only its own text: another page's filter stays in that page's field.
+            using var filtered = await host.SendAsync(HttpMethod.Get, "/Library?q=Matrix");
+            html = await filtered.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, filtered.StatusCode, html);
+            StringAssert.Contains(html, "id=\"search-search-global\" value=\"\"");
+            StringAssert.Contains(html, "value=\"Matrix\"");
         }
 
         [TestMethod]
@@ -1435,6 +1443,128 @@ namespace Jularr.Backend.Tests
         {
             await using var scope = host.Services.CreateAsyncScope();
             await scope.ServiceProvider.GetRequiredService<FillWorkMetadataV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default);
+        }
+
+        [TestMethod]
+        public async Task Filter_WholeCatalog_NarrowsLocallyByEveryFacet()
+        {
+            var provider = new FakeAniList();
+            await using var host = await CreateHostAsync(anime: provider);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
+                UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'anilist';
+                INSERT INTO "Works" ("Id", "CatalogNamespace", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "ImageUrl", "Popularity", "IsAdult", "GenreIds", "TagIds",
+                    "SiteIds", "CatalogFormatId", "ReleaseStatusId", "CatalogSourceId", "CountryOfOrigin", "Season", "SeasonYear", "Episodes", "DurationMinutes", "Chapters", "Volumes") VALUES
+                    (9301, 'anilist', 2, 1, 'Mecha Sports', 2020, 'https://img.test/301.jpg', 300, FALSE, '{10,17}', '{5,6}', '{7}', 1, 1, 1, 'JP', 2, 2020, 24, 24, NULL, NULL),
+                    (9302, 'anilist', 2, 1, 'Mecha Only', 2021, 'https://img.test/302.jpg', 200, FALSE, '{10}', '{5}', '{}', 5, 2, 2, 'JP', 3, 2021, 6, 30, NULL, NULL),
+                    (9303, 'anilist', 1, 1, 'Mecha Film', 2020, 'https://img.test/303.jpg', 100, FALSE, '{10,17}', '{}', '{8}', 3, 1, 1, 'KR', NULL, NULL, 1, 110, NULL, NULL),
+                    (9304, 'anilist', 2, 1, 'Mecha Adult', 2020, 'https://img.test/304.jpg', 999, TRUE, '{7,10}', '{}', '{}', 1, 1, 1, 'JP', 2, 2020, 12, 24, NULL, NULL),
+                    (9305, 'anilist', 3, 2, 'Long Manga', 2015, 'https://img.test/305.jpg', 50, FALSE, '{10}', '{}', '{9}', 8, 2, 1, 'KR', NULL, NULL, NULL, NULL, 200, 20);
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES
+                    (9301, 'anilist', '301'), (9302, 'anilist', '302'), (9303, 'anilist', '303'), (9304, 'anilist', '304'), (9305, 'anilist', '305');
+                """);
+
+            async Task<string> FilterAsync(ReadDiscoverFilteredDataV1 data)
+            {
+                using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/filtered", data);
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                var page = (await response.Content.ReadFromJsonAsync<DiscoverFilteredV1>())!;
+                return string.Join(",", page.CatalogItems.Select(item => item.ExternalId + (item.CatalogFormatId is { } format ? ":" + format : "")));
+            }
+
+            // Anime's films and series are one scope; genres and tags all, sites and formats any one; adult titles only when asked.
+            Assert.AreEqual("301:Tv,302:Ova,303:Movie", await FilterAsync(new ReadDiscoverFilteredDataV1("anime", genreIds: [Genre.Mecha])));
+            Assert.AreEqual("301:Tv,303:Movie", await FilterAsync(new ReadDiscoverFilteredDataV1("anime", genreIds: [Genre.Mecha, Genre.Sports])));
+            Assert.AreEqual("304:Tv,301:Tv,302:Ova,303:Movie", await FilterAsync(new ReadDiscoverFilteredDataV1("anime", genreIds: [Genre.Mecha], includesAdult: true)));
+            Assert.AreEqual("301:Tv", await FilterAsync(new ReadDiscoverFilteredDataV1("anime", tagIds: [5, 6])));
+            Assert.AreEqual("301:Tv,303:Movie", await FilterAsync(new ReadDiscoverFilteredDataV1("anime", siteIds: [7, 8])));
+            Assert.AreEqual("302:Ova,303:Movie", await FilterAsync(new ReadDiscoverFilteredDataV1("anime", catalogFormatIds: [CatalogFormat.Ova, CatalogFormat.Movie])));
+            Assert.AreEqual("302:Ova", await FilterAsync(new ReadDiscoverFilteredDataV1("anime", releaseStatusIds: [ReleaseStatus.Releasing])));
+            Assert.AreEqual("303:Movie", await FilterAsync(new ReadDiscoverFilteredDataV1("anime", countryCode: "KR")));
+            Assert.AreEqual("302:Ova", await FilterAsync(new ReadDiscoverFilteredDataV1("anime", catalogSourceIds: [CatalogSource.Manga])));
+            Assert.AreEqual("301:Tv", await FilterAsync(new ReadDiscoverFilteredDataV1("anime", season: 2, yearFrom: 2020, yearTo: 2020)));
+            Assert.AreEqual("302:Ova", await FilterAsync(new ReadDiscoverFilteredDataV1("anime", yearFrom: 2021)));
+            Assert.AreEqual("301:Tv,302:Ova", await FilterAsync(new ReadDiscoverFilteredDataV1("anime", episodesFrom: 2, durationTo: 30)));
+            Assert.AreEqual("305:Manga", await FilterAsync(new ReadDiscoverFilteredDataV1("manga", chaptersFrom: 100, volumesTo: 20, countryCode: "KR")));
+
+            // Another order sorts what the filter finds.
+            using var titled = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/filtered", new ReadDiscoverFilteredDataV1("anime", 1, DiscoverSort.Title, genreIds: [Genre.Mecha]));
+            Assert.AreEqual("303,302,301", string.Join(",", (await titled.Content.ReadFromJsonAsync<DiscoverFilteredV1>())!.CatalogItems.Select(item => item.ExternalId)));
+
+            // A choice the scope does not offer is refused, not ignored.
+            using var foreign = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/filtered", new ReadDiscoverFilteredDataV1("anime", genreIds: [Genre.Western]));
+            Assert.AreEqual(HttpStatusCode.BadRequest, foreign.StatusCode);
+            Assert.AreEqual(0, provider.Requests, "A whole catalog never asks AniList.");
+        }
+
+        [TestMethod]
+        public async Task Filter_WithoutWholeCatalog_AsksTheProviderWithTheSameChoice()
+        {
+            var aniList = new FakeAniList();
+            var tmdb = new FakeTmdb();
+            await using var host = await CreateHostAsync(fake: tmdb, anime: aniList);
+
+            // AniList: genres and formats by its names, a season with its one year, counts without their ends.
+            using var anime = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/filtered", new ReadDiscoverFilteredDataV1("anime", 1, DiscoverSort.Score, genreIds: [Genre.SliceOfLife, Genre.ScienceFiction],
+                catalogFormatIds: [CatalogFormat.Ova], season: 4, yearFrom: 2023, yearTo: 2023, episodesFrom: 10, includesAdult: false));
+            Assert.AreEqual(HttpStatusCode.OK, anime.StatusCode, await anime.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, (await anime.Content.ReadFromJsonAsync<DiscoverFilteredV1>())!.CatalogItems.Count);
+            using var variables = JsonDocument.Parse(aniList.Variables[^1]);
+            var asked = variables.RootElement;
+            Assert.AreEqual("Slice of Life,Sci-Fi", string.Join(",", asked.GetProperty("genres").EnumerateArray().Select(value => value.GetString())));
+            Assert.AreEqual("OVA", asked.GetProperty("formats")[0].GetString());
+            Assert.AreEqual("FALL", asked.GetProperty("season").GetString());
+            Assert.AreEqual(2023, asked.GetProperty("seasonYear").GetInt32());
+            Assert.AreEqual(9, asked.GetProperty("episodesAbove").GetInt32());
+            Assert.AreEqual("SCORE_DESC", asked.GetProperty("sort")[0].GetString());
+            Assert.IsFalse(asked.GetProperty("adult").GetBoolean());
+            Assert.IsFalse(asked.TryGetProperty("startAfter", out _), "A season's year is the season's own.");
+
+            // TMDB: films by their genres, series by TMDB's paired genres, both in the chosen years.
+            using var movies = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/filtered", new ReadDiscoverFilteredDataV1("movies", genreIds: [Genre.Action, Genre.ScienceFiction], yearFrom: 1999, yearTo: 1999, durationTo: 150));
+            Assert.AreEqual(HttpStatusCode.OK, movies.StatusCode, await movies.Content.ReadAsStringAsync());
+            Assert.AreEqual("The Matrix", (await movies.Content.ReadFromJsonAsync<DiscoverFilteredV1>())!.Items.Single().Title);
+            var discover = QueryHelpers.ParseQuery(tmdb.Requests.Last(request => request.AbsolutePath == "/3/discover/movie").Query);
+            Assert.AreEqual("28,878", discover["with_genres"].ToString());
+            Assert.AreEqual("1999-01-01", discover["primary_release_date.gte"].ToString());
+            Assert.AreEqual("150", discover["with_runtime.lte"].ToString());
+            Assert.AreEqual("popularity.desc", discover["sort_by"].ToString());
+
+            using var series = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/filtered", new ReadDiscoverFilteredDataV1("series", genreIds: [Genre.Action, Genre.Fantasy], releaseStatusIds: [ReleaseStatus.Releasing]));
+            Assert.AreEqual(HttpStatusCode.OK, series.StatusCode, await series.Content.ReadAsStringAsync());
+            var shows = QueryHelpers.ParseQuery(tmdb.Requests.Last(request => request.AbsolutePath == "/3/discover/tv").Query);
+            Assert.AreEqual("10759,10765", shows["with_genres"].ToString());
+            Assert.AreEqual("0", shows["with_status"].ToString());
+        }
+
+        [TestMethod]
+        public async Task Razor_Filters_ShowAGridUnderTheHighlights_AndOnlyTheTypeKeepsTheShelves()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+
+            // The type alone keeps the shelves; the row offers its filters.
+            using var shelves = await host.SendAsync(HttpMethod.Get, "/?type=anime");
+            var html = await shelves.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, shelves.StatusCode, html);
+            StringAssert.Contains(html, "data-discover-filters");
+            StringAssert.Contains(html, "discover-filter-season");
+            StringAssert.Contains(html, "id=\"discover-recommendations\"");
+
+            // A filter shows the grid with its sort and the highlights above it; a repeated choice is shown as one list.
+            using var repeated = await host.SendAsync(HttpMethod.Get, "/?type=anime&genre=Mecha&genre=Sports");
+            Assert.AreEqual(HttpStatusCode.Redirect, repeated.StatusCode);
+            Assert.AreEqual("/?type=anime&genre=Mecha,Sports", repeated.Headers.Location!.OriginalString);
+            using var filtered = await host.SendAsync(HttpMethod.Get, "/?type=anime&genre=Mecha,Sports");
+            html = await filtered.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, filtered.StatusCode, html);
+            StringAssert.Contains(html, "media-grid");
+            StringAssert.Contains(html, "hero-carousel");
+            StringAssert.Contains(html, "name=\"sort\"");
+            Assert.IsFalse(html.Contains("id=\"discover-recommendations\"", StringComparison.Ordinal), "Filtered titles replace the shelves.");
+
+            // Several types share genre and year only; a choice no chosen type offers is dropped from the address.
+            using var shared = await host.SendAsync(HttpMethod.Get, "/?type=anime,movies&genre=Mecha&season=2");
+            Assert.AreEqual("/?type=movies,anime", shared.Headers.Location?.OriginalString ?? "", "Mecha is no film genre and films have no seasons.");
         }
 
         private static async Task<Host> CreateHostAsync(bool razor = false, FakeTmdb? fake = null, FakeAniList? anime = null, FakeTvdb? tvdb = null)

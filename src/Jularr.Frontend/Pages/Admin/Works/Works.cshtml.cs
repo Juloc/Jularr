@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Admin.Library.V1;
 using Jularr.Backend.Service.Admin.Media.V1;
@@ -123,11 +124,11 @@ namespace Jularr.Frontend.Pages.Admin.Works
             page.NoPageRow();
             page.Content.Add(new MediaTypeBar(assets, Scopes.ListedSlugs, Scopes.ChosenSlugs, "library.scope.", types => Address(types: types)));
             page.Content.Add(Toolbar());
-            if (CanAcquire) page.Content.Add(SearchControls(csrf));
-            if (_searchRun is not null) page.Content.Add(SearchPanel(csrf));
+            if (_searchRun is { } run && (SearchJob is not null || run.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running)) page.Content.Add(SearchPanel(csrf));
             if (_works is { } works)
             {
                 page.Content.Add(Titles(works.Items, csrf).Paged(works.Items.Count, PageSize, primary: true));
+                if (_summary is { TotalCount: > 0 } summary) page.Content.Add(Footer(summary));
                 if (_view == WorksViewType.Table) page.Content.Add(new ColumnPicker());
                 if (works.Items.Count > 0 && CanManageMedia) page.Content.Add(DeleteDialog(csrf));
                 if (works.Items.Count > 0 && Selectable)
@@ -151,7 +152,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             }
 
             page.Content.Add(AddDialog(csrf));
-            page.Content.Add(Dock(_works));
+            page.Content.Add(Dock(_works, csrf));
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -271,7 +272,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             }
         }
 
-        // The address names a view and the cookie remembers it; a first visit shows the table.
+        // The address names a view and the cookie remembers it; a first visit shows the posters.
         private WorksViewType ResolveView()
         {
             if (ViewChoice is { } chosen && Enum.IsDefined(chosen))
@@ -280,7 +281,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
                 return chosen;
             }
 
-            return Enum.TryParse<WorksViewType>(Request.Cookies[ViewCookie], out var saved) && Enum.IsDefined(saved) ? saved : WorksViewType.Table;
+            return Enum.TryParse<WorksViewType>(Request.Cookies[ViewCookie], out var saved) && Enum.IsDefined(saved) ? saved : WorksViewType.Posters;
         }
 
         // What happened to each chosen title is shown once, after the list is shown again; the counts say how many, the titles that stayed say why.

@@ -71,6 +71,8 @@ namespace Jularr.Backend.Data.Logic.Media
 
         // TMDB's and IMDb's ids of a TheTVDB series a TMDB list or Sonarr named; the Work keeps them as further identities.
         public string? TmdbValue { get; init; }
+        // AniList's format, when the list names it.
+        public CatalogFormat? CatalogFormatId { get; init; }
         public string? ImdbValue { get; init; }
     }
 
@@ -240,6 +242,7 @@ namespace Jularr.Backend.Data.Logic.Media
             Ratings = works.Select(work => work.Rating ?? 0).ToArray();
             TmdbValues = works.Select(work => work.TmdbValue).ToArray();
             ImdbValues = works.Select(work => work.ImdbValue).ToArray();
+            CatalogFormatIds = works.Select(work => (int)(work.CatalogFormatId ?? 0)).ToArray();
         }
 
         public string Namespace { get; }
@@ -258,6 +261,7 @@ namespace Jularr.Backend.Data.Logic.Media
         public decimal[] Ratings { get; }
         public string?[] TmdbValues { get; }
         public string?[] ImdbValues { get; }
+        public int[] CatalogFormatIds { get; }
     }
 
     // One Discover shelf of a whole catalog, or a scope to search without a list: Shelf numbers it within the request.
@@ -277,10 +281,32 @@ namespace Jularr.Backend.Data.Logic.Media
 
         public int Shelf { get; }
         public string Namespace { get; }
-        public short MediaTypeId { get; }
+        // 0 reads every type of the subtype.
+        public short MediaTypeId { get; init; }
         public short MediaSubtypeId { get; }
         public short Feed { get; }
         public short Sort { get; }
+
+        // Discover's filters on a sorted shelf; null narrows nothing.
+        public short[]? Genres { get; init; }
+        public int[]? Tags { get; init; }
+        public short[]? Formats { get; init; }
+        public short[]? Statuses { get; init; }
+        public short[]? Sources { get; init; }
+        public int[]? Sites { get; init; }
+        public string? Country { get; init; }
+        public short? Season { get; init; }
+        public int? YearFrom { get; init; }
+        public int? YearTo { get; init; }
+        public int? EpisodesFrom { get; init; }
+        public int? EpisodesTo { get; init; }
+        public int? ChaptersFrom { get; init; }
+        public int? ChaptersTo { get; init; }
+        public int? VolumesFrom { get; init; }
+        public int? VolumesTo { get; init; }
+        public int? DurationFrom { get; init; }
+        public int? DurationTo { get; init; }
+        public bool Adult { get; init; }
     }
 
     // Shelves read in one statement; a browse page goes on at its offset.
@@ -351,9 +377,10 @@ namespace Jularr.Backend.Data.Logic.Media
     internal sealed class ExternalWorkShelfItemData : BaseData
     {
         public ExternalWorkShelfItemData(int shelf, string @namespace, string value, string title, int? releaseYear, string? overview, string? creator, string? imageUrl,
-            string? backdropUrl, decimal? rating, long workId, MediaStateType? mediaStateTypeId, string? plexUrl)
+            string? backdropUrl, decimal? rating, long workId, MediaStateType? mediaStateTypeId, string? plexUrl, CatalogFormat? catalogFormatId)
         {
             Rating = rating;
+            CatalogFormatId = catalogFormatId;
             Shelf = shelf;
             Namespace = @namespace;
             Value = value;
@@ -370,8 +397,8 @@ namespace Jularr.Backend.Data.Logic.Media
 
         // A suggestion also names its first genre.
         public ExternalWorkShelfItemData(int shelf, string @namespace, string value, string title, int? releaseYear, string? overview, string? creator, string? imageUrl,
-            string? backdropUrl, decimal? rating, long workId, MediaStateType? mediaStateTypeId, string? plexUrl, string? genre)
-            : this(shelf, @namespace, value, title, releaseYear, overview, creator, imageUrl, backdropUrl, rating, workId, mediaStateTypeId, plexUrl)
+            string? backdropUrl, decimal? rating, long workId, MediaStateType? mediaStateTypeId, string? plexUrl, string? genre, CatalogFormat? catalogFormatId)
+            : this(shelf, @namespace, value, title, releaseYear, overview, creator, imageUrl, backdropUrl, rating, workId, mediaStateTypeId, plexUrl, catalogFormatId)
         {
             Genre = genre;
         }
@@ -408,6 +435,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
         public decimal? Rating { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CatalogFormatId))]
+        public CatalogFormat? CatalogFormatId { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }

@@ -83,10 +83,13 @@ namespace Jularr.Backend.Logic.Media
                         nullif(entry."Rating", 0) AS "Rating",
                         CASE WHEN @IsTrending THEN entry."Rank"::integer END AS "TrendingRank",
                         entry."TmdbValue",
-                        entry."ImdbValue"
+                        entry."ImdbValue",
+                        nullif(entry."CatalogFormatId", 0)::smallint AS "CatalogFormatId"
                     FROM
-                        unnest(@Values, @Titles, @OriginalTitles, @ReleaseYears, @Overviews, @Creators, @ImageUrls, @BackdropUrls, @Ratings, @TmdbValues, @ImdbValues) WITH ORDINALITY
-                            AS entry ("Value", "Title", "OriginalTitle", "ReleaseYear", "Overview", "Creator", "ImageUrl", "BackdropUrl", "Rating", "TmdbValue", "ImdbValue", "Rank")
+                        unnest(@Values, @Titles, @OriginalTitles, @ReleaseYears, @Overviews, @Creators, @ImageUrls, @BackdropUrls, @Ratings, @TmdbValues, @ImdbValues,
+                            @CatalogFormatIds) WITH ORDINALITY
+                            AS entry ("Value", "Title", "OriginalTitle", "ReleaseYear", "Overview", "Creator", "ImageUrl", "BackdropUrl", "Rating", "TmdbValue", "ImdbValue",
+                                "CatalogFormatId", "Rank")
                     ORDER BY
                         entry."Value",
                         entry."Rank"
@@ -146,7 +149,8 @@ namespace Jularr.Backend.Logic.Media
                         "ImageUrl" = coalesce(item."ImageUrl", work."ImageUrl"),
                         "BackdropUrl" = coalesce(item."BackdropUrl", work."BackdropUrl"),
                         "Rating" = coalesce(item."Rating", work."Rating"),
-                        "TrendingRank" = coalesce(item."TrendingRank", work."TrendingRank")
+                        "TrendingRank" = coalesce(item."TrendingRank", work."TrendingRank"),
+                        "CatalogFormatId" = coalesce(item."CatalogFormatId", work."CatalogFormatId")
                     FROM
                         resolved
                         JOIN item ON item."Value" = resolved."Value"
@@ -166,6 +170,7 @@ namespace Jularr.Backend.Logic.Media
                         item."BackdropUrl",
                         item."Rating",
                         item."TrendingRank",
+                        item."CatalogFormatId",
                         nextval(pg_get_serial_sequence('"Works"', 'Id')) AS "WorkId"
                     FROM
                         item
@@ -176,7 +181,7 @@ namespace Jularr.Backend.Logic.Media
                 ), created AS (
                     INSERT INTO
                         "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "OriginalTitle", "ReleaseYear", "Overview", "Creator", "ImageUrl", "BackdropUrl", "Rating",
-                            "TrendingRank", "CatalogNamespace")
+                            "TrendingRank", "CatalogNamespace", "CatalogFormatId")
                     SELECT
                         fresh."WorkId",
                         @MediaTypeId,
@@ -190,7 +195,8 @@ namespace Jularr.Backend.Logic.Media
                         fresh."BackdropUrl",
                         fresh."Rating",
                         fresh."TrendingRank",
-                        @Namespace
+                        @Namespace,
+                        fresh."CatalogFormatId"
                     FROM
                         fresh
                 ), identified AS (
@@ -352,6 +358,7 @@ namespace Jularr.Backend.Logic.Media
         // Every shelf in one statement, each in its own order; the Shelf number keeps them apart.
         public static async Task<IReadOnlyList<ExternalWorkShelfItemData>> ReadExternalWorkShelvesAsync(this LogicContext ctx, ExternalWorkShelfQueryData data, CancellationToken ct)
         {
+            // A shelf without a type (0) reads every type of its subtype, as anime's filter does with films and series.
             // Feed numbers as DiscoverFeedType: 1 trending, 2 top, 3 new, 4 upcoming, 5 this season, 6 next season, 7 popular, 8 manhwa, 9 top 100;
             // only the shelf's own list is read, in the order of its index. A chosen order (DiscoverSort) narrows the same way and sorts what it finds;
             // trending then reads the whole catalog, trending titles first.
@@ -371,15 +378,36 @@ namespace Jularr.Backend.Logic.Media
                     work."Rating",
                     work."Id" AS "WorkId",
                     known."MediaStateTypeId",
-                    known."PlexUrl"
+                    known."PlexUrl",
+                    work."CatalogFormatId"
                 FROM
-                    jsonb_to_recordset(@Shelves::jsonb) AS shelf ("Shelf" integer, "Namespace" text, "MediaTypeId" smallint, "MediaSubtypeId" smallint, "Feed" smallint, "Sort" smallint)
+                    jsonb_to_recordset(@Shelves::jsonb) AS shelf ("Shelf" integer, "Namespace" text, "MediaTypeId" smallint, "MediaSubtypeId" smallint, "Feed" smallint, "Sort" smallint,
+                        "Genres" smallint[], "Tags" integer[], "Formats" smallint[], "Statuses" smallint[], "Sources" smallint[], "Sites" integer[], "Country" text, "Season" smallint,
+                        "YearFrom" integer, "YearTo" integer, "EpisodesFrom" integer, "EpisodesTo" integer, "ChaptersFrom" integer, "ChaptersTo" integer, "VolumesFrom" integer,
+                        "VolumesTo" integer, "DurationFrom" integer, "DurationTo" integer, "Adult" boolean)
                     CROSS JOIN LATERAL unnest(CASE
                         WHEN shelf."Sort" > 0 THEN ARRAY(
                             SELECT work."Id" FROM "Works" AS work
                                 JOIN "WorkExternalIdentities" AS listed ON listed."WorkId" = work."Id" AND listed."Namespace" = work."CatalogNamespace"
-                            WHERE work."CatalogNamespace" = shelf."Namespace" AND work."MediaTypeId" = shelf."MediaTypeId" AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
-                                AND NOT work."IsAdult" AND work."ImageUrl" IS NOT NULL
+                            WHERE work."CatalogNamespace" = shelf."Namespace" AND (shelf."MediaTypeId" = 0 OR work."MediaTypeId" = shelf."MediaTypeId")
+                                AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
+                                AND (shelf."Adult" IS TRUE OR NOT work."IsAdult") AND work."ImageUrl" IS NOT NULL
+                                -- Discover's filters: genres and tags all, the lists any one; a season counts its own year.
+                                AND (shelf."Genres" IS NULL OR work."GenreIds" @> shelf."Genres")
+                                AND (shelf."Tags" IS NULL OR work."TagIds" @> shelf."Tags")
+                                AND (shelf."Sites" IS NULL OR work."SiteIds" && shelf."Sites")
+                                AND (shelf."Formats" IS NULL OR work."CatalogFormatId" = ANY(shelf."Formats"))
+                                AND (shelf."Statuses" IS NULL OR work."ReleaseStatusId" = ANY(shelf."Statuses"))
+                                AND (shelf."Sources" IS NULL OR work."CatalogSourceId" = ANY(shelf."Sources"))
+                                AND (shelf."Country" IS NULL OR work."CountryOfOrigin" = shelf."Country")
+                                AND (shelf."Season" IS NULL OR work."Season" = shelf."Season")
+                                AND (shelf."YearFrom" IS NULL OR CASE WHEN shelf."Season" IS NULL THEN work."ReleaseYear" ELSE work."SeasonYear" END >= shelf."YearFrom")
+                                AND (shelf."YearTo" IS NULL OR CASE WHEN shelf."Season" IS NULL THEN work."ReleaseYear" ELSE work."SeasonYear" END <= shelf."YearTo")
+                                AND (shelf."EpisodesFrom" IS NULL OR work."Episodes" >= shelf."EpisodesFrom") AND (shelf."EpisodesTo" IS NULL OR work."Episodes" <= shelf."EpisodesTo")
+                                AND (shelf."ChaptersFrom" IS NULL OR work."Chapters" >= shelf."ChaptersFrom") AND (shelf."ChaptersTo" IS NULL OR work."Chapters" <= shelf."ChaptersTo")
+                                AND (shelf."VolumesFrom" IS NULL OR work."Volumes" >= shelf."VolumesFrom") AND (shelf."VolumesTo" IS NULL OR work."Volumes" <= shelf."VolumesTo")
+                                AND (shelf."DurationFrom" IS NULL OR work."DurationMinutes" >= shelf."DurationFrom")
+                                AND (shelf."DurationTo" IS NULL OR work."DurationMinutes" <= shelf."DurationTo")
                                 AND (shelf."Feed" NOT IN (2, 9) OR work."Votes" >= @TopVotes)
                                 AND (shelf."Feed" <> 3 OR work."ReleasedOn" BETWEEN @NewSince AND @Today)
                                 AND (shelf."Feed" <> 4 OR work."ReleasedOn" > @Today AND work."ReleasedOn" <= @UpcomingUntil)
@@ -562,7 +590,8 @@ namespace Jularr.Backend.Logic.Media
                     found."WorkId",
                     found."MediaStateTypeId",
                     found."PlexUrl",
-                    found."Genre"
+                    found."Genre",
+                    found."CatalogFormatId"
                 FROM
                     (
                         -- A title two catalogs know as one film (its IMDb id) shows once.
@@ -594,7 +623,8 @@ namespace Jularr.Backend.Logic.Media
                                 ORDER BY
                                     fact."IsManual" DESC
                                 LIMIT 1
-                            ) AS "Genre"
+                            ) AS "Genre",
+                            work."CatalogFormatId"
                         FROM
                             candidate
                             JOIN "Works" AS work ON work."Id" = candidate."Id"
@@ -952,7 +982,7 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(data);
             changed += await ctx.ExecuteAsyncForAffectedRows(sql, ct);
 
-            // Title, year and date belong to the details once a Work has them, and to the library's Work; the catalog fields are the catalog's.
+            // Title, year and date belong to the details once a Work has them, and to the library's Work; the catalog fields and filter facts are the catalog's.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -978,11 +1008,22 @@ namespace Jularr.Backend.Logic.Media
                     "Favourites" = CASE WHEN entry."Favourites" >= 0 THEN entry."Favourites" END,
                     "Season" = CASE WHEN entry."Season" BETWEEN 1 AND 4 AND entry."SeasonYear" BETWEEN 1800 AND 2200 THEN entry."Season" END,
                     "SeasonYear" = CASE WHEN entry."Season" BETWEEN 1 AND 4 AND entry."SeasonYear" BETWEEN 1800 AND 2200 THEN entry."SeasonYear" END,
+                    "CatalogFormatId" = entry."FormatId",
+                    "ReleaseStatusId" = entry."StatusId",
+                    "CatalogSourceId" = entry."SourceId",
+                    "Episodes" = CASE WHEN entry."Episodes" > 0 THEN entry."Episodes" END,
+                    "Chapters" = CASE WHEN entry."Chapters" > 0 THEN entry."Chapters" END,
+                    "Volumes" = CASE WHEN entry."Volumes" > 0 THEN entry."Volumes" END,
+                    "DurationMinutes" = CASE WHEN entry."DurationMinutes" > 0 THEN entry."DurationMinutes" END,
+                    "GenreIds" = coalesce(entry."GenreIds", '{}'),
+                    "TagIds" = coalesce(entry."TagIds", '{}'),
+                    "SiteIds" = coalesce(entry."SiteIds", '{}'),
                     "FetchedAt" = now()
                 FROM
                     jsonb_to_recordset(@Entries::jsonb) AS entry ("Value" text, "Title" text, "OriginalTitle" text, "ReleasedOn" date, "Overview" text, "ImageUrl" text,
                         "BackdropUrl" text, "Popularity" real, "Rating" double precision, "Votes" integer, "ImdbId" text, "IsAdult" boolean, "CountryOfOrigin" text,
-                        "Favourites" integer, "Season" smallint, "SeasonYear" smallint)
+                        "Favourites" integer, "Season" smallint, "SeasonYear" smallint, "FormatId" smallint, "StatusId" smallint, "SourceId" smallint, "Episodes" integer,
+                        "Chapters" integer, "Volumes" integer, "DurationMinutes" integer, "GenreIds" smallint[], "TagIds" integer[], "SiteIds" integer[])
                     JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = @Namespace AND identity."Value" = entry."Value"
                     CROSS JOIN LATERAL (
                         SELECT

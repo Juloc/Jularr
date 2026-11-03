@@ -366,10 +366,15 @@ namespace Jularr.Frontend.Pages.Admin.Works
         }
 
         // The page's actions and the mass editor's, and the paging of the list, float at the bottom as the save pill does.
-        private ActionDock Dock(PageResult<WorkListItemV1>? works)
+        private ActionDock Dock(PageResult<WorkListItemV1>? works, string? csrf)
         {
             var actions = new List<IUiComponent>();
             if (CanManageMedia) actions.Add(new Button(Glyph("plus", 16), new Span(new Text("works.add")).Class("action-dock__text")).Primary().Attribute("data-dialog-open", "works-add"));
+
+            // Searching the library: the titles of this list, or every monitored title across all pages.
+            if (CanAcquire && Filtered) actions.Add(new PostForm(Address("SearchAll"), csrf, [], new Button(Glyph("search", 16), new Span(new Text("works.search.filtered")).Class("action-dock__text")).Submit()));
+            if (CanAcquire) actions.Add(new PostForm(Address("SearchAll"), csrf, [("all", "true")], new Button(Glyph("layers", 16), new Span(new Text("works.search.all")).Class("action-dock__text")).Submit()
+                .TextAttribute("title", "works.search.scope")));
             if (_view == WorksViewType.Table && works is { Items.Count: > 0 }) actions.Add(new Button(Glyph("settings", 16), new Span(new Text("work.columns")).Class("action-dock__text")).Attribute("data-columns-kind", "works"));
 
             var bulk = new List<IUiComponent>();
@@ -382,6 +387,16 @@ namespace Jularr.Frontend.Pages.Admin.Works
 
         private IUiComponent BulkButton(string action, string labelKey, string icon) =>
             new Button(Glyph(icon, 16), new Span(new Text(labelKey)).Class("action-dock__text")).Submit().Attribute("form", BulkForm).Attribute("name", "action").Attribute("value", action);
+
+        // Sonarr's line under the list: how many titles the list holds without its state chip, how many of them are monitored, and what they hold on disk.
+        private static IUiComponent Footer(WorksSummaryV1 summary)
+        {
+            IUiComponent Fact(string labelKey, string value) => new Span(new Span(new Text(labelKey)).Class("works-footer__label"), new Span(new ValueText(value)).Class("works-footer__value")).Class("works-footer__fact");
+            var culture = CultureInfo.CurrentCulture;
+            return new Div(Fact("works.footer.titles", summary.TotalCount.ToString("N0", culture)), Fact("works.footer.monitored", summary.MonitoredCount.ToString("N0", culture)),
+                Fact("works.footer.unmonitored", (summary.TotalCount - summary.MonitoredCount).ToString("N0", culture)), Fact("works.footer.files", summary.FileCount.ToString("N0", culture)),
+                Fact("works.footer.size", ByteSize.Format(summary.SizeBytes))).Class("works-footer").Attribute("role", "status");
+        }
 
         // Sonarr's dialog for the chosen titles: the files go too when asked, and an exclusion keeps a request from bringing them back. The titles are written in when it opens.
         private IUiComponent DeleteDialog(string? csrf)

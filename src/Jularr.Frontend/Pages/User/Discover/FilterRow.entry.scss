@@ -1,0 +1,139 @@
+// Discover's filter row: labelled fields side by side, swiped sideways on a phone; popups of choices over the page.
+.discover-filters {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    margin: 4px 0 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
+}
+
+.discover-filter {
+    display: grid;
+    flex: 0 0 auto;
+    gap: 4px;
+    min-width: 150px;
+
+    &--select .ui-dropdown__button,
+    &__button {
+        min-width: 150px;
+        min-height: var(--control-height);
+    }
+}
+
+.discover-filter__label {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 650;
+}
+
+// The popup's button shows its label above and the chosen values inside, like the selects beside it.
+.discover-filter__button {
+    display: grid;
+    align-content: center;
+    padding: 0 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-field);
+    background: var(--field);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+
+    &:hover, &[aria-expanded="true"] { border-color: var(--accent-outline); }
+}
+
+.discover-filter__value {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.discover-filter--set .discover-filter__value,
+.discover-filter--set .ui-dropdown__value { color: var(--accent-text); }
+
+.discover-filter__popup {
+    position: fixed;
+    inset: auto;
+    width: max-content;
+    max-width: min(420px, calc(100vw - 20px));
+    max-height: 60vh;
+    margin: 0;
+    padding: 12px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-inner);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-overlay);
+
+    .choice-group__heading { display: none; }
+
+    // A phone shows the choices as a sheet from the bottom.
+    @media (max-width: 640px) {
+        inset: auto 0 0;
+        width: 100%;
+        max-width: none;
+        max-height: 70vh;
+        border-radius: var(--radius-inner) var(--radius-inner) 0 0;
+    }
+}
+
+.discover-filter__more,
+.discover-filter__clear {
+    flex: 0 0 auto;
+    gap: 6px;
+    min-height: var(--control-height);
+}
+
+.discover-filter__more { position: relative; }
+.discover-filter__clear { color: var(--muted); }
+
+// More's tags by category, and its ranges as two number fields.
+.discover-tags {
+    display: grid;
+    gap: 4px;
+}
+
+.discover-tags__items {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 12px;
+    padding-bottom: 8px;
+}
+
+.discover-tags__category > summary {
+    padding: 6px 0;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.discover-range__fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.discover-range__field {
+    display: grid;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 13px;
+
+    input {
+        min-height: var(--control-height);
+        padding: 0 10px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-field);
+        background: var(--field);
+        color: var(--text);
+    }
+}
+
+.discover-ranges {
+    display: grid;
+    gap: 14px;
+}
