@@ -1,0 +1,8 @@
+@use "../../../Framework/Components/CapsuleBar";
+
+// The blocked releases on the list kit: the grid of their columns at three widths.
+.blocked-list {
+    --list-columns: minmax(220px, 2.2fr) minmax(160px, 1.6fr) minmax(110px, .9fr) minmax(130px, 1.1fr) minmax(130px, 1fr) minmax(110px, .8fr);
+    --list-columns-medium: minmax(220px, 2.2fr) minmax(160px, 1.6fr) minmax(130px, 1.1fr) minmax(130px, 1fr) minmax(110px, .8fr);
+    --list-columns-narrow: minmax(200px, 2fr) minmax(130px, 1.1fr) minmax(110px, .8fr);
+}

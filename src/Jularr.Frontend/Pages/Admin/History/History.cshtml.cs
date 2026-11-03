@@ -4,11 +4,12 @@ using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Frontend.Framework;
+using Jularr.Frontend.Pages.Admin.Activity;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.History
 {
-    // What happened to the media, newest first, on the list kit: figures, filter chips with their counts, one row per event and a drawer of the event's details; a Work's page opens its own history.
+    // What happened to the media, newest first, on the list kit: the media-type bar, the entry's views with filter chips and their counts, one row per event and a drawer of the event's details; a Work's page opens its own history.
     public sealed class HistoryModel(ReadActivityEventsV1 read, ReadActivityEventsSummaryV1 readSummary, FrontendAssets assets, UiText texts) : JularrPage
     {
         private PageResult<ActivityEventV1>? _events;
@@ -23,6 +24,14 @@ namespace Jularr.Frontend.Pages.Admin.History
         // The chip: what was fetched, what arrived, what failed, what happened to files.
         [BindProperty(SupportsGet = true, Name = "group")]
         public ActivityEventGroupType Group { get; set; }
+
+        // Media types as slugs of the type bar, as on the Queue; none shows all of them.
+        [BindProperty(SupportsGet = true, Name = "type")]
+        public string[] Types { get; set; } = [];
+
+        private ActivityViews? _views;
+
+        private ActivityViews Views => _views ??= new ActivityViews(Types, texts, Request);
 
         protected override void Define(Page page)
         {
@@ -40,6 +49,8 @@ namespace Jularr.Frontend.Pages.Admin.History
             page.Asset("Framework/Components/Drawer.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
 
+            page.NoPageRow();
+            page.Content.Add(new MediaTypeBar(assets, Views.Scopes.ListedSlugs, Views.Scopes.ChosenSlugs, "library.scope.", types => Address(Group, types: types)));
             page.Content.Add(new ListToolbar(Chips()));
             var columns = new List<ListColumn> { new("table.work", ListRole.Main), new("history.event", ListRole.Status), new("history.release", ListRole.Data, 1), new("history.source", ListRole.Data, 2), new("history.when"), new("common.actions", ListRole.Actions) };
             var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("history.empty")));
@@ -68,8 +79,9 @@ namespace Jularr.Frontend.Pages.Admin.History
             _ => _summary?.TotalCount
         };
 
-        private NavigationTabs Chips() => new([.. Enum.GetValues<ActivityEventGroupType>().Select(group => new NavigationTab(group == ActivityEventGroupType.All ? "common.all" : "history.group." + group, Address(group), group == Group, Count: CountOf(group), Icon: Glyph(GroupIcon(group), 14)))],
-            "history.filters", "filters");
+        // The entry's views, then after a divider the groups of events with their counts.
+        private NavigationTabs Chips() => AdminMenu.Row(texts, Request, [.. Enum.GetValues<ActivityEventGroupType>().Select(group => new NavigationTab(group == ActivityEventGroupType.All ? "common.all" : "history.group." + group, Address(group), group == Group, Count: CountOf(group), Icon: Glyph(GroupIcon(group), 14)))],
+            ariaLabelKey: "history.filters", href: page => Views.Address(page.Path));
 
         // The icon and tone of what happened.
         private static (string Icon, UiTone Tone) Kind(ActivityEventType type) => type switch
@@ -153,17 +165,18 @@ namespace Jularr.Frontend.Pages.Admin.History
         protected override async Task LoadDataAsync()
         {
             var ct = HttpContext.RequestAborted;
-            _events = await read.ExecuteAsync<PageResult<ActivityEventV1>>(new ReadActivityEventsParametersV1(WorkId, Math.Max(1, PageNumber), 25, Group), ct);
-            _summary = await readSummary.ExecuteAsync<ActivityEventsSummaryV1>(new ReadActivityEventsParametersV1(WorkId), ct);
+            var (types, subtypes) = Views.Filter;
+            _events = await read.ExecuteAsync<PageResult<ActivityEventV1>>(new ReadActivityEventsParametersV1(WorkId, Math.Max(1, PageNumber), 25, Group, types, subtypes), ct);
+            _summary = await readSummary.ExecuteAsync<ActivityEventsSummaryV1>(new ReadActivityEventsParametersV1(WorkId, mediaTypeIds: types, mediaSubtypeIds: subtypes), ct);
         }
 
-        private string Address(ActivityEventGroupType group, int page = 1)
+        private string Address(ActivityEventGroupType group, int page = 1, IReadOnlyList<string>? types = null)
         {
             var values = new List<string>();
             if (group != ActivityEventGroupType.All) values.Add("group=" + group);
             if (page > 1) values.Add("PageNumber=" + page.ToString(CultureInfo.InvariantCulture));
             if (WorkId is { } work) values.Add("WorkId=" + work.ToString(CultureInfo.InvariantCulture));
-            return "/Admin/History" + (values.Count == 0 ? "" : "?" + string.Join('&', values));
+            return Views.Address("/Admin/History", types, [.. values]);
         }
     }
 }

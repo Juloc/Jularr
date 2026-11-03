@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields;
 using Jularr.Backend.Data.Fields.Account;
 using Jularr.Backend.Data.Fields.Acquisition;
@@ -54,8 +55,10 @@ namespace Jularr.Backend.Data.Logic.Library
 
     internal sealed class ActivityWorkData : BaseData
     {
-        public ActivityWorkData(long? workId, ActivityEventGroupType activityEventGroupTypeId = ActivityEventGroupType.All)
+        public ActivityWorkData(long? workId, ActivityEventGroupType activityEventGroupTypeId = ActivityEventGroupType.All, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null)
         {
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
             WorkId = workId;
             ActivityEventGroupTypeId = activityEventGroupTypeId;
         }
@@ -65,5 +68,11 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
         public long? WorkId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
     }
 }

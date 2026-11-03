@@ -12,8 +12,10 @@ namespace Jularr.Backend.Data.Logic.Operation
     internal sealed class ActivityFilterData : BaseData
     {
         public ActivityFilterData(ActivityFilterType activityFilterTypeId, bool torrentOnly = false, bool downloadsOnly = false, bool failedOnly = false, DownloadClientKind? downloadClientKindId = null,
-            long? acquisitionConnectionId = null, MediaType? mediaTypeId = null, DownloadPriorityType? downloadPriorityTypeId = null)
+            long? acquisitionConnectionId = null, MediaType? mediaTypeId = null, DownloadPriorityType? downloadPriorityTypeId = null, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null)
         {
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
             DownloadPriorityTypeId = downloadPriorityTypeId;
             ActivityFilterTypeId = activityFilterTypeId;
             TorrentOnly = torrentOnly;
@@ -47,6 +49,27 @@ namespace Jularr.Backend.Data.Logic.Operation
 
         [DataField(typeof(OperationFields), nameof(OperationFields.DownloadPriorityTypeId), false)]
         public DownloadPriorityType? DownloadPriorityTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
+    }
+
+    internal sealed class BlockedReleaseFilterData : BaseData
+    {
+        public BlockedReleaseFilterData(MediaType[] mediaTypeIds, MediaSubtype[] mediaSubtypeIds)
+        {
+            MediaTypeIds = mediaTypeIds;
+            MediaSubtypeIds = mediaSubtypeIds;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
     }
 
     internal sealed class OperationActionData : BaseData

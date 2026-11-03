@@ -45,9 +45,9 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(queued).ToContainTextAsync("70 %", slow);
                 await Assertions.Expect(queued.Locator("progress")).ToHaveAttributeAsync("value", "70");
 
-                // The tiles count the running download and follow it too.
-                await Assertions.Expect(page.Locator("[data-live=queue][data-live-text=active]")).ToContainTextAsync("1", slow);
-                await Assertions.Expect(page.Locator("[data-live=queue][data-live-text=errors]")).ToContainTextAsync("0", slow);
+                // The running download sits in its group; nothing needs help.
+                await Assertions.Expect(page.Locator("#activity-group-Running")).ToContainTextAsync(FakeServices.MovieTitle, slow);
+                await Assertions.Expect(page.Locator("#activity-group-Help")).ToHaveCountAsync(0);
                 Assert.AreEqual(1, await page.EvaluateAsync<int>("window.liveMarker ?? 0"), "The queue was reloaded instead of updated.");
                 await page.GotoAsync("/Requests");
                 var request = page.Locator(".request-row", new() { HasText = FakeServices.MovieTitle });
@@ -111,18 +111,13 @@ namespace Jularr.E2E.Tests
                 fakes.FailDownloads = false;
                 fakes.Offer(LowerFilm with { File = video });
 
-                // The error tile counts it and the Errors filter lists it, next to the history.
-                await Assertions.Expect(page.Locator("[data-live=queue][data-live-text=errors]")).ToHaveTextAsync("1");
-                await Steps.FollowAsync(page, page.Locator(".list-toolbar").GetByRole(AriaRole.Link, new() { Name = "Errors", Exact = false }));
-                await Assertions.Expect(Steps.ListRow(page, "Download failed")).ToHaveCountAsync(1);
-                var filters = page.GetByRole(AriaRole.Navigation, new() { Name = "Queue states", Exact = true });
-                foreach (var filter in new[] { "All", "Active", "Waiting", "Import", "Errors" })
-                {
-                    var address = filter == "All" ? "/Admin/Activity" : "/Admin/Activity?Filter=" + filter;
-                    await Assertions.Expect(filters.Locator(".navigation-tabs__divider ~ a[href='" + address + "']")).ToHaveCountAsync(1);
-                }
-                await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "History", Exact = true }).And(page.Locator(".view-switch__link")))
-                    .ToHaveAttributeAsync("href", "/Admin/Activity?Filter=History");
+                // The failure needs help, so it is the first group of the queue with its count; the views of the entry sit next to it.
+                var help = page.Locator("#activity-group-Help");
+                await Assertions.Expect(Steps.ListRow(help, "Download failed")).ToHaveCountAsync(1);
+                await Assertions.Expect(help.Locator(".activity-group__count")).ToHaveTextAsync("1");
+                var views = page.GetByRole(AriaRole.Navigation, new() { Name = "Pages of this area", Exact = true });
+                await Assertions.Expect(views.Locator("a[href='/Admin/History']")).ToHaveCountAsync(1);
+                await Assertions.Expect(views.Locator("a[href='/Admin/Activity/Blocked']")).ToHaveCountAsync(1);
                 await Steps.SubmitAsync(page, failed.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Retry" }) }));
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
@@ -230,8 +225,8 @@ namespace Jularr.E2E.Tests
 
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 CollectionAssert.AreEqual(new[] { fakes.NzbAddress(Film).ToString(), fakes.NzbAddress(LowerFilm).ToString() }, fakes.Grabbed.ToArray());
-                await page.GotoAsync("/Admin/Activity?Filter=History");
-                await Assertions.Expect(Steps.ListRow(page, "Removed from the queue")).ToHaveCountAsync(1);
+                await page.GotoAsync("/Admin/Activity/Blocked");
+                await Assertions.Expect(Steps.ListRow(page, Film.Title)).ToHaveCountAsync(1);
                 Assert.IsTrue(details.Length > 0);
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)

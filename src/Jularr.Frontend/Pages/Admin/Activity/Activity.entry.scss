@@ -1,3 +1,5 @@
+@use "../../../Framework/Components/CapsuleBar";
+
 // The queue on the list kit: the grid of its columns at three widths, the live status of a row and the drawer's parts.
 
 .activity-queue {
@@ -6,10 +8,12 @@
     --list-columns-narrow: minmax(200px, 2.2fr) minmax(150px, 1.3fr) minmax(110px, .8fr);
 }
 
-.activity-history {
-    --list-columns: minmax(220px, 2.4fr) minmax(130px, 1fr) minmax(130px, 1.2fr) minmax(80px, .7fr) minmax(130px, 1fr) minmax(60px, .4fr);
-    --list-columns-medium: minmax(220px, 2.4fr) minmax(130px, 1fr) minmax(80px, .7fr) minmax(130px, 1fr) minmax(60px, .4fr);
-    --list-columns-narrow: minmax(200px, 2.2fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(60px, .4fr);
+// The groups of the queue: a heading with the count (and the running group's pace) at its end, then the group's rows.
+.activity-group {
+    scroll-margin-top: 16px;
+
+    &__count { color: var(--muted); font-size: var(--text-small); font-weight: 700; }
+    &__facts { display: inline-flex; gap: 12px; align-items: baseline; color: var(--muted); font-size: var(--text-small); font-weight: 650; }
 }
 
 // Where an entry stands: the state pill takes the tone of the phase the stream sets, a bar shows how far it is and one line says why it waits or failed.

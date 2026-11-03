@@ -17,13 +17,13 @@ namespace Jularr.Backend.Tests
             // The Owner with the modules on sees every entry once; each links to the first of its pages.
             var html = await GetAsync(host, "/Admin/Dashboard");
             var entries = Entries(html);
-            foreach (var address in new[] { "/Admin/Dashboard", "/Admin/Activity", "/Admin/Jobs", "/Admin/Works", "/Admin/Library", "/Admin/Downloads", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed",
+            foreach (var address in new[] { "/Admin/Dashboard", "/Admin/Activity", "/Admin/Wanted", "/Admin/Jobs", "/Admin/Works", "/Admin/Library", "/Admin/Downloads", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed",
                 "/Admin/Downloads/Clients", "/Admin/Acquisition", "/Admin/Acquisition/Sources", "/Admin/Providers", "/Admin/Storage", "/Admin/Accounts", "/Admin/Instance", "/Admin/Localization", "/Admin/System", "/Admin/Backup", "/Admin/Ai" })
             {
                 CollectionAssert.Contains(entries, address);
             }
 
-            Assert.AreEqual(19, entries.Count);
+            Assert.AreEqual(20, entries.Count);
             Assert.AreEqual(7, Regex.Matches(html, "<section class=\"menu-group").Count);
             StringAssert.Contains(html, "class=\"menu-entry is-active\" href=\"/Admin/Dashboard\"");
 
@@ -48,9 +48,9 @@ namespace Jularr.Backend.Tests
                 CollectionAssert.DoesNotContain(entries, address);
             }
 
-            // The activity entry loses its Wanted page, the users entry its requests: only the Accounts page is left, so no row of siblings.
+            // The activity entry loses its Blocked page, the users entry its requests: only the Accounts page is left, so no row of siblings. Wanted is an entry of its own, not a page of Activity.
             var activity = await GetAsync(host, "/Admin/Activity");
-            Assert.IsFalse(activity.Contains("href=\"/Admin/Wanted\"", StringComparison.Ordinal));
+            Assert.IsFalse(activity.Contains("href=\"/Admin/Activity/Blocked\"", StringComparison.Ordinal));
             var accounts = await GetAsync(host, "/Admin/Accounts");
             Assert.IsFalse(accounts.Contains("navigation-tabs--filters", StringComparison.Ordinal), "An entry with one page has no chip row.");
 

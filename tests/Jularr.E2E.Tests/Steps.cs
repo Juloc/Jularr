@@ -215,6 +215,9 @@ namespace Jularr.E2E.Tests
         // A row of the admin list on the page (the list kit): the one whose text holds this.
         public static ILocator ListRow(IPage page, string text) => page.Locator(".list-body .list-row", new() { HasText = text });
 
+        // The same inside one part of the page (a group of the queue).
+        public static ILocator ListRow(ILocator within, string text) => within.Locator(".list-body .list-row", new() { HasText = text });
+
         public static async Task OpenWantedAsync(IPage page, string title)
         {
             await page.GotoAsync("/Admin/Wanted");
