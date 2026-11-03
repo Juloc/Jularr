@@ -34,7 +34,8 @@
 // Area > Group > Page > Title; every part but the last links. A long trail scrolls instead of wrapping.
 .app-header-location {
     flex: 1 1 0;
-    min-width: 0;
+    // The whole trail before the search's size: where the header is tight the search shrinks first (to its 220px), and only then the trail.
+    min-width: clamp(0px, 100% - 400px, 480px);
     container: crumbs / inline-size;
 }
 .breadcrumb {
@@ -92,7 +93,8 @@
     .breadcrumb__item--menu .link-menu { display: block; }
 }
 
-// The header search: a large outlined pill in the middle, the trail and the tools taking equal room beside it; on a phone only the icon until it takes focus.
+// The header search: a large outlined pill in the middle, the trail and the tools taking equal room beside it (a tight header narrows the search
+// before the trail); on a phone only the icon until it takes focus.
 .app-header__tools { display: flex; flex: 1 1 0; align-items: center; justify-content: flex-end; gap: 12px; }
 .app-search {
     position: relative;
