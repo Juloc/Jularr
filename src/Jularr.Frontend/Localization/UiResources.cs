@@ -2638,6 +2638,8 @@ namespace Jularr.Frontend.Localization
             new("list.loadMore", "Load more"),
             new("list.loading", "Loading more entries…"),
             new("list.retry", "Could not load more entries. Try again."),
+            new("list.tryAgain", "Try again"),
+            new("list.endTitles", "No more titles."),
             new("list.layout.toggle", "Switch between grid and list"),
             new("favorites.select", "Select"),
             new("favorites.select.done", "Done"),

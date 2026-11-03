@@ -491,6 +491,19 @@
     .media-card { width: 100%; max-width: 150px; }
 }
 
+// A grey card where the next page arrives (endless grids, Discover's rankings): a cover and a title line.
+.media-skeleton {
+    width: 100%;
+    max-width: 150px;
+    animation: media-skeleton 1.4s ease-in-out infinite;
+    .media-shelf__items & { flex: 0 0 144px; }
+    &::before, &::after { content: ""; display: block; border-radius: 12px; background: var(--surface); }
+    &::before { aspect-ratio: 2 / 3; }
+    &::after { width: 70%; height: 12px; margin-top: 10px; border-radius: 6px; }
+    @media (prefers-reduced-motion: reduce) { animation: none; }
+}
+
+@keyframes media-skeleton { 50% { opacity: .45; } }
 @keyframes card-request-pulse { 50% { opacity: .45; transform: scale(.86); } }
 @keyframes media-card-preview-in { from { opacity: 0; transform: translateY(4px); } }
 @keyframes media-card-preview-progress { to { width: 100%; } }

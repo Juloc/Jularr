@@ -8,7 +8,20 @@ interface InfiniteListOptions {
     inserted?: (target: HTMLElement) => void;
 }
 
-// One bounded HTML-list loader, also used inside the standalone Reader.
+// Grey cards fill the rest of the grid's last row and one more where the next page arrives.
+function skeletons(grid: HTMLElement): HTMLElement[] {
+    const columns = getComputedStyle(grid).gridTemplateColumns.split(" ").filter(Boolean).length || 1;
+    const count = columns + (columns - grid.children.length % columns) % columns;
+    return Array.from({ length: count }, () => {
+        const card = document.createElement("div");
+        card.className = "media-skeleton";
+        card.setAttribute("aria-hidden", "true");
+        return card;
+    });
+}
+
+// One bounded HTML-list loader, also used inside the standalone Reader. While pages load by themselves its button stays unseen
+// (a grid of cards shows grey cards where the page arrives); after a failure the button is the retry, and a grid says where it ends.
 export function initializeInfiniteList(rootElement: HTMLElement, options: InfiniteListOptions = {}): (() => void) | undefined {
     const targetElement = document.querySelector<HTMLElement>(rootElement.dataset.infiniteList ?? "__none__");
     if (!targetElement) return;
@@ -19,6 +32,7 @@ export function initializeInfiniteList(rootElement: HTMLElement, options: Infini
     const restore = remembered?.address === address ? remembered : undefined;
     const controller = new AbortController();
     const status = root.querySelector<HTMLElement>("[data-infinite-status]")!;
+    const cards = target.classList.contains("media-grid");
     let next = root.querySelector<HTMLAnchorElement>("[data-infinite-next]");
     let pages = 1;
     let busy = false;
@@ -40,6 +54,10 @@ export function initializeInfiniteList(rootElement: HTMLElement, options: Infini
         busy = true;
         root.setAttribute("aria-busy", "true");
         status.textContent = root.dataset.loading!;
+        // The grey cards say it to the eye; the text stays for assistive technology.
+        status.classList.toggle("visually-hidden", cards);
+        const waiting = cards ? skeletons(target) : [];
+        target.append(...waiting);
         try {
             const response = await fetch(options.requestAddress?.(next.href) ?? next.href, { signal: controller.signal, headers: { "X-Jularr-Infinite": "1" }, credentials: "same-origin" });
             if (!response.ok || response.redirected) throw new Error("Page unavailable");
@@ -55,6 +73,8 @@ export function initializeInfiniteList(rootElement: HTMLElement, options: Infini
                 action.searchParams.set("returnUrl", address);
                 form.action = action.pathname + action.search;
             }
+            // The page takes the grey cards' place.
+            for (const card of waiting) card.remove();
             // A shorter or empty final page has no next link.
             for (const child of Array.from(grid?.children ?? [])) {
                 const key = child.getAttribute("data-list-key");
@@ -68,13 +88,22 @@ export function initializeInfiniteList(rootElement: HTMLElement, options: Infini
             else { next.remove(); next = null; observer.disconnect(); }
             pages++;
             failed = false;
-            status.textContent = "";
+            root.removeAttribute("data-infinite-manual");
+            status.classList.remove("visually-hidden");
+            status.textContent = !next && cards ? root.dataset.end ?? "" : "";
             save();
             return true;
         } catch {
-            if (!controller.signal.aborted) { failed = true; status.textContent = root.dataset.error!; }
+            if (!controller.signal.aborted) {
+                failed = true;
+                status.classList.remove("visually-hidden");
+                status.textContent = root.dataset.error!;
+                root.setAttribute("data-infinite-manual", "");
+                if (next && root.dataset.retryLabel) next.textContent = root.dataset.retryLabel;
+            }
             return false;
         } finally {
+            for (const card of waiting) card.remove();
             busy = false;
             root.removeAttribute("aria-busy");
         }
