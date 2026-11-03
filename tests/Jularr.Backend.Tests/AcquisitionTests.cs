@@ -2971,6 +2971,56 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(everything, "Blocked Book");
         }
 
+        // The search of all targets follows the media types of the Wanted page's bar: only those types' targets that are not paused are due now; without types nothing is forced.
+        [TestMethod]
+        public async Task WantedSearchAll_FollowsTheChosenMediaTypes()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
+            var ids = new Dictionary<string, long>();
+            foreach (var (title, type) in new[] { ("Search Film", MediaType.Movie), ("Search Book", MediaType.Book), ("Paused Book", MediaType.Book) })
+            {
+                using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(type, title, 2020));
+                Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+                var work = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+                ids[title] = work.Id + 1000;
+                await host.Fixture.RunSqlAsync($"INSERT INTO \"WantedItems\" (\"Id\", \"WorkId\") VALUES ({work.Id + 1000}, {work.Id})");
+            }
+
+            async Task Reset() => await host.Fixture.RunSqlAsync($"UPDATE \"WantedItems\" SET \"NextSearchAt\" = now() + interval '1 day', \"IsPaused\" = (\"Id\" = {ids["Paused Book"]})");
+            async Task<bool> IsDue(string title) => (bool)(await host.ScalarAsync($"SELECT \"NextSearchAt\" IS NULL FROM \"WantedItems\" WHERE \"Id\" = {ids[title]}"))!;
+            var signal = host.Services.GetRequiredService<Jularr.Backend.Service.Core.AcquisitionSearchSignal>();
+
+            // The chosen type: its targets are due now, a paused one and the other types are not.
+            await Reset();
+            using var books = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/search", new StartWantedSearchDataV1([], [MediaType.Book]));
+            Assert.AreEqual(HttpStatusCode.OK, books.StatusCode, await books.Content.ReadAsStringAsync());
+            Assert.IsTrue(signal.TakeRequest());
+            Assert.IsTrue(await IsDue("Search Book"));
+            Assert.IsFalse(await IsDue("Paused Book"));
+            Assert.IsFalse(await IsDue("Search Film"));
+
+            // No type forces nothing, as before (the search only wakes up).
+            await Reset();
+            using var all = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/search", new StartWantedSearchDataV1([]));
+            Assert.AreEqual(HttpStatusCode.OK, all.StatusCode, await all.Content.ReadAsStringAsync());
+            Assert.IsTrue(signal.TakeRequest());
+            Assert.IsFalse(await IsDue("Search Book") || await IsDue("Search Film"));
+
+            // The page: the bar's types in the address reach the search, the chosen rows still win.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?type=movies");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "&amp;type=movies&amp;handler=Bulk");
+            using var posted = await host.SendAsync(HttpMethod.Post, "/Admin/Wanted?PageNumber=1&type=movies&handler=Bulk",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html), ["bulk"] = "Search" });
+            Assert.AreEqual(HttpStatusCode.Redirect, posted.StatusCode, await posted.Content.ReadAsStringAsync());
+            Assert.IsTrue(await IsDue("Search Film"));
+            Assert.IsFalse(await IsDue("Search Book"));
+            Assert.AreEqual("/Admin/Wanted?PageNumber=1&type=movies", posted.Headers.Location!.OriginalString);
+        }
+
         // Priority only changes which targets are searched first, never when; the bulk services and the page set it for chosen rows.
         [TestMethod]
         public async Task WantedPriority_HighTargetsAreSearchedFirst_AndBulkActionsSetAndStart()
