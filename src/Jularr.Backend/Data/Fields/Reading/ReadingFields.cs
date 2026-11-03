@@ -65,6 +65,7 @@ namespace Jularr.Backend.Data.Fields.Reading
         public static readonly StringField PageNote = new() { MaximumLength = 4000, AllowBlank = false, Trim = true };
         public static readonly StringField PageAnchor = new(NpgsqlDbType.Varchar) { MaximumLength = 200, AllowBlank = false, Trim = true };
         public static readonly BoolField IsRecommended = new();
+        public static readonly BoolField RendersPages = new();
         public static readonly LongField PageNoteId = new() { Minimum = 1 };
     }
 }

@@ -148,6 +148,7 @@ jobs:
         with:
           ffmpeg: ${{ matrix.kind == 'e2e' || matrix.tools == true }}
           cjxl: ${{ matrix.tools == true }}
+          djvulibre: 'true'
       # A concurrent dotnet CLI lane can fail its NuGet-Migrations named mutex
       # when a hosted runner has no /run/user/<uid>/.dotnet/shm directory.
       # Give backend lanes a stable user-owned runtime path before launching them.
@@ -198,6 +199,8 @@ jobs:
             echo "::error::Backend shard ${SHARD}: a test lane failed (lines are prefixed [lane1] / [lane2])."
             exit 1
           fi
+        env:
+          JULARR_TEST_DJVULIBRE: /usr/bin
       - name: Real-tool tests (FFmpeg HLS, JPEG XL covers)
         if: matrix.kind == 'backend' && matrix.tools == true
         run: |
@@ -220,6 +223,7 @@ jobs:
             --logger "trx;LogFileName=e2e-shard.trx" --results-directory TestResults/ci/e2e
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
+          JULARR_TEST_DJVULIBRE: /usr/bin
 
       - name: Summarize slowest tests
         if: always()

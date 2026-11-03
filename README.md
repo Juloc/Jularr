@@ -56,7 +56,7 @@ und [#985](https://github.com/Juloc/Jularr/issues/985) geplant.
 [compose.yaml](compose.yaml) braucht nur Image, Port und Volumes; `.env.example` nach `.env`
 kopieren, Release und Datenbankpasswort setzen, `docker compose up -d`, dann `http://<host>:8097`
 öffnen und den Owner anlegen. Jede Funktion arbeitet ohne weitere Einstellungen: Das
-[Image](Dockerfile) bringt Jellyfins FFmpeg (Hardware-Transcoding für Intel, AMD und NVIDIA), das statische fpcalc von Chromaprint, 7-Zip, par2 und den PostgreSQL-18-Client mit
+[Image](Dockerfile) bringt Jellyfins FFmpeg (Hardware-Transcoding für Intel, AMD und NVIDIA), das statische fpcalc von Chromaprint, 7-Zip, par2, DjVuLibre (ddjvu und djvused für DjVu-Bücher) und den PostgreSQL-18-Client mit
 (auf dem `PATH` gefunden; ein gesetzter Pfad gewinnt, ein leerer schaltet das Programm ab), aller
 Zustand liegt unter `DataPath` (`/data` im Image: `keys`, `backups`, `trickplay`, `translation`, `ocr`),
 Bibliotheken unter `/media` (`Storage:LocalPaths`). Eine leere Datenbank erhält beim ersten Start
