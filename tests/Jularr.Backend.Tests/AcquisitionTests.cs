@@ -2721,6 +2721,13 @@ namespace Jularr.Backend.Tests
             StringAssert.Matches(panelHtml, new System.Text.RegularExpressions.Regex("<dialog[^>]* open=\"open\""));
             StringAssert.Contains(panelHtml, "handler=Dismiss&amp;operationId=5");
 
+            // An entry that says why it failed has no bar, as the stream sets it: a bar here would vanish with the first snapshot and the rows below would jump.
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"ProgressPercent\" = 30 WHERE \"Id\" = 5");
+            using var withProgress = await host.SendAsync(HttpMethod.Get, "/Admin/Activity");
+            var progressHtml = await withProgress.Content.ReadAsStringAsync();
+            var helpGroup = progressHtml[progressHtml.IndexOf("id=\"activity-group-Help\"", StringComparison.Ordinal)..progressHtml.IndexOf("id=\"activity-group-Import\"", StringComparison.Ordinal)];
+            Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(helpGroup, "<progress(?![^>]*hidden)[^>]*>"), "A failed entry shows no bar.");
+
             // The type bar narrows the queue: the films' downloads stay for movies, none is left for books, and the choice stays in the views' addresses.
             using var movies = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?type=movies");
             var moviesHtml = await movies.Content.ReadAsStringAsync();

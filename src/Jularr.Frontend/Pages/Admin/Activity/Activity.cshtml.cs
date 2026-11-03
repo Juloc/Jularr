@@ -224,7 +224,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             var phase = Phase(item);
             var label = LivePart("status", LiveEntities.OperationStatus(texts, item.IsWaiting, item.OperationStatusTypeId, says ? null : item.DownloadStateTypeId), "state-chip__live");
             return new Div(new StateChip(label, UiTone.Neutral, Glyph(PhaseIcon(phase), 14)),
-                LiveBar(item.ProgressPercent),
+                LiveBar(says ? null : item.ProgressPercent),
                 LivePart("reason", says ? LiveEntities.Reason(texts, item.OperationTypeId, item.ReasonKey) : "", "live-progress__facts"))
                 .Class("live-progress list-phase activity-status").Attribute("data-live", LiveKeys.Operation(item.Id)).Attribute("data-phase", phase);
         }
@@ -252,6 +252,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             return text.Length == 0 ? part.Attribute("hidden", "hidden") : part;
         }
 
+        // An entry that says why it waits or failed has no bar: the stream drops it too, so the row keeps its height when the first snapshot arrives.
         private static IUiComponent LiveBar(int? percent)
         {
             var bar = new Progress().Attribute("max", "100").TextAttribute("aria-label", "live.progress").Class("live-progress__bar").Attribute("data-live-value", "percent");
@@ -310,7 +311,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             var says = Says(item);
             var phase = Phase(item);
             var state = new Div(new StateChip(LivePart("status", LiveEntities.OperationStatus(texts, item.IsWaiting, item.OperationStatusTypeId, says ? null : item.DownloadStateTypeId), "state-chip__live"), UiTone.Neutral, Glyph(PhaseIcon(phase), 14)),
-                LiveBar(item.ProgressPercent),
+                LiveBar(says ? null : item.ProgressPercent),
                 LivePart("speed", says ? "" : LiveEntities.OperationSpeed(texts, item.OperationStatusTypeId, item.DownloadStateTypeId, item.BytesPerSecond), "live-progress__facts"),
                 LivePart("detail", says ? "" : LiveEntities.OperationDetail(item.ProgressPercent, item.SizeBytes, item.RemainingBytes, item.EtaSeconds), "live-progress__facts"),
                 LivePart("reason", says ? LiveEntities.Reason(texts, item.OperationTypeId, item.ReasonKey) : "", "live-progress__facts"))
