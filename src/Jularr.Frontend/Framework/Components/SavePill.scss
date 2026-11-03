@@ -36,4 +36,4 @@
 
 // Fields that differ from the loaded page; their own save buttons give way to the pill.
 .ui-field--changed .ui-field__control { border-color: var(--accent); }
-[data-save-ready] [data-form-save] { display: none; }
+@media (scripting: enabled) { [data-form-save] { display: none; } }

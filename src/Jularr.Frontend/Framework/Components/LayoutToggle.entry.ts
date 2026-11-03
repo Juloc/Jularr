@@ -3,8 +3,6 @@ import "./LayoutToggle.scss";
 // The device's layout of personal lists; delegated from the document, so it also reaches pages swapped in later.
 const layoutKey = 'list-layout';
 
-document.documentElement.classList.add('layout-ready');
-
 function applyLayout(layout: string | null): void {
     if (layout === 'list') document.documentElement.dataset.listLayout = 'list';
     else delete document.documentElement.dataset.listLayout;

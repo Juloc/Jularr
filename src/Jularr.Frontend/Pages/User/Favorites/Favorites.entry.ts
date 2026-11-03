@@ -4,8 +4,6 @@ import { onPage } from '../../../Modules/Navigation/PageSwap';
 // so it also reaches pages swapped in later; the selection lives in the buttons of the page itself.
 const pickerId = 'favorites-picker';
 
-document.documentElement.classList.add('favorites-ready');
-
 function selected(): HTMLElement[] {
     return Array.from(document.querySelectorAll<HTMLElement>('.favorites [data-favorites-select][aria-pressed="true"]'));
 }

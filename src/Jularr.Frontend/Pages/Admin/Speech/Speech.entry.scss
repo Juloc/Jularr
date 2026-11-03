@@ -12,7 +12,7 @@
 }
 
 // A row's switch is saved by the page's pill, so the row holding only its save button is gone; the conditions to accept stay on one line beside the switch.
-[data-save-ready] .speech-models .list-actions > .ui-form[data-save] > .ui-form__actions:not(:has(> :not([data-form-save]))) { display: none; }
+@media (scripting: enabled) { .speech-models .list-actions > .ui-form[data-save] > .ui-form__actions:not(:has(> :not([data-form-save]))) { display: none; } }
 .speech-models .list-actions .ui-form { flex-wrap: nowrap; align-items: center; gap: 12px; }
 
 .speech-models__metadata {
