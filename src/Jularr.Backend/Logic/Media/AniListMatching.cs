@@ -37,6 +37,8 @@ namespace Jularr.Backend.Logic.Media
         // Episodes of their own that Discover's format filter finds; they are kept as series.
         private static readonly HashSet<string> ExtraFormats = ["OVA", "SPECIAL", "MUSIC"];
 
+        public static bool IsExtra(string? format) => format is not null && ExtraFormats.Contains(format);
+
         // Where a catalog title belongs, by the formats Discover shows.
         public static (MediaType Type, MediaSubtype Subtype)? CatalogType(string type, string? format) => type switch
         {
