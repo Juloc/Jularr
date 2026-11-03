@@ -378,7 +378,7 @@ html[data-skin="original"] .sidebar-secondary {
     margin: 0 2px 14px;
 
     .search-box { max-width: none; }
-    .search-box--inline .search-box__input { min-height: 37px; padding: 0 13px 0 38px; background: var(--field); font-size: var(--text-control); }
+    .search-box--inline .search-box__input { min-height: 37px; padding: 0 13px 0 38px; background: var(--field); font-size: var(--text-control); @media (max-width: 640px) { min-height: 44px; } }
     .search-box__icon { left: 13px; .ui-icon { width: 16px; height: 16px; } }
 }
 .menu-group {

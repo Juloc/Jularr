@@ -9,7 +9,13 @@
     h2 { margin: 0 0 12px; }
 
     // Buttons placed straight in the card touch one another: their taps cannot grow beyond their boxes.
-    > .button { --hit-gap-x: 0px; --hit-gap-y: 0px; }
+    // On a phone they wrap with 8px between them, so each tap reaches 44px without meeting its neighbour's.
+    > .button {
+        --hit-gap-x: 0px;
+        --hit-gap-y: 0px;
+
+        @media (max-width: 640px) { --hit-gap-x: 8px; --hit-gap-y: 8px; margin: 0 8px 8px 0; }
+    }
 
     // The heading with an action at its end.
     &__head {

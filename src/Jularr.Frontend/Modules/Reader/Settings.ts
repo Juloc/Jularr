@@ -227,7 +227,7 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
     headerSize.observe(identity);
     reader.querySelector<HTMLButtonElement>('[data-action=contents]')?.setAttribute('aria-expanded', reader.dataset.contents);
     reader.querySelector<HTMLElement>('[data-panel=contents]')?.removeAttribute('hidden');
-    reader.addEventListener('keydown', event => {
+    const closePanels = (event: KeyboardEvent) => {
         if (event.key !== 'Escape') return;
         const trigger = reader.dataset.contents === 'true' ? 'contents'
             : reader.querySelector<HTMLElement>('[data-panel]:not([data-panel=contents]):not([hidden])')?.dataset.panel;
@@ -238,7 +238,10 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
         reader.dataset.contents = 'false';
         reader.querySelectorAll<HTMLElement>('[data-panel]:not([data-panel=contents])').forEach(panel => panel.hidden = true);
         reader.querySelectorAll(panelButtons).forEach(button => button.setAttribute('aria-expanded', 'false'));
-    });
+    };
+    reader.addEventListener('keydown', closePanels);
+    // A click on a panel's text leaves the focus on the page around the reader; Escape closes the panel there too.
+    document.addEventListener('keydown', event => { if (!reader.contains(event.target as Node)) closePanels(event); }, { signal });
     reader.querySelectorAll<HTMLButtonElement>('[data-reader-close]').forEach(button => button.addEventListener('click', () => {
         if (button.dataset.readerClose === 'contents') reader.dataset.contents = 'false';
         else reader.querySelector<HTMLElement>(`[data-panel=${button.dataset.readerClose}]`)!.hidden = true;

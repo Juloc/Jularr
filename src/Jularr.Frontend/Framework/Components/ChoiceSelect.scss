@@ -1,3 +1,5 @@
+@use "HitArea";
+
 .choice-select {
     display: inline-flex;
     align-items: center;
@@ -17,6 +19,8 @@
         &:focus-visible { outline: none; border-color: var(--accent-outline); }
     }
 
+    // On a phone the styled dropdown keeps the toolbar's height and takes a 44px tap; its arrow has ::after.
+    &__control.ui-dropdown__button { @include HitArea.phone-hit-area($pseudo: before); }
 }
 
 // With script the choice is the submit; the media query holds before the first paint, so nothing shifts when the script arrives.
