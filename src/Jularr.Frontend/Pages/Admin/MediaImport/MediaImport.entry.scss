@@ -1,3 +1,5 @@
+@use "../../../Framework/Components/CapsuleBar";
+
 // The import mockup: the source and the behaviour as two cards side by side (stacked on a narrow page), then the preview table with its dock.
 .media-import {
     // The two cards of the first step share the form's grid.
@@ -332,3 +334,8 @@
     overflow: visible !important;
     margin-block: 8px 0;
 }
+
+// A row of a media type left out by the bar is gone, also where a phone shows rows as cards.
+.media-import__rows .page-table tbody tr[hidden] { display: none; }
+
+.media-import__types .capsule-bar { margin-bottom: 0; }
