@@ -5269,6 +5269,26 @@
    "Smallest",
    "Kleinste"
   ],
+  "wanted.search.filter.title": [
+   "Search in title",
+   "Im Titel suchen"
+  ],
+  "wanted.search.filter.quality": [
+   "All qualities",
+   "Alle Qualitäten"
+  ],
+  "wanted.search.quality.some": [
+   "{0} qualities",
+   "{0} Qualitäten"
+  ],
+  "wanted.search.quality.unknown": [
+   "Unknown",
+   "Unbekannt"
+  ],
+  "wanted.search.filter.decision": [
+   "All decisions",
+   "Alle Entscheidungen"
+  ],
   "wanted.search.filters.clear": [
    "Clear filters",
    "Filter zurücksetzen"

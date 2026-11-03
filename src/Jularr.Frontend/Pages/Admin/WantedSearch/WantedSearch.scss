@@ -110,6 +110,34 @@
     font-weight: var(--weight-control);
 }
 
+// The title field, and the qualities: a button like the selects whose popup holds one checkbox per quality found.
+.search-filter-title {
+    flex: none;
+    width: 240px;
+    min-height: var(--control-height-compact);
+    padding: 0 12px;
+    font-size: var(--text-control);
+}
+
+.search-multi { flex: none; }
+
+.search-multi__popup { max-width: 320px; }
+
+.search-multi__option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: var(--radius-small);
+    cursor: pointer;
+    font-size: var(--text-control);
+    font-weight: var(--weight-control);
+    overflow-wrap: anywhere;
+
+    &:hover, &:has(input:focus-visible) { background: var(--accent-soft); color: var(--accent-text); }
+}
+
 .search-filters [data-filters-clear] { margin-inline-start: auto; }
 .search-row[hidden] { display: none !important; }
 
@@ -190,6 +218,8 @@
     .search-scope .ui-field { width: calc(50% - 6px); }
     .search-filters { display: grid; grid-template-columns: 1fr 1fr; }
     .search-filter { width: 100%; }
+    .search-filter-title { grid-column: 1 / -1; width: 100%; }
+    .search-multi { min-width: 0; }
     .search-filters [data-filters-clear] { grid-column: 1 / -1; margin-inline-start: 0; }
     .search-scope .ui-form__actions { flex: 1 1 100%; margin-inline-start: 0; }
     .search-scope .ui-form__actions .button { width: 100%; }

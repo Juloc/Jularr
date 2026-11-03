@@ -111,6 +111,50 @@ namespace Jularr.E2E.Tests
                 await ChooseAsync("Sort", "Sort by source");
                 Assert.AreEqual(0, await dialog.Locator("tbody[data-merged]").CountAsync());
 
+                // The title field takes words in any order (accents do not matter), the decision shows one kind, the qualities one or several; the bar does not move.
+                var title = dialog.GetByRole(AriaRole.Searchbox, new() { Name = "Search in title" });
+                await title.FillAsync("melville DICK");
+                await Assertions.Expect(rows).ToHaveCountAsync(1);
+                await Assertions.Expect(rows.First).ToContainTextAsync("Moby Dick");
+                await Assertions.Expect(dialog.GetByRole(AriaRole.Status).First).ToContainTextAsync("1 of 3 releases");
+                await title.FillAsync("prejudice pride");
+                await Assertions.Expect(rows).ToHaveCountAsync(2);
+                await title.FillAsync("zzz");
+                await Assertions.Expect(dialog.Locator("[data-search-nomatch]")).ToBeVisibleAsync();
+                var typed = await dialog.Locator(".search-filters").BoundingBoxAsync();
+                Assert.AreEqual((bar!.X, bar.Y, bar.Width, bar.Height), (typed!.X, typed.Y, typed.Width, typed.Height), "The filter bar moved while typing.");
+                await dialog.GetByRole(AriaRole.Button, new() { Name = "Clear filters" }).ClickAsync();
+                await Assertions.Expect(title).ToHaveValueAsync("");
+                await Assertions.Expect(rows).ToHaveCountAsync(3);
+                await ChooseAsync("All decisions", "Rejected");
+                await Assertions.Expect(rows).ToHaveCountAsync(1);
+                await Assertions.Expect(rows.First).ToContainTextAsync("Moby Dick");
+                await ChooseAsync("All decisions", "Review");
+                await Assertions.Expect(rows).ToHaveCountAsync(2);
+                await dialog.GetByRole(AriaRole.Button, new() { Name = "Clear filters" }).ClickAsync();
+
+                // The releases here all say EPUB, so two of them get another quality, and one none.
+                await dialog.Locator("tr.search-row[data-index]").Nth(0).EvaluateAsync("row => row.dataset.quality = 'PDF'");
+                await dialog.Locator("tr.search-row[data-index]").Nth(1).EvaluateAsync("row => row.dataset.quality = ''");
+                await title.FillAsync("e");
+                await title.FillAsync("");
+                var qualities = dialog.GetByRole(AriaRole.Button, new() { Name = "All qualities", Exact = true });
+                await qualities.ClickAsync();
+                await page.GetByRole(AriaRole.Checkbox, new() { Name = "PDF", Exact = true }).CheckAsync();
+                await Assertions.Expect(rows).ToHaveCountAsync(1);
+                await Assertions.Expect(rows.First).ToContainTextAsync("Pride and Prejudice");
+                await page.GetByRole(AriaRole.Checkbox, new() { Name = "Unknown", Exact = true }).CheckAsync();
+                await Assertions.Expect(rows).ToHaveCountAsync(2);
+                await Assertions.Expect(qualities).ToContainTextAsync("2 qualities");
+                await Evidence.SaveAsync(page, "wanted-search-quality-filter-desktop");
+                await page.Keyboard.PressAsync("Escape");
+                await Assertions.Expect(page.Locator("dialog.search-dialog")).ToHaveCountAsync(1);
+                await dialog.GetByRole(AriaRole.Button, new() { Name = "Clear filters" }).ClickAsync();
+                await Assertions.Expect(rows).ToHaveCountAsync(3);
+                await Assertions.Expect(qualities).ToContainTextAsync("All qualities");
+                Assert.AreEqual(0, await page.GetByRole(AriaRole.Checkbox, new() { Checked = true }).CountAsync());
+                Assert.AreEqual(calls, sources.Calls, "Filtering asked the sources again.");
+
                 // On a phone every release is a card and nothing runs over the side.
                 await page.SetViewportSizeAsync(390, 844);
                 Assert.IsFalse(await dialog.EvaluateAsync<bool>("element => element.scrollWidth > element.clientWidth + 1 || document.body.scrollWidth > innerWidth + 1"));
