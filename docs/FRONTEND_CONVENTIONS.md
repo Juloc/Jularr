@@ -34,6 +34,8 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   A device choice that changes a page's look or layout (skin, brightness, the list and Discover layouts) is also a cookie of the same name
   ([DevicePreference.ts](../src/Jularr.Frontend/Modules/Appearance/DevicePreference.ts)); the server writes it into `<html>`
   ([DevicePreferences.cs](../src/Jularr.Frontend/Modules/Appearance/DevicePreferences.cs), known values only), the browser storage stays its source.
+  A live value renders on the page as the stream's first snapshot will say it (the same text owner, [LiveEntities](../src/Jularr.Frontend/Modules/Live/LiveEntities.cs)),
+  so a row keeps its size when the stream arrives.
 - Frontend owns UI appearance, interaction, presentation-only state.
   Backend owns permissions, identities, validation, business decisions,
   transaction boundaries, persistence, paging data and API contracts.
